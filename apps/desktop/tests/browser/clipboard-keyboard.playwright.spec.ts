@@ -1574,7 +1574,7 @@ for (const language of ["en", "ar"] as const) {
         top: bounds.top - cardBounds.top,
         left: bounds.left - cardBounds.left,
         right: cardBounds.right - bounds.right,
-        nested: button.parentElement?.closest("button") !== null,
+        nested: Boolean(button.parentElement?.closest("button")),
       };
     });
     expect(placement.width).toBeGreaterThanOrEqual(24);

@@ -30,6 +30,7 @@ import {
 } from "@stll/db-load-gate/slot";
 import { Temporal } from "@stll/time";
 
+import { admitCaseLawPopulationMaintenance } from "@/api/lib/case-law/population-maintenance-admission";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 
 import {
@@ -37,10 +38,7 @@ import {
   resolveEbsConfiguration,
 } from "../lib/db/ebs-signal-reader";
 import { executedRows } from "../lib/db/executed-rows";
-import {
-  checkReadCommittedUnit,
-  READ_COMMITTED_BEGIN,
-} from "../lib/db/read-committed-unit";
+import { runReadCommittedUnit } from "../lib/db/read-committed-unit";
 import { isPgError, PG_ERROR } from "../lib/pg-error";
 import type { IngestionTransactionRunner } from "../lib/replay-safe-ingestion";
 import { isRecord } from "../lib/type-guards";
@@ -371,6 +369,33 @@ const throwIfBackfillDeferred = ({
   }
 };
 
+type SettledMaintenanceVerdictReaderOptions = Omit<
+  Parameters<typeof admitCaseLawPopulationMaintenance>[0],
+  "query" | "verdict"
+> & {
+  indicators: { query: Query; settle: () => Promise<void> };
+  readHealth: () => Promise<Verdict>;
+};
+
+/** Finish cancelled indicator reads before the reserved session starts work. */
+const createSettledMaintenanceVerdictReader =
+  ({
+    indicators,
+    readHealth,
+    ...admission
+  }: SettledMaintenanceVerdictReaderOptions) =>
+  async () => {
+    try {
+      return await admitCaseLawPopulationMaintenance({
+        ...admission,
+        query: indicators.query,
+        verdict: await readHealth(),
+      });
+    } finally {
+      await indicators.settle();
+    }
+  };
+
 const createRuntime = <BatchTransaction>({
   name,
   tableName,
@@ -408,13 +433,14 @@ const createRuntime = <BatchTransaction>({
       config,
       sharedReadEbsSignal: readEbsSignal,
     });
-  const readSettledVerdict = async () => {
-    try {
-      return await readHealth();
-    } finally {
-      await indicatorQueries.settle();
-    }
-  };
+  const readSettledVerdict = createSettledMaintenanceVerdictReader({
+    indicators: indicatorQueries,
+    readHealth,
+    tableName,
+    tableContention,
+    name,
+    clock,
+  });
   const readCheckpoint = async (tx: BatchTransaction) => {
     const q = transactionQuery(tx);
     await setSharedQueryTimeouts(q, {
@@ -616,13 +642,20 @@ export const createScriptBackfillHealthReader = ({
     transactionQuery: (tx: Transaction) => drizzleQuery(tx),
     readTimeoutMs: config.readTimeoutMs,
   });
+  const readHealth = createVerdictReader({
+    query: bounded.query,
+    tableName,
+    clock,
+    config,
+  });
   return {
-    readVerdict: createVerdictReader({
-      query: bounded.query,
-      tableName,
-      clock,
-      config,
-    }),
+    readVerdict: async () =>
+      await admitCaseLawPopulationMaintenance({
+        query: bounded.query,
+        tableName,
+        clock,
+        verdict: await readHealth(),
+      }),
     settle: bounded.settle,
   };
 };
@@ -782,7 +815,12 @@ export const createDatabaseLoadVerdictReader = ({
           warn,
         });
       }
-      return verdict;
+      return await admitCaseLawPopulationMaintenance({
+        query: indicators.query,
+        tableName,
+        clock,
+        verdict,
+      });
     });
     await indicators.settle();
     if (Result.isError(result)) {
@@ -876,26 +914,13 @@ export const createBackfillRuntime = (
   const runInTransaction: IngestionTransactionRunner<
     Pick<OnlineMigrationConnection, "execute" | "query">
   > = async (work) => {
-    await connection.execute(READ_COMMITTED_BEGIN);
-    const isolation = await checkReadCommittedUnit(
-      async (statement) => await connection.query(statement),
+    const outcome = await runReadCommittedUnit(
+      connection,
+      async () => await work(connection),
     );
-    if (Result.isError(isolation)) {
-      await connection.execute("ROLLBACK");
-      throw isolation.error;
-    }
-    const outcome = await Result.tryPromise({
-      try: async () => {
-        const result = await work(connection);
-        await connection.execute("COMMIT");
-        return result;
-      },
-      catch: (cause: unknown) => cause,
-    });
     if (Result.isOk(outcome)) {
       return outcome.value;
     }
-    await connection.execute("ROLLBACK");
     throw outcome.error;
   };
   return createRuntime({

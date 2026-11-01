@@ -22,7 +22,8 @@
     "toolUsed": "Használt eszköz: {tool}",
     "threadTitle": "Beszélgetés",
     "threadLoadFailed": "Ezt a beszélgetést nem sikerült betölteni.",
-    "threadEmptyDescription": "Ebben a beszélgetésben még nincs üzenet.",
+    "greeting": "Min szeretne dolgozni?",
+    "greetingSubtitle": "Kezdje egy üggyel, dokumentummal vagy egyszerű kérdéssel.",
     "sections": {
       "today": "Ma",
       "yesterday": "Tegnap",
@@ -39,6 +40,19 @@
     "answerNeedsInput": "Ez a válasz az Ön közreműködésére vár. Folytassa a stella webes felületén.",
     "answerFailed": "A választ nem sikerült befejezni.",
     "composerMenu": "Mellékletek és eszközök menüjének megnyitása",
+    "attachFile": "Fájl csatolása",
+    "attachment": "Melléklet",
+    "fileTooLarge": "A fájl meghaladja a {maxSize} korlátot",
+    "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
+    "unsupportedFileType": "Nem támogatott fájltípus",
+    "uploadFailed": "A fájl feldolgozása sikertelen",
+    "scanDocument": "Dokumentum szkennelése",
+    "removeAttachment": "{name} eltávolítása",
+    "attachmentReading": "Előkészítés…",
+    "attachmentUploading": "Feltöltés…",
+    "pickFailed": "A fájlválasztót nem sikerült megnyitni. Próbálja újra.",
+    "sendFileRefused": "Egy fájlt nem sikerült elküldeni, ezért az üzenet nem lett elküldve. Távolítsa el a fájlt, és próbálja újra.",
+    "sendFileNotAnonymizable": "Ez a beszélgetés anonimizált, és a stella nem tudta anonimizálni az egyik fájlt, ezért semmi sem lett elküldve. Távolítsa el a fájlt, és próbálja újra.",
     "pickTitle": "Válasszon beszélgetést",
     "pickDescription": "Válasszon szálat a listából, vagy kezdjen újat a + gombbal."
   },
@@ -60,7 +74,8 @@
       "none": "Nincs dátum",
       "today": "Ma",
       "tomorrow": "Holnap",
-      "nextWeek": "Egy hét múlva"
+      "nextWeek": "Egy hét múlva",
+      "pick": "Dátum választása"
     },
     "due": {
       "overdue": "Lejárt",
@@ -75,7 +90,14 @@
     "statusFailed": "A feladatot nem sikerült módosítani. Próbálja újra.",
     "pickTitle": "Válasszon feladatot",
     "pickDescription": "Válasszon feladatot a listából, hogy itt lássa.",
-    "openMatter": "Ügy megnyitása"
+    "openMatter": "Ügy megnyitása",
+    "assignedTo": "Felelős",
+    "nobody": "Nincs hozzárendelve",
+    "assign": "Hozzárendelés",
+    "doneAssigning": "Kész",
+    "someone": "Valaki",
+    "membersFailed": "Az ügy tagjait nem sikerült betölteni.",
+    "assignFailed": "A feladatot nem sikerült kiosztani. Próbálja újra."
   },
   "matters": {
     "emptyTitle": "Még nincsenek ügyek",
@@ -119,7 +141,9 @@
     },
     "add": "Hozzáadás",
     "scanDocument": "Dokumentum szkennelése",
-    "newTask": "Új feladat"
+    "newTask": "Új feladat",
+    "uploadDocument": "Dokumentum feltöltése",
+    "uploadFailed": "A dokumentumot nem sikerült feltölteni. Próbálja újra."
   },
   "entity": {
     "type": "Típus",
@@ -141,7 +165,16 @@
     "preview": "Előnézet megnyitása",
     "previewDescription": "Ez a fájl a rendszer előnézetében nyílik meg.",
     "unrendered": "Ez a dokumentum itt nem jeleníthető meg, de a rendszer előnézete talán meg tudja nyitni.",
-    "details": "Részletek"
+    "details": "Részletek",
+    "zoomOut": "Kicsinyítés",
+    "zoomIn": "Nagyítás",
+    "zoomFit": "Szélességhez igazítás",
+    "fit": "Szélesség",
+    "appearance": {
+      "system": "Megjelenés: automatikus",
+      "light": "Megjelenés: világos",
+      "dark": "Megjelenés: sötét"
+    }
   },
   "signIn": {
     "beta": "Béta",
@@ -169,7 +202,8 @@
     "server": "Szerver",
     "signOut": "Kijelentkezés",
     "deleteAccount": "Fiók törlése",
-    "deleteAccountHint": "Megnyitja a fiókját a weben, ahol mindazzal együtt törölheti, ami az öné."
+    "deleteAccountHint": "Megnyitja a fiókját a weben, ahol mindazzal együtt törölheti, ami az öné.",
+    "signOutFailed": "A kijelentkezést nem sikerült befejezni. Próbálja újra."
   },
   "header": {
     "search": "Keresés"
@@ -183,6 +217,7 @@
     "headnote": "Jogi tétel",
     "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg",
     "openSource": "Eredeti forrás megnyitása",
+    "openFailed": "A hivatkozást nem sikerült megnyitni.",
     "loadFailed": "Az ítélkezési gyakorlatot nem sikerült betölteni.",
     "share": "Megosztás"
   },
@@ -268,6 +303,29 @@
   "palette": {
     "placeholder": "Ügyek és beszélgetések keresése, vagy parancs futtatása",
     "noResults": "Semmi sem felel meg ennek: „{query}”"
+  },
+  "search": {
+    "placeholder": "Keresés a stellában",
+    "clear": "Keresés törlése",
+    "cancel": "Mégse",
+    "recent": "Legutóbbi keresések",
+    "clearRecent": "Törlés",
+    "hint": "Keressen az ügyekben, dokumentumokban, feladatokban, beszélgetésekben és az ítélkezési gyakorlatban.",
+    "filters": "Szűrők",
+    "noResultsTitle": "Nincs találat",
+    "noResults": "Semmi sem felel meg ennek: „{query}”. Próbáljon más szavakat, vagy távolítson el egy szűrőt.",
+    "loadFailed": "A keresést nem sikerült elvégezni.",
+    "retry": "Újra",
+    "type": {
+      "document": "Dokumentumok",
+      "matter": "Ügyek",
+      "task": "Feladatok",
+      "caseLaw": "Ítélkezési gyakorlat",
+      "chat": "Beszélgetések",
+      "folder": "Mappák",
+      "message": "E-mailek",
+      "link": "Hivatkozások"
+    }
   },
   "pane": {
     "showList": "Lista megjelenítése",

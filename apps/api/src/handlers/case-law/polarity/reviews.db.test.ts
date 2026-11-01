@@ -30,8 +30,6 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
@@ -63,6 +61,8 @@ import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { DOCTRINE_LABEL_DOMAIN } from "@/api/scripts/apply-reviewed-citation-labels-doctrine";
 import {

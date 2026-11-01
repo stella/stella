@@ -6,7 +6,6 @@ import { printError } from "@stll/errors";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { caseLawSources } from "@/api/db/schema";
-import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter";
 /**
  * Re-parse decisions a source already ingested, from the raw payload stored
  * with each of them, without fetching anything from the publisher.
@@ -41,6 +40,10 @@ import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter"
  *   bun run src/scripts/replay-case-law-source.ts --adapter eu-ecj \
  *     --after <decisionId> --apply
  *
+ *   # only the decisions one parser version wrote
+ *   bun run src/scripts/replay-case-law-source.ts --adapter sk-courts \
+ *     --parser-version <n> --all --results-out <private path>
+ *
  *   # every row's outcome to a file, not only the summary's sample
  *   bun run src/scripts/replay-case-law-source.ts --adapter sk-courts --all \
  *     --results-out /tmp/sk-courts-replay.jsonl
@@ -50,7 +53,6 @@ import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter"
  */
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
-  acquireReplayLease,
   countReplayability,
   REPLAY_ROW_OUTCOME,
   replayCapability,
@@ -58,10 +60,12 @@ import {
   type ReplayRowReport,
   type ReplayRunReport,
   type ReplayVisitBound,
+  runWithReplayLease,
 } from "@/api/handlers/case-law/ingestion/replay";
 import { parseReplayArguments } from "@/api/handlers/case-law/ingestion/replay-arguments";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
-import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import type { StoredRawReader } from "@/api/lib/legal-search/ingestion-types";
 import {
   readS3ObjectIfPresent,
   refreshCorpusS3,
@@ -221,6 +225,9 @@ const runCaseLawSourceReplay = async (): Promise<void> => {
   if (scope.type === "court") {
     console.log(`targeting court:     ${scope.court}`);
   }
+  if (scope.type === "parser-version") {
+    console.log(`targeting version:   ${scope.parserVersion}`);
+  }
 
   // `null` only where the store confirmed it holds no such object, which is a
   // durable fact about that decision. A timeout, a refused credential or a
@@ -238,13 +245,33 @@ const runCaseLawSourceReplay = async (): Promise<void> => {
   // A writing run takes the source's ingestion lease: it allocates observation
   // orders from the same counter a crawl does, and the two must not interleave.
   // A dry run writes nothing and takes nothing.
+  const runReplay = async (
+    sourceLease: Parameters<typeof replayCaseLawSource>[0]["sourceLease"],
+  ) =>
+    await Result.tryPromise({
+      try: async () =>
+        await replayCaseLawSource({
+          adapter,
+          scopedDb: ingestionDb,
+          sourceId: source.id,
+          readStoredRaw,
+          sourceLease,
+          bound,
+          pageSize,
+          after,
+          scope,
+          rejectionPolicy,
+          recordRow,
+        }),
+      catch: (cause) => cause,
+    });
   const acquisition = apply
-    ? await acquireReplayLease({
-        acquire: async () =>
-          await acquireCaseLawSourceIngestionLease({
-            scopedDb: ingestionDb,
-            sourceId: source.id,
-          }),
+    ? await runWithReplayLease({
+        run: async () =>
+          await withCaseLawSourceIngestionLease(
+            { scopedDb: ingestionDb, sourceId: source.id },
+            runReplay,
+          ),
         waitBudgetMs: leaseWaitMinutes * MINUTE_MS,
         onWaitStart: () => {
           console.log(
@@ -262,32 +289,14 @@ const runCaseLawSourceReplay = async (): Promise<void> => {
   }
   if (acquisition !== null && acquisition.waitedMs > 0) {
     console.log(
-      `lease acquired:      after ${String(acquisition.waitedMs / 1000)} s of waiting`,
+      `lease wait:          ${String(acquisition.waitedMs / 1000)} s before the replay ran`,
     );
   }
-  const sourceLease = acquisition?.lease ?? null;
+  const replayed =
+    acquisition?.type === "completed"
+      ? acquisition.value
+      : await runReplay(null);
 
-  const replayed = await Result.tryPromise({
-    try: async () =>
-      await replayCaseLawSource({
-        adapter,
-        scopedDb: ingestionDb,
-        sourceId: source.id,
-        readStoredRaw,
-        sourceLease,
-        bound,
-        pageSize,
-        after,
-        scope,
-        rejectionPolicy,
-        recordRow,
-      }),
-    catch: (cause) => cause,
-  });
-
-  // Released on both paths: a lease left behind blocks the source's next
-  // ingestion cycle until it expires.
-  await sourceLease?.release();
   await resultsFile?.close();
 
   if (Result.isError(replayed)) {

@@ -45,13 +45,16 @@ export const BUDGET_NAMES = [
   "mcp.translate.user",
   "mcp.upload.user",
   "mcp.gateway.user_client",
+  "organizations.create.user",
+  "dictation.user",
+  "dictation.organization",
   "skills.source.user",
   "skills.source.address",
 ] as const;
 
 export type BudgetName = (typeof BUDGET_NAMES)[number];
 export type BudgetKeyKind =
-  "user" | "client" | "account" | "bearer" | "address";
+  "user" | "organization" | "client" | "account" | "bearer" | "address";
 export type BudgetObservation = { name: BudgetName; keyKind: BudgetKeyKind };
 
 /** Only the bounded budget vocabulary crosses the telemetry boundary. */
@@ -59,12 +62,13 @@ export const recordBudgetRejection = ({
   name,
   keyKind,
   windowMs,
-}: BudgetObservation & { windowMs: number }): void => {
+  status = 429,
+}: BudgetObservation & { windowMs: number; status?: 429 | 503 }): void => {
   logger.warn("rate_limit.rejected", {
     budget: name,
     "budget.keyKind": keyKind,
     "budget.windowMs": windowMs,
-    "http.status_code": 429,
+    "http.status_code": status,
   });
   emitRateLimitRejectedMetric(name);
 };

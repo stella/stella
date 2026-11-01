@@ -1,3 +1,6 @@
+// parser-output-unchanged: A null list now reads as empty; records that parsed before keep their exact output.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: Stored-object replay reuses the ingestion PDF parser and assembly without changing their output.
 import { panic, Result } from "better-result";
 import * as v from "valibot";
@@ -7,24 +10,6 @@ import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  STORED_RAW_REPLAY_STATUS,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  StoredRawReparseInput,
-  StoredRawReparseValue,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
   readPublisherBytes,
@@ -59,6 +44,25 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+  StoredRawReparseValue,
+} from "@/api/lib/legal-search/ingestion-types";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
@@ -85,21 +89,28 @@ const collectionFromUrl = (url: string): CzUohsCollection | undefined =>
     (collection) => url === `https://uohs.gov.cz/cs/${collection}.html`,
   );
 
+/**
+ * The publisher writes `null` for a list it has nothing to put in. One such
+ * record must not fail the whole listing, so it reads as an empty list.
+ */
+const statedList = <TItem extends v.GenericSchema>(item: TItem) =>
+  v.nullable(v.array(item), () => []);
+
 const recordSchema = v.looseObject({
   typ: v.unknown(),
   iri: v.string(),
   věc: v.looseObject({ cs: v.string() }),
   číslo_jednací: v.string(),
   spisová_značka: v.string(),
-  instance: v.array(v.string()),
-  odbor: v.array(v.string()),
+  instance: statedList(v.string()),
+  odbor: statedList(v.string()),
   datum_právní_moci: v.optional(
     v.looseObject({ typ: v.string(), datum: v.string() }),
   ),
-  účastník: v.array(v.unknown()),
-  typ_řízení: v.array(v.string()),
-  typ_rozhodnutí: v.array(v.string()),
-  dokument: v.array(v.looseObject({ typ: v.string(), url: v.string() })),
+  účastník: statedList(v.unknown()),
+  typ_řízení: statedList(v.string()),
+  typ_rozhodnutí: statedList(v.string()),
+  dokument: statedList(v.looseObject({ typ: v.string(), url: v.string() })),
 });
 type CzUohsRecord = v.InferOutput<typeof recordSchema>;
 
@@ -861,7 +872,11 @@ export const czUohsAdapter = defineSourceAdapter({
     const position = parsedPosition.value;
     const encoded = encodeCzUohsCursor(position);
     if (position.parkedOn !== undefined && position.parkedOn >= todayUtc()) {
-      return Result.ok({ decisions: [], nextCursor: encoded });
+      return Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.NONE,
+        nextCursor: encoded,
+      });
     }
     const listing = await listingForCursor(cursor, position, signal);
     if (Result.isError(listing)) {
@@ -882,6 +897,7 @@ export const czUohsAdapter = defineSourceAdapter({
     const reachedTip = selected.length < PAGE_SIZE;
     return Result.ok({
       decisions,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodeCzUohsCursor({
         version: CURSOR_VERSION,
         ...(lastId === undefined ? {} : { afterId: lastId }),

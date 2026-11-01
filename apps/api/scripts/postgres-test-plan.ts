@@ -15,6 +15,7 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
   new Set([
     "src/db/entity-feature-gate-maintenance.postgres.test.ts",
     "src/db/entity-feature-search-budget.postgres.test.ts",
+    "src/handlers/case-law/decisions/coverage-counts.postgres.test.ts",
     "src/handlers/case-law/ingestion/background-replay-store.postgres.test.ts",
     "src/handlers/case-law/ingestion/reconciliation-listing-revisions.postgres.test.ts",
     "src/handlers/entities/versions/list.postgres.test.ts",
@@ -162,6 +163,7 @@ const CLUSTER_VISIBILITY_TESTS = new Set([
   "src/lib/case-law/sitemap-fairness-drain.postgres.test.ts",
   "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
   "src/lib/case-law/sitemap-shard-refresh.postgres.test.ts",
+  "src/db/case-law-sitemap-packing-enrollment.postgres.test.ts",
   "src/lib/case-law/sitemap-backlog-drain.postgres.test.ts",
   "src/lib/case-law/sitemap-visibility-drain.postgres.test.ts",
 ]);
