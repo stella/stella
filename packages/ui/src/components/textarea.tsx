@@ -80,6 +80,26 @@ const Textarea = ({
     }
     onChange?.(event);
   };
+  // A native form reset restores the text without an input or change event,
+  // so an uncontrolled count rereads the field once the reset has run.
+  const syncCountOnFormReset = (control: HTMLSpanElement | null) => {
+    const textarea = control?.querySelector("textarea");
+    const form = textarea?.form;
+    if (!counted || props.value !== undefined || !textarea || !form) {
+      return undefined;
+    }
+    const handleReset = () => {
+      // `reset` is dispatched before the form restores its fields.
+      setTimeout(() => {
+        contentDir.trackValue(textarea.value);
+        setTypedLength(textarea.value.length);
+      }, 0);
+    };
+    form.addEventListener("reset", handleReset);
+    return () => {
+      form.removeEventListener("reset", handleReset);
+    };
+  };
   const textareaStyle: TextareaStyle | undefined =
     maxRows === undefined
       ? style
@@ -99,6 +119,7 @@ const Textarea = ({
       }
       data-size={size}
       data-slot="textarea-control"
+      ref={syncCountOnFormReset}
     >
       <FieldPrimitive.Control
         render={(defaultProps) => (
