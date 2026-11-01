@@ -13,9 +13,9 @@ import {
 } from "./browser-extension-capability";
 
 const ASKED_FOR_A_WEBSITE =
-  "Only if the user asks you to open, read or operate a website, tell them, in their language, ";
+  "Only if the user asks you to open, visit, read or operate a website, or to do something in their browser, tell them, in their language, ";
 const OTHERWISE_SILENT =
-  "; otherwise do not mention the browser extension. Do not claim you have no way to use a browser.";
+  ", before you answer another way such as with web search; otherwise do not mention the browser extension. Do not claim you have no way to use a browser.";
 // A row speaking to the user on its own would reach every turn unconditionally.
 const IMPERATIVE_TO_THE_USER =
   /^(?:tell|ask|instruct|explain|say|let|remind|install|click|reload|send)\b/iu;
@@ -46,7 +46,12 @@ describe("browser extension capability policy", () => {
     {
       status: BROWSER_EXTENSION_STATUS.unsupportedBrowser,
       guidance:
-        "that browser control requires a browser that supports the stella Chrome extension",
+        "to open stella in Google Chrome on this computer and install the stella browser extension there",
+    },
+    {
+      status: BROWSER_EXTENSION_STATUS.unsupportedDevice,
+      guidance:
+        "that you can use their browser when they chat with stella in Google Chrome on a computer with the stella browser extension",
     },
   ])(
     "$status keeps its recovery step behind a website request",
@@ -141,7 +146,7 @@ describe("browser extension capability policy", () => {
         status: BROWSER_EXTENSION_STATUS.connected,
       }).promptLine,
     ).toBe(
-      "BROWSER: Browser tools are available for this turn. Use them when the user asks you to operate a website.",
+      "BROWSER: Browser tools are available for this turn. Use them when the user asks you to open, visit, read or operate a website, or to do something in their browser.",
     );
   });
 });
