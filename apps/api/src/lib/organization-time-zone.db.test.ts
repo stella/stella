@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import { parseTimeZoneId } from "@stll/time";
 import type { TimeZoneId } from "@stll/time";
@@ -14,6 +14,7 @@ import {
   readWorkspaceOrganizationTimeZone,
 } from "@/api/lib/organization-time-zone";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
@@ -83,9 +84,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
-    await db
-      .delete(organization)
-      .where(inArray(organization.id, Object.values(ORGANIZATIONS)));
+    await deleteOrganizationsForTest(db, Object.values(ORGANIZATIONS));
   } finally {
     await releaseTestDb();
   }

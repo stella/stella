@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const email = process.env["APP_REVIEW_ACCOUNT_EMAIL"];
 const organizationId = process.env["APP_REVIEW_ORGANIZATION_ID"];
@@ -14,7 +15,7 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
   const { getAuth } = await import("@/api/lib/auth");
   const { env } = await import("@/api/env");
   const { rootDb } = await import("@/api/db/root");
-  const { user, organization, verification, oauthResource } =
+  const { user, verification, oauthResource } =
     await import("@/api/db/auth-schema");
   const { userProfessionalUseAcceptances } = await import("@/api/db/schema");
   const { getBetterAuthOAuthResources } =
@@ -328,9 +329,7 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
     expect(rotatedAccounts).toHaveLength(1);
     expect(rotatedAccounts.at(0)?.id).toBe(credential.id);
   } finally {
-    await rootDb
-      .delete(organization)
-      .where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(rootDb, [organizationId]);
     await rootDb.delete(user).where(eq(user.email, email));
     await rootDb.delete(user).where(eq(user.email, ordinaryEmail));
     await rootDb

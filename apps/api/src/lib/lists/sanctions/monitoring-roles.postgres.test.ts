@@ -32,6 +32,7 @@ import type {
 import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -417,9 +418,7 @@ if (!databaseUrl || !runPostgresTests) {
             .delete(contacts)
             .where(inArray(contacts.id, [targetId, otherId]));
         }
-        await db
-          .delete(organization)
-          .where(inArray(organization.id, organizations));
+        await deleteOrganizationsForTest(db, organizations);
         await db
           .delete(systemAuditRuns)
           .where(inArray(systemAuditRuns.subject, [drainRunId, backfillRunId]));
@@ -661,9 +660,7 @@ if (!databaseUrl || !runPostgresTests) {
             .delete(contacts)
             .where(inArray(contacts.id, [failedContactId, healthyContactId]));
         }
-        await db
-          .delete(organization)
-          .where(inArray(organization.id, organizations));
+        await deleteOrganizationsForTest(db, organizations);
         await db
           .delete(systemAuditRuns)
           .where(

@@ -31,6 +31,7 @@ import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -58,7 +59,7 @@ beforeAll(
 );
 afterAll(async () => {
   if (orgIds.length) {
-    await db.delete(organization).where(inArray(organization.id, orgIds));
+    await deleteOrganizationsForTest(db, orgIds);
   }
   if (userIds.length) {
     await db.delete(user).where(inArray(user.id, userIds));

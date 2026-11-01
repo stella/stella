@@ -24,6 +24,7 @@ import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -129,7 +130,7 @@ const withFixture = async (
     }
     await run({ organizationId, userId, connectorId, connectionId });
   } finally {
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     await db.delete(user).where(eq(user.id, userId));
   }
 };

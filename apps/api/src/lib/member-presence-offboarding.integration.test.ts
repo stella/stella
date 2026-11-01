@@ -18,6 +18,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -170,10 +171,8 @@ test("organization removal clears only the departing member's presence and rejoi
     await reportDesktopPresence({ scopedDb, organizationId, userId, report });
     expect((await readPresence()).type).toBe("current");
   } finally {
-    await db.delete(organization).where(eq(organization.id, organizationId));
-    await db
-      .delete(organization)
-      .where(eq(organization.id, otherOrganizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
+    await deleteOrganizationsForTest(db, [otherOrganizationId]);
     await db.delete(user).where(eq(user.id, userId));
     await db.delete(user).where(eq(user.id, actorUserId));
   }

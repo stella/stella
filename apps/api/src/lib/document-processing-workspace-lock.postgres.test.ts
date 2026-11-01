@@ -40,6 +40,7 @@ import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
@@ -60,7 +61,7 @@ const seedOcrFixture = async (db: GatedTestDb) => {
   const sourceFileId = Bun.randomUUIDv7();
   const sourceSha256Hex = "a".repeat(64);
   const cleanup = async () => {
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     await db.delete(user).where(eq(user.id, userId));
   };
   try {
@@ -1177,9 +1178,7 @@ if (!databaseUrl || !runPostgresTests) {
                 await release.promise;
               }
               if (parent === "organization") {
-                await tx
-                  .delete(organization)
-                  .where(eq(organization.id, organizationId));
+                await deleteOrganizationsForTest(tx, [organizationId]);
               } else {
                 await tx
                   .delete(workspaces)
@@ -1402,9 +1401,7 @@ if (!databaseUrl || !runPostgresTests) {
                 await release.promise;
               }
               if (parent === "organization") {
-                await tx
-                  .delete(organization)
-                  .where(eq(organization.id, organizationId));
+                await deleteOrganizationsForTest(tx, [organizationId]);
               } else {
                 await tx
                   .delete(workspaces)

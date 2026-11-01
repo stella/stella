@@ -30,6 +30,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -46,7 +47,7 @@ testState.beforeAll(async () => {
 
 afterAll(async () => {
   for (const organizationId of organizationIds) {
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
   }
   for (const policyId of policyIds) {
     await db.delete(usagePolicies).where(eq(usagePolicies.id, policyId));

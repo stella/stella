@@ -88,6 +88,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -425,7 +426,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       .delete(caseLawDecisions)
       .where(inArray(caseLawDecisions.id, seededDecisionIds));
     await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     await db.delete(user).where(eq(user.id, userId));
   });
 

@@ -22,6 +22,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createOrganizationScopedTestDb } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScalingTempTables } from "@/api/tests/read-scaling/entity-fixture";
 
@@ -106,7 +107,7 @@ const seedVatRateWriteScaling = async (db: GatedTestDb, size: number) => {
       await db
         .delete(vatRates)
         .where(eq(vatRates.organizationId, organizationId));
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(eq(user.id, userId));
     },
   };

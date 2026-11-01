@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import type { ListItemType } from "@stll/api-contract/entity-options";
@@ -29,6 +29,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
@@ -89,9 +90,7 @@ testState.beforeAll(async () => {
 
 afterAll(async () => {
   if (seededOrganizationIds.length > 0) {
-    await testDb
-      .delete(organization)
-      .where(inArray(organization.id, seededOrganizationIds));
+    await deleteOrganizationsForTest(testDb, seededOrganizationIds);
   }
   await releaseTestDb();
 });

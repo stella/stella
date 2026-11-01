@@ -67,6 +67,7 @@ import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
@@ -274,11 +275,10 @@ if (!databaseUrl || !runPostgresTests) {
           ),
         ).toBe(1);
       } finally {
-        await db
-          .delete(organization)
-          .where(
-            inArray(organization.id, [organizationId, otherOrganizationId]),
-          );
+        await deleteOrganizationsForTest(db, [
+          organizationId,
+          otherOrganizationId,
+        ]);
         await db.delete(user).where(inArray(user.id, [userId, actorUserId]));
       }
     });
@@ -477,12 +477,8 @@ if (!databaseUrl || !runPostgresTests) {
             .type,
         ).toBe("current");
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
-        await db
-          .delete(organization)
-          .where(eq(organization.id, otherOrganizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
+        await deleteOrganizationsForTest(db, [otherOrganizationId]);
         await db.delete(user).where(eq(user.id, userId));
         await db.delete(user).where(eq(user.id, actorUserId));
       }
@@ -808,9 +804,7 @@ if (!databaseUrl || !runPostgresTests) {
             }
           } finally {
             release.resolve(undefined);
-            await checkDb
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(checkDb, [organizationId]);
             await checkDb.delete(user).where(eq(user.id, actorUserId));
             await checkDb.delete(user).where(eq(user.id, leaverUserId));
           }
@@ -945,9 +939,7 @@ if (!databaseUrl || !runPostgresTests) {
           }
         } finally {
           release.resolve(undefined);
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, actorUserId));
           await db.delete(user).where(eq(user.id, leaverUserId));
         }
@@ -1362,9 +1354,7 @@ if (!databaseUrl || !runPostgresTests) {
         });
         expect(accepted.status).toBe(200);
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         for (const browser of [owner, leaver, recipient]) {
           await db.delete(user).where(eq(user.id, browser.userId));
         }
@@ -1590,9 +1580,7 @@ if (!databaseUrl || !runPostgresTests) {
               : [],
           );
         } finally {
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, actorUserId));
           await db.delete(user).where(eq(user.id, userId));
         }
@@ -1751,9 +1739,7 @@ if (!databaseUrl || !runPostgresTests) {
           if (writer) {
             await writer;
           }
-          await holdingDb
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(holdingDb, [organizationId]);
           await holdingDb.delete(user).where(eq(user.id, actorUserId));
           await holdingDb.delete(user).where(eq(user.id, userId));
         }

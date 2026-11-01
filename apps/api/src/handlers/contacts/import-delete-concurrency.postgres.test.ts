@@ -9,6 +9,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 import { lockContactCapacity } from "./contact-capacity";
@@ -107,9 +108,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
         expect(await stored()).toEqual(updated);
         expect(auditActions).toHaveLength(2);
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         await db.delete(user).where(eq(user.id, userId));
       }
     });
@@ -194,9 +193,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
       } finally {
         releaseImport.resolve(undefined);
         await Promise.allSettled(pending);
-        await setup.db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(setup.db, [organizationId]);
       }
     });
   });

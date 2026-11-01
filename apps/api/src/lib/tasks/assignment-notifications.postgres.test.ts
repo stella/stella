@@ -1,5 +1,5 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -12,6 +12,7 @@ import { taskAssignedNotifications } from "@/api/lib/tasks/assignment-notificati
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // timeout: each test opens gated clients on a shared database and seeds an organization first.
@@ -108,9 +109,7 @@ if (!databaseUrl || !runPostgresTests) {
         expect(again[0]?.userId).toBe(colleagueId);
         expect(again[0]?.idempotencyKey).not.toBe(first[0]?.idempotencyKey);
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         await db
           .delete(user)
           .where(inArray(user.id, [actorUserId, colleagueId]));

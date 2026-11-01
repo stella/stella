@@ -44,6 +44,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
@@ -430,9 +431,7 @@ const withTenant = async (
     try {
       await exercise({ db, tenant });
     } finally {
-      await db
-        .delete(organization)
-        .where(eq(organization.id, tenant.organizationId));
+      await deleteOrganizationsForTest(db, [tenant.organizationId]);
       await db.delete(user).where(eq(user.id, tenant.author));
       await db.delete(user).where(eq(user.id, tenant.colleague));
     }
@@ -792,9 +791,7 @@ describe.skipIf(!enabled)("marks on a matter document's PDF", () => {
           shared,
         ]);
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, outsider.organizationId));
+        await deleteOrganizationsForTest(db, [outsider.organizationId]);
         await db.delete(user).where(eq(user.id, outsider.author));
         await db.delete(user).where(eq(user.id, outsider.colleague));
       }

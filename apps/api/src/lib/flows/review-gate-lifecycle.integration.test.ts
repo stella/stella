@@ -21,6 +21,7 @@ import {
 import type { FlowRunStatus, FlowStep } from "@/api/lib/flows/flow-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
@@ -81,7 +82,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   try {
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     await db.delete(user).where(eq(user.id, userId));
   } finally {
     await releaseTestDb();

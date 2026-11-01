@@ -29,6 +29,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -100,7 +101,7 @@ describe.skipIf(!enabled)("withdrawn replay timing (postgres)", () => {
       .delete(caseLawDecisions)
       .where(eq(caseLawDecisions.id, decisionId));
     await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     await db.delete(user).where(eq(user.id, userId));
   });
 
