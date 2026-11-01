@@ -190,9 +190,20 @@ for (const email of [null, "a@example.test"]) {
       await page.context().addCookies((await request.storageState()).cookies);
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto("/contacts", { waitUntil: "domcontentloaded" });
+      // The unfiltered list can already show the new contact; the debounced
+      // search then replaces its rows, so wait for the filtered page first.
+      const filtered = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          response.request().method() === "GET" &&
+          url.pathname.endsWith("/contacts") &&
+          url.searchParams.get("q") === displayName
+        );
+      });
       await page
         .getByRole("searchbox", { name: "Search contacts" })
         .fill(displayName);
+      expect((await filtered).ok()).toBe(true);
       const row = page.getByRole("row").filter({
         has: page.getByRole("link", { exact: true, name: displayName }),
       });
@@ -216,6 +227,9 @@ for (const email of [null, "a@example.test"]) {
         await link.click();
         await expect(page).toHaveURL(/\/contacts$/u);
       }
+      // elementFromPoint answers null outside the viewport; a wide table can
+      // leave the email column's edge off screen.
+      await cell.scrollIntoViewIfNeeded();
       const space = await cell.evaluate((element) => {
         const bounds = element.getBoundingClientRect();
         const x = bounds.width - 4;
@@ -224,9 +238,16 @@ for (const email of [null, "a@example.test"]) {
           bounds.left + x,
           bounds.top + y,
         );
-        return { x, y, hitsLink: target?.closest("a") !== null };
+        if (target === null) {
+          return { x, y, hit: "outside-viewport" };
+        }
+        return {
+          x,
+          y,
+          hit: target.closest("a") === null ? "cell-space" : "link",
+        };
       });
-      expect(space.hitsLink).toBe(false);
+      expect(space.hit).toBe("cell-space");
       await cell.click({ position: { x: space.x, y: space.y } });
       await expect(page).toHaveURL(new RegExp(`/contacts/${contactId}$`, "u"));
     } finally {

@@ -2379,6 +2379,10 @@ const createHarness = ({
           if (query.startsWith('SELECT 1 FROM public."contacts"')) {
             return [];
           }
+          // The source config repair's probe: no legacy string config left.
+          if (query.startsWith("SELECT 1 FROM public.case_law_sources")) {
+            return [];
+          }
           if (query.startsWith("SELECT 1 FROM public.chat_run_log_entries")) {
             return [];
           }
