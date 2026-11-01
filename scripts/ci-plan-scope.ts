@@ -6,8 +6,9 @@ import path from "node:path";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { ciBrowserScopePredicate } from "./ci-browser-scope";
 import {
-  changedBrowserSuiteSpecs,
+  directlyChangedSuiteSpecs,
   hostedSuiteSpecs,
+  PRODUCTION_JOB,
 } from "./ci-browser-suites";
 import { type DependencyScope, dependencyScope } from "./ci-dependency-scope";
 import {
@@ -901,13 +902,14 @@ export const OUTPUT_RULES = {
                 (failClosedDetector("production e2e", () =>
                   productionE2eChanged(files),
                 ) ||
-                  // The job also runs the changed specs of the suites it hosts.
+                  // The job also runs the suites it hosts; the e2e planner
+                  // adds the changes their import graphs reach.
                   failClosedDetector(
                     "production browser suites",
                     () =>
                       hostedSuiteSpecs(
-                        changedBrowserSuiteSpecs(files, { root: input.root }),
-                        "e2e-production-shard",
+                        directlyChangedSuiteSpecs(files, input.root),
+                        PRODUCTION_JOB,
                       ).length > 0,
                   )),
         ),

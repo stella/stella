@@ -417,6 +417,20 @@ test("a route-smoke-only PR runs only the dedicated network leg", () => {
   }
 });
 
+test("an unknown change set selects every production leg", () => {
+  const { root } = fixture();
+  try {
+    expect(selectedE2ePlan([], root, { all: true })).toEqual({
+      status: "full",
+      matrix: allE2eMatrix(),
+      specs: [],
+      suiteSpecs: [],
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("CI executes both spec selection and the geometry shard plan guard", () => {
   const source = readCiCheckCommandText();
   expect(source).toContain("run: bun test scripts/e2e-spec-shards.test.ts");

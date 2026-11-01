@@ -1512,6 +1512,7 @@ export const TOOLING_ENV_KEYS = new Set([
   // passes the specs it carries; the shard planner adds the suite legs.
   "BROWSER_SUITE_CHANGED_PATHS",
   "BROWSER_SUITE_LEGS",
+  "LEG",
   "LEG_SPECS",
   "SCOPE_UNKNOWN",
   // CI image resolution and smoke tooling; product defaults remain upstream.

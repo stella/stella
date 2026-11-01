@@ -7049,6 +7049,60 @@ test.each([
   },
 );
 
+test.each([
+  { suiteSpecs: ["apps/api/e2e/citation-graph.spec.mts"], unknown: "false" },
+  { suiteSpecs: [], unknown: "true" },
+])(
+  "the e2e planner requires its legs for hosted suite specs or an unknown change set: %j",
+  ({ suiteSpecs, unknown }) => {
+    const planner = jobSteps(ciJobs["ci-plan"]).find(
+      (step) => step.name === "Plan changed PR e2e shards",
+    );
+    const directory = mkdtempSync(nodePath.join(tmpdir(), "e2e-plan-"));
+    const output = nodePath.join(directory, "output");
+    const selectedPlan = nodePath.join(directory, "selection.json");
+    try {
+      writeFileSync(
+        selectedPlan,
+        JSON.stringify({ matrix: { shard: [1] }, specs: [], suiteSpecs }),
+      );
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          "-e",
+          "-c",
+          `bun() {
+          [[ "$*" == 'scripts/e2e-spec-shards-core.ts all' ]] || return 1
+          printf '%s' '{"shard":[1,2,"network-baseline"]}'
+        }
+        ${planner?.run ?? panic("Missing e2e shard planner")}`,
+        ],
+        {
+          env: {
+            PATH: Bun.env["PATH"] ?? "",
+            E2E_PRODUCTION_REQUIRED: "false",
+            ROUTE_SMOKE_REQUIRED: "false",
+            EVENT_NAME: "pull_request",
+            GITHUB_OUTPUT: output,
+            SELECTED_MODE: "selected",
+            SELECTED_PLAN_PATH: selectedPlan,
+            SELECTOR_OUTCOME: unknown === "true" ? "skipped" : "success",
+            SCOPE_UNKNOWN: unknown,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      const lines = readFileSync(output, "utf-8").split("\n");
+      expect(lines).toContain(`suite_specs=${JSON.stringify(suiteSpecs)}`);
+      expect(lines).toContain("required=true");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
+);
+
 // The dedup drops a merge group's network-baseline leg only because route-smoke
 // produces the same "network manifest matches the committed baseline" verdict;
 // pin every link of that chain so neither side can drift alone.

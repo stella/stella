@@ -222,7 +222,7 @@ jobs:
       ui_playground_specs: ${{ steps.ui-playground-plan.outputs.specs || '[]' }}
       ui_playground_matrix: ${{ steps.ui-playground-plan.outputs.matrix || '[]' }}
       # ci-browser legs that run a pull request's changed suite specs.
-      browser_suite_legs: ${{ steps.browser-suite-plan.outputs.legs || '[]' }}
+      browser_suite_legs: ${{ steps.browser-suite-plan.outputs.legs || steps.browser-suite-fallback.outputs.legs || '[]' }}
       # The job and result gate consume the same event/depth decision.
       ci_browser_scope_required: ${{ steps.changed-files.outputs.ci_browser_scope_required }}
       ci_browser_required: >-
@@ -230,7 +230,7 @@ jobs:
         && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         && steps.changed-files.outputs.package_checks_required == 'true'
         && steps.changed-files.outputs.ci_browser_scope_required == 'true'
-        && ((github.event_name == 'pull_request' && (steps.changed-files.outputs.desktop_browser_required == 'true' || steps.ui-playground-plan.outputs.specs != '[]' || (steps.browser-suite-plan.outputs.legs || '[]') != '[]'))
+        && ((github.event_name == 'pull_request' && (steps.changed-files.outputs.desktop_browser_required == 'true' || steps.ui-playground-plan.outputs.specs != '[]' || (steps.browser-suite-plan.outputs.legs || steps.browser-suite-fallback.outputs.legs || '[]') != '[]'))
         || (github.event_name != 'pull_request'
         && steps.depth.outputs.suite_depth == 'full')
         || (github.event_name == 'merge_group'
@@ -1003,47 +1003,6 @@ jobs:
           HEAVY_ONLY: ${{ inputs.heavy_only }}
         run: bun scripts/ci-plan-scope.ts
 
-      # A pull request runs the specs it changes in every browser suite whose
-      # merge-group job runs them; scripts/ci-browser-suites.ts owns the suites.
-      - name: Plan changed browser suite specs
-        id: browser-suite-plan
-        if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success'
-        env:
-          BROWSER_SUITE_CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
-          SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if ! plan=$(bun scripts/ci-browser-suites.ts plan); then
-            echo "::warning::Browser suite selection failed; running every changed-spec suite in full."
-            plan=$(SCOPE_UNKNOWN=true bun scripts/ci-browser-suites.ts plan)
-          fi
-          echo "$plan" >> "$GITHUB_OUTPUT"
-
-      - name: Plan UI playground geometry specs
-        id: ui-playground-plan
-        if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success'
-        env:
-          UI_PLAYGROUND_CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
-          SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
-          EVENT_NAME: ${{ github.event_name }}
-          DESKTOP_REQUIRED: ${{ steps.changed-files.outputs.desktop_browser_required }}
-          BROWSER_SUITE_LEGS: ${{ steps.browser-suite-plan.outputs.legs || '[]' }}
-        run: |
-          if [[ "$SCOPE_UNKNOWN" == "true" ]]; then
-            echo "::warning::Changed files are unknown; running every geometry spec."
-            specs=""
-          else
-            specs=$(bun scripts/ui-playground-selection.ts) || specs=""
-          fi
-          if ! jq -e 'type == "array" and all(.[]; type == "string")' <<< "$specs" >/dev/null; then
-            [[ "$SCOPE_UNKNOWN" == "true" ]] || echo "::warning::UI playground selection failed; running every geometry spec."
-            specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
-          fi
-          echo "specs=$specs" >> "$GITHUB_OUTPUT"
-          all_specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
-          matrix=$(UI_PLAYGROUND_SELECTED_SPECS="$specs" UI_PLAYGROUND_ALL_SPECS="$all_specs" bun scripts/ui-playground-shards.ts)
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-
       - name: Plan query performance scope
         id: query-perf-scope
         if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success'
@@ -1109,6 +1068,52 @@ jobs:
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
           if-no-files-found: ignore
+
+      # A pull request runs the specs it changes in every browser suite whose
+      # merge-group job runs them; scripts/ci-browser-suites.ts owns the suites
+      # and scripts/ci-browser-suite-selection.ts follows their import graphs.
+      - name: Plan changed browser suite specs
+        id: browser-suite-plan
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success' && steps.planner-deps.outcome == 'success'
+        continue-on-error: true
+        env:
+          BROWSER_SUITE_CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
+          SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: bun scripts/ci-browser-suite-selection.ts plan >> "$GITHUB_OUTPUT"
+
+      # Without the selection a pull request runs every changed-spec suite.
+      - name: Plan every browser suite spec
+        id: browser-suite-fallback
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success' && steps.browser-suite-plan.outcome != 'success'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: bun scripts/ci-browser-suites.ts plan-all >> "$GITHUB_OUTPUT"
+
+      - name: Plan UI playground geometry specs
+        id: ui-playground-plan
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success'
+        env:
+          UI_PLAYGROUND_CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
+          SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+          EVENT_NAME: ${{ github.event_name }}
+          DESKTOP_REQUIRED: ${{ steps.changed-files.outputs.desktop_browser_required }}
+          BROWSER_SUITE_LEGS: ${{ steps.browser-suite-plan.outputs.legs || steps.browser-suite-fallback.outputs.legs || '[]' }}
+        run: |
+          if [[ "$SCOPE_UNKNOWN" == "true" ]]; then
+            echo "::warning::Changed files are unknown; running every geometry spec."
+            specs=""
+          else
+            specs=$(bun scripts/ui-playground-selection.ts) || specs=""
+          fi
+          if ! jq -e 'type == "array" and all(.[]; type == "string")' <<< "$specs" >/dev/null; then
+            [[ "$SCOPE_UNKNOWN" == "true" ]] || echo "::warning::UI playground selection failed; running every geometry spec."
+            specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
+          fi
+          echo "specs=$specs" >> "$GITHUB_OUTPUT"
+          all_specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
+          matrix=$(UI_PLAYGROUND_SELECTED_SPECS="$specs" UI_PLAYGROUND_ALL_SPECS="$all_specs" bun scripts/ui-playground-shards.ts)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
       # Read the gate from the workflow revision, even when dispatch checks an
       # older main commit that predates this planner.
@@ -1327,10 +1332,14 @@ jobs:
           && github.event_name == 'pull_request'
           && steps.planner-deps.outcome == 'success' && steps.api-test-deps.outcome == 'success'
         shell: bash
+        env:
+          SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
         run: |
           set -euo pipefail
           : "${RUNNER_TEMP:?RUNNER_TEMP must name the runner temporary directory}"
+          # An unknown change set selects every leg.
           changed_files=()
+          [[ "${SCOPE_UNKNOWN:-false}" != true ]] || changed_files+=(--all)
           if [[ -s "$RUNNER_TEMP/api-test-changed-paths" ]]; then
             while IFS= read -r -d '' file; do
               changed_files+=("$file")
@@ -1358,6 +1367,7 @@ jobs:
           SELECTED_MODE: ${{ steps.e2e-pr-selection.outputs.mode }}
           SELECTED_PLAN_PATH: ${{ runner.temp }}/e2e-pr-selection.json
           SELECTOR_OUTCOME: ${{ steps.e2e-pr-selection.outcome }}
+          SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
         run: |
           set -euo pipefail
           if [[ "$EVENT_NAME" != pull_request || "$SELECTOR_OUTCOME" != success || ! -s "$SELECTED_PLAN_PATH" ]]; then
@@ -1369,7 +1379,7 @@ jobs:
             matrix=$(jq -c .matrix "$SELECTED_PLAN_PATH")
             mode=$SELECTED_MODE
             specs=$(jq -c .specs "$SELECTED_PLAN_PATH")
-            suite_specs=$(jq -c .suiteSpecs "$SELECTED_PLAN_PATH")
+            suite_specs=$(jq -c '.suiteSpecs // []' "$SELECTED_PLAN_PATH")
           fi
           # route-smoke runs the same seeded network proof for affected merge
           # groups, so do not start a second production stack for that leg.
@@ -1388,9 +1398,14 @@ jobs:
               echo "required=false"
             } >> "$GITHUB_OUTPUT"
           else
+            # Hosted browser suites and an unknown change set need the legs too.
+            required=$E2E_PRODUCTION_REQUIRED
+            if [[ "$EVENT_NAME" == pull_request && ( "$suite_specs" != '[]' || "${SCOPE_UNKNOWN:-false}" == true ) ]]; then
+              required=true
+            fi
             {
               echo "selection_required=true"
-              echo "required=$E2E_PRODUCTION_REQUIRED"
+              echo "required=$required"
             } >> "$GITHUB_OUTPUT"
           fi
 
@@ -3528,6 +3543,7 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-browser-interactions.json
           EVENT_NAME: ${{ github.event_name }}
           LEG_SPECS: ${{ toJSON(matrix.specs) }}
+          LEG: ${{ matrix.suite }}
         run: |
           if [[ "$EVENT_NAME" != "pull_request" ]]; then
             bun --filter @stll/ui test:browser
@@ -3574,6 +3590,7 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-extension-browser-boundary.json
           EVENT_NAME: ${{ github.event_name }}
           LEG_SPECS: ${{ toJSON(matrix.specs) }}
+          LEG: ${{ matrix.suite }}
         run: |
           if [[ "$EVENT_NAME" != "pull_request" ]]; then
             bun --filter @stll/extension test:e2e
@@ -5480,8 +5497,7 @@ jobs:
           exit "$status"
 
       # API-owned browser checks (visual sandbox) need the API from this stack
-      # but no web app; one shard runs them. A selected pull request leg runs
-      # only the changed API browser specs.
+      # but no web app; one shard runs the whole suite.
       - name: Run API browser checks
         timeout-minutes: 3
         if: >-
@@ -5490,18 +5506,7 @@ jobs:
           && matrix.shard == 1
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-api-browser-checks.json
-          E2E_MODE: ${{ needs.ci-plan.outputs.e2e_production_mode }}
-          LEG_SPECS: ${{ needs.ci-plan.outputs.e2e_production_suite_specs }}
-        run: |
-          set -euo pipefail
-          if [[ "$E2E_MODE" != selected ]]; then
-            bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser
-            exit 0
-          fi
-          listed=$(bun scripts/ci-browser-suites.ts specs api-browser)
-          [[ -n "$listed" ]] || { echo "No changed specs in this suite."; exit 0; }
-          mapfile -t specs <<< "$listed"
-          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser -- "${specs[@]}"
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser
 
       - name: Run route-smoke Playwright shard
         timeout-minutes: 3
