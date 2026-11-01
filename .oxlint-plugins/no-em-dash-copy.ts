@@ -220,7 +220,19 @@ export default eslintCompatPlugin({
               (containsEmDash(raw) || EM_DASH_ENTITY.test(raw)) &&
               enforces(node)
             ) {
-              context.report({ node, messageId: "emDash" });
+              // JSX text starts after the previous tag or expression, often a
+              // line above the copy: point at the dash itself.
+              const offsets = [
+                raw.indexOf(EM_DASH),
+                raw.search(EM_DASH_ENTITY),
+              ];
+              const first = Math.min(
+                ...offsets.filter((offset) => offset >= 0),
+              );
+              const { line, column } = context.sourceCode.getLocFromIndex(
+                node.range[0] + (Number.isFinite(first) ? first : 0),
+              );
+              context.report({ loc: { line, column }, messageId: "emDash" });
             }
           },
         };
