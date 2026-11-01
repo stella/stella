@@ -3564,7 +3564,8 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       );
       const graphInputs = deriveOrgWriteGraphInputs(sources, ownershipSources, {
         role: context.role,
-        ...(context.role === "base"
+        ...(context.role === "base" &&
+        context.headOrgScopeRegistry !== undefined
           ? { headRegistryContent: context.headOrgScopeRegistry }
           : {}),
       });
