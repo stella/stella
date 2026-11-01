@@ -376,26 +376,22 @@ export const VersionsSidebar = ({
        *  width, so hovering the empty right portion of the row
        *  doesn't register. */}
       <div className={cn("flex shrink-0 border-t", TOOLBAR_ROW_HEIGHT)}>
-        {compareNeedsDocx && (
-          <Button
-            className="text-muted-foreground flex h-full min-w-0 flex-1 items-center justify-center gap-2 rounded-none px-3 text-sm"
-            disabled
-            type="button"
-            variant="ghost"
-          >
-            <FileDiffIcon className="size-4 shrink-0" />
-            <span className="truncate">{t("fileDetail.compareDocxOnly")}</span>
-          </Button>
-        )}
-        {onCompareVersions && (
+        {(onCompareVersions !== undefined || compareNeedsDocx) && (
           <Button
             className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full min-w-0 flex-1 justify-start gap-2 rounded-none border-0 border-e px-3 font-normal before:rounded-none"
+            disabled={onCompareVersions === undefined}
             onClick={onCompareVersions}
             type="button"
             variant="ghost"
           >
             <FileDiffIcon className="size-4 shrink-0" />
-            <span className="truncate">{t("fileDetail.compare")}</span>
+            <span className="truncate">
+              {t(
+                onCompareVersions === undefined
+                  ? "fileDetail.compareDocxOnly"
+                  : "fileDetail.compare",
+              )}
+            </span>
           </Button>
         )}
         <Button
