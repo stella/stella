@@ -227,8 +227,9 @@ const insertNotifications = async (
                 return {
                   ...row,
                   featureOwner:
-                    entityOwners.get(`${row.workspaceId}:${row.entityId}`) ??
-                    "unknown",
+                    entityOwners.get(
+                      `${row.workspaceId ?? ""}:${row.entityId ?? ""}`,
+                    ) ?? "unknown",
                 } satisfies typeof notifications.$inferInsert;
               default:
                 owner satisfies never;

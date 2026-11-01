@@ -8,6 +8,7 @@ import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { escapeLike } from "@/api/lib/escape-like";
 import { flowDefinitionInputSchema } from "@/api/lib/flows/flow-types";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
 import {
@@ -103,7 +104,12 @@ export const seedRecoveryScenario = async (
   database: GatedTestDb,
   { job, cohort, rows }: RecoveryScenario,
 ) => {
-  await seedRecoveryDimensionPadding(database, { job, cohort, rows });
+  await seedRecoveryDimensionPadding(database, {
+    type: "recovery",
+    job,
+    cohort,
+    rows,
+  });
   await database.execute(sql`INSERT INTO organization (id, name, slug, created_at)
     SELECT ${RECOVERY_ORGANIZATION_PREFIX} || '-' || ${job} || '-' || ${cohort} || '-' || n,
       'Recovery measurement', ${RECOVERY_ORGANIZATION_PREFIX} || '-' || ${job} || '-' || ${cohort} || '-' || n,
@@ -187,7 +193,7 @@ export const seedRecoveryScenario = async (
       await withOrgScopedFixture({
         database,
         workspaceId: matter.id,
-        actor: { type: "actor", userId: matter.userId },
+        actor: { type: "actor", userId: brandPersistedUserId(matter.userId) },
         fn: async (tx) => {
           await tx.execute(sql`INSERT INTO entities (id, workspace_id, kind, name, created_by)
             SELECT md5('recovery-entity-' || ${job} || '-' || ${cohort} || '-' || i)::uuid,
@@ -412,7 +418,7 @@ export const cleanupRecoveryScenarios = async (
     await withOrgScopedFixture({
       database,
       workspaceId: matter.id,
-      actor: { type: "actor", userId: matter.userId },
+      actor: { type: "actor", userId: brandPersistedUserId(matter.userId) },
       fn: async (tx) => {
         for (const [table, where] of [
           [

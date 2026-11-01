@@ -230,7 +230,7 @@ export const correspondence = p.pgTable.withRLS(
       to: "public",
       // UPDATE also checks SELECT visibility of the cleared row. Admit only
       // the current bounded batch, never all unassigned correspondence.
-      using: sql`${currentUserOwnsCorrespondence} and (${offboardingAssigneeCheck} or (${table.assigneeId} is null and ${table.id} = any(nullif(current_setting(${sql.raw(`'${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.recordIds}'`)}'`)}, true), '')::uuid[]))) and ${offboardingScopeCheck}`,
+      using: sql`${currentUserOwnsCorrespondence} and (${offboardingAssigneeCheck} or (${table.assigneeId} is null and ${table.id} = any(nullif(current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.recordIds}'`)}, true), '')::uuid[]))) and ${offboardingScopeCheck}`,
     }),
     p.pgPolicy("correspondence_owner_offboarding_update", {
       for: "update",
