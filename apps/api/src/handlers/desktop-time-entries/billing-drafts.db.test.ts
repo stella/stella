@@ -167,11 +167,14 @@ const unreachableModel = () => {
   const provider = createUnreachableTextModel();
   const generateObject = asTestRaw<ObjectGeneration>(
     async (options: Parameters<ObjectGeneration>[0]) =>
-      await generateTanStackObjectForTask({
-        ...options,
-        admission: testModelAdmission(ids.orgA, "billing.activity-drafts"),
-        resolveTextModel: provider.resolveTextModel,
-      }),
+      await generateTanStackObjectForTask(
+        // The test admits its own model for whichever variant the route sent.
+        asTestRaw<Parameters<ObjectGeneration>[0]>({
+          ...options,
+          admission: testModelAdmission(ids.orgA, "billing.activity-drafts"),
+          resolveTextModel: provider.resolveTextModel,
+        }),
+      ),
   );
   const generateText: TextGeneration = async (options) =>
     await generateTanStackTextForTask({

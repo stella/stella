@@ -165,6 +165,7 @@ export const FAILURE_TAGS = [
   "DevProcessSignalError",
   "DevProcessSurvivedError",
   "DevRunnerConfigError",
+  "DispatchRefusedError",
   "DockerApiError",
   "DockerEndpointError",
   "DockerKeeperError",
