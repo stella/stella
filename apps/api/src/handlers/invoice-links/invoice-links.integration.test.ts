@@ -79,7 +79,7 @@ import {
   resolveInvoiceLink,
 } from "@/api/lib/billing/invoice-links";
 import {
-  invoicePaymentAmounts,
+  invoiceAmountDue,
   paidAmountOf,
 } from "@/api/lib/billing/invoice-payments";
 import type { InvoicePdfRenderer } from "@/api/lib/billing/invoice-pdf/document";
@@ -394,6 +394,41 @@ const seedInvoice = async ({
     })),
   );
   return invoiceId;
+};
+
+/** A credit note against `originalInvoiceId` for `amount`, in `status`. */
+const seedCreditNote = async (
+  originalInvoiceId: SafeId<"invoice">,
+  { amount, status }: { amount: number; status: InvoiceStatus },
+) => {
+  const creditNoteId = createSafeId<"invoice">();
+  seededInvoiceIds.push(creditNoteId);
+  await testDb.insert(invoices).values({
+    id: creditNoteId,
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA1,
+    documentType: "credit_note",
+    originalInvoiceId,
+    invoiceNumber: numberOf(creditNoteId),
+    invoiceDate: "2026-10-03",
+    taxableSupplyDate: "2026-10-03",
+    dueDate: "2026-10-15",
+    currency: "CZK",
+    language: "cs",
+    status,
+    sellerProfileId: sellerA,
+    buyerName: "Example Client",
+    buyerRegistrationId: "87654321",
+    buyerAddressLine1: "Client street 2",
+    buyerCity: "Brno",
+    buyerPostalCode: "602 00",
+    buyerCountry: "CZ",
+    finalizedAt: status === INVOICE_STATUS.DRAFT ? null : new Date(),
+    netAmount: cents(-amount),
+    vatAmount: cents(0),
+    totalAmount: cents(-amount),
+  });
+  return creditNoteId;
 };
 
 const memberContext = ({
@@ -3309,6 +3344,166 @@ describe("invoice payment requests", () => {
   });
 });
 
+describe("the amount a client page and email state as due", () => {
+  const { money } = createInvoiceFormatters({ currency: "CZK", locale: "cs" });
+  const pageOf = async (token: string) => {
+    const response = await post(server, "view", { token });
+    expect(response.status).toBe(200);
+    return v.parse(
+      v.object({
+        paid: v.boolean(),
+        credited: v.boolean(),
+        outstandingAmount: v.number(),
+        payment: v.nullable(
+          v.object({
+            fields: v.array(v.object({ label: v.string(), value: v.string() })),
+            qrSvg: v.nullable(v.string()),
+          }),
+        ),
+      }),
+      await response.json(),
+    );
+  };
+  const memberBalance = async (invoiceId: SafeId<"invoice">) => {
+    const read = await readInvoiceById.handler(
+      asTestRaw<Parameters<typeof readInvoiceById.handler>[0]>(
+        memberContext({
+          tenant: "A",
+          invoiceId,
+          route: "/v1/invoices/:workspaceId/:invoiceId",
+        }),
+      ),
+    );
+    return v.parse(v.object({ outstandingAmount: v.number() }), read)
+      .outstandingAmount;
+  };
+  const qrFor = (invoiceId: SafeId<"invoice">, amount: number) => {
+    const variableSymbol = variableSymbolOf({
+      number: numberOf(invoiceId),
+      reference: null,
+    });
+    const payload = buildCzechQrPaymentPayload({
+      documentType: "invoice",
+      iban: "CZ3301000000000002970297",
+      amountMinor: cents(amount),
+      currency: "CZK",
+      dueDate: "2026-10-15",
+      message: numberOf(invoiceId),
+      ...(variableSymbol === null ? {} : { variableSymbol }),
+    }).unwrap("Credited fixture must build a Czech QR payload");
+    return payload.status === "payable"
+      ? qrSvg(payload.payload, "M")
+      : panic("Expected a payable Czech invoice QR");
+  };
+  const sendTo = async (invoiceId: SafeId<"invoice">, to: string) => {
+    expect(await send(invoiceId, [to])).toMatchObject({
+      deliveryStatus: "delivered",
+    });
+    const message =
+      delivered.findLast((candidate) => candidate.to === to) ??
+      panic("Expected the invoice email");
+    return { amountDue: message.amountDue, token: tokenSentTo(to) };
+  };
+
+  test("a fully credited invoice states nothing due and requests no payment, and the link stays open", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
+    const { token } = await sendTo(invoiceId, "credited-full@example.test");
+    await seedCreditNote(invoiceId, {
+      amount: 100_000,
+      status: INVOICE_STATUS.FINALIZED,
+    });
+    expect(await pageOf(token)).toMatchObject({
+      paid: false,
+      credited: true,
+      outstandingAmount: 0,
+      payment: null,
+    });
+    expect(await memberBalance(invoiceId)).toBe(0);
+    const resent = await sendTo(invoiceId, "credited-full-again@example.test");
+    expect(resent.amountDue).toBeNull();
+  });
+
+  test("a partially credited invoice asks for what the credit leaves, with a QR for exactly that", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
+    await seedCreditNote(invoiceId, {
+      amount: 30_000,
+      status: INVOICE_STATUS.SENT,
+    });
+    const { amountDue, token } = await sendTo(
+      invoiceId,
+      "credited-part@example.test",
+    );
+    expect(amountDue).toBe(money(70_000));
+    const page = await pageOf(token);
+    expect(page).toMatchObject({
+      paid: false,
+      credited: false,
+      outstandingAmount: 70_000,
+    });
+    expect(page.payment?.qrSvg).toBe(qrFor(invoiceId, 70_000));
+    expect(page.payment?.fields).toContainEqual({
+      label: expect.any(String),
+      value: money(70_000),
+    });
+    expect(await memberBalance(invoiceId)).toBe(70_000);
+  });
+
+  test("a credit after a partial payment leaves only the remainder due", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
+    await addPayment(invoiceId, { amount: 60_000, paidOn: "2026-10-02" });
+    const { token } = await sendTo(invoiceId, "credited-paid@example.test");
+    await seedCreditNote(invoiceId, {
+      amount: 25_000,
+      status: INVOICE_STATUS.FINALIZED,
+    });
+    const partly = await pageOf(token);
+    expect(partly).toMatchObject({
+      credited: false,
+      outstandingAmount: 15_000,
+    });
+    expect(partly.payment?.qrSvg).toBe(qrFor(invoiceId, 15_000));
+    await seedCreditNote(invoiceId, {
+      amount: 15_000,
+      status: INVOICE_STATUS.FINALIZED,
+    });
+    // Payment and credit together cover it; the credit alone does not.
+    expect(await pageOf(token)).toMatchObject({
+      credited: false,
+      outstandingAmount: 0,
+      payment: null,
+    });
+    expect(await memberBalance(invoiceId)).toBe(0);
+  });
+
+  test("draft and voided credit notes take nothing off the amount due", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
+    await seedCreditNote(invoiceId, {
+      amount: 100_000,
+      status: INVOICE_STATUS.DRAFT,
+    });
+    const creditNoteId = await seedCreditNote(invoiceId, {
+      amount: 100_000,
+      status: INVOICE_STATUS.FINALIZED,
+    });
+    const { token } = await sendTo(invoiceId, "credited-void@example.test");
+    expect(await pageOf(token)).toMatchObject({
+      credited: true,
+      outstandingAmount: 0,
+    });
+    await testDb
+      .update(invoices)
+      .set({ status: INVOICE_STATUS.VOID })
+      .where(eq(invoices.id, creditNoteId));
+    const reopened = await pageOf(token);
+    expect(reopened).toMatchObject({
+      credited: false,
+      outstandingAmount: 100_000,
+    });
+    expect(reopened.payment?.qrSvg).toBe(qrFor(invoiceId, 100_000));
+    expect(await memberBalance(invoiceId)).toBe(100_000);
+  });
+});
+
 describe("public invoice document descriptions", () => {
   test("legacy attached time prints the same descriptions as the authenticated PDF", async () => {
     const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
@@ -3392,14 +3587,15 @@ describe("public invoice document descriptions", () => {
     }
     const publicLines = invoiceDocumentRenderOptions(
       linked.document,
-      linked.outstandingAmount,
+      linked.amountDue,
     ).invoice.lines;
     const authenticatedLines = invoiceDocumentRenderOptions(
       authenticated,
-      invoicePaymentAmounts({
+      invoiceAmountDue({
         totalAmount: authenticated.invoice.totalAmount,
         paidAmount: paidAmountOf(authenticated.invoice.payments),
-      }).outstandingAmount,
+        creditedAmount: authenticated.invoice.creditedAmount,
+      }),
     ).invoice.lines;
     expect(authenticatedLines.map(({ description }) => description)).toContain(
       "Legacy invoice work",

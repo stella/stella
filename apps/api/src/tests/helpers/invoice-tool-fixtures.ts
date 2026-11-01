@@ -5,6 +5,7 @@ import { cents } from "@stll/money";
 
 import type { databaseRelations } from "@/api/db/database-relations";
 import type { INVOICE_DETAIL_RELATIONS } from "@/api/lib/billing/invoice-detail";
+import type { INVOICE_CREDITED_AMOUNT_EXTRA } from "@/api/lib/billing/invoice-payments";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { LIST_INVOICES_LIST_PROJECTION } from "@/api/lib/chat/projections";
 
@@ -13,7 +14,10 @@ import type { LIST_INVOICES_LIST_PROJECTION } from "@/api/lib/chat/projections";
 type InvoiceDetailRow = BuildQueryResult<
   typeof databaseRelations,
   (typeof databaseRelations)["invoices"],
-  { with: typeof INVOICE_DETAIL_RELATIONS }
+  {
+    with: typeof INVOICE_DETAIL_RELATIONS;
+    extras: typeof INVOICE_CREDITED_AMOUNT_EXTRA;
+  }
 >;
 
 type InvoiceDetailFixtureOptions = Partial<InvoiceDetailRow> &
@@ -67,15 +71,17 @@ export const invoiceDetailRowFixture = (options: InvoiceDetailFixtureOptions) =>
     payments: [],
     timeEntries: [],
     expenses: [],
+    creditedAmount: 0,
     ...options,
   }) satisfies InvoiceDetailRow;
 
-// The list query supplies the paid sum; the mapper computes outstanding and
-// replaces its private cursor timestamp with the opaque page cursor.
+// The list query supplies the paid and credited sums; the mapper computes
+// outstanding and replaces its private cursor timestamp with the opaque page
+// cursor.
 type InvoiceListRow = Omit<
   v.InferInput<typeof LIST_INVOICES_LIST_PROJECTION>["invoices"][number],
   "outstandingAmount"
-> & { createdAtCursor: Date };
+> & { createdAtCursor: Date; creditedAmount: number };
 
 type InvoiceListFixtureOptions = Partial<InvoiceListRow> &
   Pick<InvoiceListRow, "id">;
@@ -94,6 +100,7 @@ export const invoiceListRowFixture = (options: InvoiceListFixtureOptions) =>
     currency: "EUR",
     totalAmount: 0,
     paidAmount: 0,
+    creditedAmount: 0,
     createdAtCursor: new Date("2026-01-01T00:00:00.000Z"),
     ...options,
   }) satisfies InvoiceListRow;

@@ -23,7 +23,7 @@ export const assertInvoicePaymentRequest = ({
   grossAmountMinor,
   outstandingAmount,
 }: AssertInvoicePaymentRequestOptions) => {
-  expect(invoice.paymentAmountMinor).toBe(cents(outstandingAmount));
+  expect<number>(invoice.paymentAmountMinor).toBe(outstandingAmount);
   expect(invoice.totals.grossAmountMinor).toBe(cents(grossAmountMinor));
   const data = buildInvoiceTemplateData(invoice).unwrap(
     "Payment fixture must build invoice template data",

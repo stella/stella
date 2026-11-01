@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
-import type { CentsAmount } from "@stll/money";
 
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
@@ -11,6 +10,8 @@ import {
   INVOICE_SELLER_COLUMNS,
 } from "@/api/lib/billing/invoice-detail";
 import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
+import { INVOICE_CREDITED_AMOUNT_EXTRA } from "@/api/lib/billing/invoice-payments";
+import type { AmountDue } from "@/api/lib/billing/invoice-payments";
 import type { RenderInvoicePdfOptions } from "@/api/lib/billing/invoice-pdf/render-helpers";
 import { renderInvoiceWithTypst } from "@/api/lib/billing/invoice-pdf/typst/render-typst";
 import { openTypstSession } from "@/api/lib/billing/invoice-pdf/typst/session";
@@ -47,6 +48,7 @@ export const loadInvoiceDocument = async (
       organizationId: { eq: organizationId },
     },
     columns: INVOICE_DOCUMENT_COLUMNS,
+    extras: INVOICE_CREDITED_AMOUNT_EXTRA,
     with: INVOICE_DETAIL_RELATIONS,
   });
   if (!invoice) {
@@ -94,7 +96,7 @@ type LoadedInvoiceDocument = NonNullable<
 export type InvoiceDocumentSource = Omit<LoadedInvoiceDocument, "invoice"> & {
   invoice: Omit<
     LoadedInvoiceDocument["invoice"],
-    "timeEntries" | "expenses" | "payments"
+    "timeEntries" | "expenses" | "payments" | "creditedAmount"
   > &
     Pick<
       Parameters<typeof readInvoiceDocumentLines>[0],
@@ -129,7 +131,7 @@ export const invoiceDocumentError = (
 /** The render input for a loaded invoice, with its lines and totals. */
 export const invoiceDocumentRenderOptions = (
   loaded: InvoiceDocumentSource,
-  paymentAmountMinor: CentsAmount,
+  paymentAmountMinor: AmountDue,
 ): RenderInvoicePdfOptions => {
   const amounts = readInvoiceDocumentLines(loaded.invoice);
   return {
@@ -225,7 +227,7 @@ export type InvoicePdfRenderer = typeof renderInvoiceWithTypst;
 type RenderInvoiceDocumentPdfOptions = {
   loaded: InvoiceDocumentSource;
   /** Required remaining balance from the caller's payment snapshot; zero means settled. */
-  paymentAmountMinor: CentsAmount;
+  paymentAmountMinor: AmountDue;
   renderInvoice?: InvoicePdfRenderer;
 };
 

@@ -4025,6 +4025,7 @@
     "title": "Inspetor"
   },
   "invoiceLink": {
+    "credited": "Esta fatura foi totalmente creditada; não há valor a pagar.",
     "downloadEInvoice": {
       "isdoc": "Baixar ISDOC",
       "peppol_sk": "Baixar fatura eletrônica (Peppol)",

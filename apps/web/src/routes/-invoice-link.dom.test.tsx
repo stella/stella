@@ -27,6 +27,7 @@ const invoice = {
   dir: "ltr",
   documentType: "invoice",
   paid: false,
+  credited: false,
   outstandingAmount: cents(12_000),
   seller: "Legal practice",
   buyer: "Client",
@@ -50,6 +51,39 @@ const invoice = {
 } satisfies ComponentProps<typeof InvoiceSummary>["invoice"];
 
 afterAll(unregisterDomEnvironment);
+
+const renderSummary = (
+  summary: ComponentProps<typeof InvoiceSummary>["invoice"],
+) => {
+  const client = new QueryClient();
+  const markup = renderToStaticMarkup(
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <InvoiceSummary invoice={summary} token={"0f".repeat(32)} />
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+  client.clear();
+  const host = document.createElement("div");
+  // safe-html: React renderToStaticMarkup escapes this test's fixed invoice values.
+  host.innerHTML = markup;
+  return host;
+};
+
+test("a fully credited invoice says nothing is due and requests no payment", () => {
+  const host = renderSummary({
+    ...invoice,
+    credited: true,
+    outstandingAmount: cents(0),
+  });
+  expect(host.textContent).toContain(messages.invoiceLink.credited);
+  expect(host.textContent).not.toContain(messages.invoiceLink.paid);
+  expect(host.querySelector("img")).toBeNull();
+  const open = renderSummary(invoice);
+  expect(open.textContent).not.toContain(messages.invoiceLink.credited);
+});
 
 test("the amount-due label and value are emphasised without changing fact order", () => {
   const client = new QueryClient();

@@ -4025,6 +4025,7 @@
     "title": "لوحة الفحص"
   },
   "invoiceLink": {
+    "credited": "تم إصدار إشعار دائن بكامل قيمة هذه الفاتورة؛ لا يوجد مبلغ مستحق.",
     "downloadEInvoice": {
       "isdoc": "تنزيل ISDOC",
       "peppol_sk": "تنزيل الفاتورة الإلكترونية (Peppol)",

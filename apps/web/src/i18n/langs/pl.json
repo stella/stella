@@ -4025,6 +4025,7 @@
     "title": "Inspektor"
   },
   "invoiceLink": {
+    "credited": "Ta faktura została w całości skorygowana; nic nie jest do zapłaty.",
     "downloadEInvoice": {
       "isdoc": "Pobierz ISDOC",
       "peppol_sk": "Pobierz e-fakturę (Peppol)",

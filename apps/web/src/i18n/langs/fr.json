@@ -4025,6 +4025,7 @@
     "title": "Inspecteur"
   },
   "invoiceLink": {
+    "credited": "Cette facture a fait l'objet d'un avoir total ; aucun montant n'est dû.",
     "downloadEInvoice": {
       "isdoc": "Télécharger l'ISDOC",
       "peppol_sk": "Télécharger la facture électronique (Peppol)",

@@ -3,8 +3,10 @@ import { afterAll, describe, expect, test } from "bun:test";
 
 import { cents, formatMoneyCents } from "@stll/money";
 
+import { invoiceAmountDue } from "../invoice-payments";
 import { buildInvoicePaymentPayload } from "./render-helpers";
 import type { RenderInvoicePdfOptions } from "./render-helpers";
+import { amountDueOf } from "./typst/fixtures";
 import { renderInvoiceWithTypst } from "./typst/render-typst";
 import { openTypstSession } from "./typst/session";
 
@@ -28,7 +30,7 @@ const sampleLine = {
 } as const;
 
 const options = {
-  paymentAmountMinor: cents(55_555),
+  paymentAmountMinor: amountDueOf(55_555),
   invoice: {
     status: "finalized",
     documentType: "invoice",
@@ -487,7 +489,12 @@ describe("invoice QR payment", () => {
       expect(
         buildInvoicePaymentPayload({
           ...options,
-          paymentAmountMinor: grossAmountMinor,
+          // Nothing stays due on a zero or negative total.
+          paymentAmountMinor: invoiceAmountDue({
+            totalAmount: grossAmountMinor,
+            paidAmount: Math.abs(grossAmountMinor),
+            creditedAmount: 0,
+          }),
           totals: { ...options.totals, grossAmountMinor },
         }),
       ).toBeNull();

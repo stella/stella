@@ -4025,6 +4025,7 @@
     "title": "Inspektor"
   },
   "invoiceLink": {
+    "credited": "Tato faktura je plně dobropisována; nic není k úhradě.",
     "downloadEInvoice": {
       "isdoc": "Stáhnout ISDOC",
       "peppol_sk": "Stáhnout e-fakturu (Peppol)",

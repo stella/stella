@@ -4025,6 +4025,7 @@
     "title": "Inspektor"
   },
   "invoiceLink": {
+    "credited": "See arve on täielikult krediteeritud; tasuda pole midagi.",
     "downloadEInvoice": {
       "isdoc": "Laadi alla ISDOC",
       "peppol_sk": "Laadi alla e-arve (Peppol)",

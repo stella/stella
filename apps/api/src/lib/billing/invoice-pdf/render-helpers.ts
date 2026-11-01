@@ -20,12 +20,13 @@ import type {
 import { buildPayBySquarePayload } from "@stll/invoicing/pay-by-square";
 import type { PayBySquareResult } from "@stll/invoicing/pay-by-square";
 import { formatMoneyCents } from "@stll/money";
-import type { CentsAmount } from "@stll/money";
 import { parsePlainDate } from "@stll/time";
+
+import type { AmountDue } from "@/api/lib/billing/invoice-payments";
 
 export type RenderInvoicePdfOptions = {
   /** Remaining balance for payment fields and QR; zero suppresses the payment block. */
-  paymentAmountMinor: CentsAmount;
+  paymentAmountMinor: AmountDue;
   invoice: {
     status: InvoiceStatus;
     documentType: InvoiceDocumentType;
@@ -98,7 +99,7 @@ export const requestsPayment = ({
   amountMinor,
 }: {
   documentType: InvoiceDocumentType;
-  amountMinor: number;
+  amountMinor: AmountDue;
 }): boolean => documentType !== "credit_note" && amountMinor > 0;
 
 export const buildInvoicePaymentPayload = ({

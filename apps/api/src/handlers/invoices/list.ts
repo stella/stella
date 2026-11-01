@@ -7,6 +7,7 @@ import { numberFromString } from "@stll/api-contract/http-input";
 import { invoices } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
+  invoiceCreditedAmountSql,
   invoicePaidAmountSql,
   invoicePaymentAmounts,
 } from "@/api/lib/billing/invoice-payments";
@@ -108,6 +109,7 @@ const readInvoices = createSafeHandler(
             language: invoices.language,
             totalAmount: invoices.totalAmount,
             paidAmount: invoicePaidAmountSql(invoices),
+            creditedAmount: invoiceCreditedAmountSql(invoices),
             billingMode: invoices.billingMode,
             flatFeeAmount: invoices.flatFeeAmount,
             createdAt: invoices.createdAt,

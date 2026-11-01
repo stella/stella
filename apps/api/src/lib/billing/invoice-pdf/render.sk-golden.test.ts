@@ -5,6 +5,7 @@ import type { VatTreatment } from "@stll/invoicing";
 import { cents, formatMoneyCents } from "@stll/money";
 
 import type { RenderInvoicePdfOptions } from "./render-helpers";
+import { amountDueOf } from "./typst/fixtures";
 import { renderInvoiceWithTypst } from "./typst/render-typst";
 import { openTypstSession } from "./typst/session";
 
@@ -54,7 +55,7 @@ const golden = ({
   buyerVatId: string | null;
   buyerCountry: string;
 }): RenderInvoicePdfOptions => ({
-  paymentAmountMinor: cents(line.netAmount + line.vatAmount),
+  paymentAmountMinor: amountDueOf(line.netAmount + line.vatAmount),
   invoice: {
     status: "finalized",
     documentType: "invoice",

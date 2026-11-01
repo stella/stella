@@ -251,13 +251,21 @@ WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_
   AND token_hash = NULLIF(pg_catalog.current_setting('app.invoice_link_hash', true), ''));
 
 --> statement-breakpoint
--- stella-migration-safety: reviewed security-definer - fixed search path and app-only execute; only a live token in its organization can read scalar paid totals and the settlement date, never payment rows or actor data
+-- The credited amount is what issued (finalized, sent or paid) credit notes
+-- take off the invoice; drafts and void credit notes take nothing.
+-- stella-migration-safety: reviewed security-definer - fixed search path and app-only execute; only a live token in its organization can read scalar paid and credited totals and the settlement date, never payment rows, credit note rows or actor data
 CREATE FUNCTION "invoice_link_settlement"(p_token_hash text)
-RETURNS TABLE ("latest_paid_on" date, "paid_amount" bigint)
+RETURNS TABLE ("latest_paid_on" date, "paid_amount" bigint, "credited_amount" bigint)
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $$
-  SELECT CASE WHEN i.status = 'paid' THEN max(p.paid_on) ELSE NULL END, COALESCE(sum(p.amount), 0)::bigint
+  SELECT CASE WHEN i.status = 'paid' THEN max(p.paid_on) ELSE NULL END, COALESCE(sum(p.amount), 0)::bigint,
+         (SELECT COALESCE(sum(abs(c.total_amount)), 0)
+            FROM public.invoices c
+           WHERE c.original_invoice_id = i.id
+             AND c.organization_id = i.organization_id
+             AND c.document_type = 'credit_note'
+             AND c.status IN ('finalized', 'sent', 'paid'))::bigint
     FROM public.invoice_link_scope(p_token_hash) s
     JOIN public.invoices i ON i.id = s.invoice_id AND i.organization_id = s.organization_id
     LEFT JOIN public.invoice_payments p ON p.invoice_id = i.id AND p.organization_id = i.organization_id AND p.voided_at IS NULL

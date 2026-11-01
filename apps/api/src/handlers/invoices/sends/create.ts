@@ -30,10 +30,15 @@ import {
   invoiceLinkUrl,
 } from "@/api/lib/billing/invoice-links";
 import {
+  invoiceAmountDue,
+  invoiceCreditedAmountSql,
   invoicePaidAmountSql,
-  invoicePaymentAmounts,
 } from "@/api/lib/billing/invoice-payments";
-import { createInvoiceFormatters } from "@/api/lib/billing/invoice-pdf/render-helpers";
+import type { AmountDue } from "@/api/lib/billing/invoice-payments";
+import {
+  createInvoiceFormatters,
+  requestsPayment,
+} from "@/api/lib/billing/invoice-pdf/render-helpers";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { INVOICE_SEND_COMPLETION } from "@/api/lib/billing/invoice-send-completion";
 import { completeInvoiceSendDelivery } from "@/api/lib/billing/invoice-send-delivery";
@@ -193,13 +198,13 @@ type LockedInvoice = NonNullable<
   Awaited<ReturnType<typeof lockInvoiceInStatus>>
 >;
 
-type PreparedSend = {
+export type PreparedSend = {
   sendId: SafeId<"invoiceSend">;
   expiresAt: Date;
   replyTo: string;
   firmName: string;
   timeZone: string;
-  outstandingAmount: number;
+  amountDue: AmountDue;
   invoice: LockedInvoice & { invoiceNumber: string };
 };
 
@@ -340,6 +345,7 @@ export const prepareInvoiceSend = async (
     .select({
       totalAmount: invoices.totalAmount,
       paidAmount: invoicePaidAmountSql(invoices),
+      creditedAmount: invoiceCreditedAmountSql(invoices),
     })
     .from(invoices)
     .where(eq(invoices.id, options.invoiceId));
@@ -347,7 +353,7 @@ export const prepareInvoiceSend = async (
     return panic("Locked invoice disappeared while preparing its email");
   }
   return Result.ok({
-    outstandingAmount: invoicePaymentAmounts(paymentRow).outstandingAmount,
+    amountDue: invoiceAmountDue(paymentRow),
     sendId,
     expiresAt,
     replyTo,
@@ -370,15 +376,17 @@ const emailFor = (
   });
   const owed =
     invoice.status !== INVOICE_STATUS.PAID &&
-    invoice.documentType !== "credit_note" &&
-    prepared.outstandingAmount > 0;
+    requestsPayment({
+      documentType: invoice.documentType,
+      amountMinor: prepared.amountDue,
+    });
   return {
     replyTo: prepared.replyTo,
     lang: invoice.language,
     documentType: invoice.documentType,
     invoiceNumber: invoice.invoiceNumber,
     firmName: prepared.firmName,
-    amountDue: owed ? money(prepared.outstandingAmount) : null,
+    amountDue: owed ? money(prepared.amountDue) : null,
     dueDate: owed && invoice.dueDate !== null ? date(invoice.dueDate) : null,
     // The last day the link opens, in the firm's own time zone.
     expiresOn: date(
