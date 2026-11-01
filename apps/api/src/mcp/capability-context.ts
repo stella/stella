@@ -96,6 +96,7 @@ const mcpMemberCaller = async (
     session: {
       id: null,
       activeOrganizationId: context.organizationId,
+      grantedScopes: context.grantedScopes,
       ...(context.sessionCredentialType === undefined
         ? {}
         : { credentialType: context.sessionCredentialType }),

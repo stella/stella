@@ -49,9 +49,7 @@ export const readsBaseRevision = (step: Record<string, unknown>): boolean => {
 
 export type DiffScopeGap =
   /** Inspects changed files; an unchanged dependent can break unseen. */
-  | "dependents"
-  /** Outside a pull request or merge group the diff is empty. */
-  | "empty-off-change";
+  "dependents";
 
 export type DiffScope =
   /** The rule is about the change itself (a VERSION bump, new migrations). */
@@ -84,7 +82,7 @@ const DATED_WAIVER =
 const PARSER_VERSIONS =
   "Builds each changed parser's import closure before requiring a version bump.";
 const CODE_QUALITY =
-  "Workspaces run Turbo's affected scope with reverse dependants; on main the comparison is empty, so only a dispatched run checks everything.";
+  "Turbo's affected scope with reverse dependants; on main it compares with the last commit known green, or checks every file when none is known.";
 const RESULT_CONSUMPTION =
   "Checks changed files and every module importing them; outside a pull request or merge group it scans every file.";
 const CHECK_POOL =
@@ -334,20 +332,14 @@ export const DIFF_SCOPED_STEPS = {
     "dependents",
     "Its path list omits workspace packages the extension imports.",
   ),
-  "ci.yml:code-quality-api#Code quality": gap("empty-off-change", CODE_QUALITY),
+  "ci.yml:code-quality-api#Code quality": expands(CODE_QUALITY),
   "ci.yml:code-quality-api#Result consumption": expands(RESULT_CONSUMPTION),
   "ci.yml:code-quality-web-rest#Run independent code-quality checks":
     operational(CHECK_POOL),
-  "ci.yml:code-quality-web-rest#Code quality (web)": gap(
-    "empty-off-change",
-    CODE_QUALITY,
-  ),
+  "ci.yml:code-quality-web-rest#Code quality (web)": expands(CODE_QUALITY),
   "ci.yml:code-quality-web-rest#Result consumption (web)":
     expands(RESULT_CONSUMPTION),
-  "ci.yml:code-quality-web-rest#Code quality (rest)": gap(
-    "empty-off-change",
-    CODE_QUALITY,
-  ),
+  "ci.yml:code-quality-web-rest#Code quality (rest)": expands(CODE_QUALITY),
   "ci.yml:code-quality-web-rest#Result consumption (rest)":
     expands(RESULT_CONSUMPTION),
   "ci.yml:migration-upgrade-rehearsal#Rehearse the upgrade from the promoted release at scale":
@@ -356,9 +348,8 @@ export const DIFF_SCOPED_STEPS = {
     operational(
       "Selects the baseline file the full recall is measured against.",
     ),
-  "ci.yml:database-migrations-check#Check migration coverage": gap(
-    "dependents",
-    "Treats only the schema entry files as schema changes; table definitions they re-export never mark the schema changed.",
+  "ci.yml:database-migrations-check#Check migration coverage": expands(
+    "A fast check of the schema entry files; the plan runs the migration jobs for every file the schema imports, and the schema parity step in database-migrations-apply-fresh compares the migrated database with the whole schema.",
   ),
   "ci.yml:route-smoke#Prepare merge-base network budget":
     fullTree(NETWORK_BUDGET),
