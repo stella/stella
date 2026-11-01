@@ -64,6 +64,7 @@ for (const waitingOn of ["cleanup", "revocation", "deletion"] as const) {
       publish: (generation) => {
         updates.push(generation);
       },
+      kept: () => {},
     });
     await reached.promise;
     const replacement = {
@@ -143,6 +144,7 @@ test("session cleanup can authenticate before its credentials are retired", asyn
     store,
   });
   let cleaned = false;
+  let kept = 0;
   const outcome = await signOutSession({
     store,
     session: SESSION,
@@ -153,12 +155,59 @@ test("session cleanup can authenticate before its credentials are retired", asyn
     },
     revoke: async () => {},
     publish: () => {},
+    kept: () => {
+      kept++;
+    },
   });
   expect(outcome.isOk()).toBeTrue();
+  expect(kept).toBe(0);
   expect(cleaned).toBeTrue();
   expect(source.session()).toBeUndefined();
   expect(stored).toBeUndefined();
 });
+
+for (const outlived of ["keychain-kept", "sign-in-took-over"] as const) {
+  test(`a sign-out the session outlives (${outlived}) lets a later end run`, async () => {
+    let stored: StoredSession | null | undefined = SESSION;
+    const store = createSessionStore({
+      read: async () => stored,
+      write: async (session) => {
+        stored = session;
+      },
+      prepareClear: async () => {
+        if (outlived === "keychain-kept") {
+          throw new Error("keychain locked");
+        }
+        // A sign-in starts while the keychain is being cleared, then is
+        // cancelled before it writes anything.
+        store.begin();
+        stored = null;
+      },
+      clear: async () => {
+        stored = undefined;
+      },
+    });
+    const generation = store.generation();
+    const published: SessionGeneration[] = [];
+    let kept = 0;
+    const outcome = await signOutSession({
+      store,
+      session: SESSION,
+      beforeEnd: async () => {},
+      revoke: async () => {},
+      publish: (next) => {
+        published.push(next);
+      },
+      kept: () => {
+        kept++;
+      },
+    });
+    expect(outcome.isErr()).toBe(outlived === "keychain-kept");
+    expect(published).toEqual([]);
+    expect(store.isCurrent(generation)).toBeTrue();
+    expect(kept).toBe(1);
+  });
+}
 
 const SIGN_IN_B = {
   ...SESSION,

@@ -50,6 +50,12 @@ type SignOutOptions = {
   readonly beforeEnd: (session: StoredSession) => Promise<void>;
   readonly revoke: (session: StoredSession) => Promise<void>;
   readonly publish: (generation: SessionGeneration) => void;
+  /**
+   * Runs when the session is still the current one after this sign-out (the
+   * keychain kept it, or a sign-in took over the clear), so whatever
+   * `beforeEnd` set aside for an ending session can let a later end run.
+   */
+  readonly kept: () => void;
 };
 
 export const signOutSession = async ({
@@ -58,6 +64,7 @@ export const signOutSession = async ({
   beforeEnd,
   revoke,
   publish,
+  kept,
 }: SignOutOptions) => {
   const generation = store.generation();
   if (session !== undefined) {
@@ -74,12 +81,14 @@ export const signOutSession = async ({
     catch: (cause) =>
       new TokenError({ message: "The keychain kept the session", cause }),
   });
-  if (Result.isError(cleared)) {
-    return Result.err(cleared.error);
-  }
-  const outcome = cleared.value;
-  if (outcome.type === "committed") {
+  if (Result.isOk(cleared) && cleared.value.type === "committed") {
+    const outcome = cleared.value;
     store.commit(outcome.generation, () => publish(outcome.generation));
   }
-  return Result.ok(undefined);
+  if (store.isCurrent(generation)) {
+    kept();
+  }
+  return Result.isError(cleared)
+    ? Result.err(cleared.error)
+    : Result.ok(undefined);
 };

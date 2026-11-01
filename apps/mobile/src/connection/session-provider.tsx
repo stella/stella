@@ -172,6 +172,12 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
                 () => ({ status: "signed-out", ended: false }) as const,
               ) ?? current,
           ),
+        // The session outlived the sign-out, so a server refusal ends it.
+        kept: () => {
+          if (state.status === "signed-in") {
+            ending.delete(state.source);
+          }
+        },
       }),
     end: (source) => {
       if (
