@@ -10,7 +10,7 @@ import {
   WorkspaceBillingHistoryError,
   WorkspaceStorageTeardownBoundError,
 } from "@/api/lib/organization-storage-teardown";
-import { executeAuthorizedWorkspaceDeletionWithRoot } from "@/api/lib/workspace-deletion-wiring";
+import { executeAuthorizedWorkspaceDeletionWithRoot } from "@/api/lib/workspace-deletion";
 
 const config = {
   contract: "patch",

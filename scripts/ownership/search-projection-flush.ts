@@ -46,7 +46,6 @@ export default {
       "apps/api/src/lib/tasks/create-task-entity.ts",
       "apps/api/src/lib/uploads/entity-create.ts",
       "apps/api/src/lib/workspace-deletion.ts",
-      "apps/api/src/lib/workspace-deletion-wiring.ts",
       "apps/api/src/mcp/matter-tools.ts",
     ].map((importer) => ({
       path: importer,

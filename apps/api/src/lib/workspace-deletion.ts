@@ -3,6 +3,7 @@ import { and, eq, not } from "drizzle-orm";
 
 import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
+import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { documentProcessingRuns, workspaces } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -27,7 +28,7 @@ import {
 } from "@/api/lib/organization-storage-teardown";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
-import type { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 const WORKSPACE_DELETION_DEADLOCK_RETRIES = 2;
@@ -298,3 +299,15 @@ export const executeAuthorizedWorkspaceDeletion = async (
   await dependencies.flushWorkspaceSearchRepairs([workspaceId]);
   return Result.ok({ status: "deleted" });
 };
+
+/**
+ * The request entry point: binds the owner connection and the post-commit
+ * search flush once, so the command above keeps both as required inputs.
+ */
+export const executeAuthorizedWorkspaceDeletionWithRoot = async (
+  options: ExecuteAuthorizedWorkspaceDeletionOptions,
+) =>
+  await executeAuthorizedWorkspaceDeletion(options, {
+    database: rootDb,
+    flushWorkspaceSearchRepairs,
+  });
