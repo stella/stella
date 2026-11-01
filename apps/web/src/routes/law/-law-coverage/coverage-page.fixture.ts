@@ -107,11 +107,13 @@ export const CZECHIA = {
     notCountedSources: 1,
   },
   sources: [NEARLY_COMPLETE, NEVER_MEASURED, NEVER_COUNTED],
+  unreadParts: [],
 } satisfies CaseLawCoverageCountry;
 
 export const COVERAGE: CaseLawCoverage = {
   provisionProcessing: [],
   generatedAt: "2026-09-19T08:00:00.000Z",
+  unreadParts: [],
   freshness: { status: "current", ageSeconds: 0 },
   totals: {
     addedLastWeek: 12,
@@ -138,4 +140,5 @@ export const IN_PREPARATION: CaseLawCoverageCountry = {
     notCountedSources: 0,
   },
   sources: [{ ...NEVER_MEASURED, adapterKey: "sk-us", health: "current" }],
+  unreadParts: [],
 };

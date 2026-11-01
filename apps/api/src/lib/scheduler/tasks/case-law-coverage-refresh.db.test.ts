@@ -19,6 +19,8 @@ import {
   schedulerJobs,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { CASE_LAW_COVERAGE_CURRENT_WITHIN_MS } from "@/api/lib/case-law/coverage-freshness";
+import type { CaseLawCoveragePart } from "@/api/lib/case-law/coverage-parts";
 import { CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/coverage-refresh-interval";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
@@ -54,11 +56,11 @@ beforeAll(async () => {
 }, 120_000);
 afterAll(async () => await client.close());
 
-test("coverage refresh publishes complete answers atomically and retains them on degraded reads", async () => {
+const refreshContext = async () => {
   const job =
     (await db.select().from(schedulerJobs)).find(({ id }) => id === JOB_ID) ??
     panic("Coverage scheduler fixture is missing");
-  const context = {
+  return {
     db,
     job,
     payload: null,
@@ -68,46 +70,121 @@ test("coverage refresh publishes complete answers atomically and retains them on
     signal: new AbortController().signal,
     logger,
   };
-  const createRuntime: typeof createScriptBackfillRuntime = (options) =>
-    createScriptBackfillRuntime({
-      ...options,
-      clock: () => Date.parse("2026-10-01T12:00:00Z"),
-      readVerdict: async () => ({ kind: "normal", signals: [] }),
-      // Embedded PostgreSQL owns one session; PostgreSQL tests cover the shared slot.
-      slot: { tryAcquire: async () => true, release: () => {} },
-    });
-  const complete = createCaseLawCoverageRefreshTask({
+};
+
+const createRuntime: typeof createScriptBackfillRuntime = (options) =>
+  createScriptBackfillRuntime({
+    ...options,
+    clock: () => Date.parse("2026-10-01T12:00:00Z"),
+    readVerdict: async () => ({ kind: "normal", signals: [] }),
+    // Embedded PostgreSQL owns one session; PostgreSQL tests cover the shared slot.
+    slot: { tryAcquire: async () => true, release: () => {} },
+  });
+
+/** The fixture answer, computed at `generatedAt` with `unreadParts` unread. */
+const answerAt = (
+  generatedAt: string,
+  unreadParts: readonly CaseLawCoveragePart[] = [],
+) => ({
+  ...CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
+  generatedAt,
+  unreadParts,
+  countries: CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE.countries.map((country) => ({
+    ...country,
+    unreadParts,
+  })),
+});
+
+const refreshWith = async (
+  computed: Awaited<
+    ReturnType<
+      Parameters<typeof createCaseLawCoverageRefreshTask>[0]["compute"]
+    >
+  >,
+) => {
+  // A failed run backs off; each run here starts from a clean slot state.
+  await db
+    .delete(databaseBackfillStates)
+    .where(eq(databaseBackfillStates.name, SCHEDULER_BACKFILL_IDS.coverage));
+  return await createCaseLawCoverageRefreshTask({
     createRuntime,
-    compute: async () => ({
+    compute: async () => computed,
+  })(await refreshContext());
+};
+
+const storedSummary = async () =>
+  (await db.select().from(caseLawCoverageSummaries)).at(0);
+
+test("coverage refresh stores partial answers, but never over a complete one that still reads as current", async () => {
+  expect(
+    await refreshWith({
       answer: CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
       complete: true,
     }),
-  });
-  expect(await complete(context)).toBeUndefined();
-  const published = (await db.select().from(caseLawCoverageSummaries)).at(0);
+  ).toBeUndefined();
+  const published = await storedSummary();
   expect(published?.answer).toEqual(CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE);
   expect(published?.generatedAt.toISOString()).toBe(
     CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE.generatedAt,
   );
   expect(published?.sourcePolicy).toBe("[]");
-  const degraded = createCaseLawCoverageRefreshTask({
-    createRuntime,
-    compute: async () => ({
-      answer: {
-        ...CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
-        generatedAt: "2026-10-01T12:05:00.000Z",
-      },
+
+  // Five minutes later the complete answer is still current: it stays.
+  expect(
+    await refreshWith({
+      answer: answerAt("2026-10-01T12:05:00.000Z", ["facets"]),
       complete: false,
     }),
-  });
-  expect((await degraded(context))?.isErr()).toBe(true);
-  expect((await db.select().from(caseLawCoverageSummaries)).at(0)).toEqual(
-    published,
-  );
-  for (const transport of ["rejected", "result"] as const) {
+  ).toBeUndefined();
+  expect(await storedSummary()).toEqual(published);
+
+  // Past the window a partial answer is better than an old complete one.
+  const lateAt = new Date(
+    Date.parse(CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE.generatedAt) +
+      CASE_LAW_COVERAGE_CURRENT_WITHIN_MS +
+      60_000,
+  ).toISOString();
+  const late = answerAt(lateAt, ["facets"]);
+  expect(await refreshWith({ answer: late, complete: false })).toBeUndefined();
+  expect((await storedSummary())?.answer).toEqual(late);
+  expect((await storedSummary())?.generatedAt.toISOString()).toBe(lateAt);
+
+  // A partial answer always replaces a partial one, even a minute later.
+  const nextAt = new Date(Date.parse(lateAt) + 60_000).toISOString();
+  const next = answerAt(nextAt, ["courts"]);
+  expect(await refreshWith({ answer: next, complete: false })).toBeUndefined();
+  expect((await storedSummary())?.answer).toEqual(next);
+
+  // A complete answer always replaces whatever is stored.
+  const completeAt = new Date(Date.parse(nextAt) + 60_000).toISOString();
+  const complete = answerAt(completeAt);
+  expect(
+    await refreshWith({ answer: complete, complete: true }),
+  ).toBeUndefined();
+  expect((await storedSummary())?.answer).toEqual(complete);
+
+  // Without the catalogue there is no answer to store at all.
+  expect(
+    (
+      await refreshWith({
+        answer: { message: "Coverage is unavailable" },
+        complete: false,
+      })
+    )?.isErr(),
+  ).toBe(true);
+  expect((await storedSummary())?.answer).toEqual(complete);
+});
+
+test("a failed coverage read rolls back only itself, and the refresh stores the rest", async () => {
+  for (const [index, transport] of (
+    ["rejected", "result"] as const
+  ).entries()) {
     await db
       .delete(databaseBackfillStates)
       .where(eq(databaseBackfillStates.name, SCHEDULER_BACKFILL_IDS.coverage));
+    const generatedAt = new Date(
+      Date.parse("2026-10-02T12:00:00.000Z") + index * 60_000,
+    ).toISOString();
     let rejectedRead: unknown;
     let subsequentReads = 0;
     const failed = createCaseLawCoverageRefreshTask({
@@ -137,26 +214,16 @@ test("coverage refresh publishes complete answers atomically and retains them on
         if (read.isErr()) {
           rejectedRead = read.error;
         }
-        // Assembly may degrade several sections after the first read fails.
-        await Result.tryPromise(
-          async () =>
-            await readDb(async (tx) => {
-              subsequentReads += 1;
-              return await tx.execute(sql`SELECT 1`);
-            }),
-        );
-        return {
-          answer: { message: "Coverage is unavailable" },
-          complete: false,
-        };
+        // The transaction is still usable for the parts after the failed one.
+        await readDb(async (tx) => {
+          subsequentReads += 1;
+          return await tx.execute(sql`SELECT 1`);
+        });
+        return { answer: answerAt(generatedAt, ["facets"]), complete: false };
       },
     });
-    const failure = await failed(context);
-    expect(failure?.isErr()).toBe(true);
-    if (failure === undefined || failure.isOk()) {
-      panic("Canceled coverage read did not fail the refresh");
-    }
-    const evidence = readEvidence(failure.error);
+    expect(await failed(await refreshContext())).toBeUndefined();
+    const evidence = readEvidence(rejectedRead);
     expect(evidence.nodes.some(({ sqlState }) => sqlState === "57014")).toBe(
       true,
     );
@@ -169,16 +236,49 @@ test("coverage refresh publishes complete answers atomically and retains them on
         failureSink({ event: "coverage.fixture", expected: [] }),
       ).reason,
     ).toBe("pg_query_canceled");
-    expect(
-      readEvidence(rejectedRead).nodes.some(
-        ({ sqlState }) => sqlState === "57014",
-      ),
-    ).toBe(true);
-    expect(subsequentReads).toBe(0);
-    expect((await db.select().from(caseLawCoverageSummaries)).at(0)).toEqual(
-      published,
+    expect(subsequentReads).toBe(1);
+    expect((await storedSummary())?.generatedAt.toISOString()).toBe(
+      generatedAt,
     );
   }
+});
+
+test("reads left when the refresh budget is spent go unread, and what was read is stored", async () => {
+  await db
+    .delete(databaseBackfillStates)
+    .where(eq(databaseBackfillStates.name, SCHEDULER_BACKFILL_IDS.coverage));
+  const generatedAt = "2026-10-03T12:00:00.000Z";
+  let started = 0;
+  let refused: unknown;
+  const spent = createCaseLawCoverageRefreshTask({
+    createRuntime,
+    readBudget: () => AbortSignal.abort(),
+    compute: async (readDb) => {
+      const read = await Result.tryPromise({
+        try: async () =>
+          await readDb(async (tx) => {
+            started += 1;
+            return await tx.execute(sql`SELECT 1`);
+          }),
+        catch: (cause) => cause,
+      });
+      if (read.isErr()) {
+        refused = read.error;
+      }
+      return { answer: answerAt(generatedAt, ["courts"]), complete: false };
+    },
+  });
+  expect(await spent(await refreshContext())).toBeUndefined();
+  expect(started).toBe(0);
+  expect(refused).toBeInstanceOf(Error);
+  expect((await storedSummary())?.answer).toEqual(
+    answerAt(generatedAt, ["courts"]),
+  );
+});
+
+test("a held coverage refresh computes nothing and keeps the stored answer", async () => {
+  const context = await refreshContext();
+  const published = await storedSummary();
   let computations = 0;
   const held = createCaseLawCoverageRefreshTask({
     createRuntime: (options) =>
@@ -195,9 +295,7 @@ test("coverage refresh publishes complete answers atomically and retains them on
   });
   expect(await held(context)).toBeUndefined();
   expect(computations).toBe(0);
-  expect((await db.select().from(caseLawCoverageSummaries)).at(0)).toEqual(
-    published,
-  );
+  expect(await storedSummary()).toEqual(published);
 });
 
 // The refresh reads the corpus under shared locks and writes only its own
