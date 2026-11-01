@@ -11,9 +11,11 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import {
+  GLOBAL_SEARCH_CHAT_COVERAGE,
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
 } from "@stll/api-contract/search";
+import type { GlobalSearchChatCoverage } from "@stll/api-contract/search";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { api } from "@/lib/api";
@@ -131,6 +133,8 @@ const citationResponse = {
 const searchRequestBodies: unknown[] = [];
 let searchHits: readonly GlobalSearchHit[] = [hit];
 let searchResponseGate: Promise<void> | null = null;
+let searchChatCoverage: GlobalSearchChatCoverage =
+  GLOBAL_SEARCH_CHAT_COVERAGE.COMPLETE;
 let citationHits = citationResponse.hits;
 const supplementalResource = resourceRef({
   type: RESOURCE_TYPE.CASE_LAW_DECISION,
@@ -176,6 +180,7 @@ globalThis.fetch = Object.assign(
       return Response.json({
         hits: body.types?.includes("case-law") ? [supplementalHit] : searchHits,
         nextCursor: null,
+        chatCoverage: searchChatCoverage,
         totalCount: 1,
         facets: { editor: [], mimeType: [], type: [], workspace: [] },
         previewLocatorCandidates: [],
@@ -226,6 +231,7 @@ afterEach(() => {
   searchRequestBodies.length = 0;
   searchHits = [hit];
   searchResponseGate = null;
+  searchChatCoverage = GLOBAL_SEARCH_CHAT_COVERAGE.COMPLETE;
   citationHits = citationResponse.hits;
   assignUserStorage(undefined);
 });
@@ -546,6 +552,30 @@ test("a folder result reveals the folder in the tree on screen, not the first tr
       search: appRouter.state.location.search,
     }).toEqual(EXPECTED_OTHER_TREE_REVEAL),
   );
+});
+
+test("partial chat coverage keeps every result and names what was not searched", async () => {
+  searchChatCoverage = GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL;
+  await mount();
+  await typeQuery();
+  await testing.waitFor(() =>
+    expect(
+      testing.screen.getByText(messages.search.chatCoveragePartial, {
+        exact: false,
+      }),
+    ).toBeTruthy(),
+  );
+  expect(testing.screen.getAllByText(hit.title).length).toBeGreaterThan(0);
+});
+
+test("complete chat coverage adds no note to the result count", async () => {
+  await mount();
+  await typeQuery();
+  expect(
+    testing.screen.queryByText(messages.search.chatCoveragePartial, {
+      exact: false,
+    }),
+  ).toBeNull();
 });
 
 test("a bare docket shows the sheet identifier of every matching decision", async () => {
