@@ -465,7 +465,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   // Billing guideline file search over knowledge-file paths.
   {
-    introducedBy: "20261031200738_activity_billing_drafts",
+    introducedBy: "20261101221234_activity_billing_drafts",
     createSql:
       'CREATE INDEX CONCURRENTLY "agent_skill_resources_path_billing_trgm_idx" ON public."agent_skill_resources" USING gin ("path" gin_trgm_ops)',
     definitionBody:
