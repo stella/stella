@@ -31,6 +31,7 @@ import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
+import { runToolWithRealtime } from "@/api/mcp/tool-realtime";
 import type {
   AllHandlerOutputsTyped,
   AssertTrue,
@@ -379,12 +380,14 @@ export const runRegistryWriteTool = async (
     return Result.err(toRegistryChatToolError(needsMatter.error));
   }
 
-  const response = await REGISTRY_WRITE_TOOL_HANDLERS[toolName]({
+  const response = await runToolWithRealtime({
     args: applyChatApprovalConfirmation({
       args: normalized.value,
       toolName,
     }),
     context: authorizedContext,
+    handler: REGISTRY_WRITE_TOOL_HANDLERS[toolName],
+    toolName,
   });
   const finished = await finalizeToolEgress({
     context: authorizedContext,

@@ -488,6 +488,12 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `saved-time-narratives.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives list` |
 | `saved-time-narratives.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives update` |
 
+## search
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `search.results.list` | read | stella:read | — | generic invoke → `stella capability search results-list` |
+
 ## search-history
 
 | Capability | Access | Scope | Feature | Reachable via |
@@ -672,6 +678,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `time-entries.me.suggestions.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries me-suggestions-list` |
 | `time-entries.members.daily-target.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries members-daily-target-update` |
 | `time-entries.pdf.export` | read | stella:read | FEATURE_TIME_BILLING | not runnable over the generic transport: returns bytes, which the generic transport cannot serialize. time-entries.csv.export covers part of this: returns the same entries as CSV text (time-entries.ledes.export returns LEDES instead); the rendered PDF is not produced |
+| `time-entries.report.get` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries report-get` |
 | `time-entries.split` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries split` |
 | `time-entries.suggestions.decisions.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries suggestions-decisions-create` |
 | `time-entries.suggestions.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries suggestions-list` |
@@ -769,7 +776,7 @@ mechanics, and similar), not gaps in coverage.
 | provider_secret | 34 |
 | public_indexing | 9 |
 | realtime_stream | 9 |
-| search_ui | 19 |
+| search_ui | 20 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
 | upload_mechanics | 21 |

@@ -1781,6 +1781,76 @@
   },
   {
     "schema": "public",
+    "table": "case_law_population_counts",
+    "policy": "case_law_population_count_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('case_law_population_counts'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('case_law_population_counts'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "case_law_population_counts",
+    "policy": "public_law_reader_access",
+    "command": "SELECT",
+    "roles": ["stella_public_law_reader"],
+    "permissive": "PERMISSIVE",
+    "using": "(EXISTS ( SELECT 1\n   FROM case_law_sources s\n  WHERE ((s.id = case_law_population_counts.source_id) AND ((s.descriptor IS NULL) OR ((s.descriptor ->> 'allowsRedistribution'::text) = 'true'::text)))))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "case_law_population_deltas",
+    "policy": "case_law_population_delta_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('case_law_population_deltas'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('case_law_population_deltas'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "case_law_population_deltas",
+    "policy": "public_law_reader_access",
+    "command": "SELECT",
+    "roles": ["stella_public_law_reader"],
+    "permissive": "PERMISSIVE",
+    "using": "(EXISTS ( SELECT 1\n   FROM case_law_sources s\n  WHERE ((s.id = case_law_population_deltas.source_id) AND ((s.descriptor IS NULL) OR ((s.descriptor ->> 'allowsRedistribution'::text) = 'true'::text)))))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "case_law_population_projections",
+    "policy": "case_law_population_projection_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('case_law_population_projections'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('case_law_population_projections'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "case_law_population_projections",
+    "policy": "public_law_reader_access",
+    "command": "SELECT",
+    "roles": ["stella_public_law_reader"],
+    "permissive": "PERMISSIVE",
+    "using": "((publication = 'published'::text) AND (EXISTS ( SELECT 1\n   FROM case_law_sources s\n  WHERE ((s.id = case_law_population_projections.source_id) AND ((s.descriptor IS NULL) OR ((s.descriptor ->> 'allowsRedistribution'::text) = 'true'::text))))))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "case_law_population_seed_state",
+    "policy": "case_law_population_seed_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('case_law_population_seed_state'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('case_law_population_seed_state'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "case_law_provision_admission",
     "policy": "case_law_provision_extraction_owner_access",
     "command": "ALL",

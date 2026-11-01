@@ -31,7 +31,7 @@ describe("browser extension capability policy", () => {
     {
       status: BROWSER_EXTENSION_STATUS.notPaired,
       guidance:
-        "to click the stella extension icon in the browser toolbar on this stella tab and connect the tab",
+        "to click the stella extension icon in the browser toolbar and connect stella once for all their stella tabs",
     },
     {
       status: BROWSER_EXTENSION_STATUS.needsSiteAccess,

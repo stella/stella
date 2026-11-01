@@ -1713,6 +1713,19 @@ describe("OpenAI-compatible MCP tools", () => {
     ).toBe("stella:search");
   });
 
+  test("serves the curated search tools on stella:search alone", async () => {
+    for (const name of ["search", "search_across_matters"]) {
+      expect((await getMcpToolDefinition(name, createContext()))?.scope).toBe(
+        "stella:search",
+      );
+    }
+    const toolNames = (
+      await listMcpTools(createContext(), "default", ["stella:search"])
+    ).map((tool) => tool.name);
+    expect(toolNames).toContain("search");
+    expect(toolNames).toContain("search_across_matters");
+  });
+
   test("delete_task is a matter write and confirm-gated like the other deletes", async () => {
     const definition = await getMcpToolDefinition(
       "delete_task",

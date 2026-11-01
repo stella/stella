@@ -132,7 +132,7 @@ test("not-paired browser state names the connect step only on a website request"
       status: "not-paired",
     }),
   ).toContain(
-    `${ONLY_ON_A_WEBSITE_REQUEST}to click the stella extension icon in the browser toolbar on this stella tab and connect the tab, before you answer another way`,
+    `${ONLY_ON_A_WEBSITE_REQUEST}to click the stella extension icon in the browser toolbar and connect stella once for all their stella tabs, before you answer another way`,
   );
 });
 
