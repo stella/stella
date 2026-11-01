@@ -1,3 +1,5 @@
+// parser-output-unchanged: [sk-courts] exports `romanValue` for the case-law outline; no designator level changes.
+// parser-output-unchanged: [sk-us] exports `romanValue` for the case-law outline; no designator level changes.
 /**
  * Heading levels read from the headings' own designators.
  *

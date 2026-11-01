@@ -1,5 +1,16 @@
 // parser-output-unchanged: [cz-us] CZ-US uses default options; its recorded document and adapter outputs remain byte-identical.
 // parser-output-unchanged: [sk-us] adds `withAttestedLetterSpacing`, which only the Czech parsers call; `collapseLetterSpacing` is unchanged.
+// parser-output-unchanged: [at-asylgh] adds `withAttestedLetterSpacing`, which only the Czech parsers call; `collapseLetterSpacing` is unchanged.
+// parser-output-unchanged: [at-bks] adds `withAttestedLetterSpacing`, which only the Czech parsers call; `collapseLetterSpacing` is unchanged.
+// parser-output-unchanged: [at-bvwg] adds `withAttestedLetterSpacing`, which only the Czech parsers call; `collapseLetterSpacing` is unchanged.
+// parser-output-unchanged: [at-courts] adds `withAttestedLetterSpacing`, which only the Czech parsers call; `collapseLetterSpacing` is unchanged.
+// parser-output-unchanged: [at-lvwg] adds `withAttestedLetterSpacing`, which only the Czech parsers call; `collapseLetterSpacing` is unchanged.
+// parser-output-unchanged: [at-ubas] adds `withAttestedLetterSpacing`, which only the Czech parsers call; `collapseLetterSpacing` is unchanged.
+// parser-output-unchanged: [at-umse] adds `withAttestedLetterSpacing`, which only the Czech parsers call; `collapseLetterSpacing` is unchanged.
+// parser-output-unchanged: [at-uvs] adds `withAttestedLetterSpacing`, which only the Czech parsers call; `collapseLetterSpacing` is unchanged.
+// parser-output-unchanged: [at-verg] adds `withAttestedLetterSpacing`, which only the Czech parsers call; `collapseLetterSpacing` is unchanged.
+// parser-output-unchanged: [at-vfgh] adds `withAttestedLetterSpacing`, which only the Czech parsers call; `collapseLetterSpacing` is unchanged.
+// parser-output-unchanged: [at-vwgh] adds `withAttestedLetterSpacing`, which only the Czech parsers call; `collapseLetterSpacing` is unchanged.
 /**
  * Letter-spaced emphasis read back as the words it spells.
  *
