@@ -31,7 +31,10 @@ import {
   InspectorFindBar,
   useInspectorFind,
 } from "@/components/inspector/inspector-find";
-import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
+import {
+  type HeaderAction,
+  InspectorTabHeader,
+} from "@/components/inspector/inspector-tab-header";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { useProxiedIconSrc } from "@/components/proxied-icon";
@@ -44,7 +47,9 @@ import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { AVAILABLE_EVERYWHERE } from "@/lib/platform/requirements.logic";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 
 import { externalReferencePreviewOptions } from "./external-reference-preview";
@@ -305,8 +310,8 @@ const GenericExternalReferencePanel = ({
     }),
     enabled: shouldFetchPreview,
   });
-  const fetchedPreviewView = useQueryView(fetchedPreviewQuery);
-  useQueryViewError(fetchedPreviewView);
+  const fetchedPreviewView = queryView(fetchedPreviewQuery);
+  useQueryViewError(fetchedPreviewView, "GenericExternalReferencePanel:query");
   const { isLoading: previewLoading } = fetchedPreviewQuery;
   const fetchedPreview =
     fetchedPreviewView.type === "items" ? fetchedPreviewView.items : undefined;
@@ -374,8 +379,11 @@ const GenericExternalReferencePanel = ({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: connectorSlug !== undefined,
   });
-  const mcpConnectorsDataView = useQueryView(mcpConnectorsDataQuery);
-  useQueryViewError(mcpConnectorsDataView);
+  const mcpConnectorsDataView = queryView(mcpConnectorsDataQuery);
+  useQueryViewError(
+    mcpConnectorsDataView,
+    "GenericExternalReferencePanel:query-2",
+  );
   const mcpConnectorsData =
     mcpConnectorsDataView.type === "items"
       ? mcpConnectorsDataView.items
@@ -413,41 +421,52 @@ const GenericExternalReferencePanel = ({
     setConfirmHref(undefined);
   }, [confirmHref, setConfirmHref]);
 
+  const headerActions: HeaderAction[] = [];
+  if (previewText) {
+    headerActions.push({
+      id: "find",
+      requires: AVAILABLE_EVERYWHERE,
+      render: () => (
+        <Button
+          aria-label={t("common.find")}
+          onClick={find.openFind}
+          size="xs"
+          title="Cmd+F"
+          variant="ghost"
+        >
+          <SearchIcon className="size-3.5" />
+          {t("common.find")}
+        </Button>
+      ),
+    });
+  }
+  if (canPreview) {
+    headerActions.push({
+      id: "open-original",
+      requires: AVAILABLE_EVERYWHERE,
+      render: () => (
+        <Button
+          aria-label={t("inspector.external.openOriginal")}
+          onClick={() => {
+            requestOpenExternal(safeHref);
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          <ExternalLinkIcon className="size-3.5" />
+          {t("inspector.external.openOriginal")}
+        </Button>
+      ),
+    });
+  }
+
   return (
     <div
       className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden"
       ref={panelRef}
     >
       <InspectorTabHeader
-        actions={
-          <div className="flex items-center gap-1">
-            {previewText && (
-              <Button
-                aria-label={t("common.find")}
-                onClick={find.openFind}
-                size="xs"
-                title="Cmd+F"
-                variant="ghost"
-              >
-                <SearchIcon className="size-3.5" />
-                {t("common.find")}
-              </Button>
-            )}
-            {canPreview && (
-              <Button
-                aria-label={t("inspector.external.openOriginal")}
-                onClick={() => {
-                  requestOpenExternal(safeHref);
-                }}
-                size="xs"
-                variant="ghost"
-              >
-                <ExternalLinkIcon className="size-3.5" />
-                {t("inspector.external.openOriginal")}
-              </Button>
-            )}
-          </div>
-        }
+        actions={headerActions}
         label={tab.label}
         onClose={onClose}
       />

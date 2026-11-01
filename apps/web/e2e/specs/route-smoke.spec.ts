@@ -134,7 +134,8 @@ const timeBillingRedirectDestination = ({
   if (template.startsWith("/admin/")) {
     return "/admin/members";
   }
-  if (template === "/time") {
+  // My week and its approval queue leave for the matters list.
+  if (template === "/time" || template === "/time_/approvals") {
     return "/workspaces";
   }
   throw new Error(`No unenrolled redirect expectation for ${template}`);
@@ -328,7 +329,10 @@ const declareRouteSmokeGroup = ({
           const isolatedBrowser = browserForPages;
           for (const gatedRoute of gatedRoutes) {
             const template = gatedRoute.routePath.replace("/_protected", "");
+            // A trailing underscore un-nests a route file (`time_`); the URL
+            // segment has none.
             const routePath = template
+              .replaceAll(/_(?=\/|$)/gu, "")
               .replace("$workspaceId", () => workspaceId)
               .replace("$invoiceId", () => randomUUID());
             const destination = timeBillingRedirectDestination({
@@ -511,9 +515,10 @@ const measureRouteTarget = async ({
   });
   const detachPage = browserErrors.trackPage(page);
   const network = createNetworkCollector();
-  const detachNetwork = network.trackPage(page);
+  let detachNetwork: (() => Promise<void>) | undefined;
 
   try {
+    detachNetwork = await network.trackPage(page);
     await network.measureRounds(page);
     await renderSmokeRoute({ page, route });
     await network.waitForQuiet({
@@ -537,9 +542,12 @@ const measureRouteTarget = async ({
     // manifest reflects the fully-rendered route.
     return summarizeCapture(await network.capture());
   } finally {
-    detachNetwork();
-    detachPage();
-    await context.close();
+    try {
+      await detachNetwork?.();
+    } finally {
+      detachPage();
+      await context.close();
+    }
   }
 };
 

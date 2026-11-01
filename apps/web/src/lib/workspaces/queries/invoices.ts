@@ -3,7 +3,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { type InvoiceStatus, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { invoicesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
@@ -35,7 +35,7 @@ export const invoicesInfiniteOptions = (workspaceId: string, limit: number) =>
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     initialPageParam: getInitialInvoicesPageParam(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
@@ -53,7 +53,7 @@ export const invoiceByIdOptions = (workspaceId: string, invoiceId: string) =>
             fetch: { signal },
           });
 
-        return unwrapEden(response);
+        return unwrapApiResponse(response);
       },
     }),
     {
@@ -77,7 +77,7 @@ export const invoicePrefillOptions = (workspaceId: string) =>
           .invoices({ workspaceId })
           .prefill.get({ query: {}, fetch: { signal } });
 
-        return unwrapEden(response);
+        return unwrapApiResponse(response);
       },
     }),
     {
@@ -99,3 +99,43 @@ export type InvoicePrefill = Awaited<
 >;
 
 export type { InvoiceStatus };
+
+export const clientInvoicesKeys = {
+  /** Every period's prefill of one client, which a saved invoice makes stale. */
+  prefillRoot: (clientId: string) =>
+    ["client-invoices", clientId, "prefill"] as const,
+  prefill: (
+    clientId: string,
+    period: { periodStart: string | null; periodEnd: string | null },
+  ) => [...clientInvoicesKeys.prefillRoot(clientId), period] as const,
+};
+
+export const clientInvoicePrefillOptions = (
+  clientId: string,
+  period: { periodStart: string | null; periodEnd: string | null },
+) =>
+  queryOptions({
+    queryKey: clientInvoicesKeys.prefill(clientId, period),
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+    queryFn: async ({ signal }) =>
+      unwrapApiResponse(
+        await api["client-invoices"]({ clientId }).prefill.get({
+          query: {
+            ...(period.periodStart === null
+              ? {}
+              : { periodStart: period.periodStart }),
+            ...(period.periodEnd === null
+              ? {}
+              : { periodEnd: period.periodEnd }),
+          },
+          fetch: { signal },
+        }),
+      ),
+  });
+
+export type ClientInvoicePrefill = Awaited<
+  ReturnType<
+    NonNullable<ReturnType<typeof clientInvoicePrefillOptions>["queryFn"]>
+  >
+>;

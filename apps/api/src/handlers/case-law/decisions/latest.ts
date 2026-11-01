@@ -1,23 +1,25 @@
 import { Result, TaggedError } from "better-result";
 import { sql } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { parseCaseLawReadingLanguages } from "@stll/api-contract/case-law-reading-languages";
 import type { DecisionHeadnotePreview } from "@stll/api-contract/case-law-text-field";
 
 import { readBrowseFacets } from "@/api/handlers/case-law/decisions/facets";
-import { decisionDateSortKeySql } from "@/api/handlers/case-law/decisions/list";
 import {
   loadShelfCourtEntries,
   readShelfCourts,
   type ShelfCourt,
 } from "@/api/handlers/case-law/decisions/shelf-courts";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { decisionDateSortKeySql } from "@/api/lib/case-law/decision-date-order";
+import { languageVersionRankSql } from "@/api/lib/case-law/decision-language-sql";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import {
   type PublicDecisionLanguageAlternate,
@@ -48,11 +50,18 @@ import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
  * are.
  */
 
-export const listLatestDecisionsQuerySchema = t.Object({
+export const listLatestDecisionsQuerySchema = v.object({
   country: tPublicLawCountry,
+  /**
+   * The reader's languages, most preferred first, comma-separated: which
+   * version of a multilingual decision the shelf shows.
+   */
+  readingLanguages: v.optional(v.pipe(v.string(), v.maxLength(128))),
 });
 
-type ListLatestDecisionsQuery = Static<typeof listLatestDecisionsQuerySchema>;
+type ListLatestDecisionsQuery = v.InferOutput<
+  typeof listLatestDecisionsQuerySchema
+>;
 
 export type LatestDecision = {
   id: SafeId<"caseLawDecision">;
@@ -110,23 +119,38 @@ type ReadLatestDecisionsByCourtOptions = {
   country: string;
   /** Shelf order; highest-ranked court first. */
   courts: readonly ShelfCourt[];
+  /** The reader's languages, most preferred first; empty reads none. */
+  readingLanguages?: readonly string[] | undefined;
 };
 
 /**
  * The newest decisions of the given courts, a few per court, in the courts'
  * order. One statement for every court: the lateral walks each court's slice
  * of the date index backwards and stops after a handful of rows. A
- * multilingual decision appears once, by its oldest listable version, the
- * same rule the browse list applies.
+ * multilingual decision appears once, by the version the reader reads first
+ * (their languages, then the language of the case, the oldest among equals),
+ * the same rule the browse list applies.
  */
 export const readLatestDecisionsByCourt = async ({
   caseLawDb,
   country,
   courts,
+  readingLanguages = [],
 }: ReadLatestDecisionsByCourtOptions): Promise<LatestDecisionsByCourt[]> => {
   if (courts.length === 0) {
     return [];
   }
+  const siblingRank = languageVersionRankSql(
+    {
+      language: sql.raw("sibling.language"),
+      metadata: sql.raw("sibling.metadata"),
+    },
+    readingLanguages,
+  );
+  const rowRank = languageVersionRankSql(
+    { language: sql.raw("d.language"), metadata: sql.raw("d.metadata") },
+    readingLanguages,
+  );
   const result: unknown = await caseLawDb(
     async (tx) =>
       await tx.execute(sql`
@@ -178,7 +202,8 @@ export const readLatestDecisionsByCourt = async ({
                 WHERE sibling.language_group_key = d.language_group_key
                   AND sibling.country = d.country
                   AND sibling.court = d.court
-                  AND (sibling.created_at, sibling.id) < (d.created_at, d.id)
+                  AND (${siblingRank}, sibling.created_at, sibling.id)
+                    < (${rowRank}, d.created_at, d.id)
               )
           ORDER BY ${decisionDateSortKeySql(sql.raw("d.decision_date"))} DESC, d.id DESC
           LIMIT ${LIMITS.caseLawLatestPerCourt}
@@ -245,11 +270,13 @@ type LatestDecisionsLoad = {
   caseLawDb: CaseLawPublicReadDb;
   country: string;
   excludedSourceIds: readonly string[];
+  readingLanguages: readonly string[];
 };
 
 const loadLatestDecisions = async ({
   caseLawDb,
   country,
+  readingLanguages,
 }: LatestDecisionsLoad): Promise<
   Result<LatestDecisions, LatestDecisionsError>
 > =>
@@ -265,6 +292,7 @@ const loadLatestDecisions = async ({
         caseLawDb,
         country,
         courts,
+        readingLanguages,
       });
       // The statement above dropped every candidate without public rows, so
       // the cap counts only courts a reader will see.
@@ -281,14 +309,19 @@ const latestDecisions = createTtlResultCache({
   load: loadLatestDecisions,
   // Source policy is an input to the answer, so a revocation changes the key
   // instead of waiting out the window; sorted because the set has no order.
-  key: ({ country, excludedSourceIds }: LatestDecisionsLoad) =>
-    `${country}:${excludedSourceIds.toSorted().join(",")}`,
+  // The reading languages too: each order answers with other versions.
+  key: ({
+    country,
+    excludedSourceIds,
+    readingLanguages,
+  }: LatestDecisionsLoad) =>
+    `${country}:${excludedSourceIds.toSorted().join(",")}:${readingLanguages.join(",")}`,
   ttlMs: LATEST_CACHE_TTL_MS,
   maxEntries: LATEST_CACHE_MAX_ENTRIES,
 });
 
 export const listLatestDecisionsHandler = async (
-  { country }: ListLatestDecisionsQuery,
+  { country, readingLanguages }: ListLatestDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
   const countryRead = readPublicLawCountry(country, {
@@ -321,6 +354,7 @@ export const listLatestDecisionsHandler = async (
     caseLawDb,
     country: jurisdiction,
     excludedSourceIds: excludedSourceIds.value,
+    readingLanguages: parseCaseLawReadingLanguages(readingLanguages),
   });
   if (Result.isError(result)) {
     // The shelf is the page's empty state, not its content: without it the

@@ -4,7 +4,7 @@ import {
   isLegacyRequest,
   McpServer,
 } from "@modelcontextprotocol/server";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -14,10 +14,10 @@ import {
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Base64Url as legacySha256Base64Url } from "@stll/sha256/node";
 
+import { apiRoutes } from "@/api/api-routes";
 import { VerifiedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof";
 import { bridgeOauthUiRedirect } from "@/api/lib/oauth-ui-fragment";
 import { SAMPLE_MATTERS } from "@/api/lib/review-organization/sample-data";
-import api from "@/api/server";
 
 import {
   AUTHENTICATED_PROBES,
@@ -25,6 +25,7 @@ import {
   type CanaryFetcher,
   createDeploymentFetcher,
   createJsonRpcRequest,
+  describeToolLatencyOverBudget,
   evaluateAuthorizationMetadata,
   evaluateAuthorize,
   evaluateCredentialExpiry,
@@ -36,6 +37,7 @@ import {
   evaluateToolCall,
   evaluateToolsList,
   evaluateUnauthenticated,
+  judgeToolCallProbe,
   LOOPBACK_REDIRECTS,
   runAuthenticatedStreamProbe,
   runDesktopProbe,
@@ -44,6 +46,8 @@ import {
   runReviewAccountJourney,
   runStagingCredentialJourneys,
   summarize,
+  THIRD_PARTY_FETCHES_SKIP_REASON,
+  TOOL_CALL_PROBES,
 } from "./mcp-canary";
 
 const REVIEW_BASE_URL = "https://api.example";
@@ -424,6 +428,53 @@ const reviewFetcher = (
 };
 
 describe("restricted review-account journey", () => {
+  test("cleans up a successful write whose latency exceeds its budget", async () => {
+    const observed: { url: string; headers: Headers; body: string }[] = [];
+    const fetcher = reviewFetcher({ observed });
+    let elapsedMs = 0;
+    const clock = spyOn(performance, "now").mockImplementation(() => elapsedMs);
+    try {
+      const results = await runReviewAccountJourney(
+        {
+          baseUrl: REVIEW_BASE_URL,
+          configuredBaseUrl: REVIEW_BASE_URL,
+          frontendUrl: REVIEW_FRONTEND_URL,
+          password: REVIEW_PASSWORD,
+          mode: "full",
+        },
+        async (input, init) => {
+          const body = await readFakeRequestBody(
+            init.body,
+            input instanceof Request ? input : undefined,
+          );
+          const response = await fetcher(input, init);
+          if (body.includes('"name":"save_task"')) {
+            elapsedMs += 3000;
+          }
+          return response;
+        },
+      );
+      expect(elapsedMs).toBe(3000);
+      expect(
+        results.find(({ name }) => name === "restricted account: write"),
+      ).toMatchObject({
+        status: "failed",
+        detail: expect.stringContaining(
+          "save_task answered in 3000 ms, over its 2000 ms latency budget",
+        ),
+      });
+      expect(
+        observed.filter(({ body }) => body.includes('"name":"delete_task"')),
+      ).toHaveLength(1);
+      expect(results.at(-1)).toMatchObject({
+        name: "restricted account: cleanup",
+        status: "passed",
+      });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   test.each(["frontend", "api"] as const)(
     "completes OAuth across configured origins with the token endpoint on %s",
     async (tokenOrigin) => {
@@ -1471,6 +1522,89 @@ describe("authorization server probes", () => {
   });
 });
 
+describe("tool latency budgets", () => {
+  const answered = evaluateToolCall(
+    {
+      status: 200,
+      body: {
+        jsonrpc: "2.0",
+        result: { content: [{ type: "text", text: "ok" }] },
+      },
+    },
+    {
+      name: "POST /mcp (search_legislation)",
+      answered: "read-only legislation search returned content",
+    },
+  );
+
+  test("fails a correct answer that ran over its tool's budget", () => {
+    expect(
+      judgeToolCallProbe(answered, {
+        toolName: "search_legislation",
+        elapsedMs: 10_512.4,
+      }),
+    ).toEqual({
+      name: "POST /mcp (search_legislation)",
+      status: "failed",
+      detail:
+        "search_legislation answered in 10512 ms, over its 8000 ms latency budget",
+    });
+  });
+
+  test("passes a correct answer within budget and says how long it took", () => {
+    expect(
+      judgeToolCallProbe(answered, {
+        toolName: "search_legislation",
+        elapsedMs: 1480,
+      }),
+    ).toEqual({
+      name: "POST /mcp (search_legislation)",
+      status: "passed",
+      detail: "read-only legislation search returned content in 1480 ms",
+    });
+  });
+
+  test("keeps both causes when a wrong answer was also slow", () => {
+    const wrong = evaluateToolCall({ status: 502, body: null });
+    expect(
+      judgeToolCallProbe(wrong, {
+        toolName: "search_case_law",
+        elapsedMs: 9000,
+      }).detail,
+    ).toBe(
+      `${wrong.detail}; search_case_law answered in 9000 ms, over its 8000 ms latency budget`,
+    );
+  });
+
+  test("judges an ordinary read by the default budget", () => {
+    expect(
+      describeToolLatencyOverBudget({
+        toolName: "list_tasks",
+        elapsedMs: 2000,
+      }),
+    ).toBeUndefined();
+    expect(
+      describeToolLatencyOverBudget({
+        toolName: "case_law_coverage",
+        elapsedMs: 3134,
+      }),
+    ).toBe(
+      "case_law_coverage answered in 3134 ms, over its 2000 ms latency budget",
+    );
+  });
+
+  test("times every probed tool, including the slow-prone corpus reads", () => {
+    expect(TOOL_CALL_PROBES.map(({ toolName }) => toolName)).toEqual([
+      "search_case_law",
+      "search_legislation",
+      "case_law_coverage",
+    ]);
+    expect(AUTHENTICATED_PROBES.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(TOOL_CALL_PROBES.map(({ name }) => name)),
+    );
+  });
+});
+
 describe("OAuth client journeys", () => {
   const fakeOAuth = () => {
     const requests: { url: URL; init: Parameters<CanaryFetcher>[1] }[] = [];
@@ -1592,6 +1726,40 @@ describe("OAuth client journeys", () => {
     expect(await new Response(registration?.init.body).json()).toMatchObject({
       redirect_uris: LOOPBACK_REDIRECTS,
     });
+  });
+
+  test("skipped third-party fetches report each known client and never reach its host", async () => {
+    const { fetcher, requests } = fakeOAuth();
+    const results = await runOAuthJourneys(
+      {
+        baseUrl: "https://api.example",
+        frontendUrl: "https://app.example",
+        mode: "full",
+        thirdPartyFetches: "skip",
+      },
+      fetcher,
+    );
+    expect(results.filter(({ status }) => status === "skipped")).toStrictEqual(
+      CANARY_CLIENT_IDS.map((clientId) => ({
+        name: `client metadata ${clientId}`,
+        status: "skipped",
+        detail: THIRD_PARTY_FETCHES_SKIP_REASON,
+      })),
+    );
+    expect(
+      requests.filter(({ url }) => url.origin !== "https://api.example"),
+    ).toStrictEqual([]);
+    const authorizedClients = new Set(
+      requests
+        .filter(({ url }) => url.pathname === "/oauth/authorize")
+        .map(({ url }) => url.searchParams.get("client_id")),
+    );
+    expect(authorizedClients).toStrictEqual(new Set(["dynamic-client"]));
+    expect(
+      results
+        .filter(({ status }) => status !== "skipped")
+        .every(({ status }) => status === "passed"),
+    ).toBe(true);
   });
 
   test("reports unavailable client metadata once without probing authorize", async () => {
@@ -2130,7 +2298,7 @@ describe("staging credential journeys", () => {
           cookieValue: "staging-session",
         });
       }
-      if (url.pathname === "/v1/api-keys/") {
+      if (url.pathname === "/v1/api-keys") {
         return Response.json({ id: "mcp-key-id", key: "mcp-token" });
       }
       if (url.pathname === "/api/auth/get-session") {
@@ -2189,10 +2357,32 @@ describe("staging credential journeys", () => {
 
   test("runs MCP and desktop probes with short-lived credentials, then revokes the MCP key", async () => {
     const { requests, fetcher } = createStagingDeployment();
+    let activeRequests = 0;
+    let peakRequests = 0;
+    const serialFetcher: CanaryFetcher = async (input, init) => {
+      activeRequests += 1;
+      peakRequests = Math.max(peakRequests, activeRequests);
+      await Promise.resolve();
+      try {
+        return await fetcher(input, init);
+      } finally {
+        activeRequests -= 1;
+      }
+    };
     const results = await runStagingCredentialJourneys(
       { baseUrl: "https://api.example", smokeSecret: "smoke-secret" },
-      fetcher,
+      serialFetcher,
     );
+    expect(peakRequests).toBe(1);
+    const coverage = requests.find(({ body }) =>
+      body.includes('"name":"case_law_coverage"'),
+    );
+    expect(JSON.parse(coverage?.body ?? "{}")).toMatchObject({
+      params: { name: "case_law_coverage", arguments: {} },
+    });
+    expect(
+      Object.keys(JSON.parse(coverage?.body ?? "{}").params.arguments),
+    ).toEqual([]);
     expect(
       results
         .filter(
@@ -2207,7 +2397,7 @@ describe("staging credential journeys", () => {
       name: "MCP credential cleanup",
       status: "passed",
     });
-    const bootstrap = requests.find(({ path }) => path === "/v1/api-keys/");
+    const bootstrap = requests.find(({ path }) => path === "/v1/api-keys");
     expect(JSON.parse(bootstrap?.body ?? "{}")).toEqual({
       name: "MCP staging canary",
       scopes: ["stella:search", "stella:read"],
@@ -2235,31 +2425,33 @@ describe("staging credential journeys", () => {
       { baseUrl: "https://api.example", smokeSecret: "smoke-secret" },
       fetcher,
     );
-    const mounted = api.routes
-      // The Better Auth catch-all matches any path; its own prefix is
-      // checked separately below.
-      .filter(({ path }) => path !== "/*")
-      .map(({ method, path }) => ({
-        method,
-        pattern: new RegExp(
-          `^${path
-            .replaceAll(/[.+?^${}()|[\]\\]/gu, "\\$&")
-            .replaceAll(/:[^/]+/gu, "[^/]+")
-            .replaceAll("*", ".*")}$`,
-          "u",
-        ),
-      }));
+    // Better Auth's catch-all is mounted under its own prefix, so it matches
+    // only the auth paths a journey sends there.
+    const mounted = apiRoutes.map(({ method, path }) => ({
+      method,
+      pattern: new RegExp(
+        `^${path
+          .replaceAll(/[.+?^${}()|[\]\\]/gu, "\\$&")
+          .replaceAll(/:[^/]+/gu, "[^/]+")
+          .replaceAll("*", ".*")}$`,
+        "u",
+      ),
+    }));
+    // A HEAD request is answered by the path's GET route.
+    const routedMethod = (method: string) =>
+      method === "HEAD" ? "GET" : method;
     const unrouted = requests
-      .filter(({ path }) => !path.startsWith("/api/auth/"))
       .filter(
         ({ method, path }) =>
           !mounted.some(
             (route) =>
-              (route.method === method || route.method === "ALL") &&
-              route.pattern.test(path),
+              route.method === routedMethod(method) && route.pattern.test(path),
           ),
       )
       .map(({ method, path }) => `${method} ${path}`);
+    expect(
+      mounted.some(({ pattern }) => pattern.test("/api/auth/get-session")),
+    ).toBe(true);
     expect(requests.map(({ path }) => path)).toContain("/smoke/session");
     expect(unrouted).toEqual([]);
   });
@@ -2277,7 +2469,7 @@ describe("staging credential journeys", () => {
       if (url.pathname === "/smoke/session") {
         return Response.json({ cookieName: "session", cookieValue: "session" });
       }
-      if (url.pathname === "/v1/api-keys/") {
+      if (url.pathname === "/v1/api-keys") {
         return Response.json({ id: "partial-id" });
       }
       if (url.pathname === "/v1/api-keys/revoke") {
@@ -2309,7 +2501,7 @@ describe("staging credential journeys", () => {
       if (path === "/smoke/session") {
         return Response.json({ cookieName: "session", cookieValue: "session" });
       }
-      if (path === "/v1/api-keys/") {
+      if (path === "/v1/api-keys") {
         return Response.json({ id: "key-id", key: "token" });
       }
       if (path === "/v1/api-keys/revoke") {

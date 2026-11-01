@@ -3,7 +3,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { currentQueryCount } from "@/api/lib/db-query-counter";
 import { emitMcpRequestMetric } from "@/api/lib/observability/request-metrics";
 import type { McpMode } from "@/api/mcp/constants";
-import { classifyMcpMetricToolName } from "@/api/mcp/observe-tool-call";
+import { classifyMcpMetricToolName } from "@/api/mcp/metric-tool-name";
+import { mcpToolLatencyBudgetMs } from "@/api/mcp/tool-latency-budgets";
 
 const MCP_METHODS = [
   "initialize",
@@ -40,6 +41,8 @@ type McpRequestMetricState = {
   activePhase: McpMetricPhase | undefined;
   overlap: boolean;
 };
+
+export type McpTransport = McpRequestMetricState["path"];
 
 const phaseStore = new AsyncLocalStorage<McpRequestMetricState>();
 
@@ -85,12 +88,23 @@ export const addMcpPhaseDuration = (
   }
 };
 
+/**
+ * The `performance.now()` at which the observed MCP request began, the start
+ * its latency budget is judged from; undefined outside an observed request.
+ */
+export const mcpRequestStartedAt = (): number | undefined =>
+  phaseStore.getStore()?.startedAt;
+
 export const setMcpMetricProtocolPath = (path: "legacy" | "modern"): void => {
   const state = phaseStore.getStore();
   if (state !== undefined) {
     state.path = path;
   }
 };
+
+/** The request-local protocol leg, when tool execution is inside HTTP admission. */
+export const currentMcpMetricTransport = (): McpTransport =>
+  phaseStore.getStore()?.path ?? "unknown";
 
 export const setMcpMetricParsedMethod = (method: string): void => {
   const state = phaseStore.getStore();
@@ -135,7 +149,14 @@ export const observeMcpRequest = async <T>({
         mode: state.mode,
         path: state.path,
         overlap: state.overlap,
-        ...(state.toolName === undefined ? {} : { toolName: state.toolName }),
+        ...(state.toolName === undefined
+          ? {}
+          : {
+              toolName: state.toolName,
+              ...(state.method === "tools/call"
+                ? { latencyBudgetMs: mcpToolLatencyBudgetMs(state.toolName) }
+                : {}),
+            }),
         phases: state.phases,
         queryCount: Math.max(
           0,

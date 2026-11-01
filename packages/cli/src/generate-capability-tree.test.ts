@@ -56,6 +56,19 @@ test("catalog confirmation requirements survive generated leaf projection", () =
   }
 });
 
+test("catalog replay declarations survive every generated capability projection", () => {
+  const parsed = parseCapabilityCatalog(readCapabilityCatalog());
+  expect(parsed).not.toBeNull();
+  expect(parsed?.some((item) => item.idempotency?.type === "replay")).toBe(
+    true,
+  );
+  for (const item of parsed ?? []) {
+    expect(deriveCapabilityLeaf(item).spec.idempotency, item.id).toEqual(
+      item.idempotency,
+    );
+  }
+});
+
 const fileInput = (field: string, required: boolean): CatalogTransport => ({
   type: "file-input",
   input: { field, required },
@@ -724,9 +737,9 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
   });
 
   test("no committed input schema carries a transport coercion union", async () => {
-    // Elysia compiles `t.Integer` and friends to a string|scalar union with
-    // the bounds hoisted above it. The catalog embeds the advertised
-    // projection, which flattens that to the scalar; a union surviving here
+    // A path or query number travels as a string (`numberFromString`); the
+    // advertised projection the catalog embeds renders the scalar it stands
+    // for, never a string|scalar union. A union surviving here
     // would give the generated command an opaque `--input` where the MCP
     // surface advertises a bounded flag.
     const catalog = parseCapabilityCatalog(readCapabilityCatalog());

@@ -23,20 +23,18 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { matchesConnectionQuery } from "@/lib/account/connections.logic";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { resourceMutation } from "@/lib/workspace-realtime";
 
 export const NativeToolsList = () => {
   const t = useTranslations();
   const [search, setSearch] = useState("");
   const { activeOrganizationId } = useAuthenticatedUser();
-  const view = useQueryView(
-    useQuery(mcpConnectorsOptions(activeOrganizationId)),
-  );
+  const view = queryView(useQuery(mcpConnectorsOptions(activeOrganizationId)));
   const canEdit = usePermissions({ organizationSettings: ["update"] });
   const visible =
     view.type === "items"
@@ -87,7 +85,7 @@ const NativeToolRow = ({
       queryClient,
       scope: { type: "organization" },
       mutationFn: async (enabled: boolean) =>
-        unwrapEden(
+        unwrapApiResponse(
           await api.mcp["native-tools"]({ slug: tool.slug }).patch({ enabled }),
         ),
     }),

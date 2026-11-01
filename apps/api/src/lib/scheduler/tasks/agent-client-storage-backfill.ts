@@ -60,6 +60,7 @@ export const backfillAgentClientStorage: SchedulerTask = async ({
     catch: () =>
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Agent client storage update did not complete",
       }),
   });

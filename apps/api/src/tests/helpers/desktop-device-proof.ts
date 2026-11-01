@@ -50,7 +50,14 @@ export const createDesktopDeviceSigner = async () => {
       .setIssuedAt()
       .setJti(Bun.randomUUIDv7())
       .sign(privateKey);
-    const signed = new Request(request);
+    // A request the HTTP core already read has no body left to copy; the proof
+    // covers only its method, URL and headers.
+    const signed = request.bodyUsed
+      ? new Request(request.url, {
+          method: request.method,
+          headers: request.headers,
+        })
+      : new Request(request);
     signed.headers.set(DESKTOP_PROOF_HEADER, proof);
     return signed;
   };

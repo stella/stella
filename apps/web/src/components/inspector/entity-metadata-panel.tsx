@@ -36,6 +36,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type {
   EntityField,
@@ -44,7 +45,7 @@ import type {
   PropertyId,
   WorkspaceProperty,
 } from "@/lib/types";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   isPlaybookVerdictProperty,
   playbookVerdictByAskId,
@@ -191,8 +192,8 @@ const EntityMetadataContent = ({
   const versionsDataQuery = useQuery(
     entityVersionsOptions({ workspaceId, entityId: entity.entityId }),
   );
-  const versionsDataView = useQueryView(versionsDataQuery);
-  useQueryViewError(versionsDataView);
+  const versionsDataView = queryView(versionsDataQuery);
+  useQueryViewError(versionsDataView, "EntityMetadataContent:query");
   const versionsData =
     versionsDataView.type === "items" ? versionsDataView.items : undefined;
   // `useOptimistic` keeps any newly created property visible until the
@@ -670,7 +671,13 @@ const DocumentReferenceChip = ({ reference }: { reference: string }) => {
   const { copied, copy } = useCopyConfirmation(async () => {
     const result = await copyToClipboard(reference);
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "DocumentReferenceChip.copy:failure",
+        scope: {
+          type: "handler",
+          handlerId: "DocumentReferenceChip.copy:failure",
+        },
+      });
       notifyUserError(result.error, t("errors.actionFailed"));
       return false;
     }

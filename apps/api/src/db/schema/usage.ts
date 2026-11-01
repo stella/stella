@@ -109,6 +109,10 @@ const USAGE_EVENT_LANE_SQL_VALUES = USAGE_EVENT_LANES.map((lane) =>
   sql.raw(`'${lane}'`),
 );
 
+const USAGE_ACTION_TYPE_SQL_VALUES = USAGE_ACTION_TYPES.map((actionType) =>
+  sql.raw(`'${actionType}'`),
+);
+
 const USAGE_LANE_COUNTER_KIND_SQL_VALUES = USAGE_LANE_COUNTER_KINDS.map(
   (kind) => sql.raw(`'${kind}'`),
 );
@@ -147,7 +151,8 @@ export const usagePolicies = p.pgTable(
     }),
     // Operator-seeded member bound, read through the
     // `organization_member_capacity` database function together with the
-    // seat count of a per-seat policy. Null = the policy sets no bound.
+    // seat count of a per-seat policy. Null = no bound beyond the seats of
+    // a per-seat policy; a flat policy is then unbounded.
     maxMembers: p.integer("max_members"),
     serviceActionsPerPeriod: p.integer("service_actions_per_period"),
     // Hidden by default: a seeded policy only appears in the catalog
@@ -439,6 +444,18 @@ export const ORGANIZATION_ACCESS_STATE = {
   evaluationEnded: "evaluation_ended",
 } as const;
 
+export const ORGANIZATION_ACCESS_STATE_ORIGIN = {
+  creation: "creation",
+  legacyReconcile: "legacy_reconcile",
+} as const;
+
+const ORGANIZATION_ACCESS_STATE_ORIGINS = [
+  ORGANIZATION_ACCESS_STATE_ORIGIN.creation,
+  ORGANIZATION_ACCESS_STATE_ORIGIN.legacyReconcile,
+] as const;
+const ORGANIZATION_ACCESS_STATE_ORIGIN_SQL_VALUES =
+  ORGANIZATION_ACCESS_STATE_ORIGINS.map((origin) => sql.raw(`'${origin}'`));
+
 const ORGANIZATION_ACCESS_STATES = [
   ORGANIZATION_ACCESS_STATE.selfManagedKeys,
   ORGANIZATION_ACCESS_STATE.evaluationPeriod,
@@ -454,6 +471,10 @@ export const organizationAccessStates = p.pgTable(
       .primaryKey()
       .references(() => organization.id, { onDelete: "cascade" }),
     state: p.text({ enum: ORGANIZATION_ACCESS_STATES }).notNull(),
+    origin: p
+      .text({ enum: ORGANIZATION_ACCESS_STATE_ORIGINS })
+      .notNull()
+      .default(ORGANIZATION_ACCESS_STATE_ORIGIN.legacyReconcile),
     evaluationStartedAt: timestamptz("evaluation_started_at"),
     evaluationEndsAt: timestamptz("evaluation_ends_at"),
     evaluationEndedAt: timestamptz("evaluation_ended_at"),
@@ -463,12 +484,16 @@ export const organizationAccessStates = p.pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  () => [
+  (table) => [
+    p.check(
+      "organization_access_states_origin_domain",
+      sql`${table.origin} IN (${sql.join(ORGANIZATION_ACCESS_STATE_ORIGIN_SQL_VALUES, sql`, `)})`,
+    ),
     // Each state admits exactly one shape of evaluation columns, so a row
     // cannot claim an evaluation it never started or end one twice.
     p.check(
       "organization_access_states_shape",
-      sql`((state = 'self_managed_keys' AND evaluation_started_at IS NULL AND evaluation_ends_at IS NULL AND evaluation_ended_at IS NULL) OR (state = 'evaluation_period' AND evaluation_ends_at > evaluation_started_at AND evaluation_ended_at IS NULL) OR (state = 'evaluation_ended' AND evaluation_ends_at > evaluation_started_at AND evaluation_ended_at IS NOT NULL)) IS TRUE`,
+      sql`((state = 'self_managed_keys' AND evaluation_started_at IS NULL AND evaluation_ends_at IS NULL AND evaluation_ended_at IS NULL) OR (state = 'evaluation_period' AND evaluation_ends_at > evaluation_started_at AND evaluation_ended_at IS NULL) OR (state = 'evaluation_ended' AND evaluation_ended_at IS NOT NULL AND ((evaluation_started_at IS NULL AND evaluation_ends_at IS NULL) OR evaluation_ends_at > evaluation_started_at))) IS TRUE`,
     ),
     // Written only by system paths on the owner connection (organization
     // creation, operator transitions); members read their own row.
@@ -778,6 +803,10 @@ export const usageEvents = p.pgTable(
       sql`(action_kind IS NULL) = (logical_phase_id IS NULL)`,
     ),
     p.check("usage_events_units_nonneg", sql`units_consumed >= 0`),
+    p.check(
+      "usage_events_action_type_domain",
+      sql`action_type IN (${sql.join(USAGE_ACTION_TYPE_SQL_VALUES, sql`, `)})`,
+    ),
     p.check("usage_events_period_order", sql`period_end > period_start`),
     p.check(
       "usage_events_lane_domain",

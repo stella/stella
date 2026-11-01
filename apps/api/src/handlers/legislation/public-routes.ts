@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import Elysia, { t } from "elysia";
+import * as v from "valibot";
 
 import {
   readStatuteByEliHandler,
@@ -58,13 +58,13 @@ import {
   listStatuteVersionsParamsSchema,
   listStatuteVersionsQuerySchema,
 } from "@/api/handlers/legislation/versions";
+import { routes } from "@/api/http/route";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { withPublicCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
@@ -151,7 +151,7 @@ const readStatuteByEli = createSafeBoundedPublicHandler(
       ...safePublicHandlerResponseSchemasWithStatusText(
         statuteReaderSuccessResponseSchema,
       ),
-      404: t.Union([
+      404: v.union([
         safePublicHandlerErrorOrStatusTextResponseSchema,
         publisherWindowInconsistentResponseSchema,
       ]),
@@ -204,7 +204,7 @@ const readStatuteBySlug = createSafeBoundedPublicHandler(
       ...safePublicHandlerResponseSchemasWithStatusText(
         statuteReaderSuccessResponseSchema,
       ),
-      404: t.Union([
+      404: v.union([
         safePublicHandlerErrorOrStatusTextResponseSchema,
         publisherWindowInconsistentResponseSchema,
       ]),
@@ -240,7 +240,7 @@ const readStatute = createSafeBoundedPublicHandler(
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "read_statute" },
     cache: { kind: "none" },
-    params: t.Object({ documentId: tSafeId("legislationDocument") }),
+    params: v.object({ documentId: resourceIdSchema("legislationDocument") }),
   },
   async function* ({ params: { documentId } }) {
     const response = yield* Result.await(
@@ -371,80 +371,28 @@ const listStatuteSitemapStatutes = createSafeBoundedPublicHandler(
  * Public-read routes: no auth, no session, no organization context.
  * Only sources cleared for redistribution are readable.
  */
-export const publicLegislationRoute = new Elysia({
-  prefix: "/law",
-})
-  .use(
-    deploymentFeatureGate(() =>
-      isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
-    ),
-  )
-  .get("/statutes", listStatutes.handler, {
-    query: listStatutes.config.query,
-    response: listStatutes.config.response,
-  })
-  .get("/statutes/search", searchPublicStatutes.handler, {
-    query: searchPublicStatutes.config.query,
-    response: searchPublicStatutes.config.response,
-  })
-  // Ahead of `/statutes/:documentId` for the same reason as `by-eli` below.
-  .get("/statutes/shelf", readLegislationShelf.handler, {
-    query: readLegislationShelf.config.query,
-    response: readLegislationShelf.config.response,
-  })
-  // Ahead of `/statutes/:documentId` for the same reason as `by-eli` below.
-  .get("/statutes/facets", readLegislationFacets.handler, {
-    query: readLegislationFacets.config.query,
-    response: readLegislationFacets.config.response,
-  })
-  // Ahead of `/statutes/:documentId`, or the literal segment would be read as
-  // a document id and rejected by the UUID schema.
-  .get("/statutes/by-eli", readStatuteByEli.handler, {
-    query: readStatuteByEli.config.query,
-    response: readStatuteByEli.config.response,
-  })
-  .post("/statutes/resolve", resolveStatutes.handler, {
-    body: resolveStatutes.config.body,
-    response: resolveStatutes.config.response,
-  })
-  // Ahead of `/statutes/:documentId` for the same reason: `by-slug` is a
-  // literal segment, not a document id.
-  .get("/statutes/by-slug/:slug", readStatuteBySlug.handler, {
-    params: readStatuteBySlug.config.params,
-    query: readStatuteBySlug.config.query,
-    response: readStatuteBySlug.config.response,
-  })
-  .get("/statutes/:documentId", readStatute.handler, {
-    params: readStatute.config.params,
-    response: readStatute.config.response,
-  })
-  .get("/statutes/:documentId/versions", listStatuteVersions.handler, {
-    params: listStatuteVersions.config.params,
-    query: listStatuteVersions.config.query,
-    response: listStatuteVersions.config.response,
-  })
-  .get(
-    "/statutes/:documentId/provisions/:anchor/preview",
-    readProvisionPreview.handler,
-    {
-      params: readProvisionPreview.config.params,
-      query: readProvisionPreview.config.query,
-      response: readProvisionPreview.config.response,
+export const publicLegislationRoute = routes(
+  {
+    "/statutes": { GET: listStatutes },
+    "/statutes/search": { GET: searchPublicStatutes },
+    "/statutes/shelf": { GET: readLegislationShelf },
+    "/statutes/facets": { GET: readLegislationFacets },
+    "/statutes/by-eli": { GET: readStatuteByEli },
+    "/statutes/resolve": { POST: resolveStatutes },
+    "/statutes/by-slug/:slug": { GET: readStatuteBySlug },
+    "/statutes/:documentId": { GET: readStatute },
+    "/statutes/:documentId/versions": { GET: listStatuteVersions },
+    "/statutes/:documentId/provisions/:anchor/preview": {
+      GET: readProvisionPreview,
     },
-  )
-  .get(
-    "/statutes/:documentId/provisions/:anchor/history",
-    readProvisionHistory.handler,
-    {
-      params: readProvisionHistory.config.params,
-      query: readProvisionHistory.config.query,
-      response: readProvisionHistory.config.response,
+    "/statutes/:documentId/provisions/:anchor/history": {
+      GET: readProvisionHistory,
     },
-  )
-  .get("/sitemap/shards", listStatuteSitemapShards.handler, {
-    response: listStatuteSitemapShards.config.response,
-  })
-  .get("/sitemap/statutes/shard", listStatuteSitemapStatutes.handler, {
-    query: listStatuteSitemapStatutes.config.query,
-    response: listStatuteSitemapStatutes.config.response,
-  });
+    "/sitemap/shards": { GET: listStatuteSitemapShards },
+    "/sitemap/statutes/shard": { GET: listStatuteSitemapStatutes },
+  },
+  {
+    prefix: "/law",
+    middleware: [deploymentFeatureGate("FEATURE_PUBLIC_LAW")],
+  },
+);

@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import api from "@/api/server";
+import { apiApp } from "@/api/server";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   prepareEntityReadScalingTables,
@@ -28,7 +28,9 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         try {
           for (const scenario of readScalingScenarios) {
             expect(
-              api.routes.some(({ handler }) => handler === scenario.handler),
+              apiApp.routes.some(
+                ({ definition }) => definition === scenario.definition,
+              ),
             ).toBe(true);
             const at10 = await scenario.measure(small);
             const at200 = await scenario.measure(large);
@@ -58,7 +60,9 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         const { db } = openClient({ max: 1 });
         for (const scenario of writeScalingScenarios) {
           expect(
-            api.routes.some(({ handler }) => handler === scenario.handler),
+            apiApp.routes.some(
+              ({ definition }) => definition === scenario.definition,
+            ),
           ).toBe(true);
           await scenario.prepare(db);
           const small = await scenario.seed(db, 10);

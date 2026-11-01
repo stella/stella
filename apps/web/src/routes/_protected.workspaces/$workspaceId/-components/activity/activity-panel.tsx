@@ -53,6 +53,10 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import {
+  fadeScrollEdges,
+  SCROLL_EDGE_FADE_CLASS,
+} from "@stll/ui/scroll-edge-fade";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import {
   Select,
@@ -113,6 +117,7 @@ import {
 import type { ActivityGroup } from "./activity-panel.logic";
 import {
   activityDayKey,
+  CHANGED_FIELD_LABEL_KEYS,
   expandActivityGroupsForList,
   groupActivityItems,
   resolveSelectedActivityGroup,
@@ -127,7 +132,7 @@ import {
 type ActivityPanelProps = { workspaceId: string };
 
 /** The matter whose activity is shown; file thumbnails are served per matter. */
-const ActivityWorkspaceContext = createContext<string | null>(null);
+export const ActivityWorkspaceContext = createContext<string | null>(null);
 
 type ActivityDay = [ActivityGroup, ...ActivityGroup[]];
 type ActivityViewMode = "timeline" | "list";
@@ -462,7 +467,13 @@ const ActivityAdvancedFilters = ({
                       .fetchNextPage()
                       .then((result) => {
                         if (result.isError) {
-                          getAnalytics().captureError(result.error);
+                          getAnalytics().captureError(result.error, {
+                            fingerprintKey: "ActivityAdvancedFilters:failure",
+                            scope: {
+                              type: "handler",
+                              handlerId: "ActivityAdvancedFilters:failure",
+                            },
+                          });
                           notifyUserError(
                             result.error,
                             t("errors.actionFailed"),
@@ -477,7 +488,13 @@ const ActivityAdvancedFilters = ({
                         return result;
                       })
                       .catch((error: unknown) => {
-                        getAnalytics().captureError(error);
+                        getAnalytics().captureError(error, {
+                          fingerprintKey: "ActivityAdvancedFilters:failure-2",
+                          scope: {
+                            type: "handler",
+                            handlerId: "ActivityAdvancedFilters:failure-2",
+                          },
+                        });
                         notifyUserError(error, t("errors.actionFailed"), {
                           description: userErrorFromThrown(
                             error,
@@ -548,7 +565,10 @@ const ActivityExportMenu = ({
     });
     setExporting(false);
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "ActivityExportMenu.exportActivity:failure",
+        scope: { type: "handler", handlerId: `activity-export.${format}` },
+      });
       notifyUserError(
         result.error,
         APIError.is(result.error) && result.error.status === 413
@@ -581,7 +601,10 @@ const ActivityExportMenu = ({
   const startExport = (format: "csv" | "json") => {
     detached(
       exportActivity(format).catch((error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "ActivityExportMenu.startExport:failure",
+          scope: { type: "handler", handlerId: `activity-export.${format}` },
+        });
         notifyUserError(error, t("workspaces.views.exportFailed"));
       }),
       "activity-panel.export",
@@ -646,7 +669,13 @@ const ActivityTimeline = ({
           // The resolved error result reaches the user through the same toast
           // as a rejection, so it is captured here too; the `.catch` below only
           // sees a rejected request.
-          getAnalytics().captureError(result.error);
+          getAnalytics().captureError(result.error, {
+            fingerprintKey: "ActivityTimeline.loadEarlier:failure",
+            scope: {
+              type: "handler",
+              handlerId: "ActivityTimeline.loadEarlier:failure",
+            },
+          });
           notifyUserError(result.error, t("errors.actionFailed"), {
             description: userErrorFromThrown(
               result.error,
@@ -657,7 +686,13 @@ const ActivityTimeline = ({
         return result;
       })
       .catch((error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "ActivityTimeline.loadEarlier:failure-2",
+          scope: {
+            type: "handler",
+            handlerId: "ActivityTimeline.loadEarlier:failure-2",
+          },
+        });
         notifyUserError(error, t("errors.actionFailed"), {
           description: userErrorFromThrown(error, t("common.unexpectedError")),
         });
@@ -910,8 +945,12 @@ const HorizontalTimeline = ({
   onSelectGroup: (group: ActivityGroup) => void;
 }) => (
   <div
-    className="hidden overflow-x-auto overscroll-x-contain md:block"
+    className={cn(
+      "hidden overflow-x-auto overscroll-x-contain [--fade-size:2.5rem] md:block",
+      SCROLL_EDGE_FADE_CLASS,
+    )}
     data-activity-scroll=""
+    ref={fadeScrollEdges}
   >
     <div className="flex min-w-max snap-x snap-proximity flex-row-reverse px-5 pt-4 pb-5">
       <HorizontalTodayMarker />
@@ -1339,7 +1378,7 @@ const ActivityList = ({
   );
 };
 
-const ActivityDetailsSheet = ({
+export const ActivityDetailsSheet = ({
   group,
   onOpenChange,
   workspaceId,
@@ -1412,13 +1451,6 @@ const ActivityDetailsSheet = ({
                               MEDIUM_DATE_SHORT_TIME_FORMAT,
                             )}
                           </time>
-                          <span aria-hidden="true"> · </span>
-                          {t(
-                            "workspaces.overview.activity.details.eventId",
-                          )}:{" "}
-                          <BidiText as="span" className="break-all">
-                            {batchItem.id}
-                          </BidiText>
                         </span>
                       </span>
                     </>
@@ -1484,10 +1516,6 @@ const ActivityDetailsSheet = ({
           },
         ]
       : []),
-    {
-      label: t("workspaces.overview.activity.details.eventId"),
-      value: <BidiText as="span">{item.id}</BidiText>,
-    },
   ];
 
   return (
@@ -1751,7 +1779,20 @@ const ActivityAction = ({ group }: { group: ActivityGroup }) => {
   if (item.target.kind === "documentReviewRun" && item.action === "execute") {
     return t("workspaces.overview.activity.documentReview.started");
   }
-  return t(ROW_ACTION_LABEL_KEYS[item.action]);
+  if (item.action !== "update") {
+    return t(ROW_ACTION_LABEL_KEYS[item.action]);
+  }
+  const changedFields = [
+    ...new Set(group.items.flatMap((activity) => activity.changedFields)),
+  ];
+  if (changedFields.length === 0) {
+    return t(ROW_ACTION_LABEL_KEYS[item.action]);
+  }
+  return t("workspaces.overview.activity.updatedFields", {
+    fields: changedFields
+      .map((field) => t(CHANGED_FIELD_LABEL_KEYS[field]))
+      .join(", "),
+  });
 };
 
 const TargetName = ({ item }: { item: MatterActivityItem }) => {

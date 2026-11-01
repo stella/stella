@@ -1,3 +1,4 @@
+import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import {
   afterAll,
@@ -37,16 +38,12 @@ import {
   relations,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import {
-  EMPTY_AST,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceAdapter,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { EU_ECJ_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj.metadata-urls";
+import {
+  assemblePlKioDecision,
+  plKioAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { PL_KIO_DOCUMENT_REJECTION } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
 import {
   assembleSkCourtsDecision,
   skCourtsAdapter,
@@ -83,11 +80,29 @@ import {
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SourceAdapter,
+} from "@/api/lib/legal-search/ingestion-types";
 import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  openRawSourceWriteWindow,
+  RAW_SOURCE_FAMILY,
+  rawSourcePayloadKey,
+} from "@/api/lib/legal-search/raw-source-storage";
+import { captureSkDocumentRaw } from "@/api/lib/legal-search/sk-document-raw";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { memorySkDocumentRawStorage } from "@/api/tests/helpers/sk-document-raw-storage";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // A writing replay, through the same `processDecision` a crawl feeds.
@@ -308,9 +323,7 @@ test("a writing replay goes through the pipeline, and replaying again converges"
     .from(corpusIndexProjectionStates)
     .where(eq(corpusIndexProjectionStates.entityId, id));
 
-  // Same payload, same parser: the second run re-derives the stored hash, so
-  // neither the decision nor its observation watermark is written.
-  // That fixed point is what makes a re-run safe.
+  // Equal output still establishes the target parser's exact input proof.
   const second = await replay();
   if (second.type !== "ran") {
     throw new TypeError("Expected the capable adapter to run");
@@ -323,6 +336,9 @@ test("a writing replay goes through the pipeline, and replaying again converges"
       contentHash: caseLawDecisions.contentHash,
       fulltext: caseLawDecisions.fulltext,
       parserVersion: caseLawDecisions.parserVersion,
+      parsedSourceHash: caseLawDecisions.parsedSourceHash,
+      parsedSourceHashVersion: caseLawDecisions.parsedSourceHashVersion,
+      parsedSourceRawS3Key: caseLawDecisions.parsedSourceRawS3Key,
       projectionEpoch: caseLawDecisions.projectionEpoch,
       sourceHash: caseLawDecisions.sourceHash,
       sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
@@ -333,12 +349,29 @@ test("a writing replay goes through the pipeline, and replaying again converges"
   expect(converged).toEqual({
     contentHash: beforeUnchanged.contentHash,
     fulltext: NEW_PARSER_TEXT,
-    parserVersion: 1,
+    parserVersion: 5,
+    parsedSourceHash: "hash-from-the-new-parser",
+    parsedSourceHashVersion: 0,
+    parsedSourceRawS3Key: contentAddressedKey,
     projectionEpoch: beforeUnchanged.projectionEpoch,
     sourceHash: "hash-from-the-new-parser",
     sourceRawS3Key: contentAddressedKey,
-    observationOrder: 1n,
+    observationOrder: 2n,
   });
+  const beforeThird = await db
+    .select()
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.id, id));
+  const updatesBeforeThird = decisionUpdates.length;
+  const third = await replay();
+  if (third.type !== "ran") {
+    panic("Expected the proved replay to run");
+  }
+  expect(third.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+  expect(decisionUpdates.slice(updatesBeforeThird)).toEqual([]);
+  expect(
+    await db.select().from(caseLawDecisions).where(eq(caseLawDecisions.id, id)),
+  ).toEqual(beforeThird);
   expect(
     await db
       .select()
@@ -545,6 +578,15 @@ const noDocumentAdapter = stubAdapter(() => ({
   detail: "no fulltext parsed from the stored payload",
 }));
 
+// What an adapter answers when the envelope names a document object that
+// object storage does not hold.
+const metadataOnlyAdapter = stubAdapter(() => ({
+  type: "rejected",
+  rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+  status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+  detail: "the stored record has no document object for document",
+}));
+
 const STORED_PAGE_TEXT = "Site navigation, contact options and a footer.";
 
 type WithdrawFixture = {
@@ -632,6 +674,61 @@ const storedDocumentOf = async (id: SafeId<"caseLawDecision">) => {
   return row;
 };
 
+test("missing stored document capture keeps existing text even when rejected-document withdrawal is enabled", async () => {
+  const { id, sourceId } = await insertRowHoldingAPage({
+    label: "metadata-only",
+  });
+  await db
+    .update(caseLawDecisions)
+    .set({
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    })
+    .where(eq(caseLawDecisions.id, id));
+  const before = await storedDocumentOf(id);
+  const sourceLease = await acquireCaseLawSourceIngestionLease({
+    scopedDb,
+    sourceId,
+  });
+  if (sourceLease === null) {
+    panic("Expected a source ingestion lease for metadata-only replay");
+  }
+  try {
+    const run = await replayCaseLawSource({
+      adapter: metadataOnlyAdapter,
+      scopedDb,
+      sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      readStoredRaw: async () =>
+        new TextEncoder().encode(
+          encodeSourceRawEnvelope({
+            listing: JSON.stringify({
+              documentId: "7964d54e-6708-48e9-92cc-5cc400aab1e3",
+              mkRSAPNumberOfFile: "PL. ÚS 4/2020",
+              mkDateOfDecision: "03/12/2020 00:00:00",
+              mkFormOfDecision: "Nález",
+            }),
+          }),
+        ),
+      sourceLease,
+      bound: { type: "at-most", limit: 10 },
+      pageSize: 10,
+      rejectionPolicy: REPLAY_REJECTION_POLICY.WITHDRAW_NO_DOCUMENT,
+    });
+    if (run.type !== "ran") {
+      panic("Expected metadata-only replay to run");
+    }
+    expect(run.report.outcomes[REPLAY_ROW_OUTCOME.REJECTED]).toBe(1);
+    expect(run.report.outcomes[REPLAY_ROW_OUTCOME.WITHDRAWN]).toBe(0);
+    expect(run.report.outcomes[REPLAY_ROW_OUTCOME.WOULD_WITHDRAW]).toBe(0);
+    expect(
+      run.report.rejections[STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA],
+    ).toBe(1);
+    expect(await storedDocumentOf(id)).toEqual(before);
+  } finally {
+    await sourceLease.release();
+  }
+});
+
 test("a row that re-parses to no document keeps its text unless asked", async () => {
   const { id, sourceId } = await insertRowHoldingAPage({ label: "rejected" });
   const sourceLease = await acquireCaseLawSourceIngestionLease({
@@ -657,6 +754,97 @@ test("a row that re-parses to no document keeps its text unless asked", async ()
   expect(run.report.outcomes[REPLAY_ROW_OUTCOME.REJECTED]).toBe(1);
   expect(run.report.outcomes[REPLAY_ROW_OUTCOME.WITHDRAWN]).toBe(0);
   expect((await storedDocumentOf(id))?.fulltext).toBe(STORED_PAGE_TEXT);
+
+  await sourceLease.release();
+});
+
+test("a re-parse its parsing budget refuses keeps the stored text and records the refusal", async () => {
+  // A real procurement ruling whose markup the adapter's DOM allocation
+  // budget refuses. A row stored with text before the budget existed
+  // re-parses to a ruling with no document; the pipeline keeps the stored
+  // one (`preserveStoredDocument` in pipeline/decision-plan.ts) and the
+  // refusal is recorded on the row as the document status.
+  const fixture = (name: string) =>
+    Bun.file(new URL(`adapters/__fixtures__/${name}`, import.meta.url));
+  const html = new TextDecoder().decode(
+    Bun.gunzipSync(
+      new Uint8Array(
+        await fixture("pl-kio-content-10000.html.gz").arrayBuffer(),
+      ),
+    ),
+  );
+  const refused = assemblePlKioDecision({
+    item: {
+      id: "10000",
+      signature: "KIO 2155/17",
+      issueDate: "02-11-2017",
+      documentType: "wyrok",
+    },
+    detailHtml: await fixture("pl-kio-detail-10000.html").text(),
+    document: { type: "read", html },
+  }).decision;
+  expect(refused.fulltext ?? "").toBe("");
+  expect(
+    refused.metadata["documentStatus"] ===
+      PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
+  ).toBe(true);
+  const envelope = refused.sourceRaw;
+  if (envelope === undefined) {
+    panic("Expected the procurement ruling to carry its envelope");
+  }
+
+  const sourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values({
+    id: sourceId,
+    adapterKey: `replay-budget-${sourceId}`,
+    name: "replay budget fixture",
+  });
+  const id = createSafeId<"caseLawDecision">();
+  const storedText = "WYROK, as the ruling was first stored.";
+  await db.insert(caseLawDecisions).values({
+    id,
+    sourceId,
+    caseNumber: refused.caseNumber,
+    sourceDocumentId: refused.sourceDocumentId,
+    court: refused.court,
+    country: refused.country,
+    language: refused.language,
+    fulltext: storedText,
+    sections: [{ index: 0, type: "unknown", title: null, text: storedText }],
+    sourceRawS3Key: STORED_KEY_PLACEHOLDER,
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    sourceHash: "hash-of-the-envelope-as-first-stored",
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIO] - 1,
+    metadata: {},
+  });
+  const sourceLease = await acquireCaseLawSourceIngestionLease({
+    scopedDb,
+    sourceId,
+  });
+  if (sourceLease === null) {
+    throw new TypeError("Expected the source ingestion lease to be free");
+  }
+
+  const run = await replayCaseLawSource({
+    adapter: plKioAdapter,
+    scopedDb,
+    sourceId,
+    scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+    readStoredRaw: async () =>
+      await Promise.resolve(new TextEncoder().encode(envelope)),
+    sourceLease,
+    bound: { type: "at-most", limit: 10 },
+    pageSize: 10,
+  });
+  if (run.type !== "ran") {
+    throw new TypeError("Expected the capable adapter to run");
+  }
+
+  const row = await storedDocumentOf(id);
+  expect(row?.fulltext).toBe(storedText);
+  expect(row?.metadata?.["documentStatus"]).toBe(
+    PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
+  );
 
   await sourceLease.release();
 });
@@ -837,8 +1025,8 @@ const replayConvergenceFixture = async (text: string) => {
     documentAst: astWithBlocks([paragraph("b1", text)]),
     parserVersion: 4,
   });
-  const sanitized = sanitizeResult(result);
-  const payload = caseLawCanonicalPayload(sanitized);
+  const sanitized = sanitizeResult(result).unwrap();
+  const payload = caseLawCanonicalPayload(sanitized).unwrap();
   await db.insert(caseLawDecisions).values({
     id,
     sourceId,
@@ -852,7 +1040,10 @@ const replayConvergenceFixture = async (text: string) => {
     documentAst: payload.ast,
     parserVersion: 4,
     sourceHash: sanitized.rawHash,
-    sourceRawS3Key: STORED_KEY_PLACEHOLDER,
+    sourceRawS3Key: rawSourcePayloadKey({
+      owner: { family: RAW_SOURCE_FAMILY.CASE_LAW, sourceId, documentId: id },
+      data: STORED_PAYLOAD,
+    }),
     sourceRawContentType: "application/xhtml+xml",
   });
   const adapter = stubAdapter(() => ({ type: "parsed", result }));
@@ -1119,7 +1310,7 @@ test.each(["r o z h o d o l :", "Body text.\u0000"])(
 );
 
 test.each(["row-columns", "content-hash"])(
-  "an identical replay never updates the decision at a newer parser version: %p",
+  "an identical replay establishes its parser proof once: %p",
   async (storage) => {
     const fixture = await replayConvergenceFixture("Unchanged body text.");
     await db
@@ -1163,13 +1354,35 @@ test.each(["row-columns", "content-hash"])(
       throw new TypeError("Expected replay to run");
     }
     expect(run.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
-    expect(decisionUpdates.slice(updatesBefore)).toEqual([]);
-    expect(await readRow()).toEqual(before);
+    expect(decisionUpdates.length).toBeGreaterThan(updatesBefore);
+    const proved = await readRow();
+    expect(proved).toMatchObject({
+      parserVersion: 4,
+      parsedSourceHash: fixture.result.rawHash,
+      parsedSourceHashVersion: 0,
+      parsedSourceRawS3Key: before.sourceRawS3Key,
+      fulltext: before.fulltext,
+      sections: before.sections,
+      documentAst: before.documentAst,
+      metadata: before.metadata,
+    });
+    const [beforeTimestamp] = await db
+      .select({ value: sql<string>`${caseLawDecisions.updatedAt}::text` })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, fixture.id));
+    const updatesBeforeFixedPoint = decisionUpdates.length;
+    const fixedPoint = await fixture.replay(lease);
+    if (fixedPoint.type !== "ran") {
+      panic("Expected the proved fixed point to run");
+    }
+    expect(fixedPoint.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+    expect(decisionUpdates.slice(updatesBeforeFixedPoint)).toEqual([]);
+    expect(await readRow()).toEqual(proved);
     const [timestamp] = await db
       .select({ value: sql<string>`${caseLawDecisions.updatedAt}::text` })
       .from(caseLawDecisions)
       .where(eq(caseLawDecisions.id, fixture.id));
-    expect(timestamp?.value).toContain(".123456");
+    expect(timestamp?.value).toBe(beforeTimestamp?.value);
     expect(fake.requests.filter(({ method }) => method === "PUT")).toHaveLength(
       0,
     );
@@ -1201,7 +1414,7 @@ test.each(["row-columns", "content-hash"])(
       .select({ order: caseLawSources.observationOrder })
       .from(caseLawSources)
       .where(eq(caseLawSources.id, fixture.sourceId));
-    expect(source?.order).toBe(0n);
+    expect(source?.order).toBe(1n);
     const second = await fixture.replay(null);
     if (second.type !== "ran") {
       throw new TypeError("Expected replay to run");
@@ -1336,7 +1549,7 @@ test("an unchanged replay preserves a version written after the row was selected
   if (run.type !== "ran") {
     throw new TypeError("Expected replay to run");
   }
-  expect(run.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+  expect(run.report.outcomes[REPLAY_ROW_OUTCOME.RETRYABLE]).toBe(1);
   const [row] = await db
     .select({ version: caseLawDecisions.parserVersion })
     .from(caseLawDecisions)
@@ -1397,7 +1610,7 @@ test("a version bump that changes only a described column goes through the pipel
   await lease.release();
 });
 
-test("a row stored under an encoded docket replays to the decoded docket in place", async () => {
+test("captured PDF replay decodes legacy dockets while metadata-only rows retain their version", async () => {
   const sourceId = createSafeId<"caseLawSource">();
   await db.insert(caseLawSources).values({
     id: sourceId,
@@ -1412,10 +1625,43 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
     })?.sourceRaw ?? panic("legacy fixture stores no raw");
   const keyedId = createSafeId<"caseLawDecision">();
   const docketKeyedId = createSafeId<"caseLawDecision">();
+  const uncapturedId = createSafeId<"caseLawDecision">();
   const payloads = new Map([
     [keyedId, legacyPayloadFor("sk-guid-legacy")],
     [docketKeyedId, legacyPayloadFor(null)],
+    [uncapturedId, legacyPayloadFor("sk-guid-uncaptured")],
   ]);
+  const memory = memorySkDocumentRawStorage();
+  const pdf = PDF.create();
+  const page = pdf.addPage({ size: "letter" });
+  page.drawText("First paragraph of", { x: 72, y: 720, size: 12 });
+  page.drawText("the judgment.", { x: 72, y: 706, size: 12 });
+  page.drawText("Second paragraph of", { x: 72, y: 668, size: 12 });
+  page.drawText("the judgment.", { x: 72, y: 654, size: 12 });
+  const bytes = await pdf.save();
+  for (const id of [keyedId, docketKeyedId]) {
+    const raw = payloads.get(id) ?? panic("Legacy raw fixture missing");
+    // db-await-in-loop: capture each decision's PDF under its own durable identity.
+    const capture = (
+      await captureSkDocumentRaw({
+        sourceId,
+        decisionId: id,
+        window: openRawSourceWriteWindow(),
+        storedKey: null,
+        storedContentType: null,
+        inlineRaw: raw,
+        bytes,
+        signal: new AbortController().signal,
+        storage: memory.storage,
+        beforeRemoteEffect: async <T>(effect: () => Promise<T>) =>
+          await effect(),
+      })
+    ).unwrap("Legacy PDF capture must succeed");
+    payloads.set(
+      id,
+      new TextDecoder().decode(memory.objects.get(capture.sourceRawS3Key)),
+    );
+  }
   // The legacy key, or the content-addressed one the applied write moves the
   // row to; both name the decision.
   const payloadAt = (key: string) =>
@@ -1427,6 +1673,7 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
       [
         [keyedId, "sk-guid-legacy"],
         [docketKeyedId, null],
+        [uncapturedId, "sk-guid-uncaptured"],
       ] as const
     ).map(([id, sourceDocumentId]) => ({
       id,
@@ -1439,6 +1686,9 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
       sourceRawS3Key: `case-law/raw/legacy/${id}`,
       sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
       sourceHash: "hash-before-decoding",
+      fulltext: RESTRUCTURED_TEXT,
+      documentAst: FLAT_AST,
+      sections: STORED_SECTIONS,
       parserVersion: legacyVersion,
       metadata: {},
     })),
@@ -1450,6 +1700,7 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
   if (lease === null) {
     throw new TypeError("Expected the source ingestion lease to be free");
   }
+  const beforeUncaptured = await storedDocumentOf(uncapturedId);
   const reparse =
     skCourtsAdapter.reparseStoredRaw ?? panic("adapter has no replay reader");
   const replay = async () =>
@@ -1460,7 +1711,9 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
       sourceLease: lease,
       scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: async (key) =>
-        await Promise.resolve(new TextEncoder().encode(payloadAt(key))),
+        await Promise.resolve(
+          memory.objects.get(key) ?? new TextEncoder().encode(payloadAt(key)),
+        ),
       bound: { type: "at-most", limit: 10 },
       pageSize: 10,
     });
@@ -1488,11 +1741,22 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
   expect(first.report.rejections["identity-mismatch"]).toBe(1);
   expect(await readRows()).toEqual({
     [docketKeyedId]: { caseNumber: "7C&#x2F;221/1991", version: legacyVersion },
+    [uncapturedId]: { caseNumber: "7C&#x2F;221/1991", version: legacyVersion },
     [keyedId]: {
       caseNumber: "7C/221/1991",
       version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
     },
   });
+
+  expect(
+    first.report.rejections[STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA],
+  ).toBe(1);
+  expect(await storedDocumentOf(uncapturedId)).toEqual(beforeUncaptured);
+  const captured = await storedDocumentOf(keyedId);
+  expect(captured?.fulltext).toContain(
+    "First paragraph of the judgment.\n\nSecond paragraph of the judgment.",
+  );
+  expect(captured?.documentAst).not.toEqual(FLAT_AST);
 
   // The migrated row now matches its payload exactly: a second run converges.
   const second = await replay();
@@ -1584,12 +1848,16 @@ test("registered replay and its pipeline write preserve URLs and cloned diagnost
 
 test("replay updates exactly changed rows and produces content-free terminal results", async () => {
   await db.execute(
-    sql`CREATE TEMP TABLE replay_decision_updates (decision_id text NOT NULL)`,
+    sql`CREATE TEMP TABLE replay_decision_updates (decision_id text NOT NULL, payload_changed boolean NOT NULL)`,
   );
   await db.execute(sql`
     CREATE FUNCTION pg_temp.count_replay_decision_update() RETURNS trigger AS $$
     BEGIN
-      INSERT INTO replay_decision_updates VALUES (NEW.id::text);
+      INSERT INTO replay_decision_updates VALUES (
+        NEW.id::text,
+        ROW(OLD.fulltext, OLD.sections, OLD.document_ast) IS DISTINCT FROM
+        ROW(NEW.fulltext, NEW.sections, NEW.document_ast)
+      );
       RETURN NEW;
     END;
     $$ LANGUAGE plpgsql
@@ -1641,7 +1909,14 @@ test("replay updates exactly changed rows and produces content-free terminal res
             sections: fixture.payload.sections,
             documentAst: fixture.payload.ast,
             parserVersion: 3,
-            sourceRawS3Key: STORED_KEY_PLACEHOLDER,
+            sourceRawS3Key: rawSourcePayloadKey({
+              owner: {
+                family: RAW_SOURCE_FAMILY.CASE_LAW,
+                sourceId: fixture.sourceId,
+                documentId: id,
+              },
+              data: STORED_PAYLOAD,
+            }),
           });
           expected.push(
             outcome === "rejected"
@@ -1704,7 +1979,7 @@ test("replay updates exactly changed rows and produces content-free terminal res
         }
         expect(first.report.haltReason).toBeNull();
         const updates = await db.execute<{ decision_id: string }>(
-          sql`SELECT decision_id FROM replay_decision_updates`,
+          sql`SELECT decision_id FROM replay_decision_updates WHERE payload_changed`,
         );
         expect(
           updates.rows.map(({ decision_id }) => decision_id).toSorted(),
@@ -1714,8 +1989,28 @@ test("replay updates exactly changed rows and produces content-free terminal res
             .map(({ decisionId }) => decisionId)
             .toSorted(),
         );
+        const parsedInputs = await db
+          .select({
+            id: caseLawDecisions.id,
+            parserVersion: caseLawDecisions.parserVersion,
+            sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+            parsedSourceRawS3Key: caseLawDecisions.parsedSourceRawS3Key,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, fixture.sourceId));
         for (const receipt of expected) {
           expect(receipts.get(receipt.decisionId)).toEqual(receipt);
+          const row = parsedInputs.find(({ id }) => id === receipt.decisionId);
+          if (row === undefined) {
+            panic("Expected the replayed fixture row");
+          }
+          if (receipt.outcome === "rejected") {
+            expect(row.parserVersion).toBe(3);
+            expect(row.parsedSourceRawS3Key).toBeNull();
+            continue;
+          }
+          expect(row.parserVersion).toBe(4);
+          expect(row.parsedSourceRawS3Key).toBe(row.sourceRawS3Key);
         }
         expect(receipts.size).toBe(kinds.length + 1);
         await db.execute(sql`TRUNCATE replay_decision_updates`);

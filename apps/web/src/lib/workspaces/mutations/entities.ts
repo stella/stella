@@ -9,13 +9,16 @@ import {
   closeInspectorTabsForEntities,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
+import { getTranslator } from "@/i18n/translator";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { UpsertFieldContent } from "@/lib/api-contract";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { replaceCachedFileName } from "@/lib/files/queries";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
 import { resourceMutation } from "@/lib/workspace-realtime";
@@ -32,7 +35,7 @@ type CreateEntitiesVars = {
 export const useCreateEntities = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
+  return useIdempotentMutation({
     mutationFn: async ({ workspaceId, ...body }: CreateEntitiesVars) => {
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -45,10 +48,14 @@ export const useCreateEntities = () => {
           }),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateEntities:failure",
+        scope: { type: "handler", handlerId: "useCreateEntities:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -70,17 +77,22 @@ export const useDeleteEntities = () => {
           entityIds: entityIds.map((entityId) => toSafeId<"entity">(entityId)),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, { workspaceId, entityIds }) => {
       closeInspectorTabsForEntities(entityIds);
       await invalidateDeletedEntityQueries({
         queryClient,
         workspaceId,
+        entityIds,
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteEntities:failure",
+        scope: { type: "handler", handlerId: "useDeleteEntities:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -103,10 +115,14 @@ export const useMoveEntity = () => {
           parentId: parentId === null ? null : toSafeId<"entity">(parentId),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useMoveEntity:failure",
+        scope: { type: "handler", handlerId: "useMoveEntity:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -121,13 +137,11 @@ type CreateFolderFromSelectionVars = {
 export const useCreateFolderFromSelection = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      name,
-      parentId,
-      entityIds,
-    }: CreateFolderFromSelectionVars) =>
+  return useIdempotentMutation({
+    mutationFn: async (
+      { workspaceId, name, parentId, entityIds }: CreateFolderFromSelectionVars,
+      intentRequest,
+    ) =>
       await invokeCapability(
         "entities.folder-from-selection.create",
         async (request) => {
@@ -142,13 +156,23 @@ export const useCreateFolderFromSelection = () => {
                 toSafeId<"entity">(entityId),
               ),
             },
-            request,
+            {
+              ...request,
+              fetch: { headers: intentRequest.headers },
+            },
           );
-          return unwrapEden(response);
+          return unwrapApiResponse(response);
         },
       ),
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateFolderFromSelection:failure",
+        scope: {
+          type: "handler",
+          handlerId: "entities.folder-from-selection.create",
+        },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -177,8 +201,14 @@ export const useRenameEntity = (
   const analytics = useAnalytics();
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const reportFailure = (error: unknown) => {
-    analytics.captureError(error);
+  const notifyRenameFailure = (
+    error: unknown,
+    fingerprintKey: ExceptionFingerprintKey,
+  ) => {
+    analytics.captureError(error, {
+      fingerprintKey,
+      scope: { type: "handler", handlerId: fingerprintKey },
+    });
     notifyUserError(error, t("errors.actionFailed"));
   };
 
@@ -190,7 +220,7 @@ export const useRenameEntity = (
     const response = await api
       .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .rename.patch({ entityId: toSafeId<"entity">(entityId), name });
-    return unwrapEden(response);
+    return unwrapApiResponse(response);
   };
 
   const renameMutation = resourceMutation({
@@ -273,7 +303,10 @@ export const useRenameEntity = (
         }
       });
       if (reconciled.isErr()) {
-        analytics.captureError(reconciled.error);
+        analytics.captureError(reconciled.error, {
+          fingerprintKey: "useRenameEntity:failure",
+          scope: { type: "handler", handlerId: "useRenameEntity:failure" },
+        });
       }
       if (data.file) {
         replaceCachedFileName(queryClient, {
@@ -304,9 +337,12 @@ export const useRenameEntity = (
         }
       });
       if (rolledBack.isErr()) {
-        analytics.captureError(rolledBack.error);
+        analytics.captureError(rolledBack.error, {
+          fingerprintKey: "useRenameEntity:failure-2",
+          scope: { type: "handler", handlerId: "useRenameEntity:failure-2" },
+        });
       }
-      reportFailure(error);
+      notifyRenameFailure(error, "useRenameEntity:rename");
     },
     onSettled: (_data, error, { completion }, context) => {
       context?.release();
@@ -318,7 +354,7 @@ export const useRenameEntity = (
         completion?.onSuccess?.();
       });
       if (completed.isErr()) {
-        reportFailure(completed.error);
+        notifyRenameFailure(completed.error, "useRenameEntity:completion");
       }
     },
   });
@@ -350,6 +386,27 @@ type UpsertFieldVars = {
   content: UpsertFieldContent;
 };
 
+/**
+ * Write one field. The bare request, for a caller that settles a batch of
+ * writes itself (one invalidation, one toast) instead of per write.
+ */
+export const upsertFieldRequest = async ({
+  workspaceId,
+  propertyId,
+  entityId,
+  content,
+}: UpsertFieldVars) => {
+  const response = await api
+    .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    .post({
+      propertyId: toSafeId<"property">(propertyId),
+      entityId: toSafeId<"entity">(entityId),
+      content,
+    });
+
+  return unwrapApiResponse(response);
+};
+
 type UpdateKanbanPlacementVars = {
   workspaceId: string;
   entityId: string;
@@ -360,35 +417,25 @@ type UpdateKanbanPlacementVars = {
   }[];
 };
 
-export const useUpdateKanbanPlacement = () => {
-  const analytics = useAnalytics();
-  const t = useTranslations();
+/** Move one card to a subgroup cell: its column and lane in one request. */
+export const updateKanbanPlacementRequest = async ({
+  workspaceId,
+  entityId,
+  status,
+  fields,
+}: UpdateKanbanPlacementVars) => {
+  const response = await api
+    .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    ["kanban-placement"].patch({
+      entityId: toSafeId<"entity">(entityId),
+      ...(status !== undefined && { status }),
+      fields: fields.map(({ propertyId, content }) => ({
+        propertyId: toSafeId<"property">(propertyId),
+        content,
+      })),
+    });
 
-  return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      entityId,
-      status,
-      fields,
-    }: UpdateKanbanPlacementVars) => {
-      const response = await api
-        .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["kanban-placement"].patch({
-          entityId: toSafeId<"entity">(entityId),
-          ...(status !== undefined && { status }),
-          fields: fields.map(({ propertyId, content }) => ({
-            propertyId: toSafeId<"property">(propertyId),
-            content,
-          })),
-        });
-
-      return unwrapEden(response);
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-  });
+  return unwrapApiResponse(response);
 };
 
 export const useUpsertField = () => {
@@ -396,25 +443,13 @@ export const useUpsertField = () => {
   const t = useTranslations();
 
   return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      propertyId,
-      entityId,
-      content,
-    }: UpsertFieldVars) => {
-      const response = await api
-        .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .post({
-          propertyId: toSafeId<"property">(propertyId),
-          entityId: toSafeId<"entity">(entityId),
-          content,
-        });
-
-      return unwrapEden(response);
-    },
+    mutationFn: upsertFieldRequest,
 
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpsertField:failure",
+        scope: { type: "handler", handlerId: "useUpsertField:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

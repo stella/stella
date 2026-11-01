@@ -5,7 +5,6 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { panic } from "better-result";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
-import Elysia from "elysia";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -20,13 +19,16 @@ import {
 } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
 import { auditLogs, organizationSettings } from "@/api/db/schema";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteDefinition } from "@/api/http/route";
 import { API_KEY_PLUGIN_CONFIGS } from "@/api/lib/api-key-plugin-configs";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
-import { createAuthMacro } from "@/api/lib/auth";
+import { createMemberAuthenticator } from "@/api/lib/auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   PERSONAL_API_KEY_AUDIENCES,
@@ -34,6 +36,7 @@ import {
 } from "@/api/lib/machine-api-key-config";
 import {
   createPersonalApiKey,
+  issueMachineApiKey,
   listPersonalApiKeys,
   readPersonalApiKeyPolicy,
   revokePersonalApiKey,
@@ -42,6 +45,7 @@ import {
 } from "@/api/lib/machine-api-keys/personal-lifecycle";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { logger } from "@/api/lib/observability/logger";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 import {
@@ -49,6 +53,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
@@ -82,6 +87,10 @@ const withFixture = async (
     slug: organizationId,
     createdAt: new Date(),
   });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
+  });
   await db.insert(user).values(
     ids.map((id) => ({
       id,
@@ -99,9 +108,20 @@ const withFixture = async (
       createdAt: new Date(),
     })),
   );
+  await db.insert(session).values(
+    ids.map((id) => ({
+      id: `session-${id}`,
+      token: `token-${id}`,
+      userId: id,
+      activeOrganizationId: organizationId,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      updatedAt: new Date(),
+    })),
+  );
   const principal = (userId: typeof ownerId) => ({
     organizationId,
     userId,
+    sessionId: `session-${userId}`,
     database,
     name: "Personal key fixture",
     recordAuditEvent: createBackgroundAuditRecorder({
@@ -249,6 +269,27 @@ describe("personal key persistence and receipts", () => {
     });
   });
 
+  test("a credential without a browser session can neither mint nor rotate a key", async () => {
+    await withFixture(async ({ own }) => {
+      const key = requireKey(await createPersonalApiKey(own));
+      const sessionless = { ...own, sessionId: null };
+
+      const minted = await createPersonalApiKey(sessionless);
+      const rotated = await rotatePersonalApiKey({
+        ...sessionless,
+        keyId: key.id,
+      });
+
+      expect(minted.isErr() && minted.error.status).toBe(401);
+      expect(rotated.isErr() && rotated.error.status).toBe(401);
+      const page = await listPersonalApiKeys(
+        { ...own, access: "own", limit: 20 },
+        database,
+      );
+      expect(page.items.map((item) => item.id)).toEqual([key.id]);
+    });
+  });
+
   test("expired keys cannot be rotated into fresh credentials", async () => {
     await withFixture(async ({ own }) => {
       const key = requireKey(await createPersonalApiKey(own));
@@ -347,24 +388,34 @@ describe("personal key persistence and receipts", () => {
           plugins: [apiKey([...API_KEY_PLUGIN_CONFIGS])],
         });
         const sessionReads = { count: 0 };
-        const rest = new Elysia()
-          .use(
-            createAuthMacro({
-              getSession: async ({ headers }) => {
-                const resolved = await auth.api.getSession({
-                  headers: new Headers(headers),
-                  returnHeaders: true,
-                });
-                expect(resolved.response).toBeNull();
-                if (resolved.response !== null) {
-                  panic("A personal key must never create a REST session");
-                }
-                sessionReads.count += 1;
-                return { headers: resolved.headers, response: null };
-              },
-            }),
-          )
-          .get("/protected", () => "authenticated", { validateAuth: true });
+        const authenticate = createMemberAuthenticator({
+          getSession: async ({ headers }) => {
+            const resolved = await auth.api.getSession({
+              headers: new Headers(headers),
+              returnHeaders: true,
+            });
+            expect(resolved.response).toBeNull();
+            if (resolved.response !== null) {
+              panic("A personal key must never create a REST session");
+            }
+            sessionReads.count += 1;
+            return { headers: resolved.headers, response: null };
+          },
+        });
+        const protectedRoute: RouteDefinition = {
+          access: "member",
+          config: {},
+          run: async ({ ctx }) => {
+            const outcome = await authenticate(ctx, {});
+            return outcome.ok ? "authenticated" : outcome.answer;
+          },
+        };
+        await using rest = serveForTest(
+          createHttpApp({
+            middleware: [],
+            routes: routes({ "/protected": { GET: protectedRoute } }),
+          }),
+        );
         const resolveAuthorization: NonNullable<
           Parameters<typeof resolveMachineApiKeySession>[1]
         >["resolveAuthorization"] = async ({ organizationId, userId }) => {
@@ -418,8 +469,9 @@ describe("personal key persistence and receipts", () => {
               expect(response.status).toBe(200);
               expect(await response.json()).toBeNull();
               const readsBefore = sessionReads.count;
-              const protectedResponse = await rest.handle(
-                new Request("http://localhost:3001/protected", { headers }),
+              const protectedResponse = await rest.fetch(
+                "http://localhost:3001/protected",
+                { headers },
               );
               expect(protectedResponse.status).toBe(401);
               expect(sessionReads.count).toBe(readsBefore + 1);
@@ -454,6 +506,48 @@ describe("personal key persistence and receipts", () => {
       });
     },
   );
+
+  test("a machine key carries only what the role locked at issuance grants", async () => {
+    await withFixture(async ({ admin }) => {
+      const issue = async () =>
+        await issueMachineApiKey({
+          ...admin,
+          name: "Settings key",
+          scopes: ["stella:read"],
+          permissions: { organizationSettings: ["update"] },
+          expiresInDays: undefined,
+          audience: undefined,
+          auditEvent: (key) => ({
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,
+            resourceId: key.id,
+            metadata: { name: key.name },
+          }),
+        });
+      expect((await issue()).isOk()).toBe(true);
+
+      // The handler validated the request for an administrator; the caller is
+      // demoted before issuance takes its locks.
+      await db
+        .update(member)
+        .set({ role: "member" })
+        .where(
+          and(
+            eq(member.organizationId, admin.organizationId),
+            eq(member.userId, admin.userId),
+          ),
+        );
+      const demoted = await issue();
+
+      expect(demoted.isErr() && demoted.error.status).toBe(403);
+      expect(
+        await db
+          .select({ id: apikey.id })
+          .from(apikey)
+          .where(eq(apikey.referenceId, admin.userId)),
+      ).toHaveLength(1);
+    });
+  });
 
   test("rotation retains the persisted permission ceiling after an owner is promoted", async () => {
     await withFixture(async ({ own }) => {
@@ -600,6 +694,7 @@ describe("personal key persistence and receipts", () => {
           const sharedOwner = {
             ...unrelatedOwner,
             userId: own.userId,
+            sessionId: own.sessionId,
             recordAuditEvent: createBackgroundAuditRecorder({
               organizationId: unrelatedOwner.organizationId,
               userId: own.userId,

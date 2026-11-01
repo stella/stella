@@ -1,7 +1,6 @@
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { PUBLIC_LEGISLATION_PAGE_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
@@ -10,6 +9,7 @@ import {
   projectStatuteSitemapShard,
   projectStatuteSitemapStatute,
 } from "@/api/handlers/legislation/catalog-response";
+import { status } from "@/api/http/status";
 import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import {
   SITEMAP_ALL_BUCKET,
@@ -25,12 +25,19 @@ import { LIMITS } from "@/api/lib/limits";
 const SITEMAP_COUNTRY_PATTERN = "^[a-z]{2,3}$";
 const SITEMAP_BUCKET_PATTERN = "^(?:all|[0-9]{2})$";
 
-export const sitemapShardStatutesQuerySchema = t.Object({
-  country: t.String({ pattern: SITEMAP_COUNTRY_PATTERN }),
-  bucket: t.Optional(t.String({ pattern: SITEMAP_BUCKET_PATTERN })),
+export const sitemapShardStatutesQuerySchema = v.object({
+  country: v.pipe(
+    v.string(),
+    v.regex(new RegExp(SITEMAP_COUNTRY_PATTERN, "u")),
+  ),
+  bucket: v.optional(
+    v.pipe(v.string(), v.regex(new RegExp(SITEMAP_BUCKET_PATTERN, "u"))),
+  ),
 });
 
-type SitemapShardStatutesQuery = Static<typeof sitemapShardStatutesQuerySchema>;
+type SitemapShardStatutesQuery = v.InferOutput<
+  typeof sitemapShardStatutesQuerySchema
+>;
 
 const getCountryPathSegment = (country: string): string =>
   country.toLowerCase();

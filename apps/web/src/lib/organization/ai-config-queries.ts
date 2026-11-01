@@ -5,7 +5,7 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
@@ -48,7 +48,7 @@ export const aiConfigOptions = ({ organizationId }: AIConfigOptionsInput) =>
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
@@ -67,7 +67,7 @@ export const aiDefaultsPreviewOptions = ({
     queryOptions({
       queryKey: aiConfigKeys.defaultsPreview({ organizationId, providers }),
       queryFn: async ({ signal }) =>
-        unwrapEden(
+        unwrapApiResponse(
           await api["organization-settings"]["ai-config"][
             "defaults-preview"
           ].post({ providers: [...providers] }, { fetch: { signal } }),
@@ -98,7 +98,7 @@ export const aiAvailabilityOptions = ({
           fetch: { signal },
         });
 
-        return unwrapEden(response);
+        return unwrapApiResponse(response);
       },
       staleTime: ROUTE_QUERY_STALE_TIME_MS,
     }),

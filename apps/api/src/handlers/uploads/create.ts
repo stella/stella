@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Generic presigned-upload entrypoint. The body's `purpose` field
  * picks the per-surface validation + future finalize callback;
@@ -5,11 +6,9 @@
  * shared.
  *
  * Phase 1 wires only `entity_create`. Phases 2–4 will extend the
- * `t.Union(...)` and add a `switch(body.purpose)` branch.
+ * `v.union(...)` and add a `switch(body.purpose)` branch.
  */
-import { Result } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { sha256HexToBase64 } from "@stll/sha256";
 
@@ -21,13 +20,14 @@ import {
 import { validateAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { validateEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
+  authorizeUploadConsent,
   authorizeUploadPurpose,
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -42,8 +42,12 @@ import {
 } from "@/api/lib/uploads/entity-create";
 import {
   documentUploadFileFields,
-  tUploadFileSize,
+  uploadFileSizeSchema,
 } from "@/api/lib/uploads/file-metadata-schema";
+import {
+  importDocumentSource,
+  importOriginSchema,
+} from "@/api/lib/uploads/import-origin";
 import {
   PRESIGN_URL_EXPIRY_SECONDS,
   tmpUploadKey,
@@ -52,37 +56,36 @@ import {
 
 const skillPackFileMetadataSchema = {
   ...documentUploadFileFields,
-  size: tUploadFileSize(FILE_SIZE_LIMIT_BYTES.skillPack),
+  size: uploadFileSizeSchema(FILE_SIZE_LIMIT_BYTES.skillPack),
 } as const;
 
-const entityCreatePresignBodySchema = t.Object({
-  purpose: t.Literal("entity_create"),
-  propertyId: tSafeId("property"),
-  parentId: t.Optional(t.Nullable(tSafeId("entity"))),
+const entityCreatePresignBodySchema = v.object({
+  purpose: v.literal("entity_create"),
+  propertyId: resourceIdSchema("property"),
+  parentId: v.optional(v.nullable(resourceIdSchema("entity"))),
+  importOrigin: v.optional(importOriginSchema),
   ...documentUploadFileFields,
 });
 
-const entityVersionPresignBodySchema = t.Object({
-  purpose: t.Literal("entity_version"),
-  entityId: tSafeId("entity"),
+const entityVersionPresignBodySchema = v.object({
+  purpose: v.literal("entity_version"),
+  entityId: resourceIdSchema("entity"),
   ...documentUploadFileFields,
 });
 
-const agentSkillPresignBodySchema = t.Object({
-  purpose: t.Literal("agent_skill"),
-  scope: t.UnionEnum(AGENT_SKILL_SCOPES),
-  // Skill packs use the smaller `skillPack` budget enforced by the
-  // legacy upload, capped here too.
+const agentSkillPresignBodySchema = v.object({
+  purpose: v.literal("agent_skill"),
+  scope: v.picklist(AGENT_SKILL_SCOPES),
   ...skillPackFileMetadataSchema,
 });
 
-const presignBodySchema = t.Union([
+const presignBodySchema = v.union([
   entityCreatePresignBodySchema,
   entityVersionPresignBodySchema,
   agentSkillPresignBodySchema,
 ]);
 
-type PresignBody = Static<typeof presignBodySchema>;
+type PresignBody = v.InferOutput<typeof presignBodySchema>;
 
 type EntityCreatePurposeDataWithParent = Extract<
   PendingUploadPurposeData,
@@ -99,6 +102,14 @@ const toPurposeData = (purposeBody: PresignBody): PresignPurposeData => {
       type: "entity_create",
       propertyId: purposeBody.propertyId,
       parentId: purposeBody.parentId ?? null,
+      ...(purposeBody.importOrigin === undefined
+        ? {}
+        : {
+            importSource: importDocumentSource({
+              origin: purposeBody.importOrigin,
+              contentHash: purposeBody.sha256Hex,
+            }),
+          }),
     };
     return purposeData;
   }
@@ -119,8 +130,9 @@ const config = {
     "into stella from an agent surface; the multipart endpoints cannot be " +
     "called with JSON. Pass purpose plus the file metadata: name, mimeType, " +
     "size in bytes, and sha256Hex (lowercase hex SHA-256 of the exact " +
-    "bytes). purpose is entity_create (with propertyId, optional parentId) " +
-    "to add a new document, entity_version (with entityId) to add a version " +
+    "bytes). purpose is entity_create (with propertyId, optional parentId, " +
+    "and optional importOrigin to keep an imported file's source, id, " +
+    "original dates and author) to add a new document, entity_version (with entityId) to add a version " +
     "to an existing one, or agent_skill (with scope team or private) for a " +
     "skill pack. Returns uploadId, url, expiresAt, and headers. Step 2: PUT " +
     "the bytes to url with those headers verbatim -- the URL is signed " +
@@ -157,6 +169,13 @@ const presignUpload = createSafeHandler(
     });
     if (Result.isError(authorization)) {
       return Result.err(authorization.error);
+    }
+    const consent = authorizeUploadConsent({
+      grantedScopes: session.grantedScopes,
+      purpose: purposeBody.purpose,
+    });
+    if (Result.isError(consent)) {
+      return Result.err(consent.error);
     }
 
     if (purposeBody.purpose === "entity_create") {

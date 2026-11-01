@@ -4,7 +4,7 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
@@ -20,7 +20,7 @@ export const answerRevisionHistoryOptions = (
       queryKey: chatKeys.answerHistory(input),
       initialPageParam: stringCursorSeed(),
       queryFn: async ({ pageParam, signal }) =>
-        unwrapEden(
+        unwrapApiResponse(
           await api.chat
             .threads({ threadId: input.threadId })
             .messages({ messageId: input.messageId })

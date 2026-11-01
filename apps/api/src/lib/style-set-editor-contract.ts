@@ -1,17 +1,21 @@
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 
-const fontFamilySchema = t.String({ minLength: 1, maxLength: 128 });
-const fontSizeSchema = t.Number({
-  minimum: 1,
-  maximum: 400,
-  multipleOf: 0.5,
-});
-const paragraphSpacingSchema = t.Number({ minimum: 0, maximum: 1440 });
-const alignmentSchema = t.UnionEnum([
+const fontFamilySchema = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
+const fontSizeSchema = v.pipe(
+  v.number(),
+  v.minValue(1),
+  v.maxValue(400),
+  v.multipleOf(0.5),
+);
+const paragraphSpacingSchema = v.pipe(
+  v.number(),
+  v.minValue(0),
+  v.maxValue(1440),
+);
+const alignmentSchema = v.picklist([
   "preserve",
   "left",
   "center",
@@ -19,19 +23,19 @@ const alignmentSchema = t.UnionEnum([
   "both",
 ]);
 
-const paragraphStyleSchema = t.Object({
+const paragraphStyleSchema = v.object({
   fontFamily: fontFamilySchema,
   fontSizePt: fontSizeSchema,
-  bold: t.Boolean(),
+  bold: v.boolean(),
   alignment: alignmentSchema,
   spaceBeforePt: paragraphSpacingSchema,
   spaceAfterPt: paragraphSpacingSchema,
 });
 
-const numberedParagraphStyleSchema = t.Composite([
+const numberedParagraphStyleSchema = v.intersect([
   paragraphStyleSchema,
-  t.Object({
-    numberingFormat: t.UnionEnum([
+  v.object({
+    numberingFormat: v.picklist([
       "preserve",
       "decimal",
       "hierarchicalDecimal",
@@ -40,17 +44,17 @@ const numberedParagraphStyleSchema = t.Composite([
       "upperLetterParenthetical",
       "upperRoman",
     ]),
-    indentLeftPt: t.Number({ minimum: 0, maximum: 1440 }),
-    hangingPt: t.Number({ minimum: 0, maximum: 1440 }),
+    indentLeftPt: v.pipe(v.number(), v.minValue(0), v.maxValue(1440)),
+    hangingPt: v.pipe(v.number(), v.minValue(0), v.maxValue(1440)),
   }),
 ]);
 
-export const styleSetEditorSettingsSchema = t.Object({
-  body: t.Object({
+export const styleSetEditorSettingsSchema = v.object({
+  body: v.object({
     fontFamily: fontFamilySchema,
     fontSizePt: fontSizeSchema,
     alignment: alignmentSchema,
-    lineSpacing: t.UnionEnum([
+    lineSpacing: v.picklist([
       "preserve",
       "single",
       "onePoint15",
@@ -63,34 +67,34 @@ export const styleSetEditorSettingsSchema = t.Object({
   level1: numberedParagraphStyleSchema,
   level2: numberedParagraphStyleSchema,
   level3: numberedParagraphStyleSchema,
-  numbering: t.Object({ enabled: t.Boolean() }),
-  page: t.Object({
-    paperSize: t.UnionEnum(["preserve", "a4", "letter", "legal"]),
-    orientation: t.UnionEnum(["portrait", "landscape"]),
-    marginTopPt: t.Number({ minimum: 0, maximum: 1440 }),
-    marginBottomPt: t.Number({ minimum: 0, maximum: 1440 }),
-    marginLeftPt: t.Number({ minimum: 0, maximum: 1440 }),
-    marginRightPt: t.Number({ minimum: 0, maximum: 1440 }),
+  numbering: v.object({ enabled: v.boolean() }),
+  page: v.object({
+    paperSize: v.picklist(["preserve", "a4", "letter", "legal"]),
+    orientation: v.picklist(["portrait", "landscape"]),
+    marginTopPt: v.pipe(v.number(), v.minValue(0), v.maxValue(1440)),
+    marginBottomPt: v.pipe(v.number(), v.minValue(0), v.maxValue(1440)),
+    marginLeftPt: v.pipe(v.number(), v.minValue(0), v.maxValue(1440)),
+    marginRightPt: v.pipe(v.number(), v.minValue(0), v.maxValue(1440)),
   }),
 });
 
-export type StyleSetEditorSettings = Static<
+export type StyleSetEditorSettings = v.InferOutput<
   typeof styleSetEditorSettingsSchema
 >;
 
-export const createStyleSetFromEditorSchema = t.Object({
-  name: t.String({ minLength: 1, maxLength: 256 }),
+export const createStyleSetFromEditorSchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
   settings: styleSetEditorSettingsSchema,
 });
 
-export const updateStyleSetFromEditorSchema = t.Object({
-  name: t.String({ minLength: 1, maxLength: 256 }),
+export const updateStyleSetFromEditorSchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
   expectedUpdatedAt: expectedUpdatedAtSchema,
   settings: styleSetEditorSettingsSchema,
 });
 
-const previewTextSchema = t.String({ minLength: 1, maxLength: 2000 });
-const styleSetPreviewContentSchema = t.Object({
+const previewTextSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(2000));
+const styleSetPreviewContentSchema = v.object({
   title: previewTextSchema,
   introduction: previewTextSchema,
   investmentHeading: previewTextSchema,
@@ -114,18 +118,15 @@ const styleSetPreviewRequestProperties = {
   content: styleSetPreviewContentSchema,
 };
 
-export const styleSetPreviewFromEditorSchema = t.Union([
-  t.Object({
+export const styleSetPreviewFromEditorSchema = v.union([
+  v.object({ ...styleSetPreviewRequestProperties, type: v.literal("stella") }),
+  v.object({
     ...styleSetPreviewRequestProperties,
-    type: t.Literal("stella"),
-  }),
-  t.Object({
-    ...styleSetPreviewRequestProperties,
-    type: t.Literal("saved"),
-    styleSetId: tSafeId("styleSet"),
+    type: v.literal("saved"),
+    styleSetId: resourceIdSchema("styleSet"),
   }),
 ]);
 
-export type StyleSetPreviewContent = Static<
+export type StyleSetPreviewContent = v.InferOutput<
   typeof styleSetPreviewContentSchema
 >;

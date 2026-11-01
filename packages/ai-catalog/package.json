@@ -1,6 +1,6 @@
 {
   "name": "@stll/ai-catalog",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "description": "Provider-neutral AI model roles, capabilities, and curated model metadata.",
   "keywords": [
     "ai",
@@ -29,7 +29,8 @@
     ".": "./src/index.ts",
     "./benchmark-frontier": "./src/benchmark-frontier.ts",
     "./benchmarks": "./src/benchmarks.ts",
-    "./model-defaults-ledger": "./src/model-defaults-ledger.ts"
+    "./model-defaults-ledger": "./src/model-defaults-ledger.ts",
+    "./transcription": "./src/transcription.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -64,6 +65,7 @@
     "@tanstack/ai-openrouter": "catalog:",
     "bun-types": "catalog:",
     "fast-check": "catalog:",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "tsrs": "catalog:"
   }
 }

@@ -28,6 +28,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
@@ -47,6 +48,10 @@ import {
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
+
+beforeEach(() => {
+  anonymizeTextFieldsMock.mockClear();
+});
 
 const anonymizeTextFieldsMock = mock(
   async ({
@@ -539,9 +544,7 @@ describe("chat third-party anonymization boundary", () => {
       throw new TypeError("Expected prepared attachment part");
     }
     expect(getChatAttachmentUrl(part)).toContain(
-      Buffer.from("[CUSTOM_1] notes for [PERSON_1]", "utf-8").toString(
-        "base64",
-      ),
+      Buffer.from("[CUSTOM_1] notes for [PERSON_1]", "utf-8").toBase64(),
     );
   });
 
@@ -1096,6 +1099,43 @@ describe("chat third-party anonymization boundary", () => {
       participants: ["[PERSON_1]", "[CUSTOM_1]"],
       text: "[CUSTOM_1] notes for [PERSON_1]",
     });
+  });
+
+  test("anonymizes a live tool error before it reaches the model", async () => {
+    const boundary = createBoundary();
+    const tools = {
+      failing_lookup: applyChatToolPolicy(
+        toolDefinition({
+          name: "failing_lookup",
+          description: "Fail with a sensitive fixture.",
+        }).server(async () => {
+          throw new ChatToolError({
+            kind: "invalid-input",
+            message: "Jan Novák cannot access Secret notes",
+          });
+        }),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      tools: asTestToolSet(tools),
+    });
+    const executable = asTestExecutable<unknown, unknown>(
+      prepared["failing_lookup"],
+    );
+    if (!executable?.execute) {
+      throw new TypeError("Expected an executable tool");
+    }
+
+    const failure = await rejectionOf(executable.execute(undefined));
+
+    expect(failure).toMatchObject({
+      _tag: "ChatToolError",
+      kind: "invalid-input",
+      message: "[PERSON_1] cannot access [CUSTOM_1] notes",
+    });
+    expect(JSON.stringify(failure)).not.toContain("Jan Novák");
   });
 
   test("returns anonymized external MCP source tool output values", async () => {

@@ -28,11 +28,15 @@ minimumReleaseAgeExcludes = [
   # Keep the plugin SDK and every native binding with the pinned release;
   # quarantined optional bindings otherwise leave the executable unavailable.
   # bun-types ships only declarations and must match the pinned Bun runtime.
-  "bun-types", # quarantine-expires: 2026-10-27T10:17:50.170Z
   # body-parser 2.4.0 is the first release outside GHSA-27r3-jxmh-p828.
   "body-parser", # quarantine-expires: 2026-10-27T11:39:38.614Z
+  # joi 18.3.1 is the first release outside GHSA-4528-x5fx-h6hg.
+  "joi", # quarantine-expires: 2026-11-02T09:59:49.641Z
+  # node-forge 1.4.1 is the first release outside GHSA-5x38-2vff-x55p,
+  # GHSA-7wch-p9px-956x, GHSA-8hrf-8g6f-7xwp, GHSA-hqq3-7jhf-c5jx and
+  # GHSA-jc66-7q78-782g.
+  "node-forge", # quarantine-expires: 2026-11-01T04:44:07.718Z
   # happy-dom 21.0.4 carries the patched DOMStringMap override forward.
-  "happy-dom", # quarantine-expires: 2026-10-25T18:05:53.295Z
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/aho-corasick", # quarantine-excluded-since: 2026-10-17T16:30:00.000Z
@@ -56,6 +60,7 @@ minimumReleaseAgeExcludes = [
   "@stll/folio-agents", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/mcp-kit", # quarantine-excluded-since: 2026-09-30T00:00:00.000Z
   "@stll/folio-core", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/folio-fonts", # quarantine-excluded-since: 2026-10-30T04:55:17.971Z
   "@stll/folio-react", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/fuzzy-search", # quarantine-excluded-since: 2026-09-27T00:00:00.000Z
   "@stll/fuzzy-search-darwin-arm64", # quarantine-excluded-since: 2026-09-27T00:00:00.000Z
@@ -76,6 +81,7 @@ minimumReleaseAgeExcludes = [
   "@stll/template-conditions", # quarantine-excluded-since: 2026-08-11T09:34:37.000Z
   "@stll/test-kit", # quarantine-excluded-since: 2026-10-19T19:04:38.541Z
   "@stll/time", # quarantine-excluded-since: 2026-10-18T16:27:42.715Z
+  "@stll/utf8-boundaries", # quarantine-excluded-since: 2026-10-25T18:26:59.000Z
   # A napi package must be listed WITH its platform subpackages. They publish
   # in the same minute, but they are optionalDependencies: quarantine one and
   # bun skips it silently, leaving the parent installed with no native binding
@@ -93,6 +99,9 @@ minimumReleaseAgeExcludes = [
 ]
 
 [fmt]
+# These options apply on top of Prettier's defaults because the root
+# .prettierrc.yml ends the formatter's config lookup at this repository root
+# (scripts/formatter-config-root.test.ts).
 printWidth = 80
 ignorePatterns = [
   # Shared generated files (stll-toolchain formatter policy).
@@ -114,7 +123,6 @@ ignorePatterns = [
   ".tailwind-cache/**",
   "**/.oxlintrc.json",
   "**/dist/**",
-  "**/.react-email/**",
   "apps/api/src/db/schema.ts",
   "packages/template-packs/content/**",
   "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts",

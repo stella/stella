@@ -26,11 +26,11 @@ import {
   chartTableFromNode,
   tableChartPoints,
 } from "@/components/chat/table-chart.logic";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 export type ChatTableChartProps = ComponentProps<"table"> & {
@@ -42,7 +42,7 @@ export type ChatTableChartProps = ComponentProps<"table"> & {
 const requestTableChart = async (table: TableChartRequest) =>
   v.parse(
     tableChartResponseSchema,
-    unwrapEden(await api.chat["table-chart"].post(table)),
+    unwrapApiResponse(await api.chat["table-chart"].post(table)),
   );
 
 export const ChatTableChart = ({
@@ -89,7 +89,7 @@ const ChartableTable = ({
 }: ChartableTableProps) => {
   const t = useTranslations();
   const formatter = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const queryClient = useQueryClient();
   const [presentation, setPresentation] = useState<Presentation>({
     status: "table",
@@ -114,7 +114,10 @@ const ChartableTable = ({
       );
     });
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "ChartableTable:showChart",
+        scope: { type: "handler", handlerId: "chat.table-chart.show-chart" },
+      });
       setPresentation({ status: "unavailable" });
       return;
     }

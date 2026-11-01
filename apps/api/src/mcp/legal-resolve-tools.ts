@@ -2,8 +2,12 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
-import { vApiDate } from "@stll/api-contract/api-date";
+import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
+import {
+  PUBLIC_COUNTRIES,
+  PUBLIC_COUNTRY_CAPABILITIES,
+} from "@stll/api-contract/public-country-capability";
 import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
@@ -60,6 +64,9 @@ const citationText = v.pipe(
   v.nonEmpty(),
   v.maxLength(LIMITS.caseLawIdentifierMaxLength),
 );
+const supportedLawCountries = PUBLIC_COUNTRIES.filter(
+  (country) => PUBLIC_COUNTRY_CAPABILITIES[country].legislation === "admitted",
+).join(", ");
 const lawCountrySchema = countryInputSchema(
   "Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable.",
 );
@@ -72,7 +79,7 @@ const resolveDecisionArgsSchema = nullAsAbsent(
     identifier: v.pipe(
       citationText,
       v.description(
-        "One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case.",
+        "Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions.",
       ),
     ),
   }),
@@ -101,7 +108,7 @@ const resolveLawArgsSchema = nullAsAbsent(
           ),
           collection: v.pipe(
             citationText,
-            v.description("Gazette collection, e.g. sb."),
+            v.description("Gazette collection, e.g. sb, Zb. or Z. z."),
           ),
           year: v.pipe(
             citationText,
@@ -120,7 +127,9 @@ const resolveLawArgsSchema = nullAsAbsent(
     ),
     as_of: v.optional(
       v.pipe(
-        vApiDate,
+        v.string(),
+        v.isoDate(),
+        API_CALENDAR_DATE_CHECK,
         v.description(
           "Expression date YYYY-MM-DD; omit for the current expression.",
         ),
@@ -156,7 +165,7 @@ const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions in searchable countries. Resolved returns the selected language, languageAlternates, decisionId and bounded text. Continue partial text with read_case_law_decision and its decisionId. Ambiguous lists candidates without choosing. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason. Country_unavailable means this country has no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
+      "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives the decision and text; continue with read_case_law_decision. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
     inputSchema: resolveDecisionArgsSchema,
     _meta: {
       ui: {
@@ -174,8 +183,7 @@ const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
       readOnlyHint: true,
       openWorldHint: false,
     },
-    description:
-      "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
+    description: `Resolve one statute provision from a citation or structured gazette identity and section. Supported countries: ${supportedLawCountries}; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.`,
     inputSchema: resolveLawArgsSchema,
     inputNormalization: {
       ...common.inputNormalization,

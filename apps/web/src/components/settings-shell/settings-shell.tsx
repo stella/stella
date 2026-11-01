@@ -20,6 +20,7 @@ import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { settingsNavSections } from "@/components/settings-shell/settings-nav";
+import { env } from "@/env";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
@@ -27,7 +28,8 @@ import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 const NAV_ITEM_CLASS = cn(
@@ -53,7 +55,8 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
       scope: { type: "organization" },
     }),
   );
-  const roleView = useQueryView(roleQuery);
+  const roleView = queryView(roleQuery);
+  useQueryViewError(roleView, "SettingsShell.role:query");
   const role =
     roleView.type === "items" && roleView.refetchError === undefined
       ? roleView.items
@@ -73,6 +76,7 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
       }),
     beta: betaFeaturesAvailable(),
     timeBilling,
+    usage: env.VITE_FEATURE_USAGE,
   });
 
   const activeItem = sections
@@ -172,14 +176,14 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
         </ScrollArea>
       </div>
       <ScrollArea className="min-h-0 min-w-0 flex-1">
-        <main className="flex min-w-0 flex-col">
+        <section className="flex min-w-0 flex-col">
           {/* One width for every page: organization tables need it, and
               moving between sections never shifts the content. */}
           <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-6">
             <QueryViewFeedback view={roleView} />
             {children}
           </div>
-        </main>
+        </section>
       </ScrollArea>
     </div>
   );

@@ -42,6 +42,7 @@ import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { confirmAnonymizationDetectionCurrent } from "@/components/docx/docx-anonymization-detection";
 import { AnonymizationContextMenu } from "@/components/inspector/anonymization-context-menu";
 import { AnonymizationMatchStatus } from "@/components/inspector/anonymization-match-status";
@@ -54,17 +55,19 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { UnsupportedAnonymizedExportError } from "@/lib/pdf/anonymized-export-errors";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
@@ -201,44 +204,50 @@ export const AnonymizationFacet = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const format = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const analytics = useAnalytics();
   const formatLabel = (label: string): string =>
     isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
   const termsQuery = useQuery(anonymizationTermsOptions(workspaceId));
-  const termsQueryView = useQueryView(termsQuery);
-  useQueryViewError(termsQueryView);
-  const createMutation = useMutation({
-    mutationFn: async (vars: {
-      workspaceId: string;
-      entries: readonly {
-        canonical: string;
-        label: string;
-        variants?: readonly string[];
-      }[];
-    }) => {
+  const termsQueryView = queryView(termsQuery);
+  useQueryViewError(termsQueryView, "AnonymizationFacet:query");
+  const createMutation = useIdempotentMutation({
+    mutationFn: async (
+      vars: {
+        workspaceId: string;
+        entries: readonly {
+          canonical: string;
+          label: string;
+          variants?: readonly string[];
+        }[];
+      },
+      request,
+    ) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
-        ["anonymization-terms"].put({
-          entries: vars.entries.map((entry) =>
-            entry.variants
-              ? {
-                  canonical: entry.canonical,
-                  label: entry.label,
-                  variants: [...entry.variants],
-                }
-              : {
-                  canonical: entry.canonical,
-                  label: entry.label,
-                },
-          ),
-        });
+        ["anonymization-terms"].put(
+          {
+            entries: vars.entries.map((entry) =>
+              entry.variants
+                ? {
+                    canonical: entry.canonical,
+                    label: entry.label,
+                    variants: [...entry.variants],
+                  }
+                : {
+                    canonical: entry.canonical,
+                    label: entry.label,
+                  },
+            ),
+          },
+          request,
+        );
 
       // No `onError` capture here: the only caller awaits `mutateAsync` inside
       // a try/catch that captures and toasts, so a handler here would report
       // the same failure twice. `deleteMutation` below is fire-and-forget and
       // keeps its handler for that reason.
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
   const deleteMutation = useMutation({
@@ -255,7 +264,10 @@ export const AnonymizationFacet = ({
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet:failure",
+        scope: { type: "handler", handlerId: "AnonymizationFacet:failure" },
+      });
     },
   });
 
@@ -387,7 +399,13 @@ export const AnonymizationFacet = ({
         type: "success",
       });
     } catch (error) {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet.addTerm:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AnonymizationFacet.addTerm:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     }
   };
@@ -402,35 +420,44 @@ export const AnonymizationFacet = ({
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled: activeFieldId !== null,
   });
-  const allowlistQueryView = useQueryView(allowlistQuery);
-  useQueryViewError(allowlistQueryView);
+  const allowlistQueryView = queryView(allowlistQuery);
+  useQueryViewError(allowlistQueryView, "AnonymizationFacet:query-2");
   const allowlistEntries = allowlistQuery.data?.entries;
   const matchesReady =
     pipelineStatus === "ready" &&
     termsQuery.status === "success" &&
     allowlistQuery.status === "success";
-  const createAllowlistMutation = useMutation({
-    mutationFn: async (vars: {
-      workspaceId: string;
-      entityId: string | null;
-      canonical: string;
-      label: string;
-      scope: AllowlistScope;
-    }) => {
+  const createAllowlistMutation = useIdempotentMutation({
+    mutationFn: async (
+      vars: {
+        workspaceId: string;
+        entityId: string | null;
+        canonical: string;
+        label: string;
+        scope: AllowlistScope;
+      },
+      request,
+    ) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
-        ["anonymization-allowlist"].put({
-          canonical: vars.canonical,
-          label: vars.label,
-          scope: vars.scope,
-          ...(vars.scope === "document" && vars.entityId
-            ? { entityId: toSafeId<"entity">(vars.entityId) }
-            : {}),
-        });
-      return unwrapEden(response);
+        ["anonymization-allowlist"].put(
+          {
+            canonical: vars.canonical,
+            label: vars.label,
+            scope: vars.scope,
+            ...(vars.scope === "document" && vars.entityId
+              ? { entityId: toSafeId<"entity">(vars.entityId) }
+              : {}),
+          },
+          request,
+        );
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet:failure-2",
+        scope: { type: "handler", handlerId: "AnonymizationFacet:failure-2" },
+      });
     },
   });
   const deleteAllowlistMutation = useMutation({
@@ -446,7 +473,10 @@ export const AnonymizationFacet = ({
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet:failure-3",
+        scope: { type: "handler", handlerId: "AnonymizationFacet:failure-3" },
+      });
     },
   });
   // Restrict the visible workspace vocabulary to entries whose
@@ -498,7 +528,13 @@ export const AnonymizationFacet = ({
     }).then((result) => (result.isErr() ? result : result.value));
     setDownloadStatus("idle");
     if (download.isErr()) {
-      analytics.captureError(download.error);
+      analytics.captureError(download.error, {
+        fingerprintKey: "AnonymizationFacet.handleDownloadAnonymized:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AnonymizationFacet.handleDownloadAnonymized:failure",
+        },
+      });
       notifyUserError(
         download.error,
         UnsupportedAnonymizedExportError.is(download.error)
@@ -769,6 +805,7 @@ export const AnonymizationFacet = ({
           <Combobox<LabelOption>
             autoHighlight
             disabled={createMutation.isPending}
+            filter={matchesComboboxItem}
             items={[...LABEL_OPTIONS]}
             itemToStringLabel={formatLabel}
             onValueChange={(next) => {
@@ -809,7 +846,8 @@ export const AnonymizationFacet = ({
             if (onOpenFullView) {
               return (
                 <Button
-                  className="text-muted-foreground hover:bg-muted/50 hover:text-foreground h-auto w-full justify-start gap-2.5 rounded-md px-3 py-2.5 text-start text-sm leading-relaxed whitespace-normal"
+                  layout="wrap"
+                  className="text-muted-foreground hover:bg-muted/50 hover:text-foreground w-full gap-2.5 rounded-md px-3 py-2.5 text-sm leading-relaxed"
                   onClick={onOpenFullView}
                   type="button"
                   variant="ghost"
@@ -1037,6 +1075,7 @@ export const AnonymizationFacet = ({
                               primaryDisabled={
                                 createAllowlistMutation.isPending
                               }
+                              primaryContent="icon"
                               primaryLabel={t(
                                 "inspector.anonymization.ignoreAction",
                               )}

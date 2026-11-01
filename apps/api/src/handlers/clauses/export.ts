@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
@@ -31,16 +30,16 @@ import { normalizeClauseMetadata } from "./metadata";
 
 const CLAUSE_LIBRARY_AUDIT_RESOURCE_ID = "clause-library";
 
-const exportQuerySchema = t.Object({
-  ids: t.Optional(t.String()),
-  format: t.Optional(t.Union([t.Literal("csv"), t.Literal("json")])),
+const exportQuerySchema = v.object({
+  ids: v.optional(v.string()),
+  format: v.optional(v.picklist(["csv", "json"])),
 });
 
 type ExportProps = {
   safeDb: SafeDb;
   recordAuditEvent: AuditRecorder;
   organizationId: SafeId<"organization">;
-  query: Static<typeof exportQuerySchema>;
+  query: v.InferOutput<typeof exportQuerySchema>;
 };
 
 export const exportHandler = async function* ({

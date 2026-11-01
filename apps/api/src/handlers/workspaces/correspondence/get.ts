@@ -11,7 +11,7 @@ import {
 } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { readCorrespondenceProvenance } from "@/api/lib/email/correspondence/provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
@@ -52,6 +52,10 @@ const CORRESPONDENCE_DETAIL_COLUMNS = {
 };
 
 const UNPROJECTED_DETAIL_COLUMNS = [
+  "externalSource", // Reserved for the correspondence import contract.
+  "externalId", // Reserved for the correspondence import contract.
+  "externalChangeKey", // Reserved for the correspondence import contract.
+  "importedAt", // Reserved for the correspondence import contract.
   "entityFeatureGate", // RLS state is internal to the gate.
   "organizationId", // Tenant scope comes from the authorized session.
   "workspaceId", // Matter scope comes from the authorized route.
@@ -87,7 +91,9 @@ const config = {
     consumesServices: false,
   },
   access: "read",
-  params: workspaceParams({ correspondenceId: tSafeId("correspondence") }),
+  params: workspaceParams({
+    correspondenceId: resourceIdSchema("correspondence"),
+  }),
 } satisfies WorkspaceHandlerConfig;
 
 const getCorrespondence = createSafeHandler(

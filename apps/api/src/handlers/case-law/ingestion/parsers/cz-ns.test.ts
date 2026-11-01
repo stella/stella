@@ -816,3 +816,13 @@ test("retains metadata footer rows through the shared row owner", () => {
     ],
   });
 });
+
+test.each(["p", "div"])(
+  "a bare-number %s survives without page-layout evidence",
+  (tag) => {
+    const { documentAst } = parseNsDecisionHtml(
+      baseInput(`${metaTableHtml}<${tag}>100</${tag}>`),
+    );
+    expect(documentAst.blocks.map((block) => block.plainText)).toContain("100");
+  },
+);

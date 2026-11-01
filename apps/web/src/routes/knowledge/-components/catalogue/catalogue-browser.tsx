@@ -98,6 +98,7 @@ const toRowDisplay = (entry: CatalogueDisplayEntry): CatalogueRowDisplay => ({
   iconUrl: entry.iconUrl,
   jurisdictions: entry.jurisdictions,
   invocation: entry.invocation,
+  binding: entry.binding,
 });
 
 /** The organization's tools: the shared catalogue view with the member's

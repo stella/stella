@@ -80,6 +80,46 @@ const leafEntries = (
   return entries;
 };
 
+test("every generated tool leaf preserves its registry read classification", () => {
+  const listings = new Map(
+    snapshotListings.map((listing) => [listing.name, listing]),
+  );
+  const generated = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
+  const leaves = leafEntries(generated);
+  expect(leaves.length).toBeGreaterThan(0);
+  for (const { spec } of leaves) {
+    expect(listings.has(spec.toolName)).toBe(true);
+    expect(spec.readOnlyHint, spec.commandPath.join(" ")).toBe(
+      listings.get(spec.toolName)?.annotations?.readOnlyHint,
+    );
+  }
+});
+
+test.each([true, false, undefined])(
+  "runtime tool read classification %j survives leaf generation",
+  (readOnlyHint) => {
+    const listing = {
+      name: "fixture_tool",
+      description: "Fixture command",
+      inputSchema: { type: "object", properties: {} },
+      ...(readOnlyHint === undefined ? {} : { annotations: { readOnlyHint } }),
+    } satisfies RegistryToolListing;
+    const leaves = leafEntries(generateRouteMap([listing], {}));
+    expect(leaves).toHaveLength(1);
+    expect(leaves.at(0)?.spec.readOnlyHint).toBe(readOnlyHint);
+  },
+);
+
+test("capability list exposes free-text search", () => {
+  const tree = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
+  const list = findLeaf(tree, ["capability", "list"]);
+
+  expect(flagFor(list ?? errorSpec(), "--query")).toMatchObject({
+    kind: "string",
+    required: false,
+  });
+});
+
 const flagFor = (spec: LeafCommandSpec, flag: string): FlagSpec | undefined =>
   spec.flags.find((f) => f.flag === flag);
 
@@ -332,6 +372,22 @@ describe("generateRouteMap: flag mapping (S3)", () => {
         prop: "kind",
         kind: "enum",
         enum: ["search", "decision", "statute"],
+        repeatable: false,
+      },
+    });
+  });
+
+  test("string literal unions without a stated type produce enum flags", () => {
+    const schema = {
+      anyOf: [{ const: "draft" }, { const: "approved" }],
+    } as const satisfies PropSchema;
+    expect(classifyProp("status", schema)).toEqual({
+      kind: "flag",
+      spec: {
+        flag: "--status",
+        prop: "status",
+        kind: "enum",
+        enum: ["draft", "approved"],
         repeatable: false,
       },
     });

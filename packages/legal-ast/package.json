@@ -71,6 +71,10 @@
       "types": "./src/document-ast.ts",
       "import": "./src/document-ast.ts"
     },
+    "./heading-designator-levels": {
+      "types": "./src/heading-designator-levels.ts",
+      "import": "./src/heading-designator-levels.ts"
+    },
     "./document-kind": {
       "types": "./src/document-kind.ts",
       "import": "./src/document-kind.ts"
@@ -79,9 +83,17 @@
       "types": "./src/fixtures/statute-viewer.ts",
       "import": "./src/fixtures/statute-viewer.ts"
     },
+    "./fixtures/cz-141-1961-section-72a": {
+      "types": "./src/fixtures/cz-141-1961-section-72a.ts",
+      "import": "./src/fixtures/cz-141-1961-section-72a.ts"
+    },
     "./fixtures/cz-262-2006-section-51": {
       "types": "./src/fixtures/cz-262-2006-section-51.ts",
       "import": "./src/fixtures/cz-262-2006-section-51.ts"
+    },
+    "./fixtures/sk-300-2005-section-128": {
+      "types": "./src/fixtures/sk-300-2005-section-128.ts",
+      "import": "./src/fixtures/sk-300-2005-section-128.ts"
     },
     "./court-paragraph-number": {
       "types": "./src/court-paragraph-number.ts",
@@ -90,6 +102,10 @@
     "./paragraph-range": {
       "types": "./src/paragraph-range.ts",
       "import": "./src/paragraph-range.ts"
+    },
+    "./closed-quotation-paragraphs": {
+      "types": "./src/closed-quotation-paragraphs.ts",
+      "import": "./src/closed-quotation-paragraphs.ts"
     },
     "./court-paragraph-numbers": {
       "types": "./src/court-paragraph-numbers.ts",
@@ -127,9 +143,21 @@
       "types": "./src/slovak-document-roles.ts",
       "import": "./src/slovak-document-roles.ts"
     },
+    "./source-contents": {
+      "types": "./src/source-contents.ts",
+      "import": "./src/source-contents.ts"
+    },
+    "./spot-place": {
+      "types": "./src/spot-place.ts",
+      "import": "./src/spot-place.ts"
+    },
     "./statute-ast": {
       "types": "./src/statute-ast.ts",
       "import": "./src/statute-ast.ts"
+    },
+    "./statute-list": {
+      "types": "./src/statute-list.ts",
+      "import": "./src/statute-list.ts"
     },
     "./text-sanitize": {
       "types": "./src/text-sanitize.ts",
@@ -138,6 +166,10 @@
     "./text-spans": {
       "types": "./src/text-spans.ts",
       "import": "./src/text-spans.ts"
+    },
+    "./separate-opinion-heading": {
+      "types": "./src/separate-opinion-heading.ts",
+      "import": "./src/separate-opinion-heading.ts"
     }
   },
   "scripts": {
@@ -149,6 +181,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-ast"
   },
   "dependencies": {
+    "@stll/agent-input": "workspace:*",
     "@stll/sha256": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",

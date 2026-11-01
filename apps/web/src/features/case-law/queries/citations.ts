@@ -2,7 +2,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { unwrapPublicLawEden } from "@/lib/public-law-api";
+import { unwrapPublicLawResponse } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -51,7 +51,10 @@ export const decisionCitationsInfiniteOptions = (
           fetch: { signal },
         });
 
-      const data = unwrapPublicLawEden(response, "listPublicDecisionCitations");
+      const data = unwrapPublicLawResponse(
+        response,
+        "listPublicDecisionCitations",
+      );
 
       return data;
     },
@@ -72,7 +75,7 @@ export const decisionLeadingCitationsOptions = (
         .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
         .citations.leading.get({ query: { direction }, fetch: { signal } });
 
-      const data = unwrapPublicLawEden(
+      const data = unwrapPublicLawResponse(
         response,
         "listLeadingDecisionCitations",
       );
@@ -97,7 +100,7 @@ export const decisionCitationSummaryOptions = (decisionId: string) =>
         .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
         .citations.summary.get({ fetch: { signal } });
 
-      const data = unwrapPublicLawEden(
+      const data = unwrapPublicLawResponse(
         response,
         "summarizePublicDecisionCitations",
       );

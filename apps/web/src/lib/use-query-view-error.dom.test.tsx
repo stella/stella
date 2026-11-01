@@ -39,12 +39,18 @@ test("optional batches report a shared failure once until it clears", async () =
   const Wrapper = ({ children }: PropsWithChildren) => (
     <AnalyticsContext value={analytics}>{children}</AnalyticsContext>
   );
-  const { rerender } = renderHook(({ views }) => useQueryViewErrors(views), {
-    initialProps: { views: [failed, failed] },
-    wrapper: Wrapper,
-  });
+  const { rerender } = renderHook(
+    ({ views }) => useQueryViewErrors(views, "use-query-view-error:query"),
+    {
+      initialProps: { views: [failed, failed] },
+      wrapper: Wrapper,
+    },
+  );
   expect(captureError).toHaveBeenCalledTimes(1);
-  expect(captureError).toHaveBeenCalledWith(failure);
+  expect(captureError).toHaveBeenCalledWith(failure, {
+    fingerprintKey: "use-query-view-error:query",
+    scope: { type: "handler", handlerId: "use-query-view-error:query" },
+  });
   rerender({ views: [failed, failed] });
   expect(captureError).toHaveBeenCalledTimes(1);
 

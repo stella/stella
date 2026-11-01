@@ -1,21 +1,28 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { Elysia } from "elysia";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
+import { createHttpApp } from "@/api/http/app";
+import { HTTP_METHODS, mount, routes } from "@/api/http/route";
+import type { HttpMethod, Middleware, RouteTable } from "@/api/http/route";
+import { defineEndpoint } from "@/api/lib/endpoints";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
 import { createPublicCorpusRateLimitComposition } from "@/api/lib/rate-limit/public-corpus-rate-limit-composition";
+import { classifyRouteGate } from "@/api/lib/route-gates";
 import {
   getPublicCorpusClassPolicy,
   PUBLIC_CORPUS_ROUTE_POLICY,
 } from "@/api/public-corpus-policy";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import type { TestServer } from "@/api/tests/helpers/test-server";
 
-import type { RequestIpServer } from "./contracts";
 import {
   createPublicCorpusAddressRateLimitOptions,
   createPublicCorpusGlobalRateLimitOptions,
@@ -30,15 +37,23 @@ import {
   RedisRateLimitContext,
 } from "./redis-context";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 const request = (path: string, method = "GET") =>
   new Request(`http://localhost${STELLA_API_VERSION_PREFIX}${path}`, {
     method,
   });
 
+/**
+ * The socket peer a counter key reads for a test request. Every request is
+ * sent from the same local socket, so the fixture states the peer it stands
+ * for; only the test bindings' key generators read it.
+ */
+const TEST_PEER_HEADER = "x-test-socket-peer";
+
 const createBindings = () => {
   const contexts = new Map<string, InMemoryRateLimitContext>();
   const increments = new Map<string, number>();
-  const peers = new WeakMap<Request, RequestIpServer>();
   const optionsByScope = new Map<
     string,
     Parameters<typeof createRedisRateLimit>[0]
@@ -66,17 +81,23 @@ const createBindings = () => {
         decrement: (key) => context.decrement(key),
         kill: () => context.kill(),
       },
-      generator: async (incoming, server) =>
-        await generator(incoming, peers.get(incoming) ?? server),
+      generator: async (incoming, server) => {
+        const peer = incoming.headers.get(TEST_PEER_HEADER);
+        return await generator(
+          incoming,
+          peer === null ? server : { requestIP: () => ({ address: peer }) },
+        );
+      },
     };
   };
   return {
     binding,
     optionsByScope,
     increments,
-    send: async ({ app, incoming, address }: PeerRequestOptions) => {
-      peers.set(incoming, { requestIP: () => ({ address }) });
-      return await app.handle(incoming);
+    send: async ({ server, incoming, address }: PeerRequestOptions) => {
+      const headers = new Headers(incoming.headers);
+      headers.set(TEST_PEER_HEADER, address);
+      return await server.fetch(new Request(incoming, { headers }));
     },
     kill: () => {
       for (const context of contexts.values()) {
@@ -87,27 +108,252 @@ const createBindings = () => {
 };
 
 type PeerRequestOptions = {
-  app: { handle: (incoming: Request) => Promise<Response> };
+  server: Pick<TestServer, "fetch">;
   incoming: Request;
   address: string;
 };
 
-const createApp = (binding: typeof createRedisRateLimit) => {
-  const composition = createPublicCorpusRateLimitComposition({
-    createRedisBinding: binding,
-  });
-  return new Elysia().group(STELLA_API_VERSION_PREFIX, (app) =>
-    app
-      .use(composition)
-      .get("/law/statutes/search", () => "search")
-      .post("/case/decisions/search", () => "search")
-      .get("/law/statutes/facets", () => "aggregate")
-      .get("/case/decisions/facets", () => "aggregate")
-      .get("/law/sitemap/shards", () => "sitemap")
-      .get("/case/sitemap/shards", () => "sitemap")
-      .get("/law/statutes", () => "browse"),
-  );
+const answering = (body: string) => defineEndpoint.public({}, () => body);
+
+const isHttpMethod = (value: string): value is HttpMethod =>
+  HTTP_METHODS.some((method) => method === value);
+
+/** Keep the fixture's addressable routes in lockstep with production policy. */
+const publicCorpusFixtureRoutes = (): RouteTable => {
+  const table: Record<
+    string,
+    Partial<Record<HttpMethod, ReturnType<typeof answering>>>
+  > = {};
+  for (const [route, routeClass] of Object.entries(
+    PUBLIC_CORPUS_ROUTE_POLICY,
+  )) {
+    const separator = route.indexOf(" ");
+    const method = route.slice(0, separator);
+    if (separator === -1 || !isHttpMethod(method)) {
+      panic(`Invalid public corpus route policy key: ${route}`);
+    }
+    const path = route.slice(separator + 1);
+    table[path] ??= {};
+    table[path][method] = answering(routeClass);
+  }
+  return table;
 };
+
+/**
+ * Serve `table` under the API version prefix behind the given stages, as the
+ * route table mounts the public corpus routes, on a real `Bun.serve`.
+ */
+const serveVersioned = (
+  table: RouteTable,
+  middleware: readonly Middleware[],
+): TestServer =>
+  serveForTest(
+    createHttpApp({
+      middleware: [errorBoundary],
+      routes: mount([routes(table)], {
+        prefix: STELLA_API_VERSION_PREFIX,
+        middleware,
+      }),
+    }),
+  );
+
+const createApp = (binding: typeof createRedisRateLimit): TestServer =>
+  serveVersioned(
+    publicCorpusFixtureRoutes(),
+    createPublicCorpusRateLimitComposition({ createRedisBinding: binding }),
+  );
+
+test("public corpus quota preparation adds no capability access gates", () => {
+  const bindings = createBindings();
+  try {
+    const composition = createPublicCorpusRateLimitComposition({
+      createRedisBinding: bindings.binding,
+    });
+    expect(
+      composition.every((stage) => classifyRouteGate(stage).kind === "budget"),
+    ).toBe(true);
+  } finally {
+    bindings.kill();
+  }
+});
+
+test("verified crawlers bypass public browse quotas while impersonators remain limited", async () => {
+  testState.setConfig("RATE_LIMIT_API_API_MAX", 2);
+  const bindings = createBindings();
+  const checked: string[] = [];
+  const unverifiedBindings = createBindings();
+  try {
+    await using server = serveVersioned(
+      { "/law/statutes": { GET: answering("browse") } },
+      createPublicCorpusRateLimitComposition({
+        createRedisBinding: bindings.binding,
+        verifyCrawlerAddress: async (address) => {
+          checked.push(address);
+          return address === "127.0.0.1" || address === "::1";
+        },
+      }),
+    );
+    for (let index = 0; index < 10; index += 1) {
+      expect(
+        (
+          await server.fetch(
+            new Request(request("/law/statutes"), {
+              headers: {
+                "user-agent": "Googlebot",
+                "x-forwarded-for": "192.0.2.9",
+              },
+            }),
+          )
+        ).status,
+      ).toBe(200);
+    }
+    expect(checked).toHaveLength(10);
+    expect(checked.every((address) => address !== "192.0.2.9")).toBe(true);
+    expect(bindings.increments.get("api")).toBeUndefined();
+
+    await using unverified = serveVersioned(
+      { "/law/statutes": { GET: answering("browse") } },
+      createPublicCorpusRateLimitComposition({
+        createRedisBinding: unverifiedBindings.binding,
+        verifyCrawlerAddress: async () => false,
+      }),
+    );
+    for (const expectedStatus of [200, 200, 429]) {
+      const response = await unverified.fetch(
+        new Request(request("/law/statutes"), {
+          headers: { "user-agent": "Googlebot" },
+        }),
+      );
+      expect(response.status).toBe(expectedStatus);
+    }
+  } finally {
+    bindings.kill();
+    unverifiedBindings.kill();
+  }
+});
+
+test("verified sitemap readers retain shared capacity and interactive search quotas", async () => {
+  testState.setConfig("PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX", 2);
+  testState.setConfig("PUBLIC_CORPUS_SEARCH_ADDRESS_MAX", 3);
+  const bindings = createBindings();
+  try {
+    await using server = serveVersioned(
+      {
+        "/case/sitemap/shards": { GET: answering("sitemap") },
+        "/law/statutes/search": { GET: answering("search") },
+      },
+      createPublicCorpusRateLimitComposition({
+        createRedisBinding: bindings.binding,
+        verifyCrawlerAddress: async () => true,
+      }),
+    );
+    const incoming = (path: string) =>
+      new Request(request(path), {
+        headers: { "user-agent": "Bingbot" },
+      });
+    expect((await server.fetch(incoming("/case/sitemap/shards"))).status).toBe(
+      200,
+    );
+    expect((await server.fetch(incoming("/case/sitemap/shards"))).status).toBe(
+      200,
+    );
+    const busy = await server.fetch(incoming("/case/sitemap/shards"));
+    expect(busy.status).toBe(503);
+    expect(Number(busy.headers.get("Retry-After"))).toBeGreaterThan(0);
+    expect(bindings.increments.get("public-corpus-sitemap")).toBeUndefined();
+    expect(bindings.increments.get("public-corpus-global-sitemap")).toBe(3);
+    for (const expected of [200, 200, 200, 429]) {
+      expect(
+        (await server.fetch(incoming("/law/statutes/search"))).status,
+      ).toBe(expected);
+    }
+    expect(bindings.increments.get("public-corpus-search")).toBe(4);
+  } finally {
+    bindings.kill();
+  }
+});
+
+test("public reads wait for crawler verification before deciding quota exemption", async () => {
+  const entered = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<boolean>();
+  const bindings = createBindings();
+  let reads = 0;
+  try {
+    await using server = serveVersioned(
+      {
+        "/law/statutes": {
+          GET: defineEndpoint.public({}, () => {
+            reads += 1;
+            return "browse";
+          }),
+        },
+      },
+      createPublicCorpusRateLimitComposition({
+        createRedisBinding: bindings.binding,
+        verifyCrawlerAddress: async () => {
+          entered.resolve(undefined);
+          return await release.promise;
+        },
+      }),
+    );
+    const response = server.fetch(
+      new Request(request("/law/statutes"), {
+        headers: { "user-agent": "Googlebot" },
+      }),
+    );
+    await entered.promise;
+    expect(reads).toBe(0);
+    expect(bindings.increments.size).toBe(0);
+    release.resolve(false);
+    expect((await response).status).toBe(200);
+    expect(reads).toBe(1);
+    expect(bindings.increments.get("api")).toBe(1);
+  } finally {
+    release.resolve(false);
+    bindings.kill();
+  }
+});
+
+test("crawler verification bounds waiters on one coalesced DNS flight", async () => {
+  const entered = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<boolean>();
+  const bindings = createBindings();
+  let waiters = 0;
+  try {
+    await using server = serveVersioned(
+      { "/law/statutes": { GET: answering("browse") } },
+      createPublicCorpusRateLimitComposition({
+        createRedisBinding: bindings.binding,
+        verifyCrawlerAddress: async () => {
+          waiters += 1;
+          if (waiters === 32) {
+            entered.resolve(undefined);
+          }
+          return await release.promise;
+        },
+      }),
+    );
+    const crawlerRequest = async () =>
+      await server.fetch(
+        new Request(request("/law/statutes"), {
+          headers: { "user-agent": "Googlebot" },
+        }),
+      );
+    const waiting = Array.from({ length: 32 }, crawlerRequest);
+    await entered.promise;
+    const refused = await crawlerRequest();
+    expect(refused.status).toBe(503);
+    expect(refused.headers.get("Retry-After")).toBe("1");
+    expect(waiters).toBe(32);
+    release.resolve(false);
+    expect(
+      (await Promise.all(waiting)).every(({ status }) => status === 200),
+    ).toBe(true);
+  } finally {
+    release.resolve(false);
+    bindings.kill();
+  }
+});
 
 type AdmissionCountOptions = {
   lines: string[];
@@ -138,7 +384,7 @@ describe("public corpus fleet request budgets", () => {
   ] as const) {
     test(`statute and case-law searches from one address share one budget: refuses ${refused.method} ${refused.path}`, async () => {
       const bindings = createBindings();
-      const app = createApp(bindings.binding);
+      await using server = createApp(bindings.binding);
       const { max } = getPublicCorpusClassPolicy().classes.search.address;
       const alternating = [
         { path: "/law/statutes/search", method: "GET" },
@@ -155,7 +401,7 @@ describe("public corpus fleet request budgets", () => {
           expect(
             (
               await bindings.send({
-                app,
+                server,
                 incoming: request(route.path, route.method),
                 address: "192.0.2.1",
               })
@@ -163,7 +409,7 @@ describe("public corpus fleet request budgets", () => {
           ).toBe(200);
         }
         const limited = await bindings.send({
-          app,
+          server,
           incoming: request(refused.path, refused.method),
           address: "192.0.2.1",
         });
@@ -178,7 +424,7 @@ describe("public corpus fleet request budgets", () => {
           expect(
             (
               await bindings.send({
-                app,
+                server,
                 incoming: request(route.path, route.method),
                 address: "192.0.2.2",
               })
@@ -198,14 +444,14 @@ describe("public corpus fleet request budgets", () => {
     try {
       env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = 100;
       env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = 120;
-      const app = createApp(bindings.binding);
+      await using server = createApp(bindings.binding);
       for (const { path, limit } of [
         { path: "/law/statutes/search", limit: 30 },
         { path: "/law/statutes/facets", limit: 60 },
-        { path: "/law/sitemap/shards", limit: 10 },
+        { path: "/law/sitemap/shards", limit: 99 },
       ]) {
         const response = await bindings.send({
-          app,
+          server,
           incoming: request(path),
           address: "192.0.2.1",
         });
@@ -251,19 +497,21 @@ describe("public corpus fleet request budgets", () => {
         createRedisBinding: bindings.binding,
         concurrency: { waitMsOf: () => 0 },
       });
-      const app = new Elysia().group(STELLA_API_VERSION_PREFIX, (group) =>
-        group
-          .use(composition)
-          .get("/law/statutes/search", work)
-          .post("/case/decisions/search", work)
-          .get("/law/statutes/facets", work)
-          .get("/law/sitemap/shards", work),
+      const working = defineEndpoint.public({}, work);
+      await using server = serveVersioned(
+        {
+          "/law/statutes/search": { GET: working },
+          "/case/decisions/search": { POST: working },
+          "/law/statutes/facets": { GET: working },
+          "/law/sitemap/shards": { GET: working },
+        },
+        composition,
       );
       const running = Array.from(
         { length: capacity },
         async (_, index) =>
           await bindings.send({
-            app,
+            server,
             incoming: request(path, method),
             address: `192.0.2.${index + 1}`,
           }),
@@ -285,11 +533,11 @@ describe("public corpus fleet request budgets", () => {
           index += 1
         ) {
           const response = await bindings.send({
-            app,
+            server,
             incoming: request(path, method),
             address: `198.51.100.${index + 1}`,
           });
-          expect(response.status).toBe(429);
+          expect(response.status).toBe(503);
         }
         expect(started).toBe(capacity);
         expect(bindings.increments.get(scope)).toBe(capacity);
@@ -300,7 +548,7 @@ describe("public corpus fleet request budgets", () => {
         expect(
           (
             await bindings.send({
-              app,
+              server,
               incoming: request(path, method),
               address: "203.0.113.1",
             })
@@ -335,12 +583,12 @@ describe("public corpus fleet request budgets", () => {
       const bindings = createBindings();
       try {
         env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX = 7;
-        const app = createApp(bindings.binding);
+        await using server = createApp(bindings.binding);
         for (let index = 0; index < 3; index += 1) {
           expect(
             (
               await bindings.send({
-                app,
+                server,
                 incoming: request(path, method),
                 address: "192.0.2.1",
               })
@@ -350,7 +598,7 @@ describe("public corpus fleet request budgets", () => {
         expect(
           (
             await bindings.send({
-              app,
+              server,
               incoming: request(path, method),
               address: "192.0.2.1",
             })
@@ -364,7 +612,7 @@ describe("public corpus fleet request budgets", () => {
         expect(
           (
             await bindings.send({
-              app,
+              server,
               incoming: request(path, method),
               address: "192.0.2.2",
             })
@@ -393,8 +641,8 @@ describe("public corpus fleet request budgets", () => {
       env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX = 3;
       env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = 3;
       env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = 3;
-      const app = createApp(bindings.binding);
-      for (const routes of [
+      await using server = createApp(bindings.binding);
+      for (const classRoutes of [
         [
           { path: "/law/statutes/search", method: "GET" },
           { path: "/case/decisions/search", method: "POST" },
@@ -409,16 +657,16 @@ describe("public corpus fleet request budgets", () => {
         ],
       ]) {
         for (let index = 0; index < 4; index += 1) {
-          const route = routes.at(index % routes.length);
+          const route = classRoutes.at(index % classRoutes.length);
           if (!route) {
             panic("Missing test route");
           }
           const response = await bindings.send({
-            app,
+            server,
             incoming: request(route.path, route.method),
             address: `192.0.2.${index + 1}`,
           });
-          expect(response.status).toBe(index < 3 ? 200 : 429);
+          expect(response.status).toBe(index < 3 ? 200 : 503);
           if (index === 3) {
             expect(Number(response.headers.get("Retry-After"))).toBeGreaterThan(
               0,
@@ -429,7 +677,7 @@ describe("public corpus fleet request budgets", () => {
       expect(
         (
           await bindings.send({
-            app,
+            server,
             incoming: request("/law/statutes"),
             address: "192.0.2.1",
           })
@@ -446,18 +694,10 @@ describe("public corpus fleet request budgets", () => {
       }
       for (const line of lines) {
         expect(JSON.parse(line)).toMatchObject({
-          _aws: {
-            CloudWatchMetrics: [
-              {
-                Dimensions: [["class", "outcome"]],
-                Metrics: [{ Name: "PublicCorpusAdmissions", Unit: "Count" }],
-              },
-            ],
-          },
           PublicCorpusAdmissions: 1,
         });
         expect(Object.keys(JSON.parse(line)).toSorted()).toEqual(
-          ["PublicCorpusAdmissions", "_aws", "class", "outcome"].toSorted(),
+          ["PublicCorpusAdmissions", "class", "outcome"].toSorted(),
         );
       }
     } finally {
@@ -523,9 +763,9 @@ describe("public corpus fleet request budgets", () => {
     const bindings = createBindings();
     const previousSitemap = env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX;
     const previousAggregate = env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX;
-    env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = 100;
+    env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = 1200;
     env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = 100;
-    const app = createApp(bindings.binding);
+    await using server = createApp(bindings.binding);
     const lines: string[] = [];
     setMetricLineSinkForTesting((line) => {
       lines.push(line);
@@ -533,13 +773,13 @@ describe("public corpus fleet request budgets", () => {
     try {
       for (const { path, max, routeClass } of [
         { path: "/law/statutes/facets", max: 50, routeClass: "aggregate" },
-        { path: "/law/sitemap/shards", max: 10, routeClass: "sitemap" },
+        { path: "/law/sitemap/shards", max: 600, routeClass: "sitemap" },
       ]) {
         for (let index = 0; index < max; index += 1) {
           expect(
             (
               await bindings.send({
-                app,
+                server,
                 incoming: request(path),
                 address: "192.0.2.1",
               })
@@ -552,7 +792,7 @@ describe("public corpus fleet request budgets", () => {
         expect(
           (
             await bindings.send({
-              app,
+              server,
               incoming: request(path),
               address: "192.0.2.1",
             })
@@ -564,7 +804,7 @@ describe("public corpus fleet request budgets", () => {
         expect(
           (
             await bindings.send({
-              app,
+              server,
               incoming: request(path),
               address: "192.0.2.2",
             })
@@ -576,7 +816,7 @@ describe("public corpus fleet request budgets", () => {
         expect(
           (
             await bindings.send({
-              app,
+              server,
               incoming: request("/law/statutes"),
               address: "192.0.2.1",
             })
@@ -643,25 +883,20 @@ describe("public corpus fleet request budgets", () => {
           (await context.increment(captured.scope, options.duration)).count,
         ).toBeGreaterThan(options.max);
         expect(lines).toEqual([]);
-        const app = new Elysia()
-          .use(rateLimit({ ...options, context }))
-          .post(
-            `${STELLA_API_VERSION_PREFIX}/case/decisions/search`,
-            () => "search",
-          );
-        const response = await app.handle(
+        await using server = serveVersioned(
+          { "/case/decisions/search": { POST: answering("search") } },
+          [rateLimit({ ...options, context })],
+        );
+        const response = await server.fetch(
           request("/case/decisions/search", "POST"),
         );
-        expect(response.status).toBe(429);
+        expect(response.status).toBe(503);
         expect(lines).toHaveLength(1);
         for (const line of lines) {
           expect(JSON.parse(line)).toMatchObject({
             class: "search",
             outcome: "refused",
             PublicCorpusAdmissions: 1,
-            _aws: {
-              CloudWatchMetrics: [{ Dimensions: [["class", "outcome"]] }],
-            },
           });
         }
       } finally {

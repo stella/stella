@@ -24,6 +24,7 @@ export const publicRouteExceptions: Record<string, string> = {
 const absentText = { type: "absent", reason: "not_published" } as const;
 
 const decision = {
+  caseFile: { items: [], nextCursor: null, limit: 50 },
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   citationCount: 0,
@@ -47,6 +48,7 @@ const decision = {
   documentUnavailable: false,
   documentUrl: null,
   ecli: null,
+  extractionWarnings: [],
   fulltext: "Fixture decision text.",
   headnote: absentText,
   id: toSafeId<"caseLawDecision">("00000000-0000-4000-8000-000000000011"),
@@ -68,6 +70,7 @@ const decision = {
     name: "Fixture source",
   },
   sourceAttributionUrl: null,
+  sourceLanguages: null,
   sourceUrl: null,
   textFields: {
     abstract: absentText,
@@ -166,6 +169,10 @@ export const publicFixtureResponse = (
         organizationName: null,
         sanctionsMonitoringMode: "included",
         displayName: "Fixture contact",
+        externalSource: null,
+        externalId: null,
+        externalChangeKey: null,
+        importedAt: null,
         notes: null,
         emails: [],
         phones: [],

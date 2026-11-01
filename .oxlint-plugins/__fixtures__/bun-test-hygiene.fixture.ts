@@ -13,6 +13,8 @@ import {
   expect,
   expect as assertThat,
   it,
+  mock,
+  spyOn,
   test as check,
   test,
   xdescribe,
@@ -215,3 +217,37 @@ const _awaited = async () => expect(await pending).toBe(1);
 // a framework whose `expect` is not from `bun:test`
 // expect-clean: bun-test-hygiene/no-promise-matchers
 const _playwright = playwrightExpect(pending).rejects.toThrow();
+
+// --- no-global-testing-library-screen ---
+
+// the dynamic import a DOM test registers its own window before
+// oxlint-disable-next-line bun-test-hygiene/no-global-testing-library-screen
+const { screen: _screen } = await import("@testing-library/react");
+// queries taken from a render result
+// expect-clean: bun-test-hygiene/no-global-testing-library-screen
+const { render: _render } = await import("@testing-library/react");
+
+// --- require-module-mock-reset ---
+
+// a spy at module scope is detached by the first restore
+// oxlint-disable-next-line bun-test-hygiene/require-module-mock-reset
+spyOn(console, "warn");
+// a spy a test restores in its own finally
+// expect-clean: bun-test-hygiene/require-module-mock-reset
+test("restores its spy", () => { const info = spyOn(console, "info"); try { info.mockClear(); } finally { info.mockRestore(); } });
+void mock;
+
+// --- no-wait-for-under-fake-timers ---
+
+check("fake-timer wait", async () => {
+  bt.jest.useFakeTimers();
+  // oxlint-disable-next-line bun-test-hygiene/no-wait-for-under-fake-timers
+  await waitFor(() => true);
+});
+
+check("explicit fake clock", () => {
+  bt.jest.useFakeTimers();
+  bt.jest.advanceTimersByTime(50);
+  // expect-clean: bun-test-hygiene/no-wait-for-under-fake-timers
+  expect(true).toBe(true);
+});

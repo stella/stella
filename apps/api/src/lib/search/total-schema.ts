@@ -1,6 +1,4 @@
-import { Type } from "@sinclair/typebox";
-import type { TSchema } from "@sinclair/typebox";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
 import type { SearchTotal } from "@stll/api-contract/search";
@@ -13,22 +11,24 @@ type CountedSearchTotalType = Extract<
 const countedSearchTotalSchema = <TotalType extends CountedSearchTotalType>(
   type: TotalType,
 ) =>
-  t.Object(
-    {
-      type: t.Literal(type),
-      count: t.Number({
-        minimum: 0,
-        maximum: Number.MAX_SAFE_INTEGER,
-        multipleOf: 1,
-      }),
-    },
-    { additionalProperties: false },
+  v.pipe(
+    v.object({
+      type: v.literal(type),
+      count: v.pipe(
+        v.number(),
+        v.minValue(0),
+        v.maxValue(Number.MAX_SAFE_INTEGER),
+        v.multipleOf(1),
+      ),
+    }),
+    v.readonly(),
   );
 
 type SearchTotalSchemaByType = {
-  readonly [Type in SearchTotal["type"]]: TSchema & {
-    static: Extract<SearchTotal, { readonly type: Type }>;
-  };
+  readonly [Type in SearchTotal["type"]]: v.GenericSchema<
+    unknown,
+    Extract<SearchTotal, { readonly type: Type }>
+  >;
 };
 
 const SEARCH_TOTAL_SCHEMAS = {
@@ -36,21 +36,16 @@ const SEARCH_TOTAL_SCHEMAS = {
   [SEARCH_TOTAL_TYPE.ESTIMATE]: countedSearchTotalSchema(
     SEARCH_TOTAL_TYPE.ESTIMATE,
   ),
-  [SEARCH_TOTAL_TYPE.NOT_COUNTED]: t.Object(
-    { type: t.Literal(SEARCH_TOTAL_TYPE.NOT_COUNTED) },
-    { additionalProperties: false },
+  [SEARCH_TOTAL_TYPE.NOT_COUNTED]: v.pipe(
+    v.object({ type: v.literal(SEARCH_TOTAL_TYPE.NOT_COUNTED) }),
+    v.readonly(),
   ),
 } as const satisfies SearchTotalSchemaByType;
 
-const searchTotalRuntimeSchema = t.Union([
+// The branches are closed and exhaustively keyed by the shared discriminator,
+// so the union's output is `SearchTotal` itself.
+export const searchTotalSchema = v.union([
   SEARCH_TOTAL_SCHEMAS.exact,
   SEARCH_TOTAL_SCHEMAS.estimate,
   SEARCH_TOTAL_SCHEMAS.not_counted,
 ]);
-
-// SAFETY: the runtime branches are closed and exhaustively keyed by the shared
-// discriminator; Unsafe preserves their union instead of TypeBox's
-// intersection-like inference for object unions.
-export const searchTotalSchema = Type.Unsafe<SearchTotal>(
-  searchTotalRuntimeSchema,
-);

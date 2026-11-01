@@ -15,7 +15,10 @@ import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
-import { isChatPastedTextPart } from "@stll/api-contract/chat";
+import {
+  isChatPastedTextPart,
+  UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+} from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -98,13 +101,16 @@ import {
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
   isPendingApprovalPart,
+  isUserInputChatToolName,
   savedPlaybookId,
 } from "@/components/chat/chat-ui-tools";
 import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
   canRetryChatRequest,
+  isChatMessageEditRefusal,
 } from "@/components/chat/chat-user-actions";
+import { ConnectConnectorCard } from "@/components/chat/connect-connector-card";
 import { ContextNotice } from "@/components/chat/context-notice";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
@@ -122,6 +128,11 @@ import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { useLiveElapsedMs } from "@/components/chat/use-live-elapsed";
 import { useSteadyValue } from "@/components/chat/use-steady-value";
+import {
+  EditableUserMessage,
+  useUserMessageEdit,
+} from "@/components/chat/user-message-edit";
+import type { UserMessageEditActions } from "@/components/chat/user-message-edit";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { DocumentIcon } from "@/components/document-icon";
@@ -133,6 +144,7 @@ import {
 } from "@/components/references/reference.logic";
 import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
 import {
+  CHAT_REQUEST_ERROR_TRANSLATION_KEYS,
   type ChatRequestError,
   findChatRequestError,
 } from "@/features/chat/chat-request-error";
@@ -301,6 +313,7 @@ export const ChatThreadMessages = ({
   queuedMessageActions,
   streamdownComponents,
   threadRef,
+  userMessageEdit,
   workspaceId,
 }: ChatThreadMessagesProps) => {
   const { activeOrganizationId } = useChatApproval();
@@ -452,11 +465,17 @@ export const ChatThreadMessages = ({
                   );
                 case "text":
                   return (
-                    <TextMessageParts
+                    <EditableUserMessage
+                      actions={userMessageEdit}
+                      isGenerating={generationActive}
                       message={message}
-                      messages={messages}
-                      index={index}
-                    />
+                    >
+                      <TextMessageParts
+                        message={message}
+                        messages={messages}
+                        index={index}
+                      />
+                    </EditableUserMessage>
                   );
                 default:
                   policy satisfies never;
@@ -510,9 +529,11 @@ export const ChatThreadMessages = ({
                   approvalPendingMessageId={approvalPendingMessageId}
                   headerIndex={turn.index}
                   headerMessage={turn.header}
+                  isGenerating={generationActive}
                   key={turn.header.id}
                   messages={messages}
                   scrollRef={scrollRef}
+                  userMessageEdit={userMessageEdit}
                 >
                   {turn.body.map((item) =>
                     renderMessageNode(item.message, item.index),
@@ -551,8 +572,10 @@ type StickyUserTurnProps = {
   approvalPendingMessageId: string | null;
   headerIndex: number;
   headerMessage: PersistedChatMessage;
+  isGenerating: boolean;
   messages: readonly PersistedChatMessage[];
   scrollRef: RefObject<HTMLDivElement | null> | null;
+  userMessageEdit: UserMessageEditActions | undefined;
   children: ReactNode;
 };
 
@@ -569,11 +592,18 @@ const StickyUserTurn = ({
   approvalPendingMessageId,
   headerIndex,
   headerMessage,
+  isGenerating,
   messages,
   scrollRef,
+  userMessageEdit,
   children,
 }: StickyUserTurnProps) => {
   const t = useTranslations();
+  const messageEdit = useUserMessageEdit({
+    actions: userMessageEdit,
+    isGenerating,
+    message: headerMessage,
+  });
   const sentinelRef = useRef<HTMLDivElement>(null);
   const stickyHeaderRef = useRef<HTMLDivElement>(null);
   const [isStuck, setIsStuck] = useState(false);
@@ -736,7 +766,7 @@ const StickyUserTurn = ({
             from="user"
             data-chat-message-id={headerMessage.id}
           >
-            <MessageContent>
+            <MessageContent className={cn(messageEdit.editing && "hidden")}>
               <div className="group-data-[stuck=true]/sticky:hidden">
                 <UserAttachments parts={fileParts} />
               </div>
@@ -769,6 +799,7 @@ const StickyUserTurn = ({
                 )}
               </div>
             </MessageContent>
+            {messageEdit.editor}
           </Message>
         </div>
       </div>
@@ -914,7 +945,10 @@ const downloadDataAttachment = ({
 }: DownloadDataAttachmentOptions): void => {
   const decoded = decodeBase64DataUrl(url);
   if (decoded.isErr()) {
-    getAnalytics().captureError(decoded.error);
+    getAnalytics().captureError(decoded.error, {
+      fingerprintKey: "downloadDataAttachment:failure",
+      scope: { type: "handler", handlerId: "downloadDataAttachment:failure" },
+    });
     notifyUserError(decoded.error, errorTitle);
     return;
   }
@@ -1065,13 +1099,6 @@ type ChatErrorTranslationKey =
   | "chat.sendError"
   | (typeof CHAT_REQUEST_ERROR_TRANSLATION_KEYS)[ChatRequestError["kind"]];
 
-const CHAT_REQUEST_ERROR_TRANSLATION_KEYS = {
-  preparation_failed: "chat.sendErrorPreparationFailed",
-  connection_failed: "chat.sendErrorConnectionFailed",
-  timed_out: "chat.sendErrorTimedOut",
-  not_started: "chat.sendErrorNotStarted",
-} as const satisfies Record<ChatRequestError["kind"], TranslationKey>;
-
 const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
   const requestError = findChatRequestError(error);
   if (requestError !== undefined) {
@@ -1111,7 +1138,9 @@ export const ChatErrorMessage = ({
     (refusal.status === 400 || refusal.status === 422) &&
     !isDisplayableAPIError(refusal);
   let errorMessage = refusal?.message ?? t(chatErrorTranslationKey(error));
-  if (!canRetryChatRequest(error)) {
+  if (isChatMessageEditRefusal(error)) {
+    errorMessage = t("chat.editMessageRefused");
+  } else if (!canRetryChatRequest(error)) {
     errorMessage = t("chat.sendErrorContinuationRejected");
   } else if (rejectedInput) {
     errorMessage = t("errors.api.validation");
@@ -1433,6 +1462,8 @@ type ChatThreadMessagesProps = {
   /** The thread being rendered. Enables the per-message export action; omitted
    *  on embedded surfaces that don't offer export. */
   threadRef?: ChatThreadRef | undefined;
+  /** Editing the user's sent messages; omitted, no message offers it. */
+  userMessageEdit?: UserMessageEditActions | undefined;
   workspaceId?: string | undefined;
 };
 
@@ -1600,6 +1631,13 @@ const UnknownChatActivity = ({ activityType }: { activityType: string }) => {
         area: "chat-unknown-activity",
         message: "A chat activity has no registered renderer",
       }),
+      {
+        fingerprintKey: "UnknownChatActivity:ClientTelemetryError",
+        scope: {
+          type: "handler",
+          handlerId: "UnknownChatActivity:ClientTelemetryError",
+        },
+      },
     );
   }, [activitySession, activityType, analytics]);
   return null;
@@ -1618,6 +1656,10 @@ const ChatActivityPart = ({ part }: ChatActivityPartProps) => {
       break;
     case "review":
       labelKey = "chat.activity.review";
+      break;
+    // A part a newer release stored: named, never read or rendered here.
+    case UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE:
+      labelKey = "chat.activity.newerVersion";
       break;
     default:
       return (
@@ -1654,6 +1696,16 @@ const isRequestSecretToolCallPart = (
   part: ChatPart,
 ): part is RequestSecretToolCallPart =>
   part.type === "tool-call" && part.name === "request_secret";
+
+type ConnectConnectorToolCallPart = Extract<
+  RegisteredChatUIToolCallPart,
+  { name: "connect_connector" }
+>;
+
+const isConnectConnectorToolCallPart = (
+  part: ChatPart,
+): part is ConnectConnectorToolCallPart =>
+  part.type === "tool-call" && part.name === "connect_connector";
 
 const richPartRenderIdentity = (part: RichChatPart): string => {
   if (part.type === "ui-resource") {
@@ -1717,7 +1769,7 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
   }
   return (
     part.type === "tool-call" &&
-    part.name !== "ask-user" &&
+    !isUserInputChatToolName(part.name) &&
     part.name !== "create-document" &&
     part.name !== "spawn_subagents" &&
     !isApprovalPart(part) &&
@@ -1725,9 +1777,8 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
   );
 };
 
-// Mirrors `renderEntry`'s null branches for process parts, so a run whose
-// steps all render nothing (skill-lookup misses, completed searches that
-// fold into the sources row) does not produce an empty disclosure.
+// Share visibility with the renderer so hidden skill misses and searches
+// folded into the sources row cannot produce an empty process disclosure.
 const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
   if (entry.type !== "standard") {
     return true;
@@ -1970,6 +2021,16 @@ const AssistantMessageParts = ({
       );
     }
 
+    if (isConnectConnectorToolCallPart(part)) {
+      return (
+        <ConnectConnectorCard
+          isAwaitingUser={isAwaitingUser}
+          key={part.id}
+          part={part}
+        />
+      );
+    }
+
     if (part.type === "tool-call" && part.name === "create-document") {
       return (
         <NeedsMatterCard
@@ -1982,26 +2043,7 @@ const AssistantMessageParts = ({
       );
     }
 
-    if (
-      part.type === "tool-call" &&
-      part.state === "error" &&
-      (part.name === "load-skill" || part.name === "read-skill-resource")
-    ) {
-      // Skill lookup is internal routing. Once the agent has the error and
-      // can recover, showing the miss as a prominent transcript event adds
-      // implementation noise without giving the user an action to take.
-      return null;
-    }
-
-    if (
-      part.type === "tool-call" &&
-      (part.name === "web_search" || part.name === "fetch_url") &&
-      part.state === "complete"
-    ) {
-      // Completed searches are rendered as a single dedup'd row by
-      // <WebSearchSources> below; skipping here avoids the duplicate.
-      // Other states (approval-requested, input-*) still need to fall
-      // through to the approval/tool-call cards.
+    if (part.type === "tool-call" && !isVisibleProcessEntry(entry)) {
       return null;
     }
 
@@ -2203,11 +2245,13 @@ const AssistantProcessGroup = ({
           "[&::-webkit-details-marker]:hidden",
         )}
       >
-        <ChevronRightIcon
+        <DirectionalIcon
           className={cn(
             "size-3.5 shrink-0 transition-transform",
             isOpen && "rotate-90",
           )}
+          flip={!isOpen}
+          icon={ChevronRightIcon}
         />
         <span className="text-xs font-medium">
           <SwapText

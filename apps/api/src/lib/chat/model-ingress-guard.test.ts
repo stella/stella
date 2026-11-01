@@ -47,6 +47,38 @@ afterEach(() => {
   logs.restore();
 });
 
+test("shared ingress reports keep system and tool-schema surfaces separate", () => {
+  const serialized = JSON.stringify({ id: WS_A });
+  expect(() =>
+    assertModelSurfaceFreeOfTenantIds({
+      serialized,
+      surface: "system-prompt",
+      workspaceIds: [WS_A],
+    }),
+  ).toThrow("Model-bound system-prompt embeds a tenant workspace id");
+  assertModelSurfaceFreeOfTenantIds({
+    serialized,
+    surface: "tool-schemas",
+    workspaceIds: [WS_A],
+  });
+  const captures = analytics.exceptions();
+  expect(captures).toHaveLength(2);
+  expect(captures.at(0)?.properties["$exception_fingerprint"]).toContain(
+    "system-prompt",
+  );
+  expect(captures.at(1)?.properties["$exception_fingerprint"]).toContain(
+    "tool-schemas",
+  );
+  expect(captures.at(0)?.properties["$exception_fingerprint"]).not.toBe(
+    captures.at(1)?.properties["$exception_fingerprint"],
+  );
+  expect(
+    JSON.stringify(
+      captures.map(({ properties }) => properties["$exception_fingerprint"]),
+    ),
+  ).not.toContain(WS_A);
+});
+
 // The pre-TextSearch implementation remains the parity oracle.
 const sequentialRedaction = (text: string, ids: readonly string[]) => {
   let value = text;

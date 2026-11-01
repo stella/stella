@@ -113,8 +113,8 @@ export type FlagSpec = {
   repeatable: boolean;
   default?: unknown;
   /**
-   * Per-property prose from the source JSON Schema's `description` (an Elysia
-   * `t.String({ description })` on the handler config, or a curated tool's
+   * Per-property prose from the source JSON Schema's `description` (a
+   * `v.description(...)` on the handler config's schema, or a curated tool's
    * hand-written property description). Rendered ahead of the mechanical
    * type/required suffix in the flag's `--help` brief.
    */
@@ -129,6 +129,8 @@ export type LeafCommandSpec = {
   additionalScopes?: readonly ToolScope[];
   requestTimeoutMs?: number;
   toolName: string;
+  /** Registry read classification; absence must be treated as a possible write. */
+  readOnlyHint?: boolean;
   /** The tool's authored description, first sentence; the command's `--help` brief. */
   description?: string;
   discriminatorInject?: Record<string, string>;
@@ -213,6 +215,7 @@ export type CapabilityLeafSpec = {
   itemsKey?: string;
   destructive: boolean;
   confirmation?: "required";
+  idempotency?: { type: "replay" };
   scope?: ToolScope;
   additionalScopes?: readonly ToolScope[];
   /**

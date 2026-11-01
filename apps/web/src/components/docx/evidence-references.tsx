@@ -25,7 +25,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { isFileDisplayable } from "@/lib/types";
 import { entitiesWindowOptions } from "@/lib/workspaces/queries/entities";
@@ -143,7 +143,8 @@ export const EvidenceReferencesDialog = ({
                   key={`${reference.workspaceId}/${reference.entityId}/${reference.entityVersionId}/${reference.fieldId}`}
                 >
                   <Button
-                    className="h-auto min-h-11 w-full justify-start text-start whitespace-normal"
+                    layout="wrap"
+                    className="w-full"
                     disabled={reference.workspaceId !== workspaceId}
                     onClick={() => {
                       onOpenChange(false);
@@ -244,7 +245,13 @@ const EvidenceFilePicker = ({
     if (controller.current?.signal.aborted !== false) {
       return;
     }
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "EvidenceFilePicker.reportInsertError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "EvidenceFilePicker.reportInsertError:failure",
+      },
+    });
     notifyUserError(error, t("folio.evidenceUnavailable"));
   };
   const insert = useMutation({
@@ -255,7 +262,7 @@ const EvidenceFilePicker = ({
       entityId: string;
       fieldId: string;
     }) => {
-      const data = unwrapEden(
+      const data = unwrapApiResponse(
         await api
           .entities({ workspaceId })
           .entity({ entityId: sourceEntityId })
@@ -340,7 +347,8 @@ const EvidenceFilePicker = ({
         {files?.map((file) => (
           <li key={file.fieldId}>
             <Button
-              className="h-auto min-h-11 w-full justify-start text-start whitespace-normal"
+              layout="wrap"
+              className="w-full"
               disabled={insert.isPending}
               onClick={() => insert.mutate(file)}
               tooltip={t("folio.insertEvidence")}

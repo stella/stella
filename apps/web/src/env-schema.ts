@@ -47,6 +47,7 @@ export const envWebClientSchema = {
     v.pipe(v.string(), v.parseBoolean()),
     "false",
   ),
+  VITE_AUTH_APPLE: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
   // Set to "true" only on self-hosted instances. Enables the
   // in-app "update available" banner that polls the public GitHub
   // Releases API and surfaces newer versions to the operator.

@@ -15,20 +15,21 @@ import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-// A fresh checkout commits after `scripts/ensure-hook-deps.sh` installs only
-// the root workspace, so every package a hook loads must be a root
+// `scripts/require-hook-deps.sh` lets a commit run its hooks once the root
+// workspace is installed, so every package a hook loads must be a root
 // dependency. This walks the modules each hook command loads (its scripts,
-// the scripts they import, and for the lint hook oxlint.config.ts and every
-// JS plugin the loaded config names) and reports each bare import the root
-// does not declare, and each package executable a hook runs that no root
-// dependency provides. A command that passes workspaces to ensure-hook-deps.sh
-// installs those itself and is not walked.
+// including the `files:` command that lists its paths, the scripts they
+// import, and for the lint hook oxlint.config.ts and every JS plugin the
+// loaded config names) and reports each bare import the root does not
+// declare, and each package executable a hook runs that no root dependency
+// provides. A command that passes workspaces to require-hook-deps.sh requires
+// those installed too and is not walked.
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const HOOKS = ["pre-commit", "pre-push"] as const;
 const LINT_RUNNER = "scripts/precommit-lint.ts";
 const LINT_CONFIG = "oxlint.config.ts";
-const WORKSPACE_INSTALL = /ensure-hook-deps\.sh\s+[^\s&|;]/u;
+const WORKSPACE_INSTALL = /require-hook-deps\.sh\s+[^\s&|;]/u;
 const SCRIPT_FILE =
   /(?:^|[\s"'])((?:\.\/)?(?:scripts|\.oxlint-plugins)\/[\w./-]+\.(?:[cm]?[jt]s|sh))/gu;
 const PACKAGE_SCRIPT = /\bbun run ([\w:.-]+)/gu;
@@ -48,7 +49,10 @@ const RESOLVE_SUFFIXES = ["", ".ts", ".tsx", ".mts", ".js", "/index.ts"];
 
 const lefthookSchema = v.record(v.string(), v.unknown());
 const hookSchema = v.object({
-  commands: v.record(v.string(), v.object({ run: v.string() })),
+  commands: v.record(
+    v.string(),
+    v.object({ run: v.string(), files: v.optional(v.string()) }),
+  ),
 });
 const packageSchema = v.object({
   scripts: v.optional(v.record(v.string(), v.string()), {}),
@@ -233,7 +237,11 @@ export const undeclaredHookDependencies = async (
   };
   for (const hook of HOOKS) {
     const { commands } = v.parse(hookSchema, lefthook[hook]);
-    for (const { run } of Object.values(commands)) {
+    for (const { run, files } of Object.values(commands)) {
+      if (files !== undefined) {
+        commandWords("lefthook.yml", files);
+        addCommand("lefthook.yml", files);
+      }
       if (!WORKSPACE_INSTALL.test(run)) {
         commandWords("lefthook.yml", run);
         addCommand("lefthook.yml", run);
@@ -354,7 +362,7 @@ test("reports a bare import a lint plugin reaches through a relative module", as
         "    lint:",
         "      run: bun scripts/precommit-lint.ts {staged_files}",
         "    sync:",
-        "      run: bash scripts/ensure-hook-deps.sh apps/web && bun scripts/sync.ts",
+        "      run: bash scripts/require-hook-deps.sh apps/web && bun scripts/sync.ts",
         "pre-push:",
         "  commands:",
         "    check:",

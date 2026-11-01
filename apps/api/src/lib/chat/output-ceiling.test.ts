@@ -1,7 +1,16 @@
 import { panic, Result } from "better-result";
-import { afterAll, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { compactChatMessagesForModel } from "@/api/handlers/chat/compaction";
@@ -21,7 +30,6 @@ import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import type { TanStackTextFinishPolicy } from "@/api/lib/tanstack-ai-generate";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // The output ceiling read through the production chain: the real OpenRouter
@@ -210,6 +218,11 @@ const failureOf = (result: Result<string, { cause: unknown }>) => {
     finish: error instanceof ModelRunError ? error.finish : undefined,
   };
 };
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 describe("an answer cut at its output ceiling", () => {
   // The provider labels the stop `length`, with a reason no table lists, or

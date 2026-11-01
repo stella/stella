@@ -63,8 +63,8 @@ export const FileViewerWithAI = ({
   docxEditorRef,
   docxComments,
   onDocxCommentsChange,
+  presets,
   requestDocxEditMode,
-  threadPresentation,
   children,
 }: FileViewerWithAIProps) => {
   const overlayIsActive =
@@ -157,8 +157,8 @@ export const FileViewerWithAI = ({
               }}
               onActiveDraftChatBound={onActiveDraftChatBound}
               onDocxCommentsChange={onDocxCommentsChange}
+              presets={presets}
               requestDocxEditMode={requestDocxEditMode}
-              threadPresentation={threadPresentation}
               workspaceId={workspaceId}
             />
           </FileChatOverlayBoundary>

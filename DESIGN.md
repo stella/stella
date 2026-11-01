@@ -171,10 +171,11 @@ Icons: **lucide-react**.
 
 ### Key Components
 
-Accordion, AlertDialog, Avatar, Breadcrumb, Button, Checkbox,
+Accordion, AlertDialog, Avatar, Badge, Breadcrumb, Button, Checkbox,
 Combobox, Dialog, Field, Form, Input, InputGroup, InputOTP, Label,
 Menu, Pagination, Popover, PreviewCard, ScrollArea, Select,
-Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
+Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip,
+TruncatedText.
 
 ### Component Conventions
 
@@ -193,6 +194,9 @@ Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
   `overflow-auto`/`overflow-scroll` utility outside the textareas,
   `<pre>` blocks, editor canvases and wide tables that need a native
   scroller.
+- Text that may not fit renders through `TruncatedText`
+  (`@stll/ui/truncated-text`), never `truncate` plus a `title=`: it
+  shows the full text only when it was cut, and on touch as well.
 - Use semantic HTML (`<nav>`, `<main>`, `<section>`) over generic
   `<div>` with ARIA roles.
 - All interactive elements require a 44x44px minimum touch target
@@ -210,13 +214,79 @@ Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip.
 - **muted:** muted text, foreground text and accent on hover (quiet
   actions in toolbars and rows)
 - **destructive-ghost:** destructive text, transparent, tinted on hover
+- **muted-destructive:** muted text until hovered, then destructive: a
+  delete beside quiet row actions
 - **link:** underline, no background
+- **plain:** no box at all: a click target whose look is its content
+  (a card, a thumbnail, a cell). It keeps the button's disabled
+  disposition, tooltip and focus ring, lays out like a native button
+  (`inline-block`, content from the start), and ignores `size`.
+  `shape` (`box`, the container radius; `round`, an avatar or pill)
+  sets the outline its focus ring follows. Selected, it draws an inset
+  edge above its content.
 
 Sizes: `default` (h-9), `sm` (h-8, small type), `xs` (h-7, small
 type), `lg` (h-10), `xl` (h-11), `icon` and `icon-*` (square),
-`row` (a menu-list row).
-A small control renders small type itself; do not add `text-xs` to
-a `sm` button, select, or input.
+`icon-2xs` (a 16px glyph action in a dense row; the touch target
+still grows to 44px under a coarse pointer), `row` (a menu-list row),
+`inline` (a short action inside a line of text: no height, padding or
+type of its own, and text that stays selectable; quiet variants drop
+their hover fill, and with no variant it is an underlined link). A
+`<button>` is one atomic box even at `display: inline`, so an inline
+button never breaks across the paragraph's lines: a label too long for
+the line moves down whole. Text that must flow with the prose (a
+citation in reader text) is a `ButtonTextRun`: the text sits in a
+native `<label>` that wraps with the line and forwards a press to the
+button it holds.
+
+**Text selection.** Buttons are `select-none`: a label is not text to
+copy. Two exceptions: `size="inline"` and `ButtonTextRun` are
+`select-text`, because a reference inside prose is copied with the
+passage; and
+`plain` leaves selection to the browser, which in practice does not
+drag-select inside a button. So a plain row or card is fine as is, but
+if a reader needs to select or copy its text (a quoted passage, an
+identifier), the text is not the button: make a heading, an inline
+`Button` or a `CopyButton` the target and leave the text beside it.
+
+These are the only variants and sizes. A screen that seems to need
+another (a card button, a tile, a hint) composes `plain` with the
+content's own surface, or adds the variant here first.
+
+**Selected.** `selected` marks the current choice in a set (the active
+filter, a picked option) with the variant's selected treatment: an
+inset edge and a raised or stronger surface, never the hover fill
+alone, so the choice stays visible under the pointer and without it.
+The ARIA state (`aria-pressed`, `aria-current`, ...) stays the
+caller's. A row of exclusive options (filter tabs, view modes) is a
+`ToggleGroup`, which owns that state.
+
+**Focus ring.** Drawn outside the box with a gap by default;
+`focusRing="inside"` draws it within the box, for a target that fills
+an `overflow-hidden` container where an outside ring would be clipped.
+
+### One Name per Concept
+
+When a screen needs a look the components lack, add it once here and in
+`packages/ui`, under these names:
+
+| Concept                                                            | API                                                                      |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| Box-less click target (card, cell, image)                          | `Button variant="plain"` (+ `shape`, `focusRing`)                        |
+| Action inside running text                                         | `Button size="inline"` (`variant="link"` underlined by default)          |
+| Long reference that wraps with running text                        | `ButtonTextRun`                                                          |
+| Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options              |
+| Quiet disclosure line                                              | `AccordionTrigger variant="muted"`                                       |
+| Disclosure inside a dialog or card                                 | `AccordionTrigger`/`AccordionPanel` `size="sm"`                          |
+| Choice row or card around a radio                                  | `Label variant="choice"` / `"choice-card"`                               |
+| Short label and value record                                       | `DetailsGrid variant="list"` (+ `orientation`)                           |
+| Small muted caption in a filter bar or dense form                  | `Label variant="muted"`                                                  |
+| One-line or compact form                                           | `Form layout="inline"`, `density="snug" \| "compact"`                    |
+| Borderless field in a line of text                                 | `Input inline`, `Textarea inline` (one class: `INLINE_FIELD_CLASS_NAME`) |
+| Fixed-height text area in a row or cell                            | `Textarea fieldSizing="fixed"`                                           |
+| Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds          |
+| A small control renders small type itself; do not add `text-xs` to |
+| a `sm` button, select, or input.                                   |
 
 ### Menu Rows & Sections
 

@@ -6,21 +6,33 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { statuteListSchemeFor } from "@stll/api-contract/statute-list-schemes";
 import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import {
   parseDocumentAst,
   resolveDocumentHeadingAnchor,
 } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
+import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { ArrowDownIcon, ArrowUpIcon, XIcon } from "@stll/ui/icons";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+} from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 // The move flash is the reader's own `[data-highlight]` animation.
 import "@stll/decision-reader/reader.css";
 import { cn } from "@stll/ui/utils";
 
+import { VIEWER_OVERLAY_BAR_TOP_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
+import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
+import type { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import {
   StatuteBlock,
   StatuteMasthead,
@@ -34,6 +46,7 @@ import type {
 import {
   actCompareSide,
   compareStatuteBlocks,
+  comparisonAfterPick,
   groupCompareRows,
   locateCompareRows,
   pairCompareSides,
@@ -58,12 +71,16 @@ import type {
 } from "@/features/statutes/statute-compare-search";
 import { compareText, markSide } from "@/features/statutes/statute-diff-marks";
 import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
+import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
 import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
 import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { provisionInVersionOptions } from "@/lib/statutes/provision-preview";
-import { formatValidityDate } from "@/lib/statutes/statute-format";
+import {
+  formatValidityDate,
+  formatValidityRange,
+} from "@/lib/statutes/statute-format";
 
 const READER_STYLE = {
   fontFamily: "var(--reader-body-font)",
@@ -104,7 +121,16 @@ type StatuteCompareViewProps = {
   provision: string | undefined;
   show: StatuteCompareShow;
   onNavigate: CompareNavigate;
+  /**
+   * Put another consolidation on screen and keep comparing: the route names
+   * the text on screen, so swapping that side is a move to its address.
+   */
+  onOpenVersion: (versionId: string, comparison: StatuteCompareSearch) => void;
+  /** The reader's own text size, so the comparison reads at the same size. */
+  textScale: ReaderTextScale;
 };
+
+type ReaderTextScale = ReturnType<typeof useWebReaderTextScale>;
 
 /**
  * Two consolidations of one act side by side: the older wording on the left
@@ -114,10 +140,12 @@ type StatuteCompareViewProps = {
 export const StatuteCompareView = ({
   compare,
   onNavigate,
+  onOpenVersion,
   onScreen,
   onScreenBlocks,
   provision,
   show,
+  textScale,
   versions,
 }: StatuteCompareViewProps) => {
   const t = useTranslations();
@@ -149,11 +177,44 @@ export const StatuteCompareView = ({
       return panic("Unhandled statute comparison state");
   }
 
+  const pick = (
+    replaced: PublicStatuteVersion,
+    picked: PublicStatuteVersion,
+  ) => {
+    const next = comparisonAfterPick({
+      newer: resolved.newer,
+      older: resolved.older,
+      onScreenId: onScreen.id,
+      picked,
+      replaced,
+    });
+    switch (next.type) {
+      case "compare":
+        onNavigate({ compare: next.compare, provision, show });
+        return;
+      case "open":
+        onOpenVersion(next.versionId, {
+          compare: next.compare,
+          provision,
+          show,
+        });
+        return;
+      case "none":
+        return;
+      default:
+        next satisfies never;
+        panic("Unhandled comparison pick");
+    }
+  };
   const frame = {
     language: onScreen.language,
     newer: resolved.newer,
     older: resolved.older,
     onClose: close,
+    onPick: pick,
+    statuteLists: statuteListSchemeFor(onScreen.country),
+    textScale,
+    versions,
   };
 
   // Both consolidations are the same act from the same publisher, so its
@@ -193,6 +254,16 @@ type CompareFrame = {
   older: PublicStatuteVersion;
   newer: PublicStatuteVersion;
   onClose: () => void;
+  /** Show `picked` in the column that shows `replaced`. */
+  onPick: (
+    replaced: PublicStatuteVersion,
+    picked: PublicStatuteVersion,
+  ) => void;
+  /** The act's publisher scheme, which both sides' anchors nest lists in. */
+  statuteLists: StatuteListScheme;
+  textScale: ReaderTextScale;
+  /** Every consolidation of the act, for either column to take. */
+  versions: readonly PublicStatuteVersion[];
 };
 
 type OrderSidesOptions = {
@@ -387,7 +458,9 @@ type CompareFrameLayoutProps = {
 
 /**
  * The comparison's chrome stays put and only the rows scroll: the column
- * heads are what make a row far down the act legible.
+ * heads are what make a row far down the act legible. One row: each version
+ * heads its own column, and the controls end the newer one's. Zoom floats in
+ * the rows' corner, as in every reader.
  */
 const CompareFrameLayout = ({
   actions,
@@ -396,41 +469,135 @@ const CompareFrameLayout = ({
   title,
 }: CompareFrameLayoutProps) => {
   const t = useTranslations();
+  const { textScale } = frame;
 
   return (
     // Pinned to the reader pane rather than sized by percentage: the pane's
     // height is not definite for every ancestor chain, and an unbounded frame
     // lets the page scroll around the list's own scroll area.
     <section aria-label={title} className="absolute inset-0 flex flex-col">
-      <div className="mx-auto flex w-full flex-col px-4 md:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-4 pb-2">
-          <h2 className="text-sm font-medium text-balance">{title}</h2>
-          <div className="flex flex-wrap items-center gap-3">
-            {actions}
-            <Button onClick={frame.onClose} size="sm" variant="ghost">
-              <XIcon className="size-3.5" />
-              {t("statutes.compareClose")}
-            </Button>
+      <h2 className="sr-only">{title}</h2>
+      <div className="px-4 md:px-8">
+        <div className="grid items-center gap-x-8 border-b py-1.5 md:grid-cols-2">
+          {/* Stacked, every cell names its own version instead. */}
+          <div className="min-w-0 max-md:hidden">
+            <CompareVersionPicker
+              frame={frame}
+              other={frame.newer}
+              shown={frame.older}
+            />
+          </div>
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <div className="min-w-0 max-md:hidden">
+              <CompareVersionPicker
+                frame={frame}
+                other={frame.older}
+                shown={frame.newer}
+              />
+            </div>
+            <div className="ms-auto flex shrink-0 items-center gap-1">
+              {actions}
+              <Button
+                aria-label={t("statutes.compareClose")}
+                onClick={frame.onClose}
+                size="icon-xs"
+                title={t("statutes.compareClose")}
+                variant="ghost"
+              >
+                <XIcon className="size-3.5" />
+              </Button>
+            </div>
           </div>
         </div>
-        {/* Stacked, every cell names its own version instead. */}
-        <div className="hidden grid-cols-2 gap-x-8 border-b py-2 md:grid">
-          <StatuteValidityIndicator
-            expression={frame.older}
-            status={frame.older.status}
-            validFrom={frame.older.versionValidFrom}
-            validTo={frame.older.versionValidTo}
-          />
-          <StatuteValidityIndicator
-            expression={frame.newer}
-            status={frame.newer.status}
-            validFrom={frame.newer.versionValidFrom}
-            validTo={frame.newer.versionValidTo}
-          />
-        </div>
       </div>
-      {children}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {/* The rows, and only the rows, take the reader's text size. */}
+        <div className="flex min-h-0 flex-1 flex-col" {...textScale.rootProps}>
+          {children}
+        </div>
+        <FloatingZoomControls
+          atMax={textScale.atMax}
+          atMin={textScale.atMin}
+          level={textScale.level}
+          onReset={textScale.reset}
+          onZoom={textScale.zoom}
+        />
+      </div>
     </section>
+  );
+};
+
+type CompareVersionPickerProps = {
+  frame: CompareFrame;
+  /** The version the column shows. */
+  shown: PublicStatuteVersion;
+  /** The other column's version, which this one cannot also show. */
+  other: PublicStatuteVersion;
+};
+
+/**
+ * A column's head, which picks the version the column shows. Only a version
+ * with an opening day can be compared: the comparison is addressed by it.
+ */
+const CompareVersionPicker = ({
+  frame,
+  other,
+  shown,
+}: CompareVersionPickerProps) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const comparable = frame.versions.filter(
+    (version) => version.id === shown.id || version.versionValidFrom !== null,
+  );
+
+  return (
+    <Select
+      onValueChange={(value) => {
+        const picked = comparable.find((version) => version.id === value);
+        if (picked !== undefined && picked.id !== shown.id) {
+          frame.onPick(shown, picked);
+        }
+      }}
+      value={shown.id}
+    >
+      <SelectTrigger
+        aria-label={t("common.version")}
+        className="w-auto max-w-full min-w-0"
+        size="sm"
+      >
+        <StatuteValidityIndicator
+          expression={shown}
+          status={shown.status}
+          validFrom={shown.versionValidFrom}
+          validTo={shown.versionValidTo}
+        />
+      </SelectTrigger>
+      <SelectPopup>
+        {comparable.map((version) => {
+          const range = formatValidityRange({
+            format,
+            openEnded: t("statutes.openEnded"),
+            validFrom: version.versionValidFrom,
+            validTo: version.versionValidTo,
+          });
+          const ineligibleLabel = ineligibleExpressionLabelKey(version);
+          return (
+            <SelectItem
+              disabled={version.id === other.id}
+              key={version.id}
+              value={version.id}
+            >
+              {ineligibleLabel === null
+                ? range
+                : t("statutes.ineligibleVersion", {
+                    label: t(ineligibleLabel),
+                    range,
+                  })}
+            </SelectItem>
+          );
+        })}
+      </SelectPopup>
+    </Select>
   );
 };
 
@@ -649,14 +816,20 @@ const VirtualCompareGroups = ({
       viewportRef={setScrollElement}
     >
       <article
-        className="reader-statute text-card-foreground mx-auto w-full px-4 pb-16 text-start md:px-8"
+        className={cn(
+          LEGAL_TEXT_CLASS_NAME,
+          "reader-statute text-card-foreground mx-auto w-full px-4 pb-16 text-start md:px-8",
+        )}
         style={READER_STYLE}
       >
-        {masthead === null ? null : (
-          <div className="flow-root pt-6" ref={measureMasthead}>
-            <StatuteMasthead masthead={masthead} />
-          </div>
-        )}
+        {/* The floating zoom bar owns the top corner, so the list starts
+            below it; the clearance is measured with the masthead. */}
+        <div
+          className={cn("flow-root", VIEWER_OVERLAY_BAR_TOP_CLEARANCE)}
+          ref={measureMasthead}
+        >
+          {masthead === null ? null : <StatuteMasthead masthead={masthead} />}
+        </div>
         <div aria-hidden="true" style={{ height: paddingTop }} />
         {items.map((item) => {
           const group = groups.at(item.index);
@@ -823,7 +996,11 @@ const CompareCell = ({
           {row.move === null ? null : (
             <span className="sr-only">{t("statutes.compareMoved")}</span>
           )}
-          <ReaderBlocks language={frame.language} side={wording} />
+          <ReaderBlocks
+            language={frame.language}
+            side={wording}
+            statuteLists={frame.statuteLists}
+          />
         </div>
       </div>
     );
@@ -869,10 +1046,12 @@ const CompareCell = ({
 const ReaderBlocks = ({
   language,
   side,
+  statuteLists,
 }: {
   /** The act's language; the chrome around the cell is the reader's own. */
   language: string;
   side: StatuteCompareSide;
+  statuteLists: StatuteListScheme;
 }) => (
   <div
     className="flex flex-col gap-[var(--reader-paragraph-gap)] *:my-0"
@@ -884,6 +1063,7 @@ const ReaderBlocks = ({
         block={block}
         key={block.id}
         rangesByPieceId={rangesByPieceId}
+        statuteLists={statuteLists}
       />
     ))}
   </div>
@@ -969,6 +1149,7 @@ const OneSidedComparison = ({ frame, sides }: OneSidedComparisonProps) => {
   const wording = (
     <ReaderBlocks
       language={frame.language}
+      statuteLists={frame.statuteLists}
       side={{
         blocks: sides.blocks,
         segments: [{ type: "equal", text: compareText(sides.blocks) }],
@@ -979,7 +1160,11 @@ const OneSidedComparison = ({ frame, sides }: OneSidedComparisonProps) => {
   return (
     <ScrollArea axis="vertical" className="min-h-0 flex-1">
       <article
-        className="reader-statute text-card-foreground mx-auto grid w-full gap-x-8 gap-y-3 px-4 py-3 pb-16 text-start md:grid-cols-2 md:px-8"
+        className={cn(
+          LEGAL_TEXT_CLASS_NAME,
+          "reader-statute text-card-foreground mx-auto grid w-full gap-x-8 gap-y-3 px-4 pb-16 text-start md:grid-cols-2 md:px-8",
+          VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
+        )}
         style={READER_STYLE}
       >
         <div className="min-w-0">

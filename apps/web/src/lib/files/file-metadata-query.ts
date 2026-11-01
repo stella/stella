@@ -3,7 +3,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import { api } from "@/lib/api";
-import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapApiResponse } from "@/lib/errors/api";
 import {
   type FileMetadataQueryKey,
   fileMetadataQueryKey,
@@ -34,7 +34,7 @@ export const fileMetadataOptions = (props: FileMetadataOptions) =>
             fetch: { signal },
           });
 
-        const data = unwrapEden(response);
+        const data = unwrapApiResponse(response);
 
         return {
           fileId: data.fileId,

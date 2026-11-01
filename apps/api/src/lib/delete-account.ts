@@ -23,6 +23,7 @@ import {
   deletePersonalAiMemories,
   deletePersonalBillingRates,
   deletePersonalWorkspaceViewTemplatesAndAgentSkills,
+  deletePushDevices,
   deleteSearchHistory,
   deleteUserFiles,
   reassignActiveTaskAssignmentsAndDropMemberships,
@@ -44,6 +45,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { tryLockAccountMemberCleanup } from "@/api/lib/member-assignment-offboarding";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 export { ACCOUNT_DELETION_ERROR_CODE };
@@ -348,6 +350,7 @@ export const verifyAndDeleteUser = async (
           );
           await deletePersonalBillingRates(tx, currentUserId);
           await deleteSearchHistory(tx, currentUserId);
+          await deletePushDevices(tx, currentUserId);
 
           await recordAccountDeletionRequest({
             tx,
@@ -387,7 +390,12 @@ const enqueueStorageCleanupOrLog = async (
   try {
     await enqueueAccountDeletionCleanup(deletionRequestId);
   } catch (error) {
-    captureError(error, { deletionRequestId });
+    captureError(
+      error,
+      handlerErrorContext("lib.enqueueStorageCleanupOrLog", {
+        deletionRequestId,
+      }),
+    );
     logger.error("account_deletion_cleanup.enqueue_failed", {
       "error.type": errorTag(error),
       deletionRequestId,
@@ -397,7 +405,12 @@ const enqueueStorageCleanupOrLog = async (
       deletionRequestId,
       createAccountDeletionCleanupRequestDeps(rootDb),
     ).catch((cleanupError: unknown) => {
-      captureError(cleanupError, { deletionRequestId });
+      captureError(
+        cleanupError,
+        handlerErrorContext("lib.enqueueStorageCleanupOrLog.cleanupError", {
+          deletionRequestId,
+        }),
+      );
       logger.error("account_deletion_cleanup.inline_failed", {
         "error.type": errorTag(cleanupError),
         deletionRequestId,

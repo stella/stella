@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, isNull, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -18,6 +18,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
 import {
@@ -50,8 +51,8 @@ import type {
 } from "@/api/lib/mcp-upstream/oauth";
 import { redactMcpOAuthRegistrationResponse } from "@/api/lib/mcp-upstream/oauth-registration-response";
 
-const routeParams = t.Object({
-  slug: t.String({ minLength: 1, maxLength: 80 }),
+const routeParams = v.object({
+  slug: v.pipe(v.string(), v.minLength(1), v.maxLength(80)),
 });
 
 const config = {
@@ -210,9 +211,27 @@ export const createConnectMcpConnectorHandler = ({
       const state = createOAuthState();
 
       yield* Result.await(
-        safeDb((tx) =>
+        safeDb(async (tx) => {
+          await withAggregateLock({
+            aggregate: "mcpOAuthState",
+            id: {
+              connectorId: connector.id,
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+            },
+            tx,
+          });
+          await tx
+            .delete(mcpOAuthState)
+            .where(
+              and(
+                eq(mcpOAuthState.organizationId, session.activeOrganizationId),
+                eq(mcpOAuthState.connectorId, connector.id),
+                eq(mcpOAuthState.userId, user.id),
+              ),
+            );
           // audit: skip — ephemeral OAuth state row consumed by the callback; the resulting connection is recorded at callback time.
-          tx.insert(mcpOAuthState).values({
+          await tx.insert(mcpOAuthState).values({
             state,
             connectorId: connector.id,
             organizationId: session.activeOrganizationId,
@@ -225,8 +244,8 @@ export const createConnectMcpConnectorHandler = ({
               authorizationServer: metadata.authorizationServer,
               registrationMode,
             }),
-          }),
-        ),
+          });
+        }),
       );
 
       const authorizeUrl = buildAuthorizeUrl({
@@ -591,6 +610,7 @@ const ensureOAuthClient = async ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "MCP OAuth client registration could not be persisted",
         }),
       );

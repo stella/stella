@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -19,6 +19,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { HttpStatusResponse } from "@/api/http/status";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -50,7 +51,6 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import createSampleCase, { loadSampleCase } from "./create";
 import { SAMPLE_FACTS } from "./sample-case.data";
@@ -618,6 +618,7 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
         if (Array.isArray(events)) {
           throw new HandlerError({
             status: 503,
+            code: "internal_error",
             message: "Sample audit unavailable",
           });
         }
@@ -694,8 +695,8 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
           body: {},
         }),
       );
-      expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-      if (result instanceof ElysiaCustomStatusResponse) {
+      expect(result).toBeInstanceOf(HttpStatusResponse);
+      if (result instanceof HttpStatusResponse) {
         expect(result.code).toBe(404);
       }
     });

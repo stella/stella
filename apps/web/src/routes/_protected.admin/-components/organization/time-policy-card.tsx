@@ -2,7 +2,7 @@ import { useId } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal, todayFor } from "@stll/time";
 import { Button } from "@stll/ui/button";
@@ -19,10 +19,11 @@ import {
 
 import { Switch } from "@/components/switch";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { schemaFormOptions } from "@/lib/schema";
 import { myTimeEntriesKeys } from "@/lib/workspaces/queries/my-time-entries";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
@@ -92,8 +93,12 @@ export const TimePolicyForm = ({ settings, canEdit }: TimePolicyFormProps) => {
   const at = Temporal.Now.instant();
   const today = todayFor(settings.timeZone, at);
   const mutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "TimePolicyForm.mutation.useSettingsMutation",
+    },
     mutationFn: async (next: TimePolicy) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"].post(
           timePolicyPatch({ original: settings, next }),
         ),

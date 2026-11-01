@@ -34,6 +34,7 @@ import {
   PG_IDENTIFIER_PROPERTIES,
   readEvidence,
 } from "@/api/lib/observability/failure-evidence";
+import { taggedFailureReason } from "@/api/lib/observability/failure-tag-policy";
 
 // --- Closed code sets ---------------------------------------------------------
 
@@ -187,7 +188,8 @@ export type FrameworkFailure =
   | "request_malformed"
   | "request_validation"
   | "response_invalid"
-  | "route_not_found";
+  | "route_not_found"
+  | "method_not_allowed";
 
 /**
  * AWS SDK service exception names. The name is the exception's code, and it
@@ -321,6 +323,7 @@ export type FailureRule =
   | "handler_status"
   | "infra"
   | "infra_under_panic"
+  | "tag"
   | "unclassified"
   | "unobserved";
 
@@ -502,7 +505,8 @@ const matchesExpectation = (
  *     resolves it;
  *  5. infrastructure evidence anywhere in the chain;
  *  6. what the framework answered;
- *  7. otherwise a defect.
+ *  7. the tagged failure's exhaustive baseline declaration;
+ *  8. otherwise an unclassified defect.
  */
 export const gradeFailure = (
   evidence: FailureEvidence,
@@ -550,6 +554,15 @@ export const gradeFailure = (
 
   if (request.framework !== undefined) {
     return graded(request.framework, "framework", failureIndex);
+  }
+
+  const failureNode = nodes[failureIndex];
+  if (failureNode?.kind === "tagged") {
+    // Library wrappers are not project declarations in the tag policy.
+    if (isTransportWrapper(failureNode)) {
+      return graded("tagged_failure", "tag", failureIndex);
+    }
+    return graded(taggedFailureReason(failureNode.tag), "tag", failureIndex);
   }
 
   return graded("unclassified", "unclassified", failureIndex);

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { desktopPresenceSchema } from "@stll/api-contract/desktop-presence";
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
 import {
@@ -37,11 +38,19 @@ const observedDesktop = (enabled: boolean | undefined) => {
   }
   return enabled ? ("current" as const) : ("none" as const);
 };
+const observedOcr = (enabled: boolean | undefined) => {
+  if (enabled === undefined) {
+    return undefined;
+  }
+  return enabled
+    ? DOCUMENT_OCR_AVAILABILITY.live
+    : DOCUMENT_OCR_AVAILABILITY.unconfigured;
+};
 const observations = (enabled: boolean | undefined) => ({
   role: "member",
   ai: enabled,
   deepl: enabled,
-  ocr: enabled,
+  ocr: observedOcr(enabled),
   desktop: observedDesktop(enabled),
   settings:
     enabled === undefined
@@ -70,7 +79,7 @@ for (const [capability, expected] of Object.entries(cases)) {
           ?.at(1),
       ).toEqual({ type: "available" });
     });
-    test("missing and unknown prerequisites deny with the precise settings destination", () => {
+    test("missing prerequisites deny precisely while pending observations stay reserved", () => {
       expect(
         Object.entries(
           resolveActionCapabilities(observations(false)).capabilities,
@@ -92,11 +101,7 @@ for (const [capability, expected] of Object.entries(cases)) {
         )
           .find(([key]) => key === capability)
           ?.at(1),
-      ).toEqual({
-        type: "unavailable",
-        reason: "availabilityUnknown",
-        settingsLink: expected.route,
-      });
+      ).toEqual({ type: "pending" });
     });
   });
 }
@@ -115,18 +120,59 @@ test("translation accepts either configured provider but never assumes an unknow
         ai,
         deepl,
       }).capabilities.translation;
-      expect(result.type).toBe(
-        ai === true || deepl === true ? "available" : "unavailable",
-      );
+      let expected: "available" | "pending" | "unavailable" = "unavailable";
+      if (ai === true || deepl === true) {
+        expected = "available";
+      } else if (ai === undefined || deepl === undefined) {
+        expected = "pending";
+      }
+      expect(result.type).toBe(expected);
       if (result.type === "unavailable") {
-        expect(result.reason).toBe(
-          ai === undefined || deepl === undefined
-            ? "availabilityUnknown"
-            : "translationMissing",
-        );
+        expect(result.reason).toBe("translationMissing");
       }
     }
   }
+});
+
+test("translation remains available when either provider is ready", () => {
+  const error = { status: "error" } as const;
+  for (const [ai, deepl, expected] of [
+    [true, error, "available"],
+    [error, true, "available"],
+    [undefined, error, "pending"],
+    [false, true, "available"],
+  ] as const) {
+    expect(
+      resolveActionCapabilities({
+        ...observations(false),
+        ai,
+        deepl,
+      }).capabilities.translation.type,
+    ).toBe(expected);
+  }
+});
+
+test("OCR admits live and batched deployments and keeps the status for the action", () => {
+  for (const status of Object.values(DOCUMENT_OCR_AVAILABILITY)) {
+    const resolved = resolveActionCapabilities({
+      ...observations(false),
+      ocr: status,
+    });
+    expect(resolved.documentOcr).toBe(status);
+    expect(resolved.capabilities.ocr).toEqual(
+      status === DOCUMENT_OCR_AVAILABILITY.unconfigured
+        ? {
+            type: "unavailable",
+            reason: "ocrUnavailable",
+            settingsLink: "/admin/ai",
+          }
+        : { type: "available" },
+    );
+  }
+  expect(
+    resolveActionCapabilities({ ...observations(false), ocr: undefined })
+      .documentOcr,
+  ).toBeUndefined();
 });
 
 test("every observed desktop state reaches the owning recovery gate", () => {
@@ -158,7 +204,8 @@ test("capability visibility shares one role and availability policy", () => {
           throw new Error("Unexpected capability");
         }
         expect(isCapabilityActionVisible({ capability }, resolved)).toBe(
-          resolved.role === "admin" || availability.type === "available",
+          availability.type !== "pending" &&
+            (resolved.role === "admin" || availability.type === "available"),
         );
       }
     }

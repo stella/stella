@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { createMemoryBodySchema } from "@/api/handlers/memories/create-schema";
 
@@ -12,27 +12,27 @@ const BASE_MEMORY = {
 describe("create memory request boundary", () => {
   test("accepts only ownership fields valid for the selected scope", () => {
     expect(
-      Value.Check(createMemoryBodySchema, {
+      v.is(createMemoryBodySchema, {
         ...BASE_MEMORY,
         scope: "user",
       }),
     ).toBe(true);
     expect(
-      Value.Check(createMemoryBodySchema, {
+      v.is(createMemoryBodySchema, {
         ...BASE_MEMORY,
         scope: "workspace",
         workspaceId: WORKSPACE_ID,
       }),
     ).toBe(true);
     expect(
-      Value.Check(createMemoryBodySchema, {
+      v.is(createMemoryBodySchema, {
         ...BASE_MEMORY,
         scope: "user",
         workspaceId: WORKSPACE_ID,
       }),
     ).toBe(false);
     expect(
-      Value.Check(createMemoryBodySchema, {
+      v.is(createMemoryBodySchema, {
         ...BASE_MEMORY,
         scope: "workspace",
       }),

@@ -75,6 +75,29 @@ export const CHAT_CONTINUATION_REJECTED_ERROR_CODE =
 export const CHAT_TURN_NOT_OWNED_ERROR_CODE = "chat_turn_not_owned" as const;
 
 /**
+ * Why the server refused to edit a user message and drop the turns after it.
+ * After any of them the page reloads the thread as stored. Only `turnRunning`
+ * and `historyChanged` pass: the same message can be edited again once
+ * nothing runs. `targetMissing` and `targetNotUserMessage` do not change by
+ * waiting.
+ * - `targetMissing`: no such message of the requester in this thread and
+ *   organization (another user's, another thread's, or one already dropped).
+ * - `targetNotUserMessage`: the message is not a user message.
+ * - `turnRunning`: a turn of the thread still runs.
+ * - `historyChanged`: another turn changed the thread while the edit was
+ *   being saved.
+ */
+export const CHAT_MESSAGE_EDIT_ERROR_CODE = {
+  historyChanged: "chat_edit_history_changed",
+  targetMissing: "chat_edit_target_missing",
+  targetNotUserMessage: "chat_edit_target_not_user_message",
+  turnRunning: "chat_edit_turn_running",
+} as const;
+
+export type ChatMessageEditErrorCode =
+  (typeof CHAT_MESSAGE_EDIT_ERROR_CODE)[keyof typeof CHAT_MESSAGE_EDIT_ERROR_CODE];
+
+/**
  * A request needed an encrypted (password-protected) file's content: an
  * encrypted PDF or Office document cannot be read, extracted or sent to a
  * model. Shared so every client can explain it instead of a generic failure.
@@ -238,3 +261,6 @@ export const normalizeApiError = ({
     status,
   };
 };
+
+export const IDEMPOTENCY_IN_PROGRESS_CODE = "idempotency_in_progress" as const;
+export const IDEMPOTENCY_KEY_REUSED_CODE = "idempotency_key_reused" as const;

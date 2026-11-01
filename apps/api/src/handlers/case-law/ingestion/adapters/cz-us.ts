@@ -1,3 +1,5 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { panic, Result, TaggedError } from "better-result";
@@ -18,36 +20,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { czUsOpeningBench } from "@/api/handlers/case-law/ingestion/adapters/cz-us-bench";
 import {
   fetchNalus,
@@ -97,12 +69,42 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   CzechDeclinedDecisionJudge,
   DecisionJudgeInput,
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
   PrintedDecisionJudge,
   RawIngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
 } from "@/api/lib/legal-search/ingestion-types";
+import { reflowPrintedText } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -484,17 +486,18 @@ const fieldAboveAbstractMinimum = (field: TextField): TextField => {
 /**
  * Project one publisher cell to text without erasing its block breaks. NALUS
  * separates abstract paragraphs and headings with paired `<br>` elements;
- * Cheerio's `.text()` drops both and welds the blocks together.
+ * Cheerio's `.text()` drops both and welds the blocks together. The legal
+ * sentence of a typewriter-era decision has a `<br>` at every printed line,
+ * and those lines are joined back into its paragraphs.
  */
 const supplementText = ($: cheerio.CheerioAPI, selector: string): string => {
   const cells: string[] = [];
   $(selector).each((_, element) => {
     const cell = $(element).clone();
     cell.find("br").replaceWith("\n");
-    const text = visibleHtmlText(cell)
-      .replaceAll(/\r\n?/gu, "\n")
-      .split("\n")
-      .map((line) => line.trim())
+    const text = reflowPrintedText(
+      visibleHtmlText(cell).replaceAll(/\r\n?/gu, "\n").split("\n"),
+    )
       .join("\n")
       .replaceAll(/\n{3,}/gu, "\n\n")
       .trim();
@@ -669,8 +672,13 @@ const DETAIL_FIELD_BY_LABEL = new Map<string, NalusDetailFieldKey>(
  */
 const RECORD_CARD_SELECTOR = "table.recordCardTable";
 
-/** Repeats inside one value cell, as the court separates them. */
-const DETAIL_VALUE_SEPARATOR = /<br\s*\/?>/giu;
+/**
+ * Repeats inside one value cell, as the court separates them: line breaks
+ * between judges or petitioners, list items between the acts a decision
+ * touches. Taking a list's text whole would run one act's last provision
+ * into the next act's number (`§ 35 odst.2` + `20/1966 Sb.`).
+ */
+const DETAIL_VALUE_SEPARATOR = /<br\s*\/?>|<\/li\s*>/giu;
 
 const detailText = (text: string): string =>
   text.replaceAll(" ", " ").replace(/\s+/gu, " ").trim();
@@ -3316,7 +3324,11 @@ export const czUsAdapter = defineSourceAdapter({
             // Every closed availability day is accounted for, so there is
             // nothing to list and no request to spend. An unchanged cursor is
             // how this pipeline reads a source with nothing left.
-            return { decisions: [], nextCursor: makeCursor(state) };
+            return {
+              decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.NONE,
+              nextCursor: makeCursor(state),
+            };
           }
           state = rearmed;
         }
@@ -3331,6 +3343,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (state.page > 0 && error instanceof SearchPageDriftError) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor(restartSlice(state)),
             };
           }
@@ -3340,6 +3353,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (state.pass === CRAWL_PASS.VERIFY) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor(
                 afterUnconfirmedSlice(state, now, "listing-now-empty"),
               ),
@@ -3347,6 +3361,7 @@ export const czUsAdapter = defineSourceAdapter({
           }
           return {
             decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: makeCursor(nextSlice(state, now)),
           };
         }
@@ -3357,6 +3372,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (!sliceComplete) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor({
                 ...state,
                 page: state.page + 1,
@@ -3367,6 +3383,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (digest !== state.expectedDigest) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor(
                 afterUnconfirmedSlice(state, now, "digest-mismatch"),
               ),
@@ -3374,6 +3391,7 @@ export const czUsAdapter = defineSourceAdapter({
           }
           return {
             decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: makeCursor(nextSlice(state, now)),
           };
         }
@@ -3387,6 +3405,7 @@ export const czUsAdapter = defineSourceAdapter({
           return {
             decisions,
             itemBuildFailures,
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: makeCursor({
               ...state,
               pass: CRAWL_PASS.VERIFY,
@@ -3400,6 +3419,7 @@ export const czUsAdapter = defineSourceAdapter({
         return {
           decisions,
           itemBuildFailures,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: makeCursor({
             ...state,
             page: state.page + 1,

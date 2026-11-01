@@ -10,6 +10,8 @@ import { and, asc, count, eq, isNull, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  type BrowserExtensionCapability,
   CHAT_DECISION_HREF_TEMPLATE,
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
   CHAT_THREAD_PLACEHOLDER_TITLE,
@@ -63,6 +65,7 @@ import { corpusStorageMode } from "@/api/env-base";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 import type { StatuteProvisionSelection } from "@/api/handlers/chat/active-statute-selection.logic";
+import { browserExtensionPolicy } from "@/api/handlers/chat/browser-extension-capability";
 import {
   CHAT_REVISION_CONTEXT_MAX_EDITS,
   readChatRevisionContextChanges,
@@ -92,6 +95,8 @@ import {
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import { skillBindingAllows } from "@/api/lib/agent-skills/binding";
+import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import type { RequestedSkills } from "@/api/lib/agent-skills/requested-skills";
@@ -112,6 +117,7 @@ import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import {
   chatCacheStablePrefixSchema,
   chatOrganizationPromptLayerSchema,
@@ -143,6 +149,7 @@ import {
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import { readCorpusPayloadOrFallback } from "@/api/lib/legal-search/corpus-storage";
 import { canonicalLegislationTextSource } from "@/api/lib/legal-search/legislation-canonical-source";
+import { legislationDocumentStatusToday } from "@/api/lib/legal-search/legislation-current-version";
 import {
   publishedLegislationDocumentFor,
   redistributableLegislationVersionFor,
@@ -154,6 +161,7 @@ import {
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import type { LegislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   sanitizeForPrompt,
   sanitizePromptLine,
@@ -166,6 +174,10 @@ export type {
   ChatCacheStablePrefix,
   ChatSafePromptLayers,
 } from "@/api/lib/chat/chat-prompt-layers";
+
+export const browserExtensionPromptLine = (
+  extension: BrowserExtensionCapability,
+): string => browserExtensionPolicy(extension).promptLine;
 
 const TITLE_MAX_LENGTH = 80;
 const ACTIVE_DECISION_MAX_CHARS = 12_000;
@@ -668,6 +680,7 @@ export const buildChatPromptCacheKey = (
 };
 
 type BuildChatSystemPromptProps = {
+  browserExtension?: BrowserExtensionCapability | undefined;
   caseLawDb?: CaseLawPublicReadDb;
   featureAccessContext?: McpFeatureAccessContext | undefined;
   activeDecision: IncomingActiveDecision | undefined;
@@ -708,6 +721,8 @@ type BuildChatSystemPromptProps = {
    * or as the thread's active skill.
    */
   requestedSkillNames: ReadonlySet<string>;
+  /** Where this turn may use a bound skill (`resolveSkillBindingScope`). */
+  skillBindingScope: SkillBindingScope;
   threadId: SafeId<"chatThread">;
   /**
    * The conditionally-registered tools handed to the model this turn.
@@ -720,6 +735,11 @@ type BuildChatSystemPromptProps = {
   organizationId?: SafeId<"organization"> | undefined;
   userId?: SafeId<"user"> | undefined;
 };
+
+const DEFAULT_BROWSER_EXTENSION = {
+  protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+  status: "unsupported-browser",
+} satisfies BrowserExtensionCapability;
 
 const resolveActiveFilePromptContext = async ({
   activeFile,
@@ -840,19 +860,31 @@ const resolveActiveFilePromptContext = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(readResult)) {
-    captureError(readResult.error, {
-      fieldId: fileFieldId,
-      workspaceId,
-    });
+    captureError(
+      readResult.error,
+      handlerErrorContext(
+        "chat.resolveActiveFilePromptContext.readResult_error",
+        {
+          fieldId: fileFieldId,
+          workspaceId,
+        },
+      ),
+    );
     return Result.ok(promptBase);
   }
   const previewResult = await emailToPreview(readResult.value, emailMimeType);
   if (Result.isError(previewResult)) {
-    captureError(previewResult.error, {
-      fieldId: fileFieldId,
-      mimeType: emailMimeType,
-      workspaceId,
-    });
+    captureError(
+      previewResult.error,
+      handlerErrorContext(
+        "chat.resolveActiveFilePromptContext.previewResult_error",
+        {
+          fieldId: fileFieldId,
+          mimeType: emailMimeType,
+          workspaceId,
+        },
+      ),
+    );
     return Result.ok(promptBase);
   }
 
@@ -893,7 +925,30 @@ const buildOwnedActiveTemplateSection = async ({
   );
 };
 
+/**
+ * The thread's active skill was resolved before the turn's matters were
+ * known; a skill bound to another matter or client does not run here.
+ */
+const requireActiveSkillInBindingScope = ({
+  activeSkillContext,
+  skillBindingScope,
+}: {
+  activeSkillContext: ActiveChatSkillContext | null;
+  skillBindingScope: SkillBindingScope;
+}): Result<void, HandlerError<403>> =>
+  activeSkillContext === null ||
+  skillBindingAllows(skillBindingScope, activeSkillContext.binding)
+    ? Result.ok(undefined)
+    : Result.err(
+        new HandlerError({
+          status: 403,
+          message:
+            "The active skill is bound to another matter or client and cannot be used in this conversation.",
+        }),
+      );
+
 export const buildChatSystemPromptParts = async ({
+  browserExtension = DEFAULT_BROWSER_EXTENSION,
   caseLawDb = caseLawPublicReadDb,
   featureAccessContext,
   activeDecision,
@@ -912,6 +967,7 @@ export const buildChatSystemPromptParts = async ({
   safeDb,
   messages,
   requestedSkillNames,
+  skillBindingScope,
   threadId,
   toolAvailability,
   userContext,
@@ -921,10 +977,15 @@ export const buildChatSystemPromptParts = async ({
   Result<ChatSystemPromptParts, HandlerError<403 | 404 | 500> | SafeDbError>
 > =>
   await Result.gen(async function* () {
+    yield* requireActiveSkillInBindingScope({
+      activeSkillContext,
+      skillBindingScope,
+    });
     const listedSkills =
       organizationId && userId
         ? yield* Result.await(
             listAvailableChatSkillMetadata({
+              bindingScope: skillBindingScope,
               organizationId,
               safeDb,
               userId,
@@ -1071,6 +1132,7 @@ export const buildChatSystemPromptParts = async ({
     const revisionNoteSection = buildChatRevisionNoteSection(revisionChanges);
 
     const appendedUntrusted = [
+      browserExtensionPromptLine(browserExtension),
       decisionSection.prompt,
       statuteSection,
       externalSection,
@@ -2146,10 +2208,13 @@ const readActiveDecisionAst = async (row: ActiveDecisionAstPointers) => {
       raised,
     );
   }
-  captureError(raised, {
-    decisionId: row.id,
-    step: ACTIVE_DECISION_AST_READ_STEP,
-  });
+  captureError(
+    raised,
+    handlerErrorContext("chat.readActiveDecisionAst.raised", {
+      decisionId: row.id,
+      step: ACTIVE_DECISION_AST_READ_STEP,
+    }),
+  );
   return null;
 };
 
@@ -2320,6 +2385,22 @@ export const buildActiveDecisionSection = async ({
       }),
     );
 
+    const withdrawal = yield* Result.await(
+      Result.tryPromise(async () =>
+        readWithdrawnCopyProjection({
+          values: null,
+          decisionIds: [activeDecision.decisionId],
+          caseLawDb,
+        }),
+      ),
+    );
+    const marker = withdrawal.marker(null, activeDecision.decisionId);
+    if (marker !== null) {
+      return Result.ok({
+        prompt: marker,
+        passageNumbers: NO_DECISION_PASSAGE_NUMBERS,
+      });
+    }
     if (decision === null) {
       return Result.ok(NO_ACTIVE_DECISION_SECTION);
     }
@@ -2647,7 +2728,7 @@ export const buildActiveStatuteSection = async ({
                   documentType: legislationDocuments.documentType,
                   eli: legislationDocuments.eli,
                   language: legislationDocuments.language,
-                  status: legislationDocuments.status,
+                  status: legislationDocumentStatusToday,
                   title: legislationDocuments.title,
                   versionValidFrom: legislationDocuments.versionValidFrom,
                   versionValidTo: legislationDocuments.versionValidTo,

@@ -2,13 +2,16 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { ConvertibleViewLayoutType } from "@stll/api-contract";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
-import type { ViewLayout, ViewTemplateProperty } from "@/lib/types";
+import type { ViewLayout } from "@/lib/types";
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 import { viewsKeys, viewsOptions } from "@/lib/workspaces/queries/views";
 import { isWorkspaceViewAvailable } from "@/lib/workspaces/queries/views.logic";
@@ -20,23 +23,25 @@ import {
   viewOrderCache,
 } from "./views.logic";
 
-type CreateViewVars = {
-  id: string;
-  name: string;
-  layout: ViewLayout;
-  templateProperties?: ViewTemplateProperty[];
-};
+type CreateViewVars = Omit<
+  Parameters<ReturnType<typeof api.views>["put"]>[0],
+  "id"
+> & { id: string };
 
 export const useCreateView = (workspaceId: string) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIdempotentMutation({
+    idempotencyScope: workspaceId,
     mutationFn: async (body: CreateViewVars) => {
       const response = await api
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({ ...body, id: toSafeId<"workspaceView">(body.id) });
-      return unwrapEden(response);
+        .put({
+          ...body,
+          id: toSafeId<"workspaceView">(body.id),
+        });
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, variables) => {
       await Promise.all([
@@ -56,7 +61,11 @@ export const useCreateView = (workspaceId: string) => {
       ]);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateView:failure",
+        scope: { type: "handler", handlerId: "useCreateView:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -89,7 +98,7 @@ export const useUpdateView = (workspaceId: string) => {
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .view({ viewId: toSafeId<"workspaceView">(viewId) })
         .post(body);
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onMutate: async ({ viewId, ...body }) => {
       await queryClient.cancelQueries({ queryKey: localizedKey });
@@ -123,7 +132,11 @@ export const useUpdateView = (workspaceId: string) => {
       if (context?.previousViews) {
         queryClient.setQueryData(localizedKey, context.previousViews);
       }
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateView:failure",
+        scope: { type: "handler", handlerId: "useUpdateView:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({
@@ -155,7 +168,7 @@ export const useConvertView = (workspaceId: string) => {
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .view({ viewId: toSafeId<"workspaceView">(viewId) })
         .convert.post({ targetType });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_result, { viewId }) => {
       // A find belongs to the table layout: no other layout sends it or shows
@@ -167,7 +180,11 @@ export const useConvertView = (workspaceId: string) => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useConvertView:failure",
+        scope: { type: "handler", handlerId: "useConvertView:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -191,13 +208,17 @@ export const useReorderViews = (workspaceId: string) => {
         .reorder.post({
           viewIds: viewIds.map((viewId) => toSafeId<"workspaceView">(viewId)),
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onMutate: async ({ viewIds }) =>
       readQueryResult(await cache.apply(viewIds)),
     onError: (error, _variables, context) => {
       cache.restore(context);
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useReorderViews:failure",
+        scope: { type: "handler", handlerId: "useReorderViews:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
     onSettled: cache.settle,
   });
@@ -224,13 +245,17 @@ export const useDeleteView = (workspaceId: string) => {
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .view({ viewId: toSafeId<"workspaceView">(viewId) })
         .delete();
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async () => {
       await invalidateViewDerivedQueries({ queryClient, workspaceId });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteView:failure",
+        scope: { type: "handler", handlerId: "useDeleteView:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

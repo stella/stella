@@ -9,7 +9,6 @@ import {
   test,
 } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { Temporal } from "@stll/time";
 
@@ -43,6 +42,7 @@ import listTimers from "@/api/handlers/time-timers/list";
 import pauseTimer from "@/api/handlers/time-timers/pause";
 import resumeTimer from "@/api/handlers/time-timers/resume";
 import updateTimer from "@/api/handlers/time-timers/update";
+import { HttpStatusResponse } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   AUDIT_ACTION,
@@ -60,6 +60,7 @@ import {
 } from "@/api/lib/permission-authorization";
 import type { CredentialAuthority } from "@/api/lib/permission-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import {
@@ -117,6 +118,10 @@ beforeAll(async () => {
     name: "Time firm",
     slug: `time-firm-${organizationId}`,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(testDb, {
+    organizationId,
+    now: new Date(),
   });
 
   await testDb.insert(organizationSettings).values({
@@ -292,7 +297,7 @@ type AdminStopCtx = Parameters<typeof adminStopTimer.handler>[0];
 
 /** The failure status of a handler result, or null when it succeeded. */
 const statusOf = (result: unknown): number | null =>
-  result instanceof ElysiaCustomStatusResponse ? Number(result.code) : null;
+  result instanceof HttpStatusResponse ? result.code : null;
 
 // ── Per-entry operations ───────────────────────────────
 

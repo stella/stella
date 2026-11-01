@@ -66,7 +66,7 @@ type TableRowSelectionLayout = {
 };
 
 /** How the rows are ordered, and how a header changes that. */
-type TableSortingLayout = {
+export type TableSortingLayout = {
   sorts: SortingState;
   onChange: (sorts: SortingState) => void;
 };

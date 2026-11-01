@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { organizationSettings } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -12,8 +12,8 @@ import {
   webSearchKeyColumns,
 } from "@/api/lib/web-search/keys";
 
-const deleteWebSearchKeyBody = t.Object({
-  kind: t.UnionEnum(WEB_SEARCH_KEY_KINDS),
+const deleteWebSearchKeyBody = v.object({
+  kind: v.picklist(WEB_SEARCH_KEY_KINDS),
 });
 
 const config = {

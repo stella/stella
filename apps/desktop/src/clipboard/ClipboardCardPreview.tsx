@@ -8,11 +8,13 @@ import {
   clipboardSearchPreviewText,
   highlightClipboardText,
 } from "./clipboard-logic";
-import type { ClipboardItem } from "./clipboard-types";
+import type { ClipboardCopyFormat, ClipboardItem } from "./clipboard-types";
 import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import type { ClipboardImagePreviewStatus } from "./ClipboardImagePreview";
 
 type ClipboardCardPreviewProps = {
+  /** "plainText" shows how a formatted clip pastes without its formatting. */
+  format: ClipboardCopyFormat;
   imagePreviewRetryToken: number;
   item: ClipboardItem;
   onImagePreviewStatusChange: (status: ClipboardImagePreviewStatus) => void;
@@ -20,6 +22,7 @@ type ClipboardCardPreviewProps = {
 };
 
 export const ClipboardCardPreview = ({
+  format,
   imagePreviewRetryToken,
   item,
   onImagePreviewStatusChange,
@@ -39,7 +42,8 @@ export const ClipboardCardPreview = ({
       </div>
     );
   }
-  const rendersHtml = item.type === "formattedText" && !query;
+  const rendersHtml =
+    item.type === "formattedText" && format === "original" && !query;
   const previewClassName = cn(
     "text-foreground line-clamp-8 text-sm leading-5 text-pretty wrap-break-word",
     // HTML collapses its source whitespace; only plain text (and <pre>) keeps it.

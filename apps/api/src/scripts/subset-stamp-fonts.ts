@@ -27,9 +27,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 import { hashArtifactBytes as sha256Hex } from "./artifact-content-hash";
 

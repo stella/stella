@@ -48,6 +48,7 @@ import {
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
 import { searchIndexUnavailableError } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import { requestBoundedTimeoutMs } from "@/api/lib/load/request-latency-budget";
 
 /**
  * The client answers a failed search with a typed `CorpusIndexError` so its
@@ -69,6 +70,7 @@ const corpusIndexSearchFailure = (error: CorpusIndexError): HandlerError =>
   isCorpusIndexUnavailable(error)
     ? searchIndexUnavailableError(error)
     : new HandlerError({
+        code: "internal_error",
         status:
           error.status === undefined ||
           error.status === 429 ||
@@ -201,6 +203,7 @@ type CorpusIndexSearchPageInput<TContext> = {
   /** Caller-owned counters join this page's counts to the request's existing observation. */
   hitDispositions?: CorpusHitDispositionCounter | undefined;
   observer: RegistryRequestObservation;
+  signal?: AbortSignal | undefined;
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
@@ -461,6 +464,7 @@ const passageClause = (hit: CorpusIndexHit): string | null => {
 type ReadPageSnippetsOptions = {
   hitDispositions: CorpusHitDispositionCounter;
   observer: RegistryRequestObservation;
+  signal?: AbortSignal | undefined;
   /** Scan-selected passages and document fallbacks, both revision-filtered. */
   clauses: readonly { id: string; passage: string | null; document: string }[];
   cluster: QuickwitCluster;
@@ -485,6 +489,7 @@ type PageSnippets = {
 const readPageSnippets = async ({
   hitDispositions,
   observer,
+  signal,
   clauses,
   cluster,
   extractId,
@@ -501,7 +506,8 @@ const readPageSnippets = async ({
   }
 
   const startedAt = performance.now();
-  const deadline = startedAt + CORPUS_INDEX_SEARCH_TIMEOUT_MS;
+  const deadline =
+    startedAt + requestBoundedTimeoutMs(CORPUS_INDEX_SEARCH_TIMEOUT_MS);
   const search = async (clause: string, maxHits: number) => {
     const remainingMs = deadline - performance.now();
     const result =
@@ -515,6 +521,7 @@ const readPageSnippets = async ({
           )
         : await getCorpusIndexClient(cluster).search({
             observer,
+            signal,
             indexId,
             query: `(${query}) AND (${clause})`,
             maxHits,
@@ -681,6 +688,7 @@ type ScanRound = {
 
 type ReadScanRoundOptions = {
   observer: RegistryRequestObservation;
+  signal?: AbortSignal | undefined;
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
@@ -697,6 +705,7 @@ type ReadScanRoundOptions = {
  */
 const readScanRound = async ({
   observer,
+  signal,
   cluster,
   indexId,
   query,
@@ -709,6 +718,7 @@ const readScanRound = async ({
     case "native": {
       const result = await getCorpusIndexClient(cluster).search({
         observer,
+        signal,
         indexId,
         query,
         maxHits,
@@ -730,6 +740,7 @@ const readScanRound = async ({
       }
       const result = await readScoredScanRound({
         observer,
+        signal,
         cluster,
         indexId,
         query,
@@ -781,6 +792,7 @@ const scanScoreRecorder = (bestScoreById: ReadonlyMap<string, number>) => {
 
 type ReadScoredScanRoundOptions = {
   observer: RegistryRequestObservation;
+  signal?: AbortSignal | undefined;
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
@@ -794,6 +806,7 @@ type ReadScoredScanRoundOptions = {
  */
 const readScoredScanRound = async ({
   observer,
+  signal,
   cluster,
   indexId,
   query,
@@ -802,6 +815,7 @@ const readScoredScanRound = async ({
 }: ReadScoredScanRoundOptions): Promise<CorpusIndexScoredSearchResponse> => {
   const result = await getCorpusIndexClient(cluster).scoredSearch({
     observer,
+    signal,
     indexId,
     query,
     from,
@@ -1074,6 +1088,7 @@ const appliedPassages = () => {
 const readWindowPage = async <TContext>({
   hitDispositions,
   observer,
+  signal,
   cluster,
   indexId,
   query,
@@ -1157,6 +1172,7 @@ const readWindowPage = async <TContext>({
     const roundStartedAt = performance.now();
     const round = await readScanRound({
       observer,
+      signal,
       cluster,
       indexId,
       query,
@@ -1249,6 +1265,7 @@ const readWindowPage = async <TContext>({
   const snippets = await readPageSnippets({
     hitDispositions,
     observer,
+    signal,
     clauses: pageRevisionClauses({
       pageRanked,
       revisionById: ranking.revisionById,
@@ -1383,6 +1400,7 @@ const readOffsetChainPage = async <TContext>(
   const snippets = await readPageSnippets({
     hitDispositions: options.hitDispositions,
     observer: options.observer,
+    signal: options.signal,
     clauses: pageRevisionClauses({
       pageRanked,
       revisionById,
@@ -1476,6 +1494,7 @@ const readBm25SearchPage = async <TContext>(
   const {
     hitDispositions,
     observer,
+    signal,
     cluster,
     indexId,
     query,
@@ -1500,6 +1519,7 @@ const readBm25SearchPage = async <TContext>(
   const startedAt = performance.now();
   const round = await readScoredScanRound({
     observer,
+    signal,
     cluster,
     indexId,
     query,
@@ -1603,6 +1623,7 @@ const readBm25SearchPage = async <TContext>(
   const snippets = await readPageSnippets({
     hitDispositions,
     observer,
+    signal,
     clauses: pageRevisionClauses({
       pageRanked,
       revisionById: ranking.revisionById,

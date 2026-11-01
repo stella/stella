@@ -4,7 +4,7 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+import { parseSync } from "oxc-parser";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -13,6 +13,7 @@ import {
   type NoLlmsTxtExclusion,
 } from "../.claude/mcp/doc-sources";
 import { PENDING_CONTRACT_MIGRATIONS } from "../apps/api/src/lib/db/pending-contract-migrations/registry";
+import { type Comment, walk } from "../packages/scripts/src/syntax-tree.ts";
 import {
   readReleaseAgeExceptions,
   readTemporaryExcludes,
@@ -25,6 +26,11 @@ import {
   REGISTRY_FILE as FLAKY_TEST_QUARANTINE_FILE,
   splitTestId,
 } from "./flaky-test-quarantine";
+import {
+  GUARD_ROLLOUTS,
+  type GuardRollout,
+  guardRolloutSource,
+} from "./guard-rollout-policy.ts";
 import { parseLedger } from "./suppression-waivers";
 
 export const DAY_MS = 86_400_000;
@@ -55,6 +61,8 @@ export const RECHECK_INSTRUCTIONS = {
   "dependency-audit":
     "Re-run the dependency audit, check patched releases and dependency reachability; remove the acceptance.",
   "quarantined-test": "Run the quarantined test without its skip.",
+  "guard-rollout":
+    "Run the full guard and remove its temporary changed-lines scope.",
   "flaky-test-quarantine":
     "Run the test without its quarantine entry, fix its flake, and remove the entry.",
   "suppression-waiver":
@@ -110,6 +118,7 @@ type CollectWaiversOptions = {
   bunfigs: readonly string[];
   releaseAgeSources: Readonly<Record<string, string>>;
   quarantineSources?: Readonly<Record<string, string>>;
+  guardRollouts?: readonly GuardRollout[];
   flakyTestQuarantines?: readonly QuarantineEntry[];
   pendingContractMigrations?: readonly {
     name: string;
@@ -124,6 +133,7 @@ export const collectWaivers = ({
   bunfigs,
   releaseAgeSources,
   quarantineSources = {},
+  guardRollouts = [],
   flakyTestQuarantines = [],
   pendingContractMigrations = [],
 }: CollectWaiversOptions): DatedWaiver[] => {
@@ -243,6 +253,23 @@ export const collectWaivers = ({
     });
   }
   entries.push(...readTestQuarantines(quarantineSources));
+  for (const rollout of guardRollouts) {
+    if (rollout.type !== "changed-lines") {
+      continue;
+    }
+    const source = guardRolloutSource(rollout.id);
+    entries.push({
+      source,
+      line: sourceLine(read(source), rollout.id),
+      id: rollout.id,
+      kind: "guard-rollout",
+      expiresAt: rollout.expiresAt,
+      probe: {
+        command: ["env", "STELLA_GUARD_SCOPE=all", ...rollout.check],
+        attempts: TEST_ATTEMPTS,
+      },
+    });
+  }
   for (const entry of flakyTestQuarantines) {
     const identity =
       splitTestId(entry.id) ??
@@ -322,7 +349,8 @@ export const waiverWarnings = (
 // elapsed flaky-test quarantine is enforced on main by the scheduled
 // flaky-test-quarantine workflow, which fails naming its owner: neither is a defect
 // of whichever change is under review, so pull requests and merge groups only
-// annotate them. Every other elapsed waiver, including a dated test quarantine
+// annotate them. Dependency acceptance dates warn unless their source changes.
+// Every other elapsed waiver, including a dated test quarantine
 // that still skips its test, keeps failing the gate.
 export const EXPIRY_AT_CHANGE_GATE = {
   "no-llms-txt": "fail",
@@ -330,6 +358,7 @@ export const EXPIRY_AT_CHANGE_GATE = {
   "release-age-exception": "fail",
   "dependency-audit": "fail",
   "quarantined-test": "fail",
+  "guard-rollout": "fail",
   "flaky-test-quarantine": "annotate",
   "suppression-waiver": "fail",
   "pending-contract-migration": "fail",
@@ -358,7 +387,8 @@ export const expiredWaiverAnnotations = (
  * `changedFiles`: an expiry fails it only when the change touches the file that
  * declares the waiver (adding, renewing or editing it, or the waived code a
  * test quarantine sits on). Time alone never fails an unrelated change; the
- * scheduled run on the default branch checks every waiver and alerts owners.
+ * scheduled run checks other waivers; dependency acceptance dates remain warnings
+ * until a change touches the acceptance file.
  */
 export const expiredWaiverFailures = (
   entries: readonly DatedWaiver[],
@@ -370,7 +400,9 @@ export const expiredWaiverFailures = (
       (entry) =>
         EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail" &&
         isExpired(entry, now) &&
-        (changedFiles === undefined || changedFiles.has(entry.source)),
+        (entry.kind === "dependency-audit"
+          ? changedFiles?.has(entry.source) === true
+          : changedFiles === undefined || changedFiles.has(entry.source)),
     )
     .map(
       (entry) =>
@@ -393,8 +425,9 @@ export const dueWaiverWarnings = (
       (entry) =>
         !isExpired(entry, now) ||
         (EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail" &&
-          changedFiles !== undefined &&
-          !changedFiles.has(entry.source)),
+          (entry.kind === "dependency-audit"
+            ? changedFiles?.has(entry.source) !== true
+            : changedFiles !== undefined && !changedFiles.has(entry.source))),
     ),
     now,
   );
@@ -413,109 +446,119 @@ const testProbeCommand = ({
     : ["bun", "test", file, "-t", pattern];
 };
 
+// Where the whitespace and comments before `offset` begin: the end of the
+// previous token.
+const leadingTriviaStart = (
+  contents: string,
+  comments: readonly Comment[],
+  offset: number,
+): number => {
+  const commentStartByEnd = new Map(
+    comments.map((comment) => [comment.end, comment.start]),
+  );
+  let start = offset;
+  for (;;) {
+    while (start > 0 && /\s/u.test(contents.charAt(start - 1))) {
+      start -= 1;
+    }
+    const commentStart = commentStartByEnd.get(start);
+    if (commentStart === undefined) {
+      return start;
+    }
+    start = commentStart;
+  }
+};
+
 // A dated test quarantine is an adjacent comment on a literal test.skip/it.skip
 // call. The inventory guard blocks at expiry even while the source still skips.
-export const readTestQuarantines = (
-  sources: Readonly<Record<string, string>>,
+const readFileQuarantines = (
+  source: string,
+  contents: string,
 ): DatedWaiver[] => {
   const entries: DatedWaiver[] = [];
-  for (const [source, contents] of Object.entries(sources)) {
-    const ast = ts.createSourceFile(
-      source,
-      contents,
-      ts.ScriptTarget.Latest,
-      true,
+  // Syntax errors are read as data: only a file with markers must parse.
+  const parsed = parseSync(source, contents);
+  const consumed = new Set<number>();
+  const markers = new Map<number, string>();
+  for (const comment of parsed.comments) {
+    const match = /test-quarantine-expires:\s*(\S+)/u.exec(
+      contents.slice(comment.start, comment.end),
     );
-    const consumed = new Set<number>();
-    const markers = new Map<number, string>();
-    const recordedComments = new Set<number>();
-    const recordComments = (
-      ranges: readonly ts.CommentRange[] | undefined,
-    ): void => {
-      for (const range of ranges ?? []) {
-        if (recordedComments.has(range.pos)) {
-          continue;
-        }
-        recordedComments.add(range.pos);
-        const match = /test-quarantine-expires:\s*(\S+)/u.exec(
-          contents.slice(range.pos, range.end),
-        );
-        if (match) {
-          markers.set(range.pos, match.at(1) ?? "");
-        }
-      }
-    };
-    const collectComments = (node: ts.Node): void => {
-      recordComments(ts.getLeadingCommentRanges(contents, node.getFullStart()));
-      recordComments(ts.getTrailingCommentRanges(contents, node.getEnd()));
-      ts.forEachChild(node, collectComments);
-    };
-    collectComments(ast);
-    if (markers.size === 0) {
-      continue;
+    if (match) {
+      markers.set(comment.start, match.at(1) ?? "");
     }
-    const diagnostics =
-      ts.transpileModule(contents, {
-        fileName: source,
-        reportDiagnostics: true,
-      }).diagnostics ?? [];
+  }
+  if (markers.size === 0) {
+    return entries;
+  }
+  if (
+    parsed.errors.some((error) => {
+      // oxc-parser declares Severity as an ambient const enum of strings.
+      const severity: string = error.severity;
+      return severity === "Error";
+    })
+  ) {
+    panic(`Test quarantine owner does not parse: ${source}`);
+  }
+  walk(parsed.program, (node) => {
     if (
-      diagnostics.some(
-        ({ category }) => category === ts.DiagnosticCategory.Error,
+      node.type !== "CallExpression" ||
+      node.callee.type !== "MemberExpression" ||
+      node.callee.computed ||
+      node.callee.property.type !== "Identifier" ||
+      node.callee.property.name !== "skip" ||
+      !["test", "it"].includes(
+        contents.slice(node.callee.object.start, node.callee.object.end),
       )
     ) {
-      panic(`Test quarantine owner does not parse: ${source}`);
+      return;
     }
-    const visit = (node: ts.Node): void => {
-      if (
-        ts.isCallExpression(node) &&
-        ts.isPropertyAccessExpression(node.expression) &&
-        node.expression.name.text === "skip" &&
-        ["test", "it"].includes(node.expression.expression.getText(ast))
-      ) {
-        const markersHere = [...markers].filter(
-          ([offset]) =>
-            offset >= node.getFullStart() && offset < node.getStart(ast),
-        );
-        if (markersHere.length > 0) {
-          const marker = markersHere.at(0);
-          const title = node.arguments.at(0);
-          if (
-            markersHere.length !== 1 ||
-            !marker ||
-            !title ||
-            !ts.isStringLiteral(title)
-          ) {
-            panic(
-              `Test quarantine needs one literal test title and expiry: ${source}`,
-            );
-          }
-          const [offset, expiresAt] = marker;
-          expiryInstant(expiresAt);
-          consumed.add(offset);
-          entries.push({
-            source,
-            line:
-              ast.getLineAndCharacterOfPosition(node.getStart(ast)).line + 1,
-            id: title.text,
-            kind: "quarantined-test",
-            expiresAt,
-            probe: {
-              command: testProbeCommand({ file: source, title: title.text }),
-              attempts: TEST_ATTEMPTS,
-            },
-          });
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(ast);
-    if (consumed.size !== markers.size) {
-      panic(`Unowned dated test quarantine marker: ${source}`);
+    const fullStart = leadingTriviaStart(contents, parsed.comments, node.start);
+    const markersHere = [...markers].filter(
+      ([offset]) => offset >= fullStart && offset < node.start,
+    );
+    if (markersHere.length === 0) {
+      return;
     }
+    const marker = markersHere.at(0);
+    const title = node.arguments.at(0);
+    if (
+      markersHere.length !== 1 ||
+      !marker ||
+      title?.type !== "Literal" ||
+      typeof title.value !== "string"
+    ) {
+      panic(
+        `Test quarantine needs one literal test title and expiry: ${source}`,
+      );
+    }
+    const [offset, expiresAt] = marker;
+    expiryInstant(expiresAt);
+    consumed.add(offset);
+    entries.push({
+      source,
+      line: contents.slice(0, node.start).split("\n").length,
+      id: title.value,
+      kind: "quarantined-test",
+      expiresAt,
+      probe: {
+        command: testProbeCommand({ file: source, title: title.value }),
+        attempts: TEST_ATTEMPTS,
+      },
+    });
+  });
+  if (consumed.size !== markers.size) {
+    panic(`Unowned dated test quarantine marker: ${source}`);
   }
   return entries;
 };
+
+export const readTestQuarantines = (
+  sources: Readonly<Record<string, string>>,
+): DatedWaiver[] =>
+  Object.entries(sources).flatMap(([source, contents]) =>
+    readFileQuarantines(source, contents),
+  );
 
 // Expiry-bearing declarations in policy/config files and application/package
 // source enter the census. Ordinary timestamps and historical dates do not.
@@ -580,6 +623,7 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
     Object.fromEntries(policyFiles.map((file) => [file, read(file)])),
     new Set([
       DOC_SOURCE_FILE,
+      ...GUARD_ROLLOUTS.map(({ id }) => guardRolloutSource(id)),
       FLAKY_TEST_QUARANTINE_FILE,
       "scripts/suppression-waivers.ts",
       "scripts/suppression-waivers.json",
@@ -616,6 +660,7 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
   return collectWaivers({
     read,
     docs: DOC_SOURCE_EXCLUSIONS,
+    guardRollouts: GUARD_ROLLOUTS,
     audit,
     bunfigs: files,
     releaseAgeSources: configSources,

@@ -194,9 +194,7 @@ describe("API and CLI release contract", () => {
   test("release and pull-request smoke tests refuse corrupt history with pending SQL", async () => {
     const [releaseSmoke, migrationSmoke] = await Promise.all([
       readReleaseSmokeSource(),
-      Bun.file(
-        new URL("../.github/workflows/db-migrations.yml", import.meta.url),
-      ).text(),
+      Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text(),
     ]);
 
     for (const source of [releaseSmoke, migrationSmoke]) {
@@ -229,9 +227,7 @@ describe("API and CLI release contract", () => {
   test("release and migration smoke tests wait for scheduler initialization", async () => {
     const [releaseSmoke, migrationSmoke] = await Promise.all([
       readReleaseSmokeSource(),
-      Bun.file(
-        new URL("../.github/workflows/db-migrations.yml", import.meta.url),
-      ).text(),
+      Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text(),
     ]);
 
     expect(releaseSmoke).toContain('fetch("http://127.0.0.1:3001/live")');
@@ -299,7 +295,17 @@ describe("API and CLI release contract", () => {
       if (!isRecord(packageExports)) {
         throw new TypeError(`${packageName} exports is not an object`);
       }
-      for (const [subpath, target] of Object.entries(packageExports)) {
+      for (const [subpath, entry] of Object.entries(packageExports)) {
+        // A component with a React Native renderer pairs it with the web
+        // module under the `react-native` condition (scripts/publish-manifest.ts).
+        const target =
+          isRecord(entry) &&
+          Object.keys(entry).join(",") === "react-native,default" &&
+          typeof entry["default"] === "string" &&
+          entry["react-native"] ===
+            entry["default"].replace(/\.(tsx?)$/u, ".native.$1")
+            ? entry["default"]
+            : entry;
         expect(typeof target).toBe("string");
         if (typeof target !== "string") {
           throw new TypeError(`${packageName} has a non-string export target`);

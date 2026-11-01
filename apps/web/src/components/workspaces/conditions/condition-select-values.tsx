@@ -16,7 +16,8 @@ import { cn } from "@stll/ui/utils";
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
 import { normalizeOptionalArray } from "@/lib/arrays";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import type { PropertyFacetCounts } from "@/lib/workspaces/queries/property-facets";
 import { propertyFacetsOptions } from "@/lib/workspaces/queries/property-facets";
 
@@ -207,8 +208,8 @@ const usePropertyFacetCounts = ({
     }),
     enabled,
   });
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "usePropertyFacetCounts:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   return data;

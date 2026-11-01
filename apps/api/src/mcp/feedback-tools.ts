@@ -482,7 +482,10 @@ const handleSubmitFeedbackTool: McpToolHandler<
     },
   });
   if (Result.isError(submitted)) {
-    return internalFailureResult(submitted.error);
+    return internalFailureResult(
+      submitted.error,
+      "mcp.handleSubmitFeedbackTool.submitted_error",
+    );
   }
 
   const { deduplicated, deliveries, receipt, redactions, warning } =

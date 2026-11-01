@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { Elysia } from "elysia";
 
 import {
   apiScalingSurface,
@@ -11,12 +10,15 @@ import {
 
 describe("scaling coverage census", () => {
   test("a newly mounted GET or mutation requires a measurement or reason", () => {
-    const original = new Elysia({ prefix: "/v1" }).get("/rows", () => []);
-    const measured = apiScalingSurface(original.routes).reads;
-    const mutated = original
-      .get("/rows/:id", () => ({}))
-      .post("/rows", () => ({}));
-    const surface = apiScalingSurface(mutated.routes);
+    // Route table rows as the HTTP core lists them.
+    const original = [{ method: "GET", path: "/v1/rows" }];
+    const measured = apiScalingSurface(original).reads;
+    const mutated = [
+      ...original,
+      { method: "GET", path: "/v1/rows/:id" },
+      { method: "POST", path: "/v1/rows" },
+    ];
+    const surface = apiScalingSurface(mutated);
     expect(measured).toEqual(["GET /v1/rows"]);
     expect(
       scalingCoverageViolations({

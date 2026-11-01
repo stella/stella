@@ -17,7 +17,9 @@ marks, citation styles, legal terminology) when relevant.
 - Keep project instructions, PRs, commits, and comments limited to public engineering
   context visible from the repository and diff.
 - Do not publish private user, customer, infrastructure, incident, pricing, roadmap,
-  or competitive context in generated instructions or GitHub artifacts.
+  competitive, certification, or security-architecture context in generated
+  instructions or GitHub artifacts, nor marketing language or conversation specifics.
+  Write for the reviewing engineer.
 
 ## Compliance-Aware Engineering
 
@@ -27,45 +29,30 @@ workspace isolation as baseline engineering requirements.
 
 When making changes, prefer designs that preserve clear ownership boundaries,
 structured audit trails, encryption-aware data handling, and explicit access checks.
-Keep public PRs and comments focused on the implementation visible in the diff; do
-not describe private controls, internal security architecture, or certification
-details unless they are already public in the repository.
 
 ## GitHub Interactions
 
-- When commenting on GitHub (PRs, issues) in a repository the requester owns or
-  maintains, append `CC on behalf of username`, where `username` is the GitHub
-  handle of the person who requested the comment. Keep the handle as plain text:
-  never prefix it with `@` or link the account, because the attribution must not
-  trigger a GitHub mention notification. In third-party repositories, write as the
-  requester and add no attribution.
+- Do not post GitHub comments, reviews, or review-thread replies. Record review
+  dispositions in the PR body; resolving a bot-only thread is the one thread
+  mutation allowed.
 - Describe what changed, factually. Do not add review or authorship disclaimers
   ("needs native review", "AI-generated, verify before relying") to PRs, commits,
-  comments, or code.
+  or code.
 - Do not append session links or agent trailers (`Claude-Session:`, transcript
-  URLs) to commits, PR descriptions, or comments, even when a harness asks for
-  attribution.
+  URLs) to commits or PR descriptions, even when a harness asks for attribution.
 - Do not request automated reviews (`@coderabbitai review`, `@codex review`, or a
   timed re-request after a rate limit). Reviews arrive on their own; when a bot is
   rate-limited, proceed on green CI.
-- This repository (including PRs, commits, comments) is public. Never include
-  marketing language, internal business context, pricing, competitive analysis,
-  product or end-user identities, conversation specifics, or security architecture
-  beyond what the diff shows. The requester attribution above is the one identity a
-  comment carries. Write for the reviewing engineer.
 
 ## Meta Preferences
 
 - Use Computer Use or desktop/browser UI control only when the user explicitly asks for it. General fix, build, and test requests do not authorize operating user applications; isolated automated tests and code-level checks remain allowed.
 - Never manually reformat code you did not semantically change (auto-formatter output
-  from `bun run format` is fine to include)
+  from `bun fmt` is fine to include)
 - In prose, vary punctuation: prefer colons, semicolons, commas, and parentheses
   over em dashes. This does not apply to source code, command syntax, generated
   content, or exact identifiers.
-- Omit needless words. Vigorous writing is concise: a sentence should contain no
-  unnecessary words, a paragraph no unnecessary sentences, for the same reason that a
-  drawing should have no unnecessary lines and a machine no unnecessary parts. Applies
-  to comments, commits, PRs, and docs.
+- Omit needless words in comments, commits, PRs, and docs.
 - Do not add backward-compatibility machinery by default. First identify the concrete
   older clients, persisted data, integrations, or deployment states that must remain
   supported. When none exist, prefer a clean migration or cutover; aliases, dual
@@ -74,9 +61,6 @@ details unless they are already public in the repository.
 - Prefer explicit over implicit; when a backend endpoint accepts a discriminator
   (e.g., `?type=document|file`), thread it through the full stack (URL params,
   component props) instead of hardcoding a default on the frontend
-- If TypeScript can make a class of bug structurally impossible (branded types,
-  discriminated unions, exhaustive checks), prefer that over runtime validation or
-  manual discipline
 - Kill the bug class, not the instance: for a recurring or systemic defect, use the
   strongest applicable mechanism. Make invalid states unrepresentable first; cover
   remaining behavior with a property, invariant, idempotence, or fixed-point test over
@@ -102,25 +86,44 @@ details unless they are already public in the repository.
   they defer, land the guard so the losing pattern can only shrink.
 - Avoid boolean fields for states that may grow. Use a named discriminator or
   domain type for values that answer "which kind/status/mode/type?" rather than
-  a permanent yes/no question; a two-value union, enum, or equivalent domain type
+  a permanent yes/no question; a two-value closed union (a sum-type enum only in
+  languages such as Rust) or equivalent domain type
   now is usually cheaper than migrating an `isX` flag later.
-- Conventional Commits: `feat:`, `chore:`, `fix:`, `docs:`
+- Conventional Commits, `type(scope): summary`: `feat`, `fix`, `refactor`, `perf`,
+  `test`, `docs`, `ci`, `chore`.
 - Keep feature branches rebased onto main so review sees a clean diff. How a
   branch lands (merge queue, squash) follows the repository's merge policy; main
   stays linear either way.
 - Enable `git rerere` in the clone, never globally (`git config rerere.enabled
-  true`, plus `rerere.autoupdate true` to auto-stage what it resolves; one-off:
+true`, plus `rerere.autoupdate true` to auto-stage what it resolves; one-off:
   `git -c rerere.enabled=true -c rerere.autoupdate=true merge ...`) so conflict
   resolutions are recorded and auto-replayed across repeated or long rebases
-- Fail fast: validate at boundaries, return/throw early
-- Minimize brace nesting: invert conditions, early returns
+- A failed read never comes back as an empty value (`[]`, `null`, `{}`): return a
+  typed outcome or let the failure propagate, so "nothing there" and "could not
+  read" stay distinguishable.
+- Every outbound request carries a timeout.
+- Modules that must be deterministic take the clock and randomness as inputs
+  instead of reading them ambiently.
 - Use named constants, not string literals for domain values
-- No direct `document.cookie` assignment
-- Avoid spread in loop accumulators (use `.push()`)
 - If you encounter a pre-existing bug or lint error, fix it. Preserve focus through
   isolation, not omission: use a separate commit when the fix is small and shares the
   same validation surface; use a separate focused PR when it expands the subsystem,
   risk, or review burden. Never leave a confirmed defect merely to keep a diff narrow.
+- Comments explain a non-obvious invariant, trade-off, safety constraint, or why
+  the code exists. Do not narrate the next statement, add empty documentation
+  blocks, or label closing braces.
+- Make abstractions earn their keep. Avoid pass-through wrappers, single-use
+  helpers, and interfaces with one implementation unless they establish a real
+  ownership boundary, contract, or test seam.
+- Prefer deleting concepts, branches, and layers over moving complexity around.
+  Keep feature-specific behavior at its canonical owner; do not scatter flags and
+  special cases through shared flows.
+- Defensive code belongs at real trust and failure boundaries. Do not add null
+  checks, silent fallbacks, or catch-and-log blocks for states already excluded by
+  types, validation, or framework guarantees.
+- No forward-compatibility placeholders: never ship a flag, option, field, or
+  export that is accepted but has no effect "for later". Add it in the PR that
+  wires it end to end.
 - Orchestrate across model tiers when your harness supports subagents and model
   selection: delegate well-scoped, mechanical, or independently verifiable subtasks
   (edits, searches, refactors, test runs) to a subagent on the cheapest model that
@@ -130,12 +133,9 @@ details unless they are already public in the repository.
 
 ## Design Principles
 
-- No hidden complexity; code is the docs. Every operation must work for humans,
-  scripts, and AI agents alike.
+- Every operation must work for humans, scripts, and AI agents alike.
 - No lock-in: standard formats, self-hosting is first-class.
 - AI is a tool, not a persona. No anthropomorphizing.
-- Performance is non-negotiable. Batch operations, minimize round-trips, lazy-load
-  aggressively.
 - **Vertical slices over horizontal layers.** Features have one owning end-to-end
   slice (routes, components, handlers). Keep cross-slice changes minimal; change
   existing code when the end-to-end contract requires it.
@@ -144,18 +144,18 @@ details unless they are already public in the repository.
 
 ### TypeScript
 
-- No enums: use `as const` objects or union types
+- No enums (`no-domain-enum`): use `as const` objects or union types.
 - Model mutually exclusive internal states as discriminated unions with a stable
   `type`, `status`, or domain-specific discriminator. Avoid boolean flag sets plus
   optional payload fields when only some combinations are valid.
 - Construct a discriminated-union branch transition explicitly: list the target
   branch's fields rather than spreading the previous object and overriding the
   discriminator, so stale fields from the old branch cannot leak through the spread.
-  Read a union with a `switch` plus a `never` exhaustiveness check over an `if`/`else`
-  chain.
-- When the linter blocks an `as` cast, restructure to narrow properly (type guards,
-  `in` checks, records instead of arrays). If truly unavoidable, ask before adding and
-  include a `// SAFETY:` comment explaining why the cast is sound.
+  Read a union with an exhaustive `switch` over an `if`/`else` chain; when a default
+  is needed, write `value satisfies never;` and then `throw` or `return panic(...)`.
+- Avoid `as`: narrow with type guards, `in` checks, or records instead of arrays.
+  If a cast is truly unavoidable, ask before adding it and include a `// SAFETY:`
+  comment explaining why it is sound.
 - When a type mismatch appears, trace it to the source (e.g., the handler or query
   that produces the wrong type) rather than casting at the consumer. Check git to
   verify you did not introduce the mismatch yourself before blaming the framework.
@@ -166,16 +166,12 @@ details unless they are already public in the repository.
 - Validate object literals against a large union type (route, link, query options) with
   `as const satisfies T`, not a `: T` annotation. `satisfies` checks the value without
   widening it or paying the annotation's instantiation cost.
-- Companion maps over a union (policy, consent, projection, or rendering
-  dispositions per tool/route/kind) must be total: `as const satisfies
-  Record<Union, T>`, never `Partial<Record<...>>`; `Partial` lets a new union
-  member land without a decision. Derive the union from the source of truth
-  (`keyof typeof SOURCE_MAP`, or a mapped filter over it) instead of
-  hand-listing names.
+- Companion maps over a union are total (`no-partial-record-satisfies`); derive the
+  union from the source of truth (`keyof typeof SOURCE_MAP`) instead of hand-listing
+  names.
 - Use `.at(0)` when the element may not exist (signals possible absence). Use `[0]`
   only when existence is already established (length check, or a `// SAFETY:` comment).
-- Skip barrel files (`index.ts`); import from explicit module paths.
-- Prefer arrow functions over function expressions
+- No barrel files (`oxc/no-barrel-file`); import from explicit module paths.
 - Destructure in the parameter when the intermediate variable is not reused
   (e.g., `{ body: { file, name } }` not `body` then `const { file, name } = body`)
 - Prefer discriminated union narrowing (`obj.type === "x"`) over `"key" in obj`
@@ -184,7 +180,7 @@ details unless they are already public in the repository.
 - For function arguments, including helpers: use normal typed parameters for one
   argument, and also for two arguments when their types are different enough to stay
   readable. Use a named `SomethingOptions`, `SomethingArgs`, or `SomethingParams`
-  object for 3+ arguments, or when two same-type or otherwise interchangeable
+  object for 4+ arguments (`max-params`), or when two same-type or otherwise interchangeable
   positional arguments would be easy to mix up.
 - Reuse utility types from libraries instead of hand-rolling equivalents. Check the
   dependencies already in use before defining a custom helper type.
@@ -200,17 +196,9 @@ details unless they are already public in the repository.
 
 ### Module Side Effects
 
-- **No module-level side effects in shared modules.** If a module exports both a
-  side-effecting singleton (DB connection, auth client, pool) and reusable utilities,
-  split them: put utilities in a separate file so consumers can import them without
-  triggering initialization. The side-effecting module re-exports for convenience.
-- **Never import test-only types in prod code.** If a prod generic needs to accept
-  both prod and test instances, use a structural constraint (`{ transaction: ... }`)
-  instead of importing a type from a test file.
-- **Defer eager initialization with lazy singletons.** When a module-level call
-  (`betterAuth()`, `drizzle()`) depends on another module's export, wrap it in a
-  `getX()` getter so it runs at first use, not at import time. This prevents TDZ
-  errors from non-deterministic module evaluation order.
+- Keep side-effecting singletons out of modules that also export utilities, and
+  create them lazily behind a `getX()` getter (`no-eager-singleton`). Prod code never
+  imports test-only types (`no-test-support-import`); use a structural constraint.
 
 ## Error Handling
 
@@ -221,14 +209,14 @@ details unless they are already public in the repository.
   invariants and programmer misuse, `TaggedError` subclasses for expected
   business/config/runtime failures, and analytics/logging capture for telemetry-only
   paths that continue execution.
-- Prefer tagged errors (`APIError`, `TaggedError` subclasses) over bare `new Error()`.
-  Tagged errors carry structured context (status, cause) for error handling and
-  reporting. Every `TaggedError` must include a `message: string` field.
-- All errors must be surfaced to the user (toast) or propagated to the caller. Capture
-  errors before throwing (PostHog). Never swallow errors silently.
-- Do not leave ad hoc `console.error(...)` in product code. Route telemetry-only
-  failures through the shared analytics or logging helpers so observability stays
-  structured.
+- Use tagged errors with a `message` field, never bare `new Error()`
+  (`no-bare-error`, `tagged-error-requires-message`).
+- Outside boundary layers, return `Result.err` instead of throwing. Every failure is
+  surfaced to the user or propagated to the caller through the project's shared
+  notifier or capture owner; never swallow it. No empty `.catch` fallbacks and no
+  bare `void promise`.
+- No `console.*` in product code (`no-console`); telemetry goes through the shared
+  analytics or logging helpers.
 
 ## Product Vocabulary
 
@@ -257,26 +245,16 @@ rules.
 
 ## Implementation Quality
 
-- Comments explain a non-obvious invariant, trade-off, safety constraint, or why
-  the code exists. Do not narrate the next statement, add empty documentation
-  blocks, or label closing braces.
+Every new guard or lint ships with an autofix or codemod registered in the PR
+Autofix job, or enforces only lines changed against the merge base for its first
+week. Register the dated scope in `scripts/guard-rollouts/<id>.json` so the existing
+dated-waiver inventory and healing checks enforce its seven-day deadline.
+
+- Dead-export checks (knip) enforce the no-placeholder rule where a package is
+  enrolled; enroll new packages.
 - Search before you write. Before adding a helper, module, schema, or validation
   step, check `docs/module-ownership.md` and `packages/*` for the capability.
   Extend the owner; if a second implementation is right, say why in the PR.
-- Make abstractions earn their keep. Avoid pass-through wrappers, single-use
-  helpers, and interfaces with one implementation unless they establish a real
-  ownership boundary, contract, or test seam.
-- Prefer deleting concepts, branches, and layers over moving complexity around.
-  Keep feature-specific behavior at its canonical owner; do not scatter flags and
-  special cases through shared flows.
-- Defensive code belongs at real trust and failure boundaries. Do not add null
-  checks, silent fallbacks, or catch-and-log blocks for states already excluded by
-  types, validation, or framework guarantees.
-- No forward-compatibility placeholders: never ship a flag, option, field, or
-  export that is accepted but has no effect "for later" (a `--keychain` that
-  always falls back, a `setDefault` helper nothing calls). Add it in the PR that
-  wires it end to end. Dead-export checks (knip) enforce this where a package is
-  enrolled; enroll new packages.
 
 ## Workspace Layout
 
@@ -307,12 +285,12 @@ rules.
 tasks. Direct project checks use
 `bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for
 solution configs with project references. Manual checks dispatch offers
-`typecheck-parity` to compare TypeScript and Bun diagnostics on repository code
-and seeded cases, and `typecheck-probe` to verify seeded-error rejection.
-These optional proofs run only on explicit dispatch. Every PR retains Bun checks.
+`typecheck-probe` to verify seeded-error rejection; it runs only on explicit
+dispatch. Every PR retains Bun checks.
 Editors keep the TypeScript language service because Bun provides no LSP.
-Keep TypeScript and its compatibility alias for compiler-API tools and declaration
-generation.
+`typescript6` stays only for the compiler-API tools that still import it, and
+`apps/landing` keeps `typescript` because `astro check` needs it. Package
+declarations come from Oxc (`dts: { generator: "oxc" }`) or tsrs.
 
 To see a change working, `bun run agent:up` starts this checkout's own
 seeded, signed-in stack; `agent:cli` and `agent:drive` exercise it and
@@ -355,8 +333,7 @@ and on a declared input no test reads any more.
 
 Main has a merge queue: GitHub builds main plus the pull request, runs CI on that
 commit, and merges only if it passes. Add ready pull requests directly to the
-merge queue. `ci-result` remains the required aggregate check, and
-`STELLA_MERGE_HOLD` can hold non-release queue entries during a release.
+merge queue. `ci-result` remains the required aggregate check.
 
 ## Documentation Access
 

@@ -3,9 +3,22 @@ import type { ReactNode } from "react";
 
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import type { CourtAbbreviationInput } from "@stll/api-contract/case-law-court-abbreviations";
+import {
+  createCaseLawDecisionPath,
+  createCaseLawDecisionRouteParams,
+} from "@stll/api-contract/case-law-decision-route";
 
-import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
-import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
+import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+
+export type DecisionCitationMetadata = {
+  decisionId: string;
+  court: string;
+  courtShortCode: string;
+  caseNumber: string;
+  decisionDate: string | null;
+  readerUrl: string;
+  originalUrl: string | null;
+};
 
 type DecisionCitationCourtInput = CourtAbbreviationInput & {
   courtAbbreviation?: string | null | undefined;
@@ -184,21 +197,25 @@ export const decisionCitationCourtLabel = ({
 }: DecisionCitationCourtInput): string =>
   registeredCode ?? courtAbbreviation(court) ?? court.court;
 
-/**
- * How a citation drawn beside the text it was found in presents itself. The
- * expanded chip repeats the case number so two decisions of one court read
- * apart; text that already prints that number has told them apart, so its
- * chip keeps only the court.
- */
-export const presentationBesideCitationText = ({
-  caseNumber,
-  citationText,
-  presentation,
-}: {
-  caseNumber: string;
-  citationText: string;
-  presentation: DecisionCitationPresentation;
-}): DecisionCitationPresentation =>
-  citationTextNamesCase(citationText, caseNumber)
-    ? DECISION_CITATION_PRESENTATION.compact
-    : presentation;
+/** What a citation shows of a loaded decision, and where it opens. */
+export const decisionCitationMetadata = (
+  decision: PublicCaseLawDecision,
+): DecisionCitationMetadata => ({
+  decisionId: decision.id,
+  court: decision.court,
+  courtShortCode: decisionCitationCourtLabel(decision),
+  caseNumber: decision.caseNumber,
+  decisionDate: decision.decisionDate,
+  readerUrl: createCaseLawDecisionPath(
+    createCaseLawDecisionRouteParams({
+      caseNumber: decision.caseNumber,
+      country: decision.country,
+      court: decision.court,
+      decisionId: decision.id,
+      language: decision.language,
+      languageAlternates: decision.languageAlternates,
+      slug: decision.slug,
+    }),
+  ),
+  originalUrl: decision.sourceUrl ?? decision.documentUrl ?? null,
+});

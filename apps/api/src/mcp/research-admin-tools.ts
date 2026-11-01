@@ -1,8 +1,11 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { vApiDate } from "@stll/api-contract/api-date";
-import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import {
+  AUDIT_CHANGES_STATUS,
+  AUDIT_RESOURCE_TYPE,
+} from "@stll/api-contract/audit-log";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
 
@@ -201,7 +204,8 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Read the organization's audit trail (compliance view). Returns audit " +
     "entries newest first, each with its action, resource type and id, actor " +
-    "user id, matter, timestamp, and change detail. Filter by matter_id, " +
+    "user id, matter, timestamp, and change detail (null unless " +
+    'changesStatus is "visible"). Filter by matter_id, ' +
     "action, resource_type (with optional resource_id), user_id, and a " +
     "created-at range (from/to, ISO date-time). Paginate with limit and " +
     "cursor. Requires organization audit-log access.",
@@ -232,6 +236,21 @@ const LIST_AUDIT_LOG_OUTPUT_SCHEMA = v.strictObject({
       action: v.string(),
       resourceType: v.string(),
       resourceId: v.string(),
+      resource: v.variant("kind", [
+        v.strictObject({
+          kind: v.picklist(Object.values(AUDIT_RESOURCE_TYPE)),
+          id: v.string(),
+          name: v.nullable(v.string()),
+          available: v.boolean(),
+        }),
+        v.strictObject({
+          kind: v.literal("unknown"),
+          rawKind: v.string(),
+          id: v.string(),
+          name: v.null(),
+          available: v.literal(false),
+        }),
+      ]),
       changes: v.unknown(),
       changesStatus: v.picklist(Object.values(AUDIT_CHANGES_STATUS)),
     }),
@@ -514,7 +533,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
         catch: mapBoeError,
       });
       if (Result.isError(block)) {
-        return internalFailureResult(block.error);
+        return internalFailureResult(
+          block.error,
+          "mcp.handleSearchBoeLegislationTool.block_error",
+        );
       }
       return toolDataResult({ lawId, blockId, block: block.value });
     }
@@ -526,7 +548,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
         catch: mapBoeError,
       });
       if (Result.isError(related)) {
-        return internalFailureResult(related.error);
+        return internalFailureResult(
+          related.error,
+          "mcp.handleSearchBoeLegislationTool.related_error",
+        );
       }
       return toolDataResult(related.value);
     }
@@ -548,7 +573,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
       catch: mapBoeError,
     });
     if (Result.isError(detail)) {
-      return internalFailureResult(detail.error);
+      return internalFailureResult(
+        detail.error,
+        "mcp.handleSearchBoeLegislationTool.detail_error",
+      );
     }
     return toolDataResult(detail.value);
   }
@@ -585,7 +613,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
     catch: mapBoeError,
   });
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    return internalFailureResult(
+      result.error,
+      "mcp.handleSearchBoeLegislationTool.result_error",
+    );
   }
   // Publisher search has no held corpus identity. Its existing source URL
   // remains primary through the same citation resolver as corpus reads.
@@ -672,7 +703,10 @@ const handleListAuditLogTool: McpToolHandler<
     }),
   );
   if (Result.isError(page)) {
-    return internalFailureResult(page.error);
+    return internalFailureResult(
+      page.error,
+      "mcp.handleListAuditLogTool.page_error",
+    );
   }
   return toolDataResult(
     projectionPayload(LIST_AUDIT_LOG_OUTPUT_SCHEMA, {
@@ -685,6 +719,7 @@ const handleListAuditLogTool: McpToolHandler<
         action: item.action,
         resourceType: item.resourceType,
         resourceId: item.resourceId,
+        resource: item.resource,
         changes: item.changes,
         changesStatus: item.changesStatus,
       })),
@@ -782,7 +817,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
       ),
       time_locked_through_month: v.optional(
         v.pipe(
-          v.nullable(vApiDate),
+          v.nullable(apiDateSchema),
           v.description("Locked month-end date; null unlocks"),
         ),
       ),
@@ -921,7 +956,10 @@ const handleAddMember = async ({
     }),
   );
   if (Result.isError(added)) {
-    return internalFailureResult(added.error);
+    return internalFailureResult(
+      added.error,
+      "mcp.handleAddMember.added_error",
+    );
   }
   return toolDataResult(
     projectionPayload(ADD_MATTER_MEMBER_PROJECTION, {
@@ -965,7 +1003,10 @@ const handleRemoveMember = async ({
     }),
   );
   if (Result.isError(removed)) {
-    return internalFailureResult(removed.error);
+    return internalFailureResult(
+      removed.error,
+      "mcp.handleRemoveMember.removed_error",
+    );
   }
   return toolDataResult(
     projectionPayload(REMOVE_MATTER_MEMBER_PROJECTION, {
@@ -1053,7 +1094,10 @@ const handleUpdateOrganizationSettingsTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    return internalFailureResult(updated.error);
+    return internalFailureResult(
+      updated.error,
+      "mcp.handleUpdateOrganizationSettingsTool.updated_error",
+    );
   }
   return toolDataResult(
     projectionPayload(UPDATE_ORGANIZATION_SETTINGS_PROJECTION, updated.value),

@@ -1,6 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { parseTimeZoneId } from "@stll/time";
 
@@ -12,28 +21,7 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const sourceId = "019a0000-0000-7000-8000-000000000004";
 const requests: Request[] = [];
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      const url = new URL(request.url);
-      if (url.pathname.startsWith("/api/auth/")) {
-        return Response.json(null);
-      }
-      requests.push(request);
-      if (
-        request.method === "PATCH" &&
-        url.pathname.endsWith("/item-sources")
-      ) {
-        return Response.json({ id: sourceId });
-      }
-      throw new Error(
-        `Unexpected source action request: ${request.method} ${url.pathname}`,
-      );
-    },
-    { preconnect: () => undefined },
-  ),
-);
+let fetchBoundary: Mock<typeof globalThis.fetch>;
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { act, cleanup, fireEvent, render, waitFor } =
@@ -51,6 +39,8 @@ const principal = { organizationId: "org-fixture", userId: "user-fixture" };
 const workspaceId = "019a0000-0000-7000-8000-000000000001";
 const listId = "019a0000-0000-7000-8000-000000000002";
 const itemEntityId = "019a0000-0000-7000-8000-000000000003";
+const utcTimeZone =
+  parseTimeZoneId("UTC") ?? panic("UTC fixture must be a supported time zone");
 const settings = {
   declaredFeatureIds: ["legal-lists", "list-verification"],
   deploymentFeatures: { legalLists: true },
@@ -67,9 +57,8 @@ const settings = {
   timeEditWindowDays: 30,
   timeLockedThroughMonth: null,
   timeNarrativeRequired: false,
-  timeZone:
-    parseTimeZoneId("UTC") ??
-    panic("UTC fixture must be a supported time zone"),
+  timeZone: utcTimeZone,
+  primaryJurisdictionTimeZone: utcTimeZone,
   timeZoneSource: "organization",
 } satisfies OrganizationSettings;
 
@@ -120,7 +109,33 @@ const mountAction = ({
   return { mounted, client, invalidation, messages };
 };
 
+beforeEach(() => {
+  fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        const url = new URL(request.url);
+        if (url.pathname.startsWith("/api/auth/")) {
+          return Response.json(null);
+        }
+        requests.push(request);
+        if (
+          request.method === "PATCH" &&
+          url.pathname.endsWith("/item-sources")
+        ) {
+          return Response.json({ id: sourceId });
+        }
+        throw new Error(
+          `Unexpected source action request: ${request.method} ${url.pathname}`,
+        );
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+});
+
 afterEach(() => {
+  mock.restore();
   cleanup();
   requests.length = 0;
 });

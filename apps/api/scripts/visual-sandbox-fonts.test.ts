@@ -46,7 +46,7 @@ test("visual font faces embed the app's exact font bytes and preserve typography
       continue;
     }
     const bytes = Buffer.from(await Bun.file(fontPath).arrayBuffer());
-    expect(embedded).toContain(bytes.toString("base64"));
+    expect(embedded).toContain(bytes.toBase64());
     embeddedFonts += 1;
   }
   expect(embeddedFonts).toBe(selectedNames.size);

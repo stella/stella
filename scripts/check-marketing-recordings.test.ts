@@ -101,6 +101,7 @@ describe("marketing recording freshness", () => {
 
   test("does not let source verification hide capture-contract drift", () => {
     const recordedAtCommit = execFileSync("git", ["rev-parse", "HEAD"], {
+      maxBuffer: 2 ** 30,
       encoding: "utf-8",
     }).trim();
     const verdict = judgeEntry({
@@ -126,6 +127,7 @@ describe("marketing recording freshness", () => {
 
   test("does not fall back to the recording stamp after media drift", () => {
     const recordedAtCommit = execFileSync("git", ["rev-parse", "HEAD"], {
+      maxBuffer: 2 ** 30,
       encoding: "utf-8",
     }).trim();
     const verdict = judgeEntry({

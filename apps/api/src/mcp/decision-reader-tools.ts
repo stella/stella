@@ -65,6 +65,7 @@ const withheldReason = {
     "The source licence does not permit AI use of the full text. Open the decision in stella.",
 } as const;
 const metadataOf = ({ decision }: ReaderSource) => ({
+  extractionWarnings: decision.extractionWarnings,
   decisionId: decision.id,
   caseNumber: decision.caseNumber.slice(0, 256),
   caseNumberType: decision.caseNumberType,
@@ -189,7 +190,7 @@ const openTool: TypedMcpToolHandler<
     surface: "identity",
   });
   if (Result.isError(read)) {
-    return internalFailureResult(read.error);
+    return internalFailureResult(read.error, "mcp.openTool.read_error");
   }
   if (read.value === null) {
     return missing();
@@ -264,7 +265,7 @@ const blocksTool: TypedMcpToolHandler<
     surface: "identity",
   });
   if (Result.isError(read)) {
-    return internalFailureResult(read.error);
+    return internalFailureResult(read.error, "mcp.blocksTool.read_error");
   }
   if (read.value === null) {
     return missing();
@@ -344,7 +345,10 @@ const previewTool: TypedMcpToolHandler<
       }),
   );
   if (Result.isError(preview)) {
-    return internalFailureResult(preview.error);
+    return internalFailureResult(
+      preview.error,
+      "mcp.previewTool.preview_error",
+    );
   }
   if (!("blocks" in preview.value)) {
     return notFoundResult(

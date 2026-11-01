@@ -1,14 +1,15 @@
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   CaseLawCorpusDependencies,
   CaseLawJudgeDependencies,
 } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import type { SourceRetention } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { StatedEcliIdentity } from "@/api/lib/legal-search/adapter-manifest";
 import type { CorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 export const CONTENTION_RECONCILIATION = {
@@ -121,11 +122,22 @@ export const DECISION_REFRESH = {
 export type DecisionRefresh =
   (typeof DECISION_REFRESH)[keyof typeof DECISION_REFRESH];
 
+/** A fresh observation or the exact immutable object a stored parse consumed. */
+export type DecisionInputProvenance =
+  | { type: "observation" }
+  | {
+      type: "stored";
+      sourceRawS3Key: string;
+      decisionId: SafeId<"caseLawDecision">;
+    };
+
 export type ProcessDecisionAttemptOptions = {
+  inputProvenance: DecisionInputProvenance;
   signal?: AbortSignal;
   s3Policy?: S3CredentialRefreshOptions;
   metadataUrlSchema?: unknown;
   statedEcliIdentity: StatedEcliIdentity;
+  retention: SourceRetention;
   input: IngestionResult;
   judges: CaseLawJudgeDependencies;
   sourceId: SafeId<"caseLawSource">;
@@ -154,12 +166,14 @@ export type ProcessDecisionAttemptOptions = {
 
 export type ProcessDecisionOptions = Omit<
   ProcessDecisionAttemptOptions,
+  | "inputProvenance"
   | "contentionReconciliation"
   | "corpus"
   | "judges"
   | "refresh"
   | "metadataUrlSchema"
   | "statedEcliIdentity"
+  | "retention"
   | "sourceFingerprintVersion"
   | "sourceFingerprintFromStoredRaw"
 > & {

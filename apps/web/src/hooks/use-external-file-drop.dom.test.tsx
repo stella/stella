@@ -71,6 +71,7 @@ const DropTarget = ({
 }: Omit<HarnessProps, "translation">) => {
   const targetRef = useRef<HTMLDivElement>(null);
   const { isDropTarget } = useExternalFileDrop({
+    exceptionScope: { type: "handler", handlerId: "DropTarget.onDrop" },
     enabled,
     externalRef: targetRef,
     onDrop,

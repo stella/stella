@@ -54,6 +54,8 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
     lastDecisionId: safeUuid<"caseLawDecision">("last_decision_id").notNull(),
     parserVersionFrom: p.integer("parser_version_from"),
     parserVersionTo: p.integer("parser_version_to").notNull(),
+    /** Immutable raw generation captured when this reservation was created; null for legacy reservations. */
+    sourceRawS3Key: p.varchar("source_raw_s3_key", { length: 512 }),
     budgetDay: p.date("budget_day").notNull(),
     status: p.text({ enum: REPLAY_BATCH_STATUSES }).notNull(),
     outcome: p.text().$type<ReplayRowOutcome | ReplayPreviewFailure>(),
@@ -147,9 +149,10 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
   ],
 );
 
-// Any terminal receipt excludes its target version until the parser advances.
-// This existing table also owns changed and unchanged terminal receipts.
-// Decision IDs intentionally have no FK: receipts survive decision cleanup.
+// One current terminal receipt per decision and target parser. Legacy writers
+// keep this pair identity; only a receipt for the selected immutable generation
+// excludes it. Decision IDs have no FK so receipts survive decision cleanup.
+
 export const caseLawReplayBlocked = p.pgTable.withRLS(
   "case_law_replay_blocked",
   {
@@ -157,6 +160,8 @@ export const caseLawReplayBlocked = p.pgTable.withRLS(
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "restrict" }),
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    /** Exact raw generation verified at completion; null means unknown. */
+    sourceRawS3Key: p.varchar("source_raw_s3_key", { length: 512 }),
     parserVersionFrom: p.integer("parser_version_from"),
     parserVersionTo: p.integer("parser_version_to").notNull(),
     outcome: p.text({ enum: REPLAY_TERMINAL_OUTCOMES }).notNull(),
