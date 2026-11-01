@@ -187,7 +187,7 @@ describe("starter skill copy", () => {
     for (const seed of STARTER_SKILLS) {
       const copy = STARTER_SKILL_COPY[seed.slug];
       const localized = localizeStarterSkill(seed, (key) => czech(key));
-      expect(localized).toEqual({
+      expect<unknown>(localized).toEqual({
         ...seed,
         body: czech(copy.body),
         description: czech(copy.description),
@@ -237,7 +237,7 @@ describe("starter skill copy", () => {
       (key) => czech(key),
     );
     expect(localized.body).toBeNull();
-    expect(localized.name).toBe(
+    expect<unknown>(localized.name).toBe(
       czech(STARTER_SKILL_COPY[summarizeSeed.slug].name),
     );
   });
