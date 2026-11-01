@@ -12,10 +12,10 @@ import {
   toChatSourceScopeHref,
 } from "@stll/api-contract";
 import type { ChatSourceScope } from "@stll/api-contract";
+import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
 import { load } from "@stll/html";
 
 import type { ChatMention, ChatMentionHref } from "@/api/lib/chat/references";
-import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 import { createHtmlSanitizer } from "@/api/lib/markdown/sanitize-html";
 import {
   brandPersistedCaseLawDecisionId,

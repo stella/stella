@@ -1,8 +1,8 @@
 import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
+import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
 import type { ConditionNode } from "@stll/conditions";
 import { load } from "@stll/html";
 
-import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 import { createHtmlSanitizer } from "@/api/lib/markdown/sanitize-html";
 
 const ALLOWED_TAGS = new Set([

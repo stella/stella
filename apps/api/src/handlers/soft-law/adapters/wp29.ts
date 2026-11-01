@@ -27,6 +27,8 @@ import type {
   SoftLawStage,
 } from "@/api/lib/legal-search/soft-law-types";
 
+import { listingOnlyCoverage } from "./listing-only";
+
 const ORIGIN = "https://ec.europa.eu";
 const ARCHIVE = `${ORIGIN}/justice/article-29/documentation/opinion-recommendation/index_en.htm`;
 const NEWSROOM = `${ORIGIN}/newsroom/article29/`;
@@ -588,13 +590,9 @@ export const wp29Adapter = {
     userAgent: "Stella/1.0 (+https://github.com/stella/stella)",
     window: { type: "any_time" },
   },
-  getTotalCount: async () =>
-    await Promise.resolve({ type: "no-count-endpoint" as const }),
-  sliceWalk: {
-    type: "unsupported",
-    reason:
-      "WP29 has overlapping archive and newsroom indexes without a stable date slice endpoint.",
-  },
+  ...listingOnlyCoverage(
+    "WP29 has overlapping archive and newsroom indexes without a stable date slice endpoint.",
+  ),
   sourceFields: {
     status: "declared",
     fields,

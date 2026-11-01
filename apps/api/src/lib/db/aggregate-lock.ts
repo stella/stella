@@ -38,6 +38,7 @@ import {
   billingArrangements,
   billingCodes,
   caseLawReplayBatches,
+  contacts,
   entities,
   entityVersions,
   fields,
@@ -2813,6 +2814,57 @@ type MemberAccessRowLockOptions = {
   mode: "share" | "no key update" | "update";
 };
 
+type MatterCreationClientLockOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  contactId: SafeId<"contact">;
+};
+
+/** Keep the selected client attached until matter creation commits. */
+export const lockMatterCreationClient = async ({
+  tx,
+  organizationId,
+  contactId,
+}: MatterCreationClientLockOptions) =>
+  (
+    await tx
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.id, contactId),
+          eq(contacts.organizationId, organizationId),
+        ),
+      )
+      .for("update")
+      .limit(1)
+  ).at(0) ?? null;
+
+type MatterCreationMembersLockOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  userIds: readonly string[];
+};
+
+/** Organization removal takes the same membership rows in user ID order. */
+export const lockMatterCreationMembers = async ({
+  tx,
+  organizationId,
+  userIds,
+}: MatterCreationMembersLockOptions) =>
+  await tx
+    .select({ userId: member.userId })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, organizationId),
+        inArray(member.userId, [...userIds]),
+      ),
+    )
+    .orderBy(member.userId)
+    .limit(userIds.length)
+    .for("update");
+
 /** Lock the member within the caller's lifecycle or access-hold sequence. */
 export const lockMemberAccessRow = async ({
   tx,
@@ -2998,6 +3050,14 @@ export const lockCaseLawRemovalSnapshots = async (
 ): Promise<void> => {
   await tx.execute(sql`LOCK TABLE case_law_browse_facet_counts, case_law_coverage_summaries,
     case_law_sitemap_shard_counts, case_law_sitemap_shards, case_law_source_arrivals
+    IN SHARE ROW EXCLUSIVE MODE`);
+};
+
+/** A sitemap recount holds its snapshot fence before reading its inputs. */
+export const lockCaseLawSitemapSnapshot = async (
+  tx: ExecuteTransaction,
+): Promise<void> => {
+  await tx.execute(sql`LOCK TABLE case_law_sitemap_shard_counts, case_law_sitemap_shards
     IN SHARE ROW EXCLUSIVE MODE`);
 };
 

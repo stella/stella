@@ -15,7 +15,7 @@ covered by one, or through `read_capability` or
 A capability id is its handler path under `apps/api/src/handlers/`, joined
 with `.`: `<domain>[.<resource>…].<action>`. The action is one word:
 a canonical verb (`list`, `get`, `create`, `update`, `delete`)
-or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`, `void`).
+or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transcribe`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`, `void`).
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
 
@@ -128,6 +128,12 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `contacts.sanctions.reviews.update` | write | stella:contacts_write | — | generic invoke → `stella capability contacts sanctions-reviews-update` |
 | `contacts.search` | read | stella:read | — | generic invoke → `stella capability contacts search` |
 | `contacts.update` | write | stella:contacts_write | — | covered by `save_contact` |
+
+## dictation
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `dictation.transcribe` | write | stella:chat | — | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. No JSON-transport alternative: Use POST /v1/dictation/transcribe with a multipart audio file. |
 
 ## document-translations
 
@@ -285,6 +291,10 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `legislation.boe.text-block.get` | read | stella:read | FEATURE_PUBLIC_LAW | covered by `search_boe_legislation` |
 | `legislation.borme.summary.get` | read | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation borme-summary-get` |
 | `legislation.get` | read | stella:read | FEATURE_PUBLIC_LAW | covered by `read_statute` |
+| `legislation.matter-links.batch.create` | write | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation matter-links-batch-create` |
+| `legislation.matter-links.create` | write | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation matter-links-create` |
+| `legislation.matter-links.delete` | write, destructive | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation matter-links-delete` |
+| `legislation.matter-links.list` | read | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation matter-links-list` |
 | `legislation.search` | read | stella:read | FEATURE_PUBLIC_LAW | curated tool `search_legislation` |
 
 ## lists
@@ -403,6 +413,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `organization-settings.preview` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings preview` |
 | `organization-settings.sanctions-monitoring.update` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings sanctions-monitoring-update` |
 | `organization-settings.update` | write | stella:admin_write | — | curated tool `update_organization_settings` |
+
+## organizations
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `organizations.create` | write | stella:organization_create | — | generic invoke → `stella capability organizations create` |
+| `organizations.slug.update` | write | stella:admin_write | — | generic invoke → `stella capability organizations slug-update` |
 
 ## playbooks
 
@@ -747,6 +764,7 @@ mechanics, and similar), not gaps in coverage.
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
+| native_device | 2 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
 | public_indexing | 9 |

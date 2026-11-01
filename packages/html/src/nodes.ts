@@ -1,5 +1,6 @@
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 import {
+  cloneNode as domCloneNode,
   Element as DomElement,
   hasChildren as domHasChildren,
   isCDATA as domIsCDATA,
@@ -14,6 +15,7 @@ export const createElement = (
   ...args: ConstructorParameters<typeof DomElement>
 ) => new DomElement(...args);
 export const createText = (data: string) => new DomText(data);
+export const cloneNode = domCloneNode;
 export const hasChildren = domHasChildren;
 export const isCDATA = domIsCDATA;
 export const isComment = domIsComment;

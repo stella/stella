@@ -57,7 +57,10 @@ import {
   CZ_RUNNING_HEADER_SOURCE,
   withoutSoftHyphens,
 } from "@/api/lib/legal-search/parsers/page-furniture";
-import { separateOpinionHeadingTail } from "@/api/lib/legal-search/parsers/separate-opinion-heading";
+import {
+  type OpinionHeadingKind,
+  separateOpinionHeading,
+} from "@/api/lib/legal-search/parsers/separate-opinion-heading";
 
 import {
   inlinesToPlainText,
@@ -820,10 +823,13 @@ const SEPARATE_OPINION_HEADING_MAX_CHARS = 300;
  * it does not end the way a sentence reporting the opinions does
  * ("Odlišná stanoviska k rozsudku … uplatnili soudci …").
  */
-const isSeparateOpinionHeading = (plainText: string): boolean =>
-  !plainText.endsWith(".") &&
-  separateOpinionHeadingTail(plainText, SEPARATE_OPINION_HEADING_MAX_CHARS) !==
-    undefined;
+const separateOpinionHeadingKind = (
+  plainText: string,
+): OpinionHeadingKind | undefined =>
+  plainText.endsWith(".")
+    ? undefined
+    : separateOpinionHeading(plainText, SEPARATE_OPINION_HEADING_MAX_CHARS)
+        ?.kind;
 
 /** Numbered paragraph: [1], [2], ... */
 const NUMBERED_PARA_RE = /^\[(?:\d+)\]\s*/u;
@@ -833,8 +839,10 @@ const DOCUMENT_PHASE = {
   HOLDING: "holding",
   REASONING: "reasoning",
   INSTRUCTION: "instruction",
-  /** A separate opinion, after the decision's closing and signatures. */
-  SEPARATE_OPINION: "separate-opinion",
+  /** A dissenting opinion, after the decision's closing and signatures. */
+  DISSENTING_OPINION: "dissenting-opinion",
+  /** A concurring opinion, after the decision's closing and signatures. */
+  CONCURRING_OPINION: "concurring-opinion",
 } as const;
 
 type DocumentPhase = (typeof DOCUMENT_PHASE)[keyof typeof DOCUMENT_PHASE];
@@ -849,7 +857,10 @@ const PHASE_PARAGRAPH_ROLE = {
   [DOCUMENT_PHASE.HOLDING]: undefined,
   [DOCUMENT_PHASE.REASONING]: undefined,
   [DOCUMENT_PHASE.INSTRUCTION]: undefined,
-  [DOCUMENT_PHASE.SEPARATE_OPINION]: "dissent",
+  [DOCUMENT_PHASE.DISSENTING_OPINION]: "dissent",
+  // A concurring judge agrees with the outcome; the opinion is that judge's
+  // reasoning, not a dissent.
+  [DOCUMENT_PHASE.CONCURRING_OPINION]: "argumentation",
 } as const satisfies Record<DocumentPhase, ParagraphBlock["role"]>;
 
 /**
@@ -864,8 +875,14 @@ const makeAnchorId = (prefix: string, index: number): string =>
 /** The phases whose ordinary paragraphs are reasoning, the court's or a judge's. */
 const REASONING_PHASES: ReadonlySet<DocumentPhase> = new Set([
   DOCUMENT_PHASE.REASONING,
-  DOCUMENT_PHASE.SEPARATE_OPINION,
+  DOCUMENT_PHASE.DISSENTING_OPINION,
+  DOCUMENT_PHASE.CONCURRING_OPINION,
 ]);
+
+const OPINION_PHASE = {
+  dissent: DOCUMENT_PHASE.DISSENTING_OPINION,
+  concurring: DOCUMENT_PHASE.CONCURRING_OPINION,
+} as const satisfies Record<OpinionHeadingKind, DocumentPhase>;
 
 const HEADING_MAX_CHARS = 120;
 
@@ -1172,13 +1189,13 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     const courtNumbered = opensWithCourtParagraphMarker(plainText);
 
     // A separate opinion follows the decision's closing; its paragraphs are
-    // the dissenting judge's, numbered from 1 again.
-    if (
-      sawClosing &&
-      !quotedStarts.has(chunkIndex) &&
-      isSeparateOpinionHeading(plainText)
-    ) {
-      phase = DOCUMENT_PHASE.SEPARATE_OPINION;
+    // the judge's own, numbered from 1 again.
+    const opinionKind =
+      sawClosing && !quotedStarts.has(chunkIndex)
+        ? separateOpinionHeadingKind(plainText)
+        : undefined;
+    if (opinionKind !== undefined) {
+      phase = OPINION_PHASE[opinionKind];
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),

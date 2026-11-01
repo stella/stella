@@ -1,5 +1,11 @@
 # @stll/auth-model
 
+## 0.4.0
+
+### Minor Changes
+
+- [#7633](https://github.com/stella/stella/pull/7633) [`ea026da`](https://github.com/stella/stella/commit/ea026da403d121c9894049e1dd7f803120a73577) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow organization owners and admins to change an existing organization's slug through generated capabilities, with an opaque identifier option and shared slug validation.
+
 ## 0.3.0
 
 ### Minor Changes
