@@ -82,7 +82,7 @@ describe("parsePlDecisionContent", () => {
         block.plainText.startsWith(opening),
       );
       expect(recital?.plainText).toBe(
-        `${opening} ${cheerio.load(continuation).text()}`.replace(/\s+/gu, " "),
+        `${opening} ${load(continuation).text()}`.replace(/\s+/gu, " "),
       );
       expect(
         documentAst.blocks.some((block) =>
