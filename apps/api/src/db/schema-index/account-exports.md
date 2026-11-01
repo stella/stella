@@ -4,20 +4,24 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## account_exports · `accountExports` · account-exports.ts:16 · rls
+## account_exports · `accountExports` · account-exports.ts:24 · rls
 
 Durable account-owned export work; object keys are reclaimed on expiration or erasure.
 
 ```text
-account_exports.id                   uuid         pk,not null       account-exports.ts:19
-account_exports.user_id              text         fk,not null       account-exports.ts:20
-account_exports.status               text         default,not null  account-exports.ts:25
-account_exports.attempt_count        integer      default,not null  account-exports.ts:29
-account_exports.claim_token          uuid         null              account-exports.ts:30
-account_exports.lease_expires_at     timestamptz  null              account-exports.ts:31
-account_exports.object_key           text         null              account-exports.ts:32
-account_exports.attempt_object_keys  jsonb        default,not null  account-exports.ts:33
-account_exports.expires_at           timestamptz  null              account-exports.ts:37
-account_exports.created_at           timestamptz  default,not null  account-exports.ts:38
-account_exports.updated_at           timestamptz  default,not null  account-exports.ts:39
+account_exports.id                     uuid                pk,not null       account-exports.ts:27
+account_exports.user_id                text                fk,not null       account-exports.ts:28
+account_exports.kind                   text                default,not null  account-exports.ts:34  What the export covers: the account's own data or one organization's audit trail.
+account_exports.organization_id        safeOrganizationId  null              account-exports.ts:40  The organization whose audit trail an organization_audit export covers.
+account_exports.audit_row_count        integer             null              account-exports.ts:42  Number of audit rows the ready archive holds; deletion compares it with the live trail.
+account_exports.audit_covered_through  timestamptz         null              account-exports.ts:44  Creation time of the newest audit row in the ready archive; null when it holds none.
+account_exports.status                 text                default,not null  account-exports.ts:45
+account_exports.attempt_count          integer             default,not null  account-exports.ts:49
+account_exports.claim_token            uuid                null              account-exports.ts:50
+account_exports.lease_expires_at       timestamptz         null              account-exports.ts:51
+account_exports.object_key             text                null              account-exports.ts:52
+account_exports.attempt_object_keys    jsonb               default,not null  account-exports.ts:53
+account_exports.expires_at             timestamptz         null              account-exports.ts:57
+account_exports.created_at             timestamptz         default,not null  account-exports.ts:58
+account_exports.updated_at             timestamptz         default,not null  account-exports.ts:59
 ```

@@ -132,7 +132,11 @@ export const createDownloadPersonalDataExport = ({
           body: source.body,
           contentType: "application/zip",
           disposition: "attachment",
-          fileName: sanitizeFilename(`personal-data-${row.id}.zip`),
+          fileName: sanitizeFilename(
+            row.kind === "organization_audit"
+              ? `organization-audit-log-${row.id}.zip`
+              : `personal-data-${row.id}.zip`,
+          ),
           ...(source.contentLength === undefined
             ? {}
             : { contentLength: source.contentLength }),

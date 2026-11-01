@@ -3,13 +3,20 @@ import { and, asc, desc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
+import { member } from "@/api/db/auth-schema";
+import { SETTING_ORGANIZATION_ID } from "@/api/db/rls";
 import type { rootDb, Transaction } from "@/api/db/root";
-import { accountExports } from "@/api/db/schema";
+import { accountExports, auditLogs } from "@/api/db/schema";
 import {
   ACCOUNT_EXPORT_ACTIVE_STATUSES,
   ACCOUNT_EXPORT_LIMITS,
 } from "@/api/lib/account-export/constants";
-import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+  ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
+} from "@/api/lib/audit-log";
 import type { AccountAuditEventType } from "@/api/lib/audit-log.constants";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockActiveAccountRow } from "@/api/lib/db/account-row";
@@ -30,9 +37,47 @@ import {
 
 export type AccountExportRow = typeof accountExports.$inferSelect;
 export type AccountExportDb = Pick<typeof rootDb, "transaction">;
+
+/** What one export's archive is built from. */
+export type AccountExportSubject =
+  | { kind: "account" }
+  | { kind: "organization_audit"; organizationId: SafeId<"organization"> };
+
+/** The audit rows one organization audit archive holds. */
+export type OrganizationAuditCoverage = {
+  rowCount: number;
+  coveredThrough: Date | null;
+};
+
+/** What a finished build publishes; it always matches its claim's subject. */
+export type AccountExportBuild =
+  | { kind: "account" }
+  | { kind: "organization_audit"; coverage: OrganizationAuditCoverage };
+
+export const accountExportSubject = (
+  row: Pick<AccountExportRow, "kind" | "organizationId">,
+): AccountExportSubject => {
+  switch (row.kind) {
+    case "account":
+      return { kind: "account" };
+    case "organization_audit":
+      return {
+        kind: "organization_audit",
+        organizationId:
+          row.organizationId ??
+          panic("Organization audit export requires its organization"),
+      };
+    default: {
+      row.kind satisfies never;
+      return panic("Unknown account export kind");
+    }
+  }
+};
+
 export type AccountExportClaim = {
   id: string;
   userId: SafeId<"user">;
+  subject: AccountExportSubject;
   token: string;
   objectKey: string;
   leaseExpiresAt: Date;
@@ -191,6 +236,7 @@ export const requestAccountExport = async (
       .where(
         and(
           eq(accountExports.userId, userId),
+          eq(accountExports.kind, "account"),
           inArray(accountExports.status, ACCOUNT_EXPORT_ACTIVE_STATUSES),
         ),
       )
@@ -219,47 +265,360 @@ export const requestAccountExport = async (
           panic("Unknown account export status");
       }
     }
-    // The account lock serializes this indexed, bounded budget check with
-    // insertion. Returning an active export never consumes a request slot.
-    const budgetExhausted = await tx
+    return await insertRequestedExport(tx, {
+      userId,
+      subject: { kind: "account" },
+      replacing: active,
+    });
+  });
+};
+
+const subjectPredicate = (subject: AccountExportSubject) =>
+  subject.kind === "account"
+    ? eq(accountExports.kind, "account")
+    : and(
+        eq(accountExports.kind, "organization_audit"),
+        eq(accountExports.organizationId, subject.organizationId),
+      );
+
+type InsertRequestedExportOptions = {
+  userId: SafeId<"user">;
+  subject: AccountExportSubject;
+  replacing: LockedAccountExport | undefined;
+};
+
+/**
+ * Insert a new request under the account lock, within the hourly budget of
+ * its subject, after retiring the ready export it replaces.
+ */
+const insertRequestedExport = async (
+  tx: Transaction,
+  { userId, subject, replacing }: InsertRequestedExportOptions,
+): Promise<Result<AccountExportRow, HandlerError>> => {
+  // The account lock serializes this indexed, bounded budget check with
+  // insertion. Returning an active export never consumes a request slot.
+  const budgetExhausted = await tx
+    .select({ id: accountExports.id })
+    .from(accountExports)
+    .where(
+      and(
+        eq(accountExports.userId, userId),
+        subjectPredicate(subject),
+        sql`${accountExports.createdAt} > CURRENT_TIMESTAMP - (${ACCOUNT_EXPORT_LIMITS.requestWindowMs} * INTERVAL '1 millisecond')`,
+      ),
+    )
+    .offset(ACCOUNT_EXPORT_LIMITS.requestsPerWindow - 1)
+    .limit(1);
+  if (budgetExhausted.at(0) !== undefined) {
+    return Result.err(
+      new HandlerError({
+        status: 429,
+        code: "account_export_request_limited",
+        message: "Try again later.",
+      }),
+    );
+  }
+  if (
+    replacing?.row.status === "ready" &&
+    !(await expireReadyAccountExport(tx, replacing.row))
+  ) {
+    panic("Locked account export changed under its lock");
+  }
+  const rows = await tx
+    .insert(accountExports)
+    .values({
+      id: Bun.randomUUIDv7(),
+      userId,
+      kind: subject.kind,
+      organizationId:
+        subject.kind === "organization_audit" ? subject.organizationId : null,
+    })
+    .returning();
+  const created = rows.at(0);
+  if (created === undefined) {
+    panic("Account export insertion returned no row");
+  }
+  await createBackgroundAuditRecorder({ account: { userId } })(tx, {
+    type: "account.data_export.requested",
+    resourceId: created.id,
+  });
+  return Result.ok(created);
+};
+
+/**
+ * The organization's audit rows as of this statement. Callers that need the
+ * count to stay true hold the organization row lock, which every audit insert
+ * waits for through its foreign key.
+ */
+export const countOrganizationAuditRows = async (
+  tx: Pick<Transaction, "select">,
+  organizationId: SafeId<"organization">,
+): Promise<number> => {
+  const rows = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(auditLogs)
+    .where(eq(auditLogs.organizationId, organizationId));
+  return rows.at(0)?.count ?? panic("Audit row count returned no row");
+};
+
+/** Whether a ready organization audit archive still holds every audit row. */
+export const coversCurrentAuditTrail = (
+  row: Pick<AccountExportRow, "auditRowCount">,
+  liveRowCount: number,
+): boolean => row.auditRowCount === liveRowCount;
+
+const isOrganizationOwner = async (
+  tx: Pick<Transaction, "select">,
+  {
+    organizationId,
+    userId,
+  }: { organizationId: SafeId<"organization">; userId: SafeId<"user"> },
+): Promise<boolean> => {
+  const rows = await tx
+    .select({ id: member.id })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, organizationId),
+        eq(member.userId, userId),
+        eq(member.role, "owner"),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+};
+
+const organizationAuditExportForbidden = () =>
+  new HandlerError({
+    status: 403,
+    code: "organization_audit_export_forbidden",
+    message: "Only an owner of the organization can export its audit log.",
+  });
+
+/** Scope the account transaction to the organization whose trail it reads. */
+const scopeOrganizationAudit = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+) => {
+  await tx.execute(
+    sql`SELECT set_config(${SETTING_ORGANIZATION_ID}, ${organizationId}, true)`,
+  );
+};
+
+type OrganizationAuditExportOptions = {
+  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
+  db?: AccountExportDb;
+};
+
+/**
+ * Request an archive of the organization's whole audit trail for one of its
+ * owners. An archive that is still building, or ready and still holding every
+ * audit row, is returned as it is; a ready archive the trail has outgrown is
+ * replaced.
+ */
+export const requestOrganizationAuditExport = async ({
+  userId,
+  organizationId,
+  db,
+}: OrganizationAuditExportOptions): Promise<
+  Result<AccountExportRow, HandlerError>
+> => {
+  const database = await resolveDatabase(db);
+  return await withAggregateTransaction(database, async (tx) => {
+    await lockActiveAccountRow(tx, userId);
+    if (!(await isOrganizationOwner(tx, { organizationId, userId }))) {
+      return Result.err(organizationAuditExportForbidden());
+    }
+    await scopeAccount(tx, userId);
+    await scopeOrganizationAudit(tx, organizationId);
+    const subject = {
+      kind: "organization_audit",
+      organizationId,
+    } as const satisfies AccountExportSubject;
+    const existing = await tx
       .select({ id: accountExports.id })
       .from(accountExports)
       .where(
         and(
           eq(accountExports.userId, userId),
-          sql`${accountExports.createdAt} > CURRENT_TIMESTAMP - (${ACCOUNT_EXPORT_LIMITS.requestWindowMs} * INTERVAL '1 millisecond')`,
+          subjectPredicate(subject),
+          inArray(accountExports.status, ACCOUNT_EXPORT_ACTIVE_STATUSES),
         ),
       )
-      .offset(ACCOUNT_EXPORT_LIMITS.requestsPerWindow - 1)
       .limit(1);
-    if (budgetExhausted.at(0) !== undefined) {
-      return Result.err(
-        new HandlerError({
-          status: 429,
-          code: "account_export_request_limited",
-          message: "Try again later.",
-        }),
-      );
+    const activeId = existing.at(0)?.id;
+    const active =
+      activeId === undefined
+        ? undefined
+        : ((await lockAccountExport(tx, { id: activeId, userId })) ??
+          panic("Active audit export left under the account lock"));
+    if (active !== undefined) {
+      switch (active.row.status) {
+        case "requested":
+        case "processing":
+          return Result.ok(active.row);
+        case "ready":
+          if (
+            !active.readyElapsed &&
+            coversCurrentAuditTrail(
+              active.row,
+              await countOrganizationAuditRows(tx, organizationId),
+            )
+          ) {
+            return Result.ok(active.row);
+          }
+          break;
+        case "failed":
+        case "expired":
+          break;
+        default:
+          active.row.status satisfies never;
+          panic("Unknown account export status");
+      }
     }
-    if (
-      active?.row.status === "ready" &&
-      !(await expireReadyAccountExport(tx, active.row))
-    ) {
-      panic("Locked account export changed under its lock");
-    }
-    const rows = await tx
-      .insert(accountExports)
-      .values({ id: Bun.randomUUIDv7(), userId })
-      .returning();
-    const created = rows.at(0);
-    if (created === undefined) {
-      panic("Account export insertion returned no row");
-    }
-    await createBackgroundAuditRecorder({ account: { userId } })(tx, {
-      type: "account.data_export.requested",
-      resourceId: created.id,
+    const created = await insertRequestedExport(tx, {
+      userId,
+      subject,
+      replacing: active,
     });
-    return Result.ok(created);
+    if (Result.isOk(created)) {
+      // The organization's own trail records that its audit log was exported.
+      // Written before the archive is built, so the archive holds it too.
+      await createBackgroundAuditRecorder({
+        organizationId,
+        workspaceId: null,
+        userId,
+        execution: {
+          performer: { type: "user", id: userId },
+          trigger: { type: "direct" },
+        },
+      })(tx, {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.AUDIT_LOG,
+        resourceId: ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
+      });
+    }
+    return created;
+  });
+};
+
+/**
+ * Lock the owner's ready, unexpired audit archive of the organization, for
+ * the deletion that requires it. Account exports precede organizations in the
+ * registered lock order, so callers take this before the organization row.
+ */
+export const lockReadyOrganizationAuditExport = async (
+  tx: Transaction,
+  {
+    organizationId,
+    userId,
+  }: { organizationId: SafeId<"organization">; userId: SafeId<"user"> },
+): Promise<AccountExportRow | undefined> => {
+  const candidates = await tx
+    .select({ id: accountExports.id })
+    .from(accountExports)
+    .where(
+      and(
+        eq(accountExports.userId, userId),
+        subjectPredicate({ kind: "organization_audit", organizationId }),
+        eq(accountExports.status, "ready"),
+      ),
+    )
+    .limit(1);
+  const candidateId = candidates.at(0)?.id;
+  if (candidateId === undefined) {
+    return undefined;
+  }
+  const locked = await withAggregateRowQuery({
+    tx,
+    aggregate: "accountExport",
+    id: { id: candidateId, userId },
+    mode: "no key update",
+    select: (lockedTx) => lockedTx.select().from(accountExports),
+    where: sql`${eq(accountExports.status, "ready")} AND ${gt(accountExports.expiresAt, sql`clock_timestamp()`)}`,
+  });
+  return locked.rows.at(0);
+};
+
+// The account trail already records the archive's readiness and every
+// download; keeping it reachable changes no state the owner acts on.
+const retentionOnly = async (): Promise<void> => {
+  // No account event: the transition itself is the durable record.
+};
+
+/**
+ * Keep a locked ready archive downloadable for a full retention window from
+ * now, so the owner can still fetch it after the organization is gone.
+ */
+export const retainOrganizationAuditExport = async (
+  tx: Transaction,
+  row: AccountExportRow,
+): Promise<void> => {
+  const retained = await transition({
+    tx,
+    spec: TRANSITIONS.accountExports,
+    id: row.id,
+    options: {
+      from: ["ready"],
+      to: "ready",
+      set: {
+        expiresAt: sql`greatest(${accountExports.expiresAt}, statement_timestamp() + (${ACCOUNT_EXPORT_LIMITS.ttlMs} * INTERVAL '1 millisecond'))`,
+        updatedAt: sql`statement_timestamp()`,
+      },
+    },
+    recordTransitionAuditEvent: retentionOnly,
+  });
+  if (retained.type === "stale") {
+    panic("Locked organization audit export changed under its lock");
+  }
+};
+
+export type OrganizationAuditExportView = {
+  row: AccountExportRow;
+  /** For a ready archive: whether it still holds every audit row. */
+  coversCurrentTrail: boolean;
+};
+
+/** The owner's latest audit export of this organization, if any. */
+export const readLatestOrganizationAuditExport = async ({
+  userId,
+  organizationId,
+  db,
+}: OrganizationAuditExportOptions): Promise<
+  Result<OrganizationAuditExportView | null, HandlerError>
+> => {
+  const database = await resolveDatabase(db);
+  return await withAggregateTransaction(database, async (tx) => {
+    if (!(await isOrganizationOwner(tx, { organizationId, userId }))) {
+      return Result.err(organizationAuditExportForbidden());
+    }
+    await scopeAccount(tx, userId);
+    await scopeOrganizationAudit(tx, organizationId);
+    const rows = await tx
+      .select()
+      .from(accountExports)
+      .where(
+        and(
+          eq(accountExports.userId, userId),
+          subjectPredicate({ kind: "organization_audit", organizationId }),
+        ),
+      )
+      .orderBy(desc(accountExports.createdAt), desc(accountExports.id))
+      .limit(1);
+    const row = rows.at(0);
+    if (row === undefined) {
+      return Result.ok(null);
+    }
+    return Result.ok({
+      row,
+      coversCurrentTrail:
+        row.status === "ready" &&
+        coversCurrentAuditTrail(
+          row,
+          await countOrganizationAuditRows(tx, organizationId),
+        ),
+    });
   });
 };
 
@@ -308,7 +667,12 @@ export const readLatestAccountExport = async (
     const rows = await tx
       .select({ id: accountExports.id })
       .from(accountExports)
-      .where(eq(accountExports.userId, userId))
+      .where(
+        and(
+          eq(accountExports.userId, userId),
+          eq(accountExports.kind, "account"),
+        ),
+      )
       .orderBy(desc(accountExports.createdAt), desc(accountExports.id))
       .limit(1);
     const latest = rows.at(0);
@@ -392,21 +756,42 @@ export const claimAccountExport = async (
     const leaseExpiresAt =
       leases.at(0)?.leaseExpiresAt ??
       panic("Claimed export requires a lease deadline");
-    return { id, userId, token, objectKey, leaseExpiresAt };
+    return {
+      id,
+      userId,
+      subject: accountExportSubject(locked.row),
+      token,
+      objectKey,
+      leaseExpiresAt,
+    };
   });
 
 type CompleteAccountExportOptions = {
   claim: AccountExportClaim;
   objectKey: string;
+  built: AccountExportBuild;
   db: AccountExportDb;
 };
+
+const coverageColumns = (built: AccountExportBuild) =>
+  built.kind === "organization_audit"
+    ? {
+        auditRowCount: built.coverage.rowCount,
+        auditCoveredThrough: built.coverage.coveredThrough,
+      }
+    : {};
+
 export const completeAccountExport = async ({
   claim,
   objectKey,
+  built,
   db,
 }: CompleteAccountExportOptions): Promise<boolean> => {
   if (objectKey !== claim.objectKey) {
     panic("Account export object differs from its claim");
+  }
+  if (built.kind !== claim.subject.kind) {
+    panic("Account export build differs from its claim");
   }
   return await withAggregateTransaction(db, async (tx) => {
     await lockActiveAccountRow(tx, claim.userId);
@@ -428,6 +813,7 @@ export const completeAccountExport = async ({
           // the expiry exactly one TTL after the ready transition.
           expiresAt: sql`statement_timestamp() + (${ACCOUNT_EXPORT_LIMITS.ttlMs} * INTERVAL '1 millisecond')`,
           updatedAt: sql`statement_timestamp()`,
+          ...coverageColumns(built),
         },
       },
       recordTransitionAuditEvent: recordAccountExportTransition(

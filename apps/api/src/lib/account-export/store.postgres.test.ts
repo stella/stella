@@ -57,6 +57,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         for (const migration of [
           "20261010005100_account_audit_scope",
           "20261016100500_account_exports",
+          "20261101090000_organization_audit_exports",
         ]) {
           const source = await Bun.file(
             new URL(
@@ -132,6 +133,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
           await completeAccountExport({
             claim,
             objectKey: claim.objectKey,
+            built: { kind: "account" },
             db,
           }),
         ).toBe(true);
@@ -139,6 +141,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
           await completeAccountExport({
             claim,
             objectKey: claim.objectKey,
+            built: { kind: "account" },
             db,
           }),
         ).toBe(false);
@@ -385,6 +388,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
           await completeAccountExport({
             claim: abandoned,
             objectKey: abandoned.objectKey,
+            built: { kind: "account" },
             db,
           }),
         ).toBe(false);
@@ -393,6 +397,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
           await completeAccountExport({
             claim: recovered,
             objectKey: recovered.objectKey,
+            built: { kind: "account" },
             db,
           }),
         ).toBe(true);

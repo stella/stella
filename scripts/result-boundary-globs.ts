@@ -290,6 +290,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/account-deletion-cleanup-queue.ts",
   // The ZIP async iterator and Node pipeline propagate failures to the worker.
   "apps/api/src/lib/account-export/archive.ts",
+  "apps/api/src/lib/account-export/organization-audit-archive.ts",
   "apps/api/src/lib/account-export/queue.ts",
   "apps/api/src/lib/bilingual/run-queue.ts",
   "apps/api/src/lib/document-processing-queue.ts",

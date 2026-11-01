@@ -7,10 +7,18 @@ import { stella } from "@/api/db/rls";
 import {
   ACCOUNT_EXPORT_ACTIVE_STATUSES,
   ACCOUNT_EXPORT_IDLE_STATUSES,
+  ACCOUNT_EXPORT_KINDS,
   ACCOUNT_EXPORT_LIMITS,
   ACCOUNT_EXPORT_STATUSES,
 } from "@/api/lib/account-export/constants";
 import type { SafeId } from "@/api/lib/branded-types";
+
+import { safeOrganizationId } from "./common";
+
+const ACTIVE_STATUS_SQL = sql.join(
+  ACCOUNT_EXPORT_ACTIVE_STATUSES.map((status) => sql`${status}`),
+  sql`, `,
+);
 
 /** Durable account-owned export work; object keys are reclaimed on expiration or erasure. */
 export const accountExports = p.pgTable.withRLS(
@@ -22,6 +30,18 @@ export const accountExports = p.pgTable.withRLS(
       .$type<SafeId<"user">>()
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
+    /** What the export covers: the account's own data or one organization's audit trail. */
+    kind: p.text({ enum: ACCOUNT_EXPORT_KINDS }).notNull().default("account"),
+    /**
+     * The organization whose audit trail an organization_audit export covers.
+     * No foreign key on purpose: the row belongs to the requesting account and
+     * stays downloadable after that organization is deleted.
+     */
+    organizationId: safeOrganizationId("organization_id"),
+    /** Number of audit rows the ready archive holds; deletion compares it with the live trail. */
+    auditRowCount: p.integer("audit_row_count"),
+    /** Creation time of the newest audit row in the ready archive; null when it holds none. */
+    auditCoveredThrough: timestamptz("audit_covered_through"),
     status: p
       .text({ enum: ACCOUNT_EXPORT_STATUSES })
       .notNull()
@@ -61,14 +81,35 @@ export const accountExports = p.pgTable.withRLS(
       "account_exports_attempt_check",
       sql`${table.attemptCount} BETWEEN 0 AND ${ACCOUNT_EXPORT_LIMITS.attempts} AND jsonb_array_length(${table.attemptObjectKeys}) <= ${ACCOUNT_EXPORT_LIMITS.attempts}`,
     ),
+    p.check(
+      "account_exports_kind_check",
+      sql`${table.kind} IN (${sql.join(
+        ACCOUNT_EXPORT_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    // An account export names no organization and carries no audit coverage;
+    // an organization audit export names its organization, and is ready only
+    // with the coverage its archive was built with.
+    p.check(
+      "account_exports_kind_scope_check",
+      sql`(
+    (${table.kind} = 'account' AND ${table.organizationId} IS NULL AND ${table.auditRowCount} IS NULL AND ${table.auditCoveredThrough} IS NULL)
+    OR (${table.kind} = 'organization_audit' AND ${table.organizationId} IS NOT NULL
+      AND (${table.status} <> 'ready' OR (${table.auditRowCount} IS NOT NULL AND ${table.auditRowCount} >= 0)))
+  )`,
+    ),
     p
-      .uniqueIndex("account_exports_user_active_idx")
+      .uniqueIndex("account_exports_user_account_active_idx")
       .on(table.userId)
       .where(
-        sql`${table.status} IN (${sql.join(
-          ACCOUNT_EXPORT_ACTIVE_STATUSES.map((status) => sql`${status}`),
-          sql`, `,
-        )})`,
+        sql`${table.kind} = 'account' AND ${table.status} IN (${ACTIVE_STATUS_SQL})`,
+      ),
+    p
+      .uniqueIndex("account_exports_user_organization_audit_active_idx")
+      .on(table.userId, table.organizationId)
+      .where(
+        sql`${table.kind} = 'organization_audit' AND ${table.status} IN (${ACTIVE_STATUS_SQL})`,
       ),
     p
       .index("account_exports_user_created_idx")

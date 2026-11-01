@@ -38,6 +38,7 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { seedReadyOrganizationAuditExport } from "@/api/tests/helpers/organization-audit-export";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
@@ -368,6 +369,11 @@ describe("live organization ownership", () => {
         .from(member)
         .where(eq(member.organizationId, organization.id)),
     ).toHaveLength(1);
+    await seedReadyOrganizationAuditExport({
+      db: getTestDatabase(),
+      userId: brandPersistedUserId(owner.userId),
+      organizationId: brandPersistedOrganizationId(organization.id),
+    });
     const deletion = await auth.api.deleteOrganization({
       body: { organizationId: organization.id },
       headers: owner.headers(),

@@ -54,6 +54,10 @@ const downloadRoute = createDownloadPersonalDataExport({
     return {
       id,
       userId,
+      kind: "account",
+      organizationId: null,
+      auditRowCount: null,
+      auditCoveredThrough: null,
       status: "ready",
       attemptCount: 1,
       claimToken: null,
