@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Sign in again to continue with this action.",
     "resendCode": "Send code again to <email>{emailAddress}</email>",
     "selectOrganization": "Select an organization",
+    "sessionExpired": "Session expired",
+    "sessionExpiredDescription": "Sign in from a new tab. What you typed stays on this page.",
     "signIn": "Sign in",
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.",
     "signInWithPassword": "Sign in with password",
@@ -891,6 +893,24 @@
       "title": "Suggested from your activity",
       "unnamedRecord": "Matter record"
     },
+    "timeReport": {
+      "billableHours": "Billable hours",
+      "billableShare": "Billable share",
+      "change": "Change: {value}",
+      "changePoints": "Change in percentage points: {value}",
+      "collapse": "Collapse {name}",
+      "empty": "Record time to fill this report.",
+      "expand": "Expand {name}",
+      "internal": "Internal",
+      "pendingEntries": "Awaiting approval",
+      "period": "Period",
+      "privacy": "This report uses recorded time entries only. Desktop activity stays on each device.",
+      "title": "Team time report",
+      "tooLargeToLoad": "This report is too large to load. Shorten the range or show weeks or months as columns.",
+      "tooManyCells": "This report is too large to show here. Shorten the range or show weeks or months as columns, or export it as CSV.",
+      "total": "Total",
+      "unbilledValue": "Unbilled billable value"
+    },
     "timerActive": "Timer running",
     "timesheets": "Timesheets",
     "total": "Total",
@@ -928,6 +948,7 @@
     "desktopUnavailable": "Connect or update stella desktop.",
     "featureUnavailable": "This feature is unavailable.",
     "ocrUnavailable": "OCR is unavailable.",
+    "openSettings": "Open settings",
     "translationMissing": "No translation provider is configured."
   },
   "caseLaw": {
@@ -1104,9 +1125,9 @@
     "loadingMore": "Loading more...",
     "marginFilter": {
       "label": "Cited provisions filter",
-      "paragraph": "{count, plural, =0 {No provisions cited in ¶{paragraph}} one {# provision cited in ¶{paragraph}} other {# provisions cited in ¶{paragraph}}}",
-      "selection": "{count, plural, =0 {No provisions cited in the selection} one {# provision cited in the selection} other {# provisions cited in the selection}}",
-      "unnumberedParagraph": "{count, plural, =0 {No provisions cited in this paragraph} one {# provision cited in this paragraph} other {# provisions cited in this paragraph}}"
+      "paragraph": "{count, plural, one {# provision cited in ¶{paragraph}} other {# provisions cited in ¶{paragraph}}}",
+      "selection": "{count, plural, one {# provision cited in the selection} other {# provisions cited in the selection}}",
+      "unnumberedParagraph": "{count, plural, one {# provision cited in this paragraph} other {# provisions cited in this paragraph}}"
     },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# decision was already saved here} other {# decisions were already saved here}}",
@@ -1337,9 +1358,30 @@
       "none": "No setup"
     },
     "skillNeedsUnavailableTools": "Not offered in chat. It needs a tool that isn't available there: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Mask client names, account numbers, addresses, and other PII before sharing matter content with AI providers. Reversible on the client side; cleartext never leaves your workspace.",
+      "ares": "Czech business registry lookup by IČO or company name from the public ARES register (administrative register of economic subjects, Czech equivalent of a commercial registry).",
+      "boe": "Spanish consolidated legislation, daily gazette, and BORME (commercial registry gazette) from the official Boletín Oficial del Estado open-data API.",
+      "brreg": "Norwegian company lookup by organisasjonsnummer or company name from the public Brreg Enhetsregisteret open API.",
+      "companiesHouse": "UK company lookup by Companies House registration number or company name from the Companies House public data API. Requires a free API key.",
+      "createDocx": "Generate Word documents from chat with formatting, tables, headers, and embedded styling. Output is downloadable and editable in Word, LibreOffice, and Pages.",
+      "denue": "Mexican establishment and economic-unit lookup by DENUE establishment Id, name, or legal name from INEGI's official DENUE API. DENUE is an establishment directory, not the Registro Público de Comercio corporate-law register. Requires a free INEGI API token.",
+      "edgar": "US public-company lookup by Central Index Key (CIK) from the SEC's EDGAR submissions API.",
+      "gcis": "Taiwanese company lookup by 統一編號 (tongbian / tax ID) or company name from the Ministry of Economic Affairs (MoEA) Commerce Industrial Services Portal open data API.",
+      "infosoud": "Czech court case lookup and hearing calendar from infosoud.gov.cz. Search by case reference number, court, or party to pull hearing dates and case status.",
+      "krs": "Polish company lookup by KRS number from the Ministry of Justice's Krajowy Rejestr Sądowy (KRS) open API. Covers both Rejestr Przedsiębiorców (commercial companies) and Rejestr Stowarzyszeń (associations / foundations).",
+      "orsr": "Slovak company lookup by IČO or company name from the Obchodný register Slovenskej republiky JSON API operated by the Ministry of Justice.",
+      "prh": "Finnish company lookup by Y-tunnus or company name from the Patentti- ja rekisterihallitus (PRH) AvoinData v3 open API.",
+      "rechercheEntreprises": "French company lookup by SIREN, SIRET, or company name from the recherche-entreprises.api.gouv.fr open API (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Slovak lookup by IČO or name in the Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO) operated by the Statistical Office of the Slovak Republic. Covers every legal person and entrepreneur, including sole traders, associations, foundations, and public bodies outside the commercial register.",
+      "vies": "EU-wide VAT identification number validation via the European Commission's VAT Information Exchange System (VIES) REST API. Confirms whether a VAT number is registered in the supplier's member state and returns the registered trader name and address where the member state discloses them.",
+      "webSearch": "Search the public web and read individual pages. Queries hit primary sources first (courts, legislation portals) when a jurisdiction is set; falls back to the open web otherwise. Per-thread opt-in."
+    },
     "toolNames": {
       "anonymize": "Anonymise",
       "createDocx": "Create DOCX",
+      "gcis": "GCIS Company Registry",
+      "vies": "EU VIES VAT validation",
       "webSearch": "Web Search"
     },
     "unavailable": "Not available yet"
@@ -1450,7 +1492,7 @@
     "audioContent": "Generated audio",
     "browserExtension": {
       "connect": "Connect extension",
-      "connectDescription": "Click the stella extension icon in the browser toolbar on this tab, allow website access if asked, and connect this tab.",
+      "connectDescription": "Click the stella extension icon in the browser toolbar, allow website access if asked, and connect stella. One connection covers all your stella tabs.",
       "connected": "Extension connected",
       "description": "stella can open and read websites for you in a separate tab when you ask.",
       "install": "Install extension",
@@ -2888,6 +2930,7 @@
       "aiOutputModerated": "The AI provider moderated the output. Rephrase the request or choose another model.",
       "aiProviderTaskUnsupported": "The configured AI provider cannot do this task. Choose a provider that can.",
       "aiUnknown": "The AI request failed. Try again.",
+      "alreadyOrganizationMember": "This person is already a member of this organization.",
       "clauseDirectivesInvalid": "A linked clause has invalid directives. Correct the clause before filling the template.",
       "clauseDirectivesInvalidDetails": "Clause {clauseName} in slot {slotName} has invalid directives. Open the clause editor, correct the named paragraphs, and fill the template again.",
       "clauseDirectivesOverrideInvalidDetails": "The override for clause {clauseName} in slot {slotName} has invalid directives. Correct this fill’s override before filling again.",
@@ -2903,12 +2946,19 @@
       "idempotencyInProgress": "This request is still being processed. Wait a moment, then try again.",
       "idempotencyKeyReused": "This submission changed since the previous attempt. Reset the form and try again.",
       "internalServerError": "The server could not complete the action. Please try again.",
+      "invitationAlreadyPending": "This person already has a pending invitation. Resend it from Pending invitations.",
+      "invitationEmailUnverified": "Verify your email address to respond to this invitation.",
+      "invitationLimitReached": "This organization has reached its invitation limit. Cancel a pending invitation first.",
+      "invitationOtherRecipient": "This invitation was sent to a different email address.",
+      "invitationRoleNotAllowed": "You cannot invite someone with this role. Choose another role.",
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.",
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.",
       "matterContactCapacityExceeded": "This matter has more contacts than can be displayed. Remove visible contact links to reveal the remaining contacts.",
       "matterContactCapacityReached": "This matter has reached its contact limit. Remove a contact link before adding another.",
       "mcpAuthorizationApprovalRequired": "An administrator must approve this connector before you can connect.",
       "notOrganizationMember": "You are not a member of this organization.",
+      "organizationLastOwner": "An organization needs an owner. Transfer ownership first.",
+      "organizationMemberLimitReached": "This organization has reached its member limit.",
       "providerKeyRejected": "The provider rejected the API key.",
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.",
       "thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.",
@@ -3034,6 +3084,7 @@
     },
     "compareChangeSummary": "Changes by type",
     "compareCreated": "Tracked-changes document created",
+    "compareDocxOnly": "Compare (DOCX only)",
     "compareFailed": "Comparison failed",
     "compareNeedsTwoVersions": "Upload another DOCX version to compare.",
     "compareNoChanges": "No supported differences were found.",
@@ -3089,6 +3140,7 @@
     "selectVersion": "Select a version",
     "setLabel": "Set label",
     "showDiff": "Show diff",
+    "showText": "Show text",
     "showVersionList": "Show version history",
     "uploadDate": "Upload date",
     "uploadNewVersion": "Upload new version",
@@ -4048,6 +4100,28 @@
       "skippedReasonOutsideSkillFolder": "Outside the skill folder",
       "skippedReasonUnsupportedExtension": "File type not supported",
       "skippedReasonUnsupportedFolder": "Not in a resource folder",
+      "starter": {
+        "compare": {
+          "body": "Compare two versions of this document and list every material change with its location.",
+          "description": "List every material change between two versions",
+          "name": "Compare versions"
+        },
+        "draft": {
+          "body": "Draft a measured response to this letter. Keep the tone professional, address each point raised, and flag any open questions for me to confirm.",
+          "description": "Draft a professional reply to a letter",
+          "name": "Draft a response"
+        },
+        "risks": {
+          "body": "Review this document for legal risks, missing protections, and ambiguous clauses. Cite the specific clause for each finding.",
+          "description": "Spot legal risks and ambiguous clauses",
+          "name": "Find risks"
+        },
+        "summarize": {
+          "body": "Summarise this document. Cover parties, key obligations, dates, financial terms, and any termination or liability provisions.",
+          "description": "Get a structured summary of the key terms",
+          "name": "Summarise a document"
+        }
+      },
       "uploadHelp": "Use a SKILL.md file or a .zip folder containing SKILL.md and optional read-only resources.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "Version: {version}"
@@ -4729,6 +4803,7 @@
     "creationRefused": "The organization could not be created. Check the details and try again.",
     "creationSlugConflict": "This organization address is already in use. Choose another name or address.",
     "invitations": {
+      "cancelConfirmDescription": "The invitation link sent to {email} will stop working. To invite them again, send a new invitation.",
       "cancelInvitation": "Cancel invitation",
       "emailAddressLabel": "Email address",
       "emailAddressPlaceholder": "user@example.com",
@@ -4736,6 +4811,7 @@
       "inviteMember": "Invite member",
       "inviteMemberDescription": "Send an invitation to join your organization",
       "invited": "Invited",
+      "keepInvitation": "Keep invitation",
       "noInvitationsFound": "No invitations found",
       "resendInvitation": "Resend invitation",
       "sendInvitation": "Send invitation",
@@ -4972,6 +5048,7 @@
     "caseLawEmptyState": "Start typing to search court decisions.",
     "caseLawMatchingDecisions": "{count, plural, one {# matching decision} other {# matching decisions}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ matching decision} other {#+ matching decisions}}",
+    "chatCoveragePartial": "Not every chat was searched in full.",
     "continueInChat": "Continue in chat",
     "dateFrom": "From",
     "dateTo": "To",
@@ -5108,8 +5185,8 @@
       "desktopDocumentsTitle": "Desktop document editing",
       "desktopDownloadMac": "Download for macOS",
       "desktopDownloadOtherMac": "On Windows? Download for Windows",
-      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments",
       "desktopDownloadWindows": "Download for Windows",
+      "desktopDownloadWindowsArm": "On a Windows ARM device? Download the ARM version",
       "desktopHeroTitle": "Your clipboard, ready when you need it",
       "desktopInstallMacStep": "Open the DMG and drag stella desktop to Applications.",
       "desktopInstallOpenStep": "Open stella desktop once. Clipboard appears immediately and remains available from the macOS menu bar or Windows system tray.",
@@ -5330,6 +5407,7 @@
         "legal_list_item": "legal list item",
         "legal_list_verification": "legal list verification",
         "legal_resolve": "legal reference lookup",
+        "legislation_matter_link": "legislation matter link",
         "machine_api_key": "machine API key",
         "mcp_connection": "MCP connection",
         "mcp_gateway_tool": "MCP gateway tool",
@@ -5784,6 +5862,7 @@
       "open": "Open"
     },
     "subtasks": "Subtasks",
+    "taskCompleted": "Task completed",
     "title": "Tasks",
     "untitled": "Untitled task",
     "workTypeValues": {
@@ -6297,6 +6376,7 @@
     },
     "createNewWorkspace": "Create new matter",
     "defaultName": "Untitled",
+    "deleteFromMatter": "Delete from matter…",
     "deleteItem": "Delete item",
     "deleteItems": "Delete {count, plural, one {# item} other {# items}}",
     "deleteItemsDescription": "Are you sure you want to delete {count, plural, one {# item} other {# items}}? This action cannot be undone.",
@@ -6392,6 +6472,7 @@
       "downloadSearchablePdf": "Searchable PDF",
       "downloadWithComments": "Download with comments",
       "emptyFile": "The file is empty.",
+      "fileTooLarge": "The file is larger than {limit, number} MB.",
       "includeReferenceNumber": "Include reference number",
       "itemLimitReached": "This matter has reached its item limit.",
       "maxEntitiesReached": "Maximum number of items reached",
@@ -6681,11 +6762,14 @@
         "empty": "No activity in this matter yet.",
         "fields": {
           "dueDate": "due date",
+          "name": "name",
           "parentFolder": "parent folder",
           "priority": "priority",
           "property": "property",
           "schedule": "schedule",
-          "sortOrder": "order"
+          "sortOrder": "order",
+          "status": "status",
+          "type": "type"
         },
         "filterLabel": "Filter activity",
         "filters": {
@@ -6735,8 +6819,18 @@
           "team": "matter team",
           "translation": "translation"
         },
+        "taskLinks": {
+          "added": "Linked {name} to",
+          "addedUnnamed": "Linked an item to",
+          "removed": "Unlinked {name} from",
+          "removedUnnamed": "Unlinked an item from"
+        },
         "title": "Matter activity",
         "updatedFields": "Updated {fields}",
+        "versions": {
+          "added": "Added version {version} of",
+          "deleted": "Deleted version {version} of"
+        },
         "views": {
           "list": "List view",
           "timeline": "Timeline view"

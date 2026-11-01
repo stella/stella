@@ -177,6 +177,13 @@ export const READER_PROVISION_ANCHOR_MAX_CHARS = 256;
 export const UPLOAD_FILE_MIN_BYTES = 1;
 
 /**
+ * Largest document a presigned upload may declare. The browser refuses a
+ * larger file before reading it, and a folder drop sends it down the
+ * single-file path where the user sees that refusal for the file alone.
+ */
+export const UPLOAD_DOCUMENT_MAX_BYTES = 50 * 1024 * 1024;
+
+/**
  * Size bounds, in PDF points, of a visible signature stamp: legible, and never
  * a page-covering box. The browser keeps a drawn stamp inside them and the
  * API refuses a stamp outside them.

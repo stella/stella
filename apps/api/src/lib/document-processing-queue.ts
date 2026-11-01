@@ -113,6 +113,7 @@ import {
   type OrganizationFileUsageError,
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
+import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -2338,6 +2339,45 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
 };
 
 /**
+ * Queued native extraction runs small enough for the API process, oldest
+ * first. Unlike a dispatch this ignores `nextDeliveryAt`: that only spaces
+ * out queue handoffs, and the run's lease decides who processes it.
+ */
+export const readInlineNativeExtractionRuns = async ({
+  database,
+  limit,
+}: {
+  database: typeof rootDb;
+  limit: number;
+}): Promise<{ id: SafeId<"documentProcessingRun"> }[]> => {
+  const now = new Date();
+  return await database
+    .select({ id: documentProcessingRuns.id })
+    .from(documentProcessingRuns)
+    .innerJoin(fields, eq(fields.id, documentProcessingRuns.fieldId))
+    .where(
+      and(
+        eq(documentProcessingRuns.status, "queued"),
+        eq(documentProcessingRuns.kind, "native-extraction"),
+        lt(
+          documentProcessingRuns.attemptCount,
+          DOCUMENT_PROCESSING_MAX_ATTEMPTS,
+        ),
+        or(
+          isNull(documentProcessingRuns.nextAttemptAt),
+          lte(documentProcessingRuns.nextAttemptAt, now),
+        ),
+        sql`(${fields.content}->>'sizeBytes')::bigint <= ${LIMITS.documentProcessingInlineMaxBytes}`,
+      ),
+    )
+    .orderBy(
+      asc(documentProcessingRuns.createdAt),
+      asc(documentProcessingRuns.id),
+    )
+    .limit(limit);
+};
+
+/**
  * A run whose handoff failed is still queued and still nobody else's work:
  * it comes back to this phase on a later tick, so the phase order cannot
  * cover it and the phase reports it itself.
@@ -2868,7 +2908,7 @@ const recoverStaleDocumentProcessingRuns = async (
   };
 };
 
-const handleDocumentProcessingFailure = ({
+export const handleDocumentProcessingFailure = ({
   error,
   job,
 }: {

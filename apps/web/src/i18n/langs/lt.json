@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Norėdami tęsti šį veiksmą, prisijunkite iš naujo.",
     "resendCode": "Siųsti kodą dar kartą adresu <email>{emailAddress}</email>",
     "selectOrganization": "Pasirinkite organizaciją",
+    "sessionExpired": "Jūsų sesija baigėsi",
+    "sessionExpiredDescription": "Prisijunkite naujame skirtuke. Tai, ką įvedėte, liks šiame puslapyje.",
     "signIn": "Prisijungti",
     "signInBeforeInvitation": "Norėdami priimti kvietimą į organizaciją, pirmiausia turite prisijungti.",
     "signInWithPassword": "Prisijungti slaptažodžiu",
@@ -891,6 +893,24 @@
       "title": "Pasiūlymai pagal jūsų veiklą",
       "unnamedRecord": "Bylos įrašas"
     },
+    "timeReport": {
+      "billableHours": "Apmokestinamos valandos",
+      "billableShare": "Apmokestinamo laiko dalis",
+      "change": "Pokytis: {value}",
+      "changePoints": "Pokytis procentiniais punktais: {value}",
+      "collapse": "Sutraukti {name}",
+      "empty": "Registruokite laiką, kad ši ataskaita būtų užpildyta.",
+      "expand": "Išskleisti {name}",
+      "internal": "Vidinis",
+      "pendingEntries": "Laukia patvirtinimo",
+      "period": "Laikotarpis",
+      "privacy": "Šioje ataskaitoje naudojami tik užregistruoti laiko įrašai. Kompiuterio veikla lieka kiekviename įrenginyje.",
+      "title": "Komandos darbo laiko ataskaita",
+      "tooLargeToLoad": "Ši ataskaita per didelė, kad būtų įkelta. Sutrumpinkite laikotarpį arba stulpeliuose rodykite savaites ar mėnesius.",
+      "tooManyCells": "Ši ataskaita per didelė, kad būtų rodoma čia. Sutrumpinkite laikotarpį, stulpeliuose rodykite savaites arba mėnesius arba eksportuokite ją į CSV.",
+      "total": "Iš viso",
+      "unbilledValue": "Neišrašyta apmokėtina suma"
+    },
     "timerActive": "Laikmatis veikia",
     "timesheets": "Darbo laiko apskaita",
     "total": "Iš viso",
@@ -928,6 +948,7 @@
     "desktopUnavailable": "Prijunkite arba atnaujinkite stella desktop.",
     "featureUnavailable": "Ši funkcija nepasiekiama.",
     "ocrUnavailable": "OCR nepasiekiamas.",
+    "openSettings": "Atidaryti nustatymus",
     "translationMissing": "Nesukonfigūruota jokia vertimo paslauga."
   },
   "caseLaw": {
@@ -1104,9 +1125,9 @@
     "loadingMore": "Kraunama daugiau...",
     "marginFilter": {
       "label": "Cituojamų nuostatų filtras",
-      "paragraph": "{count, plural, =0 {¶{paragraph} necituojama jokių nuostatų} one {¶{paragraph} cituojama # nuostata} few {¶{paragraph} cituojamos # nuostatos} many {¶{paragraph} cituojama # nuostatos} other {¶{paragraph} cituojama # nuostatų}}",
-      "selection": "{count, plural, =0 {Pažymėtame tekste necituojama jokių nuostatų} one {Pažymėtame tekste cituojama # nuostata} few {Pažymėtame tekste cituojamos # nuostatos} many {Pažymėtame tekste cituojama # nuostatos} other {Pažymėtame tekste cituojama # nuostatų}}",
-      "unnumberedParagraph": "{count, plural, =0 {Šioje pastraipoje necituojama jokių nuostatų} one {Šioje pastraipoje cituojama # nuostata} few {Šioje pastraipoje cituojamos # nuostatos} many {Šioje pastraipoje cituojama # nuostatos} other {Šioje pastraipoje cituojama # nuostatų}}"
+      "paragraph": "{count, plural, one {¶{paragraph} cituojama # nuostata} few {¶{paragraph} cituojamos # nuostatos} many {¶{paragraph} cituojama # nuostatos} other {¶{paragraph} cituojama # nuostatų}}",
+      "selection": "{count, plural, one {Pažymėtame tekste cituojama # nuostata} few {Pažymėtame tekste cituojamos # nuostatos} many {Pažymėtame tekste cituojama # nuostatos} other {Pažymėtame tekste cituojama # nuostatų}}",
+      "unnumberedParagraph": "{count, plural, one {Šioje pastraipoje cituojama # nuostata} few {Šioje pastraipoje cituojamos # nuostatos} many {Šioje pastraipoje cituojama # nuostatos} other {Šioje pastraipoje cituojama # nuostatų}}"
     },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# sprendimas jau buvo čia išsaugotas} few {# sprendimai jau buvo čia išsaugoti} many {# sprendimo jau buvo čia išsaugota} other {# sprendimų jau buvo čia išsaugota}}",
@@ -1337,9 +1358,30 @@
       "none": "Nereikia nustatyti"
     },
     "skillNeedsUnavailableTools": "Pokalbyje nesiūloma. Reikia įrankio, kuris ten nepasiekiamas: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Paslepia klientų vardus, sąskaitų numerius, adresus ir kitus asmens duomenis prieš bendrinant bylos turinį su DI paslaugų teikėjais. Grįžtama kliento pusėje; atviras tekstas niekada nepalieka jūsų darbo vietos.",
+      "ares": "Čekijos įmonių paieška pagal IČO arba pavadinimą viešajame ARES registre (ūkio subjektų administracinis registras, Čekijos juridinių asmenų registro atitikmuo).",
+      "boe": "Ispanijos konsoliduoti teisės aktai, kasdienis oficialus leidinys ir BORME (prekybos registro leidinys) iš oficialios Boletín Oficial del Estado atvirųjų duomenų API.",
+      "brreg": "Norvegijos įmonių paieška pagal organisasjonsnummer arba pavadinimą viešoje atviroje Brreg Enhetsregisteret API.",
+      "companiesHouse": "JK įmonių paieška pagal Companies House registracijos numerį arba pavadinimą Companies House viešųjų duomenų API. Reikalingas nemokamas API raktas.",
+      "createDocx": "Kuria „Word“ dokumentus iš pokalbio su formatavimu, lentelėmis, antraštėmis ir įterptais stiliais. Rezultatą galima atsisiųsti ir redaguoti „Word“, „LibreOffice“ ir „Pages“ programose.",
+      "denue": "Meksikos veiklos vietų ir ūkio vienetų paieška pagal DENUE veiklos vietos ID, pavadinimą arba teisinį pavadinimą oficialioje INEGI DENUE API. DENUE yra veiklos vietų katalogas, o ne bendrovių teisės registras Registro Público de Comercio. Reikalingas nemokamas INEGI API žetonas.",
+      "edgar": "JAV biržinių bendrovių paieška pagal Central Index Key (CIK) SEC EDGAR pateikčių API.",
+      "gcis": "Taivano įmonių paieška pagal 統一編號 (tongbian, mokesčių identifikatorius) arba pavadinimą Ekonomikos reikalų ministerijos (MoEA) portalo Commerce Industrial Services atvirųjų duomenų API.",
+      "infosoud": "Čekijos teismo bylų paieška ir posėdžių kalendorius iš infosoud.gov.cz. Ieškokite pagal bylos numerį, teismą arba šalį ir sužinokite posėdžių datas bei bylos būseną.",
+      "krs": "Lenkijos įmonių paieška pagal KRS numerį Teisingumo ministerijos Krajowy Rejestr Sądowy (KRS) atviroje API. Apima Rejestr Przedsiębiorców (komercinės bendrovės) ir Rejestr Stowarzyszeń (asociacijos ir fondai).",
+      "orsr": "Slovakijos įmonių paieška pagal IČO arba pavadinimą Teisingumo ministerijos tvarkomo Obchodný register Slovenskej republiky JSON API.",
+      "prh": "Suomijos įmonių paieška pagal Y-tunnus arba pavadinimą Patentti- ja rekisterihallitus (PRH) atviroje API AvoinData v3.",
+      "rechercheEntreprises": "Prancūzijos įmonių paieška pagal SIREN, SIRET arba pavadinimą atviroje API recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Slovakijos paieška pagal IČO arba pavadinimą registre Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO), kurį tvarko Slovakijos Respublikos statistikos biuras. Apima visus juridinius asmenis ir verslininkus, įskaitant individualią veiklą vykdančius asmenis, asociacijas, fondus ir viešąsias įstaigas, nepatenkančias į prekybos registrą.",
+      "vies": "PVM mokėtojų kodų tikrinimas visoje ES per Europos Komisijos PVM informacijos mainų sistemos (VIES) REST API. Patvirtina, ar kodas registruotas tiekėjo valstybėje narėje, ir grąžina registruoto prekiautojo pavadinimą bei adresą, jei valstybė narė juos atskleidžia.",
+      "webSearch": "Ieško viešajame internete ir skaito atskirus puslapius. Kai nustatyta jurisdikcija, užklausos pirmiausia nukreipiamos į pirminius šaltinius (teismus, teisės aktų portalus), kitu atveju į atvirą internetą. Įjungiama kiekvienam pokalbiui atskirai."
+    },
     "toolNames": {
       "anonymize": "Anonimizuoti",
       "createDocx": "Sukurti DOCX",
+      "gcis": "GCIS įmonių registras",
+      "vies": "ES PVM kodo tikrinimas (VIES)",
       "webSearch": "Žiniatinklio paieška"
     },
     "unavailable": "Dar neprieinama"
@@ -1450,7 +1492,7 @@
     "audioContent": "Sugeneruotas garsas",
     "browserExtension": {
       "connect": "Prijungti plėtinį",
-      "connectDescription": "Šiame skirtuke spustelėkite stella plėtinio piktogramą naršyklės įrankių juostoje. Jei prašoma, leiskite pasiekti svetaines ir prijunkite šį skirtuką.",
+      "connectDescription": "Spustelėkite stella plėtinio piktogramą naršyklės įrankių juostoje, jei prašoma, leiskite pasiekti svetaines ir prijunkite stella. Vienas prijungimas galioja visiems jūsų stella skirtukams.",
       "connected": "Plėtinys prijungtas",
       "description": "Jums paprašius, stella gali atidaryti ir skaityti svetaines atskirame skirtuke.",
       "install": "Įdiegti plėtinį",
@@ -2888,6 +2930,7 @@
       "aiOutputModerated": "DI teikėjas moderavo išvestį. Performuluokite užklausą arba pasirinkite kitą modelį.",
       "aiProviderTaskUnsupported": "Sukonfigūruotas DI teikėjas negali atlikti šios užduoties. Pasirinkite teikėją, kuris gali.",
       "aiUnknown": "DI užklausa nepavyko. Bandykite dar kartą.",
+      "alreadyOrganizationMember": "Šis asmuo jau yra šios organizacijos narys.",
       "clauseDirectivesInvalid": "Susietoje sąlygoje yra netinkamų direktyvų. Prieš pildydami šabloną, pataisykite sąlygą.",
       "clauseDirectivesInvalidDetails": "Sąlygoje {clauseName}, esančioje lauke {slotName}, yra netinkamų direktyvų. Atidarykite sąlygų redaktorių, pataisykite nurodytas pastraipas ir dar kartą užpildykite šabloną.",
       "clauseDirectivesOverrideInvalidDetails": "Sąlygos {clauseName} pakeistas tekstas lauke {slotName} turi netinkamų direktyvų. Pataisykite šio pildymo pakeistą tekstą ir bandykite dar kartą.",
@@ -2903,12 +2946,19 @@
       "idempotencyInProgress": "Ši užklausa vis dar apdorojama. Šiek tiek palaukite ir bandykite dar kartą.",
       "idempotencyKeyReused": "Duomenys pasikeitė nuo ankstesnio bandymo. Iš naujo nustatykite formą ir bandykite dar kartą.",
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
+      "invitationAlreadyPending": "Šis asmuo jau turi laukiantį kvietimą. Pakartotinai jį išsiųskite skiltyje Laukiantys kvietimai.",
+      "invitationEmailUnverified": "Kad galėtumėte atsakyti į šį kvietimą, patvirtinkite savo el. pašto adresą.",
+      "invitationLimitReached": "Ši organizacija pasiekė kvietimų ribą. Pirmiausia atšaukite laukiantį kvietimą.",
+      "invitationOtherRecipient": "Šis kvietimas buvo išsiųstas kitu el. pašto adresu.",
+      "invitationRoleNotAllowed": "Negalite pakviesti asmens su šia role. Pasirinkite kitą rolę.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas elementų limitas, todėl dokumento sukurti nepavyko.",
       "legalSourceFilePropertyMissing": "Šioje byloje trūksta failo ypatybės, todėl dokumento sukurti nepavyko.",
       "matterContactCapacityExceeded": "Šioje byloje yra daugiau kontaktų, nei galima parodyti. Pašalinkite matomus kontaktų susiejimus, kad būtų parodyti likę kontaktai.",
       "matterContactCapacityReached": "Ši byla pasiekė kontaktų skaičiaus ribą. Prieš pridėdami kitą kontaktą, pašalinkite vieną kontaktų susiejimą.",
       "mcpAuthorizationApprovalRequired": "Kad galėtumėte prisijungti, administratorius turi patvirtinti šią jungtį.",
       "notOrganizationMember": "Nesate šios organizacijos narys.",
+      "organizationLastOwner": "Organizacija turi turėti savininką. Pirmiausia perduokite nuosavybę.",
+      "organizationMemberLimitReached": "Ši organizacija pasiekė narių ribą.",
       "providerKeyRejected": "Teikėjas atmetė API raktą.",
       "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",
       "thirdPartyBoundaryRefusal": "Užklausa bandė naudoti turinį už leidžiamo darbo srities konteksto ribų.",
@@ -3034,6 +3084,7 @@
     },
     "compareChangeSummary": "Pakeitimai pagal tipą",
     "compareCreated": "Sukurtas stebimų pokyčių dokumentas",
+    "compareDocxOnly": "Palyginti (tik DOCX)",
     "compareFailed": "Palyginimas nepavyko",
     "compareNeedsTwoVersions": "Norėdami palyginti, įkelkite kitą DOCX versiją.",
     "compareNoChanges": "Palaikomų skirtumų nerasta.",
@@ -3089,6 +3140,7 @@
     "selectVersion": "Pasirinkite versiją",
     "setLabel": "Nustatyti žymę",
     "showDiff": "Rodyti skirtumus",
+    "showText": "Rodyti tekstą",
     "showVersionList": "Rodyti versijų istoriją",
     "uploadDate": "Įkėlimo data",
     "uploadNewVersion": "Įkelti naują versiją",
@@ -4048,6 +4100,28 @@
       "skippedReasonOutsideSkillFolder": "Už įgūdžio aplanko ribų",
       "skippedReasonUnsupportedExtension": "Nepalaikomas failo tipas",
       "skippedReasonUnsupportedFolder": "Ne išteklių aplanke",
+      "starter": {
+        "compare": {
+          "body": "Palyginkite dvi šio dokumento versijas ir išvardykite visus esminius pakeitimus bei jų vietą.",
+          "description": "Išvardykite visus esminius dviejų versijų pakeitimus",
+          "name": "Palyginti versijas"
+        },
+        "draft": {
+          "body": "Parenkite santūrų atsakymą į šį laišką. Išlaikykite profesionalų toną, aptarkite kiekvieną iškeltą klausimą ir pažymėkite neišspręstus klausimus, kuriuos turiu patvirtinti.",
+          "description": "Parenkite profesionalų atsakymą į laišką",
+          "name": "Parengti atsakymą"
+        },
+        "risks": {
+          "body": "Peržiūrėkite šį dokumentą ir nustatykite teisines rizikas, trūkstamas apsaugos priemones bei dviprasmiškas sąlygas. Prie kiekvienos išvados nurodykite konkrečią sąlygą.",
+          "description": "Raskite teisines rizikas ir dviprasmiškas sąlygas",
+          "name": "Rasti rizikas"
+        },
+        "summarize": {
+          "body": "Apibendrinkite šį dokumentą. Aptarkite šalis, pagrindinius įsipareigojimus, datas, finansines sąlygas ir visas sąlygas dėl nutraukimo ar atsakomybės.",
+          "description": "Gaukite struktūruotą pagrindinių sąlygų santrauką",
+          "name": "Apibendrinti dokumentą"
+        }
+      },
       "uploadHelp": "Naudokite SKILL.md failą arba .zip aplanką su SKILL.md ir pasirinktiniais tik skaitymui skirtais ištekliais.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/kelias/iki/igudzio",
       "version": "Versija: {version}"
@@ -4729,6 +4803,7 @@
     "creationRefused": "Organizacijos sukurti nepavyko. Patikrinkite duomenis ir bandykite dar kartą.",
     "creationSlugConflict": "Šis organizacijos adresas jau naudojamas. Pasirinkite kitą pavadinimą arba adresą.",
     "invitations": {
+      "cancelConfirmDescription": "Adresu {email} išsiųsta kvietimo nuoroda nebeveiks. Norėdami pakviesti šį asmenį dar kartą, išsiųskite naują kvietimą.",
       "cancelInvitation": "Atšaukti kvietimą",
       "emailAddressLabel": "El. pašto adresas",
       "emailAddressPlaceholder": "naudotojas@example.com",
@@ -4736,6 +4811,7 @@
       "inviteMember": "Pakviesti narį",
       "inviteMemberDescription": "Išsiųsti kvietimą prisijungti prie jūsų organizacijos",
       "invited": "Pakviesta",
+      "keepInvitation": "Palikti kvietimą",
       "noInvitationsFound": "Kvietimų nerasta",
       "resendInvitation": "Išsiųsti kvietimą pakartotinai",
       "sendInvitation": "Išsiųsti kvietimą",
@@ -4972,6 +5048,7 @@
     "caseLawEmptyState": "Pradėkite rašyti, kad ieškotumėte teismų sprendimų.",
     "caseLawMatchingDecisions": "{count, plural, one {# atitinkantis sprendimas} few {# atitinkantys sprendimai} many {# atitinkančio sprendimo} other {# atitinkančių sprendimų}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ atitinkantis sprendimas} few {#+ atitinkantys sprendimai} many {#+ atitinkančio sprendimo} other {#+ atitinkančių sprendimų}}",
+    "chatCoveragePartial": "Ne visi pokalbiai išnagrinėti iki galo.",
     "continueInChat": "Tęsti pokalbyje",
     "dateFrom": "Nuo",
     "dateTo": "Iki",
@@ -5108,8 +5185,8 @@
       "desktopDocumentsTitle": "Dokumentų redagavimas kompiuteryje",
       "desktopDownloadMac": "Atsisiųsti „macOS“",
       "desktopDownloadOtherMac": "Naudojate „Windows“? Atsisiųsti „Windows“",
-      "desktopDownloadOtherWindows": "Arba atsisiųskite .msi diegimo programą IT valdomiems diegimams",
       "desktopDownloadWindows": "Atsisiųsti „Windows“",
+      "desktopDownloadWindowsArm": "Naudojate „Windows“ ARM įrenginyje? Atsisiųsti ARM versiją",
       "desktopHeroTitle": "Jūsų iškarpinė paruošta, kai jos prireikia",
       "desktopInstallMacStep": "Atidarykite DMG ir nuvilkite „stella desktop“ į aplanką „Applications“.",
       "desktopInstallOpenStep": "Vieną kartą atidarykite „stella desktop“. Iškarpinė pasirodys iškart ir liks pasiekiama macOS meniu juostoje arba Windows sistemos dėkle.",
@@ -5330,6 +5407,7 @@
         "legal_list_item": "teisinio sąrašo įrašas",
         "legal_list_verification": "teisinio sąrašo tikrinimas",
         "legal_resolve": "teisinės nuorodos paieška",
+        "legislation_matter_link": "teisės akto sąsaja su byla",
         "machine_api_key": "mašinos API raktas",
         "mcp_connection": "MCP ryšys",
         "mcp_gateway_tool": "MCP tinklų sietuvo įrankis",
@@ -5784,6 +5862,7 @@
       "open": "Atvira"
     },
     "subtasks": "Použduočiai",
+    "taskCompleted": "Užduotis užbaigta",
     "title": "Užduotys",
     "untitled": "Užduotis be pavadinimo",
     "workTypeValues": {
@@ -6297,6 +6376,7 @@
     },
     "createNewWorkspace": "Sukurti naują bylą",
     "defaultName": "Be pavadinimo",
+    "deleteFromMatter": "Ištrinti iš bylos…",
     "deleteItem": "Ištrinti elementą",
     "deleteItems": "Ištrinti {count, plural, one {# elementą} few {# elementus} other {# elementų}}",
     "deleteItemsDescription": "Ar tikrai norite ištrinti {count, plural, one {# elementą} few {# elementus} other {# elementų}}? Šio veiksmo negalima atšaukti.",
@@ -6392,6 +6472,7 @@
       "downloadSearchablePdf": "PDF su paieškos tekstu",
       "downloadWithComments": "Atsisiųsti su komentarais",
       "emptyFile": "Failas tuščias.",
+      "fileTooLarge": "Failas didesnis nei {limit, number} MB.",
       "includeReferenceNumber": "Įtraukti nuorodos numerį",
       "itemLimitReached": "Šioje byloje pasiektas elementų limitas.",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
@@ -6681,11 +6762,14 @@
         "empty": "Šioje byloje veiklos dar nėra.",
         "fields": {
           "dueDate": "terminas",
+          "name": "pavadinimas",
           "parentFolder": "pirminis aplankas",
           "priority": "prioritetas",
           "property": "savybė",
           "schedule": "tvarkaraštis",
-          "sortOrder": "eilės tvarka"
+          "sortOrder": "eilės tvarka",
+          "status": "būsena",
+          "type": "tipas"
         },
         "filterLabel": "Filtruoti veiklą",
         "filters": {
@@ -6735,8 +6819,18 @@
           "team": "bylos komanda",
           "translation": "vertimas"
         },
+        "taskLinks": {
+          "added": "Susiejo {name} su",
+          "addedUnnamed": "Susiejo elementą su",
+          "removed": "Atsiejo {name} nuo",
+          "removedUnnamed": "Atsiejo elementą nuo"
+        },
         "title": "Veikla",
         "updatedFields": "Atnaujinta: {fields}",
+        "versions": {
+          "added": "Pridėjo {version} versiją:",
+          "deleted": "Ištrynė {version} versiją:"
+        },
         "views": {
           "list": "Sąrašo rodinys",
           "timeline": "Laiko juostos rodinys"
