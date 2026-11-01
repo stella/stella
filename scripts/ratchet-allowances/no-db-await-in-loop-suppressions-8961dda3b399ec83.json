@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/scheduler/tasks/case-law-population-fold.ts",
+  "delta": 1,
+  "reason": "The population fold drains the delta queue in bounded batches; each batch commits on its own after a fresh load admission and checkpoint, so the batches must run in sequence rather than concurrently. It replaces the hourly browse-facet refresh, which aggregated the corpus in one statement."
+}

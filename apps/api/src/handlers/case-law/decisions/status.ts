@@ -325,6 +325,14 @@ const EMPTY_STATUS: CaseLawCorpusStatus = {
   health: CASE_LAW_COVERAGE_HEALTH.UNKNOWN,
 };
 
+/** The status is a hint beside the box, not the page: degrade to "unknown". */
+const unavailableCorpusStatus = (error: unknown): CaseLawCorpusStatus => {
+  logger.warn("case_law.corpus_status.unavailable", {
+    "error.type": errorTag(error),
+  });
+  return EMPTY_STATUS;
+};
+
 export const readCaseLawCorpusStatusHandler = async (
   { country }: ReadCaseLawCorpusStatusQuery,
   caseLawDb: CaseLawPublicReadDb,
@@ -348,10 +356,7 @@ export const readCaseLawCorpusStatusHandler = async (
   // revocation changes the key rather than waiting out the window.
   const excludedSourceIds = await readNonRedistributableCaseLawSourceIds();
   if (Result.isError(excludedSourceIds)) {
-    logger.warn("case_law.corpus_status.unavailable", {
-      "error.type": errorTag(excludedSourceIds.error),
-    });
-    return EMPTY_STATUS;
+    return unavailableCorpusStatus(excludedSourceIds.error);
   }
 
   const facets = await readBrowseFacetsUnderPolicy({
@@ -359,10 +364,7 @@ export const readCaseLawCorpusStatusHandler = async (
     excludedSourceIds: excludedSourceIds.value,
   });
   if (Result.isError(facets)) {
-    logger.warn("case_law.corpus_status.unavailable", {
-      "error.type": errorTag(facets.error),
-    });
-    return EMPTY_STATUS;
+    return unavailableCorpusStatus(facets.error);
   }
   const result = await corpusStatus({
     country: publicCountry,
@@ -379,11 +381,7 @@ export const readCaseLawCorpusStatusHandler = async (
     readSources: async () => await caseLawDb(readCaseLawSourceHealthQuery),
   });
   if (Result.isError(result)) {
-    // The status is a hint beside the box, not the page: degrade to "unknown".
-    logger.warn("case_law.corpus_status.unavailable", {
-      "error.type": errorTag(result.error),
-    });
-    return EMPTY_STATUS;
+    return unavailableCorpusStatus(result.error);
   }
 
   return caseLawCorpusStatusAt(result.value, new Date());
