@@ -42,8 +42,8 @@ export const runInlineExtractions = async ({
       panic("SchedulerAborted");
     }
     attempted++;
-    // db-await-in-loop: one file at a time is the bound on this process's memory
     const outcome = await Result.tryPromise(
+      // db-await-in-loop: one file at a time is the bound on this process's memory
       async () => await process(db, run.id, signal),
     );
     if (Result.isError(outcome)) {
