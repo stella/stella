@@ -28,10 +28,12 @@ if git show-ref --verify --quiet "refs/tags/$final"; then
   fi
   echo "Final tag $final already targets $sha; resuming publication." >&2
 else
-  # The final tag starts the production promote, so it waits for the
-  # production gate: the newest release/prod-gate status on this exact commit,
-  # set by a person, must be success. Setting it re-runs this finalization
-  # (release-tag.yml `status` trigger); until then nothing is written.
+  GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$script_dir/check-release-main-health.sh" "$repo" "$sha" "$sha"
+  # The final tag starts the production promote, so a proven candidate waits
+  # for the production gate: the newest release/prod-gate status on this exact
+  # commit, set by a person, must be success. Setting it re-runs this
+  # finalization (release-tag.yml `status` trigger); until then nothing is
+  # written.
   gate=$(GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$sha/statuses?per_page=100" \
     | jq -r '([.[][] | select(.context == "release/prod-gate")][0]) as $gate
       | if $gate == null then "missing"
@@ -41,7 +43,6 @@ else
     echo "::notice::Final tag $final waits for release/prod-gate=success on $sha (now: $gate)" >&2
     exit 0
   fi
-  GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$script_dir/check-release-main-health.sh" "$repo" "$sha" "$sha"
   git tag -a "$final" "$rc_sha" -m "$final"
   git push "https://x-access-token:${GH_TOKEN:?}@github.com/$repo.git" "refs/tags/$final"
 fi

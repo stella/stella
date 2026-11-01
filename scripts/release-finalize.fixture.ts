@@ -96,7 +96,12 @@ export const finalize = (fixture: ProofFixture = {}) => {
       ["main/heavy", "main-heavy.yml", "Main heavy suites "],
       ["main/pr-depth", "main-pr-depth.yml", "Main PR-depth checks "],
     ] as const;
-    const statuses = contexts
+    const statuses: {
+      context: string;
+      state: string;
+      creator: { login: string; type: string };
+      target_url: string;
+    }[] = contexts
       .map(([context], index) => ({
         context,
         state: fixture.states?.[context] ?? "success",

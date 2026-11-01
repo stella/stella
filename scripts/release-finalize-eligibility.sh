@@ -22,6 +22,8 @@ refuse() {
 field() { jq -er ".workflow_run.$1 // empty" "$event"; }
 status_field() { jq -er ".$1 // empty" "$event"; }
 
+# The proof workflows render this run-name (scripts/proof-run-titles.test.ts).
+title_pattern='^(Staging release proof (v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*)|Main heavy suites|Main PR-depth checks) ([0-9a-f]{40})$'
 named_rc=""
 if jq -e 'has("workflow_run")' "$event" > /dev/null; then
   [[ "$(field head_repository.full_name || true)" == "$repo" ]] ||
@@ -41,7 +43,6 @@ if jq -e 'has("workflow_run")' "$event" > /dev/null; then
   # the run title. A staging proof also names its candidate tag
   # (scripts/proof-run-titles.test.ts renders each workflow's run-name).
   title="$(field display_title || true)"
-  title_pattern='^(Staging release proof (v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*)|Main heavy suites|Main PR-depth checks) ([0-9a-f]{40})$'
   [[ "$title" =~ $title_pattern ]] ||
     refuse not-a-proof-title "the run title names no exact commit"
   named_rc="${BASH_REMATCH[2]}"
