@@ -12,13 +12,14 @@ export const resolveNextDeadline = <TTask extends DatedTask>(
   tasks: readonly TTask[],
   today: string,
 ): NextDeadline<TTask> => {
-  const task = tasks.find(({ dueDate }) => dueDate !== null);
-  if (task === undefined || task.dueDate === null) {
-    return { type: "none" };
+  for (const task of tasks) {
+    if (task.dueDate !== null) {
+      return {
+        dueDate: task.dueDate,
+        task,
+        type: task.dueDate < today ? "overdue" : "upcoming",
+      };
+    }
   }
-  return {
-    dueDate: task.dueDate,
-    task,
-    type: task.dueDate < today ? "overdue" : "upcoming",
-  };
+  return { type: "none" };
 };

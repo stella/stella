@@ -22,7 +22,9 @@ describe("completing a task", () => {
         currentStatus: () => "done",
         next: "done",
         previous,
-        restore: (status) => restored.push(status),
+        restore: (status) => {
+          restored.push(status);
+        },
       });
 
       const toast = add.mock.calls.at(0)?.at(0);
@@ -44,7 +46,9 @@ describe("completing a task", () => {
       currentStatus: () => "in_progress",
       next: "done",
       previous: "open",
-      restore: (status) => restored.push(status),
+      restore: (status) => {
+        restored.push(status);
+      },
     });
     const undo = add.mock.calls.at(0)?.at(0)?.action?.onClick;
     if (undo === undefined) {
