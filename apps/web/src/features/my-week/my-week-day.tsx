@@ -42,6 +42,7 @@ type MyWeekDayProps = SuggestionActions & {
   /** Per-entry notes from the last submission, by entry id. */
   notes: ReadonlyMap<string, string>;
   onEditEntry: (entry: MyTimeEntry) => void;
+  onCreate: () => void;
 };
 
 const LONG_DAY = {
@@ -177,9 +178,11 @@ export const MyWeekDay = ({
   canEdit,
   notes,
   onEditEntry,
+  onCreate,
   ...actions
 }: MyWeekDayProps) => {
   const t = useTranslations("timesheets.week");
+  const tCommon = useTranslations("common");
   const format = useFormatter();
   const pending = canDecide && suggestions.length > 0;
 
@@ -220,9 +223,14 @@ export const MyWeekDay = ({
         </ul>
       )}
       {!pending && entriesComplete && (
-        <p className="text-muted-foreground rounded-lg border border-dashed py-8 text-center text-sm">
-          {entries.length === 0 ? t("noActivity") : t("allLogged")}
-        </p>
+        <div className="text-muted-foreground flex flex-col items-center gap-3 rounded-lg border border-dashed py-8 text-center text-sm">
+          <p>{entries.length === 0 ? t("noActivity") : t("allLogged")}</p>
+          {entries.length === 0 && canDecide && (
+            <Button onClick={onCreate} variant="outline">
+              {tCommon("logTime")}
+            </Button>
+          )}
+        </div>
       )}
     </section>
   );

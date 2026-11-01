@@ -14,6 +14,7 @@ import {
   normalizeApiError,
   parseApiErrorValue,
   parseApiValidationIssues,
+  PREVIEW_UNAVAILABLE_ERROR_CODE,
 } from "@stll/api-contract";
 import type { ApiValidationIssue } from "@stll/api-contract";
 import {
@@ -30,7 +31,7 @@ import {
   publicCountryUnavailableSchema,
   type PublicLawDomain,
 } from "@stll/api-contract/public-country-capability";
-import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
+import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
@@ -46,6 +47,7 @@ import {
   STATUS_TO_KEY,
   translateError,
 } from "@/lib/errors/localization";
+import { uploadFileTooLargeMessage } from "@/lib/files/upload-file-validation";
 
 export class APIError extends TaggedError(API_ERROR_TAG)<{
   code?: string | undefined;
@@ -231,9 +233,9 @@ const VERIFICATION_RUN_CAP_ERROR_KEYS = {
 } as const satisfies Record<VerificationRunCapCode, TranslationKey>;
 
 const CODE_ERROR_KEYS = {
+  [TIME_ENTRY_RATE_REQUIRED_CODE]: "billing.rates.effectiveRateRequired",
   [IDEMPOTENCY_IN_PROGRESS_CODE]: "errors.apiCodes.idempotencyInProgress",
   [IDEMPOTENCY_KEY_REUSED_CODE]: "errors.apiCodes.idempotencyKeyReused",
-  [GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE]: "caseLaw.pagination.refineForMore",
   ...AI_FAILURE_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
@@ -263,6 +265,7 @@ const CODE_ERROR_KEYS = {
   deepl_key_rejected: "errors.apiCodes.deeplKeyRejected",
   deepl_quota_exceeded: "errors.apiCodes.deeplQuotaExceeded",
   [ENCRYPTED_CONTENT_ERROR_CODE]: "errors.apiCodes.encryptedContent",
+  [PREVIEW_UNAVAILABLE_ERROR_CODE]: "search.previewUnavailable",
   [API_FILE_SECURITY_REJECTED_ERROR_CODE]:
     "errors.apiCodes.fileSecurityRejected",
   forbidden: "errors.apiCodes.forbidden",
@@ -311,6 +314,10 @@ const validationIssueMessage = (issue: ApiValidationIssue): string => {
       return issue.limit === undefined
         ? t("errors.apiCodes.validationInvalid")
         : t("errors.apiCodes.validationTooShort", { limit: issue.limit });
+    case "maxBytes":
+      return issue.limit === undefined
+        ? t("errors.apiCodes.validationInvalid")
+        : uploadFileTooLargeMessage(issue.limit);
     case "required":
       return t("errors.apiCodes.validationRequired");
     case "invalid":
@@ -345,9 +352,36 @@ export const apiFieldIssueMessage = (
   return issue === undefined ? undefined : validationIssueMessage(issue);
 };
 
+/**
+ * Codes that only restate a 401 or 403. `permission_denied` is the API's
+ * refusal for both; the status tells them apart, so the status-keyed message
+ * is the right text. Any other code on those statuses refuses something else
+ * (a wrong password is a 401 too) and stays with the caller's own wording.
+ */
+const AUTH_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  "permission_denied",
+  "SESSION_EXPIRED",
+  "UNAUTHORIZED",
+]);
+
+type AuthRefusalCandidate = { code?: string | undefined; status: number };
+
+/** Whether this is a plain refusal of who is asking, whatever the action. */
+export const isAuthRefusal = ({
+  code,
+  status,
+}: AuthRefusalCandidate): boolean =>
+  (status === 401 || status === 403) &&
+  (code === undefined || AUTH_REFUSAL_CODES.has(code));
+
+/** The server has nothing to show for this file; retrying cannot help. */
+export const isPreviewUnavailableError = (error: unknown): boolean =>
+  APIError.is(error) && error.code === PREVIEW_UNAVAILABLE_ERROR_CODE;
+
 export const isDisplayableAPIError = (error: APIError): boolean =>
   isActionAdmissionCode(error.code) ||
   (typeof error.code === "string" && isKnownErrorCode(error.code)) ||
+  isAuthRefusal(error) ||
   (error.status === 402 &&
     typeof error.details?.["reason"] === "string" &&
     isUsageRejectionReason(error.details["reason"]));

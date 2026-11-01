@@ -17,12 +17,12 @@ import { Temporal } from "@stll/time";
  *   bun run apps/api/src/tests/case-law/update-adapter-fixtures.ts --adapter sk-courts
  */
 
-import type { SyncPage } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   listAdapterKeys,
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 import { encodeGzipJson } from "@/api/lib/gzip-json";
+import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
 import {
   formatProvenance,
   provenancePathOf,
@@ -125,15 +125,7 @@ const updateAdapter = async (
       recordedAt: Temporal.Now.instant().toString({
         fractionalSecondDigits: 3,
       }),
-      page: {
-        decisions: page.decisions,
-        // A page's supplements are part of what it served; a recording that
-        // kept only its decisions would drop them from every replay.
-        ...(page.supplements === undefined
-          ? {}
-          : { supplements: page.supplements }),
-        nextCursor: page.nextCursor,
-      },
+      page,
     };
 
     const filename = await writeFixture(adapterKey, record, page.sourceUrl);

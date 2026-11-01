@@ -4,106 +4,142 @@ import { hasAllSiteAccess, requestAllSiteAccess } from "../../lib/access";
 import { readBrowserController } from "../../lib/controller";
 import { downloadNoticeMessage } from "../../lib/download-guard";
 import { parseControllableUrl } from "../../lib/origin-policy";
+import { type PopupTab, runPopupAction } from "../../lib/popup-actions";
 import { type PopupResponse, sendPopupRequest } from "../../lib/popup-request";
+import {
+  handedTabView,
+  type PopupAction,
+  type PopupActiveTab,
+  type PopupMessageKey,
+  type PopupSecondaryAction,
+  type PopupView,
+  popupView,
+} from "../../lib/popup-view";
 import { trustedStellaOriginFromUrl } from "../../lib/trusted-origin";
 
+const purposeElement = document.querySelector("#purpose");
 const statusElement = document.querySelector("#status");
-const grantButton = document.querySelector("#grant");
-const connectButton = document.querySelector("#connect");
-const adoptButton = document.querySelector("#adopt");
-const disconnectButton = document.querySelector("#disconnect");
-const revokeButton = document.querySelector("#revoke");
+const statusLine = document.querySelector(".status-line");
+const primaryButton = document.querySelector("#primary");
+const secondaryActions = document.querySelector("#secondary-actions");
 const titleElement = document.querySelector("#title");
 
+if (!(purposeElement instanceof HTMLParagraphElement)) {
+  panic("Missing popup purpose element");
+}
 if (!(statusElement instanceof HTMLParagraphElement)) {
   panic("Missing popup status element");
 }
-if (!(grantButton instanceof HTMLButtonElement)) {
-  panic("Missing popup grant button");
+if (!(statusLine instanceof HTMLDivElement)) {
+  panic("Missing popup status line");
 }
-if (!(connectButton instanceof HTMLButtonElement)) {
-  panic("Missing popup connect button");
+if (!(primaryButton instanceof HTMLButtonElement)) {
+  panic("Missing popup primary button");
 }
-if (!(adoptButton instanceof HTMLButtonElement)) {
-  panic("Missing popup adopt button");
-}
-if (!(disconnectButton instanceof HTMLButtonElement)) {
-  panic("Missing popup disconnect button");
-}
-if (!(revokeButton instanceof HTMLButtonElement)) {
-  panic("Missing popup revoke button");
+if (!(secondaryActions instanceof HTMLDivElement)) {
+  panic("Missing popup secondary actions");
 }
 if (!(titleElement instanceof HTMLHeadingElement)) {
   panic("Missing popup title element");
 }
 
-const message = (name: string, substitutions?: string | string[]): string =>
-  chrome.i18n.getMessage(name, substitutions);
+const message = (
+  name: PopupMessageKey | "@@bidi_dir",
+  substitutions?: string | string[],
+): string => chrome.i18n.getMessage(name, substitutions);
 
 document.documentElement.lang = chrome.i18n.getUILanguage();
 document.documentElement.dir = message("@@bidi_dir");
 document.title = message("extensionName");
 titleElement.textContent = message("extensionName");
-grantButton.textContent = message("grantAccess");
-connectButton.textContent = message("connectTab");
-adoptButton.textContent = message("adoptTab");
-disconnectButton.textContent = message("disconnectTab");
-revokeButton.textContent = message("revokeAccess");
+purposeElement.textContent = message("connectionPurpose");
 statusElement.textContent = message("checkingAccess");
 
-const readActiveTab = async (): Promise<chrome.tabs.Tab | null> =>
+const readActiveTab = async (): Promise<PopupTab | null> =>
   (await chrome.tabs.query({ active: true, currentWindow: true })).at(0) ??
   null;
 
-/**
- * The popup shows one primary action for the tab it was opened on: connect a
- * stella tab as the controller, or hand any other public HTTPS page to a
- * connected controller so chat can read it in place.
- */
-const renderAccess = async (): Promise<void> => {
-  const [granted, controller, activeTab] = await Promise.all([
-    hasAllSiteAccess(),
-    readBrowserController(),
-    readActiveTab(),
-  ]);
-  const activeUrl = activeTab?.url ?? "";
-  const onStellaTab = trustedStellaOriginFromUrl(activeUrl) !== null;
-  const onControllablePage = parseControllableUrl(activeUrl) !== null;
-
-  if (!granted) {
-    statusElement.textContent = message("accessOff");
-  } else if (controller) {
-    statusElement.textContent = message("controllerReady", controller.origin);
-  } else {
-    statusElement.textContent = message("accessReady");
+const activeTabKind = (tab: PopupTab | null): PopupActiveTab => {
+  const url = tab?.url ?? "";
+  const stellaOrigin = trustedStellaOriginFromUrl(url);
+  if (stellaOrigin !== null) {
+    return tab?.id === undefined
+      ? { kind: "unsupported" }
+      : { kind: "stella", origin: stellaOrigin, tabId: tab.id };
   }
-  grantButton.hidden = granted;
-  connectButton.hidden = !granted || !onStellaTab;
-  // A stella tab is the controller, never the page chat operates on.
-  adoptButton.hidden =
-    !granted || controller === null || onStellaTab || !onControllablePage;
-  disconnectButton.hidden = controller === null;
-  revokeButton.hidden = !granted;
+  if (parseControllableUrl(url) !== null) {
+    return { kind: "controllable" };
+  }
+  return { kind: "unsupported" };
 };
 
-grantButton.addEventListener("click", () => {
-  requestAllSiteAccess()
-    .then(async (granted) => {
-      if (!granted) {
-        statusElement.textContent = message("accessUpdateFailed");
-        return undefined;
-      }
-      await renderAccess();
+const statusSubstitutions = (view: PopupView): string[] | undefined => {
+  switch (view.state.type) {
+    case "connected":
+    case "tab-handed-to-stella":
+      return [view.state.origin];
+    case "connected-elsewhere":
+    case "not-connected":
+    case "open-stella-to-connect":
+    case "website-access-needed":
       return undefined;
-    })
-    .catch(() => {
-      statusElement.textContent = message("accessUpdateFailed");
-    })
-    .finally(() => {
-      grantButton.disabled = false;
-    });
-  grantButton.disabled = true;
-});
+    default:
+      view.state satisfies never;
+      return panic("Unhandled popup state");
+  }
+};
+
+const renderFailure = (key: PopupMessageKey): void => {
+  statusElement.textContent = message(key);
+};
+
+const renderSecondaryAction = (
+  action: PopupSecondaryAction,
+): HTMLDivElement => {
+  const wrapper = document.createElement("div");
+  wrapper.className = "secondary-action";
+  const button = document.createElement("button");
+  button.className = "secondary";
+  button.type = "button";
+  button.textContent = message(action.messageKey);
+  const description = document.createElement("p");
+  description.textContent = message(action.descriptionMessageKey);
+  button.addEventListener("click", () => execute(button, action.action));
+  wrapper.append(button, description);
+  return wrapper;
+};
+
+const render = (view: PopupView): void => {
+  statusLine.dataset["state"] = view.state.type;
+  statusElement.textContent = message(
+    view.statusMessageKey,
+    statusSubstitutions(view),
+  );
+  primaryButton.hidden = view.primary === null;
+  if (view.primary !== null) {
+    primaryButton.textContent = message(view.primary.messageKey);
+    primaryButton.dataset["action"] = view.primary.action;
+  } else {
+    delete primaryButton.dataset["action"];
+  }
+  secondaryActions.replaceChildren(
+    ...view.secondary.map(renderSecondaryAction),
+  );
+};
+
+const pairActiveTab = async (activeTab: PopupTab | null): Promise<void> => {
+  const result =
+    activeTab?.id === undefined
+      ? ({ status: "unsupported-tab" } as const)
+      : await sendPopupRequest({ tabId: activeTab.id, type: "pair" });
+  if (result.status !== "done") {
+    renderFailure(
+      result.status === "failed" ? "accessUpdateFailed" : "unsupportedTab",
+    );
+    return;
+  }
+  await renderAccess();
+};
 
 const adoptFailureMessage = {
   done: "unsupportedTab",
@@ -113,100 +149,79 @@ const adoptFailureMessage = {
   "unsupported-tab": "unsupportedTab",
 } as const satisfies Record<
   Exclude<PopupResponse["status"], "adopted">,
-  string
+  PopupMessageKey
 >;
 
-// Pairing, adopting, disconnecting and revoking are changes the worker
-// makes, in order with the browser commands they must not race.
-connectButton.addEventListener("click", () => {
-  connectButton.disabled = true;
-  readActiveTab()
-    .then(async (activeTab) => {
-      const result =
-        activeTab?.id === undefined
-          ? ({ status: "unsupported-tab" } as const)
-          : await sendPopupRequest({ tabId: activeTab.id, type: "pair" });
-      if (result.status !== "done") {
-        statusElement.textContent = message(
-          result.status === "failed" ? "accessUpdateFailed" : "unsupportedTab",
-        );
-        return undefined;
-      }
-      await renderAccess();
-      return undefined;
-    })
-    .catch(() => {
-      statusElement.textContent = message("accessUpdateFailed");
-    })
+const adoptActiveTab = async (activeTab: PopupTab | null): Promise<void> => {
+  if (activeTab?.id === undefined) {
+    renderFailure("unsupportedTab");
+    return;
+  }
+  const result = await sendPopupRequest({ tabId: activeTab.id, type: "adopt" });
+  if (result.status !== "adopted") {
+    renderFailure(adoptFailureMessage[result.status]);
+    return;
+  }
+  render(handedTabView(new URL(result.url).origin));
+};
+
+const execute = (
+  button: HTMLButtonElement,
+  action: PopupAction["action"] | PopupSecondaryAction["action"],
+): void => {
+  button.disabled = true;
+  runPopupAction(action, {
+    renderedTab,
+    requestAccess: requestAllSiteAccess,
+    readActiveTab,
+    pair: pairActiveTab,
+    adopt: adoptActiveTab,
+    disconnect: async () => {
+      await sendPopupRequest({ type: "disconnect" });
+    },
+    revoke: async () => {
+      await sendPopupRequest({ type: "revoke" });
+    },
+    render: renderAccess,
+  })
+    .catch(() => renderFailure("accessUpdateFailed"))
     .finally(() => {
-      connectButton.disabled = false;
+      button.disabled = false;
     });
+};
+
+primaryButton.addEventListener("click", () => {
+  const action = primaryButton.dataset["action"];
+  if (
+    action === "adopt" ||
+    action === "connect" ||
+    action === "grant" ||
+    action === "grant-and-connect"
+  ) {
+    execute(primaryButton, action);
+  }
 });
 
-adoptButton.addEventListener("click", () => {
-  adoptButton.disabled = true;
-  readActiveTab()
-    .then(async (activeTab) => {
-      if (activeTab?.id === undefined) {
-        statusElement.textContent = message("unsupportedTab");
-        return undefined;
-      }
-      const result = await sendPopupRequest({
-        tabId: activeTab.id,
-        type: "adopt",
-      });
-      if (result.status !== "adopted") {
-        statusElement.textContent = message(adoptFailureMessage[result.status]);
-        return undefined;
-      }
-      statusElement.textContent = message(
-        "adoptedTab",
-        new URL(result.url).origin,
-      );
-      return undefined;
-    })
-    .catch(() => {
-      statusElement.textContent = message("accessUpdateFailed");
-    })
-    .finally(() => {
-      adoptButton.disabled = false;
-    });
-});
+let renderedTab: PopupTab | null = null;
 
-disconnectButton.addEventListener("click", () => {
-  disconnectButton.disabled = true;
-  sendPopupRequest({ type: "disconnect" })
-    .then(renderAccess)
-    .catch(() => {
-      statusElement.textContent = message("accessUpdateFailed");
-    })
-    .finally(() => {
-      disconnectButton.disabled = false;
-    });
-});
-
-revokeButton.addEventListener("click", () => {
-  revokeButton.disabled = true;
-  sendPopupRequest({ type: "revoke" })
-    .then(renderAccess)
-    .catch(() => {
-      statusElement.textContent = message("accessUpdateFailed");
-    })
-    .finally(() => {
-      revokeButton.disabled = false;
-    });
-});
+const renderAccess = async (): Promise<void> => {
+  const [granted, controller, activeTab] = await Promise.all([
+    hasAllSiteAccess(),
+    readBrowserController(),
+    readActiveTab(),
+  ]);
+  renderedTab = activeTab;
+  render(
+    popupView({ activeTab: activeTabKind(activeTab), controller, granted }),
+  );
+};
 
 await renderAccess();
-// Downloads stopped or kept while stella controlled a tab are shown once,
-// here; a kept file is always named, since it is on disk.
-// The worker owns the notices: it hands them over and clears them in turn
-// with any download it is recording.
 const taken = await sendPopupRequest({ type: "take-download-notices" });
 const downloadNotice =
   taken.status === "download-notices" ? downloadNoticeMessage(taken) : null;
 if (downloadNotice !== null) {
-  statusElement.textContent = message(
+  statusElement.textContent = chrome.i18n.getMessage(
     downloadNotice.name,
     downloadNotice.substitutions,
   );

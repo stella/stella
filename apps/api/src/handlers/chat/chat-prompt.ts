@@ -10,6 +10,8 @@ import { and, asc, count, eq, isNull, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  type BrowserExtensionCapability,
   CHAT_DECISION_HREF_TEMPLATE,
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
   CHAT_THREAD_PLACEHOLDER_TITLE,
@@ -63,6 +65,7 @@ import { corpusStorageMode } from "@/api/env-base";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 import type { StatuteProvisionSelection } from "@/api/handlers/chat/active-statute-selection.logic";
+import { browserExtensionPolicy } from "@/api/handlers/chat/browser-extension-capability";
 import {
   CHAT_REVISION_CONTEXT_MAX_EDITS,
   readChatRevisionContextChanges,
@@ -171,6 +174,10 @@ export type {
   ChatCacheStablePrefix,
   ChatSafePromptLayers,
 } from "@/api/lib/chat/chat-prompt-layers";
+
+export const browserExtensionPromptLine = (
+  extension: BrowserExtensionCapability,
+): string => browserExtensionPolicy(extension).promptLine;
 
 const TITLE_MAX_LENGTH = 80;
 const ACTIVE_DECISION_MAX_CHARS = 12_000;
@@ -673,6 +680,7 @@ export const buildChatPromptCacheKey = (
 };
 
 type BuildChatSystemPromptProps = {
+  browserExtension?: BrowserExtensionCapability | undefined;
   caseLawDb?: CaseLawPublicReadDb;
   featureAccessContext?: McpFeatureAccessContext | undefined;
   activeDecision: IncomingActiveDecision | undefined;
@@ -727,6 +735,11 @@ type BuildChatSystemPromptProps = {
   organizationId?: SafeId<"organization"> | undefined;
   userId?: SafeId<"user"> | undefined;
 };
+
+const DEFAULT_BROWSER_EXTENSION = {
+  protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+  status: "unsupported-device",
+} satisfies BrowserExtensionCapability;
 
 const resolveActiveFilePromptContext = async ({
   activeFile,
@@ -935,6 +948,7 @@ const requireActiveSkillInBindingScope = ({
       );
 
 export const buildChatSystemPromptParts = async ({
+  browserExtension = DEFAULT_BROWSER_EXTENSION,
   caseLawDb = caseLawPublicReadDb,
   featureAccessContext,
   activeDecision,
@@ -1118,6 +1132,7 @@ export const buildChatSystemPromptParts = async ({
     const revisionNoteSection = buildChatRevisionNoteSection(revisionChanges);
 
     const appendedUntrusted = [
+      browserExtensionPromptLine(browserExtension),
       decisionSection.prompt,
       statuteSection,
       externalSection,

@@ -10,12 +10,12 @@ import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogFooter,
-  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { Form } from "@stll/ui/form";
 import { FolderPlusIcon, ListTreeIcon, UngroupIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
@@ -203,7 +203,10 @@ export const InspectorGroupEditor = ({
       }}
     >
       <DialogPopup finalFocus={returnFocus}>
-        <DialogFormState
+        {/* `contents`: the form adds no box of its own, so the dialog's
+          header, panel and footer keep the popup's own layout. */}
+        <Form
+          className="contents"
           dirty={
             name !== (target.type === "edit" ? target.name : "") ||
             color !==
@@ -215,8 +218,6 @@ export const InspectorGroupEditor = ({
               target.type === "edit" ? target.color : MATTER_SWATCHES[0],
             );
           }}
-        />
-        <form
           onSubmit={(event) => {
             event.preventDefault();
             save();
@@ -276,7 +277,7 @@ export const InspectorGroupEditor = ({
               {t("common.save")}
             </Button>
           </DialogFooter>
-        </form>
+        </Form>
       </DialogPopup>
     </Dialog>
   );

@@ -31,16 +31,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
-  backlogSurface,
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  LegacyRawShape,
-  SourceSurfaceDisposition,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   getSourceRegistration,
   listSourceRegistrations,
   type SourceRegistrationKey,
@@ -48,8 +38,16 @@ import {
 import baseline from "@/api/handlers/case-law/ingestion/adapters/source-surface-backlog-baseline.json";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
   LEGACY_BACKLOG_ADAPTERS,
   LEGACY_RAW_SHAPES,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  LegacyRawShape,
+  SourceSurfaceDisposition,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {

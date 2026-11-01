@@ -149,6 +149,7 @@ const COVERAGE_DOC_PATH = path.resolve(REPO_ROOT, COVERAGE_DOC_INPUT);
  * `apps/api/src/mcp/constants.ts`.
  */
 const DOMAIN_SCOPE: Record<string, string> = {
+  "account-exports": "stella:account_export_write",
   "audit-logs": "stella:admin_read",
   "billing-codes": "stella:billing_write",
   // Corpus reads (decision analysis, ingestion status, matter-link list)
@@ -162,6 +163,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // matters-write consent. They get their own dedicated consent bucket rather
   // than borrowing the workspace write scope.
   chat: "stella:chat",
+  dictation: "stella:chat",
   clauses: "stella:knowledge_write",
   // Organization-wide address-book mutations cross matter boundaries, so
   // they require their own consent instead of borrowing a workspace write.
@@ -201,6 +203,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   notifications: "stella:matters_write",
   "vat-rates": "stella:billing_write",
   "organization-settings": "stella:admin_write",
+  organizations: "stella:admin_write",
   playbooks: "stella:knowledge_write",
   // Now carries property create/update/delete capabilities, so it reuses the
   // workspace write bucket rather than the read scope its read tool used.
@@ -209,6 +212,12 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // billing write bucket rather than the read scope its resolution tool used.
   rates: "stella:billing_write",
   "saved-time-narratives": "stella:billing_write",
+  // `search.results.list`: results across the matters a caller can open, a
+  // read-only domain at the read scope. It is not the curated `search` tool,
+  // which reads matter knowledge on its own at `stella:search`. Chat results
+  // also need `stella:chat`, applied per result type in the handler
+  // (`GLOBAL_SEARCH_RESULT_TYPE_SCOPE`).
+  search: "stella:read",
   "search-history": "stella:knowledge_write",
   // Report export creates workspace artifacts (entities / template records), so
   // it stays on the workspace write bucket. Unlike chat (which got its own
@@ -260,6 +269,9 @@ const UNMAPPED_DOMAINS: ReadonlySet<string> = new Set<string>();
  * different scope fails the export until pinned in ENTRY_SCOPE_OVERRIDES.
  */
 const SCOPE_STRICTNESS: Record<string, number> = {
+  "stella:account_export_read": 2,
+  "stella:account_export_write": 3,
+  "stella:organization_create": 3,
   "stella:search": 0,
   "stella:read": 1,
   "stella:onboarding": 2,
@@ -291,6 +303,12 @@ const SCOPE_STRICTNESS: Record<string, number> = {
  * the same consent.
  */
 const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
+  "legislation.matter-links.batch.create": "stella:matters_write",
+  "legislation.matter-links.create": "stella:matters_write",
+  "legislation.matter-links.delete": "stella:matters_write",
+  // Creating an organization is an account-level grant, not an administrative
+  // write inside the caller's current organization.
+  "organizations.create": "stella:organization_create",
   "memories.create": "stella:memory_write",
   "memories.update": "stella:memory_write",
   // Document writes that reach storage through helpers shared with other
@@ -481,8 +499,10 @@ type CapabilityEntry = {
   readClass?: McpReadClass;
   destructive: boolean;
   confirmation?: "required";
+  idempotency?: { type: "replay" };
   consumesServices: CatalogServiceClassification;
   scope: string;
+  accountScope?: string;
   /** Additional OAuth grants required by a compound covering tool. */
   additionalScopes?: readonly string[];
   /** API-owned finite transport deadline for this generated capability command. */
@@ -764,8 +784,10 @@ type BuildCatalogEntryOptions = {
   consumesServices: ServiceClassification;
   readClass: McpReadClass | undefined;
   scope: string;
+  accountScope: string | undefined;
   additionalScopes: readonly string[];
   requestTimeoutMs: number | undefined;
+  idempotency: { type: "replay" } | undefined;
   hasPermissions: boolean;
   permissions: unknown;
   /**
@@ -800,7 +822,9 @@ const buildCatalogEntry = ({
   readClass,
   scope,
   additionalScopes,
+  accountScope,
   requestTimeoutMs,
+  idempotency,
   hasPermissions,
   permissions,
   compactedInputSchema,
@@ -824,8 +848,10 @@ const buildCatalogEntry = ({
       ? VALIDATED_INPUT_SERVICE_CLASSIFICATION
       : consumesServices,
   scope,
+  ...(accountScope === undefined ? {} : { accountScope }),
   ...(additionalScopes.length === 0 ? {} : { additionalScopes }),
   ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
+  ...(idempotency === undefined ? {} : { idempotency }),
   ...(allowsArchivedWorkspace
     ? { allowsArchivedWorkspace: true as const }
     : {}),
@@ -1205,6 +1231,15 @@ const buildCatalog = async (): Promise<BuildResult> => {
     endpoint: (typeof endpoints)[number],
     id: string,
   ) => {
+    const accountScopeValue = endpoint.config["accountScope"];
+    const accountScope =
+      typeof accountScopeValue === "string" ? accountScopeValue : undefined;
+    if (accountScopeValue !== undefined && accountScope === undefined) {
+      errors.push(
+        `capability "${id}" declares invalid accountScope; expected an OAuth scope`,
+      );
+      return undefined;
+    }
     const requestTimeoutValue = endpoint.config["requestTimeoutMs"];
     const requestTimeoutMs =
       typeof requestTimeoutValue === "number" &&
@@ -1230,7 +1265,21 @@ const buildCatalog = async (): Promise<BuildResult> => {
         `capability "${id}" declares invalid access ${JSON.stringify(declaredAccessValue)}; expected "read" or "write"`,
       );
     }
-    return { requestTimeoutMs, declaredAccess } as const;
+    const declaredIdempotency = endpoint.config["idempotency"];
+    const idempotency =
+      isRecord(declaredIdempotency) && declaredIdempotency["type"] === "replay"
+        ? { type: "replay" as const }
+        : undefined;
+    if (declaredIdempotency !== undefined && idempotency === undefined) {
+      errors.push(`capability "${id}" declares invalid idempotency policy`);
+      return undefined;
+    }
+    return {
+      requestTimeoutMs,
+      declaredAccess,
+      accountScope,
+      idempotency,
+    } as const;
   };
 
   /** Compile one discovered handler into its catalog and dispatch projections. */
@@ -1294,7 +1343,8 @@ const buildCatalog = async (): Promise<BuildResult> => {
     if (metadata === undefined) {
       return;
     }
-    const { requestTimeoutMs, declaredAccess } = metadata;
+    const { requestTimeoutMs, declaredAccess, accountScope, idempotency } =
+      metadata;
     const verbs = extractVerbs(permissions);
     const inferredAccess = resolveAccess({
       id,
@@ -1525,7 +1575,9 @@ const buildCatalog = async (): Promise<BuildResult> => {
         }),
         scope,
         additionalScopes,
+        accountScope,
         requestTimeoutMs,
+        idempotency,
         hasPermissions,
         permissions,
         compactedInputSchema,

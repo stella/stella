@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import {
   TEXT_ABSENCE_REASONS,
@@ -78,6 +79,10 @@ const CURSOR_BYTES = 2048;
 const METADATA_KEY_BYTES = 512;
 const METADATA_DEPTH = 4;
 const METADATA_NODES = 32;
+/** A BCP 47 tag the corpus stores, with margin. */
+const SOURCE_LANGUAGE_TAG_BYTES = 32;
+/** More than any publisher's official-language count. */
+const SOURCE_LANGUAGES_MAX = 64;
 const JUDGES_MAX = 128;
 
 const metadataScalarSchema = v.union([
@@ -201,6 +206,7 @@ export const readDecisionSuccessResponseSchema = v.object({
   decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
   decisionType: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionType),
   citationCount: v.number(),
+  extractionWarnings: extractionWarningsSchema,
   documentAst: v.unknown(),
   fulltext: v.nullable(v.string()),
   projectionDigest: nullableBoundedString(
@@ -223,6 +229,16 @@ export const readDecisionSuccessResponseSchema = v.object({
   ),
   documentUrl: nullableBoundedString(DECISION_READER_TEXT_BYTES.documentUrl),
   metadata: metadataSchema,
+  /**
+   * Language tags the publisher lists for the decision's work, sorted; null
+   * when the source states no such list for this row.
+   */
+  sourceLanguages: v.nullable(
+    v.pipe(
+      v.array(boundedString(SOURCE_LANGUAGE_TAG_BYTES)),
+      v.maxLength(SOURCE_LANGUAGES_MAX),
+    ),
+  ),
   headnote: textFieldSchema,
   textFields: v.object({
     abstract: textFieldSchema,
@@ -446,6 +462,11 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
     ),
     documentUrl: nullableText(decision.documentUrl, text.documentUrl),
     metadata: projectMetadata(decision.metadata),
+    sourceLanguages:
+      decision.sourceLanguages
+        ?.slice(0, SOURCE_LANGUAGES_MAX)
+        .map((tag) => truncateTextBytes(tag, SOURCE_LANGUAGE_TAG_BYTES)) ??
+      null,
     headnote: projectTextField(decision.headnote),
     textFields: {
       abstract: projectTextField(decision.textFields.abstract),

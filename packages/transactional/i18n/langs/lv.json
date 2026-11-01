@@ -31,6 +31,14 @@
     "subject": "Jūsu stella verifikācijas kods",
     "twoFactorManage": "Izmantojiet šo kodu, lai apstiprinātu izmaiņas divfaktoru autentifikācijas iestatījumos."
   },
+  "pushAlert": {
+    "announcement": "Jūsu organizācija publicēja paziņojumu",
+    "flowRunAwaitingApproval": "Darbplūsma gaida jūsu apstiprinājumu",
+    "flowRunCompleted": "Darbplūsma ir pabeigta",
+    "flowRunFailed": "Darbplūsma neizdevās",
+    "mention": "Jūs tikāt pieminēts komentārā",
+    "taskAssigned": "Jums piešķirts uzdevums"
+  },
   "reportExportStatus": {
     "action": "Atvērt stella",
     "completedBody": "Jūsu pārskata eksports ir gatavs. Atveriet stella, lai to skatītu vai lejupielādētu.",

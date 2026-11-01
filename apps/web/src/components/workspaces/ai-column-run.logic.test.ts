@@ -6,6 +6,7 @@ import {
   aiColumnRunMenu,
   aiColumnRunReveal,
   aiColumnRunScope,
+  selectionShownOnPage,
 } from "./ai-column-run.logic";
 import type { AiColumnRunReveal } from "./ai-column-run.logic";
 
@@ -96,6 +97,38 @@ describe("the header Play stays on screen while it is the only sign of work", ()
     }
     expect(aiColumnRunReveal({ states: [], menuOpen: true })).toBe(
       AI_COLUMN_RUN_REVEAL.pinned,
+    );
+  });
+});
+
+describe("selectionShownOnPage", () => {
+  test("keeps a selection the page still shows as it is", () => {
+    expect(
+      selectionShownOnPage({ pageRowIds: ["a", "b"], selectedRowIds: ["b"] }),
+    ).toBeNull();
+    expect(
+      selectionShownOnPage({ pageRowIds: ["a"], selectedRowIds: [] }),
+    ).toBeNull();
+  });
+
+  test("drops the picks a new answer on the same page no longer shows", () => {
+    expect(
+      selectionShownOnPage({
+        pageRowIds: ["b", "c"],
+        selectedRowIds: ["a", "b", "z"],
+      }),
+    ).toEqual(["b"]);
+    expect(
+      selectionShownOnPage({ pageRowIds: [], selectedRowIds: ["a"] }),
+    ).toEqual([]);
+  });
+
+  test("what it keeps is what a run counts", () => {
+    const pageRowIds = ["b", "c", "d"];
+    const selectedRowIds = ["a", "c", "d"];
+    const kept = selectionShownOnPage({ pageRowIds, selectedRowIds });
+    expect(kept?.length).toBe(
+      aiColumnRunScope({ pageRowIds, selectedRowIds }).count,
     );
   });
 });
