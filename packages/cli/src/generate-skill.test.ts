@@ -341,12 +341,15 @@ describe("generateCliSkill (TanStack Intent)", () => {
     expect(skill).toContain('library: "@stll/cli"');
   });
 
-  test("documents the capability tree (count + discovery + dry-run)", () => {
+  test("documents the capability tree (discovery + dry-run, no count)", () => {
     const skill = generateCliSkill(listings, TOOL_ANNOTATIONS, CAPABILITY);
     expect(skill).toContain("## Capability commands (full surface)");
     expect(skill).toContain(
-      `generates ${CAPABILITY.commandCount}\ncapability commands`,
+      "the CLI generates capability commands\nfrom the server's capability catalog",
     );
+    // A count would change with every added capability and break merges of
+    // parallel additions; the section states the surface, not its size.
+    expect(skill).not.toContain(`generates ${CAPABILITY.commandCount}`);
     expect(skill).toContain("stella capability list");
     expect(skill).toContain("stella capability describe --capability <id>");
     expect(skill).toContain("stella capability read --capability <id>");
