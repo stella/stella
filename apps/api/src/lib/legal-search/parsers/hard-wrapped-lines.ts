@@ -481,13 +481,52 @@ export type PdfPrintedLine = {
   };
 };
 
-type PdfPageLayout = {
-  left: number;
-  right: number;
-  height: number;
+/** How often each rounded line pitch occurs, and the modal one. */
+type PitchTally = {
   pitch: number;
   pitches: Map<number, number>;
 };
+
+type PdfPageLayout = PitchTally & {
+  left: number;
+  right: number;
+  height: number;
+  /**
+   * The pitch tally of each type size on the page. A page that sets quotes or
+   * notes in smaller type has two leadings; prose is measured against its own.
+   */
+  leadings: Map<number, PitchTally>;
+};
+
+const roundedPoints = (value: number): number =>
+  Math.round(value * PDF_PARAGRAPH.pitchRounding) / PDF_PARAGRAPH.pitchRounding;
+
+/** Count one pitch; the most frequent wins, the smaller one on a tie. */
+const tallyPitch = (tally: PitchTally, pitch: number): void => {
+  const count = (tally.pitches.get(pitch) ?? 0) + 1;
+  tally.pitches.set(pitch, count);
+  const modalCount = tally.pitches.get(tally.pitch) ?? 0;
+  if (count > modalCount || (count === modalCount && pitch < tally.pitch)) {
+    tally.pitch = pitch;
+  }
+};
+
+/** Whether a tally saw its modal pitch often enough to trust it. */
+const settledPitch = (tally: PitchTally | undefined): number | null =>
+  tally !== undefined &&
+  (tally.pitches.get(tally.pitch) ?? 0) >= PDF_PARAGRAPH.minPitchObservations
+    ? tally.pitch
+    : null;
+
+/**
+ * The ordinary step between two lines of type `height`: the leading of that
+ * type size when the page sets enough of it, else the page's own, bounded on
+ * a sparse page.
+ */
+const linePitch = (page: PdfPageLayout, height: number): number =>
+  settledPitch(page.leadings.get(roundedPoints(height))) ??
+  settledPitch(page) ??
+  Math.min(page.pitch, page.height * PDF_PARAGRAPH.maxPitchHeightShare);
 
 /** The modal line pitch tolerates extraction jitter without using a paragraph gap. */
 const pdfPageLayouts = (lines: readonly (PdfPrintedLine | null)[]) => {
@@ -505,25 +544,24 @@ const pdfPageLayouts = (lines: readonly (PdfPrintedLine | null)[]) => {
       height: layout.height,
       pitch: layout.height * PDF_PARAGRAPH.maxPitchHeightShare,
       pitches: new Map<number, number>(),
+      leadings: new Map<number, PitchTally>(),
     };
     page.left = Math.min(page.left, layout.x);
     page.right = Math.max(page.right, layout.x + layout.width);
     page.height = Math.max(page.height, layout.height);
     if (previous?.pageIndex === layout.pageIndex) {
       const step = Math.abs(layout.y - previous.y);
-      if (step >= Math.max(layout.height, previous.height)) {
-        const pitch =
-          Math.round(step * PDF_PARAGRAPH.pitchRounding) /
-          PDF_PARAGRAPH.pitchRounding;
-        const count = (page.pitches.get(pitch) ?? 0) + 1;
-        page.pitches.set(pitch, count);
-        const modalCount = page.pitches.get(page.pitch) ?? 0;
-        if (
-          count > modalCount ||
-          (count === modalCount && pitch < page.pitch)
-        ) {
-          page.pitch = pitch;
-        }
+      const height = Math.max(layout.height, previous.height);
+      if (step >= height) {
+        const pitch = roundedPoints(step);
+        tallyPitch(page, pitch);
+        const size = roundedPoints(height);
+        const leading = page.leadings.get(size) ?? {
+          pitch,
+          pitches: new Map<number, number>(),
+        };
+        tallyPitch(leading, pitch);
+        page.leadings.set(size, leading);
       }
     }
     pages.set(layout.pageIndex, page);
@@ -671,11 +709,7 @@ export const readPdfLineJoins = (lines: readonly (PdfPrintedLine | null)[]) => {
       tolerance: indentTolerance,
     });
     const samePage = previousLayout.pageIndex === layout.pageIndex;
-    const pitchObservations = page.pitches.get(page.pitch) ?? 0;
-    const pitch =
-      pitchObservations >= PDF_PARAGRAPH.minPitchObservations
-        ? page.pitch
-        : Math.min(page.pitch, page.height * PDF_PARAGRAPH.maxPitchHeightShare);
+    const pitch = linePitch(page, height);
     const paragraphGap =
       samePage &&
       Math.abs(layout.y - previousLayout.y) >

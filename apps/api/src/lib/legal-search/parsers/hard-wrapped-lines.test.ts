@@ -394,4 +394,62 @@ describe("PDF line joins", () => {
       ]),
     ).toEqual([LINE_JOINS.BREAK, LINE_JOINS.SPACE, LINE_JOINS.SPACE]);
   });
+
+  /** A full-width body line on page 0 at `y`, set in type `height` points tall. */
+  const sizedLine = (
+    text: string,
+    y: number,
+    height: number,
+  ): PdfPrintedLine => ({
+    kind: PDF_LINE_KIND.BODY,
+    text,
+    layout: { x: LEFT, y, height, width: RIGHT - LEFT, pageIndex: 0 },
+  });
+
+  // A page that quotes in smaller, tighter type has as many 11-point steps
+  // as 18-point ones. Prose keeps reading at its own leading; only the wider
+  // step between prose and quote opens a paragraph.
+  test("prose and a quote in smaller type each read at their own leading", () => {
+    expect(
+      readPdfLineJoins([
+        sizedLine(
+          "Krajský súd v Bratislave preskúmal napadnuté rozhodnutie",
+          700,
+          12,
+        ),
+        sizedLine(
+          "v rozsahu podaného odvolania a dospel k záveru, že odvolanie",
+          682,
+          12,
+        ),
+        sizedLine(
+          "žalobcu nie je dôvodné a poukazuje na ustanovenie, podľa",
+          664,
+          12,
+        ),
+        sizedLine(
+          "ktorého súd rozhodne o trovách konania v rozsudku, ktorým sa",
+          634,
+          9,
+        ),
+        sizedLine(
+          "konanie končí, a to podľa pomeru úspechu strán v konaní a",
+          623,
+          9,
+        ),
+        sizedLine(
+          "podľa zásady, že trovy znáša strana, ktorá nemala úspech",
+          612,
+          9,
+        ),
+      ]),
+    ).toEqual([
+      LINE_JOINS.BREAK,
+      LINE_JOINS.SPACE,
+      LINE_JOINS.SPACE,
+      LINE_JOINS.BREAK,
+      LINE_JOINS.SPACE,
+      LINE_JOINS.SPACE,
+    ]);
+  });
 });
