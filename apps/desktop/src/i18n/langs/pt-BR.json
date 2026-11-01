@@ -484,7 +484,7 @@
     "evidenceTitles": "Títulos",
     "evidenceApps": "Apps",
     "rangeEmpty": "Nada foi registrado neste intervalo.",
-    "calendarHint": "Abra uma sugestão tracejada para revisá-la ou arraste na coluna Atividade para preparar um lançamento de qualquer intervalo.",
+    "calendarHint": "Abra uma sugestão tracejada para revisá-la ou arraste na coluna Lançamentos de horas para preparar um lançamento de qualquer intervalo.",
     "narrativeAiPrompt": "Escrever a descrição com stella AI? Só os títulos de janela desta sugestão são enviados; eles não são armazenados.",
     "narrativeAiNo": "Não",
     "narrativeAiApprove": "Aprovar",

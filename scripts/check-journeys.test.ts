@@ -9,6 +9,7 @@ import type {
   SEARCH_CASE_LAW_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
 } from "../apps/api/src/lib/chat/projections";
+import { DAY_SECONDS } from "./check-npm-publish-lag";
 
 type FoundDecision = Extract<
   v.InferInput<typeof READ_CASE_LAW_DECISION_PROJECTION>["items"][number],
@@ -667,7 +668,10 @@ describe("scheduled read journeys", () => {
   });
   test("fails all CLI journeys after the publication deadline", async () => {
     const result = await run({
-      scenario: { cliVersion: "2.0.0", promotionAgeSeconds: 86_401 },
+      // A full grace period past the deadline: the checker reads the clock
+      // when it starts and the fake release is stamped later, so a margin of
+      // seconds would depend on how slowly the runner starts the checker.
+      scenario: { cliVersion: "2.0.0", promotionAgeSeconds: 2 * DAY_SECONDS },
       mode: "cli",
     });
     expect(result.exit).toBe(1);
