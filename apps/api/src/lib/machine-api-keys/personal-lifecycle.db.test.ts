@@ -59,10 +59,11 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
 const db = await getTestDb();
-const database =
+const database = ownerDatabaseDouble(
   asTestRaw<
     NonNullable<Parameters<typeof createPersonalApiKey>[0]["database"]>
-  >(db);
+  >(db),
+);
 afterAll(releaseTestDb);
 
 const withFixture = async (

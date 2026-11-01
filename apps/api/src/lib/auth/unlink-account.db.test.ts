@@ -10,6 +10,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getTestDb,
@@ -79,10 +80,11 @@ const withDatabase = async (run: (db: TestDatabase) => Promise<void>) => {
 
 const createUnlinker = (db: TestDatabase) =>
   createConfirmedAccountUnlinker({
-    database:
+    database: ownerDatabaseDouble(
       asTestRaw<
         Parameters<typeof createConfirmedAccountUnlinker>[0]["database"]
       >(db),
+    ),
     verifyConfirmation: async (params) =>
       await consumeConfirmationOtp(db, params),
   });

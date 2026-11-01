@@ -70,10 +70,14 @@ type FixtureDb = GatedTestDb | TransactionOf<GatedTestDb>;
 // Production owners open their own aggregate transaction and refuse an
 // enclosing one. Inside a rollback fixture they receive a runner whose
 // transaction is a savepoint of the fixture, so their writes still roll back.
+// The runner is registered as an owner connection, as production's root
+// connection is.
 const ownerDb = (db: FixtureDb): Pick<GatedTestDb, "transaction"> =>
-  "rollback" in db
-    ? { transaction: async (run) => await db.transaction(run) }
-    : db;
+  ownerDatabaseDouble<Pick<GatedTestDb, "transaction">>(
+    "rollback" in db
+      ? { transaction: async (run) => await db.transaction(run) }
+      : db,
+  );
 const seedFixture = async (db: FixtureDb, proofDb: GatedTestDb) => {
   const signingKeys = await generateKeyPair("ES256", { extractable: true });
   const deviceJwk = await exportJWK(signingKeys.publicKey);
@@ -287,7 +291,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
       for (const elapsedDays of [0, 10, 29]) {
         const observed = requireSuccess(
           await probeDesktopCredential({
-            db: ownerDatabaseDouble(ownerDb(db)),
+            db: ownerDb(db),
             keyId: fixture.keyId,
             userId: fixture.userId,
             organizationId: fixture.organizationId,
@@ -303,7 +307,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
       }
       await expectUnauthorized(
         probeDesktopCredential({
-          db: ownerDatabaseDouble(ownerDb(db)),
+          db: ownerDb(db),
           keyId: fixture.keyId,
           userId: fixture.userId,
           organizationId: fixture.organizationId,
@@ -473,7 +477,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
       );
       await expectUnauthorized(
         probeDesktopCredential({
-          db: ownerDatabaseDouble(ownerDb(db)),
+          db: ownerDb(db),
           keyId: fixture.keyId,
           userId: fixture.userId,
           organizationId: fixture.organizationId,
@@ -494,7 +498,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
       expect(
         requireSuccess(
           await probeDesktopCredential({
-            db: ownerDatabaseDouble(ownerDb(db)),
+            db: ownerDb(db),
             keyId: fixture.keyId,
             userId: fixture.userId,
             organizationId: fixture.organizationId,
