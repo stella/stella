@@ -13,7 +13,7 @@ import {
   IN_FLOW_POPUP_CLASS_NAME,
 } from "../lib/positioner-sizing";
 import { cn } from "../lib/utils";
-import { Kbd, type KbdKey } from "./kbd";
+import { Kbd, type KbdKeys } from "./kbd";
 
 const TooltipCreateHandle = TooltipPrimitive.createHandle;
 
@@ -73,7 +73,7 @@ const TooltipPopup = ({
    * The keys that do the same as the trigger, shown after the label and
    * spelled for the reader's platform (`["mod", "K"]`).
    */
-  shortcut?: readonly KbdKey[] | undefined;
+  shortcut?: KbdKeys | undefined;
   align?: TooltipPrimitive.Positioner.Props["align"];
   side?: TooltipPrimitive.Positioner.Props["side"];
   sideOffset?: TooltipPrimitive.Positioner.Props["sideOffset"];

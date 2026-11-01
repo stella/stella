@@ -60,3 +60,10 @@ describe("Kbd", () => {
     expect(markup).toContain(">?</kbd>");
   });
 });
+
+// A shortcut always names a key: an empty list would draw an empty cap.
+const emptyKeysContract = () => (
+  // @ts-expect-error an empty combination draws an empty key cap
+  <Kbd keys={[]} />
+);
+void emptyKeysContract;

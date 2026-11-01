@@ -63,6 +63,12 @@ type KbdNamedKey =
  */
 type KbdKey = string;
 
+/**
+ * A combination: at least one key, so a shortcut can never draw an empty
+ * key cap.
+ */
+type KbdKeys = readonly [KbdKey, ...KbdKey[]];
+
 type KbdPlatform = "apple" | "other";
 
 /**
@@ -74,7 +80,7 @@ type KbdPlatform = "apple" | "other";
 type KbdVariant = "cap" | "plain";
 
 type KbdProps = React.ComponentProps<"kbd"> & {
-  keys?: readonly KbdKey[] | undefined;
+  keys?: KbdKeys | undefined;
   variant?: KbdVariant | undefined;
 };
 
@@ -164,6 +170,7 @@ function useKbdPlatform(): KbdPlatform {
 export { Kbd, formatKeys, kbdPlatformOf, useKbdPlatform };
 export type {
   KbdKey,
+  KbdKeys,
   KbdNamedKey,
   KbdNavigator,
   KbdPlatform,
