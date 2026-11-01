@@ -253,13 +253,19 @@ export const walkInlines = (
         // leaves the letter-spacing reassembly to guess a boundary that
         // is no longer in the text. Older conversions sometimes put real
         // words inside these spans, so only whitespace-only spans become
-        // a gap.
+        // a gap. Image alt text counts as words: `.text()` does not see it.
         if (
           inlineStyleIsAsposeSpacer(child) ||
           inlineStyleIsInlineBlock(child)
         ) {
           const innerText = $child.text().trim();
-          if (!innerText) {
+          const carriesAltText =
+            options.parseImgAlt === true &&
+            $child
+              .find("img")
+              .toArray()
+              .some((img) => ($(img).attr("alt") ?? "").trim() !== "");
+          if (!innerText && !carriesAltText) {
             appendTextInline(inlines, ASPOSE_SPACER_GAP, childAnon);
             return;
           }

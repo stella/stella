@@ -138,6 +138,21 @@ describe("walkInlines", () => {
     }
   });
 
+  test("a spacer-styled span holding an image keeps the image's alt text", () => {
+    const span =
+      '<span style="display:inline flow-root"><img alt="Figure"></span>';
+    expect(walk(span, { parseSpanStyle: true, parseImgAlt: true })).toEqual([
+      { type: "text", text: "Figure" },
+    ]);
+    // Without alt text to read, the span is still the gap it lays out.
+    expect(
+      walk('<span style="display:inline-block"><img alt=" "></span>', {
+        parseSpanStyle: true,
+        parseImgAlt: true,
+      }),
+    ).toEqual([{ type: "text", text: ASPOSE_SPACER_GAP }]);
+  });
+
   test("anonymization spans mark text and coalesce", () => {
     expect(walk("<span class='anon-block'>a<span></span>b</span>")).toEqual([
       { type: "text", text: "ab", anonymized: true },

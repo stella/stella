@@ -657,9 +657,16 @@ export const parsePlTkListingPage = (
       const caseNumber = collapse(
         visibleHtmlText(cell.find(".sygnatura").first()),
       );
-      const subjectNode = cell
-        .find("span")
-        .filter((_, el) => inlineStyleIsItalic(el));
+      // Only the outermost italic span: a nested span inherits the italic, and
+      // reading both would repeat the subject.
+      const subjectNode = cell.find("span").filter(
+        (_, el) =>
+          inlineStyleIsItalic(el) &&
+          !$(el)
+            .parentsUntil(cell, "span")
+            .toArray()
+            .some((ancestor) => inlineStyleIsItalic(ancestor)),
+      );
       const subject = collapse(visibleHtmlText(subjectNode));
       const lineNode = cell.clone();
       lineNode.find("a, span").remove();

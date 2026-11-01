@@ -167,9 +167,11 @@ test("an oblique angle is italic", () => {
   for (const angle of [
     "oblique 10deg",
     "oblique\t\n  10deg",
-    `oblique${" ".repeat(10_000)}-.5turn`,
-    "oblique +10.grad",
-    "oblique 1e2rad",
+    `oblique${" ".repeat(10_000)}-.2turn`,
+    "oblique +10.5grad",
+    "oblique 1e-2rad",
+    "oblique 90deg",
+    "oblique -100grad",
   ]) {
     expect(inlineStyleIsItalic(element(`font-style:${angle}`)), angle).toBe(
       true,
@@ -178,6 +180,25 @@ test("an oblique angle is italic", () => {
   expect(
     inlineStyleIsItalic(element("font-style:italic; font-style:oblique 10px")),
   ).toBe(true);
+});
+
+test("an oblique angle outside -90deg to 90deg, or a number ending in a point, is invalid", () => {
+  for (const angle of [
+    "oblique 100deg",
+    "oblique 1e2rad",
+    "oblique -.5turn",
+    "oblique 101grad",
+    "oblique 10.grad",
+  ]) {
+    expect(
+      inlineStyleIsItalic(element(`font-style:normal; font-style:${angle}`)),
+      angle,
+    ).toBe(false);
+  }
+  expect(
+    inlineStyleIsBold(element("font-weight:normal; font-weight:700.")),
+  ).toBe(false);
+  expect(inlineStyleIsBold(element("font-weight:700.5"))).toBe(true);
 });
 
 test("property presence accepts valid declarations rather than substrings", () => {

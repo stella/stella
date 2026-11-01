@@ -76,12 +76,11 @@ const parseCssNumber = (value: string): number | undefined => {
     mantissaToken.startsWith("+") || mantissaToken.startsWith("-")
       ? mantissaToken.slice(1)
       : mantissaToken;
-  let normalizedMagnitude = unsignedMantissa;
-  if (unsignedMantissa.startsWith(".")) {
-    normalizedMagnitude = `0${unsignedMantissa}`;
-  } else if (unsignedMantissa.endsWith(".")) {
-    normalizedMagnitude = unsignedMantissa.slice(0, -1);
-  }
+  // CSS numbers need a digit after a decimal point: `700.` is not a number,
+  // so its declaration is invalid and the previous one stands.
+  const normalizedMagnitude = unsignedMantissa.startsWith(".")
+    ? `0${unsignedMantissa}`
+    : unsignedMantissa;
   const normalizedMantissa = `${sign}${normalizedMagnitude}`;
   const mantissa = parseDecimalToken(normalizedMantissa).unwrapOr(undefined);
   if (mantissa === undefined || exponentToken === undefined) {
@@ -165,17 +164,32 @@ export const inlineStyleIsBold = (element: Element): boolean =>
 
 // User agents style these with `font-style: italic`.
 const ITALIC_TAGS: ReadonlySet<string> = new Set(["i", "em"]);
-const ANGLE_UNITS = ["grad", "turn", "deg", "rad"] as const;
+// Degrees per unit. `grad` precedes `rad`, which it ends with.
+const DEGREES_PER_ANGLE_UNIT = [
+  ["grad", 0.9],
+  ["turn", 360],
+  ["deg", 1],
+  ["rad", 180 / Math.PI],
+] as const;
+// CSS admits oblique angles from -90deg to 90deg; any other is invalid.
+const MAX_OBLIQUE_DEGREES = 90;
 
 const isObliqueAngle = (value: string): boolean => {
   if (!value.startsWith("oblique") || !/^\s$/u.test(value.charAt(7))) {
     return false;
   }
   const angle = value.slice(8).trimStart();
-  const unit = ANGLE_UNITS.find((candidate) => angle.endsWith(candidate));
+  const unit = DEGREES_PER_ANGLE_UNIT.find(([candidate]) =>
+    angle.endsWith(candidate),
+  );
+  if (unit === undefined) {
+    return false;
+  }
+  const [name, degreesPerUnit] = unit;
+  const magnitude = parseCssNumber(angle.slice(0, -name.length));
   return (
-    unit !== undefined &&
-    parseCssNumber(angle.slice(0, -unit.length)) !== undefined
+    magnitude !== undefined &&
+    Math.abs(magnitude * degreesPerUnit) <= MAX_OBLIQUE_DEGREES
   );
 };
 
