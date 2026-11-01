@@ -249,7 +249,7 @@ test.describe("PDF save and sign on the document route", () => {
     await expect(page).not.toHaveURL(
       new RegExp(`field=${originalFieldId}(?:&|$)`, "u"),
     );
-    await page.getByRole("button", { name: "Version history" }).click();
+    await page.getByRole("tab", { name: "Version history" }).click();
     await expect(
       page.getByRole("button", { name: /v2\s+Current/u }),
     ).toBeVisible();
@@ -273,7 +273,7 @@ test.describe("PDF save and sign on the document route", () => {
     await placeAndConfirm(page);
     await expect.poll(() => handoffs.routes.length).toBe(1);
 
-    await page.getByRole("button", { name: "Version history" }).click();
+    await page.getByRole("tab", { name: "Version history" }).click();
     await page.getByRole("button", { name: "v1" }).click();
     await expect(page).toHaveURL(
       new RegExp(`field=${originalFieldId}(?:&|$)`, "u"),
