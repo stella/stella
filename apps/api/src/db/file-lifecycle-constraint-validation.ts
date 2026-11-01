@@ -4,26 +4,26 @@ import type { OnlineConstraintValidation } from "./online-ddl";
 import type { OnlineRepair } from "./online-migration-connection";
 
 /**
- * Checks migrations 20261101034734_style_set_deletion_cleanup and
- * 20261101034834_file_comparison_claims add NOT VALID. Rows written before
+ * Checks migrations 20261101185603_style_set_deletion_cleanup and
+ * 20261101185703_file_comparison_claims add NOT VALID. Rows written before
  * them carry the zero attempt default, a status from the narrower list and no
  * claim, which every check accepts; new rows are checked from the start.
  * Validating here keeps the scan out of the schema transaction.
  */
 export const FILE_LIFECYCLE_CONSTRAINTS = [
   {
-    introducedBy: "20261101034734_style_set_deletion_cleanup",
+    introducedBy: "20261101185603_style_set_deletion_cleanup",
     tableName: "style_sets",
     constraintName:
       "style_sets_deletion_cleanup_attempt_count_nonnegative_check",
   },
   {
-    introducedBy: "20261101034834_file_comparison_claims",
+    introducedBy: "20261101185703_file_comparison_claims",
     tableName: "file_comparison_uploads",
     constraintName: "file_comparison_uploads_status_check",
   },
   {
-    introducedBy: "20261101034834_file_comparison_claims",
+    introducedBy: "20261101185703_file_comparison_claims",
     tableName: "file_comparison_uploads",
     constraintName: "file_comparison_uploads_claim_check",
   },

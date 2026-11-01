@@ -18,7 +18,7 @@ const describePostgres = describe.skipIf(!runPostgresTests);
 const migrationStatements = readFileSync(
   path.resolve(
     import.meta.dir,
-    "../../drizzle/20261101035334_mcp_oauth_current_state_index/migration.sql",
+    "../../drizzle/20261101190203_mcp_oauth_current_state_index/migration.sql",
   ),
   "utf-8",
 )
@@ -103,7 +103,7 @@ describePostgres("mcp OAuth current-state migration (postgres)", () => {
         const createSql =
           currentStateIndex.createSql ?? panic("Missing online index SQL");
         expect(currentStateIndex.introducedBy).toBe(
-          "20261101035334_mcp_oauth_current_state_index",
+          "20261101190203_mcp_oauth_current_state_index",
         );
         expect(createSql).toContain("CREATE UNIQUE INDEX CONCURRENTLY");
         await migration.unsafe(

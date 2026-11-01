@@ -570,6 +570,7 @@ describe("workspace deletion", () => {
             ),
         },
         enqueueCleanup: async () => {},
+        flushWorkspaceSearchRepairs: async () => ({ failed: 0, repaired: 0 }),
       },
     );
 
