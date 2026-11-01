@@ -17,7 +17,10 @@ import {
 import type { TransactionOf } from "@/api/db/scoped";
 import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
-import { CASE_LAW_POPULATION_FOLD_BATCH_LIMIT } from "@/api/lib/case-law/population-count-limits";
+import {
+  CASE_LAW_POPULATION_FOLD_BATCH_LIMIT,
+  CASE_LAW_POPULATION_MAINTENANCE_HIGH_WATER,
+} from "@/api/lib/case-law/population-count-limits";
 import {
   tryLockCaseLawSitemapMonth,
   withAggregateTransaction,
@@ -351,6 +354,25 @@ const seedLegislationChunk = async (
   );
 };
 
+/**
+ * An unfolded change log the size of a population burst, below the
+ * maintenance high water so decision backfills stay admitted. The size is
+ * fixed, so both backfill sizes read the same backlog, and the rows cancel in
+ * pairs on one key, so a later fold moves no count.
+ */
+const POPULATION_BACKLOG_ROWS = CASE_LAW_POPULATION_MAINTENANCE_HIGH_WATER / 2;
+
+const seedPopulationBacklog = async (database: GatedTestDb) => {
+  await database.execute(sql`INSERT INTO case_law_population_deltas
+      (kind, country, source_id, value, delta)
+    SELECT 'court', 'CZE', ${PROVISION_SOURCE_ID}::uuid, 'Fixture court',
+      CASE WHEN n % 2 = 1 THEN 1 ELSE -1 END
+    FROM generate_series(1, 2 * greatest(0, (${POPULATION_BACKLOG_ROWS}::integer
+      - (SELECT count(*)::integer FROM case_law_population_deltas) + 1) / 2)) AS n
+    ORDER BY n`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_deltas`);
+};
+
 /** Grow the source rows read by the bounded provision-state run. */
 export const seedProvisionBackfillRows = async (
   database: GatedTestDb,
@@ -422,6 +444,7 @@ export const seedProvisionBackfillRows = async (
   );
   await database.execute(sql`INSERT INTO case_law_provision_repair_cursors
     (name, completed_at) VALUES ('scope-bootstrap', now())`);
+  await seedPopulationBacklog(database);
   await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
 };
 
