@@ -726,6 +726,7 @@
       "payments": {
         "amountTooHigh": "O valor é maior que o saldo em aberto de {amount}.",
         "confirmVoid": "O pagamento continua registrado como cancelado e deixa de ser abatido desta fatura.",
+        "credited": "Creditada",
         "empty": "Nenhum pagamento registrado ainda",
         "method": "Forma de pagamento",
         "methods": {
@@ -738,6 +739,8 @@
         "paidOn": "Data do pagamento",
         "partiallyPaid": "Paga parcialmente",
         "record": "Registrar pagamento",
+        "refundAmount": "Reembolso devido {amount}",
+        "refundDue": "Reembolso devido",
         "summary": "Pago {paid}, em aberto {outstanding}",
         "title": "Pagamentos",
         "void": "Cancelar pagamento",
@@ -4046,6 +4049,7 @@
         "title": "Este link não está mais disponível"
       }
     },
+    "overpaid": "Você pagou {amount} a mais do que o devido; o remetente lhe deve esse valor.",
     "paid": "Esta fatura está paga.",
     "paymentQr": "QR code de pagamento",
     "validUntil": "Este link é válido até {date}."

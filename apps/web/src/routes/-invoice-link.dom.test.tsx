@@ -26,8 +26,7 @@ const invoice = {
   language: "en",
   dir: "ltr",
   documentType: "invoice",
-  paid: false,
-  credited: false,
+  settlement: { kind: "open" },
   outstandingAmount: cents(12_000),
   seller: "Legal practice",
   buyer: "Client",
@@ -75,7 +74,7 @@ const renderSummary = (
 test("a fully credited invoice says nothing is due and requests no payment", () => {
   const host = renderSummary({
     ...invoice,
-    credited: true,
+    settlement: { kind: "credited" },
     outstandingAmount: cents(0),
   });
   expect(host.textContent).toContain(messages.invoiceLink.credited);
@@ -83,6 +82,18 @@ test("a fully credited invoice says nothing is due and requests no payment", () 
   expect(host.querySelector("img")).toBeNull();
   const open = renderSummary(invoice);
   expect(open.textContent).not.toContain(messages.invoiceLink.credited);
+});
+
+test("an overpaid invoice states the refund the client is owed", () => {
+  const host = renderSummary({
+    ...invoice,
+    settlement: { kind: "overpaid", refund: "EUR 20.00" },
+    outstandingAmount: cents(0),
+  });
+  expect(host.textContent).toContain(
+    messages.invoiceLink.overpaid.replace("{amount}", "EUR 20.00"),
+  );
+  expect(host.querySelector("img")).toBeNull();
 });
 
 test("the amount-due label and value are emphasised without changing fact order", () => {

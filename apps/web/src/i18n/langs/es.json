@@ -726,6 +726,7 @@
       "payments": {
         "amountTooHigh": "El importe supera el pendiente de {amount}.",
         "confirmVoid": "El pago queda registrado como anulado y deja de computarse en esta factura.",
+        "credited": "Abonada",
         "empty": "Aún no hay pagos registrados",
         "method": "Forma de pago",
         "methods": {
@@ -738,6 +739,8 @@
         "paidOn": "Fecha de pago",
         "partiallyPaid": "Pagada parcialmente",
         "record": "Registrar pago",
+        "refundAmount": "Reembolso pendiente {amount}",
+        "refundDue": "Reembolso pendiente",
         "summary": "Pagado {paid}, pendiente {outstanding}",
         "title": "Pagos",
         "void": "Anular pago",
@@ -4046,6 +4049,7 @@
         "title": "Este enlace ya no está disponible"
       }
     },
+    "overpaid": "Ha pagado {amount} más de lo debido; el remitente le debe ese importe.",
     "paid": "Esta factura está pagada.",
     "paymentQr": "Código QR de pago",
     "validUntil": "Este enlace es válido hasta el {date}."

@@ -726,6 +726,7 @@
       "payments": {
         "amountTooHigh": "Kwota przekracza pozostałą do zapłaty kwotę {amount}.",
         "confirmVoid": "Płatność pozostanie w ewidencji jako anulowana i nie będzie już zaliczana na poczet tej faktury.",
+        "credited": "Skorygowana",
         "empty": "Nie zarejestrowano jeszcze żadnych płatności",
         "method": "Forma płatności",
         "methods": {
@@ -738,6 +739,8 @@
         "paidOn": "Data płatności",
         "partiallyPaid": "Częściowo zapłacona",
         "record": "Zarejestruj płatność",
+        "refundAmount": "Do zwrotu {amount}",
+        "refundDue": "Do zwrotu",
         "summary": "Zapłacono {paid}, pozostało {outstanding}",
         "title": "Płatności",
         "void": "Anuluj płatność",
@@ -4046,6 +4049,7 @@
         "title": "Ten link nie jest już dostępny"
       }
     },
+    "overpaid": "Zapłacono o {amount} więcej niż należało; nadawca jest Ci winien tę kwotę.",
     "paid": "Ta faktura została opłacona.",
     "paymentQr": "Kod QR do płatności",
     "validUntil": "Link jest ważny do {date}."

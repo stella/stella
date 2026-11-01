@@ -726,6 +726,7 @@
       "payments": {
         "amountTooHigh": "Suma viršija likusią mokėti sumą {amount}.",
         "confirmVoid": "Mokėjimas liks užregistruotas kaip anuliuotas ir nebebus įskaitomas į šios sąskaitos apmokėjimą.",
+        "credited": "Kredituota",
         "empty": "Mokėjimų dar neužregistruota",
         "method": "Mokėjimo būdas",
         "methods": {
@@ -738,6 +739,8 @@
         "paidOn": "Mokėjimo data",
         "partiallyPaid": "Iš dalies apmokėta",
         "record": "Užregistruoti mokėjimą",
+        "refundAmount": "Grąžintina {amount}",
+        "refundDue": "Grąžintina",
         "summary": "Sumokėta {paid}, liko sumokėti {outstanding}",
         "title": "Mokėjimai",
         "void": "Anuliuoti mokėjimą",
@@ -4046,6 +4049,7 @@
         "title": "Ši nuoroda nebepasiekiama"
       }
     },
+    "overpaid": "Sumokėjote {amount} daugiau nei reikėjo; siuntėjas jums skolingas šią sumą.",
     "paid": "Ši sąskaita apmokėta.",
     "paymentQr": "Mokėjimo QR kodas",
     "validUntil": "Ši nuoroda galioja iki {date}."

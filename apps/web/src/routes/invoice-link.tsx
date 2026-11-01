@@ -239,12 +239,13 @@ export const InvoiceSummary = ({
               );
             })}
           </DetailsGrid>
-          {invoice.paid ? (
-            <p className="text-sm font-medium">{t("paid")}</p>
-          ) : null}
-          {invoice.credited ? (
-            <p className="text-sm font-medium">{t("credited")}</p>
-          ) : null}
+          {invoice.settlement.kind === "open" ? null : (
+            <p className="text-sm font-medium">
+              {invoice.settlement.kind === "overpaid"
+                ? t("overpaid", { amount: invoice.settlement.refund })
+                : t(invoice.settlement.kind)}
+            </p>
+          )}
           {invoice.payment === null ? null : (
             <section className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex flex-col gap-2">

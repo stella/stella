@@ -726,6 +726,7 @@
       "payments": {
         "amountTooHigh": "Summa pārsniedz neapmaksāto atlikumu {amount}.",
         "confirmVoid": "Maksājums paliks uzskaitē kā anulēts un vairs netiks ieskaitīts šī rēķina apmaksā.",
+        "credited": "Kreditēts",
         "empty": "Maksājumi vēl nav reģistrēti",
         "method": "Maksājuma veids",
         "methods": {
@@ -738,6 +739,8 @@
         "paidOn": "Maksājuma datums",
         "partiallyPaid": "Daļēji apmaksāts",
         "record": "Reģistrēt maksājumu",
+        "refundAmount": "Atmaksājams {amount}",
+        "refundDue": "Atmaksājams",
         "summary": "Samaksāts {paid}, atlikums {outstanding}",
         "title": "Maksājumi",
         "void": "Anulēt maksājumu",
@@ -4046,6 +4049,7 @@
         "title": "Šī saite vairs nav pieejama"
       }
     },
+    "overpaid": "Jūs samaksājāt par {amount} vairāk nekā bija jāmaksā; sūtītājs jums ir parādā šo summu.",
     "paid": "Šis rēķins ir apmaksāts.",
     "paymentQr": "Maksājuma QR kods",
     "validUntil": "Šī saite ir derīga līdz {date}."

@@ -726,6 +726,7 @@
       "payments": {
         "amountTooHigh": "Le montant dépasse le reste dû de {amount}.",
         "confirmVoid": "Le paiement reste enregistré comme annulé et n'est plus imputé sur cette facture.",
+        "credited": "Avoir émis",
         "empty": "Aucun paiement enregistré pour l'instant",
         "method": "Mode de paiement",
         "methods": {
@@ -738,6 +739,8 @@
         "paidOn": "Date du paiement",
         "partiallyPaid": "Payée partiellement",
         "record": "Enregistrer un paiement",
+        "refundAmount": "Remboursement dû {amount}",
+        "refundDue": "Remboursement dû",
         "summary": "Payé {paid}, reste dû {outstanding}",
         "title": "Paiements",
         "void": "Annuler le paiement",
@@ -4046,6 +4049,7 @@
         "title": "Ce lien n'est plus disponible"
       }
     },
+    "overpaid": "Vous avez payé {amount} de plus que le montant dû ; l'expéditeur vous doit ce montant.",
     "paid": "Cette facture est payée.",
     "paymentQr": "QR code de paiement",
     "validUntil": "Ce lien est valable jusqu'au {date}."

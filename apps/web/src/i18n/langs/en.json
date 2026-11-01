@@ -726,6 +726,7 @@
       "payments": {
         "amountTooHigh": "The amount is more than the outstanding {amount}.",
         "confirmVoid": "The payment stays on record as voided and no longer counts towards this invoice.",
+        "credited": "Credited",
         "empty": "No payments recorded yet",
         "method": "Payment method",
         "methods": {
@@ -738,6 +739,8 @@
         "paidOn": "Payment date",
         "partiallyPaid": "Partially paid",
         "record": "Record payment",
+        "refundAmount": "Refund due {amount}",
+        "refundDue": "Refund due",
         "summary": "Paid {paid}, outstanding {outstanding}",
         "title": "Payments",
         "void": "Void payment",
@@ -4046,6 +4049,7 @@
         "title": "This link is no longer available"
       }
     },
+    "overpaid": "You have paid {amount} more than is due; the sender owes you that amount.",
     "paid": "This invoice has been paid.",
     "paymentQr": "Payment QR code",
     "validUntil": "This link is valid until {date}."

@@ -726,6 +726,7 @@
       "payments": {
         "amountTooHigh": "Az összeg meghaladja a(z) {amount} hátralékot.",
         "confirmVoid": "A kifizetés sztornózottként nyilvántartásban marad, és többé nem számít bele ennek a számlának a kiegyenlítésébe.",
+        "credited": "Jóváírva",
         "empty": "Még nincs rögzített kifizetés",
         "method": "Fizetési mód",
         "methods": {
@@ -738,6 +739,8 @@
         "paidOn": "Fizetés dátuma",
         "partiallyPaid": "Részben kifizetve",
         "record": "Kifizetés rögzítése",
+        "refundAmount": "Visszatérítendő {amount}",
+        "refundDue": "Visszatérítendő",
         "summary": "Kifizetve {paid}, hátralék {outstanding}",
         "title": "Kifizetések",
         "void": "Kifizetés sztornózása",
@@ -4046,6 +4049,7 @@
         "title": "Ez a link már nem érhető el"
       }
     },
+    "overpaid": "{amount} összeggel többet fizetett az esedékesnél; a feladó ennyivel tartozik Önnek.",
     "paid": "Ez a számla ki van fizetve.",
     "paymentQr": "Fizetési QR-kód",
     "validUntil": "Ez a link eddig érvényes: {date}."

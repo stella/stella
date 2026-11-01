@@ -359,6 +359,7 @@ const InvoiceDetail = ({
             </h2>
             <InvoiceStatusBadge
               partiallyPaid={isPartiallyPaid(invoice)}
+              settlement={invoice.settlement}
               status={invoiceStatus}
             />
           </div>
@@ -368,6 +369,16 @@ const InvoiceDetail = ({
               {t("billing.invoices.payments.outstandingAmount", {
                 amount: formatCurrencyAmount(
                   invoice.outstandingAmount,
+                  invoice.currency,
+                ),
+              })}
+            </p>
+          )}
+          {invoice.settlement.kind === "overpaid" && (
+            <p className="text-muted-foreground text-sm tabular-nums">
+              {t("billing.invoices.payments.refundAmount", {
+                amount: formatCurrencyAmount(
+                  invoice.settlement.refundAmount,
                   invoice.currency,
                 ),
               })}

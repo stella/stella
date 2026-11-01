@@ -726,6 +726,7 @@
       "payments": {
         "amountTooHigh": "Částka převyšuje zbývající dlužnou částku {amount}.",
         "confirmVoid": "Platba zůstane v evidenci jako stornovaná a do úhrady této faktury se už nezapočítá.",
+        "credited": "Dobropisováno",
         "empty": "Zatím nejsou zaznamenány žádné platby",
         "method": "Způsob platby",
         "methods": {
@@ -738,6 +739,8 @@
         "paidOn": "Datum platby",
         "partiallyPaid": "Částečně zaplaceno",
         "record": "Zaznamenat platbu",
+        "refundAmount": "K vrácení {amount}",
+        "refundDue": "K vrácení",
         "summary": "Zaplaceno {paid}, zbývá zaplatit {outstanding}",
         "title": "Platby",
         "void": "Stornovat platbu",
@@ -4046,6 +4049,7 @@
         "title": "Tento odkaz už není dostupný"
       }
     },
+    "overpaid": "Zaplatili jste o {amount} více, než bylo splatné; odesílatel vám tuto částku dluží.",
     "paid": "Tato faktura je uhrazená.",
     "paymentQr": "QR kód pro platbu",
     "validUntil": "Odkaz je platný do {date}."

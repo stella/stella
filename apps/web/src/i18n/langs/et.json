@@ -726,6 +726,7 @@
       "payments": {
         "amountTooHigh": "Summa ületab tasumata jäägi {amount}.",
         "confirmVoid": "Makse jääb arvele tühistatuna ega lähe enam selle arve tasumise arvestusse.",
+        "credited": "Krediteeritud",
         "empty": "Makseid pole veel registreeritud",
         "method": "Makseviis",
         "methods": {
@@ -738,6 +739,8 @@
         "paidOn": "Makse kuupäev",
         "partiallyPaid": "Osaliselt makstud",
         "record": "Registreeri makse",
+        "refundAmount": "Tagastamisele {amount}",
+        "refundDue": "Tagastamisele",
         "summary": "Makstud {paid}, tasumata {outstanding}",
         "title": "Maksed",
         "void": "Tühista makse",
@@ -4046,6 +4049,7 @@
         "title": "See link pole enam saadaval"
       }
     },
+    "overpaid": "Olete tasunud {amount} rohkem kui tasuda tuli; saatja võlgneb teile selle summa.",
     "paid": "See arve on tasutud.",
     "paymentQr": "Makse QR-kood",
     "validUntil": "See link kehtib kuni {date}."

@@ -16,15 +16,32 @@ type InvoiceStatusBadgeProps = {
   status: InvoiceStatus;
   /** A sent invoice with some payments recorded but not yet settled. */
   partiallyPaid?: boolean;
+  /**
+   * How the invoice stands: credit notes covering it alone (credited) or
+   * payments beyond what they leave (a refund due) are not money received.
+   */
+  settlement?: { kind: "open" | "paid" | "credited" | "overpaid" };
   className?: string;
 };
 
 export const InvoiceStatusBadge = ({
   status,
   partiallyPaid = false,
+  settlement,
   className,
 }: InvoiceStatusBadgeProps) => {
   const t = useTranslations("billing.invoices");
+  const label = (() => {
+    if (settlement?.kind === "credited") {
+      return t("payments.credited");
+    }
+    if (settlement?.kind === "overpaid") {
+      return t("payments.refundDue");
+    }
+    return partiallyPaid
+      ? t("payments.partiallyPaid")
+      : t(`statuses.${status}`);
+  })();
 
   return (
     <span
@@ -34,7 +51,7 @@ export const InvoiceStatusBadge = ({
         className,
       )}
     >
-      {partiallyPaid ? t("payments.partiallyPaid") : t(`statuses.${status}`)}
+      {label}
     </span>
   );
 };

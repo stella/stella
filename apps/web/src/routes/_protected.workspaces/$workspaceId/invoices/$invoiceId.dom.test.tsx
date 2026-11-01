@@ -98,6 +98,7 @@ const invoice = {
   payments: [],
   paidAmount: cents(0),
   outstandingAmount: cents(0),
+  settlement: { kind: "open" },
   sentAt: "2026-01-15T10:00:00.000Z",
   paidAt: null,
   finalizedAt: "2026-01-15T10:00:00.000Z",
