@@ -29,11 +29,6 @@ export const PENDING_CONTRACT_MIGRATIONS = [
     expiresAt: "2026-11-12",
     relations: ["case_law_coverage_summaries"],
   },
-  {
-    name: "20261028061200_mcp_oauth_current_state_contract",
-    expiresAt: "2026-11-03",
-    relations: ["mcp_oauth_state"],
-  },
   // Reader retirement not verified; #7708 tracks the revoke.
   {
     name: "20261015060000_case_law_decisions_base_table_contract",

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -84,6 +84,14 @@ type SeedRunOptions = {
   createdAt: string;
 };
 
+/** Review runs belong to a document of their own matter. */
+const fixtureDocumentFor = (workspaceId: SafeId<"workspace">) =>
+  new Map([
+    [ids.wsA1, ids.entityA1],
+    [ids.wsA2, ids.entityA2],
+    [ids.wsB1, ids.entityB1],
+  ]).get(workspaceId) ?? panic("Seeded run matter has no fixture document");
+
 const seedRun = async ({
   organizationId,
   workspaceId,
@@ -102,7 +110,7 @@ const seedRun = async ({
       ${id},
       ${organizationId},
       ${workspaceId},
-      ${Bun.randomUUIDv7()}::uuid,
+      ${fixtureDocumentFor(workspaceId)}::uuid,
       ${Bun.randomUUIDv7()}::uuid,
       ${Bun.randomUUIDv7()}::uuid,
       ${"a".repeat(64)},

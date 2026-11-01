@@ -32,6 +32,7 @@ export const MIGRATION_SAFETY_RULE_IDS = [
   "permissive-policy",
   "security-definer",
   "security-definer-search-path",
+  "security-definer-trusted-search-path",
   "change-owner",
   "set-schema",
   "high-volume-index-build",

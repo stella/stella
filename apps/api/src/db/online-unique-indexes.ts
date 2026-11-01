@@ -43,6 +43,8 @@ const LEGISLATION_DOCUMENTS_LEGACY_VERSION_LANG_IDX =
   "legislation_documents_legacy_version_lang_idx";
 const LEGISLATION_DOCUMENTS_PUBLISHER_IDENTITY_IDX =
   "legislation_documents_publisher_identity_idx";
+const MCP_OAUTH_STATE_ORG_CONNECTOR_USER_UIDX =
+  "mcp_oauth_state_org_connector_user_uidx";
 const PLAYBOOK_DEFINITIONS_ORG_STARTER_ID_UIDX =
   "playbook_definitions_org_starter_id_uidx";
 const PROPERTIES_WS_DOCUMENT_TYPE_CLASSIFIER_UNQ =
@@ -71,6 +73,7 @@ export const EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES = {
   INVOICES_ID_WORKSPACE_UNIQUE,
   LEGAL_LISTS_SAMPLE_WORKSPACE_UIDX,
   LEGAL_READER_ANSWER_MESSAGES_ANSWER_SEQUENCE_IDX,
+  MCP_OAUTH_STATE_ORG_CONNECTOR_USER_UIDX,
   PLAYBOOK_DEFINITIONS_ORG_STARTER_ID_UIDX,
   SESSION_PRIOR_TOKEN_HASH_IDX,
   TEMPLATES_ORG_PACK_TEMPLATE_UIDX,
@@ -104,6 +107,7 @@ export const ONLINE_UNIQUE_INDEX_NAMES = {
   LEGISLATION_DOCUMENTS_LEGACY_CURRENT_LANG_IDX,
   LEGISLATION_DOCUMENTS_LEGACY_VERSION_LANG_IDX,
   LEGISLATION_DOCUMENTS_PUBLISHER_IDENTITY_IDX,
+  MCP_OAUTH_STATE_ORG_CONNECTOR_USER_UIDX,
   PLAYBOOK_DEFINITIONS_ORG_STARTER_ID_UIDX,
   PROPERTIES_WS_DOCUMENT_TYPE_CLASSIFIER_UNQ,
   SESSION_PRIOR_TOKEN_HASH_IDX,
@@ -269,6 +273,16 @@ export type ExecutableOnlineUniqueIndex = OnlineIndexDeclaration &
   IntroducedMigrationIndex;
 
 export const EXECUTABLE_ONLINE_UNIQUE_INDEXES = [
+  {
+    introducedBy: "20261101190203_mcp_oauth_current_state_index",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "mcp_oauth_state_org_connector_user_uidx" ON public."mcp_oauth_state" USING btree ("organization_id", "connector_id", "user_id")',
+    definitionBody:
+      "ON public.mcp_oauth_state USING btree (organization_id, connector_id, user_id)",
+    isUnique: true,
+    name: "mcp_oauth_state_org_connector_user_uidx",
+    tableName: "mcp_oauth_state",
+  },
   {
     createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "contacts_org_id_unique" ON public."contacts" USING btree ("organization_id", "id")',

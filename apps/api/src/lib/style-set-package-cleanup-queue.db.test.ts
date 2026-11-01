@@ -35,7 +35,9 @@ import {
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import {
+  DeletedStyleSetCleanupError,
   deleteUnreferencedStyleSetPackage,
+  reconcileDeletedStyleSetPackages,
   reconcilePendingStyleSetPackageCleanups,
   StyleSetPackageCleanupRequeueError,
 } from "@/api/lib/style-set-package-cleanup-queue";
@@ -56,6 +58,10 @@ import {
 } from "@/api/tests/security/rls-fixture";
 
 const { testDb, ids } = await getRlsFixture();
+const deletionCleanupDb =
+  asTestRaw<Parameters<typeof reconcileDeletedStyleSetPackages>[0]["db"]>(
+    testDb,
+  );
 
 type StubJobState = "active" | "completed" | "delayed" | "failed";
 
@@ -140,12 +146,14 @@ const seededStyleSetIds: SafeId<"styleSet">[] = [];
 
 type SeedStyleSetOptions = {
   cleanupS3Key?: string | null;
+  deletedAt?: Date | null;
   s3Key?: string;
   updatedAt?: Date;
 };
 
 const styleSetValues = ({
   cleanupS3Key = null,
+  deletedAt = null,
   s3Key,
   updatedAt = SETTLED_AT,
 }: SeedStyleSetOptions = {}) => {
@@ -158,6 +166,7 @@ const styleSetValues = ({
     fileName: "styles.docx",
     s3Key: s3Key ?? `${ids.orgA}/style-sets/${styleSetId}/current.docx`,
     cleanupS3Key,
+    deletedAt,
     sizeBytes: 12,
     createdBy: ids.userA1,
     updatedAt,
@@ -193,6 +202,16 @@ const reconcile = async () => {
   const outcome = await reconcilePendingStyleSetPackageCleanups({
     cleanupQueue,
     db: testDb,
+  });
+  if (Result.isError(outcome)) {
+    throw outcome.error;
+  }
+  return outcome.value;
+};
+
+const reconcileDeleted = async () => {
+  const outcome = await reconcileDeletedStyleSetPackages({
+    db: deletionCleanupDb,
   });
   if (Result.isError(outcome)) {
     throw outcome.error;
@@ -310,6 +329,208 @@ describe("pending style set package cleanup reconciliation", () => {
     expect(await readCleanupKey(styleSetId)).toBeNull();
   });
 
+  test("redrives a terminally failed job without releasing its marker", async () => {
+    const cleanupS3Key = "style-sets/exhausted/superseded.docx";
+    const styleSetId = await seedStyleSet({ cleanupS3Key });
+    priorJobs.set(jobIdFor(cleanupS3Key), "failed");
+
+    const result = await reconcile();
+
+    expect(result).toEqual({ failed: 0, handedOff: 1, scanned: 1 });
+    expect(priorJobs.get(jobIdFor(cleanupS3Key))).toBe("delayed");
+    expect(await readCleanupKey(styleSetId)).toBe(cleanupS3Key);
+  });
+
+  test("retries partial tombstone cleanup until every object is erased", async () => {
+    const currentKey = `${ids.orgA}/style-sets/deleted/current.docx`;
+    const cleanupKey = `${ids.orgA}/style-sets/deleted/superseded.docx`;
+    const styleSetId = await seedStyleSet({
+      cleanupS3Key: cleanupKey,
+      deletedAt: SETTLED_AT,
+      s3Key: currentKey,
+    });
+    fake.put(bucket, currentKey, "current");
+    fake.put(bucket, cleanupKey, "superseded");
+    fake.failNext({ method: "DELETE", code: "InternalError", status: 500 });
+
+    const failed = await reconcileDeletedStyleSetPackages({
+      db: deletionCleanupDb,
+    });
+
+    if (!Result.isError(failed)) {
+      panic("Expected storage cleanup failure");
+    }
+    expect(failed.error).toBeInstanceOf(DeletedStyleSetCleanupError);
+    expect(failed.error.summary).toEqual({
+      cleaned: 0,
+      failed: 1,
+      scanned: 1,
+    });
+    expect(await readCleanupKey(styleSetId)).not.toBeUndefined();
+    await testDb
+      .update(styleSets)
+      .set({ deletionCleanupNextAttemptAt: new Date(0) })
+      .where(eq(styleSets.id, styleSetId));
+
+    const resumed = await reconcileDeleted();
+
+    expect(resumed).toEqual({
+      cleaned: 1,
+      failed: 0,
+      scanned: 1,
+    });
+    expect(storedKeys()).toEqual([]);
+    const [row] = await testDb
+      .select({ id: styleSets.id })
+      .from(styleSets)
+      .where(eq(styleSets.id, styleSetId));
+    expect(row).toBeUndefined();
+  });
+
+  test("transfers a reused object's cleanup obligation to its live row", async () => {
+    const sharedKey = `${ids.orgA}/style-sets/reused/current.docx`;
+    const deletedCurrentKey = `${ids.orgA}/style-sets/reused/deleted-current.docx`;
+    const deletedStyleSetId = await seedStyleSet({
+      cleanupS3Key: sharedKey,
+      deletedAt: SETTLED_AT,
+      s3Key: deletedCurrentKey,
+    });
+    const liveStyleSetId = await seedStyleSet({ s3Key: sharedKey });
+    fake.put(bucket, sharedKey, "live package");
+    fake.put(bucket, deletedCurrentKey, "deleted package");
+
+    const settled = await reconcileDeleted();
+
+    expect(settled).toEqual({
+      cleaned: 1,
+      failed: 0,
+      scanned: 1,
+    });
+    expect(storedKeys()).toEqual([sharedKey]);
+    const [deletedRow] = await testDb
+      .select({ id: styleSets.id })
+      .from(styleSets)
+      .where(eq(styleSets.id, deletedStyleSetId));
+    expect(deletedRow).toBeUndefined();
+
+    await testDb
+      .update(styleSets)
+      .set({
+        cleanupS3Key: sharedKey,
+        s3Key: `${ids.orgA}/style-sets/reused/replacement.docx`,
+      })
+      .where(eq(styleSets.id, liveStyleSetId));
+    await deleteUnreferencedStyleSetPackage(sharedKey, testDb);
+
+    expect(storedKeys()).toEqual([]);
+    expect(await readCleanupKey(liveStyleSetId)).toBeNull();
+  });
+
+  test("the scheduled task consumes a committed deletion tombstone", async () => {
+    const currentKey = `${ids.orgA}/style-sets/scheduled-delete/current.docx`;
+    const styleSetId = await seedStyleSet({
+      deletedAt: SETTLED_AT,
+      s3Key: currentKey,
+    });
+    fake.put(bucket, currentKey, "current");
+
+    const outcome = await runTask();
+
+    expect(outcome && !Result.isError(outcome)).toBe(true);
+    const [row] = await testDb
+      .select({ id: styleSets.id })
+      .from(styleSets)
+      .where(eq(styleSets.id, styleSetId));
+    expect(row).toBeUndefined();
+    expect(storedKeys()).toEqual([]);
+    expect(
+      logs.records.find(
+        ({ message }) =>
+          message === "scheduler.style_set_package_cleanups_reconciled",
+      )?.attributes,
+    ).toMatchObject({
+      "styleSetDeletionCleanups.cleaned": 1,
+      "styleSetDeletionCleanups.failed": 0,
+      "styleSetDeletionCleanups.scanned": 1,
+    });
+  });
+
+  test("concurrent tombstone reconcilers converge on one deletion", async () => {
+    const currentKey = `${ids.orgA}/style-sets/concurrent-delete/current.docx`;
+    const styleSetId = await seedStyleSet({
+      deletedAt: SETTLED_AT,
+      s3Key: currentKey,
+    });
+    fake.put(bucket, currentKey, "current");
+
+    const outcomes = await Promise.all([
+      reconcileDeleted(),
+      reconcileDeleted(),
+    ]);
+
+    expect(outcomes.every(({ failed }) => failed === 0)).toBe(true);
+    expect(storedKeys()).toEqual([]);
+    const [row] = await testDb
+      .select({ id: styleSets.id })
+      .from(styleSets)
+      .where(eq(styleSets.id, styleSetId));
+    expect(row).toBeUndefined();
+  });
+
+  test("a batch of failed tombstones does not starve later cleanup", async () => {
+    const blockedDeletedAt = new Date(0);
+    const blockedRows = Array.from({ length: 32 }, (_, index) => {
+      const sharedKey = `${ids.orgA}/style-sets/blocked-${index}/current.docx`;
+      return styleSetValues({
+        deletedAt: blockedDeletedAt,
+        s3Key: sharedKey,
+      });
+    });
+    await testDb.insert(styleSets).values(blockedRows);
+    const laterKey = `${ids.orgA}/style-sets/later/current.docx`;
+    const laterStyleSetId = await seedStyleSet({
+      deletedAt: SETTLED_AT,
+      s3Key: laterKey,
+    });
+    const deletePackage = async (s3Key: string) => {
+      if (s3Key.includes("/blocked-")) {
+        throw new Error("Storage unavailable");
+      }
+      return "removed" as const;
+    };
+
+    const blocked = await reconcileDeletedStyleSetPackages({
+      db: deletionCleanupDb,
+      deletePackage,
+    });
+    const resumed = await reconcileDeletedStyleSetPackages({
+      db: deletionCleanupDb,
+      deletePackage,
+    });
+
+    if (!Result.isError(blocked)) {
+      panic("Expected the blocked batch to fail");
+    }
+    expect(blocked.error.summary).toEqual({
+      cleaned: 0,
+      failed: 32,
+      scanned: 32,
+    });
+    if (Result.isError(resumed)) {
+      throw resumed.error;
+    }
+    expect(resumed.value).toEqual({
+      cleaned: 1,
+      failed: 0,
+      scanned: 1,
+    });
+    const [laterRow] = await testDb
+      .select({ id: styleSets.id })
+      .from(styleSets)
+      .where(eq(styleSets.id, laterStyleSetId));
+    expect(laterRow).toBeUndefined();
+  });
+
   test("leaves the marker for the next sweep when the job skipped", async () => {
     // Something still serves this key, so the deletion is refused. The marker
     // is the durable record that it is still owed and must survive.
@@ -370,7 +591,7 @@ describe("pending style set package cleanup reconciliation", () => {
     for (const { cleanupS3Key } of covered) {
       priorJobs.set(jobIdFor(cleanupS3Key ?? ""), "delayed");
     }
-    const strandedKey = "style-sets/stranded/superseded.docx";
+    const strandedKey = `${ids.orgA}/style-sets/stranded/superseded.docx`;
     await seedStyleSet({
       cleanupS3Key: strandedKey,
       updatedAt: new Date(base + 1000),
@@ -415,7 +636,7 @@ describe("pending style set package cleanup reconciliation", () => {
             operation satisfies never;
         }
       }
-      const healthyKey = "style-sets/healthy/superseded.docx";
+      const healthyKey = `${ids.orgA}/style-sets/healthy/superseded.docx`;
       const healthyId = await seedStyleSet({ cleanupS3Key: healthyKey });
 
       const outcome = await reconcilePendingStyleSetPackageCleanups({
@@ -485,7 +706,7 @@ describe("pending style set package cleanup reconciliation", () => {
       await seedStyleSet({ cleanupS3Key });
       addFailures.set(jobIdFor(cleanupS3Key), cause);
     }
-    const healthyKey = "style-sets/task/healthy.docx";
+    const healthyKey = `${ids.orgA}/style-sets/task/healthy.docx`;
     await seedStyleSet({ cleanupS3Key: healthyKey });
 
     const outcome = await runTask();

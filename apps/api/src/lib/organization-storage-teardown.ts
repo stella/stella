@@ -1,5 +1,5 @@
 import { TaggedError } from "better-result";
-import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
 
@@ -22,6 +22,7 @@ import {
   invoices,
   pendingUploads,
   propertyDependencies,
+  reportExports,
   styleSets,
   templates,
   templateVersions,
@@ -98,9 +99,9 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
  *                                 from its own id, so no other organization the
  *                                 same member belongs to can name the object.
  *
- * Deliberately not enumerated: `exports/…` report and chat exports, which the
- * bucket's lifecycle already expires, and the shared legal-corpus objects under
- * `case-law/` and `legal-corpus/`, which belong to no tenant.
+ * Deliberately not enumerated: chat exports, which are not owned by a durable
+ * tenant row, and the shared legal-corpus objects under `case-law/` and
+ * `legal-corpus/`, which belong to no tenant.
  */
 
 /** Keys recorded per cleanup request, and rows read per enumeration page. */
@@ -240,7 +241,7 @@ export const WORKSPACE_STORAGE_DISPOSITION = {
   [WORKSPACE_STORAGE_CLASS.FOLIO_YJS_SNAPSHOT]: "cleanup-request",
   [WORKSPACE_STORAGE_CLASS.OCR_DERIVATIVE]: "cleanup-request",
   [WORKSPACE_STORAGE_CLASS.PENDING_UPLOAD]: "cleanup-request",
-  [WORKSPACE_STORAGE_CLASS.REPORT_EXPORT]: "bucket-lifecycle",
+  [WORKSPACE_STORAGE_CLASS.REPORT_EXPORT]: "cleanup-request",
 } as const satisfies Record<
   WorkspaceStorageClass,
   "bucket-lifecycle" | "cleanup-request"
@@ -259,7 +260,7 @@ export const WORKSPACE_STORAGE_REFERENCE_DISPOSITION = {
   "folio_collab_rooms.yjs_snapshot_file_id": "cleanup-request",
   "office_file_evidence.source_file_id": "field-file-alias",
   "pending_uploads.purpose_data": "cleanup-request",
-  "report_exports.result_s3_key": "bucket-lifecycle",
+  "report_exports.result_s3_key": "cleanup-request",
   "user_files.s3_key": "cleanup-request",
   "user_files.thumbnail_file_id": "cleanup-request",
 } as const;
@@ -584,6 +585,40 @@ const recordPendingUploadPage = async (
   await recordPendingUploadPage(scope, workspaceId, record, lastRow.id);
 };
 
+const recordReportExportPage = async (
+  scope: OrganizationTeardownScope,
+  workspaceId: SafeId<"workspace">,
+  record: TeardownPageSink,
+  cursor: PageCursor<"reportExport"> = null,
+): Promise<void> => {
+  const page = await scope.tx
+    .select({ id: reportExports.id, s3Key: reportExports.resultS3Key })
+    .from(reportExports)
+    .where(
+      and(
+        eq(reportExports.workspaceId, workspaceId),
+        isNotNull(reportExports.resultS3Key),
+        cursor === null ? undefined : gt(reportExports.id, cursor),
+      ),
+    )
+    .orderBy(asc(reportExports.id))
+    .limit(TEARDOWN_PAGE_SIZE);
+  if (page.length === 0) {
+    return;
+  }
+
+  await record(
+    workspaceId,
+    page.flatMap(({ s3Key }) => (s3Key === null ? [] : [s3Key])),
+  );
+
+  const lastRow = page.length < TEARDOWN_PAGE_SIZE ? undefined : page.at(-1);
+  if (!lastRow) {
+    return;
+  }
+  await recordReportExportPage(scope, workspaceId, record, lastRow.id);
+};
+
 type ChatAttachment = {
   s3Key: string;
   thumbnailFileId: string | null;
@@ -839,6 +874,7 @@ const recordMatterStorage = async (
   await recordDesktopEditCheckpointPage(scope, workspaceId, record);
   await recordFolioCollabRoomFilePage(scope, workspaceId, record);
   await recordPendingUploadPage(scope, workspaceId, record);
+  await recordReportExportPage(scope, workspaceId, record);
   await recordMatterStorage(scope, workspaceIds, record, index + 1);
 };
 
@@ -972,6 +1008,7 @@ const recordWorkspaceStorageTeardown = async ({
   await recordDesktopEditCheckpointPage(scope, workspaceId, record);
   await recordFolioCollabRoomFilePage(scope, workspaceId, record);
   await recordPendingUploadPage(scope, workspaceId, record);
+  await recordReportExportPage(scope, workspaceId, record);
   await recordChatAttachmentPage(scope, record, {
     type: "workspace",
     workspaceId,

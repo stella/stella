@@ -1,0 +1,4 @@
+{
+  "add-column": "Nullable timestamp and constant integer default use catalog additions without a table rewrite, with 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "The nonnegative cleanup-attempt CHECK is NOT VALID; existing rows are validated by the online owner after the schema lock is released."
+}

@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/files/copy-organization-files.ts",
+  "delta": 2,
+  "reason": "An organization file copy renews its prepublication intent lease before and after each bounded storage round, so a lease can never lapse while a copy it covers is in flight; the rounds are bounded by the copy's object count divided by its concurrency."
+}

@@ -2,6 +2,9 @@ import { isNull, lte, or } from "drizzle-orm";
 
 import { documentProcessingRuns } from "@/api/db/schema";
 
+/** Authority window for one deadline-scout claim. */
+export const DEADLINE_SCOUT_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
+
 /**
  * A pending scan is due unless an exhausted action period skipped it until a
  * later time. Dispatch and claim share this predicate, so a skipped scan is

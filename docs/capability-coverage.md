@@ -779,5 +779,5 @@ mechanics, and similar), not gaps in coverage.
 | search_ui | 20 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 21 |
+| upload_mechanics | 22 |
 | url_preview | 2 |

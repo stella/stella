@@ -319,48 +319,48 @@ buffer_object_cleanup_intents.next_attempt_at  timestamptz         default,not n
 buffer_object_cleanup_intents.created_at       timestamptz         default,not null  entities.ts:1387
 ```
 
-## fields · `fields` · entities.ts:1493
+## fields · `fields` · entities.ts:1503
 
 ```text
-fields.{...entityFeatureGateColumns()}           spread                        entities.ts:1496
-fields.{...entityFeatureWorkspaceGateColumns()}  spread                        entities.ts:1497
-fields.id                                        pUuid            pk,not null  entities.ts:1498
-fields.workspace_id                              safeWorkspaceId  fk,not null  entities.ts:1499
-fields.property_id                               safeUuid         fk,not null  entities.ts:1500
-fields.entity_version_id                         safeUuid         fk,not null  entities.ts:1501
-fields.file_id                                   safeUuid         null         entities.ts:1504
-fields.content                                   jsonb            not null     entities.ts:1505
-fields.ai_settlement                             jsonb            null         entities.ts:1507  Durable terminal outcome of the latest AI run for this cell.
-fields.owner_run_id                              text             null         entities.ts:1509  Workflow run that currently owns this non-terminal cell.
-fields.owner_batch_id                            text             null         entities.ts:1511  Batch within the workflow run that currently owns this cell.
-fields.deadline_at                               timestamptz      null         entities.ts:1513  Time after which the cell owner may be reconciled.
-fields.attempt                                   smallint         null         entities.ts:1515  Bounded automatic-retry attempt for an owned cell.
+fields.{...entityFeatureGateColumns()}           spread                        entities.ts:1506
+fields.{...entityFeatureWorkspaceGateColumns()}  spread                        entities.ts:1507
+fields.id                                        pUuid            pk,not null  entities.ts:1508
+fields.workspace_id                              safeWorkspaceId  fk,not null  entities.ts:1509
+fields.property_id                               safeUuid         fk,not null  entities.ts:1510
+fields.entity_version_id                         safeUuid         fk,not null  entities.ts:1511
+fields.file_id                                   safeUuid         null         entities.ts:1514
+fields.content                                   jsonb            not null     entities.ts:1515
+fields.ai_settlement                             jsonb            null         entities.ts:1517  Durable terminal outcome of the latest AI run for this cell.
+fields.owner_run_id                              text             null         entities.ts:1519  Workflow run that currently owns this non-terminal cell.
+fields.owner_batch_id                            text             null         entities.ts:1521  Batch within the workflow run that currently owns this cell.
+fields.deadline_at                               timestamptz      null         entities.ts:1523  Time after which the cell owner may be reconciled.
+fields.attempt                                   smallint         null         entities.ts:1525  Bounded automatic-retry attempt for an owned cell.
 ```
 
-## cell_metadata · `cellMetadata` · entities.ts:1595
+## cell_metadata · `cellMetadata` · entities.ts:1605
 
 ```text
-cell_metadata.{...entityFeatureGateColumns()}           spread                             entities.ts:1598
-cell_metadata.{...entityFeatureWorkspaceGateColumns()}  spread                             entities.ts:1599
-cell_metadata.workspace_id                              safeWorkspaceId  fk,not null       entities.ts:1600
-cell_metadata.entity_version_id                         safeUuid         fk,not null       entities.ts:1601
-cell_metadata.property_id                               safeUuid         fk,not null       entities.ts:1604
-cell_metadata.metadata                                  jsonb            not null          entities.ts:1605
-cell_metadata.created_by                                text             fk,null           entities.ts:1606
-cell_metadata.updated_by                                text             fk,null           entities.ts:1609
-cell_metadata.created_at                                timestamptz      default,not null  entities.ts:1612
-cell_metadata.updated_at                                timestamptz      default,not null  entities.ts:1613
+cell_metadata.{...entityFeatureGateColumns()}           spread                             entities.ts:1608
+cell_metadata.{...entityFeatureWorkspaceGateColumns()}  spread                             entities.ts:1609
+cell_metadata.workspace_id                              safeWorkspaceId  fk,not null       entities.ts:1610
+cell_metadata.entity_version_id                         safeUuid         fk,not null       entities.ts:1611
+cell_metadata.property_id                               safeUuid         fk,not null       entities.ts:1614
+cell_metadata.metadata                                  jsonb            not null          entities.ts:1615
+cell_metadata.created_by                                text             fk,null           entities.ts:1616
+cell_metadata.updated_by                                text             fk,null           entities.ts:1619
+cell_metadata.created_at                                timestamptz      default,not null  entities.ts:1622
+cell_metadata.updated_at                                timestamptz      default,not null  entities.ts:1623
 ```
 
-## justifications · `justifications` · entities.ts:1642
+## justifications · `justifications` · entities.ts:1652
 
 ```text
-justifications.{...entityFeatureGateColumns()}           spread                                   entities.ts:1645
-justifications.{...entityFeatureWorkspaceGateColumns()}  spread                                   entities.ts:1646
-justifications.id                                        pUuid            pk,not null             entities.ts:1647
-justifications.workspace_id                              safeWorkspaceId  fk,not null             entities.ts:1648
-justifications.field_id                                  safeUuid         fk,not null             entities.ts:1649
-justifications.content                                   jsonb            not null                entities.ts:1650
-justifications.bounding_boxes                            jsonb            null                    entities.ts:1651
-justifications.file_field_ids                            safeUuid         array,default,not null  entities.ts:1652
+justifications.{...entityFeatureGateColumns()}           spread                                   entities.ts:1655
+justifications.{...entityFeatureWorkspaceGateColumns()}  spread                                   entities.ts:1656
+justifications.id                                        pUuid            pk,not null             entities.ts:1657
+justifications.workspace_id                              safeWorkspaceId  fk,not null             entities.ts:1658
+justifications.field_id                                  safeUuid         fk,not null             entities.ts:1659
+justifications.content                                   jsonb            not null                entities.ts:1660
+justifications.bounding_boxes                            jsonb            null                    entities.ts:1661
+justifications.file_field_ids                            safeUuid         array,default,not null  entities.ts:1662
 ```

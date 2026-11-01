@@ -75,12 +75,24 @@ import {
   DECISION_DATE_CEILING_CONSTRAINTS,
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
+import {
+  DOCUMENT_DERIVATIVE_RUN_OWNERSHIP_CONSTRAINTS,
+  DOCUMENT_DERIVATIVE_RUN_OWNERSHIP_REPAIRS,
+} from "./document-derivative-run-ownership-repair";
 import { DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL } from "./document-review-finding-decision-backfill";
 import {
   EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
   EMAIL_UNDELIVERABLE_CONSTRAINTS,
 } from "./email-undeliverable-constraint-validation";
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
+import {
+  FILE_LIFECYCLE_CONSTRAINT_VALIDATIONS,
+  FILE_LIFECYCLE_CONSTRAINTS,
+} from "./file-lifecycle-constraint-validation";
+import {
+  FILE_OBJECT_RECONCILIATION_CONSTRAINTS,
+  FILE_OBJECT_RECONCILIATION_REPAIR,
+} from "./file-object-reconciliation-repair";
 import { FUNCTION_DEPENDENT_INDEX_REINDEXES } from "./function-dependent-index-reindex";
 import {
   IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
@@ -836,6 +848,50 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "sanctions_contact_marks_organization_retry_idx",
     tableName: "sanctions_contact_marks",
   },
+  // Reservation admission counts organization and caller retained capacity.
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "file_comparison_uploads_org_user_idx" ON public."file_comparison_uploads" USING btree ("organization_id", "user_id")',
+    definitionBody:
+      "ON public.file_comparison_uploads USING btree (organization_id, user_id)",
+    isUnique: false,
+    introducedBy: "20261101185703_file_comparison_claims",
+    name: "file_comparison_uploads_org_user_idx",
+    tableName: "file_comparison_uploads",
+  },
+  // The tombstone cleanup walk over deleted style sets in retry order.
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "style_sets_deletion_cleanup_idx" ON public."style_sets" USING btree ("deletion_cleanup_attempt_count", "deleted_at", "id") WHERE "deleted_at" IS NOT NULL',
+    definitionBody:
+      "ON public.style_sets USING btree (deletion_cleanup_attempt_count, deleted_at, id) WHERE (deleted_at IS NOT NULL)",
+    isUnique: false,
+    introducedBy: "20261101185603_style_set_deletion_cleanup",
+    name: "style_sets_deletion_cleanup_idx",
+    tableName: "style_sets",
+  },
+  // Only active write rows enter the reconciliation sweep; quarantined rows
+  // keep their key, write identity and reservation for operator repair.
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "organization_file_objects_active_reconcile_idx" ON public."organization_file_objects" USING btree ("reconcile_after", "object_key") WHERE "write_id" IS NOT NULL AND "reconciliation_state" = \'active\'',
+    definitionBody:
+      "ON public.organization_file_objects USING btree (reconcile_after, object_key) WHERE ((write_id IS NOT NULL) AND (reconciliation_state = 'active'::text))",
+    isUnique: false,
+    introducedBy: "20261101185803_file_reservation_reconciliation_state",
+    name: "organization_file_objects_active_reconcile_idx",
+    tableName: "organization_file_objects",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "organization_file_objects_org_active_reconcile_idx" ON public."organization_file_objects" USING btree ("organization_id", "reconcile_after", "object_key") WHERE "write_id" IS NOT NULL AND "reconciliation_state" = \'active\'',
+    definitionBody:
+      "ON public.organization_file_objects USING btree (organization_id, reconcile_after, object_key) WHERE ((write_id IS NOT NULL) AND (reconciliation_state = 'active'::text))",
+    isUnique: false,
+    introducedBy: "20261101185803_file_reservation_reconciliation_state",
+    name: "organization_file_objects_org_active_reconcile_idx",
+    tableName: "organization_file_objects",
+  },
   ...IMPORT_PROVENANCE_UNIQUE_INDEXES,
   {
     introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
@@ -847,6 +903,9 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "search_history_entries_owner_country_recent_idx",
     tableName: "search_history_entries",
   },
+  onlineUniqueIndexDefinition(
+    EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES.MCP_OAUTH_STATE_ORG_CONNECTOR_USER_UIDX,
+  ),
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 
@@ -982,6 +1041,18 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
     legacyName: "account_issuer_account_id_uidx",
     replacementNames: ["account_provider_account_id_uidx"],
   },
+  // The reconciliation sweep orders write rows by their scheduled retry, not
+  // by their last write, and skips quarantined rows.
+  {
+    introducedBy: "20261101185803_file_reservation_reconciliation_state",
+    legacyName: "organization_file_objects_pending_reconcile_idx",
+    replacementNames: ["organization_file_objects_active_reconcile_idx"],
+  },
+  {
+    introducedBy: "20261101185803_file_reservation_reconciliation_state",
+    legacyName: "organization_file_objects_org_pending_reconcile_idx",
+    replacementNames: ["organization_file_objects_org_active_reconcile_idx"],
+  },
 ];
 
 /**
@@ -1040,6 +1111,9 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   INVOICE_LEGACY_PAYMENT_BACKFILL,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
+  ...FILE_LIFECYCLE_CONSTRAINT_VALIDATIONS,
+  FILE_OBJECT_RECONCILIATION_REPAIR,
+  ...DOCUMENT_DERIVATIVE_RUN_OWNERSHIP_REPAIRS,
   ...IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
   // Not behind one migration: the OAuth resource set is derived from the MCP
   // audiences in application code, so it is the code that moves and the rows
@@ -1083,6 +1157,9 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...USAGE_ACTION_TYPE_CONSTRAINTS,
     ...NOTIFICATION_TASK_ASSIGNED_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
+    ...FILE_LIFECYCLE_CONSTRAINTS,
+    ...FILE_OBJECT_RECONCILIATION_CONSTRAINTS,
+    ...DOCUMENT_DERIVATIVE_RUN_OWNERSHIP_CONSTRAINTS,
     ...IMPORT_PROVENANCE_CONSTRAINTS,
   ];
 

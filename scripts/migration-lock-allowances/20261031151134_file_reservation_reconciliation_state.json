@@ -1,0 +1,5 @@
+{
+  "add-column": "Reconciliation columns use constant defaults and nullable timestamps without rewriting existing rows, with 1s lock_timeout and 5s statement_timeout.",
+  "create-trigger": "The row trigger fills reconciliation state for writers during rollout; installation changes catalog metadata under 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "Reconciliation lifecycle CHECKs are NOT VALID; bounded online repair schedules existing writes before validation."
+}

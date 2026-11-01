@@ -23,6 +23,7 @@ import { archiveWorkspaceHandler } from "@/api/handlers/workspaces/archive";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { lockWorkspaceForEntityCreate } from "@/api/lib/entity-cap-lock";
 import { publishCheckpointInTransaction } from "@/api/lib/entity-versions/publish-folio-collab-checkpoint";
 import { officeFileEncryption } from "@/api/lib/files/detect-file-encryption";
@@ -399,6 +400,7 @@ if (!databaseUrl || !enabled) {
       await againstCap({
         run: async (tx, fixture) => {
           const result = await writeFileVersion({
+            authority: CALLER_AUTHORIZED,
             tx,
             organizationId: fixture.organizationId,
             workspaceId: fixture.workspaceId,
@@ -426,6 +428,7 @@ if (!databaseUrl || !enabled) {
         workspaceMode: "update",
         run: async (tx, fixture) => {
           const result = await writeFileVersion({
+            authority: CALLER_AUTHORIZED,
             tx,
             organizationId: fixture.organizationId,
             workspaceId: fixture.workspaceId,

@@ -28,7 +28,10 @@ import {
   drainSearchProjectionRepairQueue,
   enqueueEntitySearchRepairs,
 } from "@/api/lib/search/projection-repair-queue";
-import type { SearchProjectionRepairDeps } from "@/api/lib/search/projection-repair-queue";
+import type {
+  SearchProjectionRepairClaim,
+  SearchProjectionRepairDeps,
+} from "@/api/lib/search/projection-repair-queue";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -125,7 +128,9 @@ const queuedSourceIds = async () =>
 const recordingRepairDeps = (
   repaired: string[],
 ): SearchProjectionRepairDeps => {
-  const record = async (sourceId: string): Promise<void> => {
+  const record = async ({
+    sourceId,
+  }: SearchProjectionRepairClaim): Promise<void> => {
     repaired.push(sourceId);
   };
   return {
