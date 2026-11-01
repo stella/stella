@@ -2447,6 +2447,10 @@ const createHarness = ({
           if (query.includes("corpus_index_projection_intents")) {
             return [];
           }
+          // The population seed's completion: already seeded.
+          if (query.includes("case_law_population_seed_state")) {
+            return [{ phase: "complete" }];
+          }
           // The OAuth-policy repair's completion census: a complete policy.
           // Checked before the table branch below, because the census names
           // both its own CTE and the tables.
