@@ -19,15 +19,18 @@ test("deletion builders own literal, named and aliased event construction in eve
     'const domainChange = { change: "deleted", record };',
     "const built = buildResourceDeletedEvent(classified);",
   ].join("\n");
-  for (const sourcePath of [
-    "apps/api/src/arbitrary.ts",
-    "apps/web/src/arbitrary.test.ts",
-    "packages/example/src/arbitrary.tsx",
-    "scripts/arbitrary.test.ts",
-  ]) {
-    expect(await lintSingleRule(rule, source, { sourcePath })).toEqual([
-      2, 3, 4, 7, 9,
-    ]);
+  const results = await Promise.all(
+    [
+      "apps/api/src/arbitrary.ts",
+      "apps/web/src/arbitrary.test.ts",
+      "packages/example/src/arbitrary.tsx",
+      "scripts/arbitrary.test.ts",
+    ].map(
+      async (sourcePath) => await lintSingleRule(rule, source, { sourcePath }),
+    ),
+  );
+  for (const lines of results) {
+    expect(lines).toEqual([2, 3, 4, 7, 9]);
   }
 });
 
@@ -53,13 +56,17 @@ test("brand names and type assertions cannot forge trusted builder inputs", asyn
 test("only canonical source files grant brand ownership and only the contract builds events", async () => {
   const brand =
     'const ownership = v.brand("ClassifiedEntityDeletionOwnership");\nconst value = raw as BuiltRealtimeEvent;';
-  for (const sourcePath of [
-    "packages/api-contract/src/realtime-events.ts",
-    "apps/api/src/lib/flows/visibility.ts",
-  ]) {
-    expect(
-      await lintSingleRule(rule, brand, { sourcePath, cwd: "scratch" }),
-    ).toEqual([]);
+  const owners = await Promise.all(
+    [
+      "packages/api-contract/src/realtime-events.ts",
+      "apps/api/src/lib/flows/visibility.ts",
+    ].map(
+      async (sourcePath) =>
+        await lintSingleRule(rule, brand, { sourcePath, cwd: "scratch" }),
+    ),
+  );
+  for (const lines of owners) {
+    expect(lines).toEqual([]);
   }
   expect(
     await lintSingleRule(rule, brand, {
@@ -130,12 +137,16 @@ test("nested lookalike owner paths cannot mint brands or deletion events", async
     "const value = raw as BuiltRealtimeEvent;",
     'const event = { type: "resource.deleted", resource };',
   ].join("\n");
-  for (const sourcePath of [
-    "foo/packages/api-contract/src/realtime-events.ts",
-    "foo/apps/api/src/lib/flows/visibility.ts",
-  ]) {
-    expect(
-      await lintSingleRule(rule, source, { sourcePath, cwd: "scratch" }),
-    ).toEqual([1, 2, 3]);
+  const lookalikes = await Promise.all(
+    [
+      "foo/packages/api-contract/src/realtime-events.ts",
+      "foo/apps/api/src/lib/flows/visibility.ts",
+    ].map(
+      async (sourcePath) =>
+        await lintSingleRule(rule, source, { sourcePath, cwd: "scratch" }),
+    ),
+  );
+  for (const lines of lookalikes) {
+    expect(lines).toEqual([1, 2, 3]);
   }
 });
