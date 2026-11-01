@@ -733,6 +733,7 @@ jobs:
             scripts/api-health.ts
             apps/api/src/db-components.ts
             apps/api/src/deploy-env-contract.ts
+            apps/api/src/bullmq-queue-hosts.ts
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -747,6 +748,7 @@ jobs:
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/"{check-api-deployment,api-health,staging-ecs-readiness}.ts "$RUNNER_TEMP/scripts/"
           cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/db-components.ts" "$RUNNER_TEMP/apps/api/src/db-components.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/deploy-env-contract.ts" "$RUNNER_TEMP/apps/api/src/deploy-env-contract.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/bullmq-queue-hosts.ts" "$RUNNER_TEMP/apps/api/src/bullmq-queue-hosts.ts"
           echo "STAGING_PROOF_GATE_DIR=$RUNNER_TEMP/scripts" >> "$GITHUB_ENV"
           echo "STAGING_PROOF_STATE_PATH=$RUNNER_TEMP/scripts/state.json" >> "$GITHUB_ENV"
 
