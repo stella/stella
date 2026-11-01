@@ -18,7 +18,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
-import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   commitOrganizationFilesBytes,
   FILE_RESERVATION_ABANDON_DELAY_MS,
@@ -293,6 +293,7 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
           });
     const toCommit = [];
     const toRelease = [];
+    const toDelete = [];
     let committed = 0;
     let deleted = 0;
     let released = 0;
@@ -336,13 +337,17 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
         committed += 1;
         continue;
       }
-      yield* await deleteOrganizationFileWithSignal(
-        candidate.objectKey,
+      toDelete.push(reservation);
+    }
+    // One fenced, chunked deletion for every abandoned object of the sweep.
+    if (toDelete.length > 0) {
+      yield* await deleteOrganizationFilesWithSignal(
+        toDelete.map(({ objectKey }) => objectKey),
         signal ?? AbortSignal.timeout(30_000),
         { fileUsageDb: db },
       );
-      toRelease.push(reservation);
-      deleted += 1;
+      toRelease.push(...toDelete);
+      deleted += toDelete.length;
     }
     const settled = yield* await commitOrganizationFilesBytes(toCommit, db);
     committed -= settled.busyObjectKeys.length;

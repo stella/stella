@@ -12,7 +12,7 @@ import { openOrganizationFileDeletionDb } from "@/api/lib/files/organization-fil
 import type { OrganizationFileDeletionDb } from "@/api/lib/files/organization-file-deletion-db";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
-import { requireNoHold } from "@/api/lib/legal-holds/holds";
+import { requireNoHoldAcross } from "@/api/lib/legal-holds/holds";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
@@ -51,6 +51,7 @@ export const deleteOrganizationFilesWithSignal = async (
       signal,
       AbortSignal.timeout(DELETE_CHUNK_TIMEOUT_MS),
     ]);
+    // db-await-in-loop: one fenced transaction per storage chunk of DELETE_CONCURRENCY keys; the hold fence stays held only while that chunk's storage deletes settle.
     const checked = await deleteUnheldObjectChunk({
       keys: chunk,
       signal: chunkSignal,
@@ -65,6 +66,7 @@ export const deleteOrganizationFilesWithSignal = async (
         deletedKeys.push(result.value);
       }
     }
+    // db-await-in-loop: usage removal follows each chunk's settled storage deletes, so a later chunk's failure cannot leave earlier deleted bytes counted.
     const removed = await removeOrganizationFilesBytes(
       deletedKeys,
       fileUsageDb,
@@ -193,18 +195,15 @@ const deleteUnheldObjectChunk = async ({
             )}]::text[]) requested_keys(object_key)`,
             sql`${userFiles.s3Key} = requested_keys.object_key OR (${userFiles.thumbnailFileId} = split_part(split_part(requested_keys.object_key, '/', 2), '.', 1) AND (split_part(requested_keys.object_key, '/', 1) = ${userFiles.userId} OR split_part(requested_keys.object_key, '/', 1) = ${chatThreads.organizationId}))`,
           );
-        const organizationIds = [
-          ...new Set([...keyOwners, ...attachmentOwners].map(({ id }) => id)),
-        ].toSorted();
-        for (const organizationId of organizationIds) {
-          const hold = await requireNoHold({
-            tx,
-            organizationId: brandPersistedOrganizationId(organizationId),
-            target: { type: "files", objectKeys: keys },
-          });
-          if (hold.isErr()) {
-            return Result.err(hold.error);
-          }
+        const hold = await requireNoHoldAcross({
+          tx,
+          organizationIds: [...keyOwners, ...attachmentOwners].map(({ id }) =>
+            brandPersistedOrganizationId(id),
+          ),
+          target: { type: "files", objectKeys: keys },
+        });
+        if (hold.isErr()) {
+          return Result.err(hold.error);
         }
         return Result.ok(
           await Promise.allSettled(
