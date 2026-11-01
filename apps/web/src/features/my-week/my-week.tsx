@@ -18,7 +18,7 @@ import {
   type ManualTimeEntryValues,
 } from "@/components/billing/manual-time-entry-form";
 import { isTimeEntryRateRequired } from "@/components/billing/time-entry-rate-error.logic";
-import { shiftWeeks, weekOf } from "@/components/billing/work-week.logic";
+import { weekOf } from "@/components/billing/work-week.logic";
 import {
   MatterCombobox,
   type MatterOption,
@@ -272,11 +272,10 @@ export const MyWeek = ({
             />
           </>
         }
-        onNextWeek={() => onSelectDate(shiftWeeks(date, 1))}
-        onPreviousWeek={() => onSelectDate(shiftWeeks(date, -1))}
+        date={date}
+        onSelectDate={onSelectDate}
         onToday={onToday}
         totals={totals}
-        week={week}
       />
       <WeekStrip
         onSelectDate={onSelectDate}

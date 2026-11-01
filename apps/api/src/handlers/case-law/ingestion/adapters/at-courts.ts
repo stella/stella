@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -47,6 +48,7 @@ import {
   EMPTY_AST,
   encodeSourceRawEnvelope,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -1589,6 +1591,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
           if (page.total !== expectedTotal) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor(restartSliceCursor(state.slice)),
             };
           }
@@ -1600,6 +1603,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             );
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor(next),
             };
           }
@@ -1629,6 +1633,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             if (state.page < totalPages) {
               return {
                 decisions: [],
+                publisherRequest: PUBLISHER_REQUEST.ANSWERED,
                 nextCursor: encodeCursor({
                   ...state,
                   page: state.page + 1,
@@ -1644,6 +1649,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             ) {
               return {
                 decisions: [],
+                publisherRequest: PUBLISHER_REQUEST.ANSWERED,
                 nextCursor: encodeCursor(restartSliceCursor(state.slice)),
               };
             }
@@ -1654,6 +1660,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             );
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor(next),
             };
           }
@@ -1700,6 +1707,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             return {
               decisions,
               itemBuildFailures,
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor({
                 ...state,
                 page: state.page + 1,
@@ -1714,12 +1722,14 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
           if (collected !== expectedTotal - foreign) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor(restartSliceCursor(state.slice)),
             };
           }
           return {
             decisions,
             itemBuildFailures,
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: encodeCursor({
               slice: state.slice,
               phase: CURSOR_PHASE.VERIFY,

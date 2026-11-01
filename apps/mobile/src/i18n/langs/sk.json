@@ -74,7 +74,8 @@
       "none": "Bez termínu",
       "today": "Dnes",
       "tomorrow": "Zajtra",
-      "nextWeek": "O týždeň"
+      "nextWeek": "O týždeň",
+      "pick": "Vybrať dátum"
     },
     "due": {
       "overdue": "Po termíne",
@@ -89,7 +90,14 @@
     "statusFailed": "Úlohu sa nepodarilo zmeniť. Skúste to znova.",
     "pickTitle": "Vyberte úlohu",
     "pickDescription": "Vyberte úlohu zo zoznamu a zobrazí sa tu.",
-    "openMatter": "Otvoriť spis"
+    "openMatter": "Otvoriť spis",
+    "assignedTo": "Riešiteľ",
+    "nobody": "Nepriradené",
+    "assign": "Priradiť",
+    "doneAssigning": "Hotovo",
+    "someone": "Niekto",
+    "membersFailed": "Členov spisu sa nepodarilo načítať.",
+    "assignFailed": "Úlohu sa nepodarilo prideliť. Skúste to znova."
   },
   "matters": {
     "emptyTitle": "Zatiaľ žiadne spisy",
@@ -133,7 +141,9 @@
     },
     "add": "Pridať",
     "scanDocument": "Naskenovať dokument",
-    "newTask": "Nová úloha"
+    "newTask": "Nová úloha",
+    "uploadDocument": "Nahrať dokument",
+    "uploadFailed": "Dokument sa nepodarilo nahrať. Skúste to znova."
   },
   "entity": {
     "type": "Typ",
@@ -197,6 +207,7 @@
     "headnote": "Právna veta",
     "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
     "openSource": "Otvoriť originál",
+    "openFailed": "Odkaz sa nepodarilo otvoriť.",
     "loadFailed": "Judikatúru sa nepodarilo načítať.",
     "share": "Zdieľať"
   },

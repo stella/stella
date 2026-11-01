@@ -74,7 +74,8 @@
       "none": "Kuupäevata",
       "today": "Täna",
       "tomorrow": "Homme",
-      "nextWeek": "Nädala pärast"
+      "nextWeek": "Nädala pärast",
+      "pick": "Vali kuupäev"
     },
     "due": {
       "overdue": "Tähtaeg möödas",
@@ -89,7 +90,14 @@
     "statusFailed": "Ülesannet ei õnnestunud muuta. Proovige uuesti.",
     "pickTitle": "Vali ülesanne",
     "pickDescription": "Vali loendist ülesanne, et seda siin näha.",
-    "openMatter": "Ava asi"
+    "openMatter": "Ava asi",
+    "assignedTo": "Määratud",
+    "nobody": "Määramata",
+    "assign": "Määra",
+    "doneAssigning": "Valmis",
+    "someone": "Keegi",
+    "membersFailed": "Asja liikmeid ei õnnestunud laadida.",
+    "assignFailed": "Ülesannet ei õnnestunud määrata. Proovige uuesti."
   },
   "matters": {
     "emptyTitle": "Toimikuid veel pole",
@@ -133,7 +141,9 @@
     },
     "add": "Lisa",
     "scanDocument": "Skanni dokument",
-    "newTask": "Uus ülesanne"
+    "newTask": "Uus ülesanne",
+    "uploadDocument": "Laadi üles dokument",
+    "uploadFailed": "Dokumenti ei õnnestunud üles laadida. Proovige uuesti."
   },
   "entity": {
     "type": "Tüüp",
@@ -197,6 +207,7 @@
     "headnote": "Lühikokkuvõte",
     "textUnavailable": "Selle lahendi teksti ei ole saadaval",
     "openSource": "Ava algallikas",
+    "openFailed": "Linki ei õnnestunud avada.",
     "loadFailed": "Kohtupraktikat ei õnnestunud laadida.",
     "share": "Jaga"
   },

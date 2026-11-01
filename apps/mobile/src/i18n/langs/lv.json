@@ -74,7 +74,8 @@
       "none": "Bez datuma",
       "today": "Šodien",
       "tomorrow": "Rīt",
-      "nextWeek": "Pēc nedēļas"
+      "nextWeek": "Pēc nedēļas",
+      "pick": "Izvēlēties datumu"
     },
     "due": {
       "overdue": "Nokavēti",
@@ -89,7 +90,14 @@
     "statusFailed": "Uzdevumu neizdevās mainīt. Mēģiniet vēlreiz.",
     "pickTitle": "Izvēlieties uzdevumu",
     "pickDescription": "Izvēlieties uzdevumu no saraksta, lai to redzētu šeit.",
-    "openMatter": "Atvērt lietu"
+    "openMatter": "Atvērt lietu",
+    "assignedTo": "Piešķirts",
+    "nobody": "Nav piešķirts",
+    "assign": "Piešķirt",
+    "doneAssigning": "Gatavs",
+    "someone": "Kāds",
+    "membersFailed": "Neizdevās ielādēt lietas dalībniekus.",
+    "assignFailed": "Uzdevumu neizdevās piešķirt. Mēģiniet vēlreiz."
   },
   "matters": {
     "emptyTitle": "Lietu vēl nav",
@@ -133,7 +141,9 @@
     },
     "add": "Pievienot",
     "scanDocument": "Skenēt dokumentu",
-    "newTask": "Jauns uzdevums"
+    "newTask": "Jauns uzdevums",
+    "uploadDocument": "Augšupielādēt dokumentu",
+    "uploadFailed": "Dokumentu neizdevās augšupielādēt. Mēģiniet vēlreiz."
   },
   "entity": {
     "type": "Veids",
@@ -197,6 +207,7 @@
     "headnote": "Kopsavilkums",
     "textUnavailable": "Šim nolēmumam teksts nav pieejams",
     "openSource": "Atvērt sākotnējo avotu",
+    "openFailed": "Saiti neizdevās atvērt.",
     "loadFailed": "Tiesu praksi neizdevās ielādēt.",
     "share": "Kopīgot"
   },

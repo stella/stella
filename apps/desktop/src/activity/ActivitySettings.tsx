@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
+import { Switch } from "@stll/ui/switch";
 
 import type { DesktopMessages } from "../i18n/index";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -83,6 +84,7 @@ type ActivitySettingsCommand =
   | "activity_remove_app_exclusion"
   | "activity_set_app_detail_capture"
   | "activity_set_detect_calls"
+  | "activity_set_narrative_assist"
   | "activity_set_retention";
 
 type RunCommand = (
@@ -235,6 +237,26 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
         </Label>
         <p className="text-muted-foreground text-xs">
           {t("detectCallsDescription")}
+        </p>
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label
+          className="items-start gap-2"
+          htmlFor="activity-narrative-assist"
+        >
+          <Switch
+            checked={settings.narrativeAssist === "always"}
+            id="activity-narrative-assist"
+            onCheckedChange={(always) =>
+              onCommand("activity_set_narrative_assist", {
+                assist: always ? "always" : "ask",
+              })
+            }
+          />
+          <span>{t("narrativeAssistAlways")}</span>
+        </Label>
+        <p className="text-muted-foreground text-xs">
+          {t("narrativeAssistDescription")}
         </p>
       </div>
       <CaptureDetailsControl onCommand={onCommand} settings={settings} />

@@ -11,8 +11,9 @@ use tauri::{AppHandle, State};
 use crate::{
   activity::{
     self, ActivityAppDetailCapture, ActivityAppState, ActivityDeletionError,
-    ActivityDeletionRecovery, ActivityHistoryDisposition, ActivityOtherHistoryRecovery,
-    ActivityRecordingStatus, ActivityRetention, ActivitySettingsSnapshot,
+    ActivityDeletionRecovery, ActivityHistoryDisposition, ActivityNarrativeAssist,
+    ActivityOtherHistoryRecovery, ActivityRecordingStatus, ActivityRetention,
+    ActivitySettingsSnapshot,
   },
   activity_commands::{lock_error, update},
   activity_details,
@@ -212,6 +213,18 @@ pub fn activity_open_accessibility_settings(
   manager.require_caller(&caller)?;
   drop(manager);
   activity_details::open_accessibility_settings()
+}
+
+#[tauri::command]
+pub fn activity_set_narrative_assist(
+  caller: ActivitySettingsCaller,
+  app: AppHandle,
+  state: State<'_, ActivityAppState>,
+  assist: ActivityNarrativeAssist,
+) -> Result<(), String> {
+  update(&app, &state, &caller, |manager| {
+    manager.set_narrative_assist(assist)
+  })
 }
 
 #[tauri::command]

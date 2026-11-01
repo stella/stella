@@ -2,11 +2,10 @@ import { useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useSearch } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
+import { useNow, useTranslations } from "use-intl";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { compareByLocale } from "@stll/collation";
-import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Frame } from "@stll/ui/frame";
 import {
@@ -49,6 +48,11 @@ import { formatMemberDate } from "@/lib/organization/utils";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
+import {
+  INVITATION_COLUMNS,
+  InvitationsTableHeader,
+  MembersInvitations,
+} from "@/routes/_protected.admin/-components/members-invitations";
 import { OrganizationListToolbar } from "@/routes/_protected.admin/-components/organization/list-toolbar";
 import { RoleCell } from "@/routes/_protected.admin/-components/organization/member-role-cell";
 import { filterOrganizationLists } from "@/routes/_protected.admin/-components/organization/members-search.logic";
@@ -98,38 +102,6 @@ const MEMBER_COLUMNS: readonly MemberColumn[] = [
 const isSecondaryMemberColumn = (id: MemberColumn["id"]) =>
   MEMBER_COLUMNS.some((column) => column.id === id && column.secondary);
 
-type InvitationColumn = {
-  id: "email" | "role" | "status" | "invited" | "expires" | "actions";
-  label:
-    | "common.email"
-    | "common.role"
-    | "common.status"
-    | "organization.invitations.invited"
-    | "organization.invitations.expires"
-    | null;
-  secondary?: true;
-};
-
-const INVITATION_COLUMNS: readonly InvitationColumn[] = [
-  { id: "email", label: "common.email" },
-  { id: "role", label: "common.role" },
-  { id: "status", label: "common.status" },
-  {
-    id: "invited",
-    label: "organization.invitations.invited",
-    secondary: true,
-  },
-  {
-    id: "expires",
-    label: "organization.invitations.expires",
-    secondary: true,
-  },
-  { id: "actions", label: null },
-];
-
-const isSecondaryInvitationColumn = (id: InvitationColumn["id"]) =>
-  INVITATION_COLUMNS.some((column) => column.id === id && column.secondary);
-
 export const Route = createFileRoute("/_protected/admin/members")({
   staticData: {
     presentation: routePresentation({
@@ -155,6 +127,9 @@ export const Route = createFileRoute("/_protected/admin/members")({
 });
 
 function Members() {
+  // Re-read the clock so an invitation that expires while the page stays
+  // open moves from Pending to Past invitations.
+  const now = useNow({ updateInterval: 60_000 });
   const t = useTranslations();
   const locale = useFormattingLocale();
   const activeOrganizationId = Route.useRouteContext({
@@ -301,120 +276,29 @@ function Members() {
         </Frame>
       </section>
 
-      {data.invitations.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
-            {t("settings.organization.pendingInvitations")}
-          </h2>
-          <Frame>
-            <Table>
-              <InvitationsTableHeader />
-              <TableBody>
-                {filteredInvitations.map((invitation) => (
-                  <TableRow key={invitation.id}>
-                    <TableCell>
-                      <BidiText direction="ltr">{invitation.email}</BidiText>
-                    </TableCell>
-                    <TableCell>
-                      {t(`organization.roles.${invitation.role}`)}
-                    </TableCell>
-                    <TableCell>
-                      {t(
-                        `organization.invitations.statuses.${invitation.status}`,
-                      )}
-                    </TableCell>
-                    <TableCell
-                      className={cn(
-                        isSecondaryInvitationColumn("invited") &&
-                          SECONDARY_COLUMN_CLASS,
-                      )}
-                    >
-                      {formatMemberDate(invitation.createdAt)}
-                    </TableCell>
-                    <TableCell
-                      className={cn(
-                        isSecondaryInvitationColumn("expires") &&
-                          SECONDARY_COLUMN_CLASS,
-                      )}
-                    >
-                      {formatMemberDate(invitation.expiresAt)}
-                    </TableCell>
-                    <TableCell className="text-end">
-                      <Menu>
-                        <Tooltip
-                          content={t("common.actions")}
-                          render={
-                            <MenuTrigger
-                              render={<Button size="icon-xs" variant="ghost" />}
-                            />
-                          }
-                        >
-                          <EllipsisVerticalIcon />
-                        </Tooltip>
-                        <MenuPopup>
-                          <MenuItem
-                            disabled={
-                              invitation.status !== "rejected" ||
-                              inviteMember.isPending
-                            }
-                            onClick={() => {
-                              inviteMember.mutate(
-                                {
-                                  email: invitation.email,
-                                  role: invitation.role,
-                                  resend: true,
-                                },
-                                {
-                                  onSuccess: () => {
-                                    stellaToast.add({
-                                      title: t("success.invitationResent"),
-                                      type: "success",
-                                    });
-                                  },
-                                  onError: (error) => {
-                                    notifyUserError(
-                                      error,
-                                      t("errors.actionFailed"),
-                                    );
-                                  },
-                                },
-                              );
-                            }}
-                          >
-                            {t("organization.invitations.resendInvitation")}
-                          </MenuItem>
-                          <MenuItem
-                            disabled={
-                              invitation.status !== "pending" ||
-                              cancelInvitation.isPending
-                            }
-                            onClick={() =>
-                              cancelInvitation.mutate(invitation.id)
-                            }
-                            variant="destructive"
-                          >
-                            {t("organization.invitations.cancelInvitation")}
-                          </MenuItem>
-                        </MenuPopup>
-                      </Menu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredInvitations.length === 0 && (
-                  <TableRow>
-                    <TableCell
-                      className="text-muted-foreground text-center"
-                      colSpan={6}
-                    >
-                      {t("organization.invitations.noInvitationsFound")}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </Frame>
-        </section>
-      )}
+      <MembersInvitations
+        invitations={filteredInvitations}
+        now={now}
+        resendPending={inviteMember.isPending}
+        cancelPending={cancelInvitation.isPending}
+        onCancel={(invitationId) => cancelInvitation.mutate(invitationId)}
+        onResend={(invitation) =>
+          inviteMember.mutate(
+            { email: invitation.email, role: invitation.role, resend: true },
+            {
+              onSuccess: () => {
+                stellaToast.add({
+                  title: t("success.invitationResent"),
+                  type: "success",
+                });
+              },
+              onError: (error) => {
+                notifyUserError(error, t("errors.actionFailed"));
+              },
+            },
+          )
+        }
+      />
     </>
   );
 }
@@ -489,32 +373,6 @@ const MembersTableHeader = ({ sort, toggleSort }: MembersTableHeaderProps) => {
             />
           );
         })}
-      </TableRow>
-    </TableHeader>
-  );
-};
-
-const InvitationsTableHeader = () => {
-  const t = useTranslations();
-
-  return (
-    <TableHeader>
-      <TableRow>
-        {INVITATION_COLUMNS.map((column) =>
-          column.label === null ? (
-            <TableHead
-              className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
-              key={column.id}
-            />
-          ) : (
-            <TableHead
-              className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
-              key={column.id}
-            >
-              {t(column.label)}
-            </TableHead>
-          ),
-        )}
       </TableRow>
     </TableHeader>
   );
