@@ -196,9 +196,12 @@ const writtenFields = (node: Node): string[] | null => {
   });
 };
 
+const REPLAY_WRITE_MODULE = "@/api/lib/case-law/replay-write";
+
 const discoverWriters = (file: string, text: string): Writer[] => {
   const source = parseSource(file, text);
   const aliases = new Map([...tables].map((name) => [name, name]));
+  const replayPlanners = new Set<string>();
   for (const statement of source.program.body) {
     if (statement.type !== "ImportDeclaration") {
       continue;
@@ -211,8 +214,55 @@ const discoverWriters = (file: string, text: string): Writer[] => {
       if (imported && tables.has(imported)) {
         aliases.set(binding.local.name, imported);
       }
+      if (
+        imported === "replayWrite" &&
+        statement.source.value === REPLAY_WRITE_MODULE
+      ) {
+        replayPlanners.add(binding.local.name);
+      }
     }
   }
+  // `.set(write.set)` writes the values its `replayWrite` plan was given:
+  // read those, from the nearest enclosing declaration of the plan.
+  const replayValues = (
+    payload: Node,
+    ancestors: readonly Node[],
+  ): Node | null => {
+    if (
+      payload.type !== "MemberExpression" ||
+      payload.computed ||
+      payload.object.type !== "Identifier" ||
+      propertyName(payload.property) !== "set"
+    ) {
+      return null;
+    }
+    const plan = payload.object.name;
+    for (const scope of ancestors.toReversed()) {
+      if (scope.type !== "BlockStatement" && scope.type !== "Program") {
+        continue;
+      }
+      for (const statement of scope.body) {
+        if (statement.type !== "VariableDeclaration") {
+          continue;
+        }
+        for (const declarator of statement.declarations) {
+          if (
+            declarator.id.type !== "Identifier" ||
+            declarator.id.name !== plan
+          ) {
+            continue;
+          }
+          const init = declarator.init;
+          return init?.type === "CallExpression" &&
+            init.callee.type === "Identifier" &&
+            replayPlanners.has(init.callee.name)
+            ? (init.arguments.at(1) ?? null)
+            : null;
+        }
+      }
+    }
+    return null;
+  };
   const tableOf = (expression: Node): string | null => {
     if (
       expression.type !== "CallExpression" ||
@@ -288,9 +338,10 @@ const discoverWriters = (file: string, text: string): Writer[] => {
             .at(0);
         }
         if (payload) {
-          const written = writtenFields(payload);
+          const values = replayValues(payload, [...ancestors, node]) ?? payload;
+          const written = writtenFields(values);
           if (name === "values" || written === null || written.length > 0) {
-            add(`orm-${name}-${table}`, text.slice(payload.start, payload.end));
+            add(`orm-${name}-${table}`, text.slice(values.start, values.end));
           }
         }
       }
@@ -390,6 +441,27 @@ test("new ORM and SQL writers require their own checked producer", () => {
     expect(found.length).toBeGreaterThan(0);
     expect(unauthorized(found)).toHaveLength(found.length);
   }
+});
+
+test("a replay plan's SET is judged by the values the plan was given", () => {
+  const plan = (values: string) =>
+    discoverWriters(
+      "src/scripts/replay-writer.ts",
+      `import { replayWrite } from "${REPLAY_WRITE_MODULE}";\nconst write = replayWrite(caseLawDecisions, ${values});\ndb.update(caseLawDecisions).set(write.set).where(write.setWhere);`,
+    );
+  const writing = plan("{ citationKey: supplied }");
+  expect(writing.map(({ payload }) => payload)).toEqual([
+    "{ citationKey: supplied }",
+  ]);
+  expect(unauthorized(writing)).toHaveLength(1);
+  expect(plan("{ projectionEpoch: epoch }")).toEqual([]);
+  // A `set` that is not a replay plan's stays opaque and must be declared.
+  expect(
+    discoverWriters(
+      "src/scripts/opaque-writer.ts",
+      "const write = build();\ndb.update(caseLawDecisions).set(write.set);",
+    ).map(({ payload }) => payload),
+  ).toEqual(["write.set"]);
 });
 
 test("column readers and unrelated updates are not citation writers", () => {
