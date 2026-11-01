@@ -291,7 +291,7 @@ const sampleKeys = async (jurisdiction: string, want: number) => {
     // Newest-write is a heuristic, not a guarantee (a compare-and-set-
     // rejected write can be newer than the live payload); resolving the truly
     // live key would need the database, which this probe deliberately avoids.
-    const key = newestTextKey(docListing.contents ?? []);
+    const key = newestTextKey(docListing.contents);
     if (key !== undefined) {
       keys.add(key);
     }
@@ -311,7 +311,7 @@ const recheckKey = async ({
     }),
     "s3.list-recheck",
   );
-  return newestTextKey(listing.contents ?? []);
+  return newestTextKey(listing.contents);
 };
 
 type ProbedDoc = {

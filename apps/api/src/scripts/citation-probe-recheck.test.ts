@@ -69,6 +69,10 @@ describe("newestTextKey", () => {
     ).toBe(`${prefix}/c/text.zst`);
   });
 
+  test("names no key for a listing without contents", () => {
+    expect(newestTextKey(undefined)).toBe(undefined);
+  });
+
   test("names no key for a document without text", () => {
     expect(newestTextKey([{ key: `${prefix}/b/ast.json.zst` }])).toBe(
       undefined,

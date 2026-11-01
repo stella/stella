@@ -67,8 +67,13 @@ export const parseRecheckTargets = (
  * superseded payload is still the court's prose.
  */
 export const newestTextKey = (
-  contents: readonly { key: string; lastModified?: string | undefined }[],
+  contents:
+    readonly { key: string; lastModified?: string | undefined }[] | undefined,
 ): string | undefined => {
+  // A listing that answered without a contents field lists nothing.
+  if (contents === undefined) {
+    return undefined;
+  }
   let newest: { key: string; lastModified?: string | undefined } | undefined;
   for (const entry of contents) {
     if (!entry.key.endsWith("/text.zst")) {
