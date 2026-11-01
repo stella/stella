@@ -18,7 +18,7 @@ import {
 type TabChange = { status?: string; url?: string };
 type FakeTab = { id: number; status: string; title?: string; url: string };
 type Injection = {
-  args?: [{ kind: string }];
+  args?: [{ expectedTopOrigin?: string | null; kind: string }];
   target: { documentIds?: string[]; frameIds?: number[]; tabId: number };
 };
 type InjectionResult = {
@@ -1063,9 +1063,55 @@ describe("chat's tabs", () => {
       },
     ];
 
-    expect(await run(switchTo(RESULTS_TAB_ID))).toMatchObject({
+    const result = await run(switchTo(RESULTS_TAB_ID));
+    expect(result).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.tabChanged,
     });
+    expect(JSON.stringify(result)).toContain("was not read");
+  });
+
+  test("the page refuses to be read once it left the approved origin", async () => {
+    const { handlers, session } = installChatTabs();
+    const seenOrigins: (string | null | undefined)[] = [];
+    // The tab moved to another site after the checks: the page, as the
+    // injected script does, refuses when its top origin is not the one
+    // the worker expects.
+    handlers["snapshot"] = ({ args }) => {
+      const expected = args?.[0].expectedTopOrigin;
+      seenOrigins.push(expected);
+      return [
+        {
+          frameId: 0,
+          result:
+            typeof expected === "string" && expected !== "https://other.example"
+              ? { refused: "top-origin" }
+              : frameSnapshot("Elsewhere", "https://other.example/"),
+        },
+      ];
+    };
+
+    const result = await run(switchTo(RESULTS_TAB_ID));
+    expect(result).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.tabChanged,
+    });
+    expect(JSON.stringify(result)).toContain("was not read");
+    expect(seenOrigins).toEqual(["https://example.com"]);
+    // Nothing the refused read saw is kept as what chat last read.
+    expect(session["browserControlledTab"]).toMatchObject({
+      settled: null,
+      snapshot: null,
+      tabId: RESULTS_TAB_ID,
+    });
+
+    // A plain snapshot reads any page, as before.
+    handlers["snapshot"] = ({ args }) => {
+      seenOrigins.push(args?.[0].expectedTopOrigin);
+      return [{ frameId: 0, result: frameSnapshot("Results", RESULTS_URL) }];
+    };
+    expect(await run({ action: "snapshot" })).toMatchObject({
+      status: "success",
+    });
+    expect(seenOrigins.at(-1)).toBeNull();
   });
 
   test("after the controlled tab closes, chat's other tabs stay reachable", async () => {

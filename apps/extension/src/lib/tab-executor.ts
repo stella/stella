@@ -430,6 +430,11 @@ type PageOperation =
     }
   | { kind: "locate" }
   | {
+      /**
+       * The origin the tab's top document must have; every frame refuses
+       * before reading anything when it is another. Null reads any page.
+       */
+      expectedTopOrigin: string | null;
       kind: "snapshot";
       limits: typeof BROWSER_CONTROL_LIMITS;
       metadataType: typeof BROWSER_CONTROL_TARGET_METADATA;
@@ -452,6 +457,21 @@ const runPageOperation = async (
     func: (pageOperation) => {
       if (pageOperation.kind === "locate") {
         return { origin: window.origin, url: window.location.href };
+      }
+      if (
+        pageOperation.kind === "snapshot" &&
+        pageOperation.expectedTopOrigin !== null
+      ) {
+        // A frame learns its top document's origin from its own ancestors;
+        // when the browser withholds it, the frame refuses as well.
+        const ancestors = window.location.ancestorOrigins;
+        const topOrigin =
+          window === window.top
+            ? window.origin
+            : ancestors.item(ancestors.length - 1);
+        if (topOrigin !== pageOperation.expectedTopOrigin) {
+          return { refused: "top-origin" };
+        }
       }
       const { limits, metadataType, shadowSegment } = pageOperation;
       const SKIPPED_TAGS = new Set(["NOSCRIPT", "SCRIPT", "STYLE", "TEMPLATE"]);
@@ -1393,12 +1413,18 @@ const listChatTabs = async (
 
 type ReadSnapshotOptions = {
   controllerId: string;
+  /**
+   * The only origin the page may be read on, and what to return otherwise.
+   * The page refuses before reading anything, and nothing is stored.
+   */
+  requiredOrigin?: { origin: string; refusal: BrowserControlResult };
   tabId: number;
   textOffset: number;
 };
 
 const readSnapshot = async ({
   controllerId,
+  requiredOrigin,
   tabId,
   textOffset,
 }: ReadSnapshotOptions): Promise<BrowserControlResult> => {
@@ -1412,6 +1438,7 @@ const readSnapshot = async ({
   const results = await runPageOperation(
     { allFrames: true, tabId },
     {
+      expectedTopOrigin: requiredOrigin?.origin ?? null,
       kind: "snapshot",
       limits: BROWSER_CONTROL_LIMITS,
       metadataType: BROWSER_CONTROL_TARGET_METADATA,
@@ -1427,6 +1454,14 @@ const readSnapshot = async ({
   // The tab URL was checked before injection; the page may have navigated
   // since, so the document that was actually read is checked again.
   const top = frames.find(({ frameId }) => frameId === TOP_FRAME_ID);
+  // A top document that refused, or that was read on another origin, is
+  // neither returned nor stored.
+  if (
+    requiredOrigin !== undefined &&
+    top?.snapshot.origin !== requiredOrigin.origin
+  ) {
+    return requiredOrigin.refusal;
+  }
   if (
     top &&
     !isControllableFrame({
@@ -1929,7 +1964,7 @@ const runSwitchTab = async (
   const leftApprovedOrigin = (): BrowserControlResult =>
     browserControlError(
       BROWSER_CONTROL_ERROR_CODE.tabChanged,
-      `That tab no longer shows ${approved.origin} and was not read. Switch to it again with its current address from a new snapshot's tabs.`,
+      `That tab no longer shows ${approved.origin} and was not read. Take a snapshot for chat's tabs and their current addresses.`,
     );
   if (current.origin !== approved.origin) {
     return leftApprovedOrigin();
@@ -1988,14 +2023,14 @@ const runSwitchTab = async (
   if (isStopped(signal)) {
     return outcomeUnknown(STOPPED_AFTER_DISPATCH);
   }
-  const result = await readSnapshot({ controllerId, tabId, textOffset: 0 });
-  if (
-    result.status === "success" &&
-    parseControllableUrl(result.snapshot.url)?.origin !== approved.origin
-  ) {
-    return leftApprovedOrigin();
-  }
-  return result;
+  // Read only on the approved origin: a page that left it in the meantime
+  // refuses before anything is read, and nothing is stored.
+  return await readSnapshot({
+    controllerId,
+    requiredOrigin: { origin: approved.origin, refusal: leftApprovedOrigin() },
+    tabId,
+    textOffset: 0,
+  });
 };
 
 const runElementAction = async (
