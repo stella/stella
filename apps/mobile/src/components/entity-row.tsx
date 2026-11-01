@@ -23,14 +23,18 @@ const DEPTH_INDENT = 20;
  * One document, folder or task: its name, then its kind (or a task's
  * status) and the day it last changed. A date, not "2 days ago": Hermes,
  * the app's JavaScript engine, cannot format relative times. A row inside
- * folders is indented by its depth; a folder shows whether it is open.
+ * folders is indented by its depth; a folder shows whether it is open. A
+ * list that spans matters, such as search, names the matter first.
  */
 export const EntityRow = ({
+  context,
   depth,
   entity,
   folder,
   onPress,
 }: {
+  /** The matter the row sits in, where the list spans matters. */
+  context?: string | null | undefined;
   depth: number;
   entity: MatterEntity;
   folder: { open: boolean } | null;
@@ -45,9 +49,14 @@ export const EntityRow = ({
     if (kind === "task" && typeof status === "string" && isTaskStatus(status)) {
       return t(`status.${status}`);
     }
+    // A document names its file's format ("PDF", "DOCX") rather than its kind.
+    if (entity.fileType !== undefined) {
+      return entity.fileType;
+    }
     return isKnownEntityKind(kind) ? t(`kind.${kind}`) : undefined;
   })();
   const details = [
+    context === null || context === "" ? undefined : context,
     label,
     t("updated", {
       time: format.dateTime(new Date(changedAt), {

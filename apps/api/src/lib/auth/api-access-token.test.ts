@@ -204,6 +204,32 @@ describe("which routes an API access token opens", () => {
     }
   });
 
+  test("the app registers and unregisters its push device with the read grant alone", () => {
+    for (const [method, route] of [
+      ["PUT", "/v1/me/push-devices"],
+      ["DELETE", "/v1/me/push-devices/:token"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({ method, route, scopes: ["stella:read"] }),
+      ).toEqual({ admitted: true });
+      expect(
+        admitApiAccessTokenRoute({
+          method,
+          route,
+          scopes: ["stella:chat", "stella:matters_write"],
+        }),
+      ).toEqual({ admitted: false, reason: "scope" });
+    }
+    // Only the routes the app uses: listing devices stays closed.
+    expect(
+      admitApiAccessTokenRoute({
+        method: "GET",
+        route: "/v1/me/push-devices",
+        scopes: ["stella:read"],
+      }),
+    ).toEqual({ admitted: false, reason: "route" });
+  });
+
   test("a file attached to a chat message goes up with it, at the chat scope only", () => {
     const send = { method: "POST", route: "/v1/chat" } as const;
     expect(
@@ -227,6 +253,67 @@ describe("which routes an API access token opens", () => {
       "GET /v1/chat/threads/:threadId/turns/:turnId/join",
       "POST /v1/chat/threads/:threadId/turns/:turnId/cancel",
     ]);
+  });
+
+  test("search results open at the read scope", () => {
+    const search = { method: "POST", route: "/v1/search" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...search, scopes: ["stella:read"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...search,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:read"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+  });
+
+  test("search filter values open at the read scope", () => {
+    const facets = { method: "POST", route: "/v1/search/facets" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...facets, scopes: ["stella:read"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...facets,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:read"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+  });
+
+  test("the caller's recent searches open at the read scope", () => {
+    const history = { method: "GET", route: "/v1/search-history" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...history, scopes: ["stella:read"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...history,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:read"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+  });
+
+  test("the other search routes stay closed", () => {
+    for (const [method, route] of [
+      ["POST", "/v1/search/preview"],
+      ["POST", "/v1/search/refine"],
+      ["POST", "/v1/search/summary"],
+      ["POST", "/v1/search/summary/chat"],
+      ["GET", "/v1/saved-searches"],
+      ["POST", "/v1/saved-searches"],
+      ["PATCH", "/v1/saved-searches/:savedSearchId"],
+      ["DELETE", "/v1/saved-searches/:savedSearchId"],
+      ["POST", "/v1/search-history"],
+      ["DELETE", "/v1/search-history"],
+      ["DELETE", "/v1/search-history/:entryId"],
+      ["GET", "/v1/search-history/import-clock"],
+      ["POST", "/v1/search-history/import"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({ method, route, scopes: MOBILE_SCOPES }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
   });
 
   test("a request no route matched is refused", () => {
