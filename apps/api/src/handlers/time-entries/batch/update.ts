@@ -41,6 +41,19 @@ const batchUpdateBodySchema = v.object({
   ]),
 });
 
+/**
+ * The rows a batch action updates: exactly the ones it locked and checked.
+ * Under READ COMMITTED an UPDATE re-evaluates its WHERE against rows committed
+ * after the lock, so a row that came to match since (moved into the matter,
+ * changed status) would otherwise be updated without any of the checks. Rows
+ * that were not in the action's starting state when locked are skipped.
+ */
+const lockedRows = (locked: readonly { id: SafeId<"timeEntry"> }[]) =>
+  inArray(
+    timeEntries.id,
+    locked.map(({ id }) => id),
+  );
+
 type BatchAction =
   "approve" | "revert_to_draft" | "mark_billable" | "mark_non_billable";
 
@@ -259,7 +272,7 @@ const batchUpdate = createSafeHandler(
                 returnComment: null,
                 updatedAt: now,
               })
-              .where(and(condition, approvable))
+              .where(and(lockedRows(blockers), condition, approvable))
               .returning({ id: timeEntries.id });
             // The rows were locked when read, so each one's status then is
             // the status the approval moved it from.
@@ -325,6 +338,7 @@ const batchUpdate = createSafeHandler(
             }
             const candidates = await tx
               .select({
+                id: timeEntries.id,
                 dateWorked: timeEntries.dateWorked,
                 narrative: timeEntries.narrative,
                 timezoneId: timeEntries.timezoneId,
@@ -353,7 +367,11 @@ const batchUpdate = createSafeHandler(
                 updatedAt: now,
               })
               .where(
-                and(condition, eq(timeEntries.status, BILLING_STATUS.APPROVED)),
+                and(
+                  lockedRows(candidates),
+                  condition,
+                  eq(timeEntries.status, BILLING_STATUS.APPROVED),
+                ),
               )
               .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
@@ -503,6 +521,7 @@ const batchUpdate = createSafeHandler(
               })
               .where(
                 and(
+                  lockedRows(candidates),
                   condition,
                   eq(timeEntries.billable, false),
                   ne(timeEntries.status, BILLING_STATUS.BILLED),
@@ -549,6 +568,7 @@ const batchUpdate = createSafeHandler(
             }
             const candidates = await tx
               .select({
+                id: timeEntries.id,
                 dateWorked: timeEntries.dateWorked,
                 narrative: timeEntries.narrative,
                 timezoneId: timeEntries.timezoneId,
@@ -578,6 +598,7 @@ const batchUpdate = createSafeHandler(
               .set({ billable: false, updatedAt: new Date() })
               .where(
                 and(
+                  lockedRows(candidates),
                   condition,
                   eq(timeEntries.billable, true),
                   ne(timeEntries.status, BILLING_STATUS.BILLED),
