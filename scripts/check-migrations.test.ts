@@ -64,7 +64,10 @@ const createFixture = () => {
   }
   return { root, git };
 };
-const runGuard = (root: string, env = HERMETIC_GIT_ENV) =>
+const runGuard = (
+  root: string,
+  env: Readonly<Record<string, string | undefined>> = HERMETIC_GIT_ENV,
+) =>
   Bun.spawnSync(
     ["bun", path.resolve(import.meta.dir, "check-migration-schema.ts"), "base"],
     { cwd: root, env, stdout: "pipe", stderr: "pipe" },
@@ -264,7 +267,7 @@ test("a failed worktree add preserves its error and removes the temporary direct
     ),
   );
   const result = runGuard(root, {
-    ...process.env,
+    ...HERMETIC_GIT_ENV,
     PATH: `${bin}:${process.env["PATH"] ?? ""}`,
   });
   expect(result.exitCode).toBe(1);
