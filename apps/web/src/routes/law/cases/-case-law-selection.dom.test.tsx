@@ -186,6 +186,12 @@ test("the selection action receives only selected decision ids and Clear empties
     view.queryByRole("button", { name: "Run AI columns for 1 row" }),
   ).toBeNull();
   expect(onRun.mock.calls.at(-1)?.[0]).toEqual(["decision-two"]);
+
+  fireEvent.click(view.getByRole("checkbox", { name: "Select 12 C 1/2026" }));
+  fireEvent.click(
+    view.getByRole("button", { name: "Run AI columns for 1 row" }),
+  );
+  expect(onRun).toHaveBeenLastCalledWith(["decision-one"]);
 });
 
 test.each([

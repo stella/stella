@@ -108,6 +108,9 @@ test("selection names rows and exposes count, clear, and page select-all", () =>
   });
   const first = view.getByRole("checkbox", { name: /12 C 1\/2026/u });
   const second = view.getByRole("checkbox", { name: /18 C 2\/2026/u });
+  expect(
+    view.queryByRole("button", { name: messages.common.clearSelection }),
+  ).toBeNull();
 
   fireEvent.click(first);
   fireEvent.click(second);
