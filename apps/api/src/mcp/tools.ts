@@ -59,6 +59,7 @@ import {
   MCP_PUBLIC_CORPUS_CLASS,
 } from "@/api/mcp/static-tool-definitions";
 import { scopeToolResultToSurface } from "@/api/mcp/surface-tool-mentions";
+import { runToolWithRealtime } from "@/api/mcp/tool-realtime";
 import type {
   InternalToolResult,
   McpToolDefinition,
@@ -649,9 +650,11 @@ const dispatchMcpToolCall = async ({
           const executionContext = requiresConfirmation
             ? bindApprovedMcpAuditContext(authorizedContext)
             : authorizedContext;
-          const response = await handler({
+          const response = await runToolWithRealtime({
             args: normalizedArgs,
             context: executionContext,
+            handler,
+            toolName,
           });
           const finalized = await finalizeToolEgress(
             {
