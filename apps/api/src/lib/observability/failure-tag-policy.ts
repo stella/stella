@@ -89,7 +89,7 @@ export const TAGGED_FAILURE_REASON = {
   CitationProbeS3ReadError: "tagged_failure",
   CitationScopesRejectedError: "tagged_failure",
   CitationStorageFieldError: "tagged_failure",
-  ClientRegistrationError: "tagged_failure",
+  ClientDocumentUnsupportedError: "tagged_failure",
   ComparisonAppError: "tagged_failure",
   CompatibilityCheckError: "tagged_failure",
   CompletionApprovalError: "tagged_failure",

@@ -2378,6 +2378,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
     }
     if (assigneeUserId !== null) {
       return yield* addAssigneeHandler({
+        actorUserId: context.userId,
         recordAuditEvent,
         safeDb,
         workspaceId,

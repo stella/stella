@@ -20,6 +20,7 @@ const PUSH_ALERT_KEYS = {
   [NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL]:
     "pushAlert.flowRunAwaitingApproval",
   [NOTIFICATION_KIND.ANNOUNCEMENT]: "pushAlert.announcement",
+  [NOTIFICATION_KIND.TASK_ASSIGNED]: "pushAlert.taskAssigned",
 } as const satisfies Record<
   NotificationKind,
   `pushAlert.${string}` | `reportExportStatus.${string}Subject`

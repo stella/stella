@@ -65,7 +65,6 @@
     "billing.invoices.dueDate",
     "billing.invoices.statuses.draft",
     "billing.invoices.statuses.paid",
-    "billing.selectedCount",
     "billing.statuses.approved",
     "billing.statuses.draft",
     "billing.stopTimer",
@@ -275,7 +274,6 @@
     "workspaces.properties.chipText",
     "workspaces.properties.text",
     "workspaces.team",
-    "workspaces.views.fieldsSelected",
     "workspaces.views.layouts.calendar"
   ],
   "identicalToSource": {

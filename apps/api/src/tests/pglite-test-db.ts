@@ -250,6 +250,7 @@ export const CORPUS_SAMPLE_READER_SELECT_COLUMNS = {
  * reader grant and no writer.
  */
 export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
+  "config",
   "sync_cursor",
   "last_sync_at",
   "updated_at",
