@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -13,6 +14,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const dataBoxIdSchema = v.pipe(
   v.string(),
@@ -32,7 +34,8 @@ type SaveOrganizationDataBoxesOptions = {
 type SaveOrganizationDataBoxesResult =
   | { type: "saved"; value: UpdateOrganizationDataBoxesResponse }
   | { type: "limit_reached" }
-  | { type: "conflict" };
+  | { type: "conflict" }
+  | { type: "busy" };
 
 /** Bounded organization settings read, shared by every wire projection. */
 export const readOrganizationDataBoxIds = async (
@@ -54,11 +57,22 @@ export const saveOrganizationDataBoxes = async ({
   recordAuditEvent,
   change,
 }: SaveOrganizationDataBoxesOptions): Promise<SaveOrganizationDataBoxesResult> => {
-  await withAggregateLock({
+  const lock = await withAggregateLock({
     tx,
     aggregate: "organizationDataBoxes",
     id: { organizationId },
   });
+  switch (lock.status) {
+    case "locked":
+      break;
+    case "busy":
+      return { type: "busy" };
+    case "missing":
+      return panic("An advisory organization lock has no row to miss");
+    default:
+      lock satisfies never;
+      return panic("Unhandled organization data box lock");
+  }
   const [settings] = await tx
     .select({ dataBoxIds: organizationSettings.dataBoxIds })
     .from(organizationSettings)
@@ -109,4 +123,44 @@ export const saveOrganizationDataBoxes = async ({
     });
   }
   return { type: "saved", value: { boxIds } };
+};
+
+const DATA_BOX_RETRY_AFTER_MS = 1000;
+
+/** One answer per inventory change outcome, shared by add and remove. */
+export const organizationDataBoxesChangeResult = (
+  saved: SaveOrganizationDataBoxesResult,
+): Result<UpdateOrganizationDataBoxesResponse, HandlerError> => {
+  switch (saved.type) {
+    case "saved":
+      return Result.ok(saved.value);
+    case "limit_reached":
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `An organization lists at most ${ORGANIZATION_DATA_BOX_LIMIT} data boxes; remove one first`,
+        }),
+      );
+    case "conflict":
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message:
+            "The organization's data boxes changed concurrently; read them again and retry",
+        }),
+      );
+    case "busy":
+      return Result.err(
+        new HandlerError({
+          status: 503,
+          message:
+            "The organization's data boxes are being changed; retry shortly",
+          retryable: true,
+          retryAfterMs: DATA_BOX_RETRY_AFTER_MS,
+        }),
+      );
+    default:
+      saved satisfies never;
+      return panic("Unhandled data box change");
+  }
 };

@@ -2,7 +2,10 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, asc, eq, sql, TransactionRollbackError } from "drizzle-orm";
 
-import type { DataBoxStatedEnvelope } from "@stll/api-contract/data-box";
+import {
+  type DataBoxStatedEnvelope,
+  ORGANIZATION_DATA_BOX_LIMIT,
+} from "@stll/api-contract/data-box";
 import { roles } from "@stll/permissions";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -437,6 +440,59 @@ describe("organization data boxes", () => {
           .where(eq(correspondence.id, id))
           .limit(1),
       ).toEqual(before);
+    });
+  });
+
+  test("a full inventory refuses another box and an unlisted removal records nothing", async () => {
+    await runInRollback(async (tx) => {
+      const boxIds = Array.from(
+        { length: ORGANIZATION_DATA_BOX_LIMIT },
+        (_, index) => `box${String(index).padStart(4, "0")}`,
+      );
+      for (const boxId of boxIds) {
+        await addOrganizationDataBox.handler(
+          asTestRaw<Parameters<typeof addOrganizationDataBox.handler>[0]>({
+            ...contextFor(tx),
+            body: { boxId },
+          }),
+        );
+      }
+      const dataBoxAudits = async () =>
+        await tx
+          .select({ id: auditLogs.id })
+          .from(auditLogs)
+          .where(
+            and(
+              eq(auditLogs.resourceId, ids.orgA),
+              sql`jsonb_exists(${auditLogs.changes}, 'dataBoxIds')`,
+            ),
+          );
+      const auditsWhenFull = (await dataBoxAudits()).length;
+
+      expect(
+        await addOrganizationDataBox.handler(
+          asTestRaw<Parameters<typeof addOrganizationDataBox.handler>[0]>({
+            ...contextFor(tx),
+            body: { boxId: FIRM_BOX },
+          }),
+        ),
+      ).toMatchObject({ code: 400 });
+      expect(
+        await removeOrganizationDataBox.handler(
+          asTestRaw<Parameters<typeof removeOrganizationDataBox.handler>[0]>({
+            ...contextFor(tx),
+            params: { boxId: FIRM_BOX },
+          }),
+        ),
+      ).toEqual({ boxIds });
+      expect(
+        await getOrganizationDataBoxes.handler(
+          asTestRaw<Parameters<typeof getOrganizationDataBoxes.handler>[0]>(
+            contextFor(tx),
+          ),
+        ),
+      ).toEqual({ boxIds });
+      expect((await dataBoxAudits()).length).toBe(auditsWhenFull);
     });
   });
 

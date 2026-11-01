@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
@@ -8,17 +8,10 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   dataBoxIdSchema,
+  organizationDataBoxesChangeResult,
   saveOrganizationDataBoxes,
 } from "@/api/lib/email/correspondence/data-box/organization-boxes";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
-
-const concurrentChange = () =>
-  new HandlerError({
-    status: 409,
-    message:
-      "The organization's data boxes changed concurrently; read them again and retry",
-  });
 
 const config = {
   contract: "patch",
@@ -50,17 +43,7 @@ const removeOrganizationDataBox = createSafeRootHandler(
           }),
       ),
     );
-    switch (saved.type) {
-      case "saved":
-        return Result.ok(saved.value);
-      case "conflict":
-        return Result.err(concurrentChange());
-      case "limit_reached":
-        return panic("Removing a data box cannot exceed the limit");
-      default:
-        saved satisfies never;
-        return panic("Unhandled data box change");
-    }
+    return organizationDataBoxesChangeResult(saved);
   },
 );
 
