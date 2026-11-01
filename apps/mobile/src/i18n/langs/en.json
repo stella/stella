@@ -74,7 +74,8 @@
       "none": "No date",
       "today": "Today",
       "tomorrow": "Tomorrow",
-      "nextWeek": "In a week"
+      "nextWeek": "In a week",
+      "pick": "Pick a date"
     },
     "due": {
       "overdue": "Overdue",
