@@ -5785,6 +5785,7 @@
       "open": "Otevřený"
     },
     "subtasks": "Podúkoly",
+    "taskCompleted": "Úkol dokončen",
     "title": "Úkoly",
     "untitled": "Úkol bez názvu",
     "workTypeValues": {

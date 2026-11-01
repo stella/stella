@@ -5785,6 +5785,7 @@
       "open": "Aberta"
     },
     "subtasks": "Subtarefas",
+    "taskCompleted": "Tarefa concluída",
     "title": "Tarefas",
     "untitled": "Tarefa sem título",
     "workTypeValues": {

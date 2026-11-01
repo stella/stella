@@ -5785,6 +5785,7 @@
       "open": "Otvorená"
     },
     "subtasks": "Podúlohy",
+    "taskCompleted": "Úloha dokončená",
     "title": "Úlohy",
     "untitled": "Úloha bez názvu",
     "workTypeValues": {

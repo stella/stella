@@ -5785,6 +5785,7 @@
       "open": "Nyitott"
     },
     "subtasks": "Alfeladatok",
+    "taskCompleted": "Feladat befejezve",
     "title": "Feladatok",
     "untitled": "Névtelen feladat",
     "workTypeValues": {

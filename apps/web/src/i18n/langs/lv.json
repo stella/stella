@@ -5785,6 +5785,7 @@
       "open": "Atvērts"
     },
     "subtasks": "Apakšuzdevumi",
+    "taskCompleted": "Uzdevums pabeigts",
     "title": "Uzdevumi",
     "untitled": "Uzdevums bez nosaukuma",
     "workTypeValues": {

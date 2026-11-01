@@ -53,6 +53,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getWeekStart, toISODate } from "@/components/workspaces/entity-utils";
+import { notifyTaskCompletion } from "@/components/workspaces/tasks/task-completion-toast";
 import type { TaskStatus } from "@/components/workspaces/tasks/task-detail-constants";
 import {
   isTaskStatus,
@@ -94,6 +95,8 @@ import {
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { ActivityPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel";
 
+import { resolveNextDeadline } from "./overview-next-deadline.logic";
+import type { NextDeadline } from "./overview-next-deadline.logic";
 import { OverviewTimeRead, OverviewTimeTrend } from "./overview-time-read";
 
 type OverviewViewProps = {
@@ -441,9 +444,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   const totalTeamHoursThisWeek = (teamTimeSummary?.totalTeamMinutes ?? 0) / 60;
 
-  // The agenda is already ordered with dated tasks before undated tasks.
-  const nextDeadlineTask = tasks.find((task) => task.dueDate !== null);
-
   return (
     <div className="@container flex flex-1 flex-col gap-6 overflow-y-auto p-4 tabular-nums sm:p-6">
       <OverviewQueryFeedback
@@ -486,30 +486,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           }}
           value={getFormatter().number(data.taskCount)}
         />
-        <StatCard
-          icon={<CalendarClockIcon className="size-4" />}
-          label="workspaces.overview.nextDeadline"
-          onClick={() => {
-            const task = nextDeadlineTask;
-            if (task) {
-              useInspectorTabsStore.getState().openTask({
-                taskId: task.entityId,
-                workspaceId,
-                label: task.name,
-              });
-            }
-          }}
-          sublabel={nextDeadlineTask?.name}
-          value={(() => {
-            const date = nextDeadlineTask?.dueDate;
-            if (!date) {
-              return "—";
-            }
-            return getFormatter().dateTime(toDateTimeEpoch(date), {
-              ...DAY_AND_MONTH_FORMAT,
-              timeZone: "UTC",
-            });
-          })()}
+        <NextDeadlineCard
+          deadline={resolveNextDeadline(tasks, today)}
+          workspaceId={workspaceId}
         />
         {timeBillingEnabled && (
           <StatCard
@@ -751,10 +730,22 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                 if (task === null) {
                                   return;
                                 }
-                                updateTaskStatus.mutate({
-                                  taskId: task.entityId,
-                                  status,
-                                });
+                                const previous = currentMenuTaskStatus;
+                                updateTaskStatus.mutate(
+                                  { taskId: task.entityId, status },
+                                  {
+                                    onSuccess: () =>
+                                      notifyTaskCompletion({
+                                        next: status,
+                                        previous,
+                                        restore: (restored) =>
+                                          updateTaskStatus.mutate({
+                                            taskId: task.entityId,
+                                            status: restored,
+                                          }),
+                                      }),
+                                  },
+                                );
                               }}
                               value={status}
                             >
@@ -1062,6 +1053,53 @@ const OverviewSectionHeader = ({
     </Button>
   </div>
 );
+
+type NextDeadlineCardProps = {
+  deadline: NextDeadline<{ entityId: string; name: string }>;
+  workspaceId: string;
+};
+
+const NextDeadlineCard = ({ deadline, workspaceId }: NextDeadlineCardProps) => {
+  const t = useTranslations();
+  const icon = <CalendarClockIcon className="size-4" />;
+  if (deadline.type === "none") {
+    return (
+      <StatCard
+        icon={icon}
+        label="workspaces.overview.nextDeadline"
+        value="—"
+      />
+    );
+  }
+  const { task } = deadline;
+  const date = getFormatter().dateTime(toDateTimeEpoch(deadline.dueDate), {
+    ...DAY_AND_MONTH_FORMAT,
+    timeZone: "UTC",
+  });
+  return (
+    <StatCard
+      icon={icon}
+      label="workspaces.overview.nextDeadline"
+      onClick={() =>
+        useInspectorTabsStore.getState().openTask({
+          taskId: task.entityId,
+          workspaceId,
+          label: task.name,
+        })
+      }
+      sublabel={task.name}
+      value={
+        deadline.type === "overdue" ? (
+          <span className="text-destructive">
+            {t("tasks.overdue")} · {date}
+          </span>
+        ) : (
+          date
+        )
+      }
+    />
+  );
+};
 
 type StatCardProps = {
   icon: React.ReactNode;
