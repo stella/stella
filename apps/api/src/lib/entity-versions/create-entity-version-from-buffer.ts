@@ -7,7 +7,11 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -428,85 +432,105 @@ export const createEntityVersionFromBuffer = async ({
     await stopIntentHeartbeat();
   }
 
-  dependencies
-    .processExtraction(entityId, {
-      filePropertyId: written.filePropertyId,
-    })
-    .catch((error: unknown) => {
-      captureError(
-        error,
-        handlerErrorContext("entityVersionBuffer.processExtraction", {
-          entityId,
+  detached(
+    () =>
+      dependencies
+        .processExtraction(entityId, {
+          filePropertyId: written.filePropertyId,
+        })
+        .catch((error: unknown) => {
+          captureError(
+            error,
+            handlerErrorContext("entityVersionBuffer.processExtraction", {
+              entityId,
+            }),
+          );
         }),
-      );
-    });
-  dependencies
-    .flushEntitySearchRepairs([entityId])
-    .catch(
-      createErrorCapture(
-        handlerErrorContext("entityVersionBuffer.flushSearch"),
-      ),
-    );
-  dependencies
-    .enqueuePdfDerivativeOrMarkFailed({
-      encrypted: encryption.encrypted,
-      entityId,
-      fieldId,
-      mimeType,
-      organizationId,
-      userId,
-      workspaceId,
-    })
-    .catch((error: unknown) => {
-      captureError(
-        error,
-        handlerErrorContext("entityVersionBuffer.enqueuePdfDerivative", {
-          entityId,
-          fieldId,
-          mimeType,
-        }),
-      );
-    });
-  dependencies
-    .enqueueImageThumbnailOrMarkFailed({
-      encrypted: encryption.encrypted,
-      entityId,
-      fieldId,
-      mimeType,
-      organizationId,
-      userId,
-      workspaceId,
-    })
-    .catch((error: unknown) => {
-      captureError(
-        error,
-        handlerErrorContext("entityVersionBuffer.enqueueThumbnail", {
+    "create-entity-version-from-buffer.process-extraction",
+  );
+  detached(
+    () =>
+      dependencies
+        .flushEntitySearchRepairs([entityId])
+        .catch(
+          createErrorCapture(
+            handlerErrorContext("entityVersionBuffer.flushSearch"),
+          ),
+        ),
+    "create-entity-version-from-buffer.flush-entity-search-repairs",
+  );
+  detached(
+    () =>
+      dependencies
+        .enqueuePdfDerivativeOrMarkFailed({
+          encrypted: encryption.encrypted,
           entityId,
           fieldId,
           mimeType,
+          organizationId,
+          userId,
+          workspaceId,
+        })
+        .catch((error: unknown) => {
+          captureError(
+            error,
+            handlerErrorContext("entityVersionBuffer.enqueuePdfDerivative", {
+              entityId,
+              fieldId,
+              mimeType,
+            }),
+          );
         }),
-      );
-    });
-  dependencies
-    .computeVersionDiffStats({
-      versionId: entityVersionId,
-      entityId,
-      scopedDb: dependencies.createRootScopedDb({
-        organizationId,
-        userId,
-        workspaceIds: [workspaceId],
-      }),
-      workspaceId,
-      organizationId,
-    })
-    .catch((error: unknown) => {
-      captureError(
-        error,
-        handlerErrorContext("entityVersionBuffer.computeVersionDiff", {
+    "create-entity-version-from-buffer.enqueue-pdf-derivative-or-mark-failed",
+  );
+  detached(
+    () =>
+      dependencies
+        .enqueueImageThumbnailOrMarkFailed({
+          encrypted: encryption.encrypted,
+          entityId,
+          fieldId,
+          mimeType,
+          organizationId,
+          userId,
+          workspaceId,
+        })
+        .catch((error: unknown) => {
+          captureError(
+            error,
+            handlerErrorContext("entityVersionBuffer.enqueueThumbnail", {
+              entityId,
+              fieldId,
+              mimeType,
+            }),
+          );
+        }),
+    "create-entity-version-from-buffer.enqueue-image-thumbnail-or-mark-failed",
+  );
+  detached(
+    () =>
+      dependencies
+        .computeVersionDiffStats({
           versionId: entityVersionId,
+          entityId,
+          scopedDb: dependencies.createRootScopedDb({
+            organizationId,
+            userId,
+            workspaceIds: [workspaceId],
+          }),
+          workspaceId,
+          organizationId,
+        })
+        .catch((error: unknown) => {
+          captureError(
+            error,
+            handlerErrorContext("entityVersionBuffer.computeVersionDiff", {
+              versionId: entityVersionId,
+            }),
+          );
         }),
-      );
-    });
+    "create-entity-version-from-buffer.compute-version-diff-stats",
+  );
   broadcastWorkspaceResourceUpdated(
     workspaceId,
     resourceRef({ type: RESOURCE_TYPE.ENTITY, id: entityId }),

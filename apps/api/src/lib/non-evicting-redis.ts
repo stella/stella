@@ -133,13 +133,14 @@ export const nonEvictingRedis = ({
         // A reconnect supersedes the pending reply; the shared inspection
         // finishes with one check of the current connection before releasing callers.
         state.generation += 1;
-        detached(check(state), "admission-store.inspect-policy");
+        detached(() => check(state), "admission-store.inspect-policy");
       });
       // A replacement connection must not inherit the previous server's check.
-      detached(check(current), "admission-store.inspect-policy");
+      detached(() => check(state), "admission-store.inspect-policy");
       cancelRefresh ??= scheduleRefresh(() => {
-        if (current !== undefined) {
-          detached(check(current), "admission-store.inspect-policy");
+        const refreshed = current;
+        if (refreshed !== undefined) {
+          detached(() => check(refreshed), "admission-store.inspect-policy");
         }
       });
     }

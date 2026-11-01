@@ -39,6 +39,10 @@ export const withRequestWork = <TResult>(
   read: () => TResult,
 ): TResult => queryCounterStore.run(counter, read);
 
+/** Run `read` with no request store; its continuations inherit that absence. */
+export const withoutRequestWork = <TResult>(read: () => TResult): TResult =>
+  queryCounterStore.exit(read);
+
 export const currentRequestWork = (): QueryCounter | undefined =>
   queryCounterStore.getStore();
 

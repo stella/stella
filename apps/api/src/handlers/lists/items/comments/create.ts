@@ -120,7 +120,7 @@ const createItemComment = createSafeHandler(
       // must not see the write fail over a colleague's badge — the rejection
       // still reaches error capture rather than being swallowed.
       detached(
-        fanOutCrossUserNotifications(rows),
+        () => fanOutCrossUserNotifications(rows),
         "notifications.list-item-mention",
       );
     }

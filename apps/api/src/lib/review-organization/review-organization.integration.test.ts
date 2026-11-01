@@ -52,6 +52,7 @@ import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
@@ -1271,6 +1272,39 @@ describe("review organization reset task", () => {
       panic("The restored reset task must return its Result");
     }
     restoredOutcome.unwrap("Expected the reset run to succeed");
+    expect(await countRows(fixture.reviewOrgId)).toEqual({ ...SAMPLE_COUNTS });
+  });
+
+  test("charges every registered reset the same statements, none from its detached work", async () => {
+    const task = createSchedulerTaskRegistry(
+      async () => {},
+      () => undefined,
+      {
+        resetReviewOrganization: createResetReviewOrganizationTask({
+          readConfig: () => config(fixture.reviewOrgId),
+          dependencies: resetDependencies,
+          rlsDatabase: rlsDatabase(),
+        }),
+      },
+    ).get(RESET_REVIEW_ORGANIZATION_TASK);
+    if (task === undefined) {
+      panic("The reset task must be registered");
+    }
+    // The reseed's handlers start post-commit search flushes they do not
+    // await. Those finish whenever they finish, so they must not reach the
+    // task's measurement: two resets of the same organization count alike.
+    const measure = async () =>
+      await runWithQueryCounter(async (counter) => {
+        const outcome = await task(contextFor(Bun.randomUUIDv7()));
+        if (outcome === undefined) {
+          panic("The registered reset task must return its Result");
+        }
+        outcome.unwrap("Expected the reset run to succeed");
+        return counter.count + counter.transactions;
+      });
+    const first = await measure();
+    const second = await measure();
+    expect(second).toBe(first);
     expect(await countRows(fixture.reviewOrgId)).toEqual({ ...SAMPLE_COUNTS });
   });
 });

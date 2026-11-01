@@ -2119,6 +2119,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-swallowed-rejection.ts",
     "./.oxlint-plugins/no-known-value-widening.ts",
     "./.oxlint-plugins/require-detached-label-shape.ts",
+    "./.oxlint-plugins/no-floating-promise-chain.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-owner.ts",
     "./.oxlint-plugins/mcp-authorized-context-owner.ts",
@@ -3393,6 +3394,28 @@ const config = defineConfig({
       ],
       rules: {
         "require-detached-label-shape/require-detached-label-shape": "error",
+      },
+    },
+    {
+      // The fourth part of the detached-promise guard: a bare
+      // `work().catch(report);` statement starts work inside the caller's
+      // async context, so its statements land in the caller's query counter
+      // at a time the caller does not control. API work that is not awaited
+      // starts through `detached(() => work, "feature.action")`, which runs
+      // it outside every counter. CLI scripts own their process and no
+      // counter, so their top-level `main().catch(...)` stays.
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-floating-promise-chain.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.{test,spec}.ts",
+        "apps/api/src/**/tests/**",
+        "apps/api/src/**/__tests__/**",
+        "apps/api/src/scripts/**",
+      ],
+      rules: {
+        "no-floating-promise-chain/no-floating-promise-chain": "error",
       },
     },
     {

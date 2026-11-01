@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import { env } from "@/api/env";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import {
   ACCOUNT_ACCESS,
   createSafeHandler,
@@ -180,20 +180,24 @@ export default createSafeHandler(
       }).then((result) => Result.mapError(result, toSaveHandlerError)),
     );
 
-    maybeStartUploadTriggeredFlows({
-      entityId: created.entityId,
-      workspaceId: destinationWorkspaceId,
-      organizationId: session.activeOrganizationId,
-      fileName: created.fileName,
-    }).catch((error: unknown) => {
-      captureError(
-        error,
-        handlerErrorContext("emailattachment.capture", {
+    detached(
+      () =>
+        maybeStartUploadTriggeredFlows({
           entityId: created.entityId,
           workspaceId: destinationWorkspaceId,
+          organizationId: session.activeOrganizationId,
+          fileName: created.fileName,
+        }).catch((error: unknown) => {
+          captureError(
+            error,
+            handlerErrorContext("emailattachment.capture", {
+              entityId: created.entityId,
+              workspaceId: destinationWorkspaceId,
+            }),
+          );
         }),
-      );
-    });
+      "email-attachment-create.maybe-start-upload-triggered-flows",
+    );
     broadcastOrganizationResourceSetUpdated(
       session.activeOrganizationId,
       RESOURCE_TYPE.WORKSPACE,

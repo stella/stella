@@ -832,7 +832,7 @@ test("safe handlers preserve request scope through shared helpers and detached r
         handlerErrorContext("test.sharedCapture"),
       );
       detached(
-        Promise.reject(new Error("Detached failure")),
+        () => Promise.reject(new Error("Detached failure")),
         "test.shared-detached",
       );
       return Result.ok({ ok: true });

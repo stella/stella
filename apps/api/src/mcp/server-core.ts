@@ -1383,18 +1383,15 @@ export const createMcpHttpRequestHandler = ({
         await teardown();
       };
       const abortExchange = () => {
-        detached(
-          (async () => {
-            try {
-              await reader.cancel(request.signal.reason);
-            } catch (error) {
-              reportTransportError(error, "cancel_stream");
-            } finally {
-              await completeExchange();
-            }
-          })(),
-          "mcp.legacy-stream-teardown",
-        );
+        detached(async () => {
+          try {
+            await reader.cancel(request.signal.reason);
+          } catch (error) {
+            reportTransportError(error, "cancel_stream");
+          } finally {
+            await completeExchange();
+          }
+        }, "mcp.legacy-stream-teardown");
       };
       request.signal.addEventListener("abort", abortExchange, {
         once: true,

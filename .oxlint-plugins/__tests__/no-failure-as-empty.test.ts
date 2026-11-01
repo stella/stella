@@ -47,8 +47,9 @@ describe.serial("failed reads stay distinct from empty results", () => {
         "const b = async () => { const value = await load().catch(() => {}); return value; };",
         "const c = async () => await load().catch(() => { return null; });",
         "const d = async () => (await Result.tryPromise({ try: load, catch: () => undefined })).unwrapOr(undefined);",
+        "const e = () => run(() => load().catch(() => []));",
       ]),
-    ).toEqual([1, 2, 3, 4]);
+    ).toEqual([1, 2, 3, 4, 5]);
   });
 
   test("permits parsing, propagation, stated absence and typed outcomes", async () => {
@@ -63,6 +64,7 @@ describe.serial("failed reads stay distinct from empty results", () => {
         'const g = async () => { const r = await fetch(u); if (!r.ok) return { type: "unavailable", status: r.status }; return r; };',
         "const h = async () => { const r = await fetch(u); if (r.status === 200) return []; return r; };",
         "const i = async () => { const r = await fetch(u); if (r.status === 410) return null; if (!r.ok) throw new Error(); return r; };",
+        'const j = () => { detached(() => load().catch(() => {}), "example.load"); };',
       ]),
     ).toEqual([]);
   });

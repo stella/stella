@@ -329,7 +329,7 @@ const createEditionWarmer = ({
       }
     });
     state.running = running;
-    detached(running, "sanctions.public-warmup");
+    detached(() => running, "sanctions.public-warmup");
   };
 
   return {

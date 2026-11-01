@@ -11,7 +11,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -696,10 +696,14 @@ const entityCreateTree = createSafeHandler(
       );
     }
 
-    flushEntitySearchRepairs(writeResult.indexedDirectoryIds).catch(
-      createErrorCapture(
-        handlerErrorContext("entityCreateTree.flushEntitySearchRepairs"),
-      ),
+    detached(
+      () =>
+        flushEntitySearchRepairs(writeResult.indexedDirectoryIds).catch(
+          createErrorCapture(
+            handlerErrorContext("entityCreateTree.flushEntitySearchRepairs"),
+          ),
+        ),
+      "entity-create-tree.flush-entity-search-repairs",
     );
 
     return Result.ok({

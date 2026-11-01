@@ -427,7 +427,7 @@ const dictionaryFor = async (
   // during a refresh window inherit the read's latency — up to the full resolve
   // deadline when object storage is slow — which is exactly the stall the
   // fallback exists to prevent.
-  detached(refresh, "legal-search.expansion-dictionary-refresh");
+  detached(() => refresh, "legal-search.expansion-dictionary-refresh");
   return { ...previous, status: "loaded" };
 };
 
@@ -564,7 +564,10 @@ const corpusTermExpander = async (
   }
   if (availability === "resident_only" && !lastLoaded.has(language)) {
     // Warm it for the requests after this one, off the request path.
-    detached(dictionaryFor(language), "legal-search.expansion-dictionary-warm");
+    detached(
+      () => dictionaryFor(language),
+      "legal-search.expansion-dictionary-warm",
+    );
     return null;
   }
   const dictionary = await dictionaryFor(language);

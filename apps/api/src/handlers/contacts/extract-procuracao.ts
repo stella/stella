@@ -11,7 +11,7 @@ import { contactExtractionUploadKey } from "@/api/handlers/contacts/contact-extr
 import { resolveCaching } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -410,11 +410,17 @@ const extractProcuracao = createSafeRootHandler(
       );
     }
 
-    getS3()
-      .delete(key)
-      .catch(
-        createErrorCapture(handlerErrorContext("extractProcuracao.rejection")),
-      );
+    detached(
+      () =>
+        getS3()
+          .delete(key)
+          .catch(
+            createErrorCapture(
+              handlerErrorContext("extractProcuracao.rejection"),
+            ),
+          ),
+      "extract-procuracao.delete-upload",
+    );
 
     return extractionResult;
   },

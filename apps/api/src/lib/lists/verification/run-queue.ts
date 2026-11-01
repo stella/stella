@@ -20,6 +20,7 @@ import type { Transaction } from "@/api/db/root";
 import type { legalListClaims } from "@/api/db/schema";
 import { fields, legalListVerificationRuns } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
+import { detached } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
@@ -968,15 +969,19 @@ export const initListVerificationRunWorker = () => {
 
   worker.on("failed", (job, error) => {
     if (job) {
-      setRunFailed({
-        actor: brandActor(job.data),
-        errorCode: "internal",
-      }).catch((markError: unknown) => {
-        observeFailure(markError, {
-          sink: MARK_FAILED_SINK,
-          ctx: { runId: job.data.runId, workspaceId: job.data.workspaceId },
-        });
-      });
+      detached(
+        () =>
+          setRunFailed({
+            actor: brandActor(job.data),
+            errorCode: "internal",
+          }).catch((markError: unknown) => {
+            observeFailure(markError, {
+              sink: MARK_FAILED_SINK,
+              ctx: { runId: job.data.runId, workspaceId: job.data.workspaceId },
+            });
+          }),
+        "list-verification.set-run-failed",
+      );
     }
     observeFailure(error, {
       sink: RUN_FAILED_SINK,

@@ -14,7 +14,7 @@ import {
   dateOfBirthToColumns,
   validatePersonDetails,
 } from "@/api/handlers/contacts/person-details";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -346,8 +346,12 @@ export const updateContactHandler = async function* ({
     return Result.ok(outcome.row);
   }
 
-  flushContactSearchRepairs([contactId]).catch(
-    createErrorCapture(handlerErrorContext(CONTACT_REPAIR_KEY)),
+  detached(
+    () =>
+      flushContactSearchRepairs([contactId]).catch(
+        createErrorCapture(handlerErrorContext(CONTACT_REPAIR_KEY)),
+      ),
+    "contacts-update.flush-contact-search-repairs",
   );
 
   return Result.ok(outcome.row);

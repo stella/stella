@@ -7,7 +7,7 @@ import type {
 } from "@stll/api-contract";
 
 import { status } from "@/api/http/status";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDesktopEditSessionCloseSignal } from "@/api/lib/desktop-edit-session-notifications";
@@ -213,14 +213,18 @@ export const desktopEditSessionEventsHandler = async (
   }
 
   const refreshLivenessInBackground = () => {
-    refreshLiveness().catch((error: unknown) => {
-      captureError(
-        error,
-        handlerErrorContext("entities.refreshLivenessInBackground", {
-          sessionId,
+    detached(
+      () =>
+        refreshLiveness().catch((error: unknown) => {
+          captureError(
+            error,
+            handlerErrorContext("entities.refreshLivenessInBackground", {
+              sessionId,
+            }),
+          );
         }),
-      );
-    });
+      "desktop-edit-session-events.refresh-liveness",
+    );
   };
 
   const stream = new ReadableStream<Uint8Array>({

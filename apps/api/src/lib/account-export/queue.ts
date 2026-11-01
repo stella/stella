@@ -298,67 +298,64 @@ export const createAccountExportWorker =
       ]);
       // Re-read on every check: a tick ends at its deadline or on shutdown.
       const stopped = () => signal.aborted;
-      detached(
-        (async () => {
-          try {
-            const sweep = await Result.tryPromise({
-              try: async () => {
-                // Resume where the previous tick stopped; the first read after
-                // a finished sweep starts from the beginning again.
-                const resumeFrom = cursor;
-                const pages = iterateCursorPages(
-                  async (next) =>
-                    await listRecoverableAccountExports(db, next ?? resumeFrom),
-                );
-                if (stopped()) {
+      detached(async () => {
+        try {
+          const sweep = await Result.tryPromise({
+            try: async () => {
+              // Resume where the previous tick stopped; the first read after
+              // a finished sweep starts from the beginning again.
+              const resumeFrom = cursor;
+              const pages = iterateCursorPages(
+                async (next) =>
+                  await listRecoverableAccountExports(db, next ?? resumeFrom),
+              );
+              if (stopped()) {
+                return;
+              }
+              let pagesRead = 0;
+              for await (const rows of pages) {
+                // A page past this tick's budget is left for the next tick,
+                // which resumes after the last recovered row.
+                if (pagesRead >= RECOVERY_PAGES_PER_TICK) {
                   return;
                 }
-                let pagesRead = 0;
-                for await (const rows of pages) {
-                  // A page past this tick's budget is left for the next tick,
-                  // which resumes after the last recovered row.
-                  if (pagesRead >= RECOVERY_PAGES_PER_TICK) {
+                for (const row of rows) {
+                  if (stopped()) {
                     return;
                   }
-                  for (const row of rows) {
-                    if (stopped()) {
-                      return;
-                    }
-                    const recovered = await Result.tryPromise({
-                      try: async () =>
-                        // db-await-in-loop: rows recover one at a time so each row's state transition, storage cleanup, and failure stay isolated and the tick deadline is honoured between rows; a tick reads at most RECOVERY_PAGES_PER_TICK pages
-                        await recoverAccountExport({ row, db, signal }),
-                      catch: (cause) => cause,
+                  const recovered = await Result.tryPromise({
+                    try: async () =>
+                      // db-await-in-loop: rows recover one at a time so each row's state transition, storage cleanup, and failure stay isolated and the tick deadline is honoured between rows; a tick reads at most RECOVERY_PAGES_PER_TICK pages
+                      await recoverAccountExport({ row, db, signal }),
+                    catch: (cause) => cause,
+                  });
+                  if (Result.isError(recovered)) {
+                    observeFailure(recovered.error, {
+                      sink: RECOVERY_FAILED_SINK,
+                      ctx: { jobId: row.id },
                     });
-                    if (Result.isError(recovered)) {
-                      observeFailure(recovered.error, {
-                        sink: RECOVERY_FAILED_SINK,
-                        ctx: { jobId: row.id },
-                      });
-                    }
-                    // Retain progress within a page when this tick's deadline
-                    // ends; one slow row cannot pin recovery to the first page.
-                    // After a page's last row this equals its next cursor.
-                    cursor = encodePaginationCursor([row.id]);
                   }
-                  pagesRead += 1;
+                  // Retain progress within a page when this tick's deadline
+                  // ends; one slow row cannot pin recovery to the first page.
+                  // After a page's last row this equals its next cursor.
+                  cursor = encodePaginationCursor([row.id]);
                 }
-                cursor = null;
-              },
-              catch: (cause) => cause,
+                pagesRead += 1;
+              }
+              cursor = null;
+            },
+            catch: (cause) => cause,
+          });
+          if (Result.isError(sweep)) {
+            observeFailure(sweep.error, {
+              sink: RECOVERY_FAILED_SINK,
+              ctx: { queue: ACCOUNT_EXPORT_QUEUE_NAME },
             });
-            if (Result.isError(sweep)) {
-              observeFailure(sweep.error, {
-                sink: RECOVERY_FAILED_SINK,
-                ctx: { queue: ACCOUNT_EXPORT_QUEUE_NAME },
-              });
-            }
-          } finally {
-            reconciling = false;
           }
-        })(),
-        "account-export.reconcile",
-      );
+        } finally {
+          reconciling = false;
+        }
+      }, "account-export.reconcile");
     };
     reconcile();
     const interval = setInterval(reconcile, RECONCILE_INTERVAL_MS);

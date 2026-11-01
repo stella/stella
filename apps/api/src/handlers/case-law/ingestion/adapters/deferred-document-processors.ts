@@ -35,16 +35,17 @@ const skCourtsDocumentRetention: SkDocumentRetentionCheck = ({
   pdfBytes,
 }) => {
   detached(
-    startProjectedRetentionCheck({
-      adapterKey: ADAPTER_KEYS.SK_COURTS,
-      subject: {
-        caseNumber: decision.caseNumber,
-        language: "sk",
-        url: decision.documentUrl ?? undefined,
-      },
-      project: async () => await projectSkCourtsDocument(pdfBytes),
-      blocks,
-    }),
+    () =>
+      startProjectedRetentionCheck({
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        subject: {
+          caseNumber: decision.caseNumber,
+          language: "sk",
+          url: decision.documentUrl ?? undefined,
+        },
+        project: async () => await projectSkCourtsDocument(pdfBytes),
+        blocks,
+      }),
     "case-law.sk-document-retention-check",
   );
 };

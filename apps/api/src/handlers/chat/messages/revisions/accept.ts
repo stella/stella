@@ -5,7 +5,7 @@ import { chatMessageAcceptedEditSchema } from "@stll/api-contract/chat-message-r
 
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import { writeChatMessageRevisionOnTx } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -140,12 +140,16 @@ const acceptMessageRevision = createSafeRootHandler(
       ),
     );
     if (result.type === "ok") {
-      upsertChatThreadSearchDocument(threadId).catch(
-        createErrorCapture(
-          handlerErrorContext(
-            "acceptMessageRevision.upsertChatThreadSearchDocument",
+      detached(
+        () =>
+          upsertChatThreadSearchDocument(threadId).catch(
+            createErrorCapture(
+              handlerErrorContext(
+                "acceptMessageRevision.upsertChatThreadSearchDocument",
+              ),
+            ),
           ),
-        ),
+        "message-revision-accept.index-thread",
       );
     }
     return revisionResult(result);

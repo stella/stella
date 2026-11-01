@@ -100,10 +100,10 @@ const shutdown = async (signal: string): Promise<void> => {
 };
 
 process.once("SIGTERM", () => {
-  detached(shutdown("SIGTERM"), "document-processing.shutdown-sigterm");
+  detached(() => shutdown("SIGTERM"), "document-processing.shutdown-sigterm");
 });
 process.once("SIGINT", () => {
-  detached(shutdown("SIGINT"), "document-processing.shutdown-sigint");
+  detached(() => shutdown("SIGINT"), "document-processing.shutdown-sigint");
 });
 
 // Batch mode: when an idle-exit window is configured (the scheduled batch
@@ -150,11 +150,11 @@ if (idleExitMinutes !== undefined) {
         idleMinutes: idleExitMinutes,
         ...idleExitFields(reason),
       });
-      detached(shutdown("idle-exit"), "document-processing.idle-exit");
+      detached(() => shutdown("idle-exit"), "document-processing.idle-exit");
     },
   });
   const idleTimer = setInterval(() => {
-    detached(idleTick(), "document-processing.idle-exit-check");
+    detached(() => idleTick(), "document-processing.idle-exit-check");
   }, IDLE_CHECK_INTERVAL_MS);
   stopIdleSampling = () => {
     clearInterval(idleTimer);

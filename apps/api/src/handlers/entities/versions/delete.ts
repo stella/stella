@@ -15,7 +15,11 @@ import {
   pdfSigningSessions,
   searchDocuments,
 } from "@/api/db/schema";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -441,12 +445,16 @@ export const deleteEntityVersionHandler = async function* ({
     );
   }
 
-  flushEntitySearchRepairs([params.entityId]).catch(
-    createErrorCapture(
-      handlerErrorContext(
-        "deleteEntityVersionHandler.flushEntitySearchRepairs",
+  detached(
+    () =>
+      flushEntitySearchRepairs([params.entityId]).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "deleteEntityVersionHandler.flushEntitySearchRepairs",
+          ),
+        ),
       ),
-    ),
+    "versions-delete.flush-entity-search-repairs",
   );
 
   const promotedVersionId = txOutcome.promotedVersionId;

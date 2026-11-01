@@ -418,25 +418,22 @@ export const createDocumentProcessingLeaseRenewal = ({
       }
     };
     detached(
-      renewal.then(releaseRenewal, releaseRenewal),
+      () => renewal.then(releaseRenewal, releaseRenewal),
       "document-processing.lease-heartbeat-release",
     );
-    detached(
-      (async () => {
-        const result = await Result.tryPromise({
-          try: async () =>
-            await withTimeout(async () => await renewal, {
-              label: "document processing lease heartbeat",
-              timeoutMs,
-            }),
-          catch: (cause) => cause,
-        });
-        if (Result.isError(result)) {
-          onError(result.error);
-        }
-      })(),
-      "document-processing.lease-heartbeat-renew",
-    );
+    detached(async () => {
+      const result = await Result.tryPromise({
+        try: async () =>
+          await withTimeout(async () => await renewal, {
+            label: "document processing lease heartbeat",
+            timeoutMs,
+          }),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(result)) {
+        onError(result.error);
+      }
+    }, "document-processing.lease-heartbeat-renew");
   };
 };
 
@@ -3271,17 +3268,18 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
     null;
   let closing = false;
   detached(
-    worker.waitUntilReady().then(() => {
-      if (closing) {
+    () =>
+      worker.waitUntilReady().then(() => {
+        if (closing) {
+          return undefined;
+        }
+        if (ocrConfigured) {
+          readiness = startDocumentOcrWorkerReadiness(
+            envDocumentProcessingWorker.DOCUMENT_OCR_BATCH_INTERVAL_MINUTES,
+          );
+        }
         return undefined;
-      }
-      if (ocrConfigured) {
-        readiness = startDocumentOcrWorkerReadiness(
-          envDocumentProcessingWorker.DOCUMENT_OCR_BATCH_INTERVAL_MINUTES,
-        );
-      }
-      return undefined;
-    }),
+      }),
     "document-processing.publish-readiness",
   );
 
@@ -3297,18 +3295,19 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
     }
     reconciling = true;
     detached(
-      reconcileDocumentProcessing({
-        onComplete: () => {
-          reconciling = false;
-          if (!closing) {
-            detached(
-              scheduleReconciliation(),
-              "document-processing.schedule-reconciliation",
-            );
-          }
-        },
-        phases: reconciliationPhases,
-      }),
+      () =>
+        reconcileDocumentProcessing({
+          onComplete: () => {
+            reconciling = false;
+            if (!closing) {
+              detached(
+                () => scheduleReconciliation(),
+                "document-processing.schedule-reconciliation",
+              );
+            }
+          },
+          phases: reconciliationPhases,
+        }),
       "document-processing.reconcile",
     );
   };

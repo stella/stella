@@ -3302,7 +3302,7 @@ export const createSendMessage = (
                 userId: user.id,
               });
             detached(
-              run.followUpAfterSettlement(title),
+              () => run.followUpAfterSettlement(title),
               "send-message.generate-thread-title",
             );
           }

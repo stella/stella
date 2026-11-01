@@ -775,17 +775,18 @@ export const generateAnalysis = async ({
       // moved costs one indexed query.
       if (derivedAi && promptCachingEnabled !== null) {
         detached(
-          refreshSignificance({
-            admitModelAction,
-            analysis: stored.analysis,
-            contentHash: decision.contentHash,
-            derivedAi,
-            decisionId,
-            orgAIConfig,
-            orgAIConfigStatus,
-            organizationId,
-            promptCachingEnabled,
-          }),
+          () =>
+            refreshSignificance({
+              admitModelAction,
+              analysis: stored.analysis,
+              contentHash: decision.contentHash,
+              derivedAi,
+              decisionId,
+              orgAIConfig,
+              orgAIConfigStatus,
+              organizationId,
+              promptCachingEnabled,
+            }),
           "analysis-generate.refresh-significance",
         );
       }

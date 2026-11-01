@@ -375,10 +375,11 @@ const loadConnectorTools = async ({
       // Sequencing only: a late discovery rejection is the fallout of the
       // timeout reported below (often the close above), not a new failure.
       detached(
-        Promise.allSettled([discovery]).then(
-          async () =>
-            await closeAbandonedClient({ client, connectorSlug: row.slug }),
-        ),
+        () =>
+          Promise.allSettled([discovery]).then(
+            async () =>
+              await closeAbandonedClient({ client, connectorSlug: row.slug }),
+          ),
         "external-mcp-tools.discovery",
       );
     } else {

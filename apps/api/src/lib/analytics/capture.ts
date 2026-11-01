@@ -13,6 +13,7 @@ import { Temporal } from "@stll/time";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import type { ExceptionProperties } from "@/api/lib/analytics/server-analytics";
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
+import { runOutsideQueryCounter } from "@/api/lib/db-query-counter";
 import { sanitizeDiagnosticErrorForOutput } from "@/api/lib/errors/handoff-diagnostics";
 import {
   errorTag,
@@ -493,21 +494,36 @@ export const captureObservedError = (
   });
 };
 
-/**
- * Run a promise as fire-and-forget work, routing any rejection to
- * `captureError` instead of letting it surface as an unhandled rejection. Use
- * this only for genuinely detached work (best-effort cache warming, cleanup,
- * telemetry). When a caller needs the result or must react to failure, `await`
- * the promise or propagate it instead.
- *
- * `context` is a short, stable label identifying the call site (for example
- * `"account-cleanup.reconcile"`). Keep it a fixed string; never interpolate
- * identifiers, so it stays a safe correlation tag in telemetry.
- */
-export const detached = createDetached((error, context) => {
+const captureDetachedRejection = createDetached((error, context) => {
   captureError(error, {
     fingerprintKey: `detached.${context}`,
     scope: { type: "handler", handlerId: `detached.${context}` },
     context: { detached: context },
   });
 });
+
+/**
+ * Start fire-and-forget work, routing any rejection (including a synchronous
+ * throw) to `captureError` instead of letting it surface as an unhandled
+ * rejection. Use this only for genuinely detached work (post-commit search
+ * flushes, notifications, cache warming, cleanup, telemetry). When a caller
+ * needs the result or must react to failure, `await` the work instead.
+ *
+ * `work` is a function, not a promise: it starts outside the caller's query
+ * counter (see `runOutsideQueryCounter`), so statements it issues after the
+ * caller returns never land in that request's, task's or job's measured
+ * work. This is the only sanctioned way to start un-awaited work in the API.
+ *
+ * `context` is a short, stable label identifying the call site (for example
+ * `"account-cleanup.reconcile"`). Keep it a fixed string; never interpolate
+ * identifiers, so it stays a safe correlation tag in telemetry.
+ */
+export const detached = (
+  work: () => unknown,
+  context: `${string}.${string}`,
+): void => {
+  captureDetachedRejection(
+    runOutsideQueryCounter(() => Promise.try(work)),
+    context,
+  );
+};

@@ -106,5 +106,8 @@ export const fileTaskAssignedNotifications: FileTaskAssignedNotifications = (
   if (rows.length === 0) {
     return;
   }
-  detached(fanOutCrossUserNotifications(rows), "notifications.task-assigned");
+  detached(
+    () => fanOutCrossUserNotifications(rows),
+    "notifications.task-assigned",
+  );
 };

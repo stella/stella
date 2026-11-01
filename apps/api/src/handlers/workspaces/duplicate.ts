@@ -17,7 +17,11 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -1118,33 +1122,45 @@ export const createDuplicateWorkspace = (
 
       // These post-commit calls only accelerate work the transaction already
       // made durable: projection marks and immutable-source extraction runs.
-      dependencies
-        .flushWorkspaceSearchRepairs([txResult.value.workspaceId])
-        .catch(
-          createErrorCapture(
-            handlerErrorContext("matterDuplicate.flushMatterSearch"),
-          ),
-        );
-      dependencies
-        .flushEntitySearchRepairs([
-          ...txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
-          ...txResult.value.entityIds[SEARCH_INDEX_OWNER.durableExtraction],
-        ])
-        .catch(
-          createErrorCapture(
-            handlerErrorContext("matterDuplicate.flushEntitySearch"),
-          ),
-        );
+      detached(
+        () =>
+          dependencies
+            .flushWorkspaceSearchRepairs([txResult.value.workspaceId])
+            .catch(
+              createErrorCapture(
+                handlerErrorContext("matterDuplicate.flushMatterSearch"),
+              ),
+            ),
+        "workspaces-duplicate.flush-workspace-search-repairs",
+      );
+      detached(
+        () =>
+          dependencies
+            .flushEntitySearchRepairs([
+              ...txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
+              ...txResult.value.entityIds[SEARCH_INDEX_OWNER.durableExtraction],
+            ])
+            .catch(
+              createErrorCapture(
+                handlerErrorContext("matterDuplicate.flushEntitySearch"),
+              ),
+            ),
+        "workspaces-duplicate.flush-entity-search-repairs",
+      );
 
-      handoffCommittedDocumentProcessingRuns({
-        enqueue: dependencies.enqueueDocumentProcessingRun,
-        runIds: txResult.value.nativeExtractionRunIds,
-      }).catch(
-        createErrorCapture(
-          handlerErrorContext(
-            "createDuplicateWorkspace.handoffCommittedDocumentProcessingRuns",
+      detached(
+        () =>
+          handoffCommittedDocumentProcessingRuns({
+            enqueue: dependencies.enqueueDocumentProcessingRun,
+            runIds: txResult.value.nativeExtractionRunIds,
+          }).catch(
+            createErrorCapture(
+              handlerErrorContext(
+                "createDuplicateWorkspace.handoffCommittedDocumentProcessingRuns",
+              ),
+            ),
           ),
-        ),
+        "workspaces-duplicate.handoff-committed-document-processing-runs",
       );
 
       return Result.ok({ workspaceId: txResult.value.workspaceId });

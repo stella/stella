@@ -5,7 +5,7 @@ import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { kanbanPlacementRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -151,12 +151,16 @@ export const createUpdateKanbanPlacement = ({
       );
 
       if (body.fields.length > 0) {
-        flushSearchRepairs([body.entityId]).catch(
-          createErrorCapture(
-            handlerErrorContext(
-              "createUpdateKanbanPlacement.flushSearchRepairs",
+        detached(
+          () =>
+            flushSearchRepairs([body.entityId]).catch(
+              createErrorCapture(
+                handlerErrorContext(
+                  "createUpdateKanbanPlacement.flushSearchRepairs",
+                ),
+              ),
             ),
-          ),
+          "kanban-placement-update.flush-search-repairs",
         );
       }
       return Result.ok({});

@@ -7,7 +7,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -255,10 +255,14 @@ export const moveEntityHandler = async function* ({
   const moved = yield* attempt;
   yield* moved;
 
-  syncSearchActivity(workspaceId).catch(
-    createErrorCapture(
-      handlerErrorContext("moveEntityHandler.syncSearchActivity"),
-    ),
+  detached(
+    () =>
+      syncSearchActivity(workspaceId).catch(
+        createErrorCapture(
+          handlerErrorContext("moveEntityHandler.syncSearchActivity"),
+        ),
+      ),
+    "entities-move.sync-search-activity",
   );
 
   return Result.ok({});

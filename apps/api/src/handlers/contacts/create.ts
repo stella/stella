@@ -14,7 +14,7 @@ import {
   dateOfBirthToColumns,
   validatePersonDetails,
 } from "@/api/handlers/contacts/person-details";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -267,10 +267,14 @@ export const createContactHandler = async function* ({
 
   const created = outcome.row ?? panic("Contact insert returned no row");
 
-  flushContactSearchRepairs([created.id]).catch(
-    createErrorCapture(
-      handlerErrorContext("createContactHandler.flushContactSearchRepairs"),
-    ),
+  detached(
+    () =>
+      flushContactSearchRepairs([created.id]).catch(
+        createErrorCapture(
+          handlerErrorContext("createContactHandler.flushContactSearchRepairs"),
+        ),
+      ),
+    "contacts-create.flush-contact-search-repairs",
   );
 
   return Result.ok(created);

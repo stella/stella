@@ -25,7 +25,7 @@ import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import { isAiExtractablePropertyContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
@@ -372,18 +372,22 @@ export const initDocumentReviewRunWorker = ({ db }: BullMqWorkerContext) => {
     // The job body already persists failures onto the row; this is the last
     // resort if the process itself threw before that could run.
     if (job) {
-      markRunFailed(job.data, "internal").catch((markError: unknown) => {
-        captureError(
-          markError,
-          handlerErrorContext(
-            "documentreview.initDocumentReviewRunWorker.markError",
-            {
-              runId: job.data.runId,
-              workspaceId: job.data.workspaceId,
-            },
-          ),
-        );
-      });
+      detached(
+        () =>
+          markRunFailed(job.data, "internal").catch((markError: unknown) => {
+            captureError(
+              markError,
+              handlerErrorContext(
+                "documentreview.initDocumentReviewRunWorker.markError",
+                {
+                  runId: job.data.runId,
+                  workspaceId: job.data.workspaceId,
+                },
+              ),
+            );
+          }),
+        "document-review.mark-run-failed",
+      );
     }
     const runId = job ? job.data.runId : "";
     const workspaceId = job ? job.data.workspaceId : "";
