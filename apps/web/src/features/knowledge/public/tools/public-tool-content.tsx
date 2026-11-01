@@ -180,12 +180,12 @@ const McpConfig = ({ entry }: { entry: LoadedEntryByKind<"mcp"> }) => {
   );
 };
 
-// Reserves room for the documentation, so the details below it do not move
-// when the content arrives.
+// Fills the screen so the details below stay out of view until the
+// documentation arrives; shown above it, they would jump away on arrival.
 const ContentLoading = () => {
   const t = useTranslations();
   return (
-    <p className="text-muted-foreground min-h-96 text-sm">
+    <p className="text-muted-foreground min-h-dvh text-sm">
       {t("publicTools.content")}
     </p>
   );
