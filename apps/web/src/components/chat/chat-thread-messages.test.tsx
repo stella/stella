@@ -117,6 +117,23 @@ const renderedText = (html: string) => {
   return root.textContent;
 };
 
+/**
+ * Whether the disclosure whose trigger reads `label` is open: its trigger's
+ * `aria-expanded`, or null when no trigger carries that label. The innermost
+ * matching trigger wins, so a step list around a reasoning trace does not
+ * answer for it.
+ */
+const disclosureExpanded = (html: string, label: string): string | null => {
+  const window = new Window();
+  const root = window.document.createElement("div");
+  // safe-html: React renderToStaticMarkup/renderToReadableStream output from this test's own components, parsed in a detached happy-dom document.
+  root.innerHTML = html;
+  const triggers = [
+    ...root.querySelectorAll('[data-slot="collapsible-trigger"]'),
+  ].filter((trigger) => trigger.textContent.includes(label));
+  return triggers.at(-1)?.getAttribute("aria-expanded") ?? null;
+};
+
 describe("chat thread messages", () => {
   test("activity roles and embedded parts show translated labels without internal payloads", () => {
     for (const role of Object.values(CHAT_MESSAGE_RENDER_POLICY)) {
@@ -577,8 +594,8 @@ describe("chat thread messages", () => {
     );
 
     expect(html).toContain(">Reasoning trace<");
-    expect(html).toContain("<details");
-    expect(html).not.toContain('open=""');
+    // Folded: the trace is still in the page, behind a closed disclosure.
+    expect(disclosureExpanded(html, "Reasoning trace")).toBe("false");
     expect(html).toContain("12 reasoning tokens");
     expect(html).toContain("Checked the contract timeline.");
     expect(html).toContain("The deadline is Friday.");
@@ -830,7 +847,9 @@ describe("chat thread messages", () => {
     // safe-html: React's static markup from this test's own components is parsed in a detached document.
     root.innerHTML = html;
     expect(
-      root.querySelector('input[type="password"]')?.closest("details"),
+      root
+        .querySelector('input[type="password"]')
+        ?.closest('[data-slot="collapsible-panel"]'),
     ).toBeNull();
   });
 
@@ -878,7 +897,7 @@ describe("chat thread messages", () => {
     root.innerHTML = html;
     const card = root.querySelector('[data-slot="connect-connector-card"]');
     expect(card).not.toBeNull();
-    expect(card?.closest("details")).toBeNull();
+    expect(card?.closest('[data-slot="collapsible-panel"]')).toBeNull();
   });
 
   // The same supersession withdraws a user-input card: the runtime has no
@@ -978,7 +997,8 @@ describe("chat thread messages", () => {
     // own disclosure.
     expect(html).toContain(">1 analysis<");
     expect(html).not.toContain("3 steps");
-    expect(html).not.toContain("<details open");
+    expect(disclosureExpanded(html, "1 analysis")).toBe("false");
+    expect(disclosureExpanded(html, "Show details")).toBe("false");
     expect(html).toContain("This step failed — stella will work around it.");
     expect(html).toContain(">Show details<");
     expect(html).toContain("Here is the answer.");
@@ -1059,8 +1079,7 @@ describe("chat thread messages", () => {
     const loadedHtml = await renderWithLoadedMarkdown(content);
     expect(loadedHtml).toContain('data-streamdown="strong"');
     for (const output of [html, loadedHtml]) {
-      expect(output).toContain("<details");
-      expect(output).toContain('open=""');
+      expect(disclosureExpanded(output, "Reasoning trace")).toBe("true");
       expect(renderedText(output)).toContain(
         "Reading cited documents with create-document.",
       );
@@ -1094,10 +1113,9 @@ describe("chat thread messages", () => {
     );
 
     // A settled message that never produced answer text now collapses into a
-    // foldable <details> (collapsed by default) rather than staying pinned
+    // foldable disclosure (collapsed by default) rather than staying pinned
     // open — the reasoning text is still present, just tucked away.
-    expect(html).toContain("<details");
-    expect(html).not.toContain("<details open");
+    expect(disclosureExpanded(html, "Reasoning trace")).toBe("false");
     expect(html).toContain("Checking cited filings.");
     expect(html).not.toContain("Working with context");
   });

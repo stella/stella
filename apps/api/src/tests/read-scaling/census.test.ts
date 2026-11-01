@@ -25,6 +25,7 @@ import {
   markedPdfDownloadScalingScenario,
 } from "./document-annotations";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
+import { legislationMatterLinkScalingScenarios } from "./legislation-matter-links";
 import { exactIconScalingScenario } from "./link-icons";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
@@ -68,6 +69,7 @@ const measuredApiScenarios = [
   myOpenTasksScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
   organizationSlugScalingScenario,
 ];
