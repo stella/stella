@@ -6731,11 +6731,14 @@
         "empty": "Ebben az ügyben még nincs tevékenység.",
         "fields": {
           "dueDate": "határidő",
+          "name": "név",
           "parentFolder": "szülőmappa",
           "priority": "prioritás",
           "property": "tulajdonság",
           "schedule": "ütemezés",
-          "sortOrder": "sorrend"
+          "sortOrder": "sorrend",
+          "status": "státusz",
+          "type": "típus"
         },
         "filterLabel": "Tevékenység szűrése",
         "filters": {
@@ -6785,8 +6788,18 @@
           "team": "ügycsapat",
           "translation": "fordítás"
         },
+        "taskLinks": {
+          "added": "Összekapcsolta ezt: {name}, ezzel:",
+          "addedUnnamed": "Összekapcsolt egy elemet ezzel:",
+          "removed": "Leválasztotta ezt: {name}, erről:",
+          "removedUnnamed": "Leválasztott egy elemet erről:"
+        },
         "title": "Tevékenység",
         "updatedFields": "Frissítve: {fields}",
+        "versions": {
+          "added": "Hozzáadta a(z) {version}. verziót ehhez:",
+          "deleted": "Törölte a(z) {version}. verziót innen:"
+        },
         "views": {
           "list": "Listanézet",
           "timeline": "Idővonalnézet"

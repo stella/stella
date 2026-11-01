@@ -6731,11 +6731,14 @@
         "empty": "Selles toimikus pole veel tegevust.",
         "fields": {
           "dueDate": "tähtaeg",
+          "name": "nimi",
           "parentFolder": "ülemkaust",
           "priority": "prioriteet",
           "property": "omadus",
           "schedule": "ajakava",
-          "sortOrder": "järjestus"
+          "sortOrder": "järjestus",
+          "status": "olek",
+          "type": "tüüp"
         },
         "filterLabel": "Filtreeri tegevust",
         "filters": {
@@ -6785,8 +6788,18 @@
           "team": "toimiku meeskond",
           "translation": "tõlge"
         },
+        "taskLinks": {
+          "added": "Sidus {name} ülesandega",
+          "addedUnnamed": "Sidus elemendi ülesandega",
+          "removed": "Eemaldas {name} sidumise ülesandelt",
+          "removedUnnamed": "Eemaldas elemendi sidumise ülesandelt"
+        },
         "title": "Tegevus",
         "updatedFields": "Uuendati: {fields}",
+        "versions": {
+          "added": "Lisas versiooni {version} dokumendile",
+          "deleted": "Kustutas versiooni {version} dokumendist"
+        },
         "views": {
           "list": "Loendivaade",
           "timeline": "Ajajoone vaade"

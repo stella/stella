@@ -6731,11 +6731,14 @@
         "empty": "Aún no hay actividad en este asunto.",
         "fields": {
           "dueDate": "fecha de vencimiento",
+          "name": "nombre",
           "parentFolder": "carpeta superior",
           "priority": "prioridad",
           "property": "propiedad",
           "schedule": "programación",
-          "sortOrder": "orden"
+          "sortOrder": "orden",
+          "status": "estado",
+          "type": "tipo"
         },
         "filterLabel": "Filtrar actividad",
         "filters": {
@@ -6785,8 +6788,18 @@
           "team": "equipo del asunto",
           "translation": "traducción"
         },
+        "taskLinks": {
+          "added": "Vinculó {name} a",
+          "addedUnnamed": "Vinculó un elemento a",
+          "removed": "Desvinculó {name} de",
+          "removedUnnamed": "Desvinculó un elemento de"
+        },
         "title": "Actividad",
         "updatedFields": "Se actualizó: {fields}",
+        "versions": {
+          "added": "Añadió la versión {version} de",
+          "deleted": "Eliminó la versión {version} de"
+        },
         "views": {
           "list": "Vista de lista",
           "timeline": "Vista cronológica"

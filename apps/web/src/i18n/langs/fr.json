@@ -6731,11 +6731,14 @@
         "empty": "Aucune activité dans ce dossier pour le moment.",
         "fields": {
           "dueDate": "échéance",
+          "name": "nom",
           "parentFolder": "dossier parent",
           "priority": "priorité",
           "property": "propriété",
           "schedule": "calendrier",
-          "sortOrder": "ordre"
+          "sortOrder": "ordre",
+          "status": "statut",
+          "type": "type"
         },
         "filterLabel": "Filtrer l’activité",
         "filters": {
@@ -6785,8 +6788,18 @@
           "team": "équipe du dossier",
           "translation": "traduction"
         },
+        "taskLinks": {
+          "added": "A lié {name} à",
+          "addedUnnamed": "A lié un élément à",
+          "removed": "A délié {name} de",
+          "removedUnnamed": "A délié un élément de"
+        },
         "title": "Activité",
         "updatedFields": "Mise à jour : {fields}",
+        "versions": {
+          "added": "A ajouté la version {version} de",
+          "deleted": "A supprimé la version {version} de"
+        },
         "views": {
           "list": "Vue en liste",
           "timeline": "Vue chronologique"

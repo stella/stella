@@ -56,11 +56,14 @@ import {
 
 import { readActivityActorIdentities } from "./read-overview-activity-actors.query";
 import {
+  type ActivityDetail,
+  activityLinkedEntityId,
   activityTargetSource,
   bindActivityCursorToFilters,
   parseFieldAuditResourceId,
   resolveActivityAction,
   resolveActivityCategory,
+  resolveActivityDetail,
   resolveActivityRunId,
   timestampMicroseconds,
   type VisibleActivityAction,
@@ -645,6 +648,7 @@ export type MatterActivityItem = {
         type: Exclude<(typeof auditLogs.$inferSelect)["performerType"], "user">;
       };
   changedFields: ActivityChangedField[];
+  detail: ActivityDetail;
   runId: string | null;
   target: ActivityTarget;
   trigger: {
@@ -873,6 +877,13 @@ const readOverviewActivity = async ({
             id: auditLogs.id,
             legacyKind: legacyResourceKind(),
             legacyWorkspaceTeamEvent: legacyWorkspaceTeamEvent(),
+            linkChange: sql<string | null>`${auditLogs.metadata} ->> 'change'`,
+            linkSourceId: sql<
+              string | null
+            >`${auditLogs.metadata} ->> 'sourceEntityId'`,
+            linkTargetId: sql<
+              string | null
+            >`${auditLogs.metadata} ->> 'targetEntityId'`,
             performerId: auditLogs.performerId,
             performerName: auditLogs.performerName,
             performerType: auditLogs.performerType,
@@ -990,11 +1001,12 @@ const readOverviewActivity = async ({
             ...directEntityIds,
             ...versionRows.map((row) => row.entityId),
             ...reviewRunRows.map((row) => brandPersistedEntityId(row.entityId)),
-            ...rows.flatMap((row) =>
-              row.entityIdSnapshot
-                ? [brandPersistedEntityId(row.entityIdSnapshot)]
-                : [],
-            ),
+            ...rows.flatMap((row) => {
+              const linkedEntityId = activityLinkedEntityId(row);
+              return [row.entityIdSnapshot, linkedEntityId].flatMap((id) =>
+                id ? [brandPersistedEntityId(id)] : [],
+              );
+            }),
           ]),
         ];
         const entityFile = sql<EntityFile | null>`(
@@ -1135,6 +1147,8 @@ const readOverviewActivity = async ({
                 type: row.performerType,
               };
 
+        const linkedEntityId = activityLinkedEntityId(row);
+
         return {
           action: resolveActivityAction({
             action: row.action,
@@ -1151,6 +1165,16 @@ const readOverviewActivity = async ({
           changedFields: activityChangedFields({
             changes: row.changes,
             entityKind: row.legacyKind,
+            resourceType: row.resourceType,
+          }),
+          detail: resolveActivityDetail({
+            changes: row.changes,
+            linkChange: row.linkChange,
+            linkedName:
+              linkedEntityId === null
+                ? null
+                : (entityMap.get(brandPersistedEntityId(linkedEntityId))
+                    ?.name ?? null),
             resourceType: row.resourceType,
           }),
           id: row.id,

@@ -6731,11 +6731,14 @@
         "empty": "Noch keine Aktivität in dieser Akte.",
         "fields": {
           "dueDate": "Fälligkeitsdatum",
+          "name": "Name",
           "parentFolder": "übergeordneter Ordner",
           "priority": "Priorität",
           "property": "Eigenschaft",
           "schedule": "Zeitplan",
-          "sortOrder": "Reihenfolge"
+          "sortOrder": "Reihenfolge",
+          "status": "Status",
+          "type": "Typ"
         },
         "filterLabel": "Aktivität filtern",
         "filters": {
@@ -6785,8 +6788,18 @@
           "team": "Aktenteam",
           "translation": "Übersetzung"
         },
+        "taskLinks": {
+          "added": "{name} verknüpft mit",
+          "addedUnnamed": "Element verknüpft mit",
+          "removed": "{name} gelöst von",
+          "removedUnnamed": "Element gelöst von"
+        },
         "title": "Aktivität",
         "updatedFields": "{fields} aktualisiert",
+        "versions": {
+          "added": "Version {version} hinzugefügt zu",
+          "deleted": "Version {version} gelöscht von"
+        },
         "views": {
           "list": "Listenansicht",
           "timeline": "Zeitleistenansicht"

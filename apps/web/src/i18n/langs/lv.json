@@ -6731,11 +6731,14 @@
         "empty": "Šajā lietā vēl nav darbību.",
         "fields": {
           "dueDate": "termiņš",
+          "name": "nosaukums",
           "parentFolder": "vecākmape",
           "priority": "prioritāte",
           "property": "rekvizīts",
           "schedule": "grafiks",
-          "sortOrder": "secība"
+          "sortOrder": "secība",
+          "status": "statuss",
+          "type": "tips"
         },
         "filterLabel": "Filtrēt darbības",
         "filters": {
@@ -6785,8 +6788,18 @@
           "team": "lietas komanda",
           "translation": "tulkojums"
         },
+        "taskLinks": {
+          "added": "Sasaistīja {name} ar",
+          "addedUnnamed": "Sasaistīja vienību ar",
+          "removed": "Atsaistīja {name} no",
+          "removedUnnamed": "Atsaistīja vienību no"
+        },
         "title": "Darbības",
         "updatedFields": "Atjaunināts: {fields}",
+        "versions": {
+          "added": "Pievienoja {version}. versiju:",
+          "deleted": "Izdzēsa {version}. versiju:"
+        },
         "views": {
           "list": "Saraksta skats",
           "timeline": "Laika skalas skats"
