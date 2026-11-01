@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -229,9 +230,7 @@ const ClauseFormDialogBody = ({
       </DialogHeader>
       <DialogPanel className="grid gap-4">
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="clause-title">
-            {t("clauses.titleLabel")}
-          </label>
+          <Label htmlFor="clause-title">{t("clauses.titleLabel")}</Label>
           <Input
             id="clause-title"
             maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
@@ -247,9 +246,7 @@ const ClauseFormDialogBody = ({
         </div>
 
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="clause-description">
-            {t("common.description")}
-          </label>
+          <Label htmlFor="clause-description">{t("common.description")}</Label>
           <Input
             id="clause-description"
             onChange={(e) =>
@@ -265,9 +262,7 @@ const ClauseFormDialogBody = ({
 
         <div className="grid grid-cols-2 gap-4">
           <div className="grid gap-1.5">
-            <label className="text-sm font-medium" htmlFor="clause-language">
-              {t("common.language")}
-            </label>
+            <Label htmlFor="clause-language">{t("common.language")}</Label>
             <Input
               id="clause-language"
               maxLength={10}
@@ -324,9 +319,7 @@ const ClauseFormDialogBody = ({
         </div>
 
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="clause-usage-notes">
-            {t("clauses.usageNotes")}
-          </label>
+          <Label htmlFor="clause-usage-notes">{t("clauses.usageNotes")}</Label>
           <Textarea
             className="min-h-[60px]"
             id="clause-usage-notes"

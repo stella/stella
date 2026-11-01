@@ -8,12 +8,7 @@ import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import { Frame } from "@stll/ui/frame";
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  EllipsisVerticalIcon,
-  SearchIcon,
-} from "@stll/ui/icons";
+import { EllipsisVerticalIcon, SearchIcon } from "@stll/ui/icons";
 import {
   InputGroup,
   InputGroupAddon,
@@ -22,6 +17,7 @@ import {
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
+  SortableHead,
   Table,
   TableBody,
   TableCell,
@@ -230,7 +226,7 @@ function Members() {
                     >
                       {formatMemberDate(member.createdAt)}
                     </TableCell>
-                    <TableCell className="text-end">
+                    <TableCell align="end">
                       {!isSelf && (
                         <Menu>
                           <Tooltip
@@ -303,43 +299,6 @@ function Members() {
   );
 }
 
-type SortableHeadProps = {
-  label: string;
-  active: SortDir | null;
-  onClick: () => void;
-  className: string | undefined;
-};
-
-const SortableHead = ({
-  label,
-  active,
-  onClick,
-  className,
-}: SortableHeadProps) => (
-  <TableHead className={className}>
-    <button
-      className="text-foreground hover:text-foreground-strong-muted group inline-flex items-center gap-1 text-start"
-      onClick={onClick}
-      type="button"
-    >
-      <span>{label}</span>
-      <span
-        aria-hidden
-        className={cn(
-          "size-3 transition-opacity",
-          active === null && "opacity-0 group-hover:opacity-40",
-        )}
-      >
-        {active === "desc" ? (
-          <ArrowDownIcon className="size-3" />
-        ) : (
-          <ArrowUpIcon className="size-3" />
-        )}
-      </span>
-    </button>
-  </TableHead>
-);
-
 type MembersTableHeaderProps = {
   sort: Sort;
   toggleSort: (key: SortKey) => void;
@@ -365,12 +324,13 @@ const MembersTableHeader = ({ sort, toggleSort }: MembersTableHeaderProps) => {
           const sortKey = column.sortKey;
           return (
             <SortableHead
-              active={sort.key === sortKey ? sort.dir : null}
               className={cn(column.secondary && SECONDARY_COLUMN_CLASS)}
               key={column.id}
-              label={t(column.label)}
-              onClick={() => toggleSort(sortKey)}
-            />
+              onSort={() => toggleSort(sortKey)}
+              sortDirection={sort.key === sortKey ? sort.dir : null}
+            >
+              {t(column.label)}
+            </SortableHead>
           );
         })}
       </TableRow>

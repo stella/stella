@@ -55,6 +55,14 @@ const render = (node: ReactNode, locale = "en"): string =>
     </RouterContextProvider>,
   );
 
+/**
+ * The country switcher's Select renders a visually hidden form input clipped
+ * with `clip-path:inset(50%)`; that style is not a share the page states, so
+ * a check for a printed percentage reads the markup without it.
+ */
+const withoutHiddenInputClip = (markup: string): string =>
+  markup.replaceAll("clip-path:inset(50%)", "");
+
 describe("the coverage page states what it counts", () => {
   test("the hero labels searchable decisions, the server week and current sources", () => {
     const markup = render(
@@ -117,7 +125,7 @@ describe("the coverage page states what it counts", () => {
     );
 
     expect(markup).toContain("1,900");
-    expect(markup).not.toContain("50%");
+    expect(withoutHiddenInputClip(markup)).not.toContain("50%");
   });
 
   test("the legend orders jurisdictions by volume with unique proportional bars", () => {
@@ -229,7 +237,7 @@ describe("the coverage page states what it counts", () => {
     // count of its own would drag it to 50 % if it were folded in as a zero.
     expect(markup).toContain('aria-valuetext="99%"');
     expect(markup).not.toContain(">99%<");
-    expect(markup).not.toContain("50%");
+    expect(withoutHiddenInputClip(markup)).not.toContain("50%");
   });
 
   test("source rows omit decision years, pending texts and gap details", () => {

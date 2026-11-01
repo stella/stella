@@ -32,6 +32,7 @@ import {
   FileSpreadsheetIcon,
   UploadIcon,
 } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import {
   Select,
@@ -469,40 +470,52 @@ const UploadStep = ({
       <h2 className="sr-only" ref={stepHeadingRef} tabIndex={-1}>
         {t("contacts.importStudio.stepUpload")}
       </h2>
-      <button
+      {/* Not `disabled` while a file is inspected: the zone keeps its full
+          colour behind the loader (a disabled Button dims) and shows a busy
+          cursor; the click is ignored instead. */}
+      <Button
         aria-busy={isInspecting}
-        className={cn(
-          "focus-visible:ring-ring flex min-h-72 w-full flex-1 flex-col items-center justify-center gap-3 rounded-xl p-8 text-center focus-visible:ring-2 focus-visible:outline-none",
-          isDropTarget &&
-            "bg-primary/5 outline-primary/40 outline-2 -outline-offset-8 outline-dashed",
-          isInspecting && "cursor-progress",
-        )}
-        disabled={isInspecting}
+        aria-disabled={isInspecting || undefined}
+        className="flex w-full flex-1 items-stretch"
         onClick={() => {
+          if (isInspecting) {
+            return;
+          }
           openFilePicker({
             accept:
               ".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain",
             onPick: ([selected]) => onFile(selected),
           });
         }}
-        type="button"
+        variant="plain"
       >
-        {isInspecting ? (
-          <Loader className="size-10" size="sm" variant="decorative" />
-        ) : (
-          <FileSpreadsheetIcon className="text-muted-foreground size-10" />
-        )}
-        <span className="font-medium">
-          {t("contacts.importStudio.dropFile")}
+        {/* The drop surface: it fills the step and lights up while a file is
+            dragged over the screen. */}
+        <span
+          className={cn(
+            "flex min-h-72 w-full flex-1 flex-col items-center justify-center gap-3 rounded-xl p-8 text-center",
+            isDropTarget &&
+              "bg-primary/5 outline-primary/40 outline-2 -outline-offset-8 outline-dashed",
+            isInspecting && "cursor-progress",
+          )}
+        >
+          {isInspecting ? (
+            <Loader className="size-10" size="sm" variant="decorative" />
+          ) : (
+            <FileSpreadsheetIcon className="text-muted-foreground size-10" />
+          )}
+          <span className="font-medium">
+            {t("contacts.importStudio.dropFile")}
+          </span>
+          <span className="text-muted-foreground text-sm">
+            {t("contacts.importStudio.supportedFiles")}
+          </span>
+          <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
+            <UploadIcon className="size-4" />
+            {t("common.chooseFile")}
+          </span>
         </span>
-        <span className="text-muted-foreground text-sm">
-          {t("contacts.importStudio.supportedFiles")}
-        </span>
-        <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
-          <UploadIcon className="size-4" />
-          {t("common.chooseFile")}
-        </span>
-      </button>
+      </Button>
     </section>
   );
 };
@@ -648,12 +661,9 @@ const MappingStep = ({
       </Table>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <label
-            className="text-sm font-medium"
-            htmlFor="contact-import-default-type"
-          >
+          <Label htmlFor="contact-import-default-type">
             {t("contacts.importStudio.defaultType")}
-          </label>
+          </Label>
           <Select
             disabled={busy !== "idle"}
             onValueChange={(value) => {
@@ -676,12 +686,9 @@ const MappingStep = ({
           </Select>
         </div>
         <div className="space-y-2">
-          <label
-            className="text-sm font-medium"
-            htmlFor="contact-import-tax-id-scheme"
-          >
+          <Label htmlFor="contact-import-tax-id-scheme">
             {t("contacts.importStudio.taxIdScheme")}
-          </label>
+          </Label>
           <Select
             disabled={busy !== "idle"}
             onValueChange={(value) => {
@@ -704,7 +711,7 @@ const MappingStep = ({
           </Select>
         </div>
       </div>
-      <label className="flex min-h-11 items-center gap-3 text-sm">
+      <Label variant="choice">
         <Checkbox
           checked={mapping.generateDisplayName}
           disabled={busy !== "idle"}
@@ -713,7 +720,7 @@ const MappingStep = ({
           }
         />
         {t("contacts.importStudio.generateDisplayName")}
-      </label>
+      </Label>
     </section>
   );
 };

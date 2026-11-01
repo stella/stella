@@ -176,7 +176,10 @@ export const ProvisionsCited = ({
           </Button>
         </div>
       )}
+      {/* Closed is the resting state: a group's reference chips render only
+          once it is opened, not for every collapsed work on the page. */}
       <Accordion
+        hiddenUntilFound={false}
         multiple
         value={expandedGroups}
         onValueChange={(values) => {

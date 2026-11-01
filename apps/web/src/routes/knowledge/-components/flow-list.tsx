@@ -154,18 +154,16 @@ const FlowExampleCard = ({
   const example = buildFlowExample(exampleKey, tExamples);
 
   return (
-    <button
-      className="border-border hover:border-foreground/30 hover:bg-muted/40 flex flex-col items-start gap-1 rounded-lg border p-4 text-start"
-      onClick={onSelect}
-      type="button"
-    >
-      <span className="text-foreground text-sm font-medium">
-        {example.name}
+    <Button onClick={onSelect} variant="plain">
+      <span className="border-border hover:border-foreground/30 hover:bg-muted/40 flex h-full flex-col items-start gap-1 rounded-lg border p-4 text-start">
+        <span className="text-foreground text-sm font-medium">
+          {example.name}
+        </span>
+        <span className="text-muted-foreground text-sm">
+          {example.description}
+        </span>
       </span>
-      <span className="text-muted-foreground text-sm">
-        {example.description}
-      </span>
-    </button>
+    </Button>
   );
 };
 
@@ -186,25 +184,23 @@ const FlowRow = ({
 
   return (
     <li className="flex items-center gap-3 px-4 py-3">
-      <button
-        className="flex min-w-0 flex-1 items-center gap-3 text-start"
-        onClick={onSelect}
-        type="button"
-      >
-        <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <WorkflowIcon className="text-muted-foreground size-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
-            {flow.name}
-          </p>
-          <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
-            <FlowTriggerBadge triggerType={flow.triggerType} />
-            <span>{t("common.stepCount", { count: flow.stepCount })}</span>
+      <Button className="min-w-0 flex-1" onClick={onSelect} variant="plain">
+        <span className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
+            <WorkflowIcon className="text-muted-foreground size-4" />
           </div>
-        </div>
-        <span className="sr-only">{t("common.edit")}</span>
-      </button>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium" dir="auto">
+              {flow.name}
+            </p>
+            <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
+              <FlowTriggerBadge triggerType={flow.triggerType} />
+              <span>{t("common.stepCount", { count: flow.stepCount })}</span>
+            </div>
+          </div>
+          <span className="sr-only">{t("common.edit")}</span>
+        </span>
+      </Button>
       <Switch
         aria-label={
           flow.enabled ? t("flows.disableFlow") : t("flows.enableFlow")

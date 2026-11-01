@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Trash2Icon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SecretInput } from "@/components/secret-input";
@@ -123,9 +124,7 @@ const WebSearchKeyField = ({
       <Frame>
         <FramePanel>
           <div className="flex flex-col gap-3 p-1">
-            <label className="text-sm font-medium" htmlFor={fieldId}>
-              {t("organization.aiConfig.apiKey")}
-            </label>
+            <Label htmlFor={fieldId}>{t("organization.aiConfig.apiKey")}</Label>
             <SecretInput
               autoComplete="off"
               disabled={disabled}

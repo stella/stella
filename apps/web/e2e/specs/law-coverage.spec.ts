@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import {
   mkdirSync,
@@ -10,6 +11,14 @@ import {
 import path from "node:path";
 
 import { expect, test } from "../helpers/test";
+
+// The narrow-screen switcher is the design system's Select: open it, then
+// pick the country by the name the (hidden) desktop link shows in this locale.
+const pickCountry = async (page: Page, anchor: string) => {
+  const name = await page.locator(`nav a[href$="#${anchor}"]`).textContent();
+  await page.getByRole("combobox").click();
+  await page.getByRole("option", { name: name ?? anchor, exact: true }).click();
+};
 
 const cache = path.resolve(import.meta.dirname, "../../.cache");
 mkdirSync(cache, { recursive: true });
@@ -132,9 +141,9 @@ for (const locale of ["en", "ar"]) {
     await expect(switcher).toBeVisible();
     await toggle.focus();
     await page.keyboard.press("Space");
-    await switcher.selectOption("country-svk");
+    await pickCountry(page, "country-svk");
     await expect(page).toHaveURL(/#country-svk$/u);
-    await switcher.selectOption("country-cze");
+    await pickCountry(page, "country-cze");
     await expect(page).toHaveURL(/#country-cze$/u);
     await expect(table).toBeVisible();
     expect(
@@ -191,8 +200,8 @@ for (const locale of ["en", "ar"]) {
         node.style.fontSize = "24px";
       });
       if (width < 640) {
-        await page.getByRole("combobox").selectOption("country-svk");
-        await page.getByRole("combobox").selectOption("country-cze");
+        await pickCountry(page, "country-svk");
+        await pickCountry(page, "country-cze");
       } else {
         await navigation.locator('a[href$="#country-svk"]').click();
         await navigation.locator('a[href$="#country-cze"]').click();

@@ -47,6 +47,7 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import {
   DropdownMenu,
@@ -64,7 +65,6 @@ import {
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { InlineEdit } from "@/components/inline-edit";
@@ -589,6 +589,41 @@ const ClauseLeaveDialog = ({
   );
 };
 
+// The clause title opens its rename in place for an editor; a reader sees the
+// title as plain text rather than a dimmed, disabled control.
+const ClauseTitleText = ({
+  canEdit,
+  onEdit,
+  title,
+}: {
+  canEdit: boolean;
+  onEdit: () => void;
+  title: string;
+}) => {
+  const text = (
+    <span className="block min-w-0 overflow-hidden text-lg font-semibold text-ellipsis whitespace-pre">
+      {title}
+    </span>
+  );
+  if (!canEdit) {
+    return (
+      <span className="flex min-w-0 flex-1" dir="auto">
+        {text}
+      </span>
+    );
+  }
+  return (
+    <Button
+      className="min-w-0 flex-1 shrink"
+      dir="auto"
+      onClick={onEdit}
+      variant="plain"
+    >
+      {text}
+    </Button>
+  );
+};
+
 const ClauseHeader = ({
   detail,
   clauseId,
@@ -762,18 +797,14 @@ const ClauseHeader = ({
           value={titleDraft}
         />
       ) : (
-        <button
-          className="flex-1 overflow-hidden text-start text-lg font-semibold text-ellipsis whitespace-pre disabled:cursor-default"
-          dir="auto"
-          disabled={!canEdit}
-          onClick={() => {
+        <ClauseTitleText
+          canEdit={canEdit}
+          onEdit={() => {
             setTitleDraft(detail.title);
             setEditingTitle(true);
           }}
-          type="button"
-        >
-          {detail.title}
-        </button>
+          title={detail.title}
+        />
       )}
 
       {canEdit && (
@@ -952,9 +983,7 @@ const ClauseInlineTextField = ({
 
   return (
     <div className="grid gap-1.5">
-      <label className="text-sm font-medium" htmlFor={`clause-${field}`}>
-        {label}
-      </label>
+      <Label htmlFor={`clause-${field}`}>{label}</Label>
       <Input
         id={`clause-${field}`}
         onBlur={() => {
@@ -1053,9 +1082,7 @@ const ClauseLanguageField = ({
 
   return (
     <div className="grid gap-1.5">
-      <label className="text-sm font-medium" htmlFor="clause-language">
-        {t("common.language")}
-      </label>
+      <Label htmlFor="clause-language">{t("common.language")}</Label>
       <Combobox<LanguagePick>
         autoHighlight
         filter={matchesComboboxItem}
@@ -1138,9 +1165,7 @@ const ClauseUsageNotesField = ({
 
   return (
     <div className="mt-3 grid gap-1.5">
-      <label className="text-sm font-medium" htmlFor="clause-usage-notes">
-        {t("clauses.usageNotes")}
-      </label>
+      <Label htmlFor="clause-usage-notes">{t("clauses.usageNotes")}</Label>
       <Textarea
         className="min-h-[60px]"
         id="clause-usage-notes"
@@ -1573,9 +1598,7 @@ const VariantFormDialogBody = ({
       </DialogHeader>
       <DialogPanel className="grid gap-4">
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="variant-label">
-            {t("clauses.variantLabel")}
-          </label>
+          <Label htmlFor="variant-label">{t("clauses.variantLabel")}</Label>
           <Input
             id="variant-label"
             maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
@@ -1585,9 +1608,7 @@ const VariantFormDialogBody = ({
           />
         </div>
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="variant-body">
-            {t("clauses.body")}
-          </label>
+          <Label htmlFor="variant-body">{t("clauses.body")}</Label>
           <Textarea
             className="min-h-[100px]"
             id="variant-body"
@@ -1769,15 +1790,13 @@ const VersionRow = ({
 
   return (
     <li className="flex items-center gap-2 px-2">
-      <button
-        className={cn(
-          "flex flex-1 items-center justify-between",
-          "px-2 py-3 text-sm",
-          "hover:bg-muted/50 rounded",
-          isSelected && "bg-muted",
-        )}
+      <Button
+        aria-pressed={isSelected}
+        className="flex-1 justify-between"
+        selected={isSelected}
         onClick={onToggleDiff}
-        type="button"
+        size="row"
+        variant="ghost"
       >
         <span className="font-medium">
           {t("common.versionLabel", {
@@ -1790,7 +1809,7 @@ const VersionRow = ({
             MEDIUM_DATE_SHORT_TIME_FORMAT,
           )}
         </span>
-      </button>
+      </Button>
       <AlertDialog onOpenChange={setRestoreOpen} open={restoreOpen}>
         <Button
           aria-label={t("clauses.restoreVersion")}

@@ -17,7 +17,6 @@ import {
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
-import Tooltip from "@/components/tooltip";
 
 /**
  * iOS Privacy-Nutritional-Label-style detail panel. Replaces the stack
@@ -48,19 +47,16 @@ export const CatalogueDetailPreview = ({
   return (
     <div className="flex h-full max-h-full w-full items-stretch justify-center overflow-hidden">
       <div className="bg-background border-border/40 shadow-floating relative flex h-full max-h-full w-full max-w-[340px] flex-col rounded-2xl border">
-        <Tooltip
-          content={t("common.close")}
-          render={
-            <button
-              aria-label={t("common.close")}
-              className="text-muted-foreground hover:text-foreground absolute end-4 top-4"
-              onClick={onCancel}
-              type="button"
-            />
-          }
+        {/* Inset so the glyph sits where it did before it had a box. */}
+        <Button
+          aria-label={t("common.close")}
+          className="absolute end-3 top-3"
+          onClick={onCancel}
+          size="icon-sm"
+          variant="muted"
         >
           <XIcon className="size-5" />
-        </Tooltip>
+        </Button>
 
         {/* Header */}
         <header className="border-border flex items-center gap-3 border-b px-5 py-4">

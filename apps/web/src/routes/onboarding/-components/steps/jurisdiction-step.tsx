@@ -145,11 +145,10 @@ export const JurisdictionGlobePreview = ({
                 <Tooltip
                   content={t("onboarding.jurisdictionRemove", { name })}
                   render={
-                    <button
+                    <Button
                       aria-label={t("onboarding.jurisdictionRemove", {
                         name,
                       })}
-                      className="text-muted-foreground hover:text-foreground"
                       onClick={() =>
                         onChange(
                           removeJurisdiction(
@@ -158,10 +157,11 @@ export const JurisdictionGlobePreview = ({
                           ),
                         )
                       }
-                      type="button"
+                      size="inline"
+                      variant="muted"
                     >
                       <XIcon className="size-3" />
-                    </button>
+                    </Button>
                   }
                 />
               )}
