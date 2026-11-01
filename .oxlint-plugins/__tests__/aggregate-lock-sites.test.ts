@@ -130,6 +130,17 @@ describe("aggregate lock confinement", () => {
     }
     expect(aggregateLockSites(file, 'query["for"](mode)')).toHaveLength(1);
   });
+  test("counts each lockRowsForWrite call as its own acquisition", () => {
+    expect(
+      aggregateLockSites(
+        file,
+        "await lockRowsForWrite({ table: t, query: tx.select({ id: t.id }).from(t) });",
+      ).map(({ primitive }) => primitive),
+    ).toEqual(["locked-rows-write"]);
+    expect(
+      aggregateLockSites(file, "locked.lockRowsForWrite(rows);"),
+    ).toHaveLength(0);
+  });
   test("ignores comments and unrelated symbols while detecting SQL literals", () => {
     expect(
       aggregateLockSites(

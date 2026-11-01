@@ -3130,6 +3130,7 @@ type IdentifiedTable = PgTable & { id: PgColumn };
 type LockableSelect<Row> = {
   for: (strength: LockStrength, config?: LockConfig) => PromiseLike<Row[]>;
   toSQL: () => { sql: string };
+  as: (alias: string) => Subquery;
 };
 
 type LockRowsForWriteOptions<Table extends IdentifiedTable, Row> = {
@@ -3162,7 +3163,10 @@ type LockRowsForWriteOptions<Table extends IdentifiedTable, Row> = {
  * `t` in that function whose WHERE is anything but `locked.where(...)`.
  *
  * Only the target table's rows are locked (`FOR UPDATE OF table`), so the
- * query may join other tables for the decision without locking them.
+ * query may join other tables for the decision without locking them; its
+ * `id` must still be the locked table's own. Each call outside this file is
+ * an acquisition of its own (`locked-rows-write`) in
+ * `scripts/aggregate-lock-baseline.json`, reviewed like an inline lock.
  *
  * Race test: `withLockThenWriteRace` in
  * `apps/api/src/tests/helpers/lock-then-write-race.ts` runs tx A and tx B on
@@ -3175,14 +3179,28 @@ type LockRowsForWriteOptions<Table extends IdentifiedTable, Row> = {
  */
 export const lockRowsForWrite = async <
   Table extends IdentifiedTable,
-  Row extends { id: unknown },
+  Row extends { id: Table["id"]["_"]["data"] },
 >({
   table,
   query,
   mode = "update",
 }: LockRowsForWriteOptions<Table, Row>) => {
-  if (aggregateSelectTarget(query.toSQL().sql).table !== getTableName(table)) {
+  const tableName = getTableName(table);
+  if (aggregateSelectTarget(query.toSQL().sql).table !== tableName) {
     panic("Locked rows must be read from the table they are written to");
+  }
+  // `where()` names rows by `table.id`, so the projected `id` must be that
+  // column, not a joined table's id under the same name.
+  const projectedId: unknown = Reflect.get(
+    getColumns(query.as("locked_rows")),
+    "id",
+  );
+  if (
+    !is(projectedId, PgColumn) ||
+    projectedId.name !== table.id.name ||
+    getTableName(getColumnTable(projectedId)) !== tableName
+  ) {
+    panic("Locked rows must project the locked table's own id column");
   }
   const rows: readonly Row[] = await query.for(mode, { of: table });
   const ids: readonly Row["id"][] = rows.map(({ id }) => id);

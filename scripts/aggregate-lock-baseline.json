@@ -1782,6 +1782,30 @@
     "reason": "builder-for in apps/api/src/handlers/templates/lookup-formats/default/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
+    "file": "apps/api/src/handlers/time-entries/batch/delete.ts",
+    "fingerprint": "eb0bc1dee5e8f4c59b2b8de62488286e8302e0cb1267973ca0b904981edca781",
+    "count": 1,
+    "reason": "Batch delete locks the same unbilled entries through lockRowsForWrite, so its delete and write-off name only the locked ids."
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/batch/update.ts",
+    "fingerprint": "7b274673f7038cf97eb001fa49e7274b1219e7ef8ee760da8c2f43f03156585b",
+    "count": 1,
+    "reason": "Batch revert locks the same approved entries through lockRowsForWrite, so its write names only the locked ids."
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/batch/update.ts",
+    "fingerprint": "8bd7d1932e10fb9b0c563a3145eec8f646f3c587575d959e8f23a2a8bc6ee23e",
+    "count": 1,
+    "reason": "Batch approval locks the same submitted entries and the caller's own drafts through lockRowsForWrite, so its write names only the locked ids."
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/batch/update.ts",
+    "fingerprint": "b5ec74975c9cafad35c896063c50c38b3000dd32cefbd88645f45731e5b9b165",
+    "count": 1,
+    "reason": "Batch mark-non-billable locks the same billable entries through lockRowsForWrite, so its write names only the locked ids."
+  },
+  {
     "file": "apps/api/src/handlers/time-entries/split.ts",
     "fingerprint": "417504192e24109eab7c3ed529a2ccf11edb14f06da52ce9965b479f4e974cda",
     "count": 1,
