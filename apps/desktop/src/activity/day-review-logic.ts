@@ -264,7 +264,7 @@ export const cleanSharedContext = (evidence: readonly string[]) => {
 /** Titles a narrative template names per app before it stops. */
 export const EVIDENCE_DETAIL_LIMIT = 3;
 
-const TITLE_SEPARATORS = [" - ", " – ", " — "] as const;
+const TITLE_SEPARATORS = [" - ", " – ", " \u2014 "] as const;
 
 /** Browsers title a window `page - Browser - Profile`; the app icon already
  * names the browser, so the title keeps only the page. */
