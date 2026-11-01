@@ -162,6 +162,19 @@ describe("built-in skill copy", () => {
   });
 });
 
+// Starter copy has no placeholders, and a plain walk spares the compiler the
+// typing of every key in both catalogues.
+const readCopy = (catalogue: AbstractIntlMessages) => (key: string) => {
+  let node: AbstractIntlMessages | string | undefined = catalogue;
+  for (const part of key.split(".")) {
+    node = typeof node === "object" ? node[part] : undefined;
+  }
+  if (typeof node !== "string") {
+    throw new TypeError(`No message at ${key}`);
+  }
+  return node;
+};
+
 type LocalizedCopy = {
   body: string | null;
   description: string;
@@ -169,15 +182,8 @@ type LocalizedCopy = {
 };
 
 describe("starter skill copy", () => {
-  // Abstract catalogues: typing every key of both files is compiler work these
-  // lookups do not need.
-  const englishCatalogue: AbstractIntlMessages = englishMessages;
-  const czechCatalogue: AbstractIntlMessages = czechMessages;
-  const english = createTranslator({
-    locale: "en",
-    messages: englishCatalogue,
-  });
-  const czech = createTranslator({ locale: "cs", messages: czechCatalogue });
+  const english = readCopy(englishMessages);
+  const czech = readCopy(czechMessages);
 
   test("covers exactly the seeded skills, in the seeded English", () => {
     expect(Object.keys(STARTER_SKILL_COPY).toSorted()).toEqual(
