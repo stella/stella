@@ -346,20 +346,20 @@ export const inverseOfRemove = (
       };
     }
     case "comment": {
-      if (bodyRow?.body === undefined || bodyRow.body === null) {
-        return null;
+      if (bodyRow?.body !== undefined && bodyRow.body !== null) {
+        return {
+          input: {
+            body: bodyRow.body,
+            kind: "comment",
+            spans,
+            visibility: first.visibility,
+          },
+          op: "restore",
+          rowIds,
+          subject: "comment",
+        };
       }
-      return {
-        input: {
-          body: bodyRow.body,
-          kind: "comment",
-          spans,
-          visibility: first.visibility,
-        },
-        op: "restore",
-        rowIds,
-        subject: "comment",
-      };
+      return null;
     }
     default: {
       first.kind satisfies never;

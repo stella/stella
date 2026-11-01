@@ -39,7 +39,10 @@ export const useLawCrumbTrail = () =>
   useMatches({
     select: (matches): LawCrumbTrail | null => {
       const match = matches.at(-1);
-      if (match?.loaderData === undefined || !isLawReaderMatch(match)) {
+      if (match === undefined) {
+        return null;
+      }
+      if (match.loaderData === undefined || !isLawReaderMatch(match)) {
         return null;
       }
       switch (match.routeId) {
