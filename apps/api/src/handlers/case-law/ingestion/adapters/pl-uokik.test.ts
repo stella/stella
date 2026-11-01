@@ -18,7 +18,7 @@ import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import {
-  assemblePlUokikDecision,
+  assemblePlUokikDecision as uncheckedAssemblePlUokikDecision,
   encodePlUokikCursor,
   listPlUokikSourceFields,
   normalizePlUokikRow,
@@ -62,7 +62,10 @@ import {
   sourceBinaryRef,
 } from "@/api/lib/legal-search/raw-source-storage";
 import { isRecord } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const assemblePlUokikDecision = guardParser(uncheckedAssemblePlUokikDecision);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 

@@ -5,7 +5,7 @@ import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-gra
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import {
-  assemblePlKisDecision,
+  assemblePlKisDecision as uncheckedAssemblePlKisDecision,
   encodePlKisCursor,
   parsePlKisCursor,
   parsePlKisProvision,
@@ -55,6 +55,8 @@ import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
+
+const assemblePlKisDecision = guardParser(uncheckedAssemblePlKisDecision);
 
 const parsePlKisDocumentHtml = guardParser(uncheckedParsePlKisDocumentHtml);
 

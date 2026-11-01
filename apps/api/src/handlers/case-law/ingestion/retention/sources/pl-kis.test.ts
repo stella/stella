@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
-  assemblePlKisDecision,
+  assemblePlKisDecision as uncheckedAssemblePlKisDecision,
   PL_KIS_INCLUDED_CATEGORIES,
   plKisRawPartsOf,
   readPlKisListing,
@@ -13,6 +13,9 @@ import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const assemblePlKisDecision = guardParser(uncheckedAssemblePlKisDecision);
 
 const FIXTURES_DIR = new URL("../../adapters/__fixtures__/", import.meta.url);
 

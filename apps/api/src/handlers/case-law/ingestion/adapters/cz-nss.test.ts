@@ -27,7 +27,7 @@ import {
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import {
-  buildCzNssDecision,
+  buildCzNssDecision as uncheckedBuildCzNssDecision,
   CZ_NSS_CONTINUATION_PAGE_ROWS,
   CZ_NSS_FIRST_PAGE_ROWS,
   CZ_NSS_FIRST_SLICE,
@@ -70,6 +70,8 @@ import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const buildCzNssDecision = guardParser(uncheckedBuildCzNssDecision);
 
 const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
 

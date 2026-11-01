@@ -3,7 +3,7 @@ import type { ProcessedFieldSourceKey } from "@/api/lib/legal-search/processed-f
 /** Complete AST entry points used by each registered source's fixtures. */
 export const PARSER_FIXTURE_OWNERS = {
   "cz-ns": ["parseNsDecisionHtml"],
-  "cz-nss": ["parseNssDecisionHtml"],
+  "cz-nss": ["parseNssDecisionHtml", "buildCzNssDecision"],
   "cz-us": ["parseUsDecisionHtml"],
   "cz-regional": ["parseRegionalDecision"],
   "cz-uohs": ["parseCzUohsDocumentPdf", "buildCzUohsDecision"],
@@ -30,9 +30,13 @@ export const PARSER_FIXTURE_OWNERS = {
   "eu-ecj": ["parseEcjDecisionHtml"],
   "hu-bhgy": ["parseHuBhgyDecision"],
   "uk-fcl": ["parseUkFclDecision"],
-  "pl-kis": ["parsePlKisDocumentHtml", "parsePlKisDocumentPdf"],
+  "pl-kis": [
+    "parsePlKisDocumentHtml",
+    "parsePlKisDocumentPdf",
+    "assemblePlKisDecision",
+  ],
   "pl-uodo": ["parsePlUodoDecisionXml"],
-  "pl-uokik": ["parsePlUokikDocument"],
+  "pl-uokik": ["parsePlUokikDocument", "assemblePlUokikDecision"],
   "us-courtlistener": ["mapCourtListenerRecord"],
 } as const satisfies Record<
   ProcessedFieldSourceKey,
