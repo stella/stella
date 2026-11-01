@@ -203,6 +203,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/queries/**/*.{ts,tsx}",
   "apps/web/src/routes/-protected-app/**/*.{ts,tsx}",
   "apps/web/src/routes/_protected.admin/**/*.{ts,tsx}",
+  "apps/web/src/routes/_protected.time_.report/**/*.{ts,tsx}",
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",

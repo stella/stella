@@ -12,7 +12,7 @@ import {
   ClientOperationError,
   isUserSafeClientOperation,
 } from "@/lib/errors/client";
-import { EmptyUploadFileError } from "@/lib/files/upload-file-validation";
+import { UploadFileSizeError } from "@/lib/files/upload-file-validation";
 
 const SERVER_ERROR_THRESHOLD = 500;
 
@@ -45,7 +45,7 @@ export const userErrorFromThrown = (
 ): string => {
   if (
     AuthClientError.is(error) ||
-    EmptyUploadFileError.is(error) ||
+    UploadFileSizeError.is(error) ||
     (ClientOperationError.is(error) && isUserSafeClientOperation(error.action))
   ) {
     return error.message;

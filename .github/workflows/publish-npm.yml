@@ -1551,6 +1551,7 @@ jobs:
       - release-text-normalize
       - release-anonymize-chat
       - release-ui
+      - release-html
       - release-chat
       - release-country-codes
       - release-business-registries
@@ -1568,7 +1569,6 @@ jobs:
       - release-agent-input
       - release-mcp-kit
       - release-fetch
-      - release-html
       - release-scan-engine
       - release-cli
     if: >-

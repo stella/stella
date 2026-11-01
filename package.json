@@ -161,6 +161,7 @@
     "@tanstack/eslint-plugin-router": "catalog:",
     "better-result": "catalog:",
     "bun-types": "catalog:",
+    "drizzle-kit": "catalog:",
     "drizzle-orm": "catalog:",
     "eslint": "catalog:",
     "fast-check": "catalog:",

@@ -484,7 +484,7 @@
     "evidenceTitles": "Titel",
     "evidenceApps": "Apps",
     "rangeEmpty": "In diesem Zeitraum wurde nichts erfasst.",
-    "calendarHint": "Öffnen Sie einen gestrichelten Vorschlag, um ihn zu prüfen, oder ziehen Sie in der Spalte Aktivität über einen beliebigen Zeitraum, um einen Eintrag zu entwerfen.",
+    "calendarHint": "Öffnen Sie einen gestrichelten Vorschlag, um ihn zu prüfen, oder ziehen Sie in der Spalte Zeiteinträge über einen beliebigen Zeitraum, um einen Eintrag zu entwerfen.",
     "narrativeAiPrompt": "Beschreibung mit stella AI schreiben? Nur die Fenstertitel dieses Vorschlags werden gesendet und nicht gespeichert.",
     "narrativeAiNo": "Nein",
     "narrativeAiApprove": "Zustimmen",

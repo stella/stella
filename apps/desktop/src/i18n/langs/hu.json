@@ -484,7 +484,7 @@
     "evidenceTitles": "Címek",
     "evidenceApps": "Alkalmazások",
     "rangeEmpty": "Ebben az időszakban semmi sem lett rögzítve.",
-    "calendarHint": "Nyisson meg egy szaggatott javaslatot az ellenőrzéshez, vagy húzza végig a Tevékenység oszlopban, hogy bármely időszakhoz bejegyzést készítsen.",
+    "calendarHint": "Nyisson meg egy szaggatott javaslatot az ellenőrzéshez, vagy húzza végig az Időbejegyzések oszlopban, hogy bármely időszakhoz bejegyzést készítsen.",
     "narrativeAiPrompt": "Megíratja a leírást a stella AI-jal? Csak ennek a javaslatnak az ablakcímei kerülnek elküldésre, és nem tárolódnak.",
     "narrativeAiNo": "Nem",
     "narrativeAiApprove": "Jóváhagyás",
