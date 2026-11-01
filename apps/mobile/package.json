@@ -39,6 +39,7 @@
     "@stll/ui": "workspace:*",
     "better-result": "catalog:",
     "expo": "~58.0.17",
+    "expo-audio": "58.0.10",
     "expo-constants": "~58.0.13",
     "expo-crypto": "~58.0.7",
     "expo-dev-client": "~58.0.14",

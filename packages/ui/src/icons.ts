@@ -58,6 +58,10 @@ export { CopyIcon as CopyFromMenuIcon } from "lucide-react";
 // sharedOnPurpose: CopyFromMenuIcon, as above.
 export { CopyIcon as DuplicateIcon } from "lucide-react";
 
+// Dictating a message: speech that becomes text in the message box. The
+// mobile composer's round button shows it while there is nothing to send.
+export { MicIcon as DictateIcon } from "lucide-react";
+
 // --- Plain re-exports ------------------------------------------------------
 // @generated-start by scripts/codemod-icons.ts: edit by importing a lucide name and rerunning it
 export type { LucideIcon } from "lucide-react";
