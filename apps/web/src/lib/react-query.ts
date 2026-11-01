@@ -2,6 +2,7 @@ import {
   CancelledError,
   defaultShouldDehydrateQuery,
   InfiniteQueryObserver,
+  MutationCache,
   QueryClient,
   QueryObserver,
 } from "@tanstack/react-query";
@@ -18,6 +19,7 @@ import { Result, TaggedError } from "better-result";
 import { STALE_TIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { shouldRetryAPIRequest } from "@/lib/errors/api";
+import { notifySessionExpired } from "@/lib/errors/session-expired";
 
 /**
  * Typed input shape for query option factories.
@@ -374,6 +376,12 @@ export const shouldDehydrateServerQuery = (query: Query): boolean =>
 /** The app's query cache, with the defaults every read shares. */
 export const createAppQueryClient = () =>
   new QueryClient({
+    // Covers every mutation, also those that show no failure of their own.
+    mutationCache: new MutationCache({
+      onError: (error) => {
+        notifySessionExpired(error);
+      },
+    }),
     defaultOptions: {
       queries: {
         staleTime: STALE_TIME.FIVE.MINUTES,
