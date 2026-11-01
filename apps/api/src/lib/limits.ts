@@ -433,6 +433,20 @@ export const LIMITS = {
    * provision cited more widely is checked candidate by candidate instead.
    */
   caseLawProvisionIdSetMax: 5000,
+  /**
+   * Physical citation links one provision scope read examines before it
+   * calls the provision broad. Larger than the id-set bound, so links of other
+   * countries, levels or unpublished decisions do not make a narrow citing
+   * set broad, and still a fixed read.
+   */
+  caseLawProvisionScopeLinkScanMax: 20_000,
+  /** Physical citation rows examined by one correlated provision probe. */
+  caseLawProvisionLinkProbeMax: 128,
+  /**
+   * Rank-index rows a broad provision-list request examines, counted before
+   * the request's own filters.
+   */
+  caseLawProvisionCandidateBudget: 5000,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
   /** Maximum visible text returned by any global-search preview response. */
@@ -535,6 +549,14 @@ export const LIMITS = {
   extractionTimeoutMs: 30_000,
   /** Hard timeout for durable background document extraction. */
   documentProcessingExtractionTimeoutMs: 2 * 60_000,
+  /**
+   * Largest file the API process extracts itself. Parsing runs in a subprocess
+   * but the bytes pass through this process, so the bound protects its memory;
+   * larger files wait for the scheduled batch worker.
+   */
+  documentProcessingInlineMaxBytes: 5 * 1024 * 1024,
+  /** Runs one inline extraction tick takes, one after another. */
+  documentProcessingInlineBatchSize: 5,
   /** Wall-clock ceiling for one document-processing object-storage read. */
   documentProcessingObjectReadTimeoutMs: 30_000,
   /** Wall-clock ceiling (ms) for the live DOCX-to-Markdown read path in

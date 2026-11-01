@@ -9,7 +9,7 @@ import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard
 import batch from "./batch";
 import batchStatus from "./batch-status";
 import {
-  isConsentWithdrawalRequest,
+  consentWithdrawalException,
   readBillingDraftSettings,
   updateBillingDraftSettings,
 } from "./billing-draft-settings";
@@ -38,7 +38,7 @@ export const desktopTimeEntriesRoute = mount(
         middleware: [
           deploymentFeatureGateExcept(
             "FEATURE_TIME_BILLING",
-            isConsentWithdrawalRequest,
+            consentWithdrawalException,
           ),
         ],
       },

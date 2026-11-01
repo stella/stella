@@ -526,6 +526,22 @@
     "billingDraftsPreference": "Teie kavandite eelistus",
     "billingDraftsForgetPreference": "Unusta eelistus"
   },
+  "dictation": {
+    "title": "Dikteerimine",
+    "description": "Hoidke all klahve {shortcut} ja rääkige. Tekst ilmub rakendusse, mida kasutate. Kõne muudetakse tekstiks selles arvutis ja seda ei salvestata.",
+    "modelNeeded": "Kõnemudel töötab selles arvutis.",
+    "download": "Laadi alla ({size} MB)",
+    "downloading": "Kõnemudeli allalaadimine: {percent}%",
+    "downloadFailed": "Kõnemudelit ei saanud alla laadida.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
+    "shortcutTaken": "{shortcut} on teise rakenduse kasutuses.",
+    "failure": {
+      "accessibility": "Lubage hõlbustusfunktsioonide juurdepääs, et stella saaks teistesse rakendustesse kirjutada.",
+      "microphone": "stella ei kuule teie mikrofoni. Kontrollige mikrofoni juurdepääsu süsteemiseadetes.",
+      "modelMissing": "Laadige esmalt alla kõnemudel.",
+      "transcription": "Tekstiks muutmine ebaõnnestus. Proovige uuesti."
+    }
+  },
   "shortcut": {
     "title": "Lõikelaua otsetee",
     "description": "Avab lõikelaua ajaloo mis tahes rakendusest.",
@@ -645,7 +661,6 @@
     "guideAllowed": "stella desktop on lubatud",
     "never": {
       "screenRecording": "Ekraanisalvestus",
-      "microphone": "Mikrofon",
       "camera": "Kaamera",
       "keystrokes": "Klahvivajutused",
       "fullDiskAccess": "Täielik kettale juurdepääs",

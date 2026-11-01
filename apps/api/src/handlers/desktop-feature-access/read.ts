@@ -25,6 +25,7 @@ const config = {
     v.object({
       features: v.object({
         "activity-timeline": decisionSchema,
+        "desktop-dictation": decisionSchema,
         "local-agents": decisionSchema,
       } satisfies Record<DesktopFeatureId, typeof decisionSchema>),
     }),
@@ -59,6 +60,7 @@ export const createDesktopFeatureAccessReadEndpoint = (
     return Result.ok({
       features: {
         "activity-timeline": decide(snapshot, "activity-timeline"),
+        "desktop-dictation": decide(snapshot, "desktop-dictation"),
         "local-agents": decide(snapshot, "local-agents"),
       } satisfies Record<DesktopFeatureId, unknown>,
     });

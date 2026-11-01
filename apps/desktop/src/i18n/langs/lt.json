@@ -526,6 +526,22 @@
     "billingDraftsPreference": "Jūsų juodraščių nuostata",
     "billingDraftsForgetPreference": "Pamiršti nuostatą"
   },
+  "dictation": {
+    "title": "Diktavimas",
+    "description": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras naudojamoje programoje. Kalba perrašoma šiame kompiuteryje ir nesaugoma.",
+    "modelNeeded": "Kalbos modelis veikia šiame kompiuteryje.",
+    "download": "Atsisiųsti ({size} MB)",
+    "downloading": "Atsisiunčiamas kalbos modelis: {percent} %",
+    "downloadFailed": "Kalbos modelio atsisiųsti nepavyko.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
+    "shortcutTaken": "{shortcut} naudoja kita programa.",
+    "failure": {
+      "accessibility": "Leiskite prieigą prie pritaikymo neįgaliesiems funkcijų, kad „stella“ galėtų rašyti kitose programose.",
+      "microphone": "„stella“ negirdi mikrofono. Patikrinkite prieigą prie mikrofono sistemos nustatymuose.",
+      "modelMissing": "Pirmiausia atsisiųskite kalbos modelį.",
+      "transcription": "Perrašyti nepavyko. Bandykite dar kartą."
+    }
+  },
   "shortcut": {
     "title": "Iškarpinės spartusis klavišas",
     "description": "Atidaro iškarpinės istoriją iš bet kurios programos.",
@@ -645,7 +661,6 @@
     "guideAllowed": "stella desktop leidžiama",
     "never": {
       "screenRecording": "Ekrano įrašymas",
-      "microphone": "Mikrofonas",
       "camera": "Kamera",
       "keystrokes": "Klavišų paspaudimai",
       "fullDiskAccess": "Visa prieiga prie disko",
