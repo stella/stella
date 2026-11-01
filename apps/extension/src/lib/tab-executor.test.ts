@@ -969,6 +969,44 @@ describe("chat's tabs", () => {
     });
   });
 
+  test("a stop once control has moved asks for a read instead of reading", async () => {
+    const installed = installChatTabs();
+    const stop = new AbortController();
+    afterControlledTabWrite(installed, RESULTS_TAB_ID, async () => {
+      stop.abort();
+    });
+
+    expect(
+      await run(switchTo(RESULTS_TAB_ID), { signal: stop.signal }),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown });
+    expect(installed.log).not.toContain("inject:snapshot");
+    expect(installed.session["browserContainedTabs"]).toMatchObject({
+      controlledTabId: RESULTS_TAB_ID,
+    });
+  });
+
+  test("a tab Chrome cannot bring to the front is not switched to", async () => {
+    const installed = installChatTabs();
+    const { budget, events } = createBudget();
+    installed.chrome.tabs.update = async () => {
+      throw new TypeError("No tab with id 5.");
+    };
+
+    expect(await run(switchTo(RESULTS_TAB_ID), { budget })).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.executionFailed,
+    });
+    expect(events).toEqual(["charge", "refund"]);
+    expect(installed.log).not.toContain("inject:snapshot");
+    expect(installed.session["browserContainedTabs"]).toMatchObject({
+      chatTabIds: [RESULTS_TAB_ID],
+      controlledTabId: CONTROLLED_TAB_ID,
+    });
+    expect(installed.session["browserControlledTab"]).toMatchObject({
+      snapshot: { revision: "revision-1" },
+      tabId: CONTROLLED_TAB_ID,
+    });
+  });
+
   test("ownership, not a listing, decides which tab chat may switch to", async () => {
     const { handlers, tabs } = installChatTabs({ opened: [RESULTS_TAB_ID, 6] });
     // Tab 6 was on an error page when chat last read, so no list showed it;

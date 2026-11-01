@@ -1942,6 +1942,22 @@ const runSwitchTab = async (
     await budget.refund();
     return cancelled();
   }
+  // The user sees the tab chat will operate, as with `open`. It comes to
+  // the front before anything is committed, so a tab Chrome cannot show
+  // changes nothing.
+  try {
+    await chrome.tabs.update(tabId, { active: true });
+  } catch {
+    await budget.refund();
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.executionFailed,
+      "Chrome could not bring that tab to the front, so control stayed where it was. Take a snapshot to see chat's tabs.",
+    );
+  }
+  if (isStopped(signal)) {
+    await budget.refund();
+    return cancelled();
+  }
   // Containment moves first: it re-checks the tab is chat's in the same step,
   // and nothing else needs undoing when it refuses. Should the worker stop
   // before the second write, the stored controlled tab is still the old one,
@@ -1967,8 +1983,11 @@ const runSwitchTab = async (
       tabId,
     });
   }
-  // The user sees the tab chat now operates, as with `open`.
-  await chrome.tabs.update(tabId, { active: true }).catch(() => undefined);
+  // Control has moved; the web client still knows the old tab, so a stop
+  // from here on asks it to read the page before anything else.
+  if (isStopped(signal)) {
+    return outcomeUnknown(STOPPED_AFTER_DISPATCH);
+  }
   const result = await readSnapshot({ controllerId, tabId, textOffset: 0 });
   if (
     result.status === "success" &&
