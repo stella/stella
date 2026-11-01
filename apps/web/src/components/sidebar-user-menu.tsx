@@ -65,7 +65,6 @@ import {
   organizationCreationView,
 } from "@/lib/organization/creation-state";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -208,16 +207,6 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
             <CogIcon />
             {t("common.settings")}
           </MenuItem>
-          {hasOrganizationManagementAccess(role) && (
-            <MenuItem
-              onClick={() =>
-                detached(navigate({ to: "/admin" }), "sidebar-user-menu.admin")
-              }
-            >
-              <BuildingIcon />
-              {t("admin.title")}
-            </MenuItem>
-          )}
           <MenuSeparator />
           <MenuSub>
             <MenuSubTrigger>

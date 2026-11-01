@@ -134,6 +134,9 @@ const timeBillingRedirectDestination = ({
   if (template.startsWith("/workspaces/")) {
     return `/workspaces/${workspace.id}/${workspace.viewId}`;
   }
+  if (template.startsWith("/settings/organization/")) {
+    return "/settings/organization/members";
+  }
   if (template.startsWith("/admin/")) {
     return "/admin/members";
   }

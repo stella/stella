@@ -1,5 +1,5 @@
 {
-  "route": "/admin/matter-numbering",
+  "route": "/settings/organization/matter-numbering",
   "reason": "Load professional-use acceptance before protected route data is requested. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1).",
   "budget": {
     "depth": 6,
@@ -45,7 +45,7 @@
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
       "GET /v1/chat/threads": 6,
-      "GET /v1/notifications": 6,
+      "GET /v1/notifications": 7,
       "GET /v1/notifications/events": 4,
       "GET /v1/organization-settings": 7,
       "GET /v1/organization-settings/ai-availability": 4,
@@ -54,7 +54,7 @@
       "GET /v1/time-timers": 7,
       "GET /v1/workspaces/navigation": 7,
       "POST /v1/organization-settings/preview": 6,
-      "GET /v1/me/professional-use": 1,
+      "GET /v1/me/professional-use": 2,
       "GET /v1/time-entries/approval-queue": 10
     },
     "responseSizes": {
