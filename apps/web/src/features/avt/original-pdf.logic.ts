@@ -12,10 +12,10 @@
  * words are not on the page is reported rather than drawn somewhere near.
  */
 
+import { mergePdfTextBoxes } from "@stll/api-contract/pdf-mark-placement";
 import { findSearchMatchRanges } from "@stll/text-normalize";
 
 import type { VerificationClaim, VerificationRun } from "@/features/avt/types";
-import { mergePDFSearchBoxes } from "@/lib/pdf/pdf-search";
 import type { PageSearchText, PDFSearchBox } from "@/lib/pdf/pdf-search";
 
 type VerificationBlock = VerificationRun["blocks"][number];
@@ -93,7 +93,7 @@ const boxesForRange = (
   page: PageSearchText,
   range: TextRange,
 ): PDFSearchBox[] =>
-  mergePDFSearchBoxes(
+  mergePdfTextBoxes(
     page.boxesByOffset
       .slice(range.start, range.end)
       .filter((box): box is PDFSearchBox => box !== null),
