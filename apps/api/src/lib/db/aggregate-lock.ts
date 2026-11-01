@@ -485,9 +485,21 @@ const isOwnerHeld = (aggregate: AggregateName): boolean => {
 const assertOwnerHolder = (aggregate: AggregateName, tx: object): void => {
   if (isOwnerHeld(aggregate) && !ownerTransactions.has(tx)) {
     panic(
-      `The ${aggregate} aggregate is owner-held; lock it on an owner transaction`,
+      `The ${aggregate} aggregate is owner-held: lock it on a transaction from withOwnerAggregateTransaction (a test passes asOwnerTransaction(tx)).`,
     );
   }
+};
+
+// Names an unregistered connection in a refusal: its class and own keys.
+const describeConnection = (database: object): string => {
+  const prototype: unknown = Object.getPrototypeOf(database);
+  const constructor = isRecord(prototype) ? prototype["constructor"] : null;
+  const name =
+    typeof constructor === "function" && constructor.name !== ""
+      ? constructor.name
+      : "object";
+  const keys = Object.keys(database).slice(0, 6).join(", ");
+  return `${name} with ${keys === "" ? "no own keys" : `keys ${keys}`}`;
 };
 
 /**
@@ -501,7 +513,9 @@ export const withOwnerAggregateTransaction = async <Tx extends object, T>(
   run: (tx: OwnerTransaction<Tx>) => Promise<T>,
 ): Promise<T> => {
   if (!isOwnerDatabase(database)) {
-    return panic("Owner-held locks require a registered owner connection");
+    return panic(
+      `withOwnerAggregateTransaction refused an unregistered connection (${describeConnection(database)}). Owner-held locks run only on a connection registered with createOwnerDatabase where it is built (rootDb, the maintenance connection); a test passes ownerDatabaseDouble(db).`,
+    );
   }
   return await withAggregateTransaction(database, async (tx) => {
     ownerTransactions.add(tx);

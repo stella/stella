@@ -546,6 +546,9 @@ describe("explicit uses are not shapes", () => {
 });
 
 describe("modules that reach an owner-level handle", () => {
+  // A whole-module reference reaches every owner export of the root module:
+  // `rootDb`, `rlsDb` and the two confined owner operations.
+  const ROOT_EXPORTS = 4;
   const importsOf = (...lines: readonly string[]): number =>
     countRootConnectionImports(
       `${lines.join("\n")}\n`,
@@ -576,13 +579,13 @@ describe("modules that reach an owner-level handle", () => {
         'import type { rootDb as rootDatabase, Transaction } from "@/api/db/root";',
         1,
       ],
-      ['import type * as root from "@/api/db/root";', 2],
+      ['import type * as root from "@/api/db/root";', ROOT_EXPORTS],
       ['export type { rootDb } from "@/api/db/root";', 1],
       ['export { type rlsDb } from "@/api/db/root";', 1],
-      ['export type * from "@/api/db/root";', 2],
-      ['import type root = require("@/api/db/root");', 2],
+      ['export type * from "@/api/db/root";', ROOT_EXPORTS],
+      ['import type root = require("@/api/db/root");', ROOT_EXPORTS],
       ['export type Db = typeof import("@/api/db/root").rootDb;', 1],
-      ['export type Root = typeof import("@/api/db/root");', 2],
+      ['export type Root = typeof import("@/api/db/root");', ROOT_EXPORTS],
     ] as const;
     for (const [line, expected] of typeOnly) {
       expect([line, typesOf(line), importsOf(line)]).toEqual([
@@ -628,14 +631,20 @@ describe("modules that reach an owner-level handle", () => {
   test("re-exports count like imports", () => {
     expect(importsOf('export { rootDb } from "@/api/db/root";')).toBe(1);
     expect(importsOf('export { rlsDb as pool } from "../db/root";')).toBe(1);
-    expect(importsOf('export * from "@/api/db/root";')).toBe(2);
-    expect(importsOf('export * as root from "@/api/db/root";')).toBe(2);
+    expect(importsOf('export * from "@/api/db/root";')).toBe(ROOT_EXPORTS);
+    expect(importsOf('export * as root from "@/api/db/root";')).toBe(
+      ROOT_EXPORTS,
+    );
     expect(importsOf('export { Transaction } from "@/api/db/root";')).toBe(0);
   });
 
-  test("a namespace, require or undestructured dynamic import counts both", () => {
-    expect(importsOf('import * as root from "@/api/db/root";')).toBe(2);
-    expect(importsOf('import root = require("@/api/db/root");')).toBe(2);
+  test("a namespace, require or undestructured dynamic import counts every owner export", () => {
+    expect(importsOf('import * as root from "@/api/db/root";')).toBe(
+      ROOT_EXPORTS,
+    );
+    expect(importsOf('import root = require("@/api/db/root");')).toBe(
+      ROOT_EXPORTS,
+    );
     expect(
       importsOf(
         "export const load = async () => {",
@@ -643,18 +652,42 @@ describe("modules that reach an owner-level handle", () => {
         "  return root;",
         "};",
       ),
-    ).toBe(2);
+    ).toBe(ROOT_EXPORTS);
     expect(
       importsOf(
         'export const load = () => import("@/api/db/root").then((m) => m.rlsDb);',
       ),
-    ).toBe(2);
+    ).toBe(ROOT_EXPORTS);
     expect(
       importsOf(
         "export const load = async () => {",
         '  const { rootDb, ...rest } = await import("@/api/db/root");',
         "  return [rootDb, rest];",
         "};",
+      ),
+    ).toBe(ROOT_EXPORTS);
+  });
+
+  test("each confined owner operation counts once where it is imported", () => {
+    for (const operation of [
+      "withAccountExportOwnerTransaction",
+      "withConfirmationCodeOwnerTransaction",
+    ]) {
+      expect(importsOf(`import { ${operation} } from "@/api/db/root";`)).toBe(
+        1,
+      );
+      expect(
+        importsOf(
+          "export const load = async () => {",
+          `  const { ${operation} } = await import("@/api/db/root");`,
+          `  return ${operation};`,
+          "};",
+        ),
+      ).toBe(1);
+    }
+    expect(
+      importsOf(
+        'import { rootDb, withConfirmationCodeOwnerTransaction } from "@/api/db/root";',
       ),
     ).toBe(2);
   });
