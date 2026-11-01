@@ -178,6 +178,16 @@ const fixtureHasRuleDisable = (source: string, ruleId: string): boolean =>
     return rules.split(",").some((rule) => rule.trim() === ruleId);
   });
 
+export const fixtureHasExpectedError = (
+  source: string,
+  ruleId: string,
+): boolean =>
+  source.split("\n").some((line) => {
+    const marker = /(?:\/\/|\/\*)\s*expect-error:\s*(?<rules>[^*]+)/u.exec(line)
+      ?.groups?.["rules"];
+    return marker?.split(",").some((rule) => rule.trim() === ruleId) === true;
+  });
+
 // Names exported by the shared helper module. A plugin declaring one of them
 // keeps a private copy that drifts from the shared behaviour.
 export const sharedHelperNames = (utilsSource: string): string[] =>
@@ -230,7 +240,7 @@ export const newGuardRolloutErrors = ({
       return [];
     }
     return [
-      `${rule}: new guards require a registered PR Autofix generator or a dated changed-lines rollout in ${GUARD_ROLLOUT_DIRECTORY}/<id>.ts`,
+      `${rule}: new guards require a registered PR Autofix generator or a dated changed-lines rollout in ${GUARD_ROLLOUT_DIRECTORY}/<id>.json`,
     ];
   });
 
@@ -343,11 +353,15 @@ for (const file of pluginFiles) {
       errors.push(`${file}: ${fullRuleId} is not enabled in production config`);
     }
     if (
-      !fixtureSources.some((fixture) =>
-        fixtureHasRuleDisable(fixture, fullRuleId),
+      !fixtureSources.some(
+        (fixture) =>
+          fixtureHasRuleDisable(fixture, fullRuleId) ||
+          fixtureHasExpectedError(fixture, fullRuleId),
       )
     ) {
-      errors.push(`${file}: fixture does not disable ${fullRuleId}`);
+      errors.push(
+        `${file}: fixture has no suppression or expect-error marker for ${fullRuleId}`,
+      );
     }
     if (
       !fixtureSources.some((fixture) =>

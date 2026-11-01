@@ -1784,6 +1784,11 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/mcp/server.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/mcp/tool-outputs.db.test.ts": {
     "count": 4,
     "owner": "api",

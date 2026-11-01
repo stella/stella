@@ -14,6 +14,7 @@ import {
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
 import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
+import { requestBoundedTimeoutMs } from "@/api/lib/load/request-latency-budget";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -736,11 +737,25 @@ const requestFailure = ({
 const bodyReadReach = (error: unknown): CorpusIndexErrorReach =>
   error instanceof SyntaxError ? "answered" : "unreachable";
 
-const sendRequest = async <T>(
+/**
+ * Inside a request latency scope (an MCP tool call) every corpus request gives
+ * up when the request's budget does, whatever its own timeout: a search, an
+ * aggregation or a page of highlights never outwaits the caller. The bounded
+ * timeout is the one a failure names.
+ */
+const boundToRequestBudget = (
   request: CorpusIndexRequest,
+): CorpusIndexRequest => ({
+  ...request,
+  timeoutMs: requestBoundedTimeoutMs(request.timeoutMs),
+});
+
+const sendRequest = async <T>(
+  unbounded: CorpusIndexRequest,
   consume: (response: Response) => T | Promise<T>,
-): Promise<T> =>
-  await fetchCorpusIndex({
+): Promise<T> => {
+  const request = boundToRequestBudget(unbounded);
+  return await fetchCorpusIndex({
     baseUrl: request.baseUrl,
     path: request.path,
     init: {
@@ -761,9 +776,11 @@ const sendRequest = async <T>(
       reach: "unreachable",
     });
   });
+};
 
-const requestJson = async (request: CorpusIndexRequest): Promise<unknown> =>
-  await sendRequest(request, async (response) => {
+const requestJson = async (unbounded: CorpusIndexRequest): Promise<unknown> => {
+  const request = boundToRequestBudget(unbounded);
+  return await sendRequest(request, async (response) => {
     if (!response.ok) {
       const body = await response.text().catch(() => "");
       throw new CorpusIndexError({
@@ -782,6 +799,7 @@ const requestJson = async (request: CorpusIndexRequest): Promise<unknown> =>
       });
     });
   });
+};
 
 type SettlementSplit = {
   evidence: CorpusIndexSettlementSplit;

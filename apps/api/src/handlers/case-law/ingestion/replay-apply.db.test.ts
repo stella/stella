@@ -1,3 +1,4 @@
+import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import {
   afterAll,
@@ -93,12 +94,15 @@ import type {
 import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
+  openRawSourceWriteWindow,
   RAW_SOURCE_FAMILY,
   rawSourcePayloadKey,
 } from "@/api/lib/legal-search/raw-source-storage";
+import { captureSkDocumentRaw } from "@/api/lib/legal-search/sk-document-raw";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { memorySkDocumentRawStorage } from "@/api/tests/helpers/sk-document-raw-storage";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // A writing replay, through the same `processDecision` a crawl feeds.
@@ -1606,7 +1610,7 @@ test("a version bump that changes only a described column goes through the pipel
   await lease.release();
 });
 
-test("a row stored under an encoded docket replays to the decoded docket in place", async () => {
+test("captured PDF replay decodes legacy dockets while metadata-only rows retain their version", async () => {
   const sourceId = createSafeId<"caseLawSource">();
   await db.insert(caseLawSources).values({
     id: sourceId,
@@ -1621,10 +1625,43 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
     })?.sourceRaw ?? panic("legacy fixture stores no raw");
   const keyedId = createSafeId<"caseLawDecision">();
   const docketKeyedId = createSafeId<"caseLawDecision">();
+  const uncapturedId = createSafeId<"caseLawDecision">();
   const payloads = new Map([
     [keyedId, legacyPayloadFor("sk-guid-legacy")],
     [docketKeyedId, legacyPayloadFor(null)],
+    [uncapturedId, legacyPayloadFor("sk-guid-uncaptured")],
   ]);
+  const memory = memorySkDocumentRawStorage();
+  const pdf = PDF.create();
+  const page = pdf.addPage({ size: "letter" });
+  page.drawText("First paragraph of", { x: 72, y: 720, size: 12 });
+  page.drawText("the judgment.", { x: 72, y: 706, size: 12 });
+  page.drawText("Second paragraph of", { x: 72, y: 668, size: 12 });
+  page.drawText("the judgment.", { x: 72, y: 654, size: 12 });
+  const bytes = await pdf.save();
+  for (const id of [keyedId, docketKeyedId]) {
+    const raw = payloads.get(id) ?? panic("Legacy raw fixture missing");
+    // db-await-in-loop: capture each decision's PDF under its own durable identity.
+    const capture = (
+      await captureSkDocumentRaw({
+        sourceId,
+        decisionId: id,
+        window: openRawSourceWriteWindow(),
+        storedKey: null,
+        storedContentType: null,
+        inlineRaw: raw,
+        bytes,
+        signal: new AbortController().signal,
+        storage: memory.storage,
+        beforeRemoteEffect: async <T>(effect: () => Promise<T>) =>
+          await effect(),
+      })
+    ).unwrap("Legacy PDF capture must succeed");
+    payloads.set(
+      id,
+      new TextDecoder().decode(memory.objects.get(capture.sourceRawS3Key)),
+    );
+  }
   // The legacy key, or the content-addressed one the applied write moves the
   // row to; both name the decision.
   const payloadAt = (key: string) =>
@@ -1636,6 +1673,7 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
       [
         [keyedId, "sk-guid-legacy"],
         [docketKeyedId, null],
+        [uncapturedId, "sk-guid-uncaptured"],
       ] as const
     ).map(([id, sourceDocumentId]) => ({
       id,
@@ -1648,6 +1686,9 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
       sourceRawS3Key: `case-law/raw/legacy/${id}`,
       sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
       sourceHash: "hash-before-decoding",
+      fulltext: RESTRUCTURED_TEXT,
+      documentAst: FLAT_AST,
+      sections: STORED_SECTIONS,
       parserVersion: legacyVersion,
       metadata: {},
     })),
@@ -1659,6 +1700,7 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
   if (lease === null) {
     throw new TypeError("Expected the source ingestion lease to be free");
   }
+  const beforeUncaptured = await storedDocumentOf(uncapturedId);
   const reparse =
     skCourtsAdapter.reparseStoredRaw ?? panic("adapter has no replay reader");
   const replay = async () =>
@@ -1669,7 +1711,9 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
       sourceLease: lease,
       scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
       readStoredRaw: async (key) =>
-        await Promise.resolve(new TextEncoder().encode(payloadAt(key))),
+        await Promise.resolve(
+          memory.objects.get(key) ?? new TextEncoder().encode(payloadAt(key)),
+        ),
       bound: { type: "at-most", limit: 10 },
       pageSize: 10,
     });
@@ -1697,11 +1741,22 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
   expect(first.report.rejections["identity-mismatch"]).toBe(1);
   expect(await readRows()).toEqual({
     [docketKeyedId]: { caseNumber: "7C&#x2F;221/1991", version: legacyVersion },
+    [uncapturedId]: { caseNumber: "7C&#x2F;221/1991", version: legacyVersion },
     [keyedId]: {
       caseNumber: "7C/221/1991",
       version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
     },
   });
+
+  expect(
+    first.report.rejections[STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA],
+  ).toBe(1);
+  expect(await storedDocumentOf(uncapturedId)).toEqual(beforeUncaptured);
+  const captured = await storedDocumentOf(keyedId);
+  expect(captured?.fulltext).toContain(
+    "First paragraph of the judgment.\n\nSecond paragraph of the judgment.",
+  );
+  expect(captured?.documentAst).not.toEqual(FLAT_AST);
 
   // The migrated row now matches its payload exactly: a second run converges.
   const second = await replay();

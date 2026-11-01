@@ -504,6 +504,11 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/mcp/server.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/scripts/corpus-generation.postgres.test.ts": {
     "count": 1,
     "owner": "api",

@@ -19,6 +19,7 @@ import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
+import { dictationScalingScenario } from "./dictation";
 import {
   documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
@@ -31,6 +32,7 @@ import { mcpScalingScenarios } from "./mcp-scenarios";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import { mobileUpdateScalingScenario } from "./mobile-updates";
 import { myOpenTasksScalingScenario } from "./my-open-tasks";
+import { organizationSlugScalingScenario } from "./organization-slug";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -64,6 +66,8 @@ const measuredApiScenarios = [
   myOpenTasksScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  dictationScalingScenario,
+  organizationSlugScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>
