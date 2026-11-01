@@ -10,6 +10,7 @@ import type {
 
 import { bfdiAdapter } from "./bfdi";
 import { edpbAdapter } from "./edpb";
+import { uoouSkAdapter } from "./uoou-sk";
 import { wp29Adapter } from "./wp29";
 
 type SourceRegistration<Authority extends SoftLawAuthority> = {
@@ -103,7 +104,20 @@ export const SOFT_LAW_ADMISSIONS = {
   "pl-uodo": unverified,
   "pt-cnpd": unverified,
   "ro-anspdcp": unverified,
-  "sk-uoou": unverified,
+  "sk-uoou": {
+    state: "registered",
+    adapter: uoouSkAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution:
+        "Úrad na ochranu osobných údajov Slovenskej republiky; https://dataprotection.gov.sk",
+      allowsRedistribution: false,
+      allowsDerivedAi: false,
+    },
+    // The site states no reuse terms; its home page asks reusers of
+    // published documents to limit any personal data they contain.
+    reuseNotice: "https://dataprotection.gov.sk/sk/",
+  },
   "si-ip": unverified,
   "es-aepd": held,
   "se-imy": unverified,

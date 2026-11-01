@@ -1,9 +1,11 @@
 # Owner of "main/heavy is green for release purposes" when the run itself
 # failed. Called as
-#   jq -n --argjson jobs <latest-attempt jobs, with steps> --argjson total <API total_count> \
-#         --argjson record <ci-required-summary record or null> \
-#         --argjson violations <ci-required-violations record or null> \
-#         --argjson run_id <n> --argjson run_attempt <the run's current attempt> --arg head <sha> -f this
+#   jq -c --argjson run_id <n> --argjson run_attempt <the run's current attempt> --arg head <sha> -f this
+# with one input object on stdin:
+#   {jobs: <latest-attempt jobs, with steps>, total: <API total_count>,
+#    record: <ci-required-summary record or null>,
+#    violations: <ci-required-violations record or null>}
+# The job list is read from stdin because it outgrows a command-line argument.
 # Every input must come from that one attempt: a re-run of ci-result can fail
 # before it replaces the artifacts, and the previous attempt's still match.
 # by check-release-main-health.sh and, through release-heavy-verdict.ts, by
@@ -29,7 +31,8 @@
 # The names below are the ones the workflows report;
 # release-heavy-verdict.test.ts derives them from the workflows and fails
 # when they drift.
-def advisory_job: "suites / marketing-screenshots / check";
+. as {jobs: $jobs, total: $total, record: $record, violations: $violations}
+| def advisory_job: "suites / marketing-screenshots / check";
 # The job id in ci.yml's `needs`, hence the `job` of the record's entry.
 def advisory_required_job: "marketing-screenshots";
 def advisory_violation: "marketing-screenshots (planned, failure)";

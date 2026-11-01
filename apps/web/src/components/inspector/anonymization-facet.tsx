@@ -324,7 +324,7 @@ export const AnonymizationFacet = ({
     const isInsidePreview = (node: Node | null): boolean => {
       const element =
         node instanceof Element ? node : (node?.parentElement ?? null);
-      return element?.closest(PREVIEW_SURFACES) !== null && element !== null;
+      return element !== null && element.closest(PREVIEW_SURFACES) !== null;
     };
     const handler = () => {
       const selection = window.getSelection();
@@ -846,7 +846,8 @@ export const AnonymizationFacet = ({
             if (onOpenFullView) {
               return (
                 <Button
-                  className="text-muted-foreground hover:bg-muted/50 hover:text-foreground h-auto w-full justify-start gap-2.5 rounded-md px-3 py-2.5 text-start text-sm leading-relaxed whitespace-normal"
+                  layout="wrap"
+                  className="text-muted-foreground hover:bg-muted/50 hover:text-foreground w-full gap-2.5 rounded-md px-3 py-2.5 text-sm leading-relaxed"
                   onClick={onOpenFullView}
                   type="button"
                   variant="ghost"

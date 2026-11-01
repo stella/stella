@@ -52,19 +52,7 @@ export const heavyVerdict = ({
   const result = Bun.spawnSync(
     [
       "jq",
-      "-nc",
-      "--argjson",
-      "jobs",
-      JSON.stringify(jobs),
-      "--argjson",
-      "total",
-      JSON.stringify(total ?? null),
-      "--argjson",
-      "record",
-      JSON.stringify(record ?? null),
-      "--argjson",
-      "violations",
-      JSON.stringify(violations ?? null),
+      "-c",
       "--argjson",
       "run_id",
       String(runId),
@@ -77,7 +65,18 @@ export const heavyVerdict = ({
       "-f",
       VERDICT_FILTER,
     ],
-    { stderr: "pipe", stdout: "pipe" },
+    {
+      stdin: Buffer.from(
+        JSON.stringify({
+          jobs,
+          total: total ?? null,
+          record: record ?? null,
+          violations: violations ?? null,
+        }),
+      ),
+      stderr: "pipe",
+      stdout: "pipe",
+    },
   );
   if (!result.success) {
     return panic(
