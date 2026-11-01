@@ -315,16 +315,20 @@ export const reparseUkFclStoredRaw = (
   stored: StoredRawReparseInput,
 ): StoredRawReparseOutcome => {
   const parts = decodeSourceRawEnvelope(new TextDecoder().decode(stored.raw));
+  const missingEnvelope: StoredRawReparseOutcome = {
+    type: "rejected",
+    rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
+    detail: "Missing stored XML envelope",
+  };
+  if (parts === null) {
+    return missingEnvelope;
+  }
   if (
-    parts?.["listing"] === undefined ||
+    parts["listing"] === undefined ||
     parts["document"] === undefined ||
     stored.contentType !== SOURCE_RAW_ENVELOPE_CONTENT_TYPE
   ) {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
-      detail: "Missing stored XML envelope",
-    };
+    return missingEnvelope;
   }
   if (stored.sourceDocumentId === null) {
     return {

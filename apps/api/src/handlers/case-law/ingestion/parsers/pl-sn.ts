@@ -342,7 +342,7 @@ const withSuperscripts = (
         out.push({
           text: mark.text,
           bold: run?.bold ?? false,
-          ...(run?.italic === undefined ? {} : { italic: run.italic }),
+          ...(run?.italic !== undefined ? { italic: run.italic } : {}),
           superscript: true,
         });
       }

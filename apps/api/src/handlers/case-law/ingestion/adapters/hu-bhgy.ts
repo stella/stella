@@ -932,14 +932,14 @@ export const assembleHuBhgyDecision = async ({
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.HU_BHGY].country,
     language: HU_BHGY_LANGUAGE,
-    ...(read?.decisionDate === undefined
-      ? {}
-      : { decisionDate: read.decisionDate }),
-    ...(read?.decisionType === undefined
-      ? {}
-      : { decisionType: read.decisionType }),
-    ...(read?.fulltext === undefined ? {} : { fulltext: read.fulltext }),
-    ...(read?.sections === undefined ? {} : { sections: read.sections }),
+    ...(read?.decisionDate !== undefined
+      ? { decisionDate: read.decisionDate }
+      : {}),
+    ...(read?.decisionType !== undefined
+      ? { decisionType: read.decisionType }
+      : {}),
+    ...(read?.fulltext !== undefined ? { fulltext: read.fulltext } : {}),
+    ...(read?.sections !== undefined ? { sections: read.sections } : {}),
     ...(document === undefined ? { isListingOnly: true } : {}),
     sourceUrl: decisionUrl(row),
     documentUrl: documentUrlOf(row),
@@ -958,12 +958,12 @@ export const assembleHuBhgyDecision = async ({
     metadata: checkedDecisionMetadata({
       caseNumber,
       court,
-      ...(read?.decisionDate === undefined
-        ? {}
-        : { decisionDate: read.decisionDate }),
-      ...(read?.decisionType === undefined
-        ? {}
-        : { decisionType: read.decisionType }),
+      ...(read?.decisionDate !== undefined
+        ? { decisionDate: read.decisionDate }
+        : {}),
+      ...(read?.decisionType !== undefined
+        ? { decisionType: read.decisionType }
+        : {}),
       documentId: IndexId,
       bhgyIdentifier: row.EgyediAzonosito,
       kollegiums: huKollegiumsOf(row.Kollegium),
@@ -972,16 +972,16 @@ export const assembleHuBhgyDecision = async ({
       publishedAt: row.IndexelesIdeje,
       statutes,
       relatedProceedings: related,
-      ...(read?.documentDocket === undefined
-        ? {}
-        : { documentDocket: read.documentDocket }),
+      ...(read?.documentDocket !== undefined
+        ? { documentDocket: read.documentDocket }
+        : {}),
       ...(document === undefined
         ? {}
         : { documentContentType: document.contentType }),
-      ...(read?.relatedProceedings === undefined ||
-      read.relatedProceedings.length === 0
-        ? {}
-        : { instanceChainLines: read.relatedProceedings }),
+      ...(read?.relatedProceedings !== undefined &&
+      read.relatedProceedings.length > 0
+        ? { instanceChainLines: read.relatedProceedings }
+        : {}),
       ...(document === undefined
         ? {
             detailUnavailable:

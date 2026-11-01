@@ -2842,9 +2842,9 @@ export const buildCzNssDecision = async ({
             row,
             content: {
               ...content,
-              ...(recovered.content?.recovery === undefined
-                ? {}
-                : { recovery: recovered.content.recovery }),
+              ...(recovered.content?.recovery !== undefined
+                ? { recovery: recovered.content.recovery }
+                : {}),
             },
             detail,
             detailHtml,

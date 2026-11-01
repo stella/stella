@@ -1083,9 +1083,8 @@ export const assemblePlTkDecision = ({
       : undefined;
 
   const parsed =
-    ruling?.textHtml === undefined
-      ? null
-      : Result.try({
+    ruling?.textHtml !== undefined
+      ? Result.try({
           try: () =>
             parsePlTkText({
               page:
@@ -1101,7 +1100,8 @@ export const assemblePlTkDecision = ({
               textHtml: ruling.textHtml ?? "",
             }),
           catch: errorTag,
-        });
+        })
+      : null;
   if (parsed !== null && Result.isError(parsed)) {
     // The case page is stored verbatim below, so the text is recoverable by
     // re-parsing it rather than by asking the portal again.

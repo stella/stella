@@ -1275,7 +1275,7 @@ const visitLegacyParagraph = (
     printedNumbers.candidates.push({
       index,
       number: printed.value,
-      marker: match?.groups?.["dot"] === undefined ? "bare" : "dotted",
+      marker: match?.groups?.["dot"] !== undefined ? "dotted" : "bare",
       dated:
         printed.value <= DAYS_IN_MONTH_MAX &&
         MONTH_AND_YEAR.test(body.plainText),

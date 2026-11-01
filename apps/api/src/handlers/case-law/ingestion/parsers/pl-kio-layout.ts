@@ -1018,7 +1018,10 @@ const reflowOf = (
     const lines = bodyLinesOf(block, numbered);
     return lines.slice(1).flatMap((line, index) => {
       const previous = lines[index];
-      return previous?.end === undefined ||
+      if (previous === undefined) {
+        return [];
+      }
+      return previous.end === undefined ||
         previous.text.length === 0 ||
         line.text.length === 0
         ? []

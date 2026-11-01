@@ -1353,7 +1353,7 @@ const pageMetadataOf = ({ detail, files, id, row }: PageMetadataOptions) => {
           documentUrl: metadataAddressOf(id, file),
           status: fetched?.status,
           sha256:
-            fetched?.bytes === undefined ? undefined : sha256(fetched.bytes),
+            fetched?.bytes !== undefined ? sha256(fetched.bytes) : undefined,
         };
       },
     ),

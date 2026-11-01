@@ -828,6 +828,20 @@ const skCourtsSourceRaw = ({
   };
 };
 
+/** A missing list stays as stated: `null` and absent are kept apart. */
+const decodeReferencedLegislation = (
+  references: SkOdkazovanyPredpis[] | null | undefined,
+) => {
+  if (references === null || references === undefined) {
+    return references;
+  }
+  return references.map((reference) => ({
+    ...reference,
+    nazov: decodeSkCourtText(reference.nazov),
+    url: toMetadataUrl(reference.url, "transport-json"),
+  }));
+};
+
 /**
  * Build one decision from the two responses already in hand, without
  * contacting the publisher, or `null` for an item nothing can key.
@@ -953,15 +967,9 @@ export const assembleSkCourtsDecision = ({
           decisionNature: decodeSkCourtTextList(item.povaha),
           area: decodeSkCourtTextList(detail?.oblast),
           subArea: decodeSkCourtTextList(detail?.podOblast),
-          referencedLegislation:
-            detail?.odkazovanePredpisy === null ||
-            detail?.odkazovanePredpisy === undefined
-              ? detail?.odkazovanePredpisy
-              : detail.odkazovanePredpisy.map((reference) => ({
-                  ...reference,
-                  nazov: decodeSkCourtText(reference.nazov),
-                  url: toMetadataUrl(reference.url, "transport-json"),
-                })),
+          referencedLegislation: decodeReferencedLegislation(
+            detail?.odkazovanePredpisy,
+          ),
           documentName: decodeSkCourtText(detail?.dokument?.name),
           documentExtension: toOptionalValue(detail?.dokument?.fileExtension),
           documentSize: detail?.dokument?.size,
