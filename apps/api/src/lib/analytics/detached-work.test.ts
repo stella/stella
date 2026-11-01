@@ -72,6 +72,34 @@ describe("detached work and the caller's measurement", () => {
     expect(currentQueryCounter()).toBeUndefined();
   });
 
+  test("a site's own rejection handler receives the failure, including a synchronous throw", async () => {
+    const failures = Promise.withResolvers<unknown[]>();
+    const received: unknown[] = [];
+    const record = (error: unknown) => {
+      received.push(error);
+      if (received.length === 2) {
+        failures.resolve(received);
+      }
+    };
+    const rejected = new Error("rejected");
+    const thrown = new Error("thrown");
+    detached(
+      async () => await Promise.reject(rejected),
+      "test.rejected",
+      record,
+    );
+    detached(
+      () => {
+        throw thrown;
+      },
+      "test.thrown",
+      record,
+    );
+    expect(await failures.promise).toEqual(
+      expect.arrayContaining([thrown, rejected]),
+    );
+  });
+
   test("the detachment covers every continuation of the work", async () => {
     const seen = await runWithQueryCounter(async () =>
       runOutsideQueryCounter(async () => {

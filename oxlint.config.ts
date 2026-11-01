@@ -961,6 +961,17 @@ const apiPortableSafeIdBrandingImport = {
     "Brand ids through '@/api/lib/safe-id-boundaries', not the portable contract helper.",
 };
 
+// Un-awaited API work starts through `detached(() => work, "feature.action")`
+// in the capture module, which runs it outside the caller's query counter. A
+// local `createDetached` copy would take started promises and charge them to
+// whichever request or job happened to start them.
+const apiDetachedFactoryImport = {
+  name: "@stll/errors",
+  importNames: ["createDetached"],
+  message:
+    "Start detached work with `detached(() => work, \"feature.action\")` from '@/api/lib/analytics/capture'; pass `onRejection` for site-specific failure handling.",
+};
+
 // The model factory builds every provider text adapter and holds its stream
 // to the provider stream contract (one terminal event, last; a cut-off stream
 // is a run error). An adapter built anywhere else skips that contract, so the
@@ -5872,6 +5883,29 @@ const config = defineConfig({
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              apiDetachedFactoryImport,
+              ...apiProviderAdapterImports,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // The shared detached helper's owner builds it from the factory.
+      files: ["apps/api/src/lib/analytics/capture.ts"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noFastXmlParserImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
+              apiValibotJsonSchemaImport,
+              apiSafeIdBrandingImport,
+              apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
             ],
           },
@@ -5937,6 +5971,7 @@ const config = defineConfig({
               ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
+              apiDetachedFactoryImport,
               ...apiProviderAdapterImports,
             ],
           },
@@ -5959,6 +5994,7 @@ const config = defineConfig({
               ...noReactEmailImports,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              apiDetachedFactoryImport,
               ...apiProviderAdapterImports,
             ],
           },
@@ -5985,6 +6021,7 @@ const config = defineConfig({
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              apiDetachedFactoryImport,
             ],
           },
         ],
@@ -6502,6 +6539,7 @@ const config = defineConfig({
                   "Handlers must receive SafeId from request authorization (authorizeWorkspace, authenticateSession) or actor session validation, not construct it from raw strings.",
               },
               apiPortableSafeIdBrandingImport,
+              apiDetachedFactoryImport,
               ...apiProviderAdapterImports,
               {
                 name: "@/api/db",
@@ -6629,6 +6667,7 @@ const config = defineConfig({
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              apiDetachedFactoryImport,
               ...apiProviderAdapterImports,
               {
                 name: "@/api/lib/api-handlers",

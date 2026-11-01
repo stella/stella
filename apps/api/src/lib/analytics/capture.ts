@@ -517,13 +517,21 @@ const captureDetachedRejection = createDetached((error, context) => {
  * `context` is a short, stable label identifying the call site (for example
  * `"account-cleanup.reconcile"`). Keep it a fixed string; never interpolate
  * identifiers, so it stays a safe correlation tag in telemetry.
+ *
+ * `onRejection` replaces the default capture for a site that owns its failure
+ * reporting (a typed failure sink, a dropped-count metric).
  */
 export const detached = (
   work: () => unknown,
   context: `${string}.${string}`,
+  onRejection?: (error: unknown) => void,
 ): void => {
-  captureDetachedRejection(
-    runOutsideQueryCounter(() => Promise.try(work)),
-    context,
-  );
+  const started = runOutsideQueryCounter(() => Promise.try(work));
+  if (onRejection === undefined) {
+    captureDetachedRejection(started, context);
+    return;
+  }
+  createDetached((error) => {
+    onRejection(error);
+  })(started, context);
 };
