@@ -125,7 +125,7 @@ describe("ON CONFLICT targets and the online work lifecycle", () => {
     for (const [source, read] of [
       [`\${column}`, "__CONFLICT_HOLE_0__"],
       [`organization_id, \${column}`, "organization_id, __CONFLICT_HOLE_0__"],
-    ]) {
+    ] as const) {
       expect(
         check(
           `tx.execute(sql\`INSERT INTO contacts (id) VALUES (1) ON CONFLICT (${source}) DO NOTHING\`);`,

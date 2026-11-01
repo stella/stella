@@ -99,10 +99,18 @@ const declaredUniqueKeys = (table: PgTable): DeclaredUniqueKey[] => {
       });
     }
   }
-  for (const key of [...config.primaryKeys, ...config.uniqueConstraints]) {
+  for (const key of config.primaryKeys) {
     keys.push({
       name: key.getName(),
       columns: key.columns.map(({ name }) => name),
+    });
+  }
+  for (const key of config.uniqueConstraints) {
+    const columns = key.columns.map(({ name }) => name);
+    // An unnamed constraint takes PostgreSQL's default name.
+    keys.push({
+      name: key.getName() ?? `${config.name}_${columns.join("_")}_key`,
+      columns,
     });
   }
   for (const index of config.indexes) {
@@ -510,7 +518,7 @@ const targetOf = (
     if (ts.isSpreadAssignment(property)) {
       return { type: "unresolved", reason: "conflict options spread a value" };
     }
-    if (property.name?.getText(scope.ast) !== "target") {
+    if (property.name.getText(scope.ast) !== "target") {
       continue;
     }
     if (ts.isPropertyAssignment(property)) {
