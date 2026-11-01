@@ -502,7 +502,7 @@
     "download": "Stiahnuť ({size} MB)",
     "downloading": "Sťahovanie rečového modelu: {percent} %",
     "downloadFailed": "Rečový model sa nepodarilo stiahnuť.",
-    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, CC BY 4.0.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "Skratku {shortcut} používa iná aplikácia.",
     "failure": {
       "accessibility": "Povoľte prístup Prístupnosť, aby stella mohla písať do iných aplikácií.",

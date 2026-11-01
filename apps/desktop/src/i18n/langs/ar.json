@@ -502,7 +502,7 @@
     "download": "تنزيل ({size} ميغابايت)",
     "downloading": "جارٍ تنزيل نموذج الكلام: {percent}%",
     "downloadFailed": "تعذّر تنزيل نموذج الكلام.",
-    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, CC BY 4.0.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "يستخدم تطبيق آخر {shortcut}.",
     "failure": {
       "accessibility": "اسمح بالوصول إلى إمكانية الوصول حتى تتمكن stella من الكتابة في التطبيقات الأخرى.",

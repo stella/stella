@@ -502,7 +502,7 @@
     "download": "Descargar ({size} MB)",
     "downloading": "Descargando el modelo de voz: {percent} %",
     "downloadFailed": "No se pudo descargar el modelo de voz.",
-    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, CC BY 4.0.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "Otra aplicación está usando {shortcut}.",
     "failure": {
       "accessibility": "Permite el acceso a Accesibilidad para que stella pueda escribir en otras aplicaciones.",

@@ -502,7 +502,7 @@
     "download": "Laadi alla ({size} MB)",
     "downloading": "Kõnemudeli allalaadimine: {percent}%",
     "downloadFailed": "Kõnemudelit ei saanud alla laadida.",
-    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, CC BY 4.0.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "{shortcut} on teise rakenduse kasutuses.",
     "failure": {
       "accessibility": "Lubage hõlbustusfunktsioonide juurdepääs, et stella saaks teistesse rakendustesse kirjutada.",

@@ -502,7 +502,7 @@
     "download": "Lejupielādēt ({size} MB)",
     "downloading": "Lejupielādē runas modeli: {percent}%",
     "downloadFailed": "Runas modeli neizdevās lejupielādēt.",
-    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, CC BY 4.0.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "{shortcut} izmanto cita lietotne.",
     "failure": {
       "accessibility": "Atļaujiet piekļuvi pieejamībai, lai stella varētu rakstīt citās lietotnēs.",
