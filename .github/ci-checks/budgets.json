@@ -131,11 +131,9 @@
       "p99Seconds": 2,
       "peakRssMiB": 203
     },
-    "Instruction references": {
-      "minutes": 5,
-      "samples": 19,
-      "p95Seconds": 0,
-      "p99Seconds": 0,
+    "Instruction policy": {
+      "minutes": 30,
+      "samples": 0,
       "peakRssMiB": 59
     },
     "Knip production dependency checks": {

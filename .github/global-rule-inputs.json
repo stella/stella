@@ -69,6 +69,8 @@
     "scripts/check-docker-host-mounts.ts",
     "scripts/check-gh-retry.test.ts",
     "scripts/check-gh-retry.ts",
+    "scripts/check-instruction-enforcement.test.ts",
+    "scripts/check-instruction-enforcement.ts",
     "scripts/check-instruction-references.ts",
     "scripts/check-journeys.test.ts",
     "scripts/check-local-skill-overrides.sh",

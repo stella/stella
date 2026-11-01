@@ -1,0 +1,107 @@
+{
+  "reviewOnlyRules": 170,
+  "excludedSources": [
+    {
+      "file": ".ai/local-skills/dev/SKILL.md",
+      "reason": "Operating manual for the local stack: commands and their flags, not standing rules."
+    },
+    {
+      "file": ".ai/local-skills/product-deep-think/SKILL.md",
+      "reason": "A thinking procedure for product questions; its items are prompts, not code rules."
+    },
+    {
+      "file": ".ai/local-skills/security-audit/SKILL.md",
+      "reason": "An audit procedure; its items are what a reviewer inspects, so each one is a review step by construction."
+    },
+    {
+      "file": ".ai/local-skills/test-mobile/SKILL.md",
+      "reason": "Operating manual for driving the mobile app against the local stack: setup and sign-in steps, not standing rules."
+    },
+    {
+      "file": ".ai/local-skills/update-deps/SKILL.md",
+      "reason": "A dependency update procedure; its items are steps, not standing rules."
+    },
+    {
+      "file": ".ai/local/case-law-agents.md",
+      "reason": "Its rules are numbered headings with prose bodies (\"### 3. Always save sourceRaw\"); its list items are examples and checklists under them. Tagging it needs a heading-level rule grammar."
+    },
+    {
+      "file": ".ai/shared/modules/database.md",
+      "reason": "Shared module consumed by several repositories; what enforces a rule differs per consumer, so stella's tags live in its local fragments."
+    },
+    {
+      "file": ".ai/shared/modules/engineering.md",
+      "reason": "Shared module consumed by several repositories; what enforces a rule differs per consumer, so stella's tags live in its local fragments."
+    },
+    {
+      "file": ".ai/shared/modules/error-handling.md",
+      "reason": "Shared module consumed by several repositories; what enforces a rule differs per consumer, so stella's tags live in its local fragments."
+    },
+    {
+      "file": ".ai/shared/modules/frontend.md",
+      "reason": "Shared module consumed by several repositories; what enforces a rule differs per consumer, so stella's tags live in its local fragments."
+    },
+    {
+      "file": ".ai/shared/modules/react.md",
+      "reason": "Shared module consumed by several repositories; what enforces a rule differs per consumer, so stella's tags live in its local fragments."
+    },
+    {
+      "file": ".ai/shared/modules/stella-public-repo.md",
+      "reason": "Shared module consumed by several repositories; what enforces a rule differs per consumer, so stella's tags live in its local fragments."
+    },
+    {
+      "file": ".ai/shared/modules/stella-web.md",
+      "reason": "Shared module consumed by several repositories; what enforces a rule differs per consumer, so stella's tags live in its local fragments."
+    },
+    {
+      "file": ".ai/shared/modules/tanstack-react.md",
+      "reason": "Shared module consumed by several repositories; what enforces a rule differs per consumer, so stella's tags live in its local fragments."
+    },
+    {
+      "file": ".ai/shared/modules/typescript.md",
+      "reason": "Shared module consumed by several repositories; what enforces a rule differs per consumer, so stella's tags live in its local fragments."
+    }
+  ],
+  "excludedSections": [
+    {
+      "file": ".ai/local/agents.md",
+      "heading": "Finding Things",
+      "reason": "Pointers to lookup tools (schema index, ownership table, lint catalogue), not rules."
+    },
+    {
+      "file": ".ai/local-skills/conventions-ai/SKILL.md",
+      "heading": "Review checklist",
+      "reason": "A pre-finish recap of the tagged rules above it; each item restates one of them."
+    },
+    {
+      "file": ".ai/local-skills/conventions-ingestion/SKILL.md",
+      "heading": "Existing References",
+      "reason": "Pointers to example implementations, not rules."
+    },
+    {
+      "file": ".ai/local-skills/conventions-mcp/SKILL.md",
+      "heading": "Existing References",
+      "reason": "Pointers to example implementations, not rules."
+    },
+    {
+      "file": ".ai/local-skills/conventions-perf/SKILL.md",
+      "heading": "Overview",
+      "reason": "A catalogue of the performance guards themselves, each named with its script or rule; it states what exists, not what to do."
+    },
+    {
+      "file": ".ai/local-skills/conventions-perf/SKILL.md",
+      "heading": "Cross-Links",
+      "reason": "Pointers to related skills, not rules."
+    },
+    {
+      "file": ".ai/local-skills/conventions-scale/SKILL.md",
+      "heading": "Evidence Before Exceptions",
+      "reason": "Pointers to live measurements to read before accepting a limitation, not rules."
+    },
+    {
+      "file": ".ai/local-skills/conventions-ux/SKILL.md",
+      "heading": "Look at the Render",
+      "reason": "The ordered passes of a screenshot review; each step is the review itself."
+    }
+  ]
+}

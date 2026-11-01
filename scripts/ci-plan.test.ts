@@ -6807,7 +6807,7 @@ test("documentation guards run independently of package checks", () => {
   for (const name of [
     "Install dependencies",
     "Documentation source policy rule",
-    "Instruction references",
+    "Instruction policy",
   ]) {
     const step = steps.find((entry) => entry.name === name);
     expect(step?.if).not.toContain("package_checks_required");
