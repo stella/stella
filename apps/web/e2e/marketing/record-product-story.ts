@@ -102,7 +102,7 @@ type MarketingViewRoutes = {
   files: string;
   table: string;
   // Filesystem view of the Meridian workspace (MERIDIAN_WORKSPACE_ID): the
-  // template-fill scene's "Add" menu (New document from template) only
+  // template-fill scene's "Add" menu (New DOCX document from template) only
   // lives there, not in the Table view's upload-only bottom row.
   templateFillFiles: string;
 };
@@ -350,7 +350,7 @@ const waitForPassageHighlight = async (
 };
 
 // ─── Template-fill scene: AI-assisted prefill from a matter's documents ──
-// "New document from template" inside the Meridian workspace, filling the
+// "New DOCX document from template" inside the Meridian workspace, filling the
 // seeded Supply Agreement (tmpl-supply, seed-templates.ts) from that same
 // matter's own Supplier_Agreement.docx via the "Prefill from documents"
 // panel — the templates product page's H1 ("let AI fill them in") claim,
@@ -366,7 +366,7 @@ const TEMPLATE_FILL_CUSTOMER_NAME_SELECTOR = 'textarea[name="customerName"]';
 const TEMPLATE_FILL_EXPECTED_CUSTOMER_NAME = "Northstar Robotics, Inc.";
 
 // Opens the dialog fresh: "Add" (the file tree's own add menu, not the
-// Table view's upload-only bottom row) -> "New document from template" ->
+// Table view's upload-only bottom row) -> "New DOCX document from template" ->
 // the seeded Supply Agreement. NewDocumentFromTemplateDialog only mounts its
 // body while open, so every open starts at a pristine template picker.
 // Three elements answer to the accessible name "Add" on this view: the view
@@ -387,7 +387,7 @@ const openTemplateFillDialog = async (page: Page) => {
   await clickWithCursor(page, templateFillAddButton(page));
   await clickWithCursor(
     page,
-    page.getByRole("menuitem", { name: "New document from template" }),
+    page.getByRole("menuitem", { name: "New DOCX document from template" }),
   );
   // Not `exact: true`: the row's accessible name concatenates the template
   // name with its (unhidden) field-count span, e.g. "Supply Agreement 16
@@ -425,13 +425,13 @@ const runTemplateFillPrefill = async (page: Page) => {
   });
   await sourceCheckbox.scrollIntoViewIfNeeded();
   await clickWithCursor(page, sourceCheckbox);
-  await clickWithCursor(
-    page,
-    page.getByRole("button", {
-      name: TEMPLATE_FILL_PREFILL_RUN_LABEL,
-      exact: true,
-    }),
-  );
+  // The run button can sit below the dialog's fold.
+  const runButton = page.getByRole("button", {
+    name: TEMPLATE_FILL_PREFILL_RUN_LABEL,
+    exact: true,
+  });
+  await runButton.scrollIntoViewIfNeeded();
+  await clickWithCursor(page, runButton);
 };
 
 // Painted-value predicate: the Customer Name field (a plain `<textarea
