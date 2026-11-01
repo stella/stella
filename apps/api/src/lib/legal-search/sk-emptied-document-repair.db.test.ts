@@ -7,6 +7,7 @@
  * or tightens any one condition fails here. A requeued decision must be one
  * the walk hands out again, and a second run must find nothing left to do.
  */
+import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 
@@ -380,7 +381,7 @@ test("a rejected row is quarantined without rolling back its healthy batch sibli
     CHECK (id <> ${poison} OR fulltext IS NOT NULL)`.inlineParams(),
   );
   const batches: number[] = [];
-  const result = await requeueEmptiedDocuments({
+  const requeue = requeueEmptiedDocuments({
     scopedDb,
     sourceId,
     since: SINCE,
@@ -388,12 +389,13 @@ test("a rejected row is quarantined without rolling back its healthy batch sibli
     onBatch: async (outcomes) => {
       batches.push(outcomes.length);
     },
-  }).finally(async () => {
-    await testDb.execute(
-      sql`ALTER TABLE case_law_decisions DROP CONSTRAINT reject_empty_requeue`,
-    );
   });
-  expect(result.unwrap()).toEqual(
+  // The constraint is dropped whatever the requeue does.
+  const result = await Result.tryPromise(async () => await requeue);
+  await testDb.execute(
+    sql`ALTER TABLE case_law_decisions DROP CONSTRAINT reject_empty_requeue`,
+  );
+  expect(result.unwrap().unwrap()).toEqual(
     ids.map((decisionId) => ({
       decisionId,
       outcome:
