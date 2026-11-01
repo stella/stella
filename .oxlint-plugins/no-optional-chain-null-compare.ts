@@ -12,6 +12,12 @@
 // Say which question is meant:
 //   the object exists and the value is set    x !== undefined && x.y !== null
 //   absent and null mean the same             (x?.y ?? null) !== null
+//   the object exists and the value is unset  x !== undefined && x.y === undefined
+//   absent and unset mean the same            x?.y !== undefined, branches swapped,
+//                                             or an early return for an absent x
+//
+// `x === undefined || x.y === undefined` would say the last one too, but
+// prefer-optional-chain folds it back into `x?.y === undefined`.
 //
 // Flagged by no-optional-chain-null-compare:
 //   if (log?.closedAt !== null) {}
@@ -75,11 +81,23 @@ export const chainComparisonOwner = (
 
 type OwnedRule = Exclude<ChainComparisonOwner, "prefer-optional-chain">;
 
-const MESSAGE =
-  "An optional chain is `undefined` when it short-circuits, and this " +
-  "comparison is true for `undefined`, so an absent object reads as a match. " +
-  "Narrow the object first (`x !== undefined && x.y !== null`) or fold " +
-  "absence in explicitly (`(x?.y ?? null) !== null`).";
+const afterShortCircuit = (advice: string): string =>
+  `An optional chain is \`undefined\` when it short-circuits, and this comparison is true for \`undefined\`, so an absent object reads as a match. ${advice}`;
+
+const MESSAGES = {
+  "no-optional-chain-null-compare": afterShortCircuit(
+    "Narrow the object first (`x !== undefined && x.y !== null`) or fold " +
+      "absence in explicitly (`(x?.y ?? null) !== null`).",
+  ),
+  // `x === undefined || x.y === undefined` is not offered: prefer-optional-chain
+  // folds it back into the chain this rule reports.
+  "no-optional-chain-absent-match": afterShortCircuit(
+    "Write the absent case explicitly: flip to `x?.y !== undefined` with the " +
+      "branches swapped, or return early when the object is absent. Use " +
+      "`x !== undefined && x.y === undefined` when an absent object must not " +
+      "count.",
+  ),
+} satisfies Record<OwnedRule, string>;
 
 const nullishLiteral = (
   node: ESTree.Expression | ESTree.PrivateIdentifier,
@@ -110,7 +128,7 @@ const comparisonOperator = (
 const ownedComparisonRule = (rule: OwnedRule): CreateOnceRule => ({
   meta: {
     type: "problem",
-    messages: { absentAsMatch: MESSAGE },
+    messages: { absentAsMatch: MESSAGES[rule] },
   },
   createOnce(context) {
     return {
