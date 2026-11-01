@@ -428,6 +428,7 @@ const activateStagedEdition = async ({
       .update(sanctionsEditions)
       .set({ state: "ready", activatedAt: now })
       .where(eq(sanctionsEditions.id, editionId));
+    // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- supersedes every other staging edition of the source, including one staged after the lock; the locked edition is the one activated
     await tx
       .update(sanctionsEditions)
       .set({

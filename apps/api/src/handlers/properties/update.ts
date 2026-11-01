@@ -559,6 +559,7 @@ const updateProperty = createSafeHandler(
 
           if (staleIds.size > 0) {
             promises.push(
+              // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- the dependents are other properties, chosen from the workspace under lockWorkspacePropertyWrites, not the property locked above
               tx
                 .update(properties)
                 .set({ status: "stale" })

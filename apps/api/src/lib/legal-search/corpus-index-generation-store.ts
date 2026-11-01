@@ -328,6 +328,7 @@ export const setServingCorpusIndexGenerationTx = async (
   // A whole generation holds every jurisdiction itself, so no jurisdiction is
   // served by another generation once it serves.
   await clearJurisdictionServingTx(tx, target.family);
+  // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- retires whichever generation serves the family; callers hold the family's activation lock, which serializes every generation status change
   await tx
     .update(corpusIndexGenerations)
     .set({ status: "retiring", updatedAt: sql`clock_timestamp()` })
@@ -342,8 +343,8 @@ export const setServingCorpusIndexGenerationTx = async (
     .set({ status: "serving", updatedAt: sql`clock_timestamp()` })
     .where(
       and(
-        eq(corpusIndexGenerations.family, target.family),
-        eq(corpusIndexGenerations.generation, target.generation),
+        eq(corpusIndexGenerations.family, targetRow.family),
+        eq(corpusIndexGenerations.generation, targetRow.generation),
       ),
     )
     .returning();

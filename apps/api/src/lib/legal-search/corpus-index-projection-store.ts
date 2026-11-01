@@ -797,6 +797,7 @@ export const startCorpusProjectionAppendBatchTx = async (
     .returning({ id: corpusIndexProjectionIntents.id });
   const startedIds = new Set(started.map(({ id }) => id));
   if (started.length > 0 && started.length !== leases.length) {
+    // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- updates the rows the guarded transition above returned, a subset of the leased intents locked above
     await tx
       .update(corpusIndexProjectionIntents)
       .set({ appendRequestRevisionCount: started.length })
@@ -1366,6 +1367,7 @@ export const commitCorpusProjectionAppendTx = async (
       updatedAt: transitionAt,
     })
     .where(eq(corpusIndexProjectionIntents.id, intent.id));
+  // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- names the state row locked above by the intent's own (family, generation, entity) key, and the desired-state guards make it a compare-and-set on that row
   const applied = await tx
     .update(corpusIndexProjectionStates)
     .set({

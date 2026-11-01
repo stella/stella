@@ -151,7 +151,8 @@ const updateRateTable = createSafeHandler(
         }
 
         const previousDefaults = body.isDefault
-          ? await tx
+          ? // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- clears whichever table is the workspace default; the workspace advisory lock above serializes rate table writes
+            await tx
               .update(rateTables)
               .set({ isDefault: false, updatedAt: new Date() })
               .where(
