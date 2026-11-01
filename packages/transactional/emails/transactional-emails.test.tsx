@@ -268,10 +268,10 @@ describe("invoice link email", () => {
     ...overrides,
   });
 
-  test("every locale and document type renders the link, number and firm", async () => {
+  test("every locale and document type renders the link, number and firm", () => {
     for (const lang of LOCALES) {
       for (const documentType of DOCUMENT_TYPES) {
-        const html = await render(
+        const html = renderHtml(
           <InvoiceLink.Email {...props({ lang, documentType })} />,
         );
         expect(html, `${lang} ${documentType}`).toContain(`href="${LINK}"`);
@@ -308,22 +308,34 @@ describe("invoice link email", () => {
     ).toBe("Advance invoice Z-1 from Firm");
   });
 
-  test("omits the amount and due date when nothing is due", async () => {
-    const html = await render(
+  test("omits the amount and due date when nothing is due", () => {
+    const html = renderHtml(
       <InvoiceLink.Email {...props({ amountDue: null, dueDate: null })} />,
     );
     expect(html).not.toContain("Amount due");
     expect(html).not.toContain("Due date");
   });
 
-  test("escapes the firm name and the sender's message", async () => {
+  test("escapes the firm name and the sender's message", () => {
     const INJECTION = "<script>alert('xss')</script>";
-    const html = await render(
+    const html = renderHtml(
       <InvoiceLink.Email
         {...props({ firmName: INJECTION, message: INJECTION })}
       />,
     );
     expect(html).not.toContain(INJECTION);
     expect(html).toContain("&lt;script&gt;");
+  });
+
+  test("the text part carries the amount, the sender's note and the link", () => {
+    const { text } = renderEmail(
+      <InvoiceLink.Email
+        {...props({ message: "Please pay by Friday.\nThank you." })}
+      />,
+    );
+    expect(text).toContain("EUR 1,250.00");
+    expect(text).toContain("Please pay by Friday.");
+    expect(text).toContain("Thank you.");
+    expect(text).toContain(LINK);
   });
 });

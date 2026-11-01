@@ -1,16 +1,13 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Hr,
-  Html,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
-
+import { Body } from "../components/body";
+import { Button } from "../components/button";
+import { Container } from "../components/container";
+import { Head } from "../components/head";
+import { Heading } from "../components/heading";
+import { Hr } from "../components/hr";
+import { Html } from "../components/html";
+import { Preview } from "../components/preview";
+import { Section } from "../components/section";
+import { Text } from "../components/text";
 import { getEmailDirection, getTranslator } from "../i18n/translate";
 import type { SupportedLang } from "../i18n/translate";
 import { brand, BRAND_FOOTER_TEXT, sharedStyles } from "./_shared";
@@ -64,25 +61,25 @@ export const Email = ({
             {t("invoiceLink.body", document)}
           </Text>
           {amountDue === null ? null : (
-            <Text style={styles["detail"]}>
+            <Text style={styles.detail}>
               {t("invoiceLink.amountDue", { amount: amountDue })}
             </Text>
           )}
           {dueDate === null ? null : (
-            <Text style={styles["detail"]}>
+            <Text style={styles.detail}>
               {t("invoiceLink.dueDate", { date: dueDate })}
             </Text>
           )}
           {message === null ? null : (
-            <Section style={styles["message"]}>
-              <Text style={styles["messageHeading"]}>
+            <Section style={styles.message}>
+              <Text style={styles.messageHeading}>
                 {t("invoiceLink.messageFrom", { firmName })}
               </Text>
-              <Text style={styles["messageText"]}>{message}</Text>
+              <Text style={styles.messageText}>{message}</Text>
             </Section>
           )}
-          <Section style={styles["buttonSection"]}>
-            <Button href={link} style={styles["button"]}>
+          <Section style={styles.buttonSection}>
+            <Button href={link} style={styles.button}>
               {t("invoiceLink.action", { documentType })}
             </Button>
           </Section>
@@ -103,19 +100,7 @@ export const Email = ({
   );
 };
 
-Email.PreviewProps = {
-  lang: "en",
-  documentType: "invoice",
-  invoiceNumber: "2026-0042",
-  firmName: "Example Law Office",
-  amountDue: "EUR 1,250.00",
-  dueDate: "14 November 2026",
-  expiresOn: "26 December 2026",
-  message: "Please find our invoice for October.",
-  link: "http://localhost:3000/invoice-link#0000000000000000000000000000000000000000000000000000000000000000",
-} satisfies InvoiceLinkEmailProps;
-
-const styles: Record<string, React.CSSProperties> = {
+const styles = {
   detail: {
     margin: "0 0 8px",
     color: brand.textPrimary,
@@ -155,4 +140,4 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "12px 24px",
     textDecoration: "none",
   },
-};
+} satisfies Record<string, React.CSSProperties>;

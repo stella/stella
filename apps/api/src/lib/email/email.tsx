@@ -349,11 +349,7 @@ export const sendInvoiceLinkEmail = async ({
   replyTo,
   ...props
 }: SendInvoiceLinkEmailOptions) => {
-  const node = <InvoiceLink.Email {...props} />;
-  const [html, text] = await Promise.all([
-    render(node),
-    render(node, { plainText: true }),
-  ]);
+  const { html, text } = renderEmail(<InvoiceLink.Email {...props} />);
   await getTransport().send({
     from: getTransactionalEmailFrom(),
     to,
