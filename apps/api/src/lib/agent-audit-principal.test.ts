@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 
 import type { rootDb } from "@/api/db/root";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 let registrationRows: { id: string }[] = [];
@@ -15,9 +16,11 @@ const queryBuilder = {
   limit: async () => registrationRows,
   where: () => queryBuilder,
 };
-const database = asTestRaw<Pick<typeof rootDb, "select">>({
-  select: selectMock,
-});
+const database = ownerDatabaseDouble(
+  asTestRaw<Pick<typeof rootDb, "select">>({
+    select: selectMock,
+  }),
+);
 
 const { resolveAgentAuditExecution } = await import("./agent-audit-principal");
 

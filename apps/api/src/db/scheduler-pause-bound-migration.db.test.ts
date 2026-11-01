@@ -6,6 +6,7 @@ import nodePath from "node:path";
 
 import { boundSchedulerPauses } from "@/api/lib/scheduler/jobs";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 /**
@@ -125,7 +126,9 @@ test("the migration changes no row; the boot bound ends overlong pauses at the m
     });
 
     const bounded = await boundSchedulerPauses(
-      asTestRaw<SchedulerDb>(drizzle({ client: database })),
+      ownerDatabaseDouble(
+        asTestRaw<SchedulerDb>(drizzle({ client: database })),
+      ),
     );
     expect(bounded.toSorted()).toEqual(["job.infinite", "job.long"]);
 
@@ -162,7 +165,9 @@ test("the migration changes no row; the boot bound ends overlong pauses at the m
     // A second boot finds nothing left to bound.
     expect(
       await boundSchedulerPauses(
-        asTestRaw<SchedulerDb>(drizzle({ client: database })),
+        ownerDatabaseDouble(
+          asTestRaw<SchedulerDb>(drizzle({ client: database })),
+        ),
       ),
     ).toEqual([]);
 

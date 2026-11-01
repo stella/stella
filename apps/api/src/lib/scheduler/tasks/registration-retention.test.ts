@@ -28,6 +28,7 @@ import {
   sweepRegistrations,
 } from "@/api/lib/scheduler/tasks/registration-retention";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -98,30 +99,32 @@ const addRegistration = async (
 };
 const sweep = async (activityClientId?: string) =>
   await sweepRegistrations({
-    db: asTestRaw<SchedulerDb>({
-      transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
-        await db.transaction(
-          async (tx) =>
-            await callback({
-              execute: async (query: SQL) => {
-                const rows = (await tx.execute(query)).rows;
-                if (
-                  activityClientId !== undefined &&
-                  new PgDialect()
-                    .sqlToQuery(query)
-                    .sql.includes("FOR UPDATE OF c SKIP LOCKED")
-                ) {
-                  expect(rows).toHaveLength(1);
-                  await tx
-                    .update(oauthClient)
-                    .set({ updatedAt: NOW })
-                    .where(eq(oauthClient.clientId, activityClientId));
-                }
-                return rows;
-              },
-            }),
-        ),
-    }),
+    db: ownerDatabaseDouble(
+      asTestRaw<SchedulerDb>({
+        transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+          await db.transaction(
+            async (tx) =>
+              await callback({
+                execute: async (query: SQL) => {
+                  const rows = (await tx.execute(query)).rows;
+                  if (
+                    activityClientId !== undefined &&
+                    new PgDialect()
+                      .sqlToQuery(query)
+                      .sql.includes("FOR UPDATE OF c SKIP LOCKED")
+                  ) {
+                    expect(rows).toHaveLength(1);
+                    await tx
+                      .update(oauthClient)
+                      .set({ updatedAt: NOW })
+                      .where(eq(oauthClient.clientId, activityClientId));
+                  }
+                  return rows;
+                },
+              }),
+          ),
+      }),
+    ),
     now: NOW,
     retentionDays,
   });

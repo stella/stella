@@ -16,6 +16,7 @@ import { createUpdateGuideProgressHandler } from "@/api/handlers/me/update-guide
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { writeUserGuideProgress } from "@/api/lib/guide-progress";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -39,9 +40,11 @@ beforeAll(async () => {
     const result = await testDb.execute(query);
     return result.rows;
   };
-  const database = asTestRaw<Pick<typeof rootDb, "execute">>({
-    execute: executeRootQuery,
-  });
+  const database = ownerDatabaseDouble(
+    asTestRaw<Pick<typeof rootDb, "execute">>({
+      execute: executeRootQuery,
+    }),
+  );
   updateGuideProgress = createUpdateGuideProgressHandler(
     async (input) => await writeUserGuideProgress(database, input),
   );

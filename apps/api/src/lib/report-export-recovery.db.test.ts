@@ -19,6 +19,7 @@ import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { recoverStuckReportExports } from "@/api/lib/report-export-recovery";
 import type { StuckExportJobQueue } from "@/api/lib/report-export-recovery";
 import type { ViewLayout } from "@/api/lib/views-schema";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -88,7 +89,7 @@ const statusOf = async (exportId: SafeId<"reportExport">) => {
 
 const recover = async (queue: StuckExportJobQueue) => {
   const outcome = await recoverStuckReportExports({
-    db: asTestRaw<typeof rootDb>(testDb),
+    db: ownerDatabaseDouble(asTestRaw<typeof rootDb>(testDb)),
     queue,
   });
   if (Result.isError(outcome)) {

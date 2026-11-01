@@ -1,4 +1,5 @@
 import type { Transaction } from "@/api/db/root";
+import { ownerTransactionDouble } from "@/api/lib/db/aggregate-lock";
 import type { OwnerTransaction } from "@/api/lib/db/aggregate-lock";
 import { createOwnerDatabase } from "@/api/lib/db/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -9,8 +10,12 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
  * transaction only from `withOwnerAggregateTransaction` on a registered
  * owner connection.
  */
-export const asOwnerTransaction = (tx: object): OwnerTransaction<Transaction> =>
-  asTestRaw<OwnerTransaction<Transaction>>(tx);
+export const asOwnerTransaction = (
+  tx: object,
+): OwnerTransaction<Transaction> => {
+  ownerTransactionDouble(tx);
+  return asTestRaw<OwnerTransaction<Transaction>>(tx);
+};
 
 /**
  * A test database registered as an owner connection. Registration records

@@ -61,6 +61,7 @@ import {
   sanctionsSourceIds,
 } from "@/api/lib/lists/sanctions/source-config";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -90,11 +91,15 @@ const productionTransaction = (
   });
 };
 const productionSchedulerDb = () =>
-  asTestRaw<SchedulerDb>({
-    select: db.select.bind(db),
-    transaction: async (run: (tx: Transaction) => Promise<unknown>) =>
-      await db.transaction(async (tx) => await run(productionTransaction(tx))),
-  });
+  ownerDatabaseDouble(
+    asTestRaw<SchedulerDb>({
+      select: db.select.bind(db),
+      transaction: async (run: (tx: Transaction) => Promise<unknown>) =>
+        await db.transaction(
+          async (tx) => await run(productionTransaction(tx)),
+        ),
+    }),
+  );
 const scopedFor = (organizationId: typeof orgId): ScopedDb =>
   executeRowsScopedDb(
     async (run) =>

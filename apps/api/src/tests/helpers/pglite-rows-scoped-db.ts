@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type ExecuteOnlyTransaction = {
@@ -77,25 +78,27 @@ export const executeRowsSafeDb = (safeDb: unknown): SafeDb => {
 
 /** Adapt only transaction callbacks while preserving the database's query API. */
 export const executeRowsDatabase = (database: PgliteDatabase): typeof rootDb =>
-  asTestRaw<typeof rootDb>(
-    new Proxy(database, {
-      get: (target, property) => {
-        const value: unknown = Reflect.get(target, property, target);
-        if (property === "transaction" && isPgliteNestedTransaction(value)) {
-          return async (
-            run: (tx: Transaction) => Promise<unknown>,
-            config: unknown,
-          ): Promise<unknown> =>
-            await Reflect.apply(value, target, [
-              async (tx: ExecuteOnlyTransaction) =>
-                await run(adaptTransaction(tx)),
-              config,
-            ]);
-        }
-        return typeof value === "function"
-          ? (...args: readonly unknown[]): unknown =>
-              Reflect.apply(value, target, args)
-          : value;
-      },
-    }),
+  ownerDatabaseDouble(
+    asTestRaw<typeof rootDb>(
+      new Proxy(database, {
+        get: (target, property) => {
+          const value: unknown = Reflect.get(target, property, target);
+          if (property === "transaction" && isPgliteNestedTransaction(value)) {
+            return async (
+              run: (tx: Transaction) => Promise<unknown>,
+              config: unknown,
+            ): Promise<unknown> =>
+              await Reflect.apply(value, target, [
+                async (tx: ExecuteOnlyTransaction) =>
+                  await run(adaptTransaction(tx)),
+                config,
+              ]);
+          }
+          return typeof value === "function"
+            ? (...args: readonly unknown[]): unknown =>
+                Reflect.apply(value, target, args)
+            : value;
+        },
+      }),
+    ),
   );

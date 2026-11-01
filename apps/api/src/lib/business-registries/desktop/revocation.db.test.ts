@@ -9,6 +9,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
 import { revokeDesktopRegistryCredential } from "@/api/lib/business-registries/desktop/revocation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -32,7 +33,9 @@ beforeAll(async () => {
   db = await getTestDb();
   // SAFETY: PGlite and BunSQL differ in driver result types; this fixture
   // exercises only transactional update-returning and the audit insert.
-  revocationDb = asTestRaw<Pick<typeof rootDb, "transaction">>(db);
+  revocationDb = ownerDatabaseDouble(
+    asTestRaw<Pick<typeof rootDb, "transaction">>(db),
+  );
   await setupRlsTestData(db, ids);
 }, 120_000);
 afterAll(async () => await releaseTestDb());

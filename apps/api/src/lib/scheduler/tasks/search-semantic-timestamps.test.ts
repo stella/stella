@@ -5,6 +5,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { rootDb } from "@/api/db/root";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -31,7 +32,9 @@ const runRepair = async (
 ) =>
   await repairSearchSemanticTimestamps({
     ...options,
-    db: asTestRaw<Pick<typeof rootDb, "execute">>({ execute: executeMock }),
+    db: ownerDatabaseDouble(
+      asTestRaw<Pick<typeof rootDb, "execute">>({ execute: executeMock }),
+    ),
     indexEntity: upsertSearchDocumentMock,
   });
 

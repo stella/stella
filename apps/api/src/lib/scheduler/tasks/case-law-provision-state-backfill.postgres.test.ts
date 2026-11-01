@@ -29,6 +29,7 @@ import type {
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -250,7 +251,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
           schedule: { type: "interval", everyMs: 60_000 },
         });
         const result = await runSchedulerOnce({
-          db: asTestRaw<SchedulerDb>(schedulerDb),
+          db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(schedulerDb)),
           registry: new Map([["caseLaw.backfillProvisionState", task.task]]),
           runnerId: "provision-postgres-fixture",
           leaseMs: 180_000,

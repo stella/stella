@@ -53,6 +53,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -381,10 +382,13 @@ describe("personal key persistence and receipts", () => {
         const auth = betterAuth({
           secret: "personal-key-test-secret-at-least-32-characters",
           baseURL: "http://localhost:3001",
-          database: drizzleAdapter(asTestRaw<typeof rootDb>(db), {
-            provider: "pg",
-            schema: { account, apikey, session, user, verification },
-          }),
+          database: drizzleAdapter(
+            ownerDatabaseDouble(asTestRaw<typeof rootDb>(db)),
+            {
+              provider: "pg",
+              schema: { account, apikey, session, user, verification },
+            },
+          ),
           plugins: [apiKey([...API_KEY_PLUGIN_CONFIGS])],
         });
         const sessionReads = { count: 0 };

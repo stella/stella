@@ -45,6 +45,7 @@ import {
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import type { ViewLayout } from "@/api/lib/views-schema";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -190,7 +191,7 @@ const seedSchedulerJob = async () => {
 const runTask = async () => {
   const job = await seedSchedulerJob();
   return await task({
-    db: asTestRaw<SchedulerDb>(testDb),
+    db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(testDb)),
     dueAt: DueSlot.of(job),
     job,
     logger,
@@ -558,7 +559,7 @@ describe("queued report export reconciliation", () => {
       const job = await seedSchedulerJob();
 
       const status = await runJob({
-        db: asTestRaw<SchedulerDb>(testDb),
+        db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(testDb)),
         heartbeatIntervalMs: 60_000,
         job,
         leaseMs: 120_000,

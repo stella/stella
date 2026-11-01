@@ -32,6 +32,7 @@ import type {
 import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -135,7 +136,7 @@ if (!databaseUrl || !runPostgresTests) {
           );
           let continued = false;
           await backfillSanctionsMonitoringTask({
-            db: asTestRaw<SchedulerDb>(tx),
+            db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(tx)),
             signal: new AbortController().signal,
             logger,
             scheduleContinuation: () => {
@@ -165,7 +166,7 @@ if (!databaseUrl || !runPostgresTests) {
           await tx.execute(sql`SET LOCAL ROLE monitoring_role_regression`);
           await queueSanctionsMonitoringBackfills({
             runId: toSafeId<"schedulerJobRun">(Bun.randomUUIDv7()),
-            db: asTestRaw<SchedulerDb>(tx),
+            db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(tx)),
             now: new Date(),
           });
           expect(
@@ -211,7 +212,7 @@ if (!databaseUrl || !runPostgresTests) {
       const priorFanouts = await db.select().from(sanctionsEditionFanouts);
       const continued: Date[] = [];
       const context = (runId: typeof drainRunId, due: Date = drainDue) => ({
-        db: asTestRaw<SchedulerDb>(db),
+        db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(db)),
         signal: new AbortController().signal,
         logger,
         scheduleContinuation: (nextRunAt: Date) => {
@@ -441,7 +442,7 @@ if (!databaseUrl || !runPostgresTests) {
       let failedContactId: typeof contacts.$inferSelect.id | undefined;
       let healthyContactId: typeof contacts.$inferSelect.id | undefined;
       const taskContext = (at: Date, taskRunId = runId) => ({
-        db: asTestRaw<SchedulerDb>(db),
+        db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(db)),
         signal: new AbortController().signal,
         logger,
         scheduleContinuation: () => {},

@@ -25,6 +25,7 @@ import { logger } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import type { SchedulerDb, SchedulerJob } from "@/api/lib/scheduler/types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -144,7 +145,7 @@ describe("scheduled flow due day", () => {
     };
     setSystemTime(wallClock);
     await task({
-      db: asTestRaw<SchedulerDb>(testDb),
+      db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(testDb)),
       dueAt: DueSlot.of(job),
       job,
       logger,

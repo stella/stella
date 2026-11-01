@@ -41,6 +41,7 @@ import {
 } from "@/api/lib/style-set-package-cleanup-queue";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -220,7 +221,7 @@ const seedSchedulerJob = async () => {
 const runTask = async () => {
   const job = await seedSchedulerJob();
   return await task({
-    db: asTestRaw<SchedulerDb>(testDb),
+    db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(testDb)),
     dueAt: DueSlot.of(job),
     job,
     logger,
@@ -528,7 +529,7 @@ describe("pending style set package cleanup reconciliation", () => {
       const job = await seedSchedulerJob();
 
       const status = await runJob({
-        db: asTestRaw<SchedulerDb>(testDb),
+        db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(testDb)),
         heartbeatIntervalMs: 60_000,
         job,
         leaseMs: 120_000,

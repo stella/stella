@@ -36,6 +36,7 @@ import {
 } from "@/api/lib/db-query-counter";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { mintAuthProviderIdValue } from "@/api/tests/helpers/auth-provider-id";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -419,10 +420,13 @@ describe("session refresh credentials", () => {
     const auth = betterAuth({
       baseURL: "http://localhost:3001",
       secret: AUTH_SECRET,
-      database: drizzleAdapter(asTestRaw<typeof rootDb>(testDb), {
-        provider: "pg",
-        schema: { account, session, user, verification },
-      }),
+      database: drizzleAdapter(
+        ownerDatabaseDouble(asTestRaw<typeof rootDb>(testDb)),
+        {
+          provider: "pg",
+          schema: { account, session, user, verification },
+        },
+      ),
     });
     const context = await auth.$context;
     await context.internalAdapter.deleteSession(
@@ -529,10 +533,13 @@ const createHttpSession = async (cacheEnabled: boolean) => {
   const auth = betterAuth({
     baseURL: "http://localhost:3001",
     secret: AUTH_SECRET,
-    database: drizzleAdapter(asTestRaw<typeof rootDb>(fixtureDb), {
-      provider: "pg",
-      schema: { account, session, user, verification },
-    }),
+    database: drizzleAdapter(
+      ownerDatabaseDouble(asTestRaw<typeof rootDb>(fixtureDb)),
+      {
+        provider: "pg",
+        schema: { account, session, user, verification },
+      },
+    ),
     session: {
       additionalFields: SESSION_LIFETIME_FIELDS,
       expiresIn: 30 * 24 * 60 * 60,

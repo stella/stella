@@ -17,6 +17,7 @@ import {
   createDesktopEditHandoffToken,
   hashDesktopEditHandoffToken,
 } from "@/api/lib/desktop-edit-sessions";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -40,7 +41,9 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  db = asTestRaw<Pick<typeof rootDb, "update" | "select">>(testDb);
+  db = ownerDatabaseDouble(
+    asTestRaw<Pick<typeof rootDb, "update" | "select">>(testDb),
+  );
   await testDb.insert(workspaces).values({
     id: personalMatterId,
     organizationId: ids.orgA,
@@ -174,7 +177,9 @@ test("token failure acknowledgement is terminal, scoped and replay safe", async 
       kind: "desktop_edit",
       handoffToken,
       reason: DESKTOP_HANDOFF_FAILURE.updateRequired,
-      db: asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+      db: ownerDatabaseDouble(
+        asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+      ),
       now: REDEMPTION_TIME,
     });
   expect(await acknowledge(pending.handoffToken)).toBe(true);
@@ -226,7 +231,9 @@ test.each(["failure", "redemption"] as const)(
         kind: "desktop_edit",
         handoffToken,
         reason: DESKTOP_HANDOFF_FAILURE.accountRequired,
-        db: asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+        db: ownerDatabaseDouble(
+          asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+        ),
         now: REDEMPTION_TIME,
       });
     const redeem = async () =>

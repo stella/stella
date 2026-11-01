@@ -43,6 +43,7 @@ import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { runJob } from "@/api/lib/scheduler/runner";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -218,7 +219,7 @@ const runRepair = async (
     panic("expected the repair scheduler job row");
   }
   return await task({
-    db: asTestRaw<SchedulerDb>(testDb),
+    db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(testDb)),
     job,
     payload: job.payload,
     dueAt: DueSlot.of(job),
@@ -241,7 +242,7 @@ const runRepairInRunner = async (task = repairFileDerivatives) => {
     panic("expected the repair scheduler job row");
   }
   return await runJob({
-    db: asTestRaw<SchedulerDb>(testDb),
+    db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(testDb)),
     heartbeatIntervalMs: 60_000,
     job,
     leaseMs: 120_000,

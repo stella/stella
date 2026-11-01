@@ -12,6 +12,7 @@ import {
   desktopRegistryKeyConfig,
 } from "@/api/lib/business-registries/desktop/config";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -32,7 +33,7 @@ export const createRlsDesktopCredentials = async (
   });
   // SAFETY: both drivers execute the same Drizzle query and transaction APIs.
   const authorizers = createDesktopCredentialAuthorizers({
-    ownerDb: asTestRaw<typeof rootDb>(testDb),
+    ownerDb: ownerDatabaseDouble(asTestRaw<typeof rootDb>(testDb)),
     membershipDb: asTestRaw<typeof rlsDb>(testDb),
     verifyApiKey: () => auth.api.verifyApiKey,
     resolveMember: async (lookup) =>

@@ -36,6 +36,7 @@ import {
 } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -98,7 +99,7 @@ export const registerExpressionBackfillCases = ({
     const continuation = { requested: false };
     continuationAt = undefined;
     const outcome = await task({
-      db: asTestRaw<SchedulerDb>(db),
+      db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(db)),
       job,
       payload: job.payload,
       dueAt: DueSlot.of(job),
@@ -614,7 +615,7 @@ export const registerExpressionBackfillCases = ({
           try {
             expect(
               await runJob({
-                db: asTestRaw<SchedulerDb>(db),
+                db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(db)),
                 job,
                 heartbeatIntervalMs: 60_000,
                 leaseMs: 180_000,

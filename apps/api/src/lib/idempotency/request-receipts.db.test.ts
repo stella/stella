@@ -7,6 +7,7 @@ import { requestIdempotencyReceipts as receipts } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { scheduledMeasurementDatabase } from "@/api/tests/query-perf/scheduled-run";
 import {
@@ -82,7 +83,7 @@ test("state-specific retention drains bounded mixed expiry batches and leaves th
   );
   const sweep = async () =>
     await sweepExpiredRequestReceipts({
-      db: asTestRaw<SchedulerDb>(testDb),
+      db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(testDb)),
       now,
       signal: new AbortController().signal,
       deadline: 100,
@@ -92,8 +93,10 @@ test("state-specific retention drains bounded mixed expiry batches and leaves th
     try: async () =>
       await testDb.transaction(async (tx) => {
         const deleted = await sweepExpiredRequestReceipts({
-          db: asTestRaw<SchedulerDb>(
-            scheduledMeasurementDatabase(asTestRaw<Transaction>(tx)),
+          db: ownerDatabaseDouble(
+            asTestRaw<SchedulerDb>(
+              scheduledMeasurementDatabase(asTestRaw<Transaction>(tx)),
+            ),
           ),
           now,
           signal: new AbortController().signal,

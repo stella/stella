@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { TransactionRollbackError } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { stella } from "@/api/db/rls";
+import type { Transaction } from "@/api/db/root";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -11,12 +15,14 @@ import {
 } from "@/api/tests/fixtures/aggregate-lock-order";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import type { AggregateName } from "./aggregate-lock";
+import type { AggregateName, OwnerTransaction } from "./aggregate-lock";
 import {
   AGGREGATE_LOCKS,
   withAggregateLock,
   withAggregateParentBatch,
+  withAggregateSavepoint,
 } from "./aggregate-lock";
 import roleCensus from "./role-privilege-census.json" with { type: "json" };
 
@@ -213,5 +219,60 @@ describe("aggregate row locks and the application role's grants", () => {
     // @ts-expect-error organization rows are owner-held; an application transaction is refused
     const refused = async () => await withAggregateLock(lock);
     expect(refused).toBeInstanceOf(Function);
+  });
+
+  test("a transaction cast to the owner type is refused before any statement", async () => {
+    const { tx, statements } = parentRecorder();
+    const cast = asTestRaw<OwnerTransaction<Transaction>>(tx);
+    const organizationId = mintAuthProviderId<"organization">();
+    expect(
+      await rejectionOf(
+        withAggregateLock({
+          aggregate: "organization",
+          id: organizationId,
+          mode: "update",
+          tx: cast,
+        }),
+      ),
+    ).toMatchObject({ message: expect.stringContaining("owner-held") });
+    expect(
+      await rejectionOf(
+        withAggregateParentBatch({
+          tx: cast,
+          organizationIds: [organizationId],
+          mode: "key share",
+        }),
+      ),
+    ).toMatchObject({ message: expect.stringContaining("owner-held") });
+    expect(statements).toEqual([]);
+  });
+
+  test("a savepoint of an owner transaction keeps the owner registration", async () => {
+    const statements: string[] = [];
+    const nested = {
+      rollback: () => {
+        throw new TransactionRollbackError();
+      },
+      execute: async (statement: SQL) => {
+        statements.push(new PgDialect().sqlToQuery(statement).sql);
+        return [];
+      },
+    };
+    const owner = asOwnerTransaction({
+      ...nested,
+      transaction: async (run: (savepoint: Transaction) => Promise<unknown>) =>
+        await run(asTestRaw<Transaction>({ ...nested })),
+    });
+    await withAggregateSavepoint(owner, async (savepoint) => {
+      await withAggregateLock({
+        aggregate: "organization",
+        id: mintAuthProviderId<"organization">(),
+        mode: "update",
+        tx: asTestRaw<OwnerTransaction<Transaction>>(savepoint),
+      });
+    });
+    expect(rowLockedTables(statements.map((sql) => ({ sql })))).toEqual([
+      "organization",
+    ]);
   });
 });

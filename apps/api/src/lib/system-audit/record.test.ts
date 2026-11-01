@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { systemAuditRuns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -18,13 +19,15 @@ const RUN_ID = toSafeId<"schedulerJobRun">(
 
 const recordingDb = () => {
   const inserts: { table: unknown; row: unknown }[] = [];
-  const db = asTestRaw<SchedulerDb>({
-    insert: (table: unknown) => ({
-      values: async (row: unknown) => {
-        inserts.push({ table, row });
-      },
+  const db = ownerDatabaseDouble(
+    asTestRaw<SchedulerDb>({
+      insert: (table: unknown) => ({
+        values: async (row: unknown) => {
+          inserts.push({ table, row });
+        },
+      }),
     }),
-  });
+  );
   return { db, inserts };
 };
 

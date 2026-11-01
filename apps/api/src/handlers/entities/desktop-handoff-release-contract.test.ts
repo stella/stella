@@ -38,6 +38,7 @@ import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -97,7 +98,9 @@ beforeAll(async () => {
             handoffToken,
             reason,
             now,
-            db: asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+            db: ownerDatabaseDouble(
+              asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+            ),
           });
         case "pdf_signing":
           return await recordPdfSigningHandoffFailure({
