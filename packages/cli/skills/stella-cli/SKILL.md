@@ -184,7 +184,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - via `--input` only: change
   - change: type="body": body:string; type="color": color:"yellow" | "green" | "sky" | "violet" | "red"; type="style": style:string; type="visibility": visibility:"private" | "shared". Example: `--input '{"change":{"type":"body","body":"x"}}'`
 - `stella audit-log list`
-  - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --from, --to
+  - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --performer (people|automations), --from, --to
 - `stella capability describe`
   - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
 - `stella capability list`
