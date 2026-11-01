@@ -15,7 +15,6 @@ import {
   withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
-import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import { shouldRequeueOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-automatic-request-state";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
@@ -95,7 +94,7 @@ export const requestAutomaticDocumentOcr = async ({
   workspaceId,
 }: {
   /** The extraction pipeline's owner connection. */
-  db: Pick<typeof rootDb, "transaction"> & OwnerDatabaseMarker;
+  db: Pick<typeof rootDb, "transaction">;
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
   fieldId: SafeId<"field">;

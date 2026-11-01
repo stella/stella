@@ -1,5 +1,3 @@
-import { panic } from "better-result";
-
 /**
  * PostgreSQL needs UPDATE on a table for every row-locking clause, and the
  * application role has none on some tables (the organization row, for one),
@@ -11,24 +9,15 @@ import { panic } from "better-result";
  * `aggregate-lock.ts` refuses any connection not registered here, and
  * owner-held locks accept only the transactions it opens.
  */
-const OWNER_DATABASE: unique symbol = Symbol("stella.ownerDatabase");
 const ownerDatabases = new WeakSet<object>();
-
-export type OwnerDatabaseMarker = { readonly [OWNER_DATABASE]: true };
-
-const isRegistered = <Database extends object>(
-  database: Database,
-): database is Database & OwnerDatabaseMarker => ownerDatabases.has(database);
 
 /** Register the owner connection `create` builds, at its construction site. */
 export const createOwnerDatabase = <Database extends object>(
   create: () => Database,
-): Database & OwnerDatabaseMarker => {
+): Database => {
   const database = create();
   ownerDatabases.add(database);
-  return isRegistered(database)
-    ? database
-    : panic("An owner connection must be registered when it is created");
+  return database;
 };
 
 /** Whether `database` was registered as an owner connection. */

@@ -12,7 +12,6 @@ import type { SearchProjectionKind } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import { errorTag } from "@/api/lib/errors/utils";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
@@ -76,8 +75,7 @@ type SearchProjectionRepairDb = Pick<
  * settlements, and every projection rebuild they trigger.
  */
 type SearchProjectionRepairDatabase = SearchProjectionRepairDb &
-  Pick<typeof rootDb, "query" | "transaction"> &
-  OwnerDatabaseMarker;
+  Pick<typeof rootDb, "query" | "transaction">;
 
 export type SearchProjectionRepairDeps = {
   db: SearchProjectionRepairDb;

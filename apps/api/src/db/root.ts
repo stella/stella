@@ -26,6 +26,7 @@ import {
   withAggregateTransaction,
   withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import type { OwnerTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -168,6 +169,15 @@ export const rlsDb = markRlsDatabase({
     fn: (tx: TransactionOf<typeof rawRlsDb>) => Promise<TResult>,
   ): Promise<TResult> => await rawRlsDb.transaction(fn),
 });
+
+/**
+ * An aggregate transaction on the root connection for owner-held row locks
+ * (the account, the organization): the confirmation-code flows take the
+ * account row before any session or organization scope exists.
+ */
+export const withRootOwnerTransaction = async <T>(
+  run: (tx: OwnerTransaction<Transaction>) => Promise<T>,
+): Promise<T> => await withOwnerAggregateTransaction(rootDb, run);
 
 /**
  * The scoped-transaction pool registered as an owner connection. Its

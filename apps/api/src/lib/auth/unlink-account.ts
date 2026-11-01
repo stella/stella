@@ -14,7 +14,6 @@ import {
 import type { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { lockAccountRow } from "@/api/lib/db/account-row";
 import { withOwnerAggregateTransaction } from "@/api/lib/db/aggregate-lock";
-import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const unlinkBody = v.object({
@@ -35,7 +34,7 @@ type UnlinkAccountOptions = {
 type UnlinkAccountDependencies = {
   database: {
     transaction: <T>(run: (tx: Transaction) => Promise<T>) => Promise<T>;
-  } & OwnerDatabaseMarker;
+  };
   verifyConfirmation: typeof verifyConfirmationOtp;
 };
 

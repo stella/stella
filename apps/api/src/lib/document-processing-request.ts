@@ -17,7 +17,6 @@ import {
   withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
-import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import {
   DOCUMENT_OCR_PROCESSOR_VERSION,
   DOCUMENT_PROCESSING_MAX_ATTEMPTS,
@@ -101,7 +100,7 @@ export type PersistedDocumentProcessingRun = {
 
 export type PersistManualOcrRunOptions = {
   /** The owner connection, from the manual OCR request door or a test. */
-  db: Pick<typeof rootDb, "transaction"> & OwnerDatabaseMarker;
+  db: Pick<typeof rootDb, "transaction">;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   source: ManualOcrSource;

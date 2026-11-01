@@ -56,7 +56,6 @@ import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isOwnerDatabase } from "@/api/lib/db/owner-transaction";
-import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { LIMITS } from "@/api/lib/limits";
@@ -453,7 +452,7 @@ export type OwnerTransaction<Tx extends object> = Tx & {
 
 export type OwnerTransactionDatabase<Tx extends object> = {
   transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
-} & OwnerDatabaseMarker;
+};
 
 // Transactions opened by withOwnerAggregateTransaction. The registry never
 // touches the transaction object; it only lets the type follow it.

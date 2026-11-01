@@ -4,7 +4,6 @@ import type { SQLWrapper } from "drizzle-orm";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { createOwnerDatabase } from "@/api/lib/db/owner-transaction";
-import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 
 /**
  * The door through which an operator script outside the case-law tables
@@ -34,7 +33,7 @@ export const openMaintenanceDb = ({
   readOnly,
 }: {
   readOnly: boolean;
-}): MaintenanceDb & OwnerDatabaseMarker => {
+}): MaintenanceDb => {
   const transaction = async <T>(fn: (tx: Transaction) => Promise<T>) =>
     await rootDb.transaction(async (tx) => {
       if (readOnly) {

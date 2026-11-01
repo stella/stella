@@ -17,7 +17,6 @@ import {
   withAggregateRowQuery,
   withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
-import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transition } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -30,8 +29,7 @@ import {
 } from "@/api/lib/pagination";
 
 export type AccountExportRow = typeof accountExports.$inferSelect;
-export type AccountExportDb = Pick<typeof rootDb, "transaction"> &
-  OwnerDatabaseMarker;
+export type AccountExportDb = Pick<typeof rootDb, "transaction">;
 export type AccountExportClaim = {
   id: string;
   userId: SafeId<"user">;

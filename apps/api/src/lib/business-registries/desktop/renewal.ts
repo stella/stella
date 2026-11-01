@@ -24,7 +24,6 @@ import {
   withAggregateLock,
   withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
-import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
@@ -53,7 +52,7 @@ type RenewDesktopCredentialOptions = {
   successorKey: string;
   consumedProof: ConsumedDesktopDeviceProof;
   recordAuditEvent: AuditRecorder;
-  db?: Pick<typeof rootDb, "transaction"> & OwnerDatabaseMarker;
+  db?: Pick<typeof rootDb, "transaction">;
   now?: Date;
 };
 

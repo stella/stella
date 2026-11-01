@@ -13,7 +13,6 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withOwnerAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
-import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { loadCurrentExtractedContentsForSearchIndex } from "@/api/lib/document-content-provenance";
@@ -505,7 +504,6 @@ export const upsertSearchDocument = async (
 };
 
 export type IndexEntityDependencies = {
-  database?: Pick<typeof rootDb, "query" | "select" | "transaction"> &
-    OwnerDatabaseMarker;
+  database?: Pick<typeof rootDb, "query" | "select" | "transaction">;
   syncActivity?: typeof syncWorkspaceSearchActivity;
 };
