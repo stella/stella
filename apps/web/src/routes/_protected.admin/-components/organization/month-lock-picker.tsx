@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import { Temporal } from "@stll/time";
 import { NumberInput } from "@stll/ui/number-input";
 import {
@@ -38,6 +39,7 @@ export const MonthLockPicker = ({
     value === "" ? String(previousMonth.year) : value.slice(0, 4),
   );
   const month = value === "" ? null : value.slice(-2);
+  const yearValue = parseDecimalToken(year).unwrapOr(null);
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
       <Select
@@ -70,8 +72,8 @@ export const MonthLockPicker = ({
             return (
               <SelectItem
                 disabled={
-                  Number(year) > previousMonth.year ||
-                  (Number(year) === previousMonth.year &&
+                  (yearValue ?? 0) > previousMonth.year ||
+                  ((yearValue ?? 0) === previousMonth.year &&
                     monthNumber > previousMonth.month)
                 }
                 key={monthValue}
@@ -106,7 +108,7 @@ export const MonthLockPicker = ({
         }}
         required={month !== null}
         step={1}
-        value={year === "" ? null : Number(year)}
+        value={yearValue}
       />
     </div>
   );

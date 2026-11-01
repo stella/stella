@@ -4,6 +4,7 @@ import { useForm, useSelector } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import { Temporal, todayFor } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
@@ -233,11 +234,7 @@ export const TimePolicyForm = ({ settings, canEdit }: TimePolicyFormProps) => {
                       field.handleChange(next === null ? "" : String(next))
                     }
                     step={1}
-                    value={
-                      field.state.value === ""
-                        ? null
-                        : Number(field.state.value)
-                    }
+                    value={parseDecimalToken(field.state.value).unwrapOr(null)}
                   />
                   <p
                     className="text-muted-foreground text-xs"
