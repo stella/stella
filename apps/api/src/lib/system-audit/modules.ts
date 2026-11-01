@@ -26,8 +26,8 @@ export const SYSTEM_AUDIT_MODULES = {
     "system:case-law-sitemap-refresh",
   "apps/api/src/lib/legal-search/statute-sitemap-shard-refresh.ts":
     "system:statute-sitemap-refresh",
-  "apps/api/src/lib/legal-search/pg-fts-browse-facet-refresh.ts":
-    "system:case-law-browse-facet-refresh",
+  "apps/api/src/lib/scheduler/tasks/case-law-population-fold.ts":
+    "system:case-law-population-fold",
   "apps/api/src/lib/legal-search/legislation-facet-refresh.ts":
     "system:legislation-facet-refresh",
   "apps/api/src/lib/case-law/source-arrivals-refresh.ts":

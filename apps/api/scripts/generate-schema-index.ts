@@ -347,6 +347,34 @@ type IndexSchemaSourceOptions = {
   source: string;
 };
 
+const findColumnFactories = (sourceFile: ts.SourceFile) => {
+  const columnFactories = new Map<string, ts.ObjectLiteralExpression>();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      const initializer = declaration.initializer;
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        initializer === undefined ||
+        !ts.isArrowFunction(initializer) ||
+        initializer.parameters.length !== 0
+      ) {
+        continue;
+      }
+      let body = initializer.body;
+      while (ts.isParenthesizedExpression(body)) {
+        body = body.expression;
+      }
+      if (ts.isObjectLiteralExpression(body)) {
+        columnFactories.set(declaration.name.text, body);
+      }
+    }
+  }
+  return columnFactories;
+};
+
 export const indexSchemaSource = ({
   fileName,
   source,
@@ -361,6 +389,23 @@ export const indexSchemaSource = ({
     sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line +
     1;
   const tables: IndexedTable[] = [];
+  const columnFactories = findColumnFactories(sourceFile);
+  const columnObject = (expression: ts.Expression | undefined) => {
+    if (expression === undefined) {
+      return undefined;
+    }
+    if (ts.isObjectLiteralExpression(expression)) {
+      return expression;
+    }
+    if (
+      ts.isCallExpression(expression) &&
+      expression.arguments.length === 0 &&
+      ts.isIdentifier(expression.expression)
+    ) {
+      return columnFactories.get(expression.expression.text);
+    }
+    return undefined;
+  };
   const declarations = sourceFile.statements.flatMap((statement) => {
     if (
       !ts.isVariableStatement(statement) ||
@@ -390,7 +435,7 @@ export const indexSchemaSource = ({
   >();
   for (const declaration of declarations) {
     const call = findTableCall(declaration.initializer);
-    const columnsArgument = call?.arguments.at(1);
+    const columnsArgument = columnObject(call?.arguments.at(1));
     if (
       call !== null &&
       columnsArgument !== undefined &&
@@ -407,7 +452,7 @@ export const indexSchemaSource = ({
     const viewCall = findViewCall(declaration.initializer);
     const call = tableCall ?? viewCall;
     const nameArgument = call?.arguments.at(0);
-    const ownColumnsArgument = tableCall?.arguments.at(1);
+    const ownColumnsArgument = columnObject(call?.arguments.at(1));
     const viewSource =
       viewCall === null ? null : findViewSource(declaration.initializer);
     const tableDefinition =
