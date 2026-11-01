@@ -17,6 +17,7 @@ import {
   runDocumentProcessingReconciliationPhases,
 } from "@/api/lib/document-processing-queue";
 import type { DocumentProcessingReconciliationDependencies } from "@/api/lib/document-processing-queue";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -67,7 +68,7 @@ beforeAll(async () => {
   await setupRlsTestData(testDb, ids);
   const dependencies = {
     broadcastWorkspaceResourceUpdated: () => undefined,
-    database: asTestRaw<typeof rootDb>(testDb),
+    database: ownerDatabaseDouble(asTestRaw<typeof rootDb>(testDb)),
     enqueueDocumentDeadlineScout: async () => undefined,
     enqueueDocumentProcessingRun: async () => undefined,
     indexEntity: async () => undefined,

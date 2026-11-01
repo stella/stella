@@ -19,6 +19,7 @@ import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
 import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
+import { scopeTransactionToAccount } from "@/api/lib/account-export/account-scope";
 import type { getAuth } from "@/api/lib/auth";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -31,7 +32,9 @@ import {
   withAggregateLock,
   withAggregateSavepoint,
   withAggregateTransaction,
+  withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import type { OwnerTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -47,6 +50,7 @@ import { readAuditedActivitySummary } from "@/api/lib/db/operator-activity/read"
 import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
 import { runWithOrganizationSlugUpdate } from "@/api/lib/db/organization-slug-update-scope";
+import { createOwnerDatabase } from "@/api/lib/db/owner-transaction";
 import { PARTNER_CLIENT_TYPE } from "@/api/lib/db/partner-client-contract";
 import {
   changePartnerOAuthClientInTransaction,
@@ -149,11 +153,13 @@ const rlsClient = runTransactionsInCallerContext(
  * for internal infrastructure such as workspace resolution and
  * Better Auth.
  */
-export const rootDb = createDatabase({
-  client: rootClient,
-  relations: databaseRelations,
-  logger: queryLogger,
-});
+export const rootDb = createOwnerDatabase(() =>
+  createDatabase({
+    client: rootClient,
+    relations: databaseRelations,
+    logger: queryLogger,
+  }),
+);
 
 const rawRlsDb = createDatabase({
   client: rlsClient,
@@ -175,6 +181,49 @@ export const rlsDb = markRlsDatabase({
     fn: (tx: TransactionOf<typeof rawRlsDb>) => Promise<TResult>,
   ): Promise<TResult> => await rawRlsDb.transaction(fn),
 });
+
+/**
+ * The confirmation-code owner transaction, for lib/confirmation-otp.ts only
+ * (scripts/ownership/root-connection-confirmation-code.ts): a code request
+ * and a confirmed operation take the account row before any session or
+ * organization scope exists.
+ */
+export const withConfirmationCodeOwnerTransaction = async <T>(
+  run: (tx: OwnerTransaction<Transaction>) => Promise<T>,
+): Promise<T> => await withOwnerAggregateTransaction(rootDb, run);
+
+// Each transaction of the scoped pool starts on the owner role, before its
+// role switch. Registered for the account export operation below; never
+// exported.
+const accountExportConnection = createOwnerDatabase(() => ({
+  transaction: rlsDb.transaction,
+}));
+
+type AccountExportScope = {
+  userId: SafeId<"user">;
+  /** Hold the account's erasure fence on the owner role first. */
+  fenceAccount: boolean;
+};
+
+/**
+ * An account export transaction, for lib/account-export/store.ts only
+ * (scripts/ownership/root-connection-account-export.ts). It optionally holds
+ * the account fence on the owner role, then switches to the application role
+ * scoped to `userId` before `run` sees the transaction.
+ */
+export const withAccountExportOwnerTransaction = async <T>(
+  { userId, fenceAccount }: AccountExportScope,
+  run: (tx: Transaction) => Promise<T>,
+): Promise<T> =>
+  await withOwnerAggregateTransaction(accountExportConnection, async (tx) => {
+    if (fenceAccount) {
+      // account-row reads this module; load it at call time.
+      const { lockActiveAccountRow } = await import("@/api/lib/db/account-row");
+      await lockActiveAccountRow(tx, userId);
+    }
+    await scopeTransactionToAccount(tx, userId);
+    return await run(tx);
+  });
 
 /**
  * The scoped-transaction connection with `before` run first in each
@@ -349,7 +398,7 @@ export const changeOrganizationSlug = async ({
 }: ChangeOrganizationSlugOptions) =>
   await Result.tryPromise({
     try: async () =>
-      await withAggregateTransaction(rootDb, async (tx) => {
+      await withOwnerAggregateTransaction(rootDb, async (tx) => {
         await withAggregateLock({
           tx,
           aggregate: "organization",

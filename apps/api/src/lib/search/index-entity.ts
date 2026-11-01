@@ -11,6 +11,7 @@ import type { LinkMetadata, searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withOwnerAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
@@ -366,7 +367,7 @@ export const upsertSearchDocument = async (
   const observedSource = doc.extractedContentSource;
   const hasObservedSource = observedSource !== null;
 
-  await database.transaction(async (tx) => {
+  await withOwnerAggregateTransaction(database, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [doc.organizationId],
       workspaceIds: [doc.workspaceId],

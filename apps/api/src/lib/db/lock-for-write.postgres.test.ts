@@ -9,6 +9,7 @@ import { workspaces } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
 
 import { withAggregateLock } from "./aggregate-lock";
 import { lockForWrite } from "./lock-for-write";
@@ -54,12 +55,14 @@ if (!databaseUrl || !enabled) {
             )})
             ORDER BY id COLLATE "en-x-icu"`);
           expect(localeRows.map((row) => row["id"])).not.toEqual(sorted);
-          const parents = await lockForWrite(tx, { organizationIds: ids });
+          const parents = await lockForWrite(asOwnerTransaction(tx), {
+            organizationIds: ids,
+          });
           expect([...parents.organizationIds]).toEqual(sorted);
           expect(
             await rejectionOf(
               withAggregateLock({
-                tx,
+                tx: asOwnerTransaction(tx),
                 aggregate: "organization",
                 id: toSafeId<"organization">(`Z_${suffix}`),
                 mode: "key share",
@@ -71,7 +74,7 @@ if (!databaseUrl || !enabled) {
           for (const id of sorted) {
             expect(
               await withAggregateLock({
-                tx,
+                tx: asOwnerTransaction(tx),
                 aggregate: "organization",
                 id,
                 mode: "key share",
@@ -131,7 +134,7 @@ if (!databaseUrl || !enabled) {
         const referenceStatements = [...statements];
         statements.length = 0;
         const delegated = await db.transaction(async (tx) => {
-          const parents = await lockForWrite(tx, {
+          const parents = await lockForWrite(asOwnerTransaction(tx), {
             organizationIds,
             workspaceIds,
           });
@@ -140,7 +143,7 @@ if (!databaseUrl || !enabled) {
           expect(
             await rejectionOf(
               withAggregateLock({
-                tx,
+                tx: asOwnerTransaction(tx),
                 aggregate: "organization",
                 id: missingOrganizationId,
                 mode: "key share",

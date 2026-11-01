@@ -7,6 +7,7 @@ import {
   organizationSettings,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { AggregateHolderTransaction } from "@/api/lib/db/aggregate-lock";
 import { moveKeylessOrganizationsToFree } from "@/api/lib/usage/organization-access-state";
 
 export const KEYLESS_ORGANIZATION_MOVE_OUTCOME = {
@@ -63,7 +64,7 @@ export const classifyKeylessOrganizationMoves = async (
 };
 
 export const applyKeylessOrganizationMoves = async (
-  db: Transaction,
+  db: AggregateHolderTransaction<"organization", Transaction>,
   options: Parameters<typeof moveKeylessOrganizationsToFree>[1],
 ): Promise<KeylessOrganizationMoveResult[]> =>
   (await moveKeylessOrganizationsToFree(db, options)).map((organizationId) => ({

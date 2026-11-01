@@ -13,7 +13,7 @@ import * as v from "valibot";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { withOwnerAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { endManualEntitlement } from "@/api/lib/usage/manual-entitlement";
@@ -44,7 +44,7 @@ await runScriptWithErrorOutput(async () => {
   });
   const input = v.parse(inputSchema, values);
   const db = openMaintenanceDb({ readOnly: false });
-  const result = await withAggregateTransaction(
+  const result = await withOwnerAggregateTransaction(
     db,
     async (tx) =>
       await endManualEntitlement(tx, {

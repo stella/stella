@@ -30,6 +30,7 @@ import {
   FileComparisonSweepError,
   sweepExpiredFileComparisonUploads,
 } from "@/api/lib/uploads/file-comparison/sweep";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -60,19 +61,21 @@ const {
 const recordingDb = (cause?: Error) => {
   const rows: unknown[] = [];
   const tables: unknown[] = [];
-  const db = asTestRaw<SchedulerDb>({
-    insert: (table: unknown) => {
-      tables.push(table);
-      return {
-        values: async (row: unknown) => {
-          if (cause) {
-            throw cause;
-          }
-          rows.push(row);
-        },
-      };
-    },
-  });
+  const db = ownerDatabaseDouble(
+    asTestRaw<SchedulerDb>({
+      insert: (table: unknown) => {
+        tables.push(table);
+        return {
+          values: async (row: unknown) => {
+            if (cause) {
+              throw cause;
+            }
+            rows.push(row);
+          },
+        };
+      },
+    }),
+  );
   return { db, rows, tables };
 };
 
@@ -197,7 +200,7 @@ const runInRunner = async (
     panic("Expected comparison sweep job");
   }
   return await runJob({
-    db: asTestRaw<SchedulerDb>(testDb),
+    db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(testDb)),
     heartbeatIntervalMs: 60_000,
     job,
     leaseMs: 120_000,

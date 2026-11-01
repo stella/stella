@@ -1,6 +1,7 @@
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateParentBatch } from "@/api/lib/db/aggregate-lock";
+import type { AggregateHolderTransaction } from "@/api/lib/db/aggregate-lock";
 
 /**
  * Write locks follow organization -> workspace -> entity -> child rows.
@@ -14,7 +15,7 @@ type LockForWriteOptions = {
 
 /** Only returned parents remain live; omit sources whose parents disappeared. */
 export const lockForWrite = async (
-  tx: Pick<Transaction, "execute">,
+  tx: AggregateHolderTransaction<"organization", Pick<Transaction, "execute">>,
   { organizationIds, workspaceIds = [] }: LockForWriteOptions,
 ) =>
   await withAggregateParentBatch({

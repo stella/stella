@@ -63,6 +63,7 @@ import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -83,7 +84,9 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  rawDb = asTestRaw<Pick<typeof rootDb, "transaction">>(testDb);
+  rawDb = ownerDatabaseDouble(
+    asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+  );
   scopedDbA = asTestRaw<ScopedDb>(
     createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
   );

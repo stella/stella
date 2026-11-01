@@ -33,6 +33,7 @@ import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/deskt
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
 import { lockAccountRow, shareAccountRow } from "@/api/lib/db/account-row";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import type { OwnerTransaction } from "@/api/lib/db/aggregate-lock";
 import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
 import { machineApiKeyOrganizationScope } from "@/api/lib/machine-api-key-scope";
 import {
@@ -642,7 +643,7 @@ export class CredentialIssuanceFence {
 
   /** The fence, or null when the issuing session is not live under it. */
   static async hold(
-    tx: Transaction,
+    tx: OwnerTransaction<Transaction>,
     { userId, sessionId }: HoldLiveSessionCredentialFenceOptions,
   ): Promise<CredentialIssuanceFence | null> {
     if (sessionId === null) {
@@ -663,7 +664,7 @@ export class CredentialIssuanceFence {
    * membership before the organization's tokens.
    */
   static async holdForGrant(
-    tx: Transaction,
+    tx: OwnerTransaction<Transaction>,
     {
       userId,
       sessionId,
@@ -752,7 +753,7 @@ const revokeAllUserPendingTwoFactorSignIns = async (
 
 /** Ends every session and durable credential an account holds before recovery. */
 export const revokeAllUserDurableCredentials = async (
-  tx: Transaction,
+  tx: OwnerTransaction<Transaction>,
   userId: SafeId<"user">,
 ): Promise<void> => {
   await lockAccountRow(tx, userId);

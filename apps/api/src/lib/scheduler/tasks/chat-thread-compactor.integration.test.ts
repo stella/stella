@@ -41,6 +41,7 @@ import type {
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
 import * as modelTransport from "@/api/lib/tanstack-ai-generate";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -204,7 +205,7 @@ const seedDueThread = async (
 const runCompactor = async (task: SchedulerTask = compactChatThreads) => {
   await task(
     asTestRaw<SchedulerTaskContext>({
-      db: asTestRaw<SchedulerDb>(testDb),
+      db: ownerDatabaseDouble(asTestRaw<SchedulerDb>(testDb)),
       logger,
       signal: new AbortController().signal,
     }),

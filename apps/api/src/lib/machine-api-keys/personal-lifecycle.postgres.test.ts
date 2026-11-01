@@ -33,6 +33,10 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import {
+  asOwnerTransaction,
+  ownerDatabaseDouble,
+} from "@/api/tests/helpers/owner-transaction";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const liveSessionRow = (userId: string) => ({
@@ -102,7 +106,7 @@ if (!databaseUrl || !runPostgres) {
               userId,
               sessionId,
               recordAuditEvent,
-              database,
+              database: ownerDatabaseDouble(database),
             });
           const seeded = [];
           for (let index = 0; index < 4; index += 1) {
@@ -250,7 +254,7 @@ if (!databaseUrl || !runPostgres) {
             sessionId: options.sessionId,
           },
           recordAuditEvent: racingAuditRecorder(options),
-          database: options.database,
+          database: ownerDatabaseDouble(options.database),
         }),
     } satisfies Record<
       string,
@@ -307,12 +311,15 @@ if (!databaseUrl || !runPostgres) {
               if (!resetWorker) {
                 panic("The reset session must exist");
               }
-              await revokeAllUserDurableCredentials(tx, userId);
+              await revokeAllUserDurableCredentials(
+                asOwnerTransaction(tx),
+                userId,
+              );
               pending = issue({
                 organizationId,
                 userId,
                 sessionId,
-                database: mintDb,
+                database: ownerDatabaseDouble(mintDb),
               });
               await waitForBlockedPid(observer, {
                 waitingPid: mintWorker.pid,
@@ -383,7 +390,7 @@ if (!databaseUrl || !runPostgres) {
             recordAuditEvent: async () => {
               throw new DatabaseError({ message: "Audit write failed" });
             },
-            database: db,
+            database: ownerDatabaseDouble(db),
           });
           expect(issued.isErr()).toBe(true);
           expect(

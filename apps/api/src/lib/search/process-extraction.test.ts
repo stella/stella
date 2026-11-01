@@ -7,7 +7,6 @@ import JSZip from "jszip";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { writeZipEntry } from "@stll/docx-utils";
 
-import type { rootDb } from "@/api/db/root";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -33,6 +32,7 @@ import type {
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -126,27 +126,33 @@ const enqueueUploadedMailMock = mock(
 const enqueueDocumentProcessingRunMock = mock(async () => undefined);
 const indexEntityMock = mock(async () => undefined);
 
-const database = asTestRaw<
-  NonNullable<ProcessExtractionDependencies["database"]>
->({
-  insert: insertMock,
-  query: {
-    entities: { findFirst: findFirstMock },
-    extractedContent: { findFirst: extractedContentFindFirstMock },
-  },
-  select: selectMock,
-  transaction: transactionMock,
-  update: updateMock,
-});
-const transactionDatabase = asTestRaw<Pick<typeof rootDb, "transaction">>({
-  transaction: transactionMock,
-});
+const database = ownerDatabaseDouble(
+  asTestRaw<NonNullable<ProcessExtractionDependencies["database"]>>({
+    insert: insertMock,
+    query: {
+      entities: { findFirst: findFirstMock },
+      extractedContent: { findFirst: extractedContentFindFirstMock },
+    },
+    select: selectMock,
+    transaction: transactionMock,
+    update: updateMock,
+  }),
+);
+const transactionDatabase = ownerDatabaseDouble(
+  asTestRaw<
+    Parameters<typeof persistNativeExtractionProjectionWithDatabase>[1]
+  >({
+    transaction: transactionMock,
+  }),
+);
 // The one connection an extraction is handed; every database-backed
 // collaborator must receive this object and no other.
-const extractionDatabase = asTestRaw<NativeExtractionDatabase>({
-  transaction: transactionMock,
-  update: updateMock,
-});
+const extractionDatabase = ownerDatabaseDouble(
+  asTestRaw<NativeExtractionDatabase>({
+    transaction: transactionMock,
+    update: updateMock,
+  }),
+);
 const recordLanguageMock = mock(
   async (
     ..._args: Parameters<ExecuteNativeExtractionDependencies["recordLanguage"]>

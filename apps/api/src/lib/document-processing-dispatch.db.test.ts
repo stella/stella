@@ -17,6 +17,7 @@ import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { createDispatchNativeExtractionTask } from "@/api/lib/scheduler/tasks/document-processing-native-extraction";
 import { createDispatchDocumentOcrTask } from "@/api/lib/scheduler/tasks/document-processing-ocr";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 import {
@@ -88,7 +89,7 @@ const reconciliationDependencies = (
 ) =>
   ({
     broadcastWorkspaceResourceUpdated: () => undefined,
-    database: asTestRaw<typeof rootDb>(db),
+    database: ownerDatabaseDouble(asTestRaw<typeof rootDb>(db)),
     enqueueDocumentDeadlineScout: async () => undefined,
     enqueueDocumentProcessingRun,
     indexEntity: async () => undefined,
@@ -101,7 +102,7 @@ const reconciliationDependencies = (
 
 const schedulerContext = (): SchedulerTaskContext =>
   asTestRaw<SchedulerTaskContext>({
-    db: asTestRaw<typeof rootDb>(db),
+    db: ownerDatabaseDouble(asTestRaw<typeof rootDb>(db)),
     dueAt: DueSlot.of({ nextRunAt: new Date() }),
     logger: { info: () => undefined },
     scheduleContinuation: () => undefined,

@@ -30,6 +30,7 @@ import {
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -161,7 +162,7 @@ if (!databaseUrl || !runPostgresTests) {
         });
         const retryPhase =
           createDocumentProcessingReconciliationPhases({
-            database: asTestRaw<typeof rootDb>(db),
+            database: ownerDatabaseDouble(asTestRaw<typeof rootDb>(db)),
             broadcastWorkspaceResourceUpdated: () => undefined,
             enqueueDocumentDeadlineScout: async () => undefined,
             enqueueDocumentProcessingRun: async () => undefined,
@@ -236,7 +237,7 @@ if (!databaseUrl || !runPostgresTests) {
         const { db } = openClient();
         const fixture = await seedFixture(db);
         const healthyFixture = await seedFixture(db);
-        const database = asTestRaw<typeof rootDb>(db);
+        const database = ownerDatabaseDouble(asTestRaw<typeof rootDb>(db));
         let now = new Date();
         try {
           const runId = await fixture.insertRun({
@@ -462,7 +463,7 @@ if (!databaseUrl || !runPostgresTests) {
           // so source cancellation cannot conceal an incorrect claim.
           const runId = await fixture.insertRun(run);
           await processDocumentProcessingRun(
-            asTestRaw<typeof rootDb>(db),
+            ownerDatabaseDouble(asTestRaw<typeof rootDb>(db)),
             runId,
             new AbortController().signal,
             {

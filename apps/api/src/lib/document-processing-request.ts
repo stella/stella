@@ -14,7 +14,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   withAggregateRowQuery,
-  withAggregateTransaction,
+  withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import {
@@ -116,7 +116,7 @@ export const persistManualOcrRun = async ({
   workspaceId,
   db,
 }: PersistManualOcrRunOptions): Promise<PersistedDocumentProcessingRun | null> =>
-  await withAggregateTransaction(db, async (tx) => {
+  await withOwnerAggregateTransaction(db, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [organizationId],
     });

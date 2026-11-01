@@ -18,6 +18,7 @@ import {
 import type { PersistManualOcrRunOptions } from "@/api/lib/document-processing-request";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 beforeEach(() => {
@@ -437,7 +438,7 @@ describe("requestManualOcrHandler", () => {
       );
 
       const run = await persistManualOcrRun({
-        db: { transaction: rootTransactionMock },
+        db: ownerDatabaseDouble({ transaction: rootTransactionMock }),
         organizationId,
         recordAuditEvent,
         source: {
@@ -570,7 +571,7 @@ describe("requestManualOcrHandler", () => {
       );
 
       const run = await persistManualOcrRun({
-        db: { transaction: rootTransactionMock },
+        db: ownerDatabaseDouble({ transaction: rootTransactionMock }),
         organizationId,
         recordAuditEvent,
         source: {
@@ -695,7 +696,7 @@ describe("requestManualOcrHandler", () => {
       );
 
       const run = await persistManualOcrRun({
-        db: { transaction: rootTransactionMock },
+        db: ownerDatabaseDouble({ transaction: rootTransactionMock }),
         organizationId,
         recordAuditEvent,
         source: {
@@ -768,7 +769,7 @@ describe("requestManualOcrHandler", () => {
     );
 
     const run = await persistManualOcrRun({
-      db: { transaction: rootTransactionMock },
+      db: ownerDatabaseDouble({ transaction: rootTransactionMock }),
       organizationId,
       recordAuditEvent: async () => {
         events.push("audit");
@@ -852,7 +853,7 @@ describe("requestManualOcrHandler", () => {
     );
 
     const run = await persistManualOcrRun({
-      db: { transaction: rootTransactionMock },
+      db: ownerDatabaseDouble({ transaction: rootTransactionMock }),
       organizationId,
       recordAuditEvent,
       source: {
@@ -898,7 +899,7 @@ describe("requestManualOcrHandler", () => {
     );
 
     const run = await persistManualOcrRun({
-      db: { transaction: rootTransactionMock },
+      db: ownerDatabaseDouble({ transaction: rootTransactionMock }),
       organizationId,
       recordAuditEvent,
       source: {

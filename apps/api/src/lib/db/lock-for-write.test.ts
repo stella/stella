@@ -2,10 +2,9 @@ import { expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
-import type { Transaction } from "@/api/db/root";
 import { toSafeId } from "@/api/lib/branded-types";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
 
 import {
   canonicalParentLockStatement,
@@ -20,7 +19,7 @@ test.each(["array", "rows"] as const)(
     const workspaceId = toSafeId<"workspace">("workspace_live");
     const missingWorkspaceId = toSafeId<"workspace">("workspace_missing");
     const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
-    const tx = asTestRaw<Pick<Transaction, "execute">>({
+    const tx = asOwnerTransaction({
       execute: async (query: SQL) => {
         const compiled = new PgDialect().sqlToQuery(query);
         queries.push(compiled);
@@ -71,7 +70,7 @@ test("adds only byte collation to the reference statements for independent sorte
   };
   const record = () => {
     const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
-    const tx = asTestRaw<Pick<Transaction, "execute">>({
+    const tx = asOwnerTransaction({
       execute: async (query: SQL) => {
         queries.push(new PgDialect().sqlToQuery(query));
         return [];
@@ -107,7 +106,7 @@ test.each(["empty", "organization-only", "workspace-only"] as const)(
     };
     const record = () => {
       const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
-      const tx = asTestRaw<Pick<Transaction, "execute">>({
+      const tx = asOwnerTransaction({
         execute: async (query: SQL) => {
           queries.push(new PgDialect().sqlToQuery(query));
           return [];

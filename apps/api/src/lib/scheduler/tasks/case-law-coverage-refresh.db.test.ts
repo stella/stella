@@ -33,6 +33,7 @@ import {
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE } from "@/api/tests/helpers/case-law-coverage-fixture";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -43,7 +44,7 @@ const JOB_ID = "coverage-refresh-test";
 // timeout: build the complete migration schema in embedded PostgreSQL once.
 beforeAll(async () => {
   client = await createTestPglite();
-  db = asTestRaw<SchedulerDb>(drizzle({ client }));
+  db = ownerDatabaseDouble(asTestRaw<SchedulerDb>(drizzle({ client })));
   await db.insert(schedulerJobs).values({
     id: JOB_ID,
     description: "Coverage refresh fixture",

@@ -26,6 +26,7 @@ import { persistManualOcrRun } from "@/api/lib/document-processing-request";
 import { claimDocumentProcessingAttempt } from "@/api/lib/document-processing-retry";
 import type { restoreManualOcrRunAfterProjectionLoss as RestoreManualOcrRunAfterProjectionLoss } from "@/api/lib/search/document-processing-manual-ocr-restore";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -144,11 +145,13 @@ const restore = async ({
   sourceSha256Hex = SOURCE_SHA256_HEX,
 } = {}) =>
   await restoreManualOcrRunAfterProjectionLoss({
-    db: asTestRaw<
-      NonNullable<
-        Parameters<typeof restoreManualOcrRunAfterProjectionLoss>[0]["db"]
-      >
-    >(testDb),
+    db: ownerDatabaseDouble(
+      asTestRaw<
+        NonNullable<
+          Parameters<typeof restoreManualOcrRunAfterProjectionLoss>[0]["db"]
+        >
+      >(testDb),
+    ),
     entityId: ids.entityA1,
     entityVersionId: ids.entityVersionA1,
     fieldId: ids.fieldA1,
@@ -351,7 +354,9 @@ test.each(
     });
     const request = async () =>
       await persistManualOcrRun({
-        db: asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+        db: ownerDatabaseDouble(
+          asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+        ),
         organizationId: ids.orgA,
         workspaceId: ids.wsA1,
         userId: ids.userA1,
@@ -417,7 +422,9 @@ test.each(
       status,
     });
     await requestAutomaticDocumentOcr({
-      db: asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+      db: ownerDatabaseDouble(
+        asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+      ),
       organizationId: ids.orgA,
       workspaceId: ids.wsA1,
       entityId: ids.entityA1,

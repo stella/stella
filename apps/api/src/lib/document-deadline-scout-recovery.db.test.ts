@@ -28,6 +28,7 @@ import {
   runDocumentDeadlineScout,
   skipDeadlineScan,
 } from "@/api/lib/scouts/document-deadlines";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -68,7 +69,7 @@ const scoutQueue = {
 
 const sweep = async () =>
   await recoverDocumentDeadlineScoutDispatches({
-    database: asTestRaw<typeof rootDb>(testDb),
+    database: ownerDatabaseDouble(asTestRaw<typeof rootDb>(testDb)),
     enqueueDocumentDeadlineScout: async (job) =>
       await enqueueDocumentDeadlineScoutJob({ scoutQueue, job }),
   });
@@ -194,11 +195,13 @@ const databaseClaimingBeforeFirstUpdate = (claim: () => Promise<void>) => {
         };
       },
     });
-  return asTestRaw<typeof rootDb>({
-    select: testDb.select.bind(testDb),
-    update: (table: Parameters<typeof testDb.update>[0]) =>
-      deferred(testDb.update(table)),
-  });
+  return ownerDatabaseDouble(
+    asTestRaw<typeof rootDb>({
+      select: testDb.select.bind(testDb),
+      update: (table: Parameters<typeof testDb.update>[0]) =>
+        deferred(testDb.update(table)),
+    }),
+  );
 };
 
 test("does not reset a claim taken between the select and the update", async () => {
@@ -254,7 +257,7 @@ test("a scan skipped for an exhausted period is not dispatched before the period
   const periodEnd = new Date(claimedAt.getTime() + 60 * 60 * 1000);
 
   await skipDeadlineScan({
-    db: asTestRaw<typeof rootDb>(testDb),
+    db: ownerDatabaseDouble(asTestRaw<typeof rootDb>(testDb)),
     runId,
     skippedUntil: periodEnd,
   });
@@ -322,7 +325,7 @@ test("a period refusal inside the scout run skips the scan until the period ends
   const admitted: string[] = [];
   try {
     await runDocumentDeadlineScout({
-      db: asTestRaw<typeof rootDb>(testDb),
+      db: ownerDatabaseDouble(asTestRaw<typeof rootDb>(testDb)),
       database: asTestRaw<RlsDatabase<Transaction>>(testDb),
       sourceRunId: runId,
       // The member's period is exhausted: admission refuses the scan before
@@ -375,7 +378,7 @@ test("a period refusal inside the scout run skips the scan until the period ends
 test("a skip applies only to a running scan, and only a pending scan may carry one", async () => {
   const runId = await insertPendingScoutRun();
   await skipDeadlineScan({
-    db: asTestRaw<typeof rootDb>(testDb),
+    db: ownerDatabaseDouble(asTestRaw<typeof rootDb>(testDb)),
     runId,
     skippedUntil: new Date(Date.now() + 60_000),
   });

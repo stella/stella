@@ -58,6 +58,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -273,7 +274,7 @@ describe("moving keyless organizations to the free floor", () => {
     try {
       const beforeEvaluating = await readState(accessIds.evaluating);
       const beforeEnded = await readState(accessIds.ended);
-      moved = await moveKeylessOrganizationsToFree(ownerDb(), {
+      moved = await moveKeylessOrganizationsToFree(asOwnerTransaction(testDb), {
         now,
         actor: "operator:test",
       });
@@ -301,10 +302,13 @@ describe("moving keyless organizations to the free floor", () => {
           .from(usageEntitlements)
           .where(eq(usageEntitlements.id, entitlementId)),
       ).toEqual([{ id: entitlementId }]);
-      const movedAgain = await moveKeylessOrganizationsToFree(ownerDb(), {
-        now: new Date(now.getTime() + DAY_IN_MS),
-        actor: "operator:test",
-      });
+      const movedAgain = await moveKeylessOrganizationsToFree(
+        asOwnerTransaction(testDb),
+        {
+          now: new Date(now.getTime() + DAY_IN_MS),
+          actor: "operator:test",
+        },
+      );
       expect(movedAgain).toEqual([]);
       // One audit event per moved organization, none for a re-run or a kept one.
       for (const organizationId of [...expectedMoved, accessIds.ownKey]) {

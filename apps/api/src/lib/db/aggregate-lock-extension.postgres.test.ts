@@ -15,6 +15,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
 
 import {
   AggregateLockBusy,
@@ -145,7 +146,7 @@ if (!databaseUrl || !enabled) {
                   aggregate: "organization",
                   id: otherOrganizationId,
                   mode: "update",
-                  tx: holdingTx,
+                  tx: asOwnerTransaction(holdingTx),
                 }),
               ).toEqual({ status: "locked" });
               await contender.transaction(async (tx) => {
@@ -162,7 +163,7 @@ if (!databaseUrl || !enabled) {
                   aggregate: "organization",
                   id: organizationId,
                   mode: "update",
-                  tx,
+                  tx: asOwnerTransaction(tx),
                   select: (queryTx) =>
                     queryTx.select({ id: organization.id }).from(organization),
                   where: extras[extra],
@@ -180,7 +181,7 @@ if (!databaseUrl || !enabled) {
                     aggregate: "organization",
                     id: organizationId,
                     mode: "update",
-                    tx,
+                    tx: asOwnerTransaction(tx),
                   }),
                 ).toEqual({ status: "locked" });
               });
@@ -237,7 +238,7 @@ if (!databaseUrl || !enabled) {
                     aggregate: "organization",
                     id: otherOrganizationId,
                     mode: "update",
-                    tx,
+                    tx: asOwnerTransaction(tx),
                   }),
                 ),
               ).toMatchObject({ message: "Aggregate lock rank inversion" });
@@ -247,7 +248,7 @@ if (!databaseUrl || !enabled) {
                   id: otherOrganizationId,
                   mode: "update",
                   wait: "nowait",
-                  tx,
+                  tx: asOwnerTransaction(tx),
                 }),
               ).toEqual({ status: "locked" });
             });
@@ -273,7 +274,7 @@ if (!databaseUrl || !enabled) {
                 aggregate: "organization",
                 id: organizationId,
                 mode: "key share",
-                tx: firstTx,
+                tx: asOwnerTransaction(firstTx),
               }),
             ).toEqual({ status: "locked" });
             await contender.transaction(async (secondTx) => {
@@ -283,7 +284,7 @@ if (!databaseUrl || !enabled) {
                   aggregate: "organization",
                   id: organizationId,
                   mode: "key share",
-                  tx: secondTx,
+                  tx: asOwnerTransaction(secondTx),
                 }),
               ).toEqual({ status: "locked" });
               const beforeUpgrade = holderStatements.length;
@@ -293,7 +294,7 @@ if (!databaseUrl || !enabled) {
                     aggregate: "organization",
                     id: organizationId,
                     mode: "update",
-                    tx: firstTx,
+                    tx: asOwnerTransaction(firstTx),
                   }),
                 ),
               ).toMatchObject({
@@ -307,7 +308,7 @@ if (!databaseUrl || !enabled) {
                     aggregate: "organization",
                     id: organizationId,
                     mode: "update",
-                    tx: secondTx,
+                    tx: asOwnerTransaction(secondTx),
                   }),
                 ),
               ).toMatchObject({
@@ -319,14 +320,14 @@ if (!databaseUrl || !enabled) {
                 id: organizationId,
                 mode: "update",
                 wait: "nowait",
-                tx: firstTx,
+                tx: asOwnerTransaction(firstTx),
               });
               const second = await withAggregateLock({
                 aggregate: "organization",
                 id: organizationId,
                 mode: "update",
                 wait: "nowait",
-                tx: secondTx,
+                tx: asOwnerTransaction(secondTx),
               });
               expect(first.status).toBe("busy");
               expect(second.status).toBe("busy");
@@ -364,7 +365,7 @@ if (!databaseUrl || !enabled) {
                   aggregate: "organization",
                   id: organizationId,
                   mode: held,
-                  tx: holdingTx,
+                  tx: asOwnerTransaction(holdingTx),
                 }),
               ).toEqual({ status: "locked" });
               await contender.transaction(async (tx) => {
@@ -374,7 +375,7 @@ if (!databaseUrl || !enabled) {
                   id: organizationId,
                   mode: requested,
                   wait: "nowait",
-                  tx,
+                  tx: asOwnerTransaction(tx),
                 });
                 const contended = conflicts[held].some(
                   (mode) => mode === requested,
@@ -484,7 +485,7 @@ if (!databaseUrl || !enabled) {
                     aggregate: "organization",
                     id: organizationId,
                     mode: "update",
-                    tx,
+                    tx: asOwnerTransaction(tx),
                   }),
                 ),
               ).toMatchObject({ message: "Aggregate lock rank inversion" });
@@ -505,7 +506,7 @@ if (!databaseUrl || !enabled) {
                 aggregate: "organization",
                 id: organizationId,
                 mode: "update",
-                tx: holdingTx,
+                tx: asOwnerTransaction(holdingTx),
               }),
             ).toEqual({ status: "locked" });
             await contender.transaction(async (tx) => {
@@ -515,7 +516,7 @@ if (!databaseUrl || !enabled) {
                 id: organizationId,
                 mode: "update",
                 wait: "nowait",
-                tx,
+                tx: asOwnerTransaction(tx),
               });
               expect(refusal.status).toBe("busy");
               if (refusal.status !== "busy") {
@@ -538,7 +539,7 @@ if (!databaseUrl || !enabled) {
                     aggregate: "organization",
                     id: organizationId,
                     mode: "update",
-                    tx,
+                    tx: asOwnerTransaction(tx),
                   }),
                 ),
               ).toMatchObject({ message: "Aggregate lock rank inversion" });
@@ -558,7 +559,7 @@ if (!databaseUrl || !enabled) {
               aggregate: "organization",
               id: organizationId,
               mode: "update",
-              tx: holdingTx,
+              tx: asOwnerTransaction(holdingTx),
             });
             const refusal = await rejectionOf(
               contender.transaction(async (tx) => {
@@ -571,7 +572,7 @@ if (!databaseUrl || !enabled) {
                   id: organizationId,
                   mode: "update",
                   wait: "nowait",
-                  tx,
+                  tx: asOwnerTransaction(tx),
                 });
                 if (acquisition.status !== "busy") {
                   panic("The other session must contend before the abort");
@@ -625,7 +626,7 @@ if (!databaseUrl || !enabled) {
                   aggregate: "organization",
                   id: organizationId,
                   mode: "key share",
-                  tx,
+                  tx: asOwnerTransaction(tx),
                 }),
               ).toEqual({ status: "locked" });
               expect(
@@ -642,7 +643,7 @@ if (!databaseUrl || !enabled) {
                     aggregate: "organization",
                     id: organizationId,
                     mode: "update",
-                    tx,
+                    tx: asOwnerTransaction(tx),
                   }),
                 ),
               ).toMatchObject({
@@ -656,7 +657,7 @@ if (!databaseUrl || !enabled) {
                   id: organizationId,
                   mode: "update",
                   wait: "nowait",
-                  tx,
+                  tx: asOwnerTransaction(tx),
                 });
                 expect(acquisition.status).toBe(
                   availability === "contended" ? "busy" : "locked",
@@ -672,7 +673,7 @@ if (!databaseUrl || !enabled) {
                       aggregate: "organization",
                       id: otherOrganizationId,
                       mode: "update",
-                      tx,
+                      tx: asOwnerTransaction(tx),
                     }),
                   ),
                 ).toMatchObject({ message: "Aggregate lock rank inversion" });
@@ -688,7 +689,7 @@ if (!databaseUrl || !enabled) {
                     aggregate: "organization",
                     id: organizationId,
                     mode: "no key update",
-                    tx: holdingTx,
+                    tx: asOwnerTransaction(holdingTx),
                   }),
                 ).toEqual({ status: "locked" });
                 await upgrade();
@@ -710,7 +711,7 @@ if (!databaseUrl || !enabled) {
                 aggregate: "organization",
                 id: organizationId,
                 mode: "no key update",
-                tx,
+                tx: asOwnerTransaction(tx),
               }),
             ).toEqual({ status: "locked" });
             const insertedId = createSafeId<"workspace">();
@@ -748,7 +749,7 @@ if (!databaseUrl || !enabled) {
                 aggregate: "organization",
                 id: organizationId,
                 mode: "no key update",
-                tx,
+                tx: asOwnerTransaction(tx),
               }),
             ).toEqual({ status: "locked" });
             expect(
@@ -765,7 +766,7 @@ if (!databaseUrl || !enabled) {
                 aggregate: "organization",
                 id: organizationId,
                 mode: "share",
-                tx,
+                tx: asOwnerTransaction(tx),
               }),
             ).toEqual({ status: "locked" });
             expect(
@@ -781,7 +782,7 @@ if (!databaseUrl || !enabled) {
                   id: organizationId,
                   mode: "key share",
                   wait: "nowait",
-                  tx: otherTx,
+                  tx: asOwnerTransaction(otherTx),
                 }),
               ).toEqual({ status: "locked" });
               const refusal = await withAggregateLock({
@@ -789,7 +790,7 @@ if (!databaseUrl || !enabled) {
                 id: organizationId,
                 mode: "share",
                 wait: "nowait",
-                tx: otherTx,
+                tx: asOwnerTransaction(otherTx),
               });
               expect(refusal.status).toBe("busy");
               if (refusal.status !== "busy") {

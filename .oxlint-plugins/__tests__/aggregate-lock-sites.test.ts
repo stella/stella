@@ -30,6 +30,28 @@ describe("aggregate lock confinement", () => {
       ),
     ).toEqual([]);
   });
+  test("counts owner transaction helpers other than the owner's aggregate runner", () => {
+    for (const helper of [
+      "withOwnerTransaction",
+      "withRootOwnerTransaction",
+      "withScopedPoolOwnerTransaction",
+    ]) {
+      const raw = aggregateLockSites(
+        file,
+        `await ${helper}(rootDb, async (tx) => run(tx));`,
+      );
+      expect(raw.map(({ primitive }) => primitive)).toEqual([
+        "transaction-boundary",
+      ]);
+    }
+    for (const runner of [
+      "withOwnerAggregateTransaction(rootDb, async (tx) => run(tx))",
+      "withConfirmationCodeOwnerTransaction(async (tx) => run(tx))",
+      "withAccountExportOwnerTransaction(scope, async (tx) => run(tx))",
+    ]) {
+      expect(aggregateLockSites(file, `await ${runner};`)).toEqual([]);
+    }
+  });
   test("enumerates SQL savepoint creation, release and rollback", () => {
     for (const operation of [
       "SAVEPOINT example",

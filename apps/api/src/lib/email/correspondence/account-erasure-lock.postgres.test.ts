@@ -34,6 +34,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -245,7 +246,7 @@ if (!databaseUrl || !runPostgresTests) {
                 await tx.execute(sql`SELECT pg_advisory_lock(${gateKey})`);
                 gateHeld.resolve(undefined);
                 await waitForWriterGate(tx, writerPid);
-                await lockAccountRow(tx, userId);
+                await lockAccountRow(asOwnerTransaction(tx), userId);
                 await tx.execute(sql`SELECT pg_advisory_unlock(${gateKey})`);
                 await reassignActiveTaskAssignmentsAndDropMemberships({
                   tx,

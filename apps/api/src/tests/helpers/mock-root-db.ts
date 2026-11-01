@@ -2,6 +2,7 @@ import { mock } from "bun:test";
 import type { SQL } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 export const rootDbExecuteMock = mock(
@@ -30,21 +31,23 @@ export const rootDbChatThreadFindFirstMock = mock(
     await Promise.resolve(null),
 );
 
-export const rootDbTestDouble = asTestRaw<
-  Pick<typeof rootDb, "execute" | "query" | "select" | "transaction">
->({
-  execute: rootDbExecuteMock,
-  transaction: rootDbTransactionMock,
-  select: rootDbSelectMock,
-  query: {
-    caseLawDecisions: {
-      findFirst: rootDbCaseLawDecisionFindFirstMock,
+export const rootDbTestDouble = ownerDatabaseDouble(
+  asTestRaw<
+    Pick<typeof rootDb, "execute" | "query" | "select" | "transaction">
+  >({
+    execute: rootDbExecuteMock,
+    transaction: rootDbTransactionMock,
+    select: rootDbSelectMock,
+    query: {
+      caseLawDecisions: {
+        findFirst: rootDbCaseLawDecisionFindFirstMock,
+      },
+      chatThreads: {
+        findFirst: rootDbChatThreadFindFirstMock,
+      },
     },
-    chatThreads: {
-      findFirst: rootDbChatThreadFindFirstMock,
-    },
-  },
-});
+  }),
+);
 
 export const clearRootDbMocks = () => {
   rootDbExecuteMock.mockClear();

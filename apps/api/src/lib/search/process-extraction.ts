@@ -16,6 +16,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { withOwnerAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
@@ -179,7 +180,7 @@ export const persistNativeExtractionProjection = async (
   }: NativeExtractionProjectionOptions,
   database: Pick<typeof rootDb, "transaction">,
 ): Promise<NativeExtractionProjectionOutcome> =>
-  await database.transaction(async (tx) => {
+  await withOwnerAggregateTransaction(database, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [organizationId],
       workspaceIds: [workspaceId],

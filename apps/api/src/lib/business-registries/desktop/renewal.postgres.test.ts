@@ -40,6 +40,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import {
@@ -69,10 +70,14 @@ type FixtureDb = GatedTestDb | TransactionOf<GatedTestDb>;
 // Production owners open their own aggregate transaction and refuse an
 // enclosing one. Inside a rollback fixture they receive a runner whose
 // transaction is a savepoint of the fixture, so their writes still roll back.
+// The runner is registered as an owner connection, as production's root
+// connection is.
 const ownerDb = (db: FixtureDb): Pick<GatedTestDb, "transaction"> =>
-  "rollback" in db
-    ? { transaction: async (run) => await db.transaction(run) }
-    : db;
+  ownerDatabaseDouble<Pick<GatedTestDb, "transaction">>(
+    "rollback" in db
+      ? { transaction: async (run) => await db.transaction(run) }
+      : db,
+  );
 const seedFixture = async (db: FixtureDb, proofDb: GatedTestDb) => {
   const signingKeys = await generateKeyPair("ES256", { extractable: true });
   const deviceJwk = await exportJWK(signingKeys.publicKey);
@@ -590,7 +595,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
           await expectUnauthorized(
             probeDesktopCredential({
               ...fixture,
-              db,
+              db: ownerDatabaseDouble(db),
               currentKey,
               now: new Date(NOW.getTime() + DAY_MS),
             }),
@@ -622,7 +627,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
               requireSuccess(
                 await probeDesktopCredential({
                   ...fixture,
-                  db,
+                  db: ownerDatabaseDouble(db),
                   currentKey: SUCCESSOR_KEY,
                   now: new Date(NOW.getTime() + DAY_MS),
                 }),
@@ -773,7 +778,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
               requireSuccess(
                 await probeDesktopCredential({
                   ...fixture,
-                  db,
+                  db: ownerDatabaseDouble(db),
                   currentKey: winningKey,
                   now: new Date(NOW.getTime() + DAY_MS),
                 }),
@@ -782,7 +787,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
             await expectUnauthorized(
               probeDesktopCredential({
                 ...fixture,
-                db,
+                db: ownerDatabaseDouble(db),
                 currentKey: losingKey,
                 now: new Date(NOW.getTime() + DAY_MS),
               }),

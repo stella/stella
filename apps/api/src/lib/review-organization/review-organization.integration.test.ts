@@ -89,6 +89,7 @@ import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-a
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -189,7 +190,7 @@ const config = (
   }) ?? panic("Expected a complete review configuration");
 
 const rlsDatabase = () => asTestRaw<RlsDatabase<Transaction>>(testDb);
-const ownerDb = () => asTestRaw<SchedulerDb>(testDb);
+const ownerDb = () => ownerDatabaseDouble(asTestRaw<SchedulerDb>(testDb));
 
 const actorFor = (
   organizationId: SafeId<"organization">,

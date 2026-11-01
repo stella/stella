@@ -20,6 +20,7 @@ import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { exceptionFingerprint } from "@/api/lib/observability/exception-fingerprint";
 import { getExceptionScope } from "@/api/lib/observability/exception-scope";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -60,7 +61,7 @@ let db: SchedulerDb;
 
 beforeAll(async () => {
   testDb = await getTestDb();
-  db = asTestRaw<SchedulerDb>(testDb);
+  db = ownerDatabaseDouble(asTestRaw<SchedulerDb>(testDb));
 });
 
 afterAll(async () => {
@@ -1140,16 +1141,18 @@ describe("stale-token completion preserves a same-runner re-acquired lease", () 
 
 describe("lease heartbeat", () => {
   // A database the runner cannot reach: every renewal rejects.
-  const unreachableDb = asTestRaw<SchedulerDb>({
-    update: () => ({
-      set: () => ({
-        where: () => ({
-          returning: async () =>
-            await Promise.reject(new Error("connection refused")),
+  const unreachableDb = ownerDatabaseDouble(
+    asTestRaw<SchedulerDb>({
+      update: () => ({
+        set: () => ({
+          where: () => ({
+            returning: async () =>
+              await Promise.reject(new Error("connection refused")),
+          }),
         }),
       }),
     }),
-  });
+  );
 
   test("stops the task once renewals have failed for a whole lease", async () => {
     const { promise: lost, resolve: onLeaseLost } =

@@ -30,6 +30,7 @@ import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { runWorkAttentionScout } from "@/api/lib/scouts/work-attention";
 import type { WorkAttentionScoutDependencies } from "@/api/lib/scouts/work-attention";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -185,7 +186,7 @@ const seedWork = async (work: SeedWork) => {
 };
 
 const dependencies = (): WorkAttentionScoutDependencies => ({
-  db: asTestRaw<typeof rootDb>(testDb),
+  db: ownerDatabaseDouble(asTestRaw<typeof rootDb>(testDb)),
   createScopedDb: (options) =>
     createRootScopedDb(options, asTestRaw<RlsDatabase<Transaction>>(testDb)),
 });

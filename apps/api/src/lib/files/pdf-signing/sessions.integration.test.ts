@@ -43,6 +43,7 @@ import {
   redeemPdfSigningHandoff,
 } from "@/api/lib/files/pdf-signing/sessions";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -156,7 +157,7 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  db = asTestRaw<typeof rootDb>(testDb);
+  db = ownerDatabaseDouble(asTestRaw<typeof rootDb>(testDb));
   tokenDb = testTokenDb();
 
   await testDb.insert(workspaces).values({

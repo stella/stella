@@ -76,8 +76,16 @@ import {
 const ROOT_CONNECTION_MODULE =
   /(?:^|\/)db\/root(?:\.[cm]?[jt]sx?)?$|^\.\/root(?:\.[cm]?[jt]sx?)?$/u;
 
-/** The owner-level handles the root connection module exports. */
-const ROOT_CONNECTION_EXPORTS = ["rootDb", "rlsDb"] as const;
+/**
+ * The owner-level handles and owner transactions the root connection module
+ * exports. Each name counts where it is imported, as the handles do.
+ */
+const ROOT_CONNECTION_EXPORTS = [
+  "rootDb",
+  "rlsDb",
+  "withAccountExportOwnerTransaction",
+  "withConfirmationCodeOwnerTransaction",
+] as const;
 
 const ROOT_CONNECTION_EXPORT_NAMES: ReadonlySet<string> = new Set(
   ROOT_CONNECTION_EXPORTS,

@@ -1,0 +1,7 @@
+# Confirmation-code transactions on the owner connection
+
+Generated from `scripts/ownership/root-connection-confirmation-code.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                                   | Owner                     | Enforcement                                                                              | Summary                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `root-connection-confirmation-code` — Confirmation-code transactions on the owner connection | `apps/api/src/db/root.ts` | import `withConfirmationCodeOwnerTransaction` from `@/api/db/root` (plus 1 allowed file) | A confirmation-code request and a confirmed operation run in one owner transaction that takes the account row before any session or organization scope exists. Only the confirmation-code module opens it. |

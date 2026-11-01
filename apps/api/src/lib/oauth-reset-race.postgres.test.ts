@@ -41,6 +41,7 @@ import {
   refreshOAuthGrant,
   registerOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -114,7 +115,10 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
   const resetAccess = async (userId: string) =>
     await rootDb.transaction(
       async (tx) =>
-        await revokeAllUserDurableCredentials(tx, brandPersistedUserId(userId)),
+        await revokeAllUserDurableCredentials(
+          asOwnerTransaction(tx),
+          brandPersistedUserId(userId),
+        ),
     );
 
   const countTokenRows = async (clientId: string) => ({
@@ -265,12 +269,15 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
           if (!issuer) {
             panic("The issuing session must exist");
           }
-          const fence = await CredentialIssuanceFence.holdForGrant(tx, {
-            userId,
-            sessionId: null,
-            grantId,
-            organizationId,
-          });
+          const fence = await CredentialIssuanceFence.holdForGrant(
+            asOwnerTransaction(tx),
+            {
+              userId,
+              sessionId: null,
+              grantId,
+              organizationId,
+            },
+          );
           expect(fence).not.toBeNull();
           removal = removalDb.transaction(
             async (removalTx) =>

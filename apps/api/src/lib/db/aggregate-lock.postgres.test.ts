@@ -19,6 +19,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 import {
@@ -411,7 +412,7 @@ if (!databaseUrl || !enabled) {
                             aggregate: "organization",
                             id: organizationId,
                             mode: "update",
-                            tx,
+                            tx: asOwnerTransaction(tx),
                           }),
                         ),
                       ).toMatchObject({
@@ -534,7 +535,7 @@ if (!databaseUrl || !enabled) {
                   aggregate: "organization",
                   mode: "update",
                   id: organizationId,
-                  tx,
+                  tx: asOwnerTransaction(tx),
                 }),
               ).toEqual({ status: "locked" });
               await tx.insert(workspaces).values({
@@ -594,7 +595,8 @@ if (!databaseUrl || !enabled) {
             db,
             workspace: "present",
             run: async ({ organizationId, workspaceId }) => {
-              await db.transaction(async (tx) => {
+              await db.transaction(async (rawTx) => {
+                const tx = asOwnerTransaction(rawTx);
                 const lower = {
                   aggregate: "organization",
                   mode: "update",
@@ -612,13 +614,16 @@ if (!databaseUrl || !enabled) {
                     const refusal = await rejectionOf(
                       withAggregateSavepoint(tx, async (child) =>
                         mode === "parent inversion"
-                          ? await withAggregateLock({ ...lower, tx: child })
+                          ? await withAggregateLock({
+                              ...lower,
+                              tx: asOwnerTransaction(child),
+                            })
                           : await withAggregateSavepoint(
                               child,
                               async (grandchild) =>
                                 await withAggregateLock({
                                   ...lower,
-                                  tx: grandchild,
+                                  tx: asOwnerTransaction(grandchild),
                                 }),
                             ),
                       ),
@@ -673,7 +678,10 @@ if (!databaseUrl || !enabled) {
                     );
                     expect(
                       await rejectionOf(
-                        withAggregateLock({ ...lower, tx: child }),
+                        withAggregateLock({
+                          ...lower,
+                          tx: asOwnerTransaction(child),
+                        }),
                       ),
                     ).toMatchObject({
                       message: "Aggregate savepoint transaction is closed",
@@ -689,7 +697,10 @@ if (!databaseUrl || !enabled) {
                           "Await the aggregate savepoint before reusing its parent transaction",
                       });
                       expect(
-                        await withAggregateLock({ ...lower, tx: child }),
+                        await withAggregateLock({
+                          ...lower,
+                          tx: asOwnerTransaction(child),
+                        }),
                       ).toEqual({ status: "locked" });
                     });
                     return;
@@ -818,7 +829,7 @@ if (!databaseUrl || !enabled) {
                 aggregate: "organization",
                 mode: "update",
                 id: organizationId,
-                tx,
+                tx: asOwnerTransaction(tx),
               }),
             ),
           ).toMatchObject({ message: "Aggregate lock rank inversion" });

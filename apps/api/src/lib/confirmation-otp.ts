@@ -6,9 +6,10 @@ import { randomInt } from "node:crypto";
 import { Temporal } from "@stll/time";
 
 import { verification } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
+import { rootDb, withConfirmationCodeOwnerTransaction } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { lockAccountRowByEmail } from "@/api/lib/db/account-row";
+import type { OwnerTransaction } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { checkSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
@@ -64,7 +65,7 @@ export const createConfirmationOtp = async ({
       const identifier = confirmationOtpIdentifier(purpose, email);
       const otp = generateSixDigitOtp();
 
-      await rootDb.transaction(async (tx) => {
+      await withConfirmationCodeOwnerTransaction(async (tx) => {
         // Lock the user row by email first to serialize OTP requests for this email
         await lockAccountRowByEmail(tx, email);
 
@@ -220,7 +221,7 @@ type ConfirmedTransactionOptions<T> = {
    * Locks taken before the code is read. A refusal here (for example a busy
    * row) rolls back without touching the code, so the same code retries.
    */
-  beforeConsume: (tx: Transaction) => Promise<void>;
+  beforeConsume: (tx: OwnerTransaction<Transaction>) => Promise<void>;
   /**
    * The confirmed work. An abort here rolls the consume back with it, so a
    * correct code stays usable for a retry; nothing else can observe it.
@@ -246,7 +247,7 @@ export const runConfirmedTransaction = async <T>({
   if (Result.isError(access)) {
     return Result.err(access.error);
   }
-  return await rootDb.transaction(async (tx) => {
+  return await withConfirmationCodeOwnerTransaction(async (tx) => {
     await beforeConsume(tx);
     const consumed = await consumeConfirmationOtp(tx, confirmation);
     if (Result.isError(consumed)) {

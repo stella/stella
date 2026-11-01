@@ -15,6 +15,7 @@ import {
   aggregateFences as fences,
 } from "@/api/tests/fixtures/aggregate-lock-order";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createSelectQueryMock } from "@/api/tests/scoped-db-mock";
 
@@ -67,7 +68,7 @@ test.each(["present", "missing"] as const)(
     await withInvoiceMatterLocks(tx, [first, second]);
     const count = statements.length;
     const earlierParent = withAggregateLock({
-      tx,
+      tx: asOwnerTransaction(tx),
       aggregate: "organization",
       id: organizationId,
       mode: "update",
@@ -463,7 +464,9 @@ describe("aggregate acquisition ordering", () => {
       fixture.workspace,
       fixture.entity,
     ]) {
-      expect(await withAggregateLock({ ...fence, tx })).toEqual({
+      expect(
+        await withAggregateLock({ ...fence, tx: asOwnerTransaction(tx) }),
+      ).toEqual({
         status: "locked",
       });
     }
@@ -555,12 +558,12 @@ describe("aggregate acquisition ordering", () => {
     for (const [index, first] of ordered.entries()) {
       for (const [secondIndex, second] of ordered.entries()) {
         let executions = 0;
-        const tx = {
+        const tx = asOwnerTransaction({
           execute: async (statement: SQL) => {
             executions += 1;
             return aggregateExecutionRows(statement);
           },
-        };
+        });
         expect(await withAggregateLock({ ...first, tx })).toEqual({
           status: "locked",
         });
@@ -581,9 +584,9 @@ describe("aggregate acquisition ordering", () => {
 
   test("retains history across helper calls but isolates new transactions and reacquisition", async () => {
     const fixture = fences();
-    const tx = {
+    const tx = asOwnerTransaction({
       execute: async (statement: SQL) => aggregateExecutionRows(statement),
-    };
+    });
     await withAggregateLock({ ...fixture.workspace, tx });
     await withAggregateLock({ ...fixture.entity, tx });
     expect(await withAggregateLock({ ...fixture.workspace, tx })).toEqual({
@@ -592,9 +595,9 @@ describe("aggregate acquisition ordering", () => {
     expect(
       await rejectionOf(withAggregateLock({ ...fixture.organization, tx })),
     ).toMatchObject({ message: "Aggregate lock rank inversion" });
-    const retryTx = {
+    const retryTx = asOwnerTransaction({
       execute: async (statement: SQL) => aggregateExecutionRows(statement),
-    };
+    });
     expect(
       await withAggregateLock({ ...fixture.organization, tx: retryTx }),
     ).toEqual({ status: "locked" });
@@ -603,10 +606,10 @@ describe("aggregate acquisition ordering", () => {
   test("missing rows consume no rank and scoped reacquisition still executes its predicate", async () => {
     const fixture = fences();
     let found = false;
-    const tx = {
+    const tx = asOwnerTransaction({
       execute: async (statement: SQL) =>
         aggregateExecutionRows(statement, found),
-    };
+    });
     expect(await withAggregateLock({ ...fixture.entity, tx })).toEqual({
       status: "missing",
     });

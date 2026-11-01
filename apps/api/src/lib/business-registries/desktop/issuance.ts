@@ -21,7 +21,7 @@ import {
 } from "@/api/lib/business-registries/desktop/config";
 import {
   withAggregateLock,
-  withAggregateTransaction,
+  withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -109,7 +109,7 @@ export const issueDesktopAccountCredential = async ({
 }: IssueDesktopAccountCredentialOptions) =>
   await Result.tryPromise({
     try: async () =>
-      await withAggregateTransaction(database, async (tx) => {
+      await withOwnerAggregateTransaction(database, async (tx) => {
         const fence = await CredentialIssuanceFence.hold(tx, {
           userId: identity.userId,
           sessionId: identity.sessionId,

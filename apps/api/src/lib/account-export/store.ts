@@ -5,6 +5,7 @@ import { Temporal } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import { accountExports } from "@/api/db/schema";
+import { scopeTransactionToAccount } from "@/api/lib/account-export/account-scope";
 import {
   ACCOUNT_EXPORT_ACTIVE_STATUSES,
   ACCOUNT_EXPORT_LIMITS,
@@ -16,6 +17,7 @@ import { lockActiveAccountRow } from "@/api/lib/db/account-row";
 import {
   withAggregateRowQuery,
   withAggregateTransaction,
+  withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transition } from "@/api/lib/db/transitions";
@@ -66,18 +68,26 @@ export const accountExportStatus = (
 };
 
 // Account scope precedes any organization selection; workers reconcile the
-// durable ledger across accounts through this owning module only.
-const resolveDatabase = async (db: AccountExportDb | undefined) => {
-  if (db !== undefined) {
-    return db;
+// durable ledger across accounts through this owning module only. An
+// account's own request, read or download runs in the root module's account
+// export transaction; a caller that hands its connection in runs the same
+// fence and scope on it.
+const inAccountScope = async <T>(
+  db: AccountExportDb | undefined,
+  scope: { userId: SafeId<"user">; fenceAccount: boolean },
+  run: (tx: Transaction) => Promise<T>,
+): Promise<T> => {
+  if (db === undefined) {
+    const { withAccountExportOwnerTransaction } = await import("@/api/db/root");
+    return await withAccountExportOwnerTransaction(scope, run);
   }
-  const { rlsDb } = await import("@/api/db/root");
-  return rlsDb;
-};
-
-const scopeAccount = async (tx: Transaction, userId: SafeId<"user">) => {
-  await tx.execute(sql`SET LOCAL ROLE stella`);
-  await tx.execute(sql`SELECT set_config('app.user_id', ${userId}, true)`);
+  return await withOwnerAggregateTransaction(db, async (tx) => {
+    if (scope.fenceAccount) {
+      await lockActiveAccountRow(tx, scope.userId);
+    }
+    await scopeTransactionToAccount(tx, scope.userId);
+    return await run(tx);
+  });
 };
 
 const claimable = () =>
@@ -180,11 +190,8 @@ type RequestAccountExportOptions = {
 export const requestAccountExport = async (
   userId: SafeId<"user">,
   { db }: RequestAccountExportOptions = {},
-): Promise<Result<AccountExportRow, HandlerError>> => {
-  const database = await resolveDatabase(db);
-  return await withAggregateTransaction(database, async (tx) => {
-    await lockActiveAccountRow(tx, userId);
-    await scopeAccount(tx, userId);
+): Promise<Result<AccountExportRow, HandlerError>> =>
+  await inAccountScope(db, { userId, fenceAccount: true }, async (tx) => {
     const existing = await tx
       .select({ id: accountExports.id })
       .from(accountExports)
@@ -261,7 +268,6 @@ export const requestAccountExport = async (
     });
     return Result.ok(created);
   });
-};
 
 type ReadScopedAccountExportOptions = {
   tx: Transaction;
@@ -290,21 +296,18 @@ export const readAccountExport = async ({
   id,
   userId,
   db,
-}: ReadAccountExportOptions): Promise<AccountExportRow | null> => {
-  const database = await resolveDatabase(db);
-  return await withAggregateTransaction(database, async (tx) => {
-    await scopeAccount(tx, userId);
-    return await readScopedAccountExport({ tx, id, userId });
-  });
-};
+}: ReadAccountExportOptions): Promise<AccountExportRow | null> =>
+  await inAccountScope(
+    db,
+    { userId, fenceAccount: false },
+    async (tx) => await readScopedAccountExport({ tx, id, userId }),
+  );
 
 export const readLatestAccountExport = async (
   userId: SafeId<"user">,
   db?: AccountExportDb,
-): Promise<AccountExportRow | null> => {
-  const database = await resolveDatabase(db);
-  return await withAggregateTransaction(database, async (tx) => {
-    await scopeAccount(tx, userId);
+): Promise<AccountExportRow | null> =>
+  await inAccountScope(db, { userId, fenceAccount: false }, async (tx) => {
     const rows = await tx
       .select({ id: accountExports.id })
       .from(accountExports)
@@ -316,7 +319,6 @@ export const readLatestAccountExport = async (
       ? null
       : await readScopedAccountExport({ tx, id: latest.id, userId });
   });
-};
 
 const claimSource = ({ row, leaseElapsed }: LockedAccountExport) => {
   if (row.status === "requested") {
@@ -329,7 +331,7 @@ export const claimAccountExport = async (
   id: string,
   db: AccountExportDb,
 ): Promise<AccountExportClaim | null> =>
-  await withAggregateTransaction(db, async (tx) => {
+  await withOwnerAggregateTransaction(db, async (tx) => {
     const owners = await tx
       .select({ userId: accountExports.userId })
       .from(accountExports)
@@ -408,7 +410,7 @@ export const completeAccountExport = async ({
   if (objectKey !== claim.objectKey) {
     panic("Account export object differs from its claim");
   }
-  return await withAggregateTransaction(db, async (tx) => {
+  return await withOwnerAggregateTransaction(db, async (tx) => {
     await lockActiveAccountRow(tx, claim.userId);
     const locked = await lockAccountExport(tx, claim);
     if (!holdsClaim(locked, claim)) {
@@ -550,11 +552,8 @@ export const recordAccountExportDownload = async ({
   id,
   userId,
   db,
-}: ReadAccountExportOptions): Promise<AccountExportRow | null> => {
-  const database = await resolveDatabase(db);
-  return await withAggregateTransaction(database, async (tx) => {
-    await lockActiveAccountRow(tx, userId);
-    await scopeAccount(tx, userId);
+}: ReadAccountExportOptions): Promise<AccountExportRow | null> =>
+  await inAccountScope(db, { userId, fenceAccount: true }, async (tx) => {
     const result = await withAggregateRowQuery({
       tx,
       aggregate: "accountExport",
@@ -573,7 +572,6 @@ export const recordAccountExportDownload = async ({
     });
     return row;
   });
-};
 
 export const listRecoverableAccountExports = async (
   db: AccountExportDb,

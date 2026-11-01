@@ -14,6 +14,7 @@ import {
 } from "@/api/lib/scheduler/tasks/system-audit-retention";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { systemAuditRow } from "@/api/lib/system-audit/record";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const MIGRATION = new URL(
@@ -151,12 +152,14 @@ test("the purge deletes only rows past retention, in bounded batches", async () 
     [now.toString()],
   );
   const dialect = new PgDialect();
-  const executor = asTestRaw<SchedulerDb>({
-    execute: async (query: SQLWrapper) => {
-      const { sql, params } = dialect.sqlToQuery(query.getSQL());
-      return (await db.query(sql, params)).rows;
-    },
-  });
+  const executor = ownerDatabaseDouble(
+    asTestRaw<SchedulerDb>({
+      execute: async (query: SQLWrapper) => {
+        const { sql, params } = dialect.sqlToQuery(query.getSQL());
+        return (await db.query(sql, params)).rows;
+      },
+    }),
+  );
 
   expect(
     await purgeSystemAuditRuns({

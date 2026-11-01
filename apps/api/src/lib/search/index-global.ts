@@ -33,6 +33,7 @@ import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identi
 import { readPublicDecisionLanguageAlternatesForGroupKeys } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
+import { withOwnerAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { escapeLike } from "@/api/lib/escape-like";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
@@ -1909,7 +1910,7 @@ const writeContactProjections = async (
   });
   const previewGeneration = Bun.randomUUIDv7();
 
-  await database.transaction(async (tx) => {
+  await withOwnerAggregateTransaction(database, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: builtProjections.map(
         ({ contact }) => contact.organizationId,
@@ -2086,7 +2087,7 @@ const writeWorkspaceProjections = async (
   });
   const previewGeneration = Bun.randomUUIDv7();
 
-  await database.transaction(async (tx) => {
+  await withOwnerAggregateTransaction(database, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: builtProjections.map(
         ({ workspace }) => workspace.organizationId,

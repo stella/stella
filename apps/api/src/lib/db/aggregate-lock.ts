@@ -58,6 +58,7 @@ import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-ti
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { isOwnerDatabase } from "@/api/lib/db/owner-transaction";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { LIMITS } from "@/api/lib/limits";
@@ -191,11 +192,22 @@ type AdvisoryIdentityOptions = Exclude<
   AggregateIdentityOptions,
   RowIdentityOptions
 >;
-type WaitingOptions =
-  | { wait?: "block"; tx: ExecuteTransaction }
-  | { wait: "nowait"; tx: SavepointTransaction };
+// A row lock's transaction follows its aggregate's registered holder, so an
+// owner-held row (the organization, the account) refuses a scoped
+// application-role transaction at compile time.
+type HolderRowLockOptions = {
+  [Name in AggregateName]: (typeof AGGREGATE_LOCKS)[Name]["kind"] extends "row"
+    ? { aggregate: Name; id: AggregateIdentities[Name]; mode: RowLockMode } & (
+        | { wait?: "block"; tx: AggregateHolderTransaction<Name> }
+        | {
+            wait: "nowait";
+            tx: AggregateHolderTransaction<Name, SavepointTransaction>;
+          }
+      )
+    : never;
+}[AggregateName];
 type AggregateLockOptions =
-  | (RowIdentityOptions & { mode: RowLockMode } & WaitingOptions)
+  | HolderRowLockOptions
   | (AdvisoryIdentityOptions & {
       mode?: AdvisoryLockMode;
       wait?: "block" | "nowait";
@@ -432,6 +444,90 @@ export const createAggregateSavepointDatabase = <Tx extends object>(parent: {
   return database;
 };
 
+// A transaction opened on an owner connection (see owner-transaction.ts).
+// Owner-held row locks accept only this, so a scoped application-role
+// transaction cannot reach one.
+const OWNER_TRANSACTION: unique symbol = Symbol("stella.ownerTransaction");
+
+export type OwnerTransaction<Tx extends object> = Tx & {
+  readonly [OWNER_TRANSACTION]: true;
+};
+
+export type OwnerTransactionDatabase<Tx extends object> = {
+  transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
+};
+
+// Transactions opened by withOwnerAggregateTransaction, and their savepoints.
+// The registry never touches the transaction object; it lets the type follow
+// it and lets owner-held locks refuse anything else at run time too.
+const ownerTransactions = new WeakSet<object>();
+const isOwnerTransaction = <Tx extends object>(
+  tx: Tx,
+): tx is OwnerTransaction<Tx> => ownerTransactions.has(tx);
+
+/**
+ * A test double standing in for an owner transaction. Only test helpers may
+ * import it (scripts/ownership/owner-database.ts); production transactions
+ * come from withOwnerAggregateTransaction.
+ */
+export const ownerTransactionDouble = <Tx extends object>(
+  tx: Tx,
+): OwnerTransaction<Tx> => {
+  ownerTransactions.add(tx);
+  return isOwnerTransaction(tx)
+    ? tx
+    : panic("An owner transaction double must be registered");
+};
+
+const isOwnerHeld = (aggregate: AggregateName): boolean => {
+  const definition = AGGREGATE_LOCKS[aggregate];
+  return definition.kind === "row" && definition.holder === "owner";
+};
+
+/** Owner-held rows refuse an unregistered transaction before any statement. */
+const assertOwnerHolder = (aggregate: AggregateName, tx: object): void => {
+  if (isOwnerHeld(aggregate) && !ownerTransactions.has(tx)) {
+    panic(
+      `The ${aggregate} aggregate is owner-held: lock it on a transaction from withOwnerAggregateTransaction (a test passes asOwnerTransaction(tx)).`,
+    );
+  }
+};
+
+// Names an unregistered connection in a refusal: its class and own keys.
+const describeConnection = (database: object): string => {
+  const prototype: unknown = Object.getPrototypeOf(database);
+  const constructor = isRecord(prototype) ? prototype.constructor : null;
+  const name =
+    typeof constructor === "function" && constructor.name !== ""
+      ? constructor.name
+      : "object";
+  const keys = Object.keys(database).slice(0, 6).join(", ");
+  return `${name} with ${keys === "" ? "no own keys" : `keys ${keys}`}`;
+};
+
+/**
+ * {@link withAggregateTransaction} on a registered owner connection, the only
+ * source of transactions that owner-held locks accept. The connection passes
+ * through the same savepoint and nesting checks; an unregistered one is
+ * refused before any statement runs.
+ */
+export const withOwnerAggregateTransaction = async <Tx extends object, T>(
+  database: OwnerTransactionDatabase<Tx>,
+  run: (tx: OwnerTransaction<Tx>) => Promise<T>,
+): Promise<T> => {
+  if (!isOwnerDatabase(database)) {
+    return panic(
+      `withOwnerAggregateTransaction refused an unregistered connection (${describeConnection(database)}). Owner-held locks run only on a connection registered with createOwnerDatabase where it is built (rootDb, the maintenance connection); a test passes ownerDatabaseDouble(db).`,
+    );
+  }
+  return await withAggregateTransaction(database, async (tx) => {
+    ownerTransactions.add(tx);
+    return isOwnerTransaction(tx)
+      ? await run(tx)
+      : panic("An owner transaction must be registered when it opens");
+  });
+};
+
 /** A fresh physical transaction owns a fresh history, including failure/commit cleanup. */
 export const withAggregateTransaction = async <Tx extends object, T>(
   database: AggregateDatabase<Tx>,
@@ -613,6 +709,9 @@ export const withAggregateSavepoint = async <Tx extends object, T>(
   try {
     const committed = await tx.transaction(async (savepoint) => {
       histories.set(savepoint, history);
+      if (ownerTransactions.has(tx)) {
+        ownerTransactions.add(savepoint);
+      }
       try {
         const value = await run(savepoint);
         if (transactionHasAggregateLocks(history)) {
@@ -994,12 +1093,29 @@ const assertBatchIdAlphabet = (id: string): void => {
 };
 
 const parentRowSchema = v.object({ id: v.string() });
-type AggregateParentBatchOptions = {
-  tx: ExecuteTransaction;
-  organizationIds: readonly SafeId<"organization">[];
+/** The transaction a row lock on `Name`'s table accepts, by its registered holder. */
+export type AggregateHolderTransaction<
+  Name extends AggregateName,
+  Tx extends object = ExecuteTransaction,
+> = (typeof AGGREGATE_LOCKS)[Name] extends { holder: "owner" }
+  ? OwnerTransaction<Tx>
+  : Tx;
+type ParentBatchCommon = {
   workspaceIds?: readonly SafeId<"workspace">[];
   mode: RowLockMode;
 };
+// An organization row lock needs the organization aggregate's holder; a
+// workspace-only batch needs only the workspace aggregate's.
+type AggregateParentBatchOptions =
+  | (ParentBatchCommon & {
+      tx: AggregateHolderTransaction<"workspace">;
+      organizationIds: readonly [];
+    })
+  | (ParentBatchCommon & {
+      tx: AggregateHolderTransaction<"organization"> &
+        AggregateHolderTransaction<"workspace">;
+      organizationIds: readonly SafeId<"organization">[];
+    });
 
 /**
  * Parent batches ascend by registered rank, then immutable primary key.
@@ -1012,6 +1128,9 @@ export const withAggregateParentBatch = async ({
   workspaceIds = [],
   mode,
 }: AggregateParentBatchOptions) => {
+  if (organizationIds.length > 0) {
+    assertOwnerHolder("organization", tx);
+  }
   const history = lockHistory(tx);
   assertAggregateLevelAvailable(history);
   for (const id of [...organizationIds, ...workspaceIds]) {
@@ -1462,6 +1581,7 @@ export const withAggregateLock = async (
   options: AggregateLockOptions,
 ): Promise<AggregateLockResult> => {
   const { tx, aggregate } = options;
+  assertOwnerHolder(aggregate, tx);
   const wait = options.wait ?? "block";
   const history = lockHistory(tx);
   assertAggregateLevelAvailable(history);
@@ -1673,7 +1793,7 @@ type AggregateQueryIdentity =
       children?: undefined;
     });
 
-type AggregateRowQueryOptions<Row> = AggregateQueryIdentity & {
+type AggregateRowQueryCommon<Row> = {
   mode: RowLockMode;
   select: (tx: Transaction) => {
     where: (predicate: SQL) => AggregateLockableQuery<Row>;
@@ -1682,7 +1802,19 @@ type AggregateRowQueryOptions<Row> = AggregateQueryIdentity & {
   };
   where?: SQL;
   lockConfig?: Omit<LockConfig, "noWait" | "skipLocked">;
-} & ({ tx: Transaction; wait?: "block" } | { tx: Transaction; wait: "nowait" });
+};
+// Distributes over the identity union so each aggregate's transaction
+// follows its own registered holder.
+type AggregateRowQueryOptions<Row> =
+  AggregateQueryIdentity extends infer Identity
+    ? Identity extends { aggregate: infer Name extends AggregateName }
+      ? Identity &
+          AggregateRowQueryCommon<Row> & {
+            tx: AggregateHolderTransaction<Name, Transaction>;
+            wait?: "block" | "nowait";
+          }
+      : never
+    : never;
 type AggregateRowsResult<Row> =
   | { status: "locked" | "missing"; rows: Row[] }
   | { status: "busy"; error: AggregateLockBusy };
@@ -2147,6 +2279,7 @@ export function withAggregateRowQuery<Row>(
 export async function withAggregateRowQuery<Row>(
   options: AggregateRowQueryOptions<Row>,
 ): Promise<AggregateRowsResult<Row>> {
+  assertOwnerHolder(options.aggregate, options.tx);
   const history = lockHistory(options.tx);
   assertAggregateLevelAvailable(history);
   const wait = options.wait ?? "block";
@@ -2906,7 +3039,7 @@ export const lockOrganizationSettingsWrites = async ({
   tx,
   organizationIds,
 }: {
-  tx: Transaction;
+  tx: AggregateHolderTransaction<"organization", Transaction>;
   organizationIds: readonly SafeId<"organization">[];
 }): Promise<void> => {
   if (organizationIds.length === 0) {

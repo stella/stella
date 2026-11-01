@@ -7,7 +7,6 @@ import { createTestState } from "@stll/test-state";
 import { DAY_IN_MS } from "@stll/time";
 
 import { organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
   ORGANIZATION_ACCESS_STATE,
@@ -26,7 +25,7 @@ import {
 } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -211,7 +210,7 @@ if (!databaseUrl || !runPostgres) {
             await written.promise;
 
             const move = withAggregateTransaction(moverDb, async (tx) =>
-              moveKeylessOrganizationsToFree(asTestRaw<Transaction>(tx), {
+              moveKeylessOrganizationsToFree(asOwnerTransaction(tx), {
                 now: new Date(),
                 actor: "operator:test",
               }),

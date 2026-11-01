@@ -15,6 +15,7 @@ import {
   sweepRegistrations,
 } from "@/api/lib/scheduler/tasks/registration-retention";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -104,15 +105,17 @@ test("consent deletion removes pending handoffs and their browser sessions", asy
 
 const sweep = async () =>
   await sweepRegistrations({
-    db: asTestRaw<SchedulerDb>({
-      transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
-        await db.transaction(
-          async (tx) =>
-            await callback({
-              execute: async (query: SQL) => (await tx.execute(query)).rows,
-            }),
-        ),
-    }),
+    db: ownerDatabaseDouble(
+      asTestRaw<SchedulerDb>({
+        transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+          await db.transaction(
+            async (tx) =>
+              await callback({
+                execute: async (query: SQL) => (await tx.execute(query)).rows,
+              }),
+          ),
+      }),
+    ),
     now,
     retentionDays: 7,
   });

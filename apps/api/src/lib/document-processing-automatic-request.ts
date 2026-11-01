@@ -12,7 +12,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   withAggregateRowQuery,
-  withAggregateTransaction,
+  withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { shouldRequeueOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-automatic-request-state";
@@ -104,7 +104,7 @@ export const requestAutomaticDocumentOcr = async ({
   sourceSha256Hex: string;
   workspaceId: SafeId<"workspace">;
 }): Promise<void> => {
-  await withAggregateTransaction(db, async (tx) => {
+  await withOwnerAggregateTransaction(db, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [organizationId],
       workspaceIds: [workspaceId],
