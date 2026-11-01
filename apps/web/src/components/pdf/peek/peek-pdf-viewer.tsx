@@ -42,6 +42,7 @@ import {
 } from "@/components/docx-preview-zoom";
 import { useDocxBlockScroll } from "@/components/docx/use-docx-block-scroll";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { FilePreviewUnavailable } from "@/components/inspector/inspector-pdf-error-fallback";
 import {
   PdfSignPlacementBar,
   PdfSignPlacementLayer,
@@ -160,6 +161,8 @@ type PeekPdfViewerProps = {
   pdfPageSource: PDFPageSource;
   errorFallback?: ((props: { reset: () => void }) => ReactNode) | undefined;
   onError?: ((error: Error) => void) | undefined;
+  /** Offered when the file has no preview; without it the state is text only. */
+  onDownload?: (() => void) | undefined;
   colorMode?: PDFColorMode | undefined;
 };
 
@@ -209,6 +212,7 @@ const PeekPdfViewerContent = ({
   docxPlugins,
   pdfPageOverlay,
   pdfPageSource,
+  onDownload,
   colorMode = "system",
 }: PeekPdfViewerProps) => {
   const isImageOrigin = mimeType?.startsWith("image/") ?? false;
@@ -255,6 +259,9 @@ const PeekPdfViewerContent = ({
   );
 
   if (fileQuery.isError) {
+    if (isPreviewUnavailableError(fileQuery.error)) {
+      return <FilePreviewUnavailable onDownload={onDownload} />;
+    }
     throw fileQuery.error;
   }
   if (!file) {
