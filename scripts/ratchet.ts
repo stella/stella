@@ -53,7 +53,6 @@ import {
   walk,
 } from "../packages/scripts/src/syntax-tree";
 import { treeBaseRevision } from "../packages/scripts/src/tree-base-revision";
-import { API_RUNTIME_ENTRIES, LOCAL_DEV_MODULES } from "./api-runtime-entries";
 import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
   collectLintDirectives,
@@ -63,11 +62,6 @@ import {
   TRACKED_SUPPRESSION_RULES,
   type TrackedRule,
 } from "./lint-suppressions";
-import {
-  deriveOrgWriteGraphInputs,
-  type OrgWriteGraphHeadMetadata,
-  orgWriteGraphHeadMetadata,
-} from "./org-write-graph-enrollment";
 import {
   isApiProductionModule,
   isOutboundProductionModule,
@@ -92,9 +86,6 @@ import {
   countRootConnectionImports,
   countRootConnectionShapes,
   countRootConnectionTypeImports,
-  findUnscopedOrgWrites,
-  reachableGraphSources,
-  scanOrgWriteGraph,
 } from "./root-connection-shapes";
 import { schemaIntrospectionPaths } from "./schema-introspection";
 import {
@@ -144,39 +135,20 @@ const isExcludedFromResultConventionMetrics = (file: string): boolean =>
 // Every metric scans the same checkout, so each distinct glob is walked once
 // and each file is read once, however many metrics select it.
 
-/**
- * A whole checkout measures every metric. A partial one (the closure clone the
- * derived-totals harness builds from the ratchet definition paths) holds only
- * the guard and its declared inputs, so it does not measure whole-tree metrics.
- */
-type TreeExtent = "whole" | "partial";
-// Only an explicit command-line request measures a checkout as partial.
-const CHECKOUT_EXTENT: TreeExtent =
-  import.meta.main && process.argv.includes("--partial-tree")
-    ? "partial"
-    : "whole";
-
 type SourceTree = {
   readonly root: string;
   readonly role: MeasurementRole;
-  readonly extent: TreeExtent;
   readonly trackedFiles?: ReadonlySet<string> | undefined;
-  readonly headOrgGraph?: OrgWriteGraphHeadMetadata | undefined;
   readonly globs: Map<string, readonly string[]>;
   readonly contents: Map<string, string>;
 };
 
 export const openSourceTree = (
   root: string,
-  {
-    role = "head",
-    trackedFiles,
-    extent = CHECKOUT_EXTENT,
-  }: Omit<ScanOptions, "metrics"> = {},
+  { role = "head", trackedFiles }: Omit<ScanOptions, "metrics"> = {},
 ): SourceTree => ({
   root,
   role,
-  extent,
   trackedFiles,
   globs: new Map(),
   contents: new Map(),
@@ -1300,19 +1272,6 @@ const OWNER_HANDLE_ALLOWLIST_REMEDY =
 const ROOT_CONNECTION_DOOR_FILES: ReadonlySet<string> = new Set(
   ROOT_CONNECTION_DOORS.flatMap((door) => door.owner),
 );
-
-const orgWriteBudgetPath = (file: string): string =>
-  file === "apps/api/src/lib/member-assignment-offboarding.ts" ||
-  file === "apps/api/src/lib/member-assignment-offboarding-owner.ts"
-    ? "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts"
-    : file;
-const isOrgWriteOwner = (file: string): boolean =>
-  /^apps\/api\/src\/lib\/(?:flows|signals|scouts|feature-access|member-offboarding|scheduler\/tasks)\//u.test(
-    file,
-  ) ||
-  /^apps\/api\/src\/lib\/(?:auth|document-deadline-scout-worker|member-assignment-offboarding(?:-owner|-census)?)\.ts$/u.test(
-    file,
-  );
 
 // `audit: skip` directives: occurrences in comments only, found as the
 // occurrences that stripping comments removes.
@@ -2629,11 +2588,6 @@ export type RatchetMetric = (
       readonly id: string;
       readonly description: string;
       readonly count: RepoCounter;
-      /**
-       * Measured only on a whole checkout: the count closes over the whole
-       * source graph and refuses a tree that lacks part of it.
-       */
-      readonly tree?: "whole";
       /** Gate each measured member independently, including virtual file keys. */
       readonly perFile?: true;
     }
@@ -3570,120 +3524,6 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     allowlist: OWNER_HANDLE_ALLOWLIST_REMEDY,
   },
   {
-    scope: "repo",
-    id: "unscoped-org-owner-writes",
-    tree: "whole",
-    description:
-      "ORG table writes in owner modules outside the withOrgScope callback transaction; each file/table/operation/normalized-statement identity is independently shrink-only",
-    perFile: true,
-    growth: "shrink-only",
-    count: (context) => {
-      const sourceFiles = scanRepoFiles(context, API_OWNER_HANDLE_GLOBS);
-      if (sourceFiles.length === 0) {
-        return panic(
-          "The measured tree has no API source files for the organization write graph",
-        );
-      }
-      const sources = new Map(
-        sourceFiles.map((file) => [file, readSource(context, file)]),
-      );
-      const ownershipFiles = scanRepoFiles(context, ["scripts/ownership/*.ts"]);
-      const ownershipSources = new Map(
-        ownershipFiles.map((file) => [file, readSource(context, file)]),
-      );
-      const graphInputs = deriveOrgWriteGraphInputs(sources, ownershipSources, {
-        role: context.role,
-        ...(context.headOrgGraph === undefined
-          ? {}
-          : { head: context.headOrgGraph }),
-      });
-      const { rootDoorFiles, ...analysisInputs } = graphInputs;
-      const policyEntryFiles = new Set(
-        sourceFiles.filter(
-          (file) => rootDoorFiles.has(file) || isOrgWriteOwner(file),
-        ),
-      );
-      const orgTables = graphInputs.orgTables;
-      const counts = new Map<string, number>();
-      let count = 0;
-      const legacySinkSites = new Set<string>();
-      for (const file of policyEntryFiles) {
-        const content =
-          sources.get(file) ?? panic(`Missing tree source ${file}`);
-        for (const hit of findUnscopedOrgWrites({ content, file, orgTables })) {
-          const key = `${orgWriteBudgetPath(file)}#${hit.table}#${hit.operation}#${hit.fingerprint}`;
-          counts.set(key, (counts.get(key) ?? 0) + 1);
-          legacySinkSites.add(
-            `${file}#${hit.line}#${hit.table}#${hit.operation}`,
-          );
-          count += 1;
-        }
-      }
-      const graphSources = new Map(
-        ALL_SOURCE_GLOBS.flatMap((glob) => globFiles(context, glob)).map(
-          (file) => [file, readSource(context, file)],
-        ),
-      );
-      for (const [file, content] of sources) {
-        graphSources.set(file, content);
-      }
-      // Only modules a runtime process reaches can write in production; a
-      // declared door or owner outside that closure is not an entry, but it
-      // must still exist.
-      const reachable = reachableGraphSources({
-        sources,
-        roots: API_RUNTIME_ENTRIES.map(({ file }) => file),
-        localDevFiles: new Set(LOCAL_DEV_MODULES.map(({ file }) => file)),
-      });
-      for (const file of rootDoorFiles) {
-        if (!graphSources.has(file)) {
-          panic(
-            `Unresolved organization write graph: missing root-door owner ${file}`,
-          );
-        }
-      }
-      const graph = scanOrgWriteGraph({
-        sources: graphSources,
-        entryFiles: reachable,
-        rootDoorFiles: new Set(
-          [...rootDoorFiles].filter((file) => reachable.has(file)),
-        ),
-        policyEntryFiles: new Set(
-          [...policyEntryFiles].filter((file) => reachable.has(file)),
-        ),
-        ...analysisInputs,
-      });
-      const entryFiles = graph.entries
-        .map(({ file }) => file)
-        .toSorted(compareCodeUnit);
-      if (
-        graph.analyzedEntries.toSorted(compareCodeUnit).join("\0") !==
-          entryFiles.join("\0") ||
-        graph.reachedRecoveryOwners.toSorted(compareCodeUnit).join("\0") !==
-          [...graphInputs.recoveryOwnerFiles]
-            .toSorted(compareCodeUnit)
-            .join("\0")
-      ) {
-        return panic(
-          "Organization write graph did not close over its derived entries and recovery owners",
-        );
-      }
-      for (const hit of graph.hits) {
-        if (
-          legacySinkSites.has(
-            `${hit.file}#${hit.line}#${hit.table}#${hit.operation}`,
-          )
-        ) {
-          continue;
-        }
-        const key = `${orgWriteBudgetPath(hit.file)}#${hit.table}#${hit.operation}#${hit.fingerprint}`;
-        counts.set(key, (counts.get(key) ?? 0) + 1);
-        count += 1;
-      }
-      return { count, files: Object.fromEntries(counts) };
-    },
-  },
-  {
     scope: "file",
     id: "public-corpus-audit-membership",
     description:
@@ -4232,7 +4072,6 @@ type TreeScan = {
   readonly snapshot: Baseline;
   readonly role: MeasurementRole;
   readonly files: ReadonlyMap<string, FileCounts>;
-  readonly headOrgGraph?: OrgWriteGraphHeadMetadata | undefined;
 };
 
 type ScanTreeOptions = {
@@ -4253,29 +4092,6 @@ export const scanTree = ({
   previous,
 }: ScanTreeOptions): TreeScan => {
   assertMetricRegistry();
-  const measured = (metric: RatchetMetric) =>
-    tree.extent === "whole" ||
-    metric.scope !== "repo" ||
-    metric.tree !== "whole";
-  const needsOrgWriteGraph = metrics.some(
-    (metric) =>
-      measured(metric) &&
-      metric.scope === "repo" &&
-      metric.id === "unscoped-org-owner-writes",
-  );
-  let headOrgGraph = previous?.headOrgGraph;
-  if (needsOrgWriteGraph && tree.role === "head") {
-    headOrgGraph = orgWriteGraphHeadMetadata((file) => readSource(tree, file));
-  }
-  if (needsOrgWriteGraph && headOrgGraph === undefined) {
-    return panic(
-      "Base organization graph measurement requires the measured HEAD scope registry and table relations",
-    );
-  }
-  const metricContext: SourceTree = {
-    ...tree,
-    ...(headOrgGraph === undefined ? {} : { headOrgGraph }),
-  };
   const metricsByFile = new Map<string, FileMetric[]>();
   for (const metric of metrics) {
     if (metric.scope !== "file") {
@@ -4328,18 +4144,12 @@ export const scanTree = ({
   for (const metric of metrics) {
     switch (metric.scope) {
       case "repo":
-        if (!measured(metric)) {
-          // A partial tree keeps an unmeasured whole-tree metric level with
-          // its base, which is measured the same way.
-          snapshot[metric.id] = { count: 0, files: {} };
-          break;
-        }
         if (metric.count === countDuplicateTokenBlocks) {
           // Release transient syntax trees and the prior tree's token index
           // before allocating another whole-repository duplication index.
           Bun.gc(true);
         }
-        snapshot[metric.id] = sortedSnapshot(metric.count(metricContext));
+        snapshot[metric.id] = sortedSnapshot(metric.count(tree));
         break;
       case "file":
         snapshot[metric.id] = sortedSnapshot(
@@ -4356,34 +4166,22 @@ export const scanTree = ({
   if (inspection.status === "invalid") {
     panic(inspection.errors.join("\n"));
   }
-  return {
-    snapshot: inspection.baseline,
-    role: tree.role,
-    files,
-    ...(headOrgGraph === undefined ? {} : { headOrgGraph }),
-  };
+  return { snapshot: inspection.baseline, role: tree.role, files };
 };
 
 type ScanOptions = {
   metrics?: readonly RatchetMetric[];
   role?: MeasurementRole;
   trackedFiles?: ReadonlySet<string>;
-  extent?: TreeExtent;
 };
 
 export const scanAll = (
   root: string,
-  {
-    metrics = RATCHET_METRICS,
-    role = "head",
-    trackedFiles,
-    extent,
-  }: ScanOptions = {},
+  { metrics = RATCHET_METRICS, role = "head", trackedFiles }: ScanOptions = {},
 ): Baseline =>
   scanTree({
     tree: openSourceTree(root, {
       role,
-      ...(extent === undefined ? {} : { extent }),
       ...(trackedFiles === undefined ? {} : { trackedFiles }),
     }),
     metrics,
@@ -7434,8 +7232,7 @@ const runSelfTest = (): number => {
 
     writeFileSync(path.join(root, "package.json"), "{}");
     writeFileSync(path.join(root, "bun.lock"), "{ packages: {} }");
-    // A synthetic tree, so whole-tree metrics are not measured here.
-    const snapshot = scanAll(root, { extent: "partial" });
+    const snapshot = scanAll(root);
 
     failures.push(...schemaIntrospectionSelfTestFailures(snapshot));
 
@@ -7856,8 +7653,6 @@ Options:
   --base <commit> Compare against this revision instead of the merge base.
   --head <commit> Measure this revision instead of the working tree.
   --details       Include per-file counts in report mode.
-  --partial-tree  Measure a closure clone, not a whole checkout: whole-tree
-                  metrics stay unmeasured on both sides of the comparison.
   -h, --help      Print this usage and exit.
 
 Allowances:
@@ -7877,7 +7672,6 @@ const main = (): number => {
     "--base",
     "--head",
     "--details",
-    "--partial-tree",
   ]);
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
     printUsage();
