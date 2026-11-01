@@ -32,6 +32,7 @@ import {
   failureExitCode,
   formatCheckFailure,
   greenBaseScope,
+  greenBaseScopeMessage,
   LINT_ONLY_CACHE_INPUTS,
   lintAllTrace,
   matchedLintAllInputs,
@@ -2460,13 +2461,49 @@ describe("main's code check compares with the last green commit", () => {
         type: "affected",
         base: green,
       });
-      // Not an ancestor of the checked tree, unknown, or malformed.
-      expect(greenBaseScope(side, root)).toEqual({ type: "all" });
-      expect(greenBaseScope("", root)).toEqual({ type: "all" });
-      expect(greenBaseScope("f".repeat(40), root)).toEqual({ type: "all" });
-      expect(greenBaseScope("HEAD~1", root)).toEqual({ type: "all" });
+      // Not an ancestor of the checked tree, or malformed.
+      expect(greenBaseScope(side, root)).toEqual({
+        type: "all",
+        reason: "not-ancestor",
+      });
+      expect(greenBaseScope("", root)).toEqual({
+        type: "all",
+        reason: "malformed",
+      });
+      expect(greenBaseScope("HEAD~1", root)).toEqual({
+        type: "all",
+        reason: "malformed",
+      });
+      // An unknown commit fails the probe; its message is kept, not read as
+      // a missing green commit.
+      const unknown = greenBaseScope("f".repeat(40), root);
+      expect(unknown).toMatchObject({ type: "all", reason: "probe-failed" });
+      expect(greenBaseScopeMessage(unknown)).toContain(
+        "green main ancestry probe failed",
+      );
+      expect(greenBaseScopeMessage(greenBaseScope(side, root))).toBe(
+        "code-check: no reachable green main commit; checking every file",
+      );
     } finally {
       rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  test("a failed ancestry probe keeps its message and still checks every file", () => {
+    const outside = mkdtempSync(path.join(tmpdir(), "green-base-outside-"));
+    try {
+      const scope = greenBaseScope("a".repeat(40), outside);
+      if (scope.type !== "all" || scope.reason !== "probe-failed") {
+        throw new Error(
+          `expected a failed probe, got ${JSON.stringify(scope)}`,
+        );
+      }
+      expect(scope.detail).toContain("not a git repository");
+      expect(greenBaseScopeMessage(scope)).toBe(
+        `code-check: green main ancestry probe failed (${scope.detail}); checking every file`,
+      );
+    } finally {
+      rmSync(outside, { force: true, recursive: true });
     }
   });
 

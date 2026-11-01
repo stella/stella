@@ -462,23 +462,62 @@ export const codeCheckExclusions = (
 
 const FULL_COMMIT = /^[0-9a-f]{40}$/u;
 
+/** Where a check of main starts, and why a missing green base checks everything. */
+export type GreenBaseScope =
+  | { type: "affected"; base: string }
+  | { type: "all"; reason: "malformed" | "not-ancestor" }
+  /** The ancestry probe failed; its message is kept so it never reads as absence. */
+  | { type: "all"; reason: "probe-failed"; detail: string };
+
 /**
  * The scope for a check of main: the change since the last commit known
- * green, or every file when that commit is missing, malformed or not an
- * ancestor of the checked tree. Comparing main with itself would check
- * nothing, so the scope fails closed to the full check.
+ * green, or every file when that commit is malformed, not an ancestor of the
+ * checked tree, or the ancestry probe fails. Comparing main with itself would
+ * check nothing, so the scope fails closed to the full check.
  */
-export const greenBaseScope = (greenBase: string, root: string): CheckScope => {
+export const greenBaseScope = (
+  greenBase: string,
+  root: string,
+): GreenBaseScope => {
   if (!FULL_COMMIT.test(greenBase)) {
-    return { type: "all" };
+    return { type: "all", reason: "malformed" };
   }
   const ancestor = Bun.spawnSync(
     ["git", "merge-base", "--is-ancestor", greenBase, "HEAD"],
-    { cwd: root, stdout: "ignore", stderr: "ignore" },
+    { cwd: root, stdout: "ignore", stderr: "pipe" },
   );
-  return ancestor.exitCode === 0
-    ? { type: "affected", base: greenBase }
-    : { type: "all" };
+  switch (ancestor.exitCode) {
+    case 0:
+      return { type: "affected", base: greenBase };
+    case 1:
+      return { type: "all", reason: "not-ancestor" };
+    default:
+      return {
+        type: "all",
+        reason: "probe-failed",
+        detail:
+          ancestor.stderr.toString().trim() ||
+          `merge-base exited ${String(ancestor.exitCode)}`,
+      };
+  }
+};
+
+/** The log line that says which scope a green base produced. */
+export const greenBaseScopeMessage = (scope: GreenBaseScope): string => {
+  if (scope.type === "affected") {
+    return `code-check: checking changes since green main ${scope.base}`;
+  }
+  switch (scope.reason) {
+    case "malformed":
+      return "code-check: green main is not a full commit id; checking every file";
+    case "not-ancestor":
+      return "code-check: no reachable green main commit; checking every file";
+    case "probe-failed":
+      return `code-check: green main ancestry probe failed (${scope.detail}); checking every file`;
+    default:
+      scope satisfies never;
+      return panic("Unhandled green base scope");
+  }
 };
 
 type Options = {
@@ -1544,17 +1583,14 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   if (toolchain.isErr()) {
     return toolchain;
   }
-  const checkScope =
+  const resolvedGreenBase =
     options.greenBase === undefined
-      ? options.scope
+      ? undefined
       : greenBaseScope(options.greenBase, process.cwd());
-  if (options.greenBase !== undefined) {
-    console.log(
-      checkScope.type === "affected"
-        ? `code-check: checking changes since green main ${checkScope.base}`
-        : "code-check: no reachable green main commit; checking every file",
-    );
+  if (resolvedGreenBase !== undefined) {
+    console.log(greenBaseScopeMessage(resolvedGreenBase));
   }
+  const checkScope: CheckScope = resolvedGreenBase ?? options.scope;
   const scoped = await planScope(checkScope, options.leg);
   if (scoped.isErr()) {
     return scoped;
