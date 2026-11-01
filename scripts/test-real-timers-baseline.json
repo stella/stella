@@ -1,10 +1,20 @@
 {
   ".claude/mcp/stella-docs-http.test.ts": {
-    "count": 3,
+    "count": 1,
     "owner": ".claude",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  ".oxlint-plugins/__tests__/lint-single-rule.test.ts": {
+    "count": 1,
+    "owner": ".oxlint-plugins",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/evals/lib/model-turn.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/scripts/export-mcp-tool-registry.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -20,22 +30,17 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/scripts/test-process-supervisor.test.ts": {
-    "count": 5,
+    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/db/backfill-runtime-load-reader.db.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/db/case-law-provision-extraction-state.postgres.test.ts": {
-    "count": 2,
+    "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/db/entity-feature-gate-maintenance.postgres.test.ts": {
-    "count": 4,
+    "count": 3,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -45,21 +50,11 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/db/migration-runner.db.test.ts": {
-    "count": 4,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/db/online-ddl-contention.postgres.test.ts": {
     "count": 1,
     "owner": "api",
-    "reason": "polls pg_stat_activity until a real backend lock wait appears; the gate's wait contract gives up silently after its budget"
-  },
-  "apps/api/src/db/online-index-gate.postgres.test.ts": {
-    "count": 6,
-    "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/db/online-repair-holds.db.test.ts": {
+  "apps/api/src/db/online-index-gate.postgres.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -74,6 +69,11 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/handlers/case-law/decisions/search-expand.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa.test.ts": {
     "count": 1,
     "owner": "api",
@@ -84,43 +84,23 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/handlers/case-law/ingestion/background-replay.postgres.test.ts": {
+  "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.db.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/handlers/case-law/ingestion/pipeline-identity.db.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/case-law/ingestion/source-totals.db.test.ts": {
+  "apps/api/src/handlers/case-law/republished-erasure-lock.postgres.test.ts": {
     "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/chat/chat-turn-run-ownership.integration.test.ts": {
-    "count": 9,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/chat/send-message-turn-settlement.integration.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/chat/send-message.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.test.ts": {
-    "count": 1,
+    "count": 7,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.test.ts": {
-    "count": 3,
+    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -139,23 +119,8 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/handlers/expenses/immutability.postgres.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/invoices/pdf/typst/session.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/handlers/legal-reader/answers/runtime.db.test.ts": {
     "count": 5,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/legal-reader/answers/stream-deadline.postgres.test.ts": {
-    "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -164,22 +129,12 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/handlers/lists/columns/create.postgres.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/rates/default-concurrency.postgres.test.ts": {
-    "count": 1,
+  "apps/api/src/handlers/lists/verifications/claim-comments/claim-comments.db.test.ts": {
+    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/sanctions/public-routes.db.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/search-history/import-clock.integration.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -190,6 +145,11 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/workspaces/workspace-events-access.db.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/http/request-body.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -204,16 +164,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/business-registries/desktop/renewal.postgres.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/case-law/analysis-failure-sweep.postgres.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/case-law/maintenance-lane.db.test.ts": {
     "count": 1,
     "owner": "api",
@@ -225,11 +175,6 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/chat/run-log.db.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/chat/run-log.postgres.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -254,37 +199,17 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/db/member-access-hold.postgres.test.ts": {
-    "count": 3,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/db/rls-role-posture.db.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/db/tree-parent-guard.postgres.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/document-processing-idle-exit.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/document-processing-queue.test.ts": {
-    "count": 8,
+    "count": 5,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/email/correspondence/account-erasure-lock.postgres.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/email/inbound/sender.postgres.test.ts": {
+  "apps/api/src/lib/files/conversion-input.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -295,7 +220,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/legal-search/corpus-index-delete-survivor.contract.test.ts": {
-    "count": 2,
+    "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -339,36 +264,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/lists/sanctions/monitoring-claims.postgres.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/lists/sanctions/monitoring-opt-out.postgres.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/machine-api-keys/personal-lifecycle.postgres.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/member-removal-locks.postgres.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/member-role-invariants.postgres.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/observability/event-loop-delay.test.ts": {
     "count": 4,
     "owner": "api",
@@ -376,6 +271,11 @@
   },
   "apps/api/src/lib/observability/request-context.test.ts": {
     "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/public-law-read-deadline.postgres.test.ts": {
+    "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -415,11 +315,6 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/rate-limit/rate-limit.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/rate-limit/redis-context.cold-start.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -464,6 +359,11 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/lib/sse-fanout.db.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/lib/sse-publish-timeout.test.ts": {
     "count": 1,
     "owner": "api",
@@ -489,11 +389,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/usage/member-capacity.postgres.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/workflow-queue.test.ts": {
     "count": 1,
     "owner": "api",
@@ -504,17 +399,12 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/mcp/server-served-body.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/mcp/server.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/scripts/corpus-generation.postgres.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/scripts/eu-completion-tick.postgres.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -584,8 +474,23 @@
     "owner": "extension",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/web/e2e/journeys/inspector-layout.spec.ts": {
+    "count": 2,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/web/e2e/specs/guides.spec.ts": {
     "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/e2e/specs/network-collector.spec.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/e2e/specs/render-probe.spec.ts": {
+    "count": 2,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -624,6 +529,16 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/web/src/components/chat/streamdown-mention-link.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/chat/tool-approval-card.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/web/src/components/docx/docx-edit-mode.logic.test.ts": {
     "count": 1,
     "owner": "web",
@@ -635,12 +550,22 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/web/src/components/inspector/inspector-tabs-store.test.ts": {
-    "count": 2,
+    "count": 3,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/inspector/markdown-file-viewer.dom.test.tsx": {
+    "count": 1,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/web/src/components/inspector/maximize-tab.test.ts": {
     "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/legal-reader/annotations/reader-annotation-undo.dom.test.tsx": {
+    "count": 2,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -656,6 +581,11 @@
   },
   "apps/web/src/components/provision-version-basis.dom.test.tsx": {
     "count": 2,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/toast-behaviour.dom.test.tsx": {
+    "count": 1,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -700,7 +630,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/web/src/features/case-law/components/case-viewer/use-reader-answers.dom.test.tsx": {
-    "count": 4,
+    "count": 5,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -719,13 +649,23 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/web/src/features/chat/queries.test.ts": {
+  "apps/web/src/features/chat/chat-runtime-version-skew.test.ts": {
     "count": 1,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/web/src/features/chat/queries.test.ts": {
+    "count": 2,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/web/src/features/chat/stream-chunk-commit-budget.dom.test.tsx": {
-    "count": 4,
+    "count": 5,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/chat/user-message-edit-session.dom.test.tsx": {
+    "count": 1,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -784,6 +724,11 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/web/src/lib/analytics/web-hang/web-hang-detector.dom.test.tsx": {
+    "count": 7,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/web/src/lib/errors/user-toast.test.ts": {
     "count": 1,
     "owner": "web",
@@ -804,6 +749,16 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/web/src/lib/workspaces/mutations/upload-failure-toast.dom.test.tsx": {
+    "count": 4,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/routes/-app-frame-bridge.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/web/src/routes/-app-frame-transition.dom.test.tsx": {
     "count": 1,
     "owner": "web",
@@ -815,7 +770,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/web/src/routes/_protected.chat/-components/chat-history-page.dom.test.tsx": {
-    "count": 1,
+    "count": 2,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -849,6 +804,11 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/web/src/testing/timer-guard.test.ts": {
+    "count": 18,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "packages/business-registries/src/ares/client.test.ts": {
     "count": 1,
     "owner": "business-registries",
@@ -879,11 +839,6 @@
     "owner": "errors",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "packages/infosoud/src/client.test.ts": {
-    "count": 1,
-    "owner": "infosoud",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "packages/legal-atlas/src/document-stage-observer.test.ts": {
     "count": 1,
     "owner": "legal-atlas",
@@ -892,6 +847,16 @@
   "packages/property-testing/src/assert-property.test.ts": {
     "count": 2,
     "owner": "property-testing",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/property-testing/src/fake-timers.test.ts": {
+    "count": 9,
+    "owner": "property-testing",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/scripts/src/dev-process-groups.test.ts": {
+    "count": 1,
+    "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "packages/scripts/src/process-memory.test.ts": {
@@ -930,6 +895,11 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "scripts/gh-retry-processes.test.ts": {
+    "count": 1,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "scripts/oxlint-tailwind-design-system.test.ts": {
     "count": 1,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
