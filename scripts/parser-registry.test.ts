@@ -171,6 +171,9 @@ const bumpEntry = (file: string, source: string, side: string) => {
   return `${JSON.stringify(bumped)}\n`;
 };
 
+const render = (entries: ReadonlyMap<string, string>) =>
+  renderParserRegistry(entries) ?? panic("Empty parser registry");
+
 test("changes to neighbouring entries merge without a registry conflict", () => {
   const base = sourceEntries(repositoryRoot);
   const files = [...base.keys()].toSorted();
@@ -194,10 +197,7 @@ test("changes to neighbouring entries merge without a registry conflict", () => 
         ["ours", ours],
         ["theirs", theirs],
       ] as const) {
-        writeFileSync(
-          path.join(directory, name),
-          renderParserRegistry(entries),
-        );
+        writeFileSync(path.join(directory, name), render(entries));
       }
       const merged = gitResult(directory, [
         "merge-file",
@@ -207,7 +207,7 @@ test("changes to neighbouring entries merge without a registry conflict", () => 
         "theirs",
       ]);
       expect(merged.exitCode, `${left} next to ${right}`).toBe(0);
-      expect(merged.stdout.toString()).toBe(renderParserRegistry(both));
+      expect(merged.stdout.toString()).toBe(render(both));
     }
   } finally {
     rmSync(directory, { recursive: true, force: true });
