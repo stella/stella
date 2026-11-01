@@ -190,28 +190,42 @@ export const readCheckPool = (
 ) => parseCheckPool(read(job));
 
 /**
- * Every pooled check's wall-time budget, generated from measured durations
- * by scripts/ci-check-budgets.ts; one entry per pooled check, no other.
+ * Every pooled check's wall-time budget and peak memory, generated from
+ * measured runs by scripts/ci-check-budgets.ts; one entry per pooled check,
+ * no other.
  */
 export const CHECK_BUDGETS_PATH = ".github/ci-checks/budgets.json";
-export type CheckBudget = {
+export type TimeBudget = {
   minutes: number;
   samples: number;
   p95Seconds?: number;
   p99Seconds?: number;
 };
+export type CheckBudget = TimeBudget & {
+  /** The largest peak RSS a passing run measured, in MiB: the pool's admission weight. */
+  peakRssMiB: number;
+};
 export type CheckBudgets = Readonly<
   Record<CheckPoolJob, Readonly<Record<string, CheckBudget>>>
 >;
 
-const BUDGET_KEYS = new Set(["minutes", "samples", "p95Seconds", "p99Seconds"]);
+const BUDGET_KEYS = new Set([
+  "minutes",
+  "samples",
+  "p95Seconds",
+  "p99Seconds",
+  "peakRssMiB",
+]);
+// A budget without a measured peak cannot be admitted by memory, so it is invalid.
 const isBudget = (value: unknown): value is CheckBudget =>
   record(value) &&
   Object.keys(value).every((key) => BUDGET_KEYS.has(key)) &&
   Number.isInteger(value["minutes"]) &&
   Number(value["minutes"]) >= 1 &&
   Number.isInteger(value["samples"]) &&
-  Number(value["samples"]) >= 0;
+  Number(value["samples"]) >= 0 &&
+  Number.isInteger(value["peakRssMiB"]) &&
+  Number(value["peakRssMiB"]) >= 1;
 
 export const parseCheckBudgets = (source: string): CheckBudgets => {
   const parsed: unknown = JSON.parse(source);
@@ -248,12 +262,11 @@ export const parseCheckBudgets = (source: string): CheckBudgets => {
 export const readCheckBudgets = (root: string = ROOT) =>
   parseCheckBudgets(readFileSync(path.join(root, CHECK_BUDGETS_PATH), "utf-8"));
 
-/** A pooled check's generated budget; a check without one cannot run. */
-export const checkBudgetMinutes = (
+const checkBudgetOf = (
   budgets: CheckBudgets,
   job: CheckPoolJob,
   name: string,
-) => {
+): CheckBudget => {
   const budget = Object.hasOwn(budgets[job], name)
     ? budgets[job][name]
     : undefined;
@@ -262,8 +275,22 @@ export const checkBudgetMinutes = (
       `${name}: no budget in ${CHECK_BUDGETS_PATH}; run bun scripts/ci-check-budgets.ts refresh`,
     );
   }
-  return budget.minutes;
+  return budget;
 };
+
+/** A pooled check's generated budget; a check without one cannot run. */
+export const checkBudgetMinutes = (
+  budgets: CheckBudgets,
+  job: CheckPoolJob,
+  name: string,
+) => checkBudgetOf(budgets, job, name).minutes;
+
+/** A pooled check's measured peak memory; a check without one cannot run. */
+export const checkPeakRssMiB = (
+  budgets: CheckBudgets,
+  job: CheckPoolJob,
+  name: string,
+) => checkBudgetOf(budgets, job, name).peakRssMiB;
 
 /** Where the pool leaves per-check outcomes for the receipt recorder. */
 export const checkPoolResultsPath = (job: CheckPoolJob, runnerTemp: string) =>
