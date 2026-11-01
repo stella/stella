@@ -234,7 +234,8 @@ type McpCapabilityReason =
   | "correspondence"
   | "personal_history"
   | "assistant_memory"
-  | "notification_inbox";
+  | "notification_inbox"
+  | "organization_admin";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from
@@ -283,6 +284,9 @@ type McpCapabilityReason =
  * - `compound_consent`: operations that require multiple independent OAuth
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
+ * - `native_device`: a native app registering the device it runs on (push
+ *   alert delivery). Only the signed-in app holds the device token; an agent
+ *   that could register one could route a person's alerts elsewhere.
  */
 type McpInternalReason =
   | "auth_plumbing"
@@ -306,7 +310,8 @@ type McpInternalReason =
   | "document_processing"
   | "native_tool_ui"
   | "billing_ui"
-  | "compound_consent";
+  | "compound_consent"
+  | "native_device";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler
@@ -644,6 +649,8 @@ type SafeErrorBody = {
   retryAfterMs?: number;
   /** Field-scoped reasons the request was rejected. */
   issues?: HandlerErrorValidationIssue[];
+  /** Matter destination for a scope correction the caller may follow. */
+  workspaceId?: string;
   /**
    * Structured fields surfaced on specific error responses. Today
    * only the 402 UsageLimitExceeded path uses them so the
@@ -2170,6 +2177,7 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
     ? {}
     : { retryAfterMs: error.retryAfterMs }),
   ...(error.issues ? { issues: error.issues } : {}),
+  ...(error.workspaceId ? { workspaceId: error.workspaceId } : {}),
   // Usage-limit 402s carry structured fields so the frontend renders the
   // "x of y units left" modal without parsing the message (see SafeErrorBody).
   ...(error.usage

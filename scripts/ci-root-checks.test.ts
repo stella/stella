@@ -576,6 +576,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test preview scope tool availability": [
     "scripts/visual-preview-scope.test.ts",
+    "scripts/visual-preview-scope.ts",
   ],
   "ci-checks-rest/Test public document fetch": [
     "scripts/fetch-public-documents.test.ts",
