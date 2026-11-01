@@ -28,6 +28,8 @@ import infosoudCourts from "@/api/handlers/workspaces/infosoud-courts";
 import infosoudImportAgenda from "@/api/handlers/workspaces/infosoud-import-agenda";
 import infosoudLookup from "@/api/handlers/workspaces/infosoud-lookup";
 import readJustifications from "@/api/handlers/workspaces/justifications/list";
+import placeMatterLegalHold from "@/api/handlers/workspaces/legal-holds/place";
+import releaseMatterLegalHold from "@/api/handlers/workspaces/legal-holds/release";
 import readWorkspaces from "@/api/handlers/workspaces/list";
 import listWorkspaceMemberPreviews from "@/api/handlers/workspaces/member-previews/list";
 import addWorkspaceMember from "@/api/handlers/workspaces/members/add";
@@ -126,6 +128,8 @@ export const workspacesRoute = mount(
           POST: updateWorkspace,
           DELETE: deleteWorkspace,
         },
+        "/legal-holds": { POST: placeMatterLegalHold },
+        "/legal-holds/:holdId/release": { POST: releaseMatterLegalHold },
         "/vocabulary": { GET: readVocabulary },
         "/workflow": { GET: readWorkflow },
         "/workflow/start": { POST: workflowStart },

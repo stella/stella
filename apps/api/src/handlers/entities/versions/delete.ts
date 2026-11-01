@@ -24,6 +24,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { requireNoHold } from "@/api/lib/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
@@ -89,6 +91,30 @@ export const deleteEntityVersionHandler = async function* ({
   // whether the version can be tombstoned.
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
+      const workspace = await tx.query.workspaces.findFirst({
+        where: { id: { eq: workspaceId } },
+        columns: { organizationId: true },
+      });
+      if (!workspace) {
+        return {
+          ok: false as const,
+          status: 404 as const,
+          message: "Version not found",
+        };
+      }
+      const hold = await requireNoHold({
+        tx,
+        organizationId: workspace.organizationId,
+        target: { type: "entityVersion", entityVersionId: versionId },
+      });
+      if (hold.isErr()) {
+        return {
+          ok: false as const,
+          status: 409 as const,
+          message: hold.error.message,
+          error: hold.error,
+        };
+      }
       const targetProperties = await tx
         .select({ propertyId: fields.propertyId })
         .from(fields)
@@ -433,6 +459,9 @@ export const deleteEntityVersionHandler = async function* ({
   );
 
   if (!txOutcome.ok) {
+    if ("error" in txOutcome) {
+      return Result.err(legalHoldRefusal(txOutcome.error));
+    }
     return Result.err(
       new HandlerError({
         status: txOutcome.status,

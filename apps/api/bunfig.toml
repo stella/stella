@@ -3,4 +3,7 @@
 auto = "disable"
 
 [test]
-preload = ["./src/tests/statement-ceiling-hooks.ts"]
+preload = [
+  "./src/tests/statement-ceiling-hooks.ts",
+  "./src/tests/hermetic-file-deletion-preload.ts",
+]

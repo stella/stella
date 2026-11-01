@@ -26,6 +26,10 @@ export const AUDIT_ACTION_PROJECTIONS = {
   [AUDIT_ACTION.REVIEW]: "settings.organization.auditLogsSentenceReview",
   [AUDIT_ACTION.SYNTHETIC_SESSION_MINTED]:
     "settings.organization.auditLogsSentenceSessionCreated",
+  [AUDIT_ACTION.LEGAL_HOLD_PLACED]:
+    "settings.organization.auditLogsSentenceLegalHoldPlaced",
+  [AUDIT_ACTION.LEGAL_HOLD_RELEASED]:
+    "settings.organization.auditLogsSentenceLegalHoldReleased",
 } as const satisfies Record<AuditAction, TranslationKey>;
 
 export const AUDIT_RESOURCE_PROJECTIONS = {
@@ -125,6 +129,8 @@ export const AUDIT_RESOURCE_PROJECTIONS = {
     "settings.organization.auditResourceKinds.personal_api_key",
   [AUDIT_RESOURCE_TYPE.MACHINE_API_KEY]:
     "settings.organization.auditResourceKinds.machine_api_key",
+  [AUDIT_RESOURCE_TYPE.LEGAL_HOLD]:
+    "settings.organization.auditResourceKinds.legal_hold",
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST]:
     "settings.organization.auditResourceKinds.legal_list",
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST_GENERATION]:

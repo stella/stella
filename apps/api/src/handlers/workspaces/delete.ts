@@ -6,6 +6,8 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
+import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import {
   WorkspaceBillingHistoryError,
   WorkspaceStorageTeardownBoundError,
@@ -39,6 +41,9 @@ export const deleteWorkspaceHandler = async function* (
 ) {
   const outcome = await executeAuthorizedWorkspaceDeletion(props);
   if (Result.isError(outcome)) {
+    if (LegalHoldActiveError.is(outcome.error)) {
+      return Result.err(legalHoldRefusal(outcome.error));
+    }
     if (outcome.error instanceof WorkspaceBillingHistoryError) {
       return Result.err(
         new HandlerError({ status: 409, message: outcome.error.message }),

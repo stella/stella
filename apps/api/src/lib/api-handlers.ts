@@ -86,6 +86,8 @@ import {
   fingerprintHttpRequest,
   runWithRequestReceipt,
 } from "@/api/lib/idempotency/request-receipts";
+import { legalHoldViewerFromContext } from "@/api/lib/legal-holds/projection";
+import { legalHoldRefusalForViewer } from "@/api/lib/legal-holds/refusal";
 import {
   publicReadTimeoutError,
   runPublicReadRequest,
@@ -1064,7 +1066,15 @@ const runSafeHandlerInDeliveryScope = async <
         telemetry: safeErrorTelemetryDisposition(statusCode, handlerError.code),
       });
 
-      return toErrorStatus(statusCode, safeErrorBody(handlerError));
+      return toErrorStatus(
+        statusCode,
+        safeErrorBody(
+          legalHoldRefusalForViewer(
+            handlerError,
+            legalHoldViewerFromContext(ctx),
+          ),
+        ),
+      );
     }
 
     if (DatabaseError.is(error)) {
@@ -1135,7 +1145,15 @@ const runSafeHandlerInDeliveryScope = async <
           handlerError.code,
         ),
       });
-      return toErrorStatus(handlerError.status, safeErrorBody(handlerError));
+      return toErrorStatus(
+        handlerError.status,
+        safeErrorBody(
+          legalHoldRefusalForViewer(
+            handlerError,
+            legalHoldViewerFromContext(ctx),
+          ),
+        ),
+      );
     }
 
     logAndCaptureSafeError({

@@ -1094,6 +1094,41 @@ describe("toolErrorLines", () => {
       "hint: Fix the fields",
     ]);
   });
+
+  test("an issue code renders beside its reason, so each legal hold names its scope", () => {
+    const envelope = errorEnvelope({
+      error: {
+        code: "legal_hold_active",
+        message: "Deletion is blocked by an active legal hold",
+        hint: "Release the hold first",
+        issues: [
+          {
+            path: "hold-1",
+            code: "matter",
+            message: "2026-10-01T00:00:00.000Z",
+          },
+          {
+            path: "hold-2",
+            code: "entity",
+            message: "2026-10-02T00:00:00.000Z",
+          },
+          { path: "hold-3", code: 7, message: "2026-10-03T00:00:00.000Z" },
+        ],
+      },
+    });
+    expect(envelope?.issues).toEqual([
+      { path: "hold-1", code: "matter", message: "2026-10-01T00:00:00.000Z" },
+      { path: "hold-2", code: "entity", message: "2026-10-02T00:00:00.000Z" },
+      { path: "hold-3", message: "2026-10-03T00:00:00.000Z" },
+    ]);
+    expect(envelope === null ? [] : toolErrorLines(envelope, FLAGS)).toEqual([
+      "error: Deletion is blocked by an active legal hold",
+      "  hold-1: 2026-10-01T00:00:00.000Z [matter]",
+      "  hold-2: 2026-10-02T00:00:00.000Z [entity]",
+      "  hold-3: 2026-10-03T00:00:00.000Z",
+      "hint: Release the hold first",
+    ]);
+  });
 });
 
 test("verification limit envelopes retain recovery metadata and select their exit class", () => {

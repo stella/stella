@@ -14,6 +14,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { lockWorkspaceLifecycle } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   isTreeParentGuardError,
@@ -189,6 +190,7 @@ export const moveEntities = async ({
   ...options
 }: MoveEntitiesOptions): Promise<Result<LockedMove[], HandlerError>> => {
   const { tx, workspaceId, entityIds, parentId } = options;
+  await lockWorkspaceLifecycle(tx, workspaceId);
   // Serialize ancestry decisions before taking any entity locks. Disjoint
   // source/target row pairs can still join into a cycle across two moves;
   // the `entities_parent_acyclic` trigger holds the rule for any writer

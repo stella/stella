@@ -37,6 +37,7 @@
     "./untrusted-content-fence": "./src/untrusted-content-fence.ts",
     "./audit-log": "./src/audit-log.ts",
     "./verification-run-caps": "./src/verification-run-caps.ts",
+    "./legal-holds": "./src/legal-holds.ts",
     "./action-admission": "./src/action-admission.ts",
     "./capability-request": "./src/capability-request.ts",
     "./browser-storage": "./src/browser-storage.ts",

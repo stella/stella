@@ -12,11 +12,14 @@ export const AUDIT_ACTION = {
   CANCEL: "cancel",
   REVIEW: "review",
   SYNTHETIC_SESSION_MINTED: "synthetic.session_minted",
+  LEGAL_HOLD_PLACED: "legal_hold.placed",
+  LEGAL_HOLD_RELEASED: "legal_hold.released",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
 
 export const AUDIT_RESOURCE_TYPE = {
+  LEGAL_HOLD: "legal_hold",
   MCP_WEB_HANDOFF: "mcp_web_handoff",
   SERVICE_OAUTH_CLIENT: "service_oauth_client",
   LEGAL_RESOLVE: "legal_resolve",

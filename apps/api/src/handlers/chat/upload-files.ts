@@ -8,7 +8,11 @@ import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { chatThreads, userFiles } from "@/api/db/schema";
+import {
+  chatThreads,
+  entityDeletionCleanupRequests,
+  userFiles,
+} from "@/api/db/schema";
 import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
 import {
   CHAT_MAX_FILE_BYTES,
@@ -44,6 +48,8 @@ import {
   toDataUrl,
 } from "@/api/lib/data-url";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
+import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileThumbnailKey, type FileKey } from "@/api/lib/file-key";
 import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
@@ -70,7 +76,9 @@ import {
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
 import type { CheckedFileWrite } from "@/api/lib/files/organization-file-usage";
-import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
+import { createUserFileKey } from "@/api/lib/files/utils";
+import type { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
+import { requireNoHold } from "@/api/lib/legal-holds/holds";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { putS3ObjectWithSignal } from "@/api/lib/s3";
@@ -101,7 +109,9 @@ type UploadMessageFilesProps = {
 };
 
 export type UploadMessageFilesError =
-  HandlerError<400 | 409 | 413 | 422 | 500 | 503> | SafeDbError;
+  | HandlerError<400 | 409 | 413 | 422 | 500 | 503>
+  | LegalHoldActiveError
+  | SafeDbError;
 
 type UploadMessageFilesReturn = Result<
   UploadedChatMessage,
@@ -225,27 +235,39 @@ export const deleteUploadedChatFiles = async ({
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
-}): Promise<Result<void, HandlerError<500> | SafeDbError>> => {
+}): Promise<
+  Result<void, HandlerError<500> | LegalHoldActiveError | SafeDbError>
+> => {
   if (files.length === 0) {
     return Result.ok();
   }
 
-  const deleteS3Result = await deleteS3Keys(
-    files.flatMap((file) =>
-      file.thumbnailS3Key ? [file.s3Key, file.thumbnailS3Key] : [file.s3Key],
-    ),
-  );
-  if (Result.isError(deleteS3Result)) {
-    return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "Failed to delete uploaded chat attachments from storage",
-        cause: deleteS3Result.error,
-      }),
-    );
-  }
-
   const deleteDbResult = await safeDb(async (tx) => {
+    const thread = await tx.query.chatThreads.findFirst({
+      where: { id: { eq: threadId }, userId: { eq: userId } },
+      columns: { organizationId: true },
+    });
+    if (!thread) {
+      return Result.ok({ requestIds: [] });
+    }
+    const hold = await requireNoHold({
+      tx,
+      organizationId: thread.organizationId,
+      target: { type: "thread", threadId },
+    });
+    if (hold.isErr()) {
+      return Result.err(hold.error);
+    }
+    const requestId = createSafeId<"entityDeletionCleanupRequest">();
+    // audit: skip; outbox keys share the audited attachment erasure transaction.
+    await tx.insert(entityDeletionCleanupRequests).values({
+      id: requestId,
+      organizationId: thread.organizationId,
+      workspaceId,
+      s3Keys: files.flatMap((file) =>
+        file.thumbnailS3Key ? [file.s3Key, file.thumbnailS3Key] : [file.s3Key],
+      ),
+    });
     await tx.delete(userFiles).where(
       and(
         eq(userFiles.threadId, threadId),
@@ -256,7 +278,6 @@ export const deleteUploadedChatFiles = async ({
         ),
       ),
     );
-
     await recordAuditEvent(
       tx,
       files.map((file) => ({
@@ -267,9 +288,18 @@ export const deleteUploadedChatFiles = async ({
         metadata: { threadId, s3Key: file.s3Key },
       })),
     );
+    return Result.ok({ requestIds: [requestId] });
   });
-
-  return deleteDbResult.andThen(() => Result.ok());
+  const checked = deleteDbResult.andThen((outcome) => outcome);
+  if (checked.isErr()) {
+    return Result.err(checked.error);
+  }
+  await handoffCommittedEntityDeletionCleanupBatch({
+    captureDeliveryError: captureError,
+    enqueueCleanup: enqueueEntityDeletionCleanup,
+    requestIds: checked.value.requestIds,
+  });
+  return Result.ok();
 };
 
 type HydrateFilePartProps = {
@@ -901,6 +931,14 @@ export const uploadUserFile = async ({
           catch: (cause) => cause,
         });
     if (Result.isError(writeSourceResult)) {
+      if (
+        OrganizationFileUsageError.is(writeSourceResult.error) &&
+        writeSourceResult.error.reason !== "storage_unavailable"
+      ) {
+        return Result.err(
+          organizationFileUsageHandlerError(writeSourceResult.error),
+        );
+      }
       const cleanupResult = Result.flatten(
         await Result.tryPromise({
           try: async () =>

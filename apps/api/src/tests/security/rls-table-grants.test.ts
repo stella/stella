@@ -176,6 +176,10 @@ const POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES = new Set([
   // Account export ledger: request transactions create and transition rows;
   // only the table owner deletes them, during account erasure.
   "account_exports",
+  // Legal holds: request transactions place and release holds; a hold row is
+  // removed only by the delete backstop after release, never by the request
+  // role.
+  "legal_holds",
 ]);
 const MUTABLE_PROJECTION_PRIVILEGES = new Set(["select", "insert", "update"]);
 

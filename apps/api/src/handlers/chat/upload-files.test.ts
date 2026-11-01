@@ -34,6 +34,7 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createSelectQueryMock } from "@/api/tests/scoped-db-mock";
 
 import {
   canHydrateFilePartAsPlainText,
@@ -80,7 +81,17 @@ const makeDocxBytes = async (): Promise<Uint8Array> => {
 };
 const organizationId = toSafeId<"organization">("organization_1");
 const workspaceId = toSafeId<"workspace">("workspace_1");
+const createFileDeletionTx = () =>
+  asTestRaw<Transaction>({
+    select: () => createSelectQueryMock([]),
+    selectDistinct: () => createSelectQueryMock([]),
+  });
+const fileUsageDb = {
+  transaction: async <T>(callback: (tx: Transaction) => Promise<T>) =>
+    await callback(createFileDeletionTx()),
+};
 const uploadDependencies = {
+  organizationFileUsageDb: fileUsageDb,
   reserveChatObjectCleanupIntent: async () => Result.ok([]),
 };
 
@@ -351,6 +362,9 @@ describe("chat attachment hydration", () => {
     const whereMock = mock(async () => undefined);
     const deleteMock = mock(() => ({ where: whereMock }));
     const tx = {
+      execute: async () => [],
+      select: () => createSelectQueryMock([]),
+      query: { chatThreads: { findFirst: async () => ({ organizationId }) } },
       delete: deleteMock,
       insert: insertMock,
     };
@@ -392,11 +406,13 @@ describe("chat attachment hydration", () => {
     });
 
     expect(Result.isError(result)).toBe(true);
-    // The first attachment landed and was then rolled back out of the store,
-    // leaving only the seeded fixture behind.
+    // Row withdrawal and durable storage cleanup are committed together;
+    // the worker receives the exact stored key.
     expect(requestKeys("PUT")).toHaveLength(1);
-    expect(requestKeys("DELETE")).toEqual(requestKeys("PUT"));
-    expect([...fake.objects.keys()]).toEqual([`${bucket}/${ATTACHMENT_KEY}`]);
+    expect(requestKeys("DELETE")).toEqual([]);
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ s3Keys: requestKeys("PUT") }),
+    );
     expect(whereMock).toHaveBeenCalledTimes(1);
     expect(recordAuditEvent).toHaveBeenCalledWith(
       testTx,
@@ -440,6 +456,7 @@ describe("chat attachment hydration", () => {
 
     const result = await uploadUserFile({
       dependencies: {
+        ...uploadDependencies,
         reserveChatObjectCleanupIntent: async () =>
           Result.ok([cleanupIntentId]),
         settleObjectCleanupIntentsAfterWriter: settleIntents,
@@ -529,6 +546,7 @@ describe("chat attachment hydration", () => {
     );
     const result = await uploadUserFile({
       dependencies: {
+        ...uploadDependencies,
         generateImageThumbnail: async () =>
           Result.ok({
             placeholder: "data:image/png;base64,placeholder",

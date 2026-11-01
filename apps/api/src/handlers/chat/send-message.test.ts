@@ -5,6 +5,10 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_INTENT } from "@stll/api-contract";
+import {
+  LEGAL_HOLD_ACTIVE,
+  LEGAL_HOLD_REASON_ISSUE_CODE,
+} from "@stll/api-contract/legal-holds";
 import { roles } from "@stll/permissions";
 import { createTestState } from "@stll/test-state";
 
@@ -41,6 +45,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  LegalHoldActiveError,
+  LegalHoldRecord,
+} from "@/api/lib/legal-holds/errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import {
   hasMemberPermission,
@@ -122,7 +130,7 @@ const uploadMessageFilesWithRollbackDefault = async ({
 }): Promise<
   Result<
     { message: PersistableChatMessage; uploadedFiles: UploadedChatFile[] },
-    never
+    LegalHoldActiveError
   >
 > => Result.ok({ message, uploadedFiles: [] });
 const uploadMessageFilesWithRollbackMock = mock(
@@ -553,6 +561,7 @@ describe("send message disconnect handling", () => {
         return Result.ok("owned");
       });
       const lifecycle = new ChatSendLifecycle({
+        organizationId,
         ownership,
         mode: "raw",
         indexThread: upsertChatThreadSearchDocumentMock,
@@ -1698,6 +1707,75 @@ describe("send message disconnect handling", () => {
 });
 
 describe("send message turn persistence", () => {
+  test("preserves legal-hold details when attachment rollback is refused", async () => {
+    const holdId = toSafeId<"legalHold">(
+      "00000000-0000-0000-0000-000000000010",
+    );
+    uploadMessageFilesWithRollbackMock.mockImplementationOnce(async () =>
+      Result.err(
+        new LegalHoldActiveError({
+          code: LEGAL_HOLD_ACTIVE,
+          message: "An active legal hold prevents attachment rollback.",
+          holds: [
+            new LegalHoldRecord({
+              id: holdId,
+              placedAt: new Date("2026-01-01T00:00:00Z"),
+              placedBy: "another-member",
+              reason: "Preserve the supplier dispute record",
+              scope: "matter",
+              workspaceId: activeWorkspaceId,
+              entityId: null,
+            }),
+          ],
+        }),
+      ),
+    );
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        transaction: {
+          query: {
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                chatReasoningEffort: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectChatMessages,
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({
+      code: 409,
+      response: {
+        code: LEGAL_HOLD_ACTIVE,
+        // The requesting owner reads the reason; see projection.test.ts for
+        // the members who do not.
+        issues: [
+          { path: holdId, code: "matter" },
+          {
+            path: `${holdId}.reason`,
+            code: LEGAL_HOLD_REASON_ISSUE_CODE,
+            message: "Preserve the supplier dispute record",
+          },
+        ],
+      },
+    });
+  });
+
   test("rolls back an uploaded attachment before rejecting an invalid replay", async () => {
     const uploadedFile = {
       id: toSafeId<"userFile">("00000000-0000-0000-0000-000000000009"),

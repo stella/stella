@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "Thread deletion and chat attachment erasure now record their storage keys in the cleanup outbox inside the audited deletion transaction; the outbox insert is bookkeeping for the audited CHAT_THREAD and attachment events, not a separate user action."
+}

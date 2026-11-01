@@ -19,14 +19,14 @@ test("commits the entity withdrawal fence before storage cleanup is dispatched",
 
 test("transfers durable room objects before the entity cascade removes their pointers", () => {
   const roomRead = source.indexOf(".from(folioCollabRooms)");
-  const roomLock = source.indexOf('.for("update")', roomRead);
-  const entityRead = source.indexOf(".from(entities)");
+  const roomLock = source.indexOf('aggregate: "folioCollabRoom"', roomRead);
+  const entityLock = source.indexOf("await withAggregateEntityBatch(");
   const roomFiles = source.indexOf("collectFolioCollabStoredRoomFiles(room)");
   const deleteEntity = source.indexOf(".delete(entities)");
 
   expect(roomRead).toBeGreaterThan(-1);
   expect(roomLock).toBeGreaterThan(roomRead);
-  expect(entityRead).toBeGreaterThan(roomLock);
+  expect(entityLock).toBeGreaterThan(roomLock);
   expect(roomFiles).toBeGreaterThan(roomRead);
   expect(deleteEntity).toBeGreaterThan(roomFiles);
 });

@@ -83,6 +83,16 @@ describe("organization management roles", () => {
 });
 
 describe("role grant boundaries", () => {
+  test("only owner and admin can place or release legal holds", () => {
+    for (const role of ROLE_NAMES) {
+      for (const action of statements.legalHold) {
+        expect(roles[role].authorize({ legalHold: [action] }).success).toBe(
+          role === "owner" || role === "admin",
+        );
+      }
+    }
+  });
+
   // Pins the security-critical boundaries between roles so a future grant
   // edit cannot silently widen a low-privilege role.
   test("only owner and admin hold org-admin powers", () => {

@@ -21,6 +21,7 @@ import {
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
+import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
@@ -250,6 +251,7 @@ const CODE_ERROR_KEYS = {
   access_denied: "errors.apiCodes.accessDenied",
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",
   account_deletion_otp_invalid: "errors.apiCodes.accountDeletionOtpInvalid",
+  [LEGAL_HOLD_ACTIVE]: "errors.apiCodes.legalHoldActive",
   account_deletion_sole_owner: "errors.apiCodes.accountDeletionSoleOwner",
   account_deletion_task_reassignment_invalid:
     "errors.apiCodes.accountDeletionTaskReassignmentInvalid",

@@ -29,6 +29,8 @@ import {
   userIdSchema,
 } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { requireNoHold } from "@/api/lib/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -197,6 +199,17 @@ export const updateWorkspaceHandler = async function* ({
       };
     }
 
+    if (body.clientId !== undefined && body.clientId !== workspace.clientId) {
+      const hold = await requireNoHold({
+        tx,
+        organizationId,
+        target: { type: "matter", workspaceId },
+      });
+      if (hold.isErr()) {
+        return { ok: false as const, error: hold.error };
+      }
+    }
+
     if (body.clientId !== undefined) {
       const client = await tx
         .select({ id: contacts.id })
@@ -341,6 +354,9 @@ export const updateWorkspaceHandler = async function* ({
 
   const failure = txResult.value;
   if (!failure.ok) {
+    if ("error" in failure) {
+      return yield* Result.err(legalHoldRefusal(failure.error));
+    }
     return yield* Result.err(
       new HandlerError({
         status: failure.status,

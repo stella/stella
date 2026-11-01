@@ -28,6 +28,7 @@ import {
 import { panic, Result } from "better-result";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 
+import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
 import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
 import {
   PROFESSIONAL_USE_REQUIRED_CODE,
@@ -293,6 +294,7 @@ import {
   buildFeatureAccessSnapshot,
   featureAccessReadPlan,
 } from "@/api/lib/feature-access/snapshot";
+import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
 import {
   AUTH_RATE_LIMITS,
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
@@ -1413,6 +1415,25 @@ export const mintWebHandoff = async (
   return null;
 };
 
+/** The answer an organization deletion gives when its storage teardown fails. */
+const organizationTeardownRefusal = (error: unknown): APIError => {
+  if (LegalHoldActiveError.is(error)) {
+    return new APIError("CONFLICT", {
+      error: LEGAL_HOLD_ACTIVE,
+      message: error.message,
+    });
+  }
+  if (error instanceof OrganizationStorageTeardownBoundError) {
+    return new APIError("BAD_REQUEST", {
+      error: "organization_storage_too_large",
+      message: error.message,
+    });
+  }
+  return new APIError("INTERNAL_SERVER_ERROR", {
+    message: "Failed to delete the organization's stored files",
+  });
+};
+
 export const createAuth = (
   roleAssignmentPolicy = assignableRoles,
   factoryOptions: CreateAuthOptions = {},
@@ -1863,20 +1884,17 @@ export const createAuth = (
           catch: (cause) => cause,
         });
         if (Result.isError(teardown)) {
-          captureError(
-            teardown.error,
-            handlerErrorContext("lib.beforeDeleteOrganization.teardown_error", {
-              organizationId,
-            }),
-          );
-          throw teardown.error instanceof OrganizationStorageTeardownBoundError
-            ? new APIError("BAD_REQUEST", {
-                error: "organization_storage_too_large",
-                message: teardown.error.message,
-              })
-            : new APIError("INTERNAL_SERVER_ERROR", {
-                message: "Failed to delete the organization's stored files",
-              });
+          // An active legal hold is a refusal the caller acts on, not a fault.
+          if (!LegalHoldActiveError.is(teardown.error)) {
+            captureError(
+              teardown.error,
+              handlerErrorContext(
+                "lib.beforeDeleteOrganization.teardown_error",
+                { organizationId },
+              ),
+            );
+          }
+          throw organizationTeardownRefusal(teardown.error);
         }
 
         if (teardown.value.type === "subscription_renews") {

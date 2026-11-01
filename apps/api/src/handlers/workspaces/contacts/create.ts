@@ -17,6 +17,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { lockLegalHoldOrganization } from "@/api/lib/legal-holds/holds";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
@@ -84,6 +85,7 @@ export const createWorkspaceContactHandler = async function* ({
   dependencies = { flushWorkspaceSearchRepairs },
 }: CreateWorkspaceContactHandlerProps) {
   const txResult = await safeDb(async (tx) => {
+    await lockLegalHoldOrganization({ tx, organizationId, mode: "share" });
     // The parent matter lock precedes the contact count and insert, matching
     // matter members and entity capacity.
     await lockWorkspacesForEntityCap(tx, [workspaceId]);

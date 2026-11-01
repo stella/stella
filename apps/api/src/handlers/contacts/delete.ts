@@ -12,6 +12,8 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { requireNoHold } from "@/api/lib/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -40,6 +42,19 @@ export const deleteContactHandler = async function* ({
   recordAuditEvent,
 }: DeleteContactHandlerProps) {
   const txResult = await safeDb(async (tx) => {
+    const hold = await requireNoHold({
+      tx,
+      organizationId,
+      target: { type: "contacts", ids: [contactId] },
+    });
+    if (hold.isErr()) {
+      return {
+        ok: false as const,
+        status: 409 as const,
+        message: hold.error.message,
+        error: hold.error,
+      };
+    }
     await lockContactCapacity(tx, organizationId);
 
     const contact = await tx
@@ -137,6 +152,9 @@ export const deleteContactHandler = async function* ({
   }
 
   if (!txResult.value.ok) {
+    if ("error" in txResult.value) {
+      return Result.err(legalHoldRefusal(txResult.value.error));
+    }
     return yield* Result.err(
       new HandlerError({
         status: txResult.value.status,

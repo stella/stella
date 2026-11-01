@@ -591,6 +591,12 @@ describe("policy coverage", () => {
     // workspace policies would hide exactly the rows the check exists to
     // find. Organization is the real boundary and the org policies pin it.
     "document_reference_counters",
+    // A legal hold is an organization record: an item hold carries no
+    // workspace_id, so workspace policies would hide it from the deletion
+    // checks that must see it. The request role places and releases holds but
+    // never deletes one (no DELETE grant or policy); the dedicated assertion
+    // below covers that boundary.
+    "legal_holds",
   ]);
   const APPEND_ONLY = new Set([
     "audit_logs",
@@ -1060,6 +1066,31 @@ describe("policy coverage", () => {
       expect(expression).toContain("owner");
       expect(expression).toContain("admin");
     }
+  });
+
+  test("legal holds pin the organization and the request role never deletes one", async () => {
+    const policies = (await fetchStellaPolicies(testDb)).filter(
+      (policy) =>
+        policy.table_name === "legal_holds" &&
+        policy.policy_name !== "legal_holds_owner_access",
+    );
+    expect(policies.map(({ command }) => command).toSorted()).toEqual([
+      "a",
+      "r",
+      "w",
+    ]);
+    for (const policy of policies) {
+      const expr =
+        policy.command === "a" ? policy.check_expr : policy.using_expr;
+      expect(expr).toContain("organization_id");
+      expect(expr).toContain(SETTING_ORGANIZATION_ID);
+    }
+    expect(
+      privilegesForTable(
+        await fetchStellaTablePrivileges(testDb),
+        "legal_holds",
+      ),
+    ).not.toContain("DELETE");
   });
 
   test("chat tables have user + optional workspace policies", async () => {

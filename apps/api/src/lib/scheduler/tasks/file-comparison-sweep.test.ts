@@ -19,6 +19,7 @@ import {
   systemAuditRuns,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { DeleteOrganizationFileError } from "@/api/lib/files/delete-organization-file";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { runJob } from "@/api/lib/scheduler/runner";
 import type {
@@ -315,10 +316,14 @@ describe("comparison sweep replay and runner capture", () => {
               ) {
                 if (stage === "ledger") {
                   return Result.err(
-                    new OrganizationFileUsageError({
+                    new DeleteOrganizationFileError({
                       message: "Ledger unavailable",
-                      reason: "storage_unavailable",
-                      cause,
+                      stage: "usage_removal",
+                      cause: new OrganizationFileUsageError({
+                        message: "Ledger unavailable",
+                        reason: "storage_unavailable",
+                        cause,
+                      }),
                     }),
                   );
                 }

@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/files/delete-organization-file.ts",
+  "delta": 2,
+  "reason": "Organization file deletion works in storage chunks of DELETE_CONCURRENCY keys: each chunk takes the legal-hold fence for one transaction while its storage deletes settle, then removes the usage of the keys it deleted. Holding one fence across every chunk would keep the fence open for the whole deletion, and removing usage before a chunk settles would drop bytes still stored."
+}

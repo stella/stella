@@ -14,6 +14,8 @@ import {
 import { runScopedWorkInTransaction } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { requireNoHold } from "@/api/lib/legal-holds/holds";
 import {
   WORKSPACE_DELETION_RETAINED_STAGES,
   WORKSPACE_DELETION_RETAINED_TABLES,
@@ -75,6 +77,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   business_registry_credentials:
     "Integration credentials: never touched by the reset.",
   feedback_reports: "Product feedback the operators read.",
+  legal_holds:
+    "Audited preservation records: an active hold refuses the reset, and a released hold goes with its matter or item.",
   chat_content_v3_backfill_receipts:
     "Repair receipts the operators read; identifiers only, never chat content.",
   sanctions_organization_marks:
@@ -310,6 +314,14 @@ export const sweepReviewOrganization = async (
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
 ): Promise<Map<string, number>> => {
+  const hold = await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "organization" },
+  });
+  if (hold.isErr()) {
+    abortTransaction(hold.error);
+  }
   // audit: skip - the reset sweep; the run's totals go to the system audit
   const removed = new Map<string, number>();
   // Chat attachments name no organization; their rows hold their threads

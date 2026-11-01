@@ -350,6 +350,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   folioCollabContribution: { type: "non_resource", reason: "association" },
   folioCollabPublication: { type: "non_resource", reason: "workflow" },
   signal: { type: "non_resource", reason: "workflow" },
+  legalHold: { type: "non_resource", reason: "policy" },
   signalEvent: { type: "non_resource", reason: "event" },
   scoutRun: { type: "non_resource", reason: "workflow" },
   // A filed report is maintainer-facing, not a tenant resource: it has no read

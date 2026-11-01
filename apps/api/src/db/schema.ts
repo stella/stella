@@ -4,6 +4,7 @@ export * from "./schema/synthetic-session";
 export * from "./schema/account-exports";
 export * from "./schema/organization-creation-requests";
 export * from "./schema/contacts";
+export * from "./schema/legal-holds";
 export * from "./schema/backfill-state";
 export * from "./schema/case-law-replay";
 export * from "./schema/eu-completion";

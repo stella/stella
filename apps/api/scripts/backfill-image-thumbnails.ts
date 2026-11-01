@@ -28,20 +28,17 @@ import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { enqueueImageThumbnailOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
+import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   generateImageThumbnail,
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
 import {
   type CheckedFileWrite,
-  removeOrganizationFilesBytes,
   writeOrganizationFiles,
 } from "@/api/lib/files/organization-file-usage";
-import {
-  deleteS3ObjectWithSignal,
-  readS3ArrayBuffer,
-  writeS3ObjectWithRetry,
-} from "@/api/lib/s3";
+import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
+import { readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
@@ -74,27 +71,36 @@ type EntityFieldRow = {
 /** Bounds the cleanup delete; a stuck socket must not stall the backfill. */
 const THUMBNAIL_CLEANUP_TIMEOUT_MS = 15_000;
 
+/**
+ * Delete the batch's orphaned thumbnails in one call. Storage failures and
+ * held keys only warn (the objects stay recorded); a failed usage removal
+ * stops the backfill, since the byte count would drift.
+ */
 const deleteThumbnailsBestEffort = async (thumbnailKeys: string[]) => {
-  const deletedKeys: string[] = [];
-  for (const thumbnailKey of thumbnailKeys) {
-    const cleanup = await Result.tryPromise({
-      try: async () =>
-        await deleteS3ObjectWithSignal(
-          thumbnailKey,
-          AbortSignal.timeout(THUMBNAIL_CLEANUP_TIMEOUT_MS),
-        ),
-      catch: (cause) => cause,
-    });
-    if (Result.isError(cleanup)) {
-      console.warn(`  chat: thumbnail cleanup failed for ${thumbnailKey}`);
-      continue;
-    }
-    deletedKeys.push(thumbnailKey);
+  if (thumbnailKeys.length === 0) {
+    return;
   }
-  const removed = await removeOrganizationFilesBytes(deletedKeys);
-  if (Result.isError(removed)) {
-    throw removed.error;
+  const cleanup = await deleteOrganizationFilesWithSignal(
+    thumbnailKeys,
+    AbortSignal.timeout(THUMBNAIL_CLEANUP_TIMEOUT_MS),
+    { fileUsageDb: db },
+  );
+  if (Result.isOk(cleanup)) {
+    return;
   }
+  if (
+    LegalHoldActiveError.is(cleanup.error) ||
+    cleanup.error.reason === "storage_unavailable"
+  ) {
+    console.warn(
+      `  chat: thumbnail cleanup failed for ${String(thumbnailKeys.length)} key(s)`,
+    );
+    return;
+  }
+  throw new ThumbnailBackfillWriteError({
+    message: "Thumbnail usage removal failed",
+    cause: cleanup.error,
+  });
 };
 
 const backfillEntityFields = async (): Promise<number> => {

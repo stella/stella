@@ -44,8 +44,10 @@ import {
   fields,
   invoiceLines,
   invoices,
+  legalHolds,
   organizationSettings,
   pdfSigningSessions,
+  pendingUploads,
   requestIdempotencyReceipts,
   timeEntries,
   workspaceMembers,
@@ -57,6 +59,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { outsideRetainedMatters } from "@/api/lib/legal-holds/retained-matters";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
@@ -164,6 +167,9 @@ const CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE = 0x0f_10_cc_b3;
 const CHAT_OWNER_STORED_CONTENT_EGRESS_LOCK_NAMESPACE = 0x0f_10_cc_b4;
 const ORGANIZATION_OBJECT_INTENT_LOCK_NAMESPACE = 0x0f_10_cc_b0;
 const READER_ANNOTATION_LOCK_NAMESPACE = 0x0f_10_cc_af;
+// Legal-hold organization fences: a plain two-key namespace taken outside the
+// aggregate history, in organization ID order (see lockLegalHoldOrganizations).
+const LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE = 19_054;
 
 const chatOwnerStoredContentEgressKey = ({
   organizationId,
@@ -3119,4 +3125,135 @@ export const lockUnbillableRateCandidates = async (
     })
     .from(timeEntries)
     .where(condition)
+    .for("update");
+
+/** Legal-hold rows are locked after their organization placement fence. */
+export const readLockedLegalHolds = async ({
+  tx,
+  predicate,
+  mode,
+}: {
+  tx: Transaction;
+  predicate: SQL;
+  mode: "share" | "update";
+}) => await tx.select().from(legalHolds).where(predicate).for(mode);
+
+const legalHoldOrganizationRowSchema = v.object({ id: v.string() });
+
+/** Account erasure locks every affected organization in one stable order. */
+export const lockLegalHoldOrganizations = async ({
+  tx,
+  predicate,
+  mode = "update",
+}: {
+  tx: Transaction;
+  predicate: SQL;
+  mode?: RowLockMode;
+}) => {
+  const fence =
+    mode === "share"
+      ? sql`pg_advisory_xact_lock_shared(${LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE}, hashtext(ordered.id))`
+      : sql`pg_advisory_xact_lock(${LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE}, hashtext(ordered.id))`;
+  // One statement reads the organizations and takes their fences in ID order.
+  const rows = executedRows(
+    await tx.execute(
+      sql`SELECT ordered.id FROM (SELECT ${organization.id} AS id FROM ${organization} WHERE ${predicate} ORDER BY ${organization.id} COLLATE "C") ordered CROSS JOIN LATERAL (SELECT ${fence}) fence`,
+    ),
+  ).map((row) => v.parse(legalHoldOrganizationRowSchema, row));
+  return rows;
+};
+
+/**
+ * The organization's object-intent advisory lock key. Writers share it while
+ * reserving storage; a lifecycle (matter or organization teardown) takes it
+ * exclusively.
+ */
+export const organizationObjectIntentLockKey = (
+  organizationId: SafeId<"organization">,
+): string => `buffer-object:${organizationId}`;
+
+// The lifecycle lock is an exclusive transaction-scoped advisory lock, held
+// until the transaction ends: a second take in the same transaction is a no-op
+// and runs no statement.
+const lifecycleLockedOrganizations = new WeakMap<Transaction, Set<string>>();
+
+const noteLifecycleLock = (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+) => {
+  const locked = lifecycleLockedOrganizations.get(tx) ?? new Set<string>();
+  locked.add(organizationId);
+  lifecycleLockedOrganizations.set(tx, locked);
+};
+
+/** Close the organization's object intents to writers for a lifecycle. */
+export const lockOrganizationObjectIntentsForLifecycle = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+): Promise<void> => {
+  if (lifecycleLockedOrganizations.get(tx)?.has(organizationId) === true) {
+    return;
+  }
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
+  );
+  noteLifecycleLock(tx, organizationId);
+};
+
+/**
+ * For a transaction that works on a whole organization (the review reset):
+ * lock its row FOR UPDATE, then take the object-intent lifecycle lock and the
+ * exclusive legal-hold fence, in the order every deletion takes them, all in
+ * one statement. Later takes of the lifecycle lock in this transaction are
+ * no-ops. Returns whether the organization exists.
+ */
+export const lockOrganizationRowWithLegalHoldFence = async ({
+  tx,
+  organizationId,
+}: {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+}): Promise<boolean> => {
+  const rows = executedRows(
+    await tx.execute(
+      sql`SELECT ordered.id FROM (SELECT ${organization.id} AS id FROM ${organization} WHERE ${organization.id} = ${organizationId} FOR UPDATE) ordered CROSS JOIN LATERAL (SELECT pg_advisory_xact_lock(hashtext(${organizationObjectIntentLockKey(organizationId)})), pg_advisory_xact_lock(${LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE}, hashtext(ordered.id))) fence`,
+    ),
+  ).map((row) => v.parse(legalHoldOrganizationRowSchema, row));
+  if (rows.length > 0) {
+    noteLifecycleLock(tx, organizationId);
+  }
+  return rows.length > 0;
+};
+
+/** In-flight upload cancellation keeps content belonging to held matters. */
+export const lockAccountDeletionPendingUploads = async ({
+  tx,
+  currentUserId,
+  retainedWorkspaceIds,
+}: {
+  tx: Transaction;
+  currentUserId: string;
+  retainedWorkspaceIds: readonly SafeId<"workspace">[];
+}) =>
+  await tx
+    .select({
+      declaredMime: pendingUploads.declaredMime,
+      id: pendingUploads.id,
+      organizationId: pendingUploads.organizationId,
+      purpose: pendingUploads.purpose,
+      purposeData: pendingUploads.purposeData,
+      status: pendingUploads.status,
+      workspaceId: pendingUploads.workspaceId,
+    })
+    .from(pendingUploads)
+    .where(
+      and(
+        eq(pendingUploads.userId, currentUserId),
+        outsideRetainedMatters(
+          pendingUploads.workspaceId,
+          retainedWorkspaceIds,
+        ),
+        sql`${pendingUploads.status} <> 'finalized'`,
+      ),
+    )
     .for("update");
