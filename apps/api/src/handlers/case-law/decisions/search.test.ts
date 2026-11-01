@@ -268,7 +268,7 @@ test.each(SERVING_TARGET_REFUSALS)(
     // The returned envelope is the body the route error mapping renders for
     // the thrown refusal, so a client cannot tell the two paths apart.
     const thrown = searchIndexUnavailableError(failure);
-    expect(thrown.status).toBe(outcome.code);
+    expect(outcome.code).toBe(thrown.status);
     // Compared as a value: the envelope's declared type is the union of every
     // body the route may return.
     const body: unknown = outcome.response;

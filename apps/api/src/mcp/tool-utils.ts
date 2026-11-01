@@ -867,10 +867,12 @@ export const internalFailureResult = (
   error: unknown,
   fingerprintKey: StableExceptionKey,
 ): InternalToolErrorResult => {
-  if (isSearchIndexUnavailable(error)) {
+  // A read the request's budget ended is a timeout whatever it was waiting
+  // on, so it is read before the dependency's own failure.
+  const timeout = publicReadTimeoutError(error);
+  if (timeout === null && isSearchIndexUnavailable(error)) {
     return searchIndexUnavailableResult(error);
   }
-  const timeout = publicReadTimeoutError(error);
   if (
     timeout === null &&
     HandlerError.is(error) &&

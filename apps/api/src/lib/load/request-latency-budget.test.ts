@@ -1,10 +1,13 @@
+import { panic, UnhandledException } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { readFailureBrand } from "@stll/errors";
 
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { HandlerError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
+  findRequestBudgetExpiry,
   remainingRequestBudgetMs,
+  requestBoundedTimeout,
   requestBoundedTimeoutMs,
   requestBudgetExpiry,
   runBoundedRequestStep,
@@ -145,6 +148,55 @@ describe("request budget expiry", () => {
       },
       () => {
         expect(requestBoundedTimeoutMs(30_000)).toBeLessThanOrEqual(500);
+      },
+    );
+  });
+
+  test("attributes a timeout to the request only when it keeps the request's deadline", () => {
+    expect(requestBoundedTimeout(30_000).endsAtRequestDeadline).toBe(false);
+    runWithinRequestLatencyBudget(
+      { label: "search_legislation", budgetMs: 8000 },
+      () => {
+        expect(requestBoundedTimeout(30_000).endsAtRequestDeadline).toBe(true);
+        expect(requestBoundedTimeout(0).endsAtRequestDeadline).toBe(true);
+        expect(requestBoundedTimeout(1500)).toEqual({
+          timeoutMs: 1500,
+          endsAtRequestDeadline: false,
+        });
+        // A timeout passed down as what is left of the request keeps its
+        // deadline even though the clamp floors to whole milliseconds.
+        const remaining = remainingRequestBudgetMs() ?? panic("in scope");
+        expect(
+          requestBoundedTimeout(remaining - 0.5).endsAtRequestDeadline,
+        ).toBe(true);
+      },
+    );
+  });
+
+  test("finds the budget's expiry through the errors that carry it, and only it", () => {
+    runWithinRequestLatencyBudget(
+      { label: "search_legislation", budgetMs: 0 },
+      () => {
+        const expiry =
+          requestBudgetExpiry(cause, { clampedTimeout: true }) ??
+          panic("in scope");
+        const carried = new HandlerError({
+          status: 503,
+          code: "search_index_unavailable",
+          message: "refused",
+          cause: new UnhandledException({ cause: expiry }),
+        });
+        expect(findRequestBudgetExpiry(carried)).toBe(expiry);
+        expect(
+          findRequestBudgetExpiry(
+            new TimeoutError({
+              message: "a timeout of its own",
+              label: "search_legislation",
+              timeoutMs: 20, // timeout under test
+            }),
+          ),
+        ).toBeUndefined();
+        expect(findRequestBudgetExpiry(cause)).toBeUndefined();
       },
     );
   });

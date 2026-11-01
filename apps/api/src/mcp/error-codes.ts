@@ -52,7 +52,11 @@ export const MCP_ERROR_CODES = [
   "rate_limited",
   /** A named external dependency is temporarily unavailable; retry is safe. */
   "upstream_unavailable",
-  /** The public corpus read exceeded its statement budget; narrow and retry. */
+  /**
+   * The public corpus read (a database statement or a search index request)
+   * exceeded its statement budget or the tool call's latency budget; narrow
+   * and retry.
+   */
   "public_read_timeout",
   /**
    * The case-law and legislation search index could not be reached (refused

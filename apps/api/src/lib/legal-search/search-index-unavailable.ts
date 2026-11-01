@@ -1,6 +1,13 @@
+import { panic } from "better-result";
+
 import { HttpStatusResponse, status } from "@/api/http/status";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  HandlerError,
+  type HandlerErrorStatusCode,
+} from "@/api/lib/errors/tagged-errors";
+import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import { publicReadTimeoutRefusal } from "@/api/lib/legal-search/public-read-timeout";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
@@ -22,7 +29,9 @@ export const SEARCH_INDEX_UNAVAILABLE_HINT =
   "Retry the same request shortly; changing the arguments will not help.";
 
 /** The typed 503 a search answers when the index did not. */
-export const searchIndexUnavailableError = (cause: unknown): HandlerError =>
+export const searchIndexUnavailableError = (
+  cause: unknown,
+): HandlerError<503> =>
   new HandlerError({
     status: 503,
     code: SEARCH_INDEX_UNAVAILABLE_CODE,
@@ -31,6 +40,33 @@ export const searchIndexUnavailableError = (cause: unknown): HandlerError =>
     retryable: true,
     cause,
   });
+
+/**
+ * The refusal a failed corpus index read answers with, total over what the
+ * client knows of the failure (`CorpusIndexError.reach`), so no caller can
+ * read an expired request budget as an outage or an outage as a defect:
+ *
+ * - `budget_expired`: the request ran out of time, the public read timeout;
+ * - `unreachable`, `index_missing`: the index is unavailable;
+ * - `answered`: whatever the caller makes of an engine that did answer.
+ */
+export const corpusIndexReadRefusal = <TStatus extends HandlerErrorStatusCode>(
+  error: CorpusIndexError,
+  answered: (error: CorpusIndexError) => HandlerError<TStatus>,
+): HandlerError<TStatus | 503> => {
+  switch (error.reach) {
+    case "budget_expired":
+      return publicReadTimeoutRefusal(error);
+    case "unreachable":
+    case "index_missing":
+      return searchIndexUnavailableError(error);
+    case "answered":
+      return answered(error);
+    default:
+      error.reach satisfies never;
+      return panic(`Unhandled corpus index reach: ${String(error.reach)}`);
+  }
+};
 
 /**
  * Whether a failure is the search index being unavailable: a thrown refusal,

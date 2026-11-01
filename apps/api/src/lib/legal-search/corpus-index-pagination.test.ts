@@ -36,12 +36,18 @@ import {
 } from "@/api/lib/legal-search/corpus-search-order";
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 import { collapseLegislationHitsByWork } from "@/api/lib/legal-search/legislation-work-collapse";
+import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
 import {
   blendStableCitationAuthority,
   DEFAULT_AUTHORITY_WEIGHT,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
+import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  findRequestBudgetExpiry,
+  runWithinRequestLatencyBudget,
+} from "@/api/lib/load/request-latency-budget";
 import {
   testAppliedProjectionsFor,
   testRevisionOf,
@@ -1517,6 +1523,55 @@ describe("only the passages a page emits are highlighted", () => {
     });
     expect(snippetRequests()).toHaveLength(1);
     clock.mockRestore();
+  });
+
+  test("a highlight window the request's budget ended is a timeout, not an outage", async () => {
+    engineHits = Array.from({ length: 6 }, (_, index) => ({
+      document_id: `doc-${index}`,
+    }));
+    let now = 0;
+    const clock = spyOn(performance, "now").mockImplementation(() => now);
+    const budgetMs = 1000; // timeout under test: shorter than the 30 s window
+    const engine = globalThis.fetch;
+    const stub = async (
+      input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const body: Record<string, unknown> =
+        typeof init?.body === "string" ? JSON.parse(init.body) : {};
+      if (
+        body["snippet_fields"] !== undefined &&
+        snippetRequests().length === 0
+      ) {
+        // The request's budget, not the window's own 30 s, runs out here.
+        now = budgetMs + 1;
+        requestBodies.push(body);
+        return new Response(
+          JSON.stringify({ num_hits: 0, hits: [], snippets: [] }),
+        );
+      }
+      return engine(input, init);
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    try {
+      const failure = await runWithinRequestLatencyBudget(
+        { label: "search_legislation", budgetMs },
+        async () => await rejectionOf(readPage(6)),
+      );
+      expect(failure).toMatchObject({
+        status: 503,
+        code: PUBLIC_READ_TIMEOUT_CODE,
+      });
+      expect(isSearchIndexUnavailable(failure)).toBe(false);
+      expect(findRequestBudgetExpiry(failure)).toMatchObject({
+        label: "search_legislation",
+      });
+      expect(snippetRequests()).toHaveLength(1);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   test("an empty page asks the engine for nothing to highlight", async () => {

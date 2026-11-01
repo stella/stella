@@ -5,6 +5,7 @@ import {
   getPublicReadStatementTimeoutMs,
   runWithPublicReadStatementTimeout,
 } from "@/api/lib/legal-search/public-read-timeout-context";
+import { findRequestBudgetExpiry } from "@/api/lib/load/request-latency-budget";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { publicCorpusClassOf } from "@/api/public-corpus-policy";
@@ -37,8 +38,26 @@ export const runPublicReadRequest = <T>(
   );
 };
 
-/** Only observed public-law statements carry the provenance for this refusal. */
+/** The typed, retryable 503 a public read that ran out of time answers with. */
+export const publicReadTimeoutRefusal = (cause: unknown): HandlerError<503> =>
+  new HandlerError({
+    status: 503,
+    code: PUBLIC_READ_TIMEOUT_CODE,
+    message: "Public read timed out. Please try again.",
+    cause,
+  });
+
+/**
+ * The refusal for a public read that ran out of time: the request's latency
+ * budget ended it (a corpus index request or a public-law transaction the
+ * budget clamped), or an observed public-law statement was cancelled at its
+ * statement budget. Checked before any reading of the dependency's own
+ * failure, so an expired budget never reads as the dependency being down.
+ */
 export const publicReadTimeoutError = (error: unknown) => {
+  if (findRequestBudgetExpiry(error) !== undefined) {
+    return publicReadTimeoutRefusal(error);
+  }
   if (getPublicReadStatementTimeoutMs() === undefined) {
     return null;
   }
@@ -53,10 +72,5 @@ export const publicReadTimeoutError = (error: unknown) => {
   ) {
     return null;
   }
-  return new HandlerError({
-    status: 503,
-    code: PUBLIC_READ_TIMEOUT_CODE,
-    message: "Public read timed out. Please try again.",
-    cause: error,
-  });
+  return publicReadTimeoutRefusal(error);
 };
