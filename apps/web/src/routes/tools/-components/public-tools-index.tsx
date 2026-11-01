@@ -104,7 +104,8 @@ export function PublicToolsIndex({
     ReadonlySet<string>
   >(new Set());
 
-  // Search and order follow what the reader sees on each card.
+  // Search and order follow what the reader sees on each card; the source copy
+  // stays searchable, so a term from it still finds the tool in any language.
   const localizedEntries = catalogueEntries.map((entry) => {
     const identity = { slug: entry.slug, kind: entry.kind };
     const labelKey = nativeToolLabelKey(identity);
@@ -113,6 +114,7 @@ export function PublicToolsIndex({
       ...entry,
       displayName: labelKey ? t(labelKey) : entry.displayName,
       description: descriptionKey ? t(descriptionKey) : entry.description,
+      sourceCopy: `${entry.displayName} ${entry.description}`,
     };
   });
 

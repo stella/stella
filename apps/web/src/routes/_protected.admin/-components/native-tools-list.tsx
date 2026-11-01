@@ -63,6 +63,7 @@ export const NativeToolsList = () => {
           return matchesConnectionQuery(search, [
             displayName,
             description,
+            tool.description,
             tool.displayName,
             tool.slug,
           ]);
