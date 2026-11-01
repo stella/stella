@@ -304,11 +304,15 @@ const typeQuery = async (
     throw new TypeError("Search dialog combobox must be an input");
   }
   jest.useFakeTimers();
-  await testing.act(async () => {
+  const typed = testing.act(async () => {
     testing.fireEvent.input(input, { target: { value } });
     jest.advanceTimersByTime(301);
   });
+  // React settles an async act on a scheduled task, which a fake clock would
+  // hold forever. Return to real timers before awaiting it, while the render
+  // that starts the search requests is still queued.
   restoreRealTimers();
+  await typed;
   await testing.waitFor(() =>
     expect(testing.screen.getAllByText(expectedTitle).length).toBeGreaterThan(
       0,
