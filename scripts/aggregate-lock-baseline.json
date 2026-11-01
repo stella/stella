@@ -3156,12 +3156,6 @@
     "reason": "builder-for in apps/api/src/lib/legal-search/deferred-document-source-ownership.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/legal-search/pg-fts-browse-facet-refresh.ts",
-    "fingerprint": "91f5e28e38c944c22b7e3e98887bcb4c5bb7f9c65a060b0cf370abdad2b8ab9f",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/legal-search/pg-fts-browse-facet-refresh.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/lib/legal-search/reconciliation-store.ts",
     "fingerprint": "3dfb8a4fc67b3efb280e3b06022ca942b5246e91a17b9912030020e2d735ec0b",
     "count": 1,
