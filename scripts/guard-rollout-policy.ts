@@ -1,3 +1,6 @@
+import { fail as panic } from "node:assert";
+import { readdirSync, readFileSync } from "node:fs";
+
 export type GuardRollout = {
   id: string;
   check: readonly string[];
@@ -8,127 +11,81 @@ export type GuardRollout = {
   | { type: "autofix"; generator: string }
 );
 
-export const GUARD_ROLLOUTS: readonly GuardRollout[] = [
-  {
-    id: "portable-path",
-    rules: ["no-raw-path-relative/no-raw-path-relative"],
-    type: "full",
-    check: [
-      "bun",
-      "--bun",
-      "oxlint",
-      "-c",
-      "oxlint.config.ts",
-      "--allow",
-      "all",
-      "--deny",
-      "no-raw-path-relative/no-raw-path-relative",
-      ".",
-    ],
-  },
-  {
-    id: "central-test-timeout",
-    type: "full",
-    check: ["bun", "scripts/check-oxlint-test-timeouts.ts"],
-  },
-  {
-    id: "worker-database-login-posture",
-    rules: [
-      "require-worker-database-login-posture/require-worker-database-login-posture",
-    ],
-    type: "full",
-    check: [
-      "bun",
-      "--bun",
-      "oxlint",
-      "-c",
-      "oxlint.config.ts",
-      "--allow",
-      "all",
-      "--deny",
-      "require-worker-database-login-posture/require-worker-database-login-posture",
-      "apps/api/src",
-    ],
-  },
-  {
-    id: "tracked-symlinks",
-    type: "full",
-    check: ["bun", "scripts/check-tracked-symlinks.ts"],
-  },
-  {
-    id: "no-direct-decision-identifier-column-write",
-    rules: [
-      "no-direct-decision-identifier-column-write/no-direct-decision-identifier-column-write",
-    ],
-    type: "changed-lines",
-    expiresAt: "2026-11-05T00:00:00.000Z",
-    check: [
-      "bun",
-      "--bun",
-      "oxlint",
-      "-c",
-      "oxlint.config.ts",
-      "--allow",
-      "all",
-      "--deny",
-      "no-direct-decision-identifier-column-write/no-direct-decision-identifier-column-write",
-      ".",
-    ],
-  },
-  {
-    id: "no-ambient-time-in-tests",
-    rules: ["no-ambient-time-in-tests/no-ambient-time-in-tests"],
-    type: "changed-lines",
-    expiresAt: "2026-11-05T00:00:00.000Z",
-    check: [
-      "bun",
-      "--bun",
-      "oxlint",
-      "-c",
-      "oxlint.config.ts",
-      "--allow",
-      "all",
-      "--deny",
-      "no-ambient-time-in-tests/no-ambient-time-in-tests",
-      ".",
-    ],
-  },
-  {
-    id: "no-real-timers-in-tests",
-    rules: ["no-real-timers-in-tests/no-real-timers-in-tests"],
-    type: "changed-lines",
-    expiresAt: "2026-11-05T00:00:00.000Z",
-    check: [
-      "bun",
-      "--bun",
-      "oxlint",
-      "-c",
-      "oxlint.config.ts",
-      "--allow",
-      "all",
-      "--deny",
-      "no-real-timers-in-tests/no-real-timers-in-tests",
-      ".",
-    ],
-  },
-  {
-    id: "no-wallclock-assertions-in-tests",
-    rules: [
-      "no-wallclock-assertions-in-tests/no-wallclock-assertions-in-tests",
-    ],
-    type: "changed-lines",
-    expiresAt: "2026-11-05T00:00:00.000Z",
-    check: [
-      "bun",
-      "--bun",
-      "oxlint",
-      "-c",
-      "oxlint.config.ts",
-      "--allow",
-      "all",
-      "--deny",
-      "no-wallclock-assertions-in-tests/no-wallclock-assertions-in-tests",
-      ".",
-    ],
-  },
-] as const;
+// One rollout per file, so adding independent guards never edits a shared index.
+export const GUARD_ROLLOUT_DIRECTORY = "scripts/guard-rollouts";
+
+export const guardRolloutSource = (id: string) =>
+  `${GUARD_ROLLOUT_DIRECTORY}/${id}.json`;
+
+const isStringArray = (value: unknown): value is readonly string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+const isGuardRollout = (value: unknown): value is GuardRollout => {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("id" in value) ||
+    typeof value.id !== "string" ||
+    !("check" in value) ||
+    !isStringArray(value.check) ||
+    ("rules" in value && !isStringArray(value.rules)) ||
+    !("type" in value)
+  ) {
+    return false;
+  }
+  switch (value.type) {
+    case "full":
+      return true;
+    case "changed-lines":
+      return "expiresAt" in value && typeof value.expiresAt === "string";
+    case "autofix":
+      return "generator" in value && typeof value.generator === "string";
+    default:
+      return false;
+  }
+};
+
+const loadedFiles = new Map<string, GuardRollout>();
+for (const file of readdirSync(
+  new URL("guard-rollouts/", import.meta.url),
+).toSorted()) {
+  if (!file.endsWith(".json")) {
+    continue;
+  }
+  const source = `${GUARD_ROLLOUT_DIRECTORY}/${file}`;
+  const id = /^([a-z][a-z0-9]*(?:-[a-z][a-z0-9]*)*)\.json$/u.exec(file)?.[1];
+  if (id === undefined) {
+    panic(`guard rollout file must be <kebab-case-id>.json: ${source}`);
+  }
+  const url = new URL(`guard-rollouts/${file}`, import.meta.url);
+  let rollout: unknown;
+  try {
+    rollout = JSON.parse(readFileSync(url, "utf-8"));
+  } catch (error) {
+    panic(`Cannot load guard rollout ${source}: ${String(error)}`);
+  }
+  if (!isGuardRollout(rollout)) {
+    panic(`Invalid guard rollout: ${source}`);
+  }
+  if (rollout.id !== id) {
+    panic(`guard rollout filename must match id: ${source} (${rollout.id})`);
+  }
+  loadedFiles.set(id, rollout);
+}
+
+export const GUARD_ROLLOUT_FILES = Object.fromEntries(loadedFiles);
+
+// Ids are unique because file names are: a second file declaring an existing
+// id fails here as a mismatch.
+export const guardRolloutsFromFiles = (
+  files: Readonly<Record<string, GuardRollout>>,
+): readonly GuardRollout[] =>
+  Object.entries(files).map(([file, rollout]) =>
+    rollout.id === file
+      ? rollout
+      : panic(
+          `guard rollout filename must match id: ${file}.json (${rollout.id})`,
+        ),
+  );
+
+export const GUARD_ROLLOUTS = guardRolloutsFromFiles(GUARD_ROLLOUT_FILES);

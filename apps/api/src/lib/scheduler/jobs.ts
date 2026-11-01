@@ -308,7 +308,10 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS,
     },
     task: REFRESH_CASE_LAW_COVERAGE_TASK,
-    reads: "load-governed",
+    reads: {
+      budget: "scheduled.caseLaw.refreshCoverage",
+      governance: "load-governed",
+    },
   },
   {
     description: "Report scheduler pauses older than 24 hours",
@@ -551,7 +554,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
-    reads: "load-governed",
+    reads: {
+      budget: "scheduled.caseLaw.backfillProvisionState",
+      governance: "load-governed",
+    },
   },
   {
     description:
@@ -561,7 +567,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
-    reads: "load-governed",
+    reads: {
+      budget: "scheduled.legislation.backfillExpressionIds",
+      governance: "load-governed",
+    },
   },
   {
     description: "Emit persisted backfill health gauges",

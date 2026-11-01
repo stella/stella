@@ -18,6 +18,39 @@ const isRule = (value: string): value is keyof typeof RULES =>
   Object.hasOwn(RULES, value);
 
 type Entry = { count: number; owner: string; reason: string };
+type RetainedCensusEntriesOptions = {
+  reviewed: Record<string, unknown>;
+  selected: ReadonlySet<string>;
+  tracked: ReadonlySet<string>;
+};
+
+export const retainedCensusEntries = ({
+  reviewed,
+  selected,
+  tracked,
+}: RetainedCensusEntriesOptions) => {
+  const retained = new Map<string, Entry>();
+  for (const [file, entry] of Object.entries(reviewed)) {
+    if (selected.has(file) || !tracked.has(file)) {
+      continue;
+    }
+    if (
+      !isRecord(entry) ||
+      typeof entry["count"] !== "number" ||
+      typeof entry["owner"] !== "string" ||
+      typeof entry["reason"] !== "string"
+    ) {
+      panic(`Invalid reviewed determinism entry for ${file}`);
+    }
+    retained.set(file, {
+      count: entry["count"],
+      owner: entry["owner"],
+      reason: entry["reason"],
+    });
+  }
+  return retained;
+};
+
 type CensusEntryOptions = {
   file: string;
   current: Entry | undefined;
@@ -99,23 +132,12 @@ if (import.meta.main) {
       if (baseline === undefined) {
         panic(`Missing census rule ${rule}`);
       }
-      for (const [file, entry] of Object.entries(entries)) {
-        if (selected.includes(file)) {
-          continue;
-        }
-        if (
-          !isRecord(entry) ||
-          typeof entry["count"] !== "number" ||
-          typeof entry["owner"] !== "string" ||
-          typeof entry["reason"] !== "string"
-        ) {
-          panic(`Invalid reviewed determinism entry for ${file}`);
-        }
-        baseline.set(file, {
-          count: entry["count"],
-          owner: entry["owner"],
-          reason: entry["reason"],
-        });
+      for (const [file, entry] of retainedCensusEntries({
+        reviewed: entries,
+        selected: new Set(selected),
+        tracked: new Set(files),
+      })) {
+        baseline.set(file, entry);
       }
     }
   }

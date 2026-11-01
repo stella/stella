@@ -402,13 +402,15 @@ if (!databaseUrl || !runPostgresTests) {
           observationOrder: bigint,
           overrides: Partial<RawIngestionResult>,
         ) => {
-          await processDecision({
-            input: plainTextIngestionResult({ ...input, ...overrides }),
-            observationOrder,
-            sourceId: fixture.sourceId,
-            scopedDb,
-            observedAt: new Date(),
-          });
+          (
+            await processDecision({
+              input: plainTextIngestionResult({ ...input, ...overrides }),
+              observationOrder,
+              sourceId: fixture.sourceId,
+              scopedDb,
+              observedAt: new Date(),
+            })
+          ).unwrap();
         };
         const owed = async () => {
           const [row] = await observer`

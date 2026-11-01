@@ -258,7 +258,8 @@ describe(RULE, () => {
     expect(
       await Promise.all(
         ["x.spec.ts", "x.property.test.ts", "x.test.mjs", "x.spec.tsx"].map(
-          (sourcePath) => lintSingleRule(RULE, "Date.now();", { sourcePath }),
+          async (sourcePath) =>
+            lintSingleRule(RULE, "Date.now();", { sourcePath }),
         ),
       ),
     ).toEqual([[1], [1], [1], [1]]);

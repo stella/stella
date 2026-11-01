@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { parseTestBaseline } from "../scripts/check-test-state-baseline.ts";
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import { repoRelativeFilename } from "./utils.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -21,16 +22,21 @@ const baselineCounts = (baselinePath: string) => {
 };
 
 type CreateTestDeterminismRuleOptions = {
+  guard: string;
   baselinePath: string;
   message: string;
   createDetector: (context: Context) => (node: ESTree.Node) => boolean;
 };
 
-export const createTestDeterminismRule = ({
-  baselinePath,
-  message,
-  createDetector,
-}: CreateTestDeterminismRuleOptions) => ({
+export const createTestDeterminismRule = (
+  {
+    guard,
+    baselinePath,
+    message,
+    createDetector,
+  }: CreateTestDeterminismRuleOptions,
+  enforcesLine = guardEnforcesLine,
+) => ({
   meta: {
     type: "problem" as const,
     messages: {
@@ -117,7 +123,18 @@ export const createTestDeterminismRule = ({
         );
         // Every occurrence needs a slot; explain unescaped excess before documented intent.
         const candidates = [...unescaped.toReversed(), ...escaped.toReversed()];
-        for (const hit of candidates.slice(0, excess)) {
+        // An unchanged hit must not consume the excess slot before a new violation.
+        const scoped = candidates.filter((hit) => {
+          const start = context.sourceCode.getLocFromIndex(hit.range[0]).line;
+          const end = context.sourceCode.getLocFromIndex(hit.range[1] - 1).line;
+          for (let line = start; line <= end; line++) {
+            if (enforcesLine({ guard, file: filename, line })) {
+              return true;
+            }
+          }
+          return false;
+        });
+        for (const hit of scoped.slice(0, excess)) {
           context.report({
             node: hit,
             messageId: escapedLines.has(hit.loc.start.line)

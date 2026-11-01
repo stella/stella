@@ -1,3 +1,5 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: legacy wrappers nested by deferred capture produce the same metadata as their original raw shape; existing raw shapes are unchanged.
 // parser-output-unchanged: Deferred document raw storage is declared without changing metadata or document parsing.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
@@ -21,37 +23,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  backlogSurface,
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-  UnreadListedItem,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
@@ -111,10 +82,46 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DOCUMENT_RAW_CAPTURE } from "@/api/lib/legal-search/document-raw-capture";
-import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
+import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  DOCUMENT_DELIVERY,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  StoredRawReparseValue,
+  SyncPage,
+  UnreadListedItem,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
+import { parsePendingDocument } from "@/api/lib/legal-search/sk-document-parser";
+import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { logger } from "@/api/lib/observability/logger";
 import { sanitizeUrl, toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1652,6 +1659,7 @@ const collectFrontierPage = async (
   if (day === null) {
     return Result.ok({
       decisions: [],
+      publisherRequest: PUBLISHER_REQUEST.NONE,
       nextCursor: encodeFrontierCursor({
         verifiedThrough: frontier.verifiedThrough,
         page: 0,
@@ -1722,6 +1730,7 @@ const collectFrontierPage = async (
     decisions,
     itemBuildFailures: { type: "item_build_failed", count: failed },
     ...(unreadItems.length === 0 ? {} : { unreadItems }),
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor:
       nextPage * PAGE_SIZE < total
         ? encodeFrontierCursor({
@@ -1999,7 +2008,7 @@ const skCourtsStoredDocketMatch = ({
  * are recoverable without asking the publisher again precisely because that
  * record was kept, which is the whole argument for storing it.
  */
-const reparseStoredRaw = (
+export const reparseSkCourtsStoredMetadata = (
   stored: StoredRawReparseInput,
 ): StoredRawReparseOutcome => {
   if (
@@ -2097,6 +2106,71 @@ const reparseStoredRaw = (
     type: "parsed",
     result: decision,
     legacyCaseNumber: stored.caseNumber,
+  };
+};
+
+const reparseStoredRaw = async (
+  stored: StoredRawReparseInput,
+): Promise<StoredRawReparseValue> => {
+  const metadata = reparseSkCourtsStoredMetadata(stored);
+  if (metadata.type !== "parsed") {
+    return metadata;
+  }
+  const readObject = await readStoredDocumentObject(
+    stored,
+    DOCUMENT_RAW_CAPTURE[ADAPTER_KEYS.SK_COURTS].objectPart,
+  );
+  if (Result.isError(readObject)) {
+    return readObject;
+  }
+  const bytes = readObject.value;
+  if (bytes === null) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+      detail:
+        "Stored PDF capture is required to apply the current document parser; refresh the PDF capture explicitly",
+    };
+  }
+  const { result } = metadata;
+  const parsed = await parsePendingDocument(
+    {
+      caseNumber: result.caseNumber,
+      court: result.court,
+      ecli: result.ecli ?? null,
+      decisionDate: result.decisionDate ?? null,
+      decisionType: result.decisionType ?? null,
+    },
+    bytes,
+  );
+  if (parsed.isErr()) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: `${parsed.error.code}: ${parsed.error.paths.join(", ")}`,
+    };
+  }
+  const document = parsed.value;
+  if (document === undefined || document.documentAst.blocks.length === 0) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+      detail: "Stored PDF parsed without document layout",
+    };
+  }
+  return {
+    type: "parsed",
+    result: {
+      ...result,
+      ...document,
+      sourceRaw: new TextDecoder().decode(stored.raw),
+      sourceRawContentType:
+        stored.contentType ?? SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    ...(metadata.legacyCaseNumber === undefined
+      ? {}
+      : { legacyCaseNumber: metadata.legacyCaseNumber }),
   };
 };
 

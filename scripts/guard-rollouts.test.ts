@@ -1,8 +1,24 @@
 import { expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { GUARD_ROLLOUTS } from "./guard-rollout-policy.ts";
+import {
+  GUARD_ROLLOUT_DIRECTORY,
+  GUARD_ROLLOUTS,
+  type GuardRollout,
+  guardRolloutsFromFiles,
+  guardRolloutSource,
+} from "./guard-rollout-policy.ts";
 import {
   changedLineNumbers,
   guardEnforcesLine as productionGuardEnforcesLine,
@@ -32,15 +48,36 @@ test("diff scope excludes deletion hunks and includes every inserted line", () =
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const FIXTURES = ".oxlint-plugins/__fixtures__";
-const fixtures = readdirSync(path.join(ROOT, FIXTURES), {
-  encoding: "utf-8",
-  recursive: true,
-})
-  .filter((name) => name.endsWith(".fixture.ts"))
-  .map((name) => {
-    const file = `${FIXTURES}/${name}`;
-    return { file, source: readFileSync(path.join(ROOT, file), "utf-8") };
-  });
+const readFixtures = (directory: string) =>
+  readdirSync(path.join(ROOT, directory), {
+    encoding: "utf-8",
+    recursive: true,
+  })
+    .filter((name) => /\.fixture(?:\.test)?\.tsx?$/u.test(name))
+    .map((name) => {
+      const file = `${directory}/${name}`;
+      return { file, source: readFileSync(path.join(ROOT, file), "utf-8") };
+    });
+
+const fixtures = readFixtures(FIXTURES);
+
+test("fixture discovery reads TypeScript and test fixture suffixes", () => {
+  const directory = mkdtempSync(path.join(ROOT, ".fixture-discovery-"));
+  try {
+    writeFileSync(path.join(directory, "rule.fixture.tsx"), "tsx");
+    writeFileSync(path.join(directory, "rule.fixture.ts"), "ts");
+    writeFileSync(path.join(directory, "rule.fixture.test.ts"), "test-ts");
+    writeFileSync(path.join(directory, "rule.fixture.test.tsx"), "test-tsx");
+    writeFileSync(path.join(directory, "rule.ts"), "other");
+    expect(
+      readFixtures(path.basename(directory))
+        .map(({ source }) => source)
+        .toSorted(),
+    ).toEqual(["test-ts", "test-tsx", "ts", "tsx"]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 for (const { id: guard, rules = [] } of GUARD_ROLLOUTS) {
   for (const rule of rules) {
@@ -102,4 +139,166 @@ test("first-week path enforcement ignores legacy lines and expires into full sco
       now: new Date("2026-10-20T00:00:00.000Z"),
     }),
   ).toBe(true);
+});
+
+const fullRollout = (id: string): GuardRollout => ({
+  id,
+  type: "full",
+  check: ["bun", `scripts/check-${id}.ts`],
+});
+
+test("discovery loads every rollout in file name order", () => {
+  expect(GUARD_ROLLOUTS.map(({ id }) => guardRolloutSource(id))).toEqual(
+    readdirSync(path.join(ROOT, GUARD_ROLLOUT_DIRECTORY))
+      .filter((file) => file.endsWith(".json"))
+      .toSorted()
+      .map((file) => `${GUARD_ROLLOUT_DIRECTORY}/${file}`),
+  );
+});
+
+const withRolloutRepo = (run: (root: string) => void) => {
+  const root = mkdtempSync(path.join(tmpdir(), "guard-rollouts-"));
+  try {
+    mkdirSync(path.join(root, GUARD_ROLLOUT_DIRECTORY), { recursive: true });
+    copyFileSync(
+      path.join(ROOT, "scripts/guard-rollout-policy.ts"),
+      path.join(root, "scripts/guard-rollout-policy.ts"),
+    );
+    run(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+};
+
+const loadRollouts = (root: string) =>
+  spawnSync(
+    process.execPath,
+    [
+      "-e",
+      'import { GUARD_ROLLOUT_FILES, GUARD_ROLLOUTS } from "./scripts/guard-rollout-policy.ts"; console.log(JSON.stringify({ files: GUARD_ROLLOUT_FILES, rollouts: GUARD_ROLLOUTS }));',
+    ],
+    { cwd: root, encoding: "utf-8", maxBuffer: 2 ** 20 },
+  );
+
+test("parallel rollout branches merge cleanly and both load without an install", () => {
+  withRolloutRepo((root) => {
+    const git = (...args: string[]) =>
+      execFileSync("git", args, {
+        cwd: root,
+        encoding: "utf-8",
+        maxBuffer: 2 ** 20,
+      }).trim();
+    git("init", "-b", "base");
+    git("config", "user.name", "Rollout fixture");
+    git("config", "user.email", "rollout@example.test");
+    writeFileSync(path.join(root, GUARD_ROLLOUT_DIRECTORY, ".gitkeep"), "");
+    git("add", ".");
+    git("commit", "-m", "fixture base");
+    // Add in reverse lexical order so discovery must establish its own order.
+    for (const id of ["z-guard", "a-guard"]) {
+      git("switch", "-c", id, "base");
+      writeFileSync(
+        path.join(root, guardRolloutSource(id)),
+        JSON.stringify(fullRollout(id)),
+      );
+      git("add", ".");
+      git("commit", "-m", `add ${id}`);
+    }
+    expect(git("merge-tree", "--write-tree", "a-guard", "z-guard")).toMatch(
+      /^[a-f0-9]{40,64}$/u,
+    );
+    git("merge", "--no-edit", "z-guard");
+    const loaded = loadRollouts(root);
+    expect(loaded.status).toBe(0);
+    expect(loaded.stderr).toBe("");
+    expect(JSON.parse(loaded.stdout)).toEqual({
+      files: {
+        "a-guard": fullRollout("a-guard"),
+        "z-guard": fullRollout("z-guard"),
+      },
+      rollouts: [fullRollout("a-guard"), fullRollout("z-guard")],
+    });
+  });
+});
+
+test.each([
+  { label: "invalid JSON", source: "{" },
+  { label: "null rollout", source: "null" },
+  { label: "missing fields", source: '{ "id": "bad-guard" }' },
+  {
+    label: "unknown type",
+    source: '{ "id": "bad-guard", "type": "other", "check": [] }',
+  },
+  {
+    label: "invalid check",
+    source: '{ "id": "bad-guard", "type": "full", "check": [1] }',
+  },
+  {
+    label: "invalid rules",
+    source:
+      '{ "id": "bad-guard", "type": "full", "check": [], "rules": "rule" }',
+  },
+  {
+    label: "missing expiry",
+    source: '{ "id": "bad-guard", "type": "changed-lines", "check": [] }',
+  },
+  {
+    label: "missing generator",
+    source: '{ "id": "bad-guard", "type": "autofix", "check": [] }',
+  },
+  {
+    label: "mismatched id",
+    source: '{ "id": "other", "type": "full", "check": [] }',
+  },
+  {
+    label: "invalid syntax",
+    source: "not json",
+  },
+])("a bad rollout panics with its path: $label", ({ source }) => {
+  withRolloutRepo((root) => {
+    const file = guardRolloutSource("bad-guard");
+    writeFileSync(path.join(root, file), source);
+    const loaded = loadRollouts(root);
+    expect(loaded.status).not.toBe(0);
+    expect(loaded.stderr).toContain(file);
+    expect(loaded.stderr).toContain("AssertionError");
+  });
+});
+
+test.each(["Guard.json", "a-1.json", "a--b.json", "1a.json"])(
+  "an invalid rollout filename panics with its path: %s",
+  (file) => {
+    withRolloutRepo((root) => {
+      const source = `${GUARD_ROLLOUT_DIRECTORY}/${file}`;
+      writeFileSync(path.join(root, source), "{}");
+      const loaded = loadRollouts(root);
+      expect(loaded.status).not.toBe(0);
+      expect(loaded.stderr).toContain(source);
+      expect(loaded.stderr).toContain("AssertionError");
+    });
+  },
+);
+
+test("rollouts from separate files preserve registry order", () => {
+  expect(
+    guardRolloutsFromFiles({
+      "a-guard": fullRollout("a-guard"),
+      "z-guard": fullRollout("z-guard"),
+    }),
+  ).toEqual([fullRollout("a-guard"), fullRollout("z-guard")]);
+});
+
+test("a rollout whose file name differs from its id panics", () => {
+  expect(() =>
+    guardRolloutsFromFiles({ renamed: fullRollout("a-guard") }),
+  ).toThrow("guard rollout filename must match id: renamed.json (a-guard)");
+});
+
+test("a duplicate rollout id panics through the file name contract", () => {
+  expect(() =>
+    guardRolloutsFromFiles({
+      "a-guard": fullRollout("a-guard"),
+      "b-guard": fullRollout("a-guard"),
+    }),
+  ).toThrow("guard rollout filename must match id: b-guard.json (a-guard)");
 });

@@ -4,13 +4,28 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/handlers/case-law/ingestion/citation-extractor.property.test.ts": {
+  "apps/api/src/db/online-migrations-startup.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/env-feature-access.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/case-law/ingestion/source-total-maintenance.db.test.ts": {
     "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/chat/tools/execute/script-call-guide.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/analytics/posthog-client.test.ts": {
+    "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -29,12 +44,47 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/lib/files/conversion-input.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/files/xml-scan.test.ts": {
+    "count": 3,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/legal-search/corpus-index-client.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/lib/legal-search/corpus-index-pagination.test.ts": {
     "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/legal-search/corpus-index-query-features.contract.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/load/request-latency-budget.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/observability/otlp-log-exporter.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/public-law-read-deadline.postgres.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/search/highlight.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -54,6 +104,16 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/mcp/tool-name-suggestions.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/mcp/tools.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/tests/helpers/transaction-interleaving.postgres.test.ts": {
     "count": 1,
     "owner": "api",
@@ -69,6 +129,11 @@
     "owner": "visual-preview",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/web/e2e/specs/network-collector.spec.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "packages/legal-atlas/src/document-stage-observer.test.ts": {
     "count": 1,
     "owner": "legal-atlas",
@@ -79,6 +144,16 @@
     "owner": "legal-atlas",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "packages/mcp-kit/src/envelope.test.ts": {
+    "count": 2,
+    "owner": "mcp-kit",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/parameter-store/src/read-parameter.test.ts": {
+    "count": 1,
+    "owner": "parameter-store",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "packages/scripts/src/process-stderr.test.ts": {
     "count": 1,
     "owner": "scripts",
@@ -87,6 +162,11 @@
   "packages/template-conditions/src/parse.test.ts": {
     "count": 1,
     "owner": "template-conditions",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "scripts/ci-check-pool.test.ts": {
+    "count": 1,
+    "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "scripts/ci-failure-digest.test.ts": {

@@ -6,6 +6,7 @@ import { createTimeResolver } from "./test-time-resolver.ts";
 
 const RULE_NAME = "no-ambient-time-in-tests";
 const rule = createTestDeterminismRule({
+  guard: RULE_NAME,
   baselinePath: BASELINE_PATHS.testAmbientTime,
   message:
     "Use createTestClock from @stll/test-kit instead of the ambient clock.",

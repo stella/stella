@@ -7,12 +7,13 @@ import { useTimeZone, useTranslations } from "use-intl";
 import { Text } from "@stll/ui/text";
 
 import { ChatThreadRow } from "@/components/chat-thread-row";
-import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
-import { PagingFooter, RetryButton } from "@/components/retry-button";
+import { EmptyCard, emptyListProps } from "@/components/empty-state-screen";
+import { LoadFailedCard } from "@/components/load-failure";
+import { PagingFooter } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
-import type { Load } from "@/state/api-request";
+import type { ApiError, Load } from "@/state/api-request";
 import {
   appendThreadsPage,
   listChatThreads,
@@ -45,6 +46,7 @@ export const LoadedChats = ({
 
   return (
     <ThreadTimeline
+      failure={Result.isError(result) ? result.error : undefined}
       firstPage={Result.isOk(result) ? result.value : undefined}
       // A refresh starts the timeline over from its new first page.
       key={loadedAt}
@@ -58,6 +60,7 @@ export const LoadedChats = ({
 };
 
 const ThreadTimeline = ({
+  failure,
   firstPage,
   loadedAt,
   onReload,
@@ -65,6 +68,7 @@ const ThreadTimeline = ({
   search,
   source,
 }: {
+  failure: ApiError | undefined;
   firstPage: ChatThreadsPage | undefined;
   loadedAt: number;
   onReload: () => void;
@@ -101,19 +105,22 @@ const ThreadTimeline = ({
 
   return (
     <SectionList
-      contentContainerStyle={screenStyles.content}
+      {...emptyListProps(threads.length === 0)}
       // The header is the platform's translucent bar; the list scrolls under it.
       contentInsetAdjustmentBehavior="automatic"
       // A chat found by a search opens on the first tap, the keyboard up.
       keyboardShouldPersistTaps="handled"
       keyExtractor={(thread) => thread.id}
       ListEmptyComponent={
-        firstPage === undefined ? (
-          <EmptyCard description={t("loadFailed")} title={t("emptyTitle")}>
-            <RetryButton label={t("retry")} onPress={onReload} />
-          </EmptyCard>
-        ) : (
+        failure === undefined ? (
           <NoThreads search={search.trim()} />
+        ) : (
+          <LoadFailedCard
+            error={failure}
+            onRetry={onReload}
+            retryLabel={t("retry")}
+            title={t("loadFailed")}
+          />
         )
       }
       ListFooterComponent={

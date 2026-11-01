@@ -22,7 +22,8 @@
     "toolUsed": "Izmantots: {tool}",
     "threadTitle": "Saruna",
     "threadLoadFailed": "Šo sarunu neizdevās ielādēt.",
-    "threadEmptyDescription": "Šajā sarunā vēl nav ziņu.",
+    "greeting": "Pie kā vēlaties strādāt?",
+    "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "sections": {
       "today": "Šodien",
       "yesterday": "Vakar",
@@ -39,6 +40,19 @@
     "answerNeedsInput": "Šai atbildei nepieciešama jūsu ievade. Turpiniet to stella tīmekļa lietotnē.",
     "answerFailed": "Atbildi neizdevās pabeigt.",
     "composerMenu": "Atvērt pielikumu un rīku izvēlni",
+    "attachFile": "Pievienot failu",
+    "attachment": "Pielikums",
+    "fileTooLarge": "Fails pārsniedz {maxSize} ierobežojumu",
+    "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
+    "unsupportedFileType": "Neatbalstīts faila tips",
+    "uploadFailed": "Neizdevās apstrādāt failu",
+    "scanDocument": "Skenēt dokumentu",
+    "removeAttachment": "Noņemt {name}",
+    "attachmentReading": "Sagatavo…",
+    "attachmentUploading": "Augšupielādē…",
+    "pickFailed": "Neizdevās atvērt failu atlasītāju. Mēģiniet vēlreiz.",
+    "sendFileRefused": "Neizdevās nosūtīt failu, tāpēc ziņa netika nosūtīta. Noņemiet failu un mēģiniet vēlreiz.",
+    "sendFileNotAnonymizable": "Šī saruna ir anonimizēta, un stella nevarēja anonimizēt vienu no failiem, tāpēc nekas netika nosūtīts. Noņemiet failu un mēģiniet vēlreiz.",
     "pickTitle": "Izvēlieties sarunu",
     "pickDescription": "Izvēlieties pavedienu no saraksta vai sāciet jaunu ar +."
   },
@@ -60,7 +74,8 @@
       "none": "Bez datuma",
       "today": "Šodien",
       "tomorrow": "Rīt",
-      "nextWeek": "Pēc nedēļas"
+      "nextWeek": "Pēc nedēļas",
+      "pick": "Izvēlēties datumu"
     },
     "due": {
       "overdue": "Nokavēti",
@@ -75,7 +90,14 @@
     "statusFailed": "Uzdevumu neizdevās mainīt. Mēģiniet vēlreiz.",
     "pickTitle": "Izvēlieties uzdevumu",
     "pickDescription": "Izvēlieties uzdevumu no saraksta, lai to redzētu šeit.",
-    "openMatter": "Atvērt lietu"
+    "openMatter": "Atvērt lietu",
+    "assignedTo": "Piešķirts",
+    "nobody": "Nav piešķirts",
+    "assign": "Piešķirt",
+    "doneAssigning": "Gatavs",
+    "someone": "Kāds",
+    "membersFailed": "Neizdevās ielādēt lietas dalībniekus.",
+    "assignFailed": "Uzdevumu neizdevās piešķirt. Mēģiniet vēlreiz."
   },
   "matters": {
     "emptyTitle": "Lietu vēl nav",
@@ -119,13 +141,31 @@
     },
     "add": "Pievienot",
     "scanDocument": "Skenēt dokumentu",
-    "newTask": "Jauns uzdevums"
+    "newTask": "Jauns uzdevums",
+    "uploadDocument": "Augšupielādēt dokumentu",
+    "uploadFailed": "Dokumentu neizdevās augšupielādēt. Mēģiniet vēlreiz."
   },
   "entity": {
     "type": "Veids",
     "reference": "Numurs",
     "currentVersion": "Pašreizējā versija",
     "loadFailed": "Šo ierakstu neizdevās ielādēt."
+  },
+  "document": {
+    "title": "Dokuments",
+    "failedTitle": "Šo dokumentu neizdevās atvērt",
+    "failure": {
+      "offline": "Jūs esat bezsaistē. Izveidojiet savienojumu ar internetu un mēģiniet vēlreiz.",
+      "noFile": "Šim dokumentam vēl nav faila.",
+      "failed": "Atverot radās kļūda. Pēc brīža mēģiniet vēlreiz.",
+      "unsupported": "Lai atvērtu dokumentus, atjauniniet lietotni.",
+      "android": "Android lietotnē dokumentus vēl nevar atvērt."
+    },
+    "retry": "Mēģināt vēlreiz",
+    "preview": "Atvērt priekšskatījumu",
+    "previewDescription": "Šis fails tiek atvērts sistēmas priekšskatījumā.",
+    "unrendered": "Šo dokumentu šeit nevar parādīt, taču sistēmas priekšskatījums, iespējams, to atvērs.",
+    "details": "Detalizēta informācija"
   },
   "signIn": {
     "beta": "Beta",
@@ -163,11 +203,11 @@
     "newest": "Jaunākie nolēmumi",
     "noResults": "Nekas neatbilst vārdiem, ko pieprasīja šī meklēšana.",
     "noResultsHint": "Mēģiniet mazāk vai citus vārdus: jēdzienus, ko lietotu nolēmums, nevis teikumu, kādā tiek uzdots jautājums.",
-    "unavailable": "Meklēšana īslaicīgi nav pieejama",
     "retry": "Mēģināt vēlreiz",
     "headnote": "Kopsavilkums",
     "textUnavailable": "Šim nolēmumam teksts nav pieejams",
     "openSource": "Atvērt sākotnējo avotu",
+    "openFailed": "Saiti neizdevās atvērt.",
     "loadFailed": "Tiesu praksi neizdevās ielādēt.",
     "share": "Kopīgot"
   },
@@ -179,6 +219,14 @@
   "writes": {
     "consentNeeded": "Lai lietotnē veiktu izmaiņas, stella nepieciešama jūsu atļauja. Piesakieties vēlreiz, lai to piešķirtu.",
     "signInAgain": "Pieteikties vēlreiz"
+  },
+  "loads": {
+    "offline": "stella nevarēja sazināties ar jūsu serveri. Pārbaudiet savienojumu un mēģiniet vēlreiz.",
+    "outdated": "Serveris atbildēja formātā, ko šī lietotnes versija nesaprot. Atjauniniet lietotni vai serveri, ja to pārvaldāt.",
+    "consent": "Šī pieteikšanās neļauj lietotnei to lasīt. Piesakieties vēlreiz, lai piešķirtu piekļuvi.",
+    "session": "Jūsu pieteikšanās ir beigusies. Piesakieties vēlreiz.",
+    "server": "Serverī radās problēma (kļūdas kods {status}). Pēc brīža mēģiniet vēlreiz.",
+    "refused": "Serveris noraidīja pieprasījumu (kļūdas kods {status})."
   },
   "timers": {
     "title": "Taimeri",
@@ -213,7 +261,27 @@
     "matterTitle": "Lieta",
     "uploadFailed": "Skenējumu neizdevās augšupielādēt. Mēģiniet vēlreiz.",
     "failedTitle": "Skenēšana neizdevās",
-    "failed": "Kamera nevarēja saglabāt skenējumu. Mēģiniet vēlreiz."
+    "failed": "Kamera nevarēja saglabāt skenējumu. Mēģiniet vēlreiz.",
+    "save": "Saglabāt",
+    "saveTitle": "Saglabāt lietā",
+    "share": "Kopīgot",
+    "addPages": "Pievienot lappuses",
+    "page": "{number}. lappuse",
+    "rotatePage": "Pagriezt {number}. lappusi",
+    "removePage": "Noņemt {number}. lappusi",
+    "deletePage": "Dzēst",
+    "movePage": "Pārvietot {number}. lappusi",
+    "moveUp": "Pārvietot uz augšu",
+    "moveDown": "Pārvietot uz leju",
+    "noPages": "Lappuses vairs nav. Skenējiet vēl ar pogu “Pievienot lappuses”.",
+    "kilobytes": "{size} KB",
+    "megabytes": "{size} MB",
+    "pdfFailed": "PDF neizdevās izveidot. Mēģiniet vēlreiz.",
+    "shareFailed": "PDF neizdevās kopīgot. Mēģiniet vēlreiz.",
+    "discardTitle": "Atmest šo skenējumu?",
+    "discardMessage": "Tā lappuses nav saglabātas lietā un tiks dzēstas no šīs ierīces.",
+    "discard": "Atmest",
+    "keepEditing": "Turpināt rediģēt"
   },
   "shortcuts": {
     "search": "Meklēt",

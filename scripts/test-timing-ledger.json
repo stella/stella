@@ -765,11 +765,6 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/web/src/features/time-timers/global-timer.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
-    "count": 2,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/web/src/hooks/use-latest-callback.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -1517,11 +1512,6 @@
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/decision-rekey.db.test.ts::<module>::test timeout",
     "count": 5,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/ingestion/eu-completion-store.postgres.test.ts::<module>::test timeout",
-    "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
