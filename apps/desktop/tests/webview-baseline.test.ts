@@ -51,7 +51,7 @@ const desktopSources = async () =>
 
 const importClosure = async (
   entries: readonly string[],
-  readSource = (file: string) => readFile(file, "utf-8"),
+  readSource = async (file: string) => await readFile(file, "utf-8"),
 ) => {
   const pending = [...entries];
   const sources = new Map<string, string>();
@@ -116,10 +116,10 @@ describe("desktop WebView baseline", () => {
 
   test("package exports resolve calendar logic into the import closure", async () => {
     const entry = path.join(SOURCE_ROOT, "calendar-import-fixture.ts");
-    const sources = await importClosure([entry], (file) =>
+    const sources = await importClosure([entry], async (file) =>
       file === entry
-        ? Promise.resolve('import "@stll/ui/day-calendar.logic";')
-        : readFile(file, "utf-8"),
+        ? 'import "@stll/ui/day-calendar.logic";'
+        : await readFile(file, "utf-8"),
     );
     expect(
       sources.has(
