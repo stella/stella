@@ -253,7 +253,9 @@ const expectConsistent = (
 ) => {
   for (const record of state) {
     expect(record.sources.length).toBeGreaterThan(0);
-    expect(record.sources).toContain(record.sourceEntityId);
+    expect(
+      record.sources.some((source) => source === record.sourceEntityId),
+    ).toBe(true);
   }
   const linked = state.flatMap(({ sources }) => sources);
   expect(new Set(linked).size).toBe(linked.length);
