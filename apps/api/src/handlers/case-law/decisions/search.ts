@@ -1553,8 +1553,24 @@ type CaseLawSearchRowFilterBody = Pick<
   | "language"
 >;
 
-export const caseLawSearchRowFilters = (
-  body: CaseLawSearchRowFilterBody,
+/**
+ * The row filters a provision does not take part in. Membership in a
+ * provision is decided per row by a bounded link probe, never by these
+ * filters, so the type refuses a body that names one: a caller drops it with
+ * {@link withoutProvision}, which states that it decides membership itself.
+ */
+type CaseLawNonProvisionRowFilterBody = Omit<
+  CaseLawSearchRowFilterBody,
+  "provision"
+> & { provision?: never };
+
+const withoutProvision = ({
+  provision: _provision,
+  ...body
+}: CaseLawSearchRowFilterBody): CaseLawNonProvisionRowFilterBody => body;
+
+const caseLawNonProvisionRowFilters = (
+  body: CaseLawNonProvisionRowFilterBody,
   generation: string,
 ): SQL[] => {
   const filters: SQL[] = [
@@ -1715,8 +1731,13 @@ const partitionProvisionRecords = async <
  * authority and the deciding court drive the blend, the group key folds the
  * language versions of one judgment. SQL evaluates eligibility for every
  * candidate so rehydration can account for exclusions before ranking.
+ *
+ * Unresolved: a row is returned whether or not it cites a requested
+ * provision, carrying the probe's `provisionOutcome`. Only
+ * {@link candidateDecisionRowsQuery} decides membership; this form exists for
+ * plan measurement, and the module ownership rule confines its importers.
  */
-export const candidateDecisionRowsStatement = (
+export const unresolvedCandidateDecisionRowsStatement = (
   tx: CaseLawPublicReadTransaction,
   { body, generation, ids, provisionProofs }: DecisionRowsQueryOptions,
 ) => {
@@ -1760,7 +1781,7 @@ export const candidateDecisionRowsStatement = (
     .where(
       and(
         inArray(publishedCaseLawDecisions.id, ids),
-        ...caseLawSearchRowFilters(body, generation),
+        ...caseLawNonProvisionRowFilters(withoutProvision(body), generation),
       ),
     )
     // Bounds the content branch and keeps its subplans behind eligibility.
@@ -1780,7 +1801,7 @@ export const candidateDecisionRowsQuery = async (
   partitionProvisionRecords(
     tx,
     options,
-    await candidateDecisionRowsStatement(tx, options),
+    await unresolvedCandidateDecisionRowsStatement(tx, options),
   );
 
 type CandidateDecisionRow = Awaited<
@@ -1791,8 +1812,11 @@ type CandidateDecisionRow = Awaited<
  * Everything a result card shows, read only for the ids the page emits. The
  * publisher summary and the identifier aggregate are the expensive parts, and
  * a page of ten is the only place they are wanted.
+ *
+ * Unresolved, like {@link unresolvedCandidateDecisionRowsStatement}: only
+ * {@link pageDecisionRowsQuery} decides provision membership.
  */
-export const pageDecisionRowsStatement = (
+export const unresolvedPageDecisionRowsStatement = (
   tx: CaseLawPublicReadTransaction,
   { body, generation, ids, provisionProofs }: DecisionRowsQueryOptions,
 ) => {
@@ -1839,7 +1863,7 @@ export const pageDecisionRowsStatement = (
     .where(
       and(
         inArray(publishedCaseLawDecisions.id, ids),
-        ...caseLawSearchRowFilters(body, generation),
+        ...caseLawNonProvisionRowFilters(withoutProvision(body), generation),
       ),
     )
     // Bounds the content branch and keeps its subplans behind eligibility.
@@ -1859,7 +1883,7 @@ export const pageDecisionRowsQuery = async (
   partitionProvisionRecords(
     tx,
     options,
-    await pageDecisionRowsStatement(tx, options),
+    await unresolvedPageDecisionRowsStatement(tx, options),
   );
 
 type PageDecisionRow = Awaited<
@@ -3691,11 +3715,12 @@ type ProvisionDecisionPageQueryOptions = {
   after: SQL | undefined;
   orderBy: SQL[];
   limit: number;
-  decisionIds?: readonly SafeId<"caseLawDecision">[];
+  /** The complete citing set: the provision's membership, read by id. */
+  decisionIds: readonly SafeId<"caseLawDecision">[];
 };
 
-/** Ranked candidates probe their own links; a broad provision is never materialised. */
-export const provisionDecisionPageQuery = (
+/** A page of a small citing set, ranked within the set's own ids. */
+const provisionDecisionPageQuery = (
   tx: CaseLawPublicReadTransaction,
   {
     body,
@@ -3719,10 +3744,8 @@ export const provisionDecisionPageQuery = (
     )
     .where(
       and(
-        decisionIds === undefined
-          ? undefined
-          : inArray(publishedCaseLawDecisions.id, decisionIds),
-        ...caseLawSearchRowFilters(body, generation),
+        inArray(publishedCaseLawDecisions.id, decisionIds),
+        ...caseLawNonProvisionRowFilters(withoutProvision(body), generation),
         after,
       ),
     )
@@ -3733,39 +3756,42 @@ type BroadProvisionBody = SearchDecisionsBody & {
   provision: CaseLawProvisionFilter;
 };
 
-/** The row filters a broad walk ranks by; the provision is probed instead. */
-const broadCandidateFilters = (
-  body: BroadProvisionBody,
-  generation: string,
-) => {
-  const { provision: _provision, ...candidateBody } = body;
-  return caseLawSearchRowFilters(candidateBody, generation);
-};
+/** The row filters a broad walk checks per examined row; the provision is probed. */
+const broadCandidateFilters = (body: BroadProvisionBody, generation: string) =>
+  caseLawNonProvisionRowFilters(withoutProvision(body), generation);
 
 type ProvisionDecisionWalkQueryOptions = {
   body: BroadProvisionBody;
   generation: string;
   after: SQL | undefined;
   rank: ProvisionRank;
-  /** Ranked candidates the walk may examine: its hard read bound. */
+  /**
+   * Rank-index rows the walk may examine, counted before the request's
+   * filters: its hard read bound, however selective those filters are.
+   */
   budget: number;
   /** Rows that end the walk: matches and undecided probes. */
   stopAfter: number;
 };
 
 /**
- * A bounded rank walk for a broad provision. The ranked candidates are capped
- * at `budget` before any probe runs, and each candidate's link probe runs
- * only when the outer read pulls it, so the walk stops probing as soon as
- * `stopAfter` matching or undecided candidates are found.
+ * A bounded rank walk for a broad provision. The walk examines at most
+ * `budget` rank-index rows: the country's published decisions in rank order,
+ * capped before any other filter is checked, so a selective date, court or
+ * language filter cannot stretch the read across the country. Each examined
+ * row is then checked against the request's filters and, when it passes,
+ * probed for its own citing links. Both happen only when the outer read pulls
+ * the row, so the walk stops as soon as `stopAfter` matching or undecided
+ * candidates are found.
  *
  * The rows leave in rank order because the outer query says so: it orders by
- * the rank the candidates were capped in, re-read from their own columns.
- * That order is the one the ranked candidates already stream in, so the plan
- * needs no sort above the probes (a sort would pull every candidate first),
- * and `ordinal` numbers the same order. The candidate at `ordinal = budget`
- * is always returned when it is reached, so a walk that spent its budget
- * hands out the position it stopped at.
+ * the rank the rows were capped in, re-read from their own columns. That
+ * order is the one the ranked rows already stream in, so the plan needs no
+ * sort above the probes (a sort would pull every row first), and `ordinal`
+ * numbers the same order. The row at `ordinal = budget` is always returned
+ * when it is reached, whether the filters admit it or not, so a walk that
+ * spent its budget hands out the position it stopped at. Its
+ * `provisionOutcome` is null when the filters exclude it.
  */
 export const provisionDecisionWalkQuery = (
   tx: CaseLawPublicReadTransaction,
@@ -3779,6 +3805,9 @@ export const provisionDecisionWalkQuery = (
   }: ProvisionDecisionWalkQueryOptions,
 ) => {
   const orderBy = provisionRankOrderBy(rank, publishedCaseLawDecisions.id);
+  // Only the rank index's own key and predicate, the country and the
+  // publication state, bound the rows examined. Every other filter is
+  // checked per examined row by the lateral below.
   const ranked = tx
     .select({
       id: publishedCaseLawDecisions.id,
@@ -3791,26 +3820,34 @@ export const provisionDecisionWalkQuery = (
         ),
     })
     .from(publishedCaseLawDecisions)
-    .innerJoin(
-      caseLawSources,
-      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-    )
-    .where(and(...broadCandidateFilters(body, generation), after))
+    .where(and(eq(publishedCaseLawDecisions.country, body.country), after))
     .orderBy(...orderBy)
     .limit(budget)
     .as("ranked");
-  // One probe per pulled candidate. The LIMIT keeps the lateral a subquery
-  // of its own, so the filter and the result read one evaluation of it.
+  // One filter check per pulled row, and one link probe per row the filters
+  // admit: the select list is evaluated only for a row its WHERE passes. The
+  // LIMIT keeps the lateral a subquery of its own, so the outer filter and
+  // the result read one evaluation of it.
   const probe = tx
     .select({
       provisionOutcome:
         sql<ProvisionLinkReadOutcome>`${provisionLinkReadOutcomeSql({
-          decisionId: sql`${ranked.id}`,
+          decisionId: sql`${publishedCaseLawDecisions.id}`,
           jurisdiction: body.country,
           provision: body.provision,
         })}`.as("provision_outcome"),
     })
-    .from(sql`(VALUES (1)) AS probe_source(one)`)
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .where(
+      and(
+        sql`${publishedCaseLawDecisions.id} = ${ranked.id}`,
+        ...broadCandidateFilters(body, generation),
+      ),
+    )
     .limit(1)
     .as("probe");
   return tx
@@ -3819,10 +3856,11 @@ export const provisionDecisionWalkQuery = (
       decisionDate: ranked.decisionDate,
       citationAuthority: ranked.citationAuthority,
       ordinal: ranked.ordinal,
-      provisionOutcome: probe.provisionOutcome,
+      // Null for an examined row the request's filters exclude.
+      provisionOutcome: sql<ProvisionLinkReadOutcome | null>`${probe.provisionOutcome}`,
     })
     .from(ranked)
-    .crossJoinLateral(probe)
+    .leftJoinLateral(probe, sql`true`)
     .where(
       sql`(${probe.provisionOutcome} ->> 'type' <> 'noMatch' OR ${ranked.ordinal} = ${budget})`,
     )
@@ -3947,10 +3985,11 @@ const readProvisionIdSetPage = async (
 };
 
 /**
- * A page of a broad provision: candidates in rank order, each probed for its
- * own citing links, at most `candidateBudget` per request. A page may hold
- * fewer than `limit` hits and still continue: the cursor then names where the
- * budget ran out, or the decision whose probe could not decide, which the
+ * A page of a broad provision: rank-index rows in rank order, at most
+ * `candidateBudget` per request whatever the filters admit, each admitted row
+ * probed for its own citing links. A page may hold fewer than `limit` hits,
+ * none at all, and still continue: the cursor then names the last row the
+ * budget examined, or the decision whose probe could not decide, which the
  * next request resumes first.
  */
 const readBroadProvisionPage = async (
@@ -4017,6 +4056,11 @@ const readBroadProvisionPage = async (
   );
   for (const row of walked) {
     const outcome = row.provisionOutcome;
+    // Only the boundary row is returned when the filters exclude it: it
+    // carries the position the walk stopped at, never a hit.
+    if (outcome === null) {
+      continue;
+    }
     switch (outcome.type) {
       case "match":
         hits.push(row);

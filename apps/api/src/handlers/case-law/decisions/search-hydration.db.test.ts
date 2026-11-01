@@ -24,18 +24,18 @@ import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-see
 import {
   assertProvisionWalkOrder,
   candidateDecisionRowsQuery,
-  candidateDecisionRowsStatement,
   caseLawSearchPlan,
   decisionHitsPage,
   listCaseLawProvisionDecisions,
   pageDecisionRowsQuery,
-  pageDecisionRowsStatement,
   provisionDecisionWalkQuery,
   provisionListCursorCodec,
   readCaseLawPageDecisionRows,
   rehydrateCaseLawCandidates,
   searchCorpusIndexDecisions,
   searchPostgresDecisions,
+  unresolvedCandidateDecisionRowsStatement,
+  unresolvedPageDecisionRowsStatement,
 } from "@/api/handlers/case-law/decisions/search";
 import type { ProvisionRank } from "@/api/handlers/case-law/decisions/search";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -2148,6 +2148,280 @@ test("the walk order check refuses rows out of rank order, past the budget or pa
   }
 });
 
+/** A provision only the sparse corpus below cites. */
+const SPARSE_PROVISION = { work: "55/1999 Sb.", anchor: "par_9" } as const;
+const SPARSE_CORPUS_SIZE = 36;
+const SPARSE_COURT = "Ústavní soud";
+/** Together these admit one decision in four of the sparse corpus. */
+const SPARSE_FILTERS = {
+  courts: [SPARSE_COURT],
+  dateFrom: "2024-01-01",
+  dateTo: "2024-12-31",
+};
+
+type SparseDecision = {
+  id: SafeId<"caseLawDecision">;
+  index: number;
+  cites: boolean;
+  admitted: boolean;
+};
+
+/**
+ * Czech decisions ranked above every other one, by `100 + index`. Every
+ * third cites {@link SPARSE_PROVISION}; the court and the date alternate so
+ * {@link SPARSE_FILTERS} admit only `index % 4 === 0`, each filter rejecting
+ * rows the other admits. Three decisions both cite and pass.
+ */
+const withSparseFilteredCorpus = async (
+  run: (decisions: readonly SparseDecision[]) => Promise<void>,
+) => {
+  const db = drizzle({ client });
+  const decisions = Array.from({ length: SPARSE_CORPUS_SIZE }, (_, index) => ({
+    id: createSafeId<"caseLawDecision">(),
+    index,
+    court: index % 2 === 0 ? SPARSE_COURT : "Nejvyšší soud",
+    decisionDate: index % 4 < 2 ? "2024-03-15" : "2021-06-01",
+    cites: index % 3 === 0,
+    admitted: index % 4 === 0,
+  }));
+  const ids = decisions.map(({ id }) => id);
+  const held = decisions.map(({ id }) =>
+    heldProjection({
+      entityId: id,
+      generation: GENERATION,
+      indexId: INDEX_ID,
+      intentId: createSafeId<"corpusIndexProjectionIntent">(),
+    }),
+  );
+  await db.insert(caseLawDecisions).values(
+    decisions.map(({ id, index, court, decisionDate }) => ({
+      id,
+      sourceId,
+      caseNumber: `sparse/${String(index)}`,
+      court,
+      country: "CZE",
+      language: "cs",
+      decisionDate,
+      citationAuthority: 100 + index,
+    })),
+  );
+  await db
+    .insert(corpusIndexProjectionIntents)
+    .values(held.map(({ intent }) => intent));
+  await db
+    .insert(corpusIndexProjectionStates)
+    .values(held.map(({ state }) => state));
+  await db.insert(caseLawProvisionCitations).values(
+    decisions
+      .filter(({ cites }) => cites)
+      .map(({ id, decisionDate }) => ({
+        anchor: SPARSE_PROVISION.anchor,
+        confidence: 0.9,
+        decisionDate,
+        decisionId: id,
+        jurisdiction: "CZE",
+        section: 9,
+        sentenceText: "sentence par_9",
+        spanEnd: 20,
+        spanStart: 10,
+        unit: "section" as const,
+        workCollection: "Sb.",
+        workIdentifier: SPARSE_PROVISION.work,
+        workNumber: 55,
+        workYear: 1999,
+      })),
+  );
+  try {
+    await run(decisions);
+  } finally {
+    await db
+      .delete(caseLawProvisionCitations)
+      .where(
+        eq(caseLawProvisionCitations.workIdentifier, SPARSE_PROVISION.work),
+      );
+    await db
+      .delete(corpusIndexProjectionStates)
+      .where(inArray(corpusIndexProjectionStates.entityId, ids));
+    await db
+      .delete(corpusIndexProjectionIntents)
+      .where(inArray(corpusIndexProjectionIntents.entityId, ids));
+    await db.delete(caseLawDecisions).where(inArray(caseLawDecisions.id, ids));
+  }
+};
+
+test("a filtered broad provision list spends its budget on examined rank rows and lists every match once", async () => {
+  await withSparseFilteredCorpus(async (decisions) => {
+    const budget = 5;
+    const [ranked] = await drizzle({ client })
+      .select({ count: sql<number>`count(*)::int` })
+      .from(publishedCaseLawDecisions)
+      .where(eq(publishedCaseLawDecisions.country, "CZE"));
+    const czechDecisions = ranked?.count ?? panic("expected a Czech count");
+    const pages: { hits: string[]; nextCursor: string | null }[] = [];
+    let cursor: string | undefined;
+    // Each page examines at most `budget` rank rows, so the country is
+    // walked within this many pages; a page per examined row would not fit.
+    const maxPages = Math.ceil(czechDecisions / budget) + 1;
+    do {
+      // db-await-in-loop: each page resumes from the cursor the previous page issued.
+      const page = await listCaseLawProvisionDecisions({
+        body: {
+          ...SEARCH_BODY,
+          ...SPARSE_FILTERS,
+          provision: SPARSE_PROVISION,
+          limit: 1,
+          ...(cursor === undefined ? {} : { cursor }),
+        },
+        caseLawDb,
+        dependencies: {
+          candidateBudget: budget,
+          provisionIdSetMax: 0,
+          servingGeneration: GENERATION,
+          provider: "corpus-index",
+          loadCourtWeights: async () => await Promise.resolve(courtWeights),
+        },
+      });
+      if (!("hits" in page)) {
+        throw new Error("expected a filtered provision page");
+      }
+      pages.push({
+        hits: page.hits.map(({ decisionId }) => decisionId),
+        nextCursor: page.nextCursor,
+      });
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined && pages.length <= maxPages);
+    expect(cursor).toBeUndefined();
+    expect(pages.length).toBeLessThanOrEqual(maxPages);
+    // Every decision that cites the provision and passes the filters, once,
+    // in rank order.
+    expect(pages.flatMap(({ hits }) => hits)).toEqual(
+      decisions
+        .filter(({ cites, admitted }) => cites && admitted)
+        .toSorted((left, right) => right.index - left.index)
+        .map(({ id }) => String(id)),
+    );
+    // A page whose examined rows held no match still continues.
+    expect(
+      pages.some(
+        ({ hits, nextCursor }) => hits.length === 0 && nextCursor !== null,
+      ),
+    ).toBe(true);
+    const cursors = pages.flatMap(({ nextCursor }) =>
+      nextCursor === null ? [] : [nextCursor],
+    );
+    expect(new Set(cursors).size).toBe(cursors.length);
+  });
+});
+
+test("a filtered walk reads at most its budget of rank rows and probes only the rows its filters admit", async () => {
+  await withSparseFilteredCorpus(async (decisions) => {
+    await caseLawDb(async (tx) => {
+      await tx.execute(sql`SET LOCAL enable_seqscan = off`);
+      // The seven top-ranked rows: indexes 35 down to 29. The filters admit
+      // only 32, which does not cite the provision; 29, the last examined
+      // row, is not admitted.
+      const walk = { budget: 7, stopAfter: 2 };
+      const query = provisionDecisionWalkQuery(tx, {
+        body: {
+          ...SEARCH_BODY,
+          ...SPARSE_FILTERS,
+          provision: SPARSE_PROVISION,
+        },
+        generation: GENERATION,
+        after: undefined,
+        rank: walkRanks.relevance,
+        ...walk,
+      });
+      const boundary =
+        decisions.find(({ index }) => index === 29) ??
+        panic("expected the boundary decision");
+      // The walk hands back only the position it stopped at, with no outcome.
+      expect(assertProvisionWalkOrder(await query, walk)).toEqual([
+        expect.objectContaining({
+          id: boundary.id,
+          ordinal: walk.budget,
+          provisionOutcome: null,
+        }),
+      ]);
+      const plan = explainRoot(
+        await tx.execute(sql`EXPLAIN (ANALYZE, FORMAT JSON) ${query.getSQL()}`),
+      );
+      const path =
+        planPathTo(plan, (node) => node["Node Type"] === "WindowAgg") ??
+        panic("The walk plan numbers no ranked rows");
+      // No sort above the ranked rows, so the stop is the read's stop.
+      expect(path.slice(0, -1).map((node) => node["Node Type"])).not.toContain(
+        "Sort",
+      );
+      const nodes: Record<string, unknown>[] = [plan];
+      for (let index = 0; index < nodes.length; index += 1) {
+        const children = nodes.at(index)?.["Plans"];
+        if (isUnknownArray(children)) {
+          nodes.push(...children.filter(isRecord));
+        }
+      }
+      const rankScans = nodes.filter(
+        (node) => node["Index Name"] === CASE_LAW_PROVISION_SEARCH_INDEX.name,
+      );
+      expect(rankScans.length).toBeGreaterThan(0);
+      // The filters are not checked inside the rank scan, so they cannot
+      // stretch it: it reads the budget and stops.
+      for (const scan of rankScans) {
+        expect(Number(scan["Actual Rows"])).toBeLessThanOrEqual(
+          walk.budget + 1,
+        );
+        expect(scan["Rows Removed by Filter"] ?? 0).toBe(0);
+      }
+      // One link probe: the one examined row the filters admit.
+      const probes = nodes.filter(
+        (node) => node["Relation Name"] === "case_law_provision_citations",
+      );
+      expect(
+        probes.reduce((loops, node) => loops + Number(node["Actual Loops"]), 0),
+      ).toBe(1);
+    });
+  });
+});
+
+test("the unresolved row statements leave provision membership to their query forms", async () => {
+  await caseLawDb(async (tx) => {
+    // The Czech decision cites § 316 of the labour code; the Slovak one cites
+    // § 31 of it and § 316 of another act.
+    const options = {
+      body: {
+        ...SEARCH_BODY,
+        provision: { work: "262/2006 Sb.", anchor: "par_316" },
+      },
+      generation: GENERATION,
+      ids: [czechId, slovakId],
+    };
+    for (const statement of [
+      unresolvedCandidateDecisionRowsStatement(tx, options),
+      unresolvedPageDecisionRowsStatement(tx, options),
+    ]) {
+      const outcomes = new Map(
+        (await statement).map(({ id, row }) => [
+          String(id),
+          row?.provisionOutcome?.type,
+        ]),
+      );
+      expect(outcomes).toEqual(
+        new Map([
+          [String(czechId), "match"],
+          [String(slovakId), "noMatch"],
+        ]),
+      );
+    }
+    for (const read of [
+      await candidateDecisionRowsQuery(tx, options),
+      await pageDecisionRowsQuery(tx, options),
+    ]) {
+      expect(read.rows.map(({ id }) => String(id))).toEqual([String(czechId)]);
+      expect(read.dispositions).toEqual([{ id: slovakId, type: "excluded" }]);
+    }
+  });
+});
+
 /**
  * Takes the rank index away the way a deploy finds it before the online
  * build: absent under its name, or left invalid by a build that has not
@@ -2458,8 +2732,8 @@ test("the provision filter reads links through an index, never by scanning them"
       ids: [czechId, slovakId],
     };
     for (const query of [
-      candidateDecisionRowsStatement(tx, options),
-      pageDecisionRowsStatement(tx, options),
+      unresolvedCandidateDecisionRowsStatement(tx, options),
+      unresolvedPageDecisionRowsStatement(tx, options),
     ]) {
       const plan = JSON.stringify(
         await tx.execute(sql`EXPLAIN (COSTS OFF) ${query.getSQL()}`),
@@ -2506,8 +2780,8 @@ test.each([true, false])(
         ids: [czechId, slovakId],
       };
       for (const query of [
-        candidateDecisionRowsStatement(tx, options),
-        pageDecisionRowsStatement(tx, options),
+        unresolvedCandidateDecisionRowsStatement(tx, options),
+        unresolvedPageDecisionRowsStatement(tx, options),
       ]) {
         const plan = JSON.stringify(
           await tx.execute(sql`EXPLAIN (COSTS OFF) ${query.getSQL()}`),
@@ -2661,8 +2935,8 @@ test("the database returns no content columns for excluded canonical ids", async
       ids: [closedId, queuedId],
     };
     const statements = [
-      candidateDecisionRowsStatement(tx, options),
-      pageDecisionRowsStatement(tx, options),
+      unresolvedCandidateDecisionRowsStatement(tx, options),
+      unresolvedPageDecisionRowsStatement(tx, options),
       rehydrateCorpusIndexProviderCandidatesStatement(tx, options),
     ];
     for (const statement of statements) {

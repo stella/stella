@@ -432,9 +432,19 @@ export const LIMITS = {
    * provision cited more widely is checked candidate by candidate instead.
    */
   caseLawProvisionIdSetMax: 5000,
+  /**
+   * Physical citation links one provision scope read examines before it
+   * calls the provision broad. Larger than the id-set bound, so links of other
+   * countries, levels or unpublished decisions do not make a narrow citing
+   * set broad, and still a fixed read.
+   */
+  caseLawProvisionScopeLinkScanMax: 20_000,
   /** Physical citation rows examined by one correlated provision probe. */
   caseLawProvisionLinkProbeMax: 128,
-  /** Ranked decisions examined per broad provision-list request. */
+  /**
+   * Rank-index rows a broad provision-list request examines, counted before
+   * the request's own filters.
+   */
   caseLawProvisionCandidateBudget: 5000,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,

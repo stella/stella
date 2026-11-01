@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { desc, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
@@ -32,6 +33,10 @@ import {
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const PAGE_SIZE = 20;
 const SCOPE_LIMIT = 128;
+/** The physical links one scope read examines in this experiment. */
+const SCOPE_LINK_SCAN_LIMIT = SCOPE_LIMIT * 4;
+/** The court the selective filter below admits. */
+const RARE_COURT = "Rare court";
 const GENERATION = "case_law_v5";
 const PROVISION = {
   work: "2/1993 Sb.",
@@ -238,8 +243,10 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
               jurisdiction: "CZE",
               provision: PROVISION,
               idSetMax: SCOPE_LIMIT,
+              linkScanMax: SCOPE_LINK_SCAN_LIMIT,
             }),
           ).toEqual({ type: "broad" });
+          // More links than the scan budget: broad after one bounded count.
           expect(captured).toHaveLength(1);
           const scope =
             captured.at(0) ?? panic("The scope query was not captured");
@@ -252,7 +259,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           for (const scan of citationScans(scopePlan)) {
             expect(String(scan["Index Name"])).toContain("work_citing");
             expect(Number(scan["Actual Rows"])).toBeLessThanOrEqual(
-              SCOPE_LIMIT + 1,
+              SCOPE_LINK_SCAN_LIMIT + 1,
             );
           }
           // The handler's own shape: the whole candidate budget, stopped by
@@ -272,7 +279,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           expect(rows).toHaveLength(PAGE_SIZE + 1);
           expect(
             rows.every(
-              ({ provisionOutcome }) => provisionOutcome.type === "match",
+              ({ provisionOutcome }) => provisionOutcome?.type === "match",
             ),
           ).toBe(true);
           const pagePlan = explainRoot(
@@ -353,7 +360,9 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
         });
         expect(
           sparse
-            .filter(({ provisionOutcome }) => provisionOutcome.type === "match")
+            .filter(
+              ({ provisionOutcome }) => provisionOutcome?.type === "match",
+            )
             .map(({ ordinal }) => ordinal),
         ).toEqual(
           Array.from(
@@ -381,6 +390,109 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
         expect(sparseBlocks).toBeLessThan(budget * SPARSE_BLOCKS_PER_CANDIDATE);
         await db.execute(sql`SET statement_timeout = 0`);
 
+        // A selective court and date filter on the same sparse provision: one
+        // decision in 500 is at the rare court, and every fourth of those is
+        // dated outside the range. The filters cannot stretch a walk past its
+        // budget of rank rows, and paging from each walk's last examined row
+        // lists every admitted citing decision exactly once.
+        await db.execute(sql`UPDATE case_law_decisions decision
+          SET court = ${RARE_COURT},
+            decision_date = CASE WHEN ranked.rank % 2000 = 0
+              THEN DATE '2019-06-01' ELSE decision.decision_date END
+          FROM (
+            SELECT id, row_number() OVER (
+              ORDER BY citation_authority DESC, id DESC
+            ) AS rank
+            FROM case_law_decisions
+          ) ranked
+          WHERE decision.id = ranked.id AND ranked.rank % 500 = 0`);
+        await db.execute(sql`VACUUM (ANALYZE) ${schema}.case_law_decisions`);
+        const expectedFiltered = (
+          await db.execute(sql`SELECT decision.id FROM case_law_decisions decision
+            WHERE decision.court = ${RARE_COURT}
+              AND decision.decision_date BETWEEN DATE '2020-01-01' AND DATE '2020-12-31'
+              AND EXISTS (
+                SELECT 1 FROM case_law_provision_citations link
+                WHERE link.decision_id = decision.id
+                  AND link.anchor = ${PROVISION.anchor}
+              )`)
+        ).map((row) => String(row["id"]));
+        // Ranks 1000, 3000, ... 29000 of the 30,000 decisions.
+        expect(expectedFiltered).toHaveLength(15);
+        await db.execute(
+          sql`SELECT set_config('statement_timeout', ${`${PUBLIC_READ_STATEMENT_TIMEOUT_MS.search}ms`}, false)`,
+        );
+        const filteredBody = {
+          country: "CZE",
+          query: "",
+          provision: PROVISION,
+          courts: [RARE_COURT],
+          dateFrom: "2020-01-01",
+          dateTo: "2020-12-31",
+        };
+        const filteredWalk = { budget, stopAfter: PAGE_SIZE + 1 };
+        const listed: string[] = [];
+        let filteredAfter: SQL | undefined;
+        let walks = 0;
+        const filteredBlocks: number[] = [];
+        for (;;) {
+          walks += 1;
+          const filteredQuery = provisionDecisionWalkQuery(tx, {
+            body: filteredBody,
+            generation: GENERATION,
+            after: filteredAfter,
+            rank: RANK,
+            ...filteredWalk,
+          });
+          // db-await-in-loop: each walk resumes from the row the previous one stopped at.
+          const filteredRows = assertProvisionWalkOrder(
+            await filteredQuery,
+            filteredWalk,
+          );
+          // db-await-in-loop: every walk of the paging experiment is measured.
+          const filteredPlan = explainRoot(
+            await db.execute(
+              sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${filteredQuery.getSQL()}`,
+            ),
+          );
+          for (const scan of rankScans(filteredPlan)) {
+            expect(Number(scan["Actual Rows"])).toBeLessThanOrEqual(budget + 1);
+          }
+          expect(
+            nodesOf(filteredPlan).some((node) => node["Node Type"] === "Sort"),
+          ).toBe(false);
+          // Probes run only for admitted rows, so far fewer than the budget.
+          for (const scan of citationScans(filteredPlan)) {
+            expect(Number(scan["Actual Loops"])).toBeLessThanOrEqual(
+              budget / 100,
+            );
+          }
+          filteredBlocks.push(readBlocks(filteredPlan));
+          expect(readBlocks(filteredPlan)).toBeLessThan(
+            budget * SPARSE_BLOCKS_PER_CANDIDATE,
+          );
+          listed.push(
+            ...filteredRows
+              .filter(
+                ({ provisionOutcome }) => provisionOutcome?.type === "match",
+              )
+              .map(({ id }) => String(id)),
+          );
+          const boundary = filteredRows.find(
+            ({ ordinal }) => ordinal === budget,
+          );
+          if (boundary === undefined) {
+            break;
+          }
+          filteredAfter = sql`(${publishedCaseLawDecisions.citationAuthority}, ${publishedCaseLawDecisions.id}) < (${boundary.citationAuthority}, ${boundary.id})`;
+        }
+        // Six full walks over 30,000 rank rows, and the empty one that ends.
+        expect(walks).toBe(30_000 / budget + 1);
+        console.log("filtered provision walk shared blocks", filteredBlocks);
+        expect(new Set(listed).size).toBe(listed.length);
+        expect(listed.toSorted()).toEqual(expectedFiltered.toSorted());
+        await db.execute(sql`SET statement_timeout = 0`);
+
         // A skipped hierarchy level makes the anchor cover every letter under
         // the section. Non-matching letters must still consume the fixed
         // physical-read budget rather than being scanned without a bound.
@@ -404,6 +516,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
             jurisdiction: "CZE",
             provision: GAPPED_PROVISION,
             idSetMax: SCOPE_LIMIT,
+            linkScanMax: SCOPE_LINK_SCAN_LIMIT,
           }),
         ).toEqual({ type: "broad" });
         expect(captured).toHaveLength(1);
@@ -419,7 +532,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           const examined =
             Number(scan["Actual Rows"]) +
             Number(scan["Rows Removed by Filter"] ?? 0);
-          expect(examined).toBeLessThanOrEqual(SCOPE_LIMIT + 1);
+          expect(examined).toBeLessThanOrEqual(SCOPE_LINK_SCAN_LIMIT + 1);
         }
 
         // A skipped hierarchy level can leave many non-matching links inside
