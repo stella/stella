@@ -163,13 +163,24 @@ export const lockOrganizationObjectIntentsForWriter = async (
   );
 };
 
+// The lifecycle lock is an exclusive transaction-scoped advisory lock, held
+// until the transaction ends: a second take in the same transaction is a no-op
+// and runs no statement.
+const lifecycleLockedOrganizations = new WeakMap<Transaction, Set<string>>();
+
 export const lockOrganizationObjectIntentsForLifecycle = async (
   tx: Transaction,
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
+  const locked = lifecycleLockedOrganizations.get(tx) ?? new Set<string>();
+  if (locked.has(organizationId)) {
+    return;
+  }
   await tx.execute(
     sql`SELECT pg_advisory_xact_lock(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
   );
+  locked.add(organizationId);
+  lifecycleLockedOrganizations.set(tx, locked);
 };
 
 type ActiveWorkspaceBufferIntentOptions = {

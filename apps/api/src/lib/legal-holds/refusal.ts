@@ -7,9 +7,8 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorValidationIssue } from "@/api/lib/errors/tagged-errors";
 
-import { LegalHoldActiveError } from "./errors";
-import { UNIDENTIFIED_LEGAL_HOLD_VIEWER } from "./projection";
-import type { LegalHoldViewer } from "./projection";
+import { LegalHoldActiveError, UNIDENTIFIED_LEGAL_HOLD_VIEWER } from "./errors";
+import type { LegalHoldViewer } from "./errors";
 
 /**
  * One issue per hold names it (path), its scope (code) and when it was placed

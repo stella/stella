@@ -4,8 +4,8 @@
   "worker": {},
   "scheduler": {
     "reviewOrganization.reset": {
-      "threshold": 1014,
-      "reason": "CI census: the complete canonical table sweep, fixture seeding and audit queries plus transaction round trips in both real registered reset tests, and 35 legal-hold checks (the organization hold lock and hold read for each contact and matter deletion and for the closing sweep)."
+      "threshold": 979,
+      "reason": "Initial CI census: the complete canonical table sweep, fixture seeding and audit queries plus transaction round trips in both real registered reset tests."
     }
   }
 }

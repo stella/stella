@@ -14,13 +14,13 @@ import {
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
 
-import { LegalHoldActiveError } from "./errors";
 import {
+  LegalHoldActiveError,
   LegalHoldRecord,
-  legalHoldViewerFromContext,
   UNIDENTIFIED_LEGAL_HOLD_VIEWER,
-} from "./projection";
-import type { LegalHoldViewer } from "./projection";
+} from "./errors";
+import type { LegalHoldViewer } from "./errors";
+import { legalHoldViewerFromContext } from "./projection";
 import { legalHoldRefusal, legalHoldRefusalForViewer } from "./refusal";
 
 const REASON = "Preserve the supplier dispute record";

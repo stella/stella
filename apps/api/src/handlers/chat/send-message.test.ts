@@ -45,8 +45,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
-import { LegalHoldRecord } from "@/api/lib/legal-holds/projection";
+import {
+  LegalHoldActiveError,
+  LegalHoldRecord,
+} from "@/api/lib/legal-holds/errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import {
   hasMemberPermission,

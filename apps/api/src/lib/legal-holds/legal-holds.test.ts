@@ -9,10 +9,9 @@ import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
-import { LegalHoldActiveError } from "./errors";
+import { LegalHoldActiveError, LegalHoldRecord } from "./errors";
 import { holdTargetPredicate } from "./holds";
 import type { HoldTarget } from "./holds";
-import { LegalHoldRecord } from "./projection";
 import { legalHoldRefusal } from "./refusal";
 
 const targets = () =>

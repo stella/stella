@@ -10,8 +10,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { readLockedLegalHolds } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-import { lockLegalHoldOrganization } from "./holds";
-import { LegalHoldRecord } from "./projection";
+import { LegalHoldRecord } from "./errors";
+import { forgetClearHoldTargets, lockLegalHoldOrganization } from "./holds";
 
 type LegalHoldScope =
   | { type: "matter"; workspaceId: SafeId<"workspace"> }
@@ -74,6 +74,7 @@ export const placeLegalHold = async (options: HoldMutationOptions) => {
   const { tx, organizationId, actorId, scope, reason, recordAuditEvent } =
     options;
   await lockLegalHoldOrganization({ tx, organizationId });
+  forgetClearHoldTargets(tx);
   if (!(await scopeExists(options))) {
     return Result.err(
       new HandlerError({ status: 404, message: "Matter or item not found." }),
@@ -132,6 +133,7 @@ export const releaseLegalHold = async (options: ReleaseHoldOptions) => {
     holdId,
   } = options;
   await lockLegalHoldOrganization({ tx, organizationId });
+  forgetClearHoldTargets(tx);
   if (!(await scopeExists(options))) {
     return Result.err(
       new HandlerError({ status: 404, message: "Matter or item not found." }),

@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, inArray, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
@@ -30,9 +30,8 @@ import {
   readLockedLegalHolds,
 } from "@/api/lib/db/aggregate-lock";
 
-import { LegalHoldActiveError } from "./errors";
+import { LegalHoldActiveError, LegalHoldRecord } from "./errors";
 import type { HoldSummary } from "./errors";
-import { LegalHoldRecord } from "./projection";
 
 export type HoldTarget =
   | { type: "matter"; workspaceId: SafeId<"workspace"> }
@@ -51,9 +50,64 @@ export type HoldTarget =
   | { type: "account"; userId: SafeId<"user"> }
   | { type: "organization" };
 
+type FenceMode = "share" | "update";
+
+/**
+ * What one transaction already holds: the organization fences it took and the
+ * hold targets it proved clear under them. Both last until the transaction
+ * ends (the fences are transaction-scoped advisory locks), so a second take
+ * of a fence the transaction holds, or a second check of a target it proved
+ * clear, is answered here without a statement.
+ */
+type TransactionHoldState = {
+  fences: Map<string, FenceMode>;
+  clear: Set<string>;
+};
+const transactionHoldStates = new WeakMap<Transaction, TransactionHoldState>();
+
+const holdStateOf = (tx: Transaction): TransactionHoldState => {
+  const existing = transactionHoldStates.get(tx);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const created: TransactionHoldState = { fences: new Map(), clear: new Set() };
+  transactionHoldStates.set(tx, created);
+  return created;
+};
+
+const holdsFence = (held: FenceMode | undefined, mode: FenceMode) =>
+  held === "update" || (held === "share" && mode === "share");
+
 // An empty active-hold set cannot be locked with FOR SHARE. The organization
 // row is the placement fence, including the first hold. Lock order is the
-// organization fence, then hold rows, then resource rows.
+// organization fence, then hold rows, then resource rows. One statement takes
+// every fence the transaction does not hold yet, in organization ID order.
+const fenceOrganizations = async ({
+  tx,
+  organizationIds,
+  mode,
+}: {
+  tx: Transaction;
+  organizationIds: readonly SafeId<"organization">[];
+  mode: FenceMode;
+}) => {
+  const state = holdStateOf(tx);
+  const missing = [...new Set(organizationIds)].filter(
+    (id) => !holdsFence(state.fences.get(id), mode),
+  );
+  if (missing.length === 0) {
+    return;
+  }
+  await lockLegalHoldOrganizations({
+    tx,
+    predicate: inArray(organization.id, missing),
+    mode,
+  });
+  for (const id of missing) {
+    state.fences.set(id, mode);
+  }
+};
+
 export const lockLegalHoldOrganization = async ({
   tx,
   organizationId,
@@ -61,13 +115,17 @@ export const lockLegalHoldOrganization = async ({
 }: {
   tx: Transaction;
   organizationId: SafeId<"organization">;
-  mode?: "share" | "update";
+  mode?: FenceMode;
 }) => {
-  await lockLegalHoldOrganizations({
-    tx,
-    predicate: eq(organization.id, organizationId),
-    mode,
-  });
+  await fenceOrganizations({ tx, organizationIds: [organizationId], mode });
+};
+
+/**
+ * Placement and release change the hold set under the exclusive fence, so a
+ * target this transaction proved clear before must be checked again.
+ */
+export const forgetClearHoldTargets = (tx: Transaction) => {
+  holdStateOf(tx).clear.clear();
 };
 
 const heldWorkspace = sql`coalesce(${legalHolds.workspaceId}, (SELECT e.workspace_id FROM ${entities} e WHERE e.id = ${legalHolds.entityId}))`;
@@ -162,29 +220,54 @@ type HoldOptions = {
   organizationId: SafeId<"organization">;
   target: HoldTarget;
 };
-export const holdsBlocking = async ({
+type HoldsAcrossOptions = {
+  tx: Transaction;
+  organizationIds: readonly SafeId<"organization">[];
+  target: HoldTarget;
+};
+
+const clearTargetKey = (
+  organizationIds: readonly SafeId<"organization">[],
+  target: HoldTarget,
+) => JSON.stringify([[...organizationIds].toSorted(), target]);
+
+/**
+ * The active holds that block `target` in any of the organizations: their
+ * fences first (one statement for those the transaction does not hold), then
+ * one read of the holds after the fences.
+ */
+const holdsBlockingAcross = async ({
   tx,
-  organizationId,
+  organizationIds,
   target,
-}: HoldOptions): Promise<
+}: HoldsAcrossOptions): Promise<
   { type: "clear" } | { type: "held"; holds: HoldSummary[] }
 > => {
-  await lockLegalHoldOrganization({
+  if (organizationIds.length === 0) {
+    return { type: "clear" };
+  }
+  const state = holdStateOf(tx);
+  const key = clearTargetKey(organizationIds, target);
+  if (state.clear.has(key)) {
+    return { type: "clear" };
+  }
+  await fenceOrganizations({
     tx,
-    organizationId,
+    organizationIds,
     mode: target.type === "contacts" ? "update" : "share",
   });
   const rows = await readLockedLegalHolds({
     tx,
     predicate:
       and(
-        eq(legalHolds.organizationId, organizationId),
+        inArray(legalHolds.organizationId, [...new Set(organizationIds)]),
         isNull(legalHolds.releasedAt),
         holdTargetPredicate(target),
       ) ?? panic("Missing hold predicate"),
     mode: "share",
   });
   if (rows.length === 0) {
+    state.clear.add(key);
     return { type: "clear" };
   }
   const entityIds = rows.flatMap((row) => (row.entityId ? [row.entityId] : []));
@@ -220,10 +303,29 @@ export const holdsBlocking = async ({
   return { type: "held", holds };
 };
 
-export const requireNoHold = async (
-  options: HoldOptions,
+export const holdsBlocking = async ({
+  tx,
+  organizationId,
+  target,
+}: HoldOptions) =>
+  await holdsBlockingAcross({ tx, organizationIds: [organizationId], target });
+
+export const requireNoHold = async ({
+  tx,
+  organizationId,
+  target,
+}: HoldOptions): Promise<Result<void, LegalHoldActiveError>> =>
+  await requireNoHoldAcross({
+    tx,
+    organizationIds: [organizationId],
+    target,
+  });
+
+/** One fenced check of `target` across several organizations. */
+export const requireNoHoldAcross = async (
+  options: HoldsAcrossOptions,
 ): Promise<Result<void, LegalHoldActiveError>> => {
-  const outcome = await holdsBlocking(options);
+  const outcome = await holdsBlockingAcross(options);
   if (outcome.type === "clear") {
     return Result.ok();
   }
