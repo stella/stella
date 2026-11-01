@@ -263,9 +263,11 @@ test("a queue entry is checked against the entry ahead of it, not the target bra
       "utf-8",
     ),
   );
+  // The plan's entry base is the entry ahead in a merge group and empty
+  // elsewhere (scripts/ci-completed-depth.test.ts runs the step).
   const previousEntryBase = [
     "$",
-    "{{ github.event_name == 'merge_group' && github.event.merge_group.base_sha",
+    "{{ needs.ci-plan.outputs.entry_base_sha",
     " || needs.ci-plan.outputs.target_base_sha }}",
   ].join("");
   for (const job of ["pr-heavy-gate", "ci-quick-checks"]) {
