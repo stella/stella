@@ -55,7 +55,10 @@ export const SignalInspectorView = ({
 const SignalInspectorReader = ({
   onClose,
   tab,
-}: InspectorViewRenderProps<InboxSignalViewPayload>) => {
+}: Pick<
+  InspectorViewRenderProps<InboxSignalViewPayload>,
+  "onClose" | "tab"
+>) => {
   const t = useTranslations();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const {

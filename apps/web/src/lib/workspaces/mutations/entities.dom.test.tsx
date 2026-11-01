@@ -462,6 +462,7 @@ test("an aborted rename leaves the form's entered value in place", async () => {
         getSelectedDragItems={() => []}
         getSelectedEntities={() => []}
         getAncestorIds={() => []}
+        canTransferEntities={() => false}
       />
     );
   };

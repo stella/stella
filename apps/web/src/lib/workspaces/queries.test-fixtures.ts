@@ -1,4 +1,4 @@
-import type { WebApiRoutes } from "@/lib/eden-client";
+import type { WebApiRoutes } from "@/lib/api";
 
 export const DISABLED_NAVIGATION_FEATURES = {
   timeBilling: false,

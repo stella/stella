@@ -78,7 +78,11 @@ const renderInspector = (signals: boolean, enrolled: boolean) => {
             wordEditShortcut: null,
           }}
         >
-          <SignalInspectorView tab={TAB} onClose={() => undefined} />
+          <SignalInspectorView
+            tab={TAB}
+            onClose={() => undefined}
+            onMoveToMain={() => undefined}
+          />
         </AuthenticatedUserProvider>
       </IntlProvider>
     </QueryClientProvider>,
