@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 
 /**
- * Online repair behind migration 20261031200838_contact_vat_id_check, which
+ * Online repair behind migration 20261031213747_contact_vat_id_check, which
  * adds `contacts_vat_id_check` NOT VALID: an EU VAT number lives in vat_id,
  * and tax_id holds one only beside a vat_id. A contact written before
  * 20261019010000_invoice_party_tax_vat_ids gave contacts a vat_id may hold an
@@ -184,7 +184,7 @@ const validateConstraint = async (
 export const createContactVatIdRepair = (
   options: RepairRuntimeOptions = {},
 ): MigrationOwnedOnlineRepair => ({
-  introducedBy: "20261031200838_contact_vat_id_check",
+  introducedBy: "20261031213747_contact_vat_id_check",
   name: CONTACT_VAT_ID_REPAIR_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({

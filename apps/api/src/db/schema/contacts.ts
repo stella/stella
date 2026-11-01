@@ -142,7 +142,7 @@ export const contacts = p.pgTable(
       )})`,
     ),
     // An EU VAT number lives in vat_id: tax_id holds one only beside a vat_id
-    // (migration 20261031200838_contact_vat_id_check, validated online).
+    // (migration 20261031213747_contact_vat_id_check, validated online).
     p.check(
       "contacts_vat_id_check",
       sql`${table.vatId} IS NOT NULL OR ${table.taxId} IS NULL OR ${sql.raw(
