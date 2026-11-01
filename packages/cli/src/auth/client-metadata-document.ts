@@ -6,7 +6,6 @@ import {
   CLI_KNOWN_SCOPES,
   CLIENT_NAME,
   LOOPBACK_REDIRECT_PATH,
-  LOOPBACK_REDIRECT_URI,
 } from "./constants.js";
 
 export { LOOPBACK_REDIRECT_PATH };
@@ -26,22 +25,6 @@ export type CliClientMetadataDocument = {
   readonly token_endpoint_auth_method: "none";
 };
 
-/** Public native metadata shared by registration and its server-side policy. */
-export const CLI_LOOPBACK_CLIENT_METADATA = {
-  application_type: "native",
-  grant_types: ["authorization_code", "refresh_token"],
-  redirect_uris: [LOOPBACK_REDIRECT_URI],
-  response_types: ["code"],
-  token_endpoint_auth_method: "none",
-} as const satisfies Pick<
-  CliClientMetadataDocument,
-  | "application_type"
-  | "grant_types"
-  | "redirect_uris"
-  | "response_types"
-  | "token_endpoint_auth_method"
->;
-
 /**
  * The CLI's `client_id` for an authorization server: the document URL on the
  * issuer's origin. Undefined when the issuer is not https, since a metadata
@@ -59,13 +42,16 @@ export const cliClientMetadataUrl = (issuer: string): string | undefined => {
 export const buildCliClientMetadataDocument = (
   clientId: string,
 ): CliClientMetadataDocument => ({
-  ...CLI_LOOPBACK_CLIENT_METADATA,
   client_id: clientId,
   client_name: CLIENT_NAME,
+  application_type: "native",
+  grant_types: ["authorization_code", "refresh_token"],
   // Loopback redirects match on any port (RFC 8252 §7.3).
   redirect_uris: [
     `http://127.0.0.1${LOOPBACK_REDIRECT_PATH}`,
     `http://localhost${LOOPBACK_REDIRECT_PATH}`,
   ],
+  response_types: ["code"],
   scope: CLI_KNOWN_SCOPES.join(" "),
+  token_endpoint_auth_method: "none",
 });

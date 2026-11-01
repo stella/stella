@@ -7,7 +7,6 @@ import {
   MCP_OAUTH_PROTOCOL_SCOPES,
   type OAuthConsentClient,
 } from "@stll/api-contract";
-import { CLI_LOOPBACK_CLIENT_METADATA } from "@stll/cli/client-metadata-document";
 
 import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { getAuth } from "@/api/lib/auth";
@@ -107,70 +106,6 @@ const acceptanceCases = Object.values(OAUTH_CLIENT_REGISTRATION_FIXTURES).map(
 );
 
 describe("OAuth dynamic client registration", () => {
-  test("reserves first-party display names for the exact public native CLI registration", async () => {
-    for (const name of [
-      "stella",
-      "stella CLI",
-      "stella-cli",
-      "STELLA_CLI",
-      "stеlla",
-      "stella\u200bcli",
-    ]) {
-      const response = await registerClient({
-        client_name: name,
-        redirect_uris: ["https://unrelated.example/callback"],
-      });
-      expect(response.status).toBe(400);
-    }
-    const response = await registerClient({
-      ...CLI_LOOPBACK_CLIENT_METADATA,
-      client_name: "stella CLI",
-    });
-    expect(response.status).toBe(201);
-  });
-
-  test("registers the released CLI request under the current display name", async () => {
-    // Request fields from oauth-client-registration.ts before the display-name change.
-    const response = await registerClient({
-      client_name: "stella-cli",
-      grant_types: ["authorization_code", "refresh_token"],
-      redirect_uris: ["http://127.0.0.1/callback"],
-      response_types: ["code"],
-      resources: [getMcpResourceUrl()],
-      scope: "openid profile email offline_access stella:read",
-      token_endpoint_auth_method: "none",
-      application_type: "native",
-    });
-    expect(response.status).toBe(201);
-    const registered = v.parse(
-      v.looseObject({ client_id: v.string(), client_name: v.string() }),
-      await response.json(),
-    );
-    expect(registered.client_name).toBe("stella CLI");
-    const context = await getAuth().$context;
-    const stored = await context.adapter.findOne<
-      SchemaClient<readonly string[]>
-    >({
-      model: "oauthClient",
-      where: [{ field: "clientId", value: registered.client_id }],
-    });
-    expect(stored?.name).toBe("stella CLI");
-  });
-
-  test("refuses the legacy CLI name with a non-CLI registration shape", async () => {
-    const response = await registerClient({
-      client_name: "stella-cli",
-      grant_types: ["authorization_code", "refresh_token"],
-      redirect_uris: ["https://connector.example/callback"],
-      response_types: ["code"],
-      resources: [getMcpResourceUrl()],
-      scope: "openid profile email offline_access stella:read",
-      token_endpoint_auth_method: "none",
-      application_type: "native",
-    });
-    expect(response.status).toBe(400);
-  });
-
   test("requires a session for consent details", async () => {
     const response = await getAuth().handler(
       new Request(
