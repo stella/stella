@@ -29,10 +29,6 @@ import type { DayReviewGroup, MatchedSegment } from "./day-review-logic";
 const MINUTE_MS = 60_000;
 /** Idle gaps up to this long keep one suggestion's time in one block. */
 const SUGGESTION_RUN_GAP_MS = 5 * MINUTE_MS;
-/** Titles one stella AI description may send; the native side refuses more. */
-export const NARRATIVE_TITLE_LIMIT = 40;
-/** Consecutive declines after which the consent strip folds into a button. */
-export const NARRATIVE_DECLINES_BEFORE_FOLD = 3;
 
 /** Working hours the calendar always shows. */
 const DEFAULT_HOURS = { endHour: 18, startHour: 8 } as const;
@@ -327,17 +323,6 @@ export const nextSuggestion = (
     null
   );
 };
-
-/** The window titles a stella AI description may use, longest-used first. */
-export const narrativeTitles = (suggestion: ActivitySuggestion) =>
-  [
-    ...new Set(
-      suggestion.evidence
-        .flatMap(({ details }) => details)
-        .sort((left, right) => right.durationMs - left.durationMs)
-        .map(({ title }) => title),
-    ),
-  ].slice(0, NARRATIVE_TITLE_LIMIT);
 
 export type EvidenceRow = {
   /** The app the row's time was recorded in; it picks the row's icon. */

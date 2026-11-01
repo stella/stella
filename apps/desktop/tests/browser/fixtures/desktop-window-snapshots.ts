@@ -82,7 +82,6 @@ export const ACTIVITY_SETTINGS = {
   detailsAccess: "ready",
   browserApps: [{ identifier: "com.example.browser", name: "Example Browser" }],
   browserTitleApps: [],
-  narrativeAssist: "ask",
   apps: [
     { identifier: "com.example.editor", name: "Example Editor" },
     { identifier: "com.example.browser", name: "Example Browser" },

@@ -13,8 +13,6 @@ import {
   draftedBlocks,
   manualSuggestion,
   matchedSuggestions,
-  NARRATIVE_TITLE_LIMIT,
-  narrativeTitles,
   nextSuggestion,
   segmentTitles,
   shortSegmentThresholdMs,
@@ -372,27 +370,6 @@ describe("suggestions", () => {
 });
 
 describe("suggestion evidence", () => {
-  test("stella AI receives at most the limit of distinct titles, longest-used first", () => {
-    const segments = Array.from(
-      { length: NARRATIVE_TITLE_LIMIT + 10 },
-      (_, index) =>
-        segment({
-          from: index * 2,
-          to: index * 2 + 1 + (index === 7 ? 1 : 0),
-          matterId: "lease",
-          title: `Lease draft ${String(index)}`,
-        }),
-    );
-    const [suggestion] = matchedSuggestions(day(segments).groups, new Set());
-    if (!suggestion) {
-      throw new TypeError("The fixture must produce a suggestion");
-    }
-    const titles = narrativeTitles(suggestion);
-    expect(titles).toHaveLength(NARRATIVE_TITLE_LIMIT);
-    expect(new Set(titles).size).toBe(titles.length);
-    expect(titles.at(0)).toBe("Lease draft 7");
-  });
-
   test("title and app rows share the suggestion's time", () => {
     const [suggestion] = matchedSuggestions(
       day([

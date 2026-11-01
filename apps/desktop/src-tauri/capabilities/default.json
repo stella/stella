@@ -40,7 +40,6 @@
     "allow-activity-get-settings",
     "allow-activity-set-capture-details",
     "allow-activity-set-detect-calls",
-    "allow-activity-set-narrative-assist",
     "allow-activity-set-browser-title-capture",
     "allow-activity-set-app-detail-capture",
     "allow-activity-open-accessibility-settings",
@@ -49,6 +48,9 @@
     "allow-activity-remove-app-exclusion",
     "allow-activity-delete-day",
     "allow-activity-delete-all",
-    "allow-activity-delete-other-account-history"
+    "allow-activity-delete-other-account-history",
+    "allow-billing-draft-get-settings",
+    "allow-billing-draft-grant-consent",
+    "allow-billing-draft-withdraw-consent"
   ]
 }
