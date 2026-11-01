@@ -434,7 +434,13 @@ const sectionHeadingIn = (key: string): SectionHeading | null =>
  * In the current era the operative part opens with `Rendelkező rész`, which is
  * a section heading.
  */
-const OPERATIVE_INTRODUCTIONS = new Set(["ítéletet", "végzést", "határozatot"]);
+const OPERATIVE_INTRODUCTIONS = new Set([
+  "ítéletet",
+  "részítéletet",
+  "közbenső ítéletet",
+  "végzést",
+  "határozatot",
+]);
 
 /** The republic's formula, printed above the operative part in the legacy era. */
 const REPUBLIC_FORMULAE = new Set([
@@ -551,13 +557,31 @@ type HeaderLabelMatch = {
 };
 
 /**
+ * Whether a line opens with a label: the form, perhaps a few more words of a
+ * longer label (`A másodfokú bíróság neve és a jogerős határozat száma:`), and
+ * its colon; or the form alone with its value on the next line. A sentence
+ * that opens with the same words (`A felperes másodfokú eljárásban…`) is the
+ * decision's own text.
+ */
+const LABEL_TAIL = /^[^:.;]{0,80}:/u;
+
+const isLabelOpening = (key: string, form: string): boolean =>
+  key.startsWith(form) &&
+  (key.length === form.length || LABEL_TAIL.test(key.slice(form.length)));
+
+/**
  * The header label a line opens with, or `null`.
  *
  * Longest form wins, so a plural line is read as the label it is rather than
  * as the shorter one it happens to contain.
  */
 const huBhgyHeaderLabelIn = (text: string): HeaderLabelMatch | null => {
-  const key = headingKey(text);
+  // The heading key without its trailing-mark trim: a label's colon is what
+  // tells it from a sentence that opens with the same words.
+  const key = collapseSpacedLetters(text)
+    .replaceAll(/[\s ]+/gu, " ")
+    .trim()
+    .toLocaleLowerCase("hu-HU");
   let best: {
     label: HuBhgyHeaderLabel;
     role: ParagraphRole;
@@ -566,7 +590,7 @@ const huBhgyHeaderLabelIn = (text: string): HeaderLabelMatch | null => {
   for (const { label, role, forms } of HEADER_LABELS) {
     for (const form of forms) {
       if (
-        key.startsWith(form) &&
+        isLabelOpening(key, form) &&
         (best === null || form.length > best.length)
       ) {
         best = { label, role, length: form.length };
@@ -803,6 +827,8 @@ const HU_DECISION_TYPES = [
   "kollégiumi állásfoglalás",
   "kollégiumi vélemény",
   "elvi határozat",
+  "részítélet",
+  "közbenső ítélet",
   "ítélet",
   "végzés",
   "határozat",
@@ -838,6 +864,20 @@ export const huDecisionTypeFrom = (
   }
   return undefined;
 };
+
+/**
+ * Whether a short line introduces the operative part: its accusative
+ * introduction (`Í T É L E T E T :`), or, below a header, the kind printed
+ * alone (`V é g z é s`). Above a header the same word is the title block's.
+ */
+const opensOperativePart = (
+  key: string,
+  text: string,
+  belowHeader: boolean,
+): boolean =>
+  text.length <= 40 &&
+  (OPERATIVE_INTRODUCTIONS.has(key) ||
+    (belowHeader && HU_DECISION_TYPES.some((type) => type === key)));
 
 /** `Az ügy száma:      Gfv.VI.30.091/2025/4.` */
 const DOCKET_LABEL = "az ügy száma:";
@@ -1212,7 +1252,13 @@ export const parseHuBhgyDecision = (
     }
 
     // ── The operative part's own introduction ──
-    if (OPERATIVE_INTRODUCTIONS.has(key) && line.text.length <= 40) {
+    if (
+      opensOperativePart(
+        key,
+        line.text,
+        region === "front" && statedLabels.size > 0,
+      )
+    ) {
       region = "operative";
       builder.heading({
         type: "heading",
@@ -1386,6 +1432,16 @@ export const parseHuBhgyDecision = (
       continue;
     }
     lineTexts.push(plainText);
+    if (region === "front") {
+      for (const row of item.table.rows) {
+        const labelled = huBhgyHeaderLabelIn(
+          row.map(({ value }) => value.text).join("\t"),
+        );
+        if (labelled !== null) {
+          statedLabels.add(labelled.label);
+        }
+      }
+    }
     builder.table({ type: "table", rows, plainText });
   }
 
