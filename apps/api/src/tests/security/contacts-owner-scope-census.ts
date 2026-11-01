@@ -1,4 +1,5 @@
 import {
+  type CallExpression,
   type ImportDeclaration,
   type Node,
   parseSource,
@@ -25,30 +26,41 @@ import {
  * organization-scoped application handle, whose row policies admit the
  * organization the handle was built for.
  *
- * A module is a member of the census when its code (comments excluded) names
- * the contacts table:
+ * A module is a member of the census when its code (comments excluded) shows
+ * one of these sites:
  *
  * - the schema's `contacts` binding, under any imported or local name, or
  *   `schema.contacts` through a namespace import;
- * - the relational query `<handle>.query.contacts`;
- * - SQL text that reads or writes the table (`FROM`, `JOIN`, `UPDATE`,
- *   `INTO` before `contacts` or `public.contacts`), or the bare table name
- *   `"contacts"` handed to code that builds the statement.
+ * - the relational query `<handle>.query.contacts`, or a relation followed
+ *   into contacts from another table (`with: { client: … }`, by the relation
+ *   names the schema declares on contacts);
+ * - SQL text that reads, writes or locks the table (`FROM`, `JOIN`, `UPDATE`,
+ *   `INTO`, `USING`, `TRUNCATE`, `LOCK`, `COPY`, with or without `ONLY` and
+ *   `public.`), the bare table name `"contacts"` handed to code that builds
+ *   the statement, and a template that interpolates a constant holding it;
+ * - a call of `withOwnerOrganizationScope`, pinned with the source of the
+ *   organization id it names (`<symbol>#withOwnerOrganizationScope(<id>)`),
+ *   so a new caller, or a caller that names a different organization, fails
+ *   the census until it is reviewed.
  *
- * Screened, so never a finding: a site inside a `withOwnerOrganizationScope`
- * call (the owner names the organization), the owner module itself, and the
- * schema that declares the table and its policies, which the committed
- * migrations apply (migrations are SQL files and outside the census).
+ * Screened, so never a finding: a site in a `withOwnerOrganizationScope`
+ * callback that runs on the callback's own transaction parameter (an owner
+ * handle used inside the callback is still a finding), the owner module
+ * itself, and the schema that declares the table and its policies, which the
+ * committed migrations apply (migrations are SQL files and outside the
+ * census).
  *
  * Deny by default: every other module needs an allowlist entry whose reason
- * says which organization-scoped handle its sites run on. The entry pins the
- * module's sites per enclosing symbol, so a new contacts read or write, or one
- * moved into another symbol, fails the census until it is reviewed, and a
- * site that disappears makes the entry stale, so entries only shrink.
+ * says which organization-scoped handle its sites run on, or where an owner
+ * scope takes its organization from. The entry pins the module's sites per
+ * enclosing symbol, so a new site, or one moved into another symbol, fails the
+ * census until it is reviewed, and a site that disappears makes the entry
+ * stale, so entries only shrink.
  *
- * Scope: one module's syntax. A relation followed from another table
- * (`with: { client: true }`), a re-export or a dynamic import is left to
- * review and to the row policies, which enforce the organization either way.
+ * Scope: one module's syntax. A table name carried through a list into a
+ * statement builder is counted where the list names it; a re-export or a
+ * dynamic import is left to review and to the row policies, which enforce the
+ * organization either way.
  */
 
 export const CONTACTS_OWNER_SCOPE_FILE =
@@ -58,8 +70,12 @@ const SCHEMA_DIRECTORY = "apps/api/src/db/schema";
 export const CONTACTS_SIGNAL = "names-contacts-table";
 
 const CONTACTS_SQL =
-  /\b(?:from|join|update|into)\s+(?:"?public"?\s*\.\s*)?"?contacts\b(?![\w$-])/giu;
+  /\b(?:from|join|update|into|using|truncate(?:\s+table)?|lock(?:\s+table)?|copy)\s+(?:only\s+)?(?:"?public"?\s*\.\s*)?"?contacts\b(?![\w$-])/giu;
+/** A statement keyword right before an interpolated table name. */
+const SQL_BEFORE_TABLE =
+  /\b(?:from|join|update|into|using|truncate(?:\s+table)?|lock(?:\s+table)?|copy)\s+(?:only\s+)?(?:"?public"?\s*\.\s*)?"?$/iu;
 const CONTACTS_TABLE_NAME = "contacts";
+const CONTACTS_RELATION = /\b(\w+)\s*:\s*r\.(?:one|many)\.contacts\s*\(/gu;
 
 export type ContactsAccessFinding = {
   file: string;
@@ -67,6 +83,14 @@ export type ContactsAccessFinding = {
   screened: boolean;
   sites: MatterAccessSites;
 };
+
+/** Relation names the schema declares into contacts (`client`, `person`, …). */
+export const contactRelationNames = (relationsSource: string) =>
+  new Set(
+    [...relationsSource.matchAll(CONTACTS_RELATION)].flatMap(([, name]) =>
+      name === undefined ? [] : [name],
+    ),
+  );
 
 const isSchemaModule = (specifier: string, file: string) => {
   const resolved = resolveSpecifier(specifier, file).replace(
@@ -85,6 +109,8 @@ type Bindings = {
   namespaces: Set<string>;
   /** Local names bound to the owner scope function. */
   ownerScope: Set<string>;
+  /** Local constants holding the table name `"contacts"`. */
+  tableNames: Set<string>;
 };
 
 const recordImport = (
@@ -119,15 +145,22 @@ const recordImport = (
   }
 };
 
-/** `const people = contacts` makes `people` the table too. */
+/**
+ * `const people = contacts` makes `people` the table too, and
+ * `const TABLE = "contacts"` makes `TABLE` its name.
+ */
 const recordLocalAlias = (node: Node, bindings: Bindings) => {
-  if (
-    node.type === "VariableDeclarator" &&
-    node.id.type === "Identifier" &&
-    node.init?.type === "Identifier" &&
-    bindings.tables.has(node.init.name)
-  ) {
+  if (node.type !== "VariableDeclarator" || node.id.type !== "Identifier") {
+    return;
+  }
+  if (node.init?.type === "Identifier" && bindings.tables.has(node.init.name)) {
     bindings.tables.add(node.id.name);
+  }
+  if (
+    node.init?.type === "Literal" &&
+    node.init.value === CONTACTS_TABLE_NAME
+  ) {
+    bindings.tableNames.add(node.id.name);
   }
 };
 
@@ -150,14 +183,90 @@ const namesTableMember = (node: Node, bindings: Bindings) => {
   );
 };
 
-/** Whether a node sits inside a call of the owner scope function. */
-const insideOwnerScope = (ancestors: readonly Node[], bindings: Bindings) =>
-  ancestors.some(
-    (ancestor) =>
-      ancestor.type === "CallExpression" &&
-      ancestor.callee.type === "Identifier" &&
-      bindings.ownerScope.has(ancestor.callee.name),
-  );
+const isOwnerScopeCall = (
+  node: Node,
+  bindings: Bindings,
+): node is CallExpression =>
+  node.type === "CallExpression" &&
+  node.callee.type === "Identifier" &&
+  bindings.ownerScope.has(node.callee.name);
+
+/** The identifier a receiver chain starts from: `tx` in `tx.a().b`. */
+const chainRoot = (node: Node): string | undefined => {
+  switch (node.type) {
+    case "Identifier":
+      return node.name;
+    case "MemberExpression":
+      return chainRoot(node.object);
+    case "CallExpression":
+      return chainRoot(node.callee);
+    case "AwaitExpression":
+    case "ParenthesizedExpression":
+    case "TSAsExpression":
+    case "TSNonNullExpression":
+      return chainRoot(node.expression);
+    case "ChainExpression":
+      return chainRoot(node.expression);
+    default:
+      return undefined;
+  }
+};
+
+/**
+ * Whether a site runs on the transaction an owner scope hands its callback:
+ * it lies in the callback, and a call between it and the callback runs on
+ * the callback's first parameter (`tx.select().from(contacts)`,
+ * `tx.execute(sql\`… contacts …\`)`, `tx.query.contacts`).
+ */
+const onOwnerScopeTransaction = (
+  node: Node,
+  ancestors: readonly Node[],
+  bindings: Bindings,
+) => {
+  for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+    const ancestor = ancestors[index];
+    const callback = ancestors[index + 1];
+    if (
+      ancestor === undefined ||
+      callback === undefined ||
+      !isOwnerScopeCall(ancestor, bindings) ||
+      ancestor.arguments.at(2) !== callback ||
+      (callback.type !== "ArrowFunctionExpression" &&
+        callback.type !== "FunctionExpression")
+    ) {
+      continue;
+    }
+    const parameter = callback.params.at(0);
+    if (parameter?.type !== "Identifier") {
+      return false;
+    }
+    // The nearest statement chain around the site decides; `sql` fragments
+    // are built for the chain around them, and a nested function is a
+    // different handle's scope.
+    const inner = [...ancestors.slice(index + 2), node].toReversed();
+    for (const candidate of inner) {
+      if (
+        candidate.type === "ArrowFunctionExpression" ||
+        candidate.type === "FunctionExpression"
+      ) {
+        return false;
+      }
+      if (
+        candidate.type !== "CallExpression" &&
+        candidate.type !== "MemberExpression"
+      ) {
+        continue;
+      }
+      const root = chainRoot(candidate);
+      if (root === undefined || root === "sql") {
+        continue;
+      }
+      return root === parameter.name;
+    }
+    return false;
+  }
+  return false;
+};
 
 /**
  * Not a use of the table itself: a declared name (`const contacts = …`), an
@@ -171,6 +280,43 @@ const isNotTableUse = (node: Node, parent: Node | undefined) =>
   (parent?.type === "MemberExpression" &&
     (parent.object === node || (parent.property === node && !parent.computed)));
 
+/** `with: { client: true }`: the relation entries of a relational query. */
+const relationEntries = (node: Node) => {
+  if (
+    node.type !== "Property" ||
+    node.computed ||
+    node.key.type !== "Identifier" ||
+    node.key.name !== "with" ||
+    node.value.type !== "ObjectExpression"
+  ) {
+    return [];
+  }
+  return node.value.properties.flatMap((entry) =>
+    entry.type === "Property" &&
+    !entry.computed &&
+    entry.key.type === "Identifier" &&
+    !(entry.value.type === "Literal" && entry.value.value === false)
+      ? [{ name: entry.key.name, entry }]
+      : [],
+  );
+};
+
+/** Interpolations of a contacts-name constant right after a SQL keyword. */
+const interpolatedTableNames = (node: Node, bindings: Bindings) => {
+  if (node.type !== "TemplateLiteral") {
+    return 0;
+  }
+  return node.expressions.filter((expression, index) => {
+    const before = node.quasis[index];
+    return (
+      expression.type === "Identifier" &&
+      bindings.tableNames.has(expression.name) &&
+      before !== undefined &&
+      SQL_BEFORE_TABLE.test(before.value.cooked ?? before.value.raw)
+    );
+  }).length;
+};
+
 const TYPE_WRAPPED_EXPRESSIONS = new Set([
   "TSAsExpression",
   "TSInstantiationExpression",
@@ -179,12 +325,21 @@ const TYPE_WRAPPED_EXPRESSIONS = new Set([
 ]);
 
 // Cheap prefilter so only candidate files are parsed.
-const CANDIDATE = /\bcontacts\b/u;
+const CANDIDATE = /\bcontacts\b|withOwnerOrganizationScope/u;
+
+const sourceText = (source: string, node: Node) =>
+  source.slice(node.start, node.end).replaceAll(/\s+/gu, " ");
+
+type ClassifyOptions = {
+  /** Relation names the schema declares into contacts. */
+  contactRelations: ReadonlySet<string>;
+};
 
 /** Classify one module. `file` is the repository-relative path. */
 export const classifyContactsAccessModule = (
   file: string,
   source: string,
+  { contactRelations }: ClassifyOptions,
 ): ContactsAccessFinding[] => {
   if (!CANDIDATE.test(source) || file.startsWith(`${SCHEMA_DIRECTORY}/`)) {
     return [];
@@ -194,14 +349,18 @@ export const classifyContactsAccessModule = (
     tables: new Set(),
     namespaces: new Set(),
     ownerScope: new Set(),
+    tableNames: new Set(),
   };
   const sites: MatterAccessSites = {};
-  const add = (ancestors: readonly Node[], count = 1) => {
-    if (count === 0 || insideOwnerScope(ancestors, bindings)) {
-      return;
+  const pin = (key: string, count = 1) => {
+    if (count > 0) {
+      sites[key] = (sites[key] ?? 0) + count;
     }
-    const symbol = enclosingSymbol(ancestors);
-    sites[symbol] = (sites[symbol] ?? 0) + count;
+  };
+  const add = (node: Node, ancestors: readonly Node[], count = 1) => {
+    if (count > 0 && !onOwnerScopeTransaction(node, ancestors, bindings)) {
+      pin(enclosingSymbol(ancestors), count);
+    }
   };
   walk(program, (node, ancestors) => {
     if (node.type === "ImportDeclaration") {
@@ -217,6 +376,14 @@ export const classifyContactsAccessModule = (
       return "skip-children";
     }
     recordLocalAlias(node, bindings);
+    if (isOwnerScopeCall(node, bindings)) {
+      const organization = node.arguments.at(1);
+      pin(
+        `${enclosingSymbol(ancestors)}#${OWNER_SCOPE_FUNCTION}(${
+          organization === undefined ? "" : sourceText(source, organization)
+        })`,
+      );
+    }
     const parent = ancestors.at(-1);
     if (
       node.type === "Identifier" &&
@@ -224,16 +391,23 @@ export const classifyContactsAccessModule = (
       !isRepeatedName(node, parent) &&
       !isNotTableUse(node, parent)
     ) {
-      add(ancestors);
+      add(node, ancestors);
     }
     if (namesTableMember(node, bindings)) {
-      add(ancestors);
+      add(node, ancestors);
       // `query.contacts` is one site, not also a use of its object.
       return "skip-children";
     }
+    for (const { name, entry } of relationEntries(node)) {
+      if (contactRelations.has(name)) {
+        add(entry, [...ancestors, node]);
+      }
+    }
+    add(node, ancestors, interpolatedTableNames(node, bindings));
     const text = literalText(node);
     if (text !== undefined) {
       add(
+        node,
         ancestors,
         text === CONTACTS_TABLE_NAME
           ? 1

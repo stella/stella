@@ -1,8 +1,9 @@
 {
   "apps/api/scripts/seed-dev.ts::names-contacts-table": {
-    "reason": "Development seed: every contacts statement runs inside `organizationTransaction`, which is `withOwnerOrganizationScope` for the seed organization.",
+    "reason": "Development seed: `organizationTransaction` is `withOwnerOrganizationScope` for ORG_ID, the seed organization resolved from the seed arguments, and every contacts statement runs inside it.",
     "sites": {
       "seed.clearSeedData": 1,
+      "seed.organizationTransaction#withOwnerOrganizationScope(ORG_ID)": 1,
       "seed.seedContacts": 2
     }
   },
@@ -13,9 +14,10 @@
     }
   },
   "apps/api/src/db/contact-vat-id-repair.ts::names-contacts-table": {
-    "reason": "Online repair of a committed migration on the migration session: every contacts statement follows a `set_config` naming one organization, page by page; covered by contacts-rls-maintenance.postgres.test.ts.",
+    "reason": "Online repair of a committed migration on the migration session: each batch statement on the interpolated table name follows a `set_config` naming one organization from the organization walk, inside the step transaction; completion is the validated check, a catalog read.",
     "sites": {
-      "TABLE_NAME": 1
+      "TABLE_NAME": 1,
+      "moveContactVatIdBatch": 2
     }
   },
   "apps/api/src/db/import-provenance-columns.ts::names-contacts-table": {
@@ -147,6 +149,19 @@
       "updateWorkspaceHandler.txResult.client": 1
     }
   },
+  "apps/api/src/handlers/workspaces/vocabulary/get.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`scopedDb`), whose row policies admit the request's organization only. The matter read follows its client and party relations on that handle.",
+    "sites": {
+      "readVocabularyHandler.matter.with": 1,
+      "readVocabularyHandler.with": 1
+    }
+  },
+  "apps/api/src/handlers/workspaces/workspace-contacts-read.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`scopedDb`), whose row policies admit the request's organization only. The matter contact read follows the contact relation on that handle.",
+    "sites": {
+      "readWorkspaceContactsHandler.result.with": 1
+    }
+  },
   "apps/api/src/lib/account-deletion-steps.ts::names-contacts-table": {
     "reason": "Coverage declaration: lists the tables account deletion clears; the contacts attorney references are cleared by member-assignment-offboarding inside `withOwnerOrganizationScope`, one membership organization at a time.",
     "sites": {
@@ -239,8 +254,9 @@
     }
   },
   "apps/api/src/lib/member-assignment-offboarding.ts::names-contacts-table": {
-    "reason": "Attorney reference cleanup: `clearMemberContactAssignments` runs only inside `withOwnerOrganizationScope`, which `clearContactAssignmentsByOrganization` opens per organization.",
+    "reason": "Attorney reference cleanup: `clearContactAssignmentsByOrganization` opens `withOwnerOrganizationScope` per organizationId, the organization the member leaves or each membership row of a deleted account, and `clearMemberContactAssignments` runs only inside it.",
     "sites": {
+      "clearContactAssignmentsByOrganization#withOwnerOrganizationScope(organizationId)": 1,
       "clearMemberContactAssignments": 1,
       "clearMemberContactAssignments.contactResult.try": 1,
       "clearMemberContactAssignments.rowCount": 1
@@ -253,15 +269,17 @@
     }
   },
   "apps/api/src/lib/review-organization/reset-scope.ts::names-contacts-table": {
-    "reason": "Review reset sweep: deletes the table by name; `sweepReviewOrganization` sends every table whose owner policy names the organization through `withOwnerOrganizationScope`.",
+    "reason": "Review reset sweep: deletes the table by name from REVIEW_RESET_CLEARED_TABLES; `sweepReviewOrganization` sends every table whose owner policy names the organization through `withOwnerOrganizationScope` with organizationId, the review organization the reset resolved and fenced.",
     "sites": {
-      "REVIEW_RESET_CLEARED_TABLES": 1
+      "REVIEW_RESET_CLEARED_TABLES": 1,
+      "sweepReviewOrganization.swept#withOwnerOrganizationScope(organizationId)": 1
     }
   },
   "apps/api/src/lib/review-organization/reset.ts::names-contacts-table": {
-    "reason": "Labels the contacts deletion step; the enumeration runs in `withOwnerOrganizationScope` and each deletion through the delete handler's `safeDb`.",
+    "reason": "Review reset: `deleteContacts` enumerates inside `withOwnerOrganizationScope` with organizationId, the configured review organization the reset resolved, and deletes each contact through the delete handler's `safeDb`.",
     "sites": {
-      "deleteContacts": 1
+      "deleteContacts": 1,
+      "deleteContacts.rows#withOwnerOrganizationScope(organizationId)": 1
     }
   },
   "apps/api/src/lib/review-organization/seed.ts::names-contacts-table": {
@@ -272,17 +290,29 @@
     }
   },
   "apps/api/src/lib/search/index-global.ts::names-contacts-table": {
-    "reason": "Projection writers take the handle their caller scoped: contact handlers pass their `safeDb` transaction, and the projection repair drain and the supplemental rebuild wrap them in `withOwnerOrganizationScope`.",
+    "reason": "Projection writers take the handle their caller scoped: contact handlers pass their `safeDb` transaction, and the projection repair drain wraps them in `withOwnerOrganizationScope`; `rebuildSupplementalSearchIndex` scopes with organizationId, the session organization of the development route. Matter projections follow the client and party relations on that same handle.",
     "sites": {
       "rebuildContactPage.page": 1,
+      "rebuildSupplementalSearchIndex#withOwnerOrganizationScope(organizationId)": 1,
       "reindexWorkspacesForContact.contact": 1,
-      "writeContactProjections.sources": 1
+      "writeContactProjections.sources": 1,
+      "writeWorkspaceProjections.sources.with": 1,
+      "writeWorkspaceProjections.sources.with.workspaceContacts.with": 1
     }
   },
   "apps/api/src/lib/search/projection-repair-queue.ts::names-contacts-table": {
-    "reason": "Enqueues repairs inside the caller's organization-scoped transaction: contact handlers' `safeDb` transactions and the offboarding owner scope.",
+    "reason": "Enqueues repairs inside the caller's organization-scoped transaction; the drain rebuilds contact and matter projections inside `withOwnerOrganizationScope` with organizationId, the organization stored on the claimed queue row.",
     "sites": {
+      "createSearchProjectionRepairDeps.repair.contact#withOwnerOrganizationScope(organizationId)": 1,
+      "createSearchProjectionRepairDeps.repair.workspace#withOwnerOrganizationScope(organizationId)": 1,
       "enqueueContactSearchRepairs": 1
+    }
+  },
+  "apps/api/src/lib/template-binding/build-binding-context.ts::names-contacts-table": {
+    "reason": "Template binding context: reads the matter's client and parties through the caller's organization-scoped `ScopedDb`.",
+    "sites": {
+      "fetchParties.links.with": 1,
+      "fetchWorkspace.workspace.with": 1
     }
   },
   "apps/api/src/mcp/matter-tools.ts::names-contacts-table": {
