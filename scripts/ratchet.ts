@@ -53,7 +53,7 @@ import {
   walk,
 } from "../packages/scripts/src/syntax-tree";
 import { treeBaseRevision } from "../packages/scripts/src/tree-base-revision";
-import { API_RUNTIME_ENTRIES } from "./api-runtime-entries";
+import { API_RUNTIME_ENTRIES, LOCAL_DEV_MODULES } from "./api-runtime-entries";
 import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
   collectLintDirectives,
@@ -3633,6 +3633,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       const reachable = reachableGraphSources({
         sources,
         roots: API_RUNTIME_ENTRIES.map(({ file }) => file),
+        localDevFiles: new Set(LOCAL_DEV_MODULES.map(({ file }) => file)),
       });
       for (const file of rootDoorFiles) {
         if (!graphSources.has(file)) {

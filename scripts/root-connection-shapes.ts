@@ -1570,9 +1570,12 @@ const resolveGraphModule = ({
 export const reachableGraphSources = ({
   sources,
   roots,
+  localDevFiles = new Set(),
 }: {
   sources: ReadonlyMap<string, string>;
   roots: readonly string[];
+  /** Modules only an open local runtime loads; imports into them stop here. */
+  localDevFiles?: ReadonlySet<string>;
 }): ReadonlySet<string> => {
   const reached = new Set<string>();
   const pending = roots.filter((root) => sources.has(root));
@@ -1586,7 +1589,11 @@ export const reachableGraphSources = ({
         specifier === undefined
           ? undefined
           : resolveGraphModule({ sources, from: file, specifier });
-      if (target !== undefined && sources.has(target)) {
+      if (
+        target !== undefined &&
+        sources.has(target) &&
+        !localDevFiles.has(target)
+      ) {
         pending.push(target);
       }
     };

@@ -72,3 +72,21 @@ export const API_RUNTIME_ENTRIES = [
     kind: "operator",
   })),
 ] as const satisfies readonly ApiRuntimeEntry[];
+
+export type LocalDevModule = {
+  readonly file: string;
+  readonly reason: string;
+};
+
+/**
+ * Modules only an open local-development runtime loads. Every import of one
+ * sits behind `isLocalDevOpen()` (a guard test proves it), so production never
+ * runs them and the organization write graph does not follow imports into them.
+ */
+export const LOCAL_DEV_MODULES = [
+  {
+    file: "apps/api/src/handlers/dev/routes.ts",
+    reason:
+      "Local seeding and search maintenance routes, mounted only in an open local runtime.",
+  },
+] as const satisfies readonly LocalDevModule[];
