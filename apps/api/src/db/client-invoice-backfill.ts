@@ -10,13 +10,14 @@ import {
 } from "./online-ddl";
 import type { OnlineConstraintValidation } from "./online-ddl";
 import type { OnlineRepair } from "./online-migration-connection";
+import { INVOICE_TENANT_UNIQUE_INDEX } from "./online-unique-indexes";
 import type { OnlineWorkLifecycleName } from "./online-work-lifecycle";
 
 /** Its reader and its installation both need the tenant key index built. */
 export const CLIENT_INVOICE_TENANT_KEY = {
   introducedBy: "20261026220000_client_invoices",
   name: "client-invoice-tenant-key",
-  dependsOn: ["invoices_id_org_unique"],
+  dependsOn: [INVOICE_TENANT_UNIQUE_INDEX.name],
   readCompletion: async (connection) =>
     (await readInvoiceTenantKeyInstalled(connection))
       ? { type: "complete" }
