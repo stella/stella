@@ -31,7 +31,13 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { KanbanColumnHeader } from "@stll/ui/kanban";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import {
+  Menu,
+  MenuAnchor,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/menu";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
@@ -141,6 +147,7 @@ export const KanbanColumn = ({
 
   // Context menu state
   const [ctxOpen, setCtxOpen] = useState(false);
+  const [ctxOpener, setCtxOpener] = useState<HTMLElement | null>(null);
   const [ctxAnchor, setCtxAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -150,6 +157,9 @@ export const KanbanColumn = ({
       return;
     }
     e.preventDefault();
+    setCtxOpener(
+      e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
+    );
     const x = e.clientX;
     const y = e.clientY;
     setCtxAnchor({
@@ -409,11 +419,11 @@ export const KanbanColumn = ({
           }}
           open={ctxOpen}
         >
-          <MenuTrigger
-            nativeButton={false}
-            render={<span className="sr-only" />}
-          />
-          <MenuPopup anchor={ctxAnchor ?? undefined}>
+          <MenuAnchor />
+          <MenuPopup
+            anchor={ctxAnchor ?? undefined}
+            finalFocus={() => ctxOpener}
+          >
             <MenuItem onClick={() => onCreate("task")}>
               <SquareCheckIcon />
               {t("tasks.newTask")}
@@ -619,13 +629,15 @@ export const KanbanColumnTitle = ({
   }
 
   return (
-    <button
-      className="overflow-hidden text-start text-sm font-medium text-ellipsis whitespace-pre"
+    <Button
+      className="flex min-w-0 shrink overflow-hidden"
       onClick={onStartEditing}
-      type="button"
+      variant="plain"
     >
-      {title}
-    </button>
+      <span className="min-w-0 overflow-hidden text-sm font-medium text-ellipsis whitespace-pre">
+        {title}
+      </span>
+    </Button>
   );
 };
 
@@ -665,16 +677,17 @@ export const KanbanColumnSwatch = ({
       side="bottom"
       value={optionColor}
     >
-      <button
+      <Button
         aria-label={t("common.changeColor")}
-        className="shrink-0 cursor-pointer"
-        type="button"
+        className="flex shrink-0"
+        shape="round"
+        variant="plain"
       >
         <span
           className="block size-2.5 rounded-full"
           style={{ backgroundColor: color }}
         />
-      </button>
+      </Button>
     </ColorPicker>
   );
 };

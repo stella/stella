@@ -4,10 +4,10 @@
 // renderers set it at the same Tailwind size and in the same face, so a
 // heading on a phone reads as one on the web does.
 //
-// A browser derives a weight or an italic from one font family; a phone does
-// not: every face is its own embedded font. So a role names its face as a
-// family, a weight and a slant, and each renderer spells that its own way
-// (`font-medium` on the web, the `DMSans-Medium` face on a phone).
+// A browser derives a weight from one font family; a phone does not: every
+// weight is its own embedded font. So a role names its weight, and each
+// renderer spells that its own way (`font-medium` on the web, the
+// `DMSans-Medium` face on a phone).
 
 import type { ReactNode } from "react";
 
@@ -32,29 +32,15 @@ export const TEXT_VARIANT_CLASS_NAMES = {
   badge: "text-[10px] uppercase tracking-[1px] text-muted-foreground",
   /** An inline link in a caption, underlined as legal links are. */
   link: "text-sm text-muted-foreground underline",
-  /**
-   * A court decision's text, in the reader's serif at its 1.65 leading
-   * (packages/decision-reader reader.css). Its emphases nest inside it and
-   * keep its size.
-   */
-  reading: "text-base leading-[26px]",
-  readingStrong: "",
-  readingEmphasis: "",
-  readingStrongEmphasis: "",
 } as const;
 
 export type TextVariant = keyof typeof TEXT_VARIANT_CLASS_NAMES;
 
 export type TextFace = {
-  readonly family: "sans" | "serif";
   readonly weight: "light" | "regular" | "medium" | "semibold" | "bold";
-  readonly italic?: true;
 };
 
-const sans = (weight: TextFace["weight"]): TextFace => ({
-  family: "sans",
-  weight,
-});
+const sans = (weight: TextFace["weight"]): TextFace => ({ weight });
 
 /** The face each role is set in. */
 export const TEXT_VARIANT_FACES = {
@@ -70,10 +56,6 @@ export const TEXT_VARIANT_FACES = {
   display: sans("light"),
   badge: sans("medium"),
   link: sans("regular"),
-  reading: { family: "serif", weight: "regular" },
-  readingStrong: { family: "serif", weight: "bold" },
-  readingEmphasis: { family: "serif", weight: "regular", italic: true },
-  readingStrongEmphasis: { family: "serif", weight: "bold", italic: true },
 } as const satisfies Record<TextVariant, TextFace>;
 
 /** The props every text renderer accepts, with one meaning. */

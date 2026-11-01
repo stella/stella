@@ -22,7 +22,8 @@
     "toolUsed": "Użyto: {tool}",
     "threadTitle": "Rozmowa",
     "threadLoadFailed": "Nie udało się wczytać tej rozmowy.",
-    "threadEmptyDescription": "Ta rozmowa nie ma jeszcze wiadomości.",
+    "greeting": "Nad czym chcesz pracować?",
+    "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
     "sections": {
       "today": "Dzisiaj",
       "yesterday": "Wczoraj",
@@ -39,6 +40,19 @@
     "answerNeedsInput": "Ta odpowiedź wymaga Twojej decyzji. Dokończ ją w stelli w przeglądarce.",
     "answerFailed": "Nie udało się dokończyć odpowiedzi.",
     "composerMenu": "Otwórz menu załączników i narzędzi",
+    "attachFile": "Załącz plik",
+    "attachment": "Załącznik",
+    "fileTooLarge": "Plik przekracza limit {maxSize}",
+    "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
+    "unsupportedFileType": "Nieobsługiwany typ pliku",
+    "uploadFailed": "Przetwarzanie pliku nie powiodło się",
+    "scanDocument": "Zeskanuj dokument",
+    "removeAttachment": "Usuń {name}",
+    "attachmentReading": "Przygotowywanie…",
+    "attachmentUploading": "Przesyłanie…",
+    "pickFailed": "Nie udało się otworzyć wyboru plików. Spróbuj ponownie.",
+    "sendFileRefused": "Nie udało się wysłać pliku, więc wiadomość nie została wysłana. Usuń plik i spróbuj ponownie.",
+    "sendFileNotAnonymizable": "Ta rozmowa jest anonimizowana, a stella nie mogła zanonimizować jednego z plików, więc nic nie wysłano. Usuń plik i spróbuj ponownie.",
     "pickTitle": "Wybierz rozmowę",
     "pickDescription": "Wybierz wątek z listy lub rozpocznij nowy przyciskiem +."
   },
@@ -60,7 +74,8 @@
       "none": "Bez terminu",
       "today": "Dziś",
       "tomorrow": "Jutro",
-      "nextWeek": "Za tydzień"
+      "nextWeek": "Za tydzień",
+      "pick": "Wybierz datę"
     },
     "due": {
       "overdue": "Po terminie",
@@ -75,7 +90,14 @@
     "statusFailed": "Nie udało się zmienić zadania. Spróbuj ponownie.",
     "pickTitle": "Wybierz zadanie",
     "pickDescription": "Wybierz zadanie z listy, aby zobaczyć je tutaj.",
-    "openMatter": "Otwórz sprawę"
+    "openMatter": "Otwórz sprawę",
+    "assignedTo": "Przypisano do",
+    "nobody": "Nieprzypisane",
+    "assign": "Przypisz",
+    "doneAssigning": "Gotowe",
+    "someone": "Ktoś",
+    "membersFailed": "Nie udało się wczytać członków sprawy.",
+    "assignFailed": "Nie udało się przypisać zadania. Spróbuj ponownie."
   },
   "matters": {
     "emptyTitle": "Nie ma jeszcze spraw",
@@ -119,7 +141,9 @@
     },
     "add": "Dodaj",
     "scanDocument": "Zeskanuj dokument",
-    "newTask": "Nowe zadanie"
+    "newTask": "Nowe zadanie",
+    "uploadDocument": "Prześlij dokument",
+    "uploadFailed": "Nie udało się przesłać dokumentu. Spróbuj ponownie."
   },
   "entity": {
     "type": "Typ",
@@ -141,7 +165,16 @@
     "preview": "Otwórz podgląd",
     "previewDescription": "Ten plik otworzy się w podglądzie systemowym.",
     "unrendered": "Tego dokumentu nie można tu wyświetlić, ale podgląd systemowy może go otworzyć.",
-    "details": "Szczegóły"
+    "details": "Szczegóły",
+    "zoomOut": "Pomniejsz",
+    "zoomIn": "Powiększ",
+    "zoomFit": "Dopasuj do szerokości",
+    "fit": "Szerokość",
+    "appearance": {
+      "system": "Wygląd: automatyczny",
+      "light": "Wygląd: jasny",
+      "dark": "Wygląd: ciemny"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -169,7 +202,8 @@
     "server": "Serwer",
     "signOut": "Wyloguj się",
     "deleteAccount": "Usuń konto",
-    "deleteAccountHint": "Otwiera Twoje konto w przeglądarce, gdzie możesz je usunąć wraz ze wszystkim, co do Ciebie należy."
+    "deleteAccountHint": "Otwiera Twoje konto w przeglądarce, gdzie możesz je usunąć wraz ze wszystkim, co do Ciebie należy.",
+    "signOutFailed": "Nie udało się wylogować. Spróbuj ponownie."
   },
   "header": {
     "search": "Szukaj"
@@ -183,6 +217,7 @@
     "headnote": "Teza",
     "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
     "openSource": "Otwórz źródło oryginalne",
+    "openFailed": "Nie udało się otworzyć linku.",
     "loadFailed": "Nie udało się wczytać orzecznictwa.",
     "share": "Udostępnij"
   },
@@ -236,7 +271,27 @@
     "matterTitle": "Sprawa",
     "uploadFailed": "Nie udało się przesłać skanu. Spróbuj ponownie.",
     "failedTitle": "Skanowanie nie powiodło się",
-    "failed": "Aparat nie zapisał skanu. Spróbuj ponownie."
+    "failed": "Aparat nie zapisał skanu. Spróbuj ponownie.",
+    "save": "Zapisz",
+    "saveTitle": "Zapisz w sprawie",
+    "share": "Udostępnij",
+    "addPages": "Dodaj strony",
+    "page": "Strona {number}",
+    "rotatePage": "Obróć stronę {number}",
+    "removePage": "Usuń stronę {number}",
+    "deletePage": "Usuń",
+    "movePage": "Przenieś stronę {number}",
+    "moveUp": "Przesuń w górę",
+    "moveDown": "Przesuń w dół",
+    "noPages": "Nie zostały żadne strony. Zeskanuj kolejne przyciskiem Dodaj strony.",
+    "kilobytes": "{size} KB",
+    "megabytes": "{size} MB",
+    "pdfFailed": "Nie udało się utworzyć pliku PDF. Spróbuj ponownie.",
+    "shareFailed": "Nie udało się udostępnić pliku PDF. Spróbuj ponownie.",
+    "discardTitle": "Odrzucić ten skan?",
+    "discardMessage": "Jego strony nie zostały zapisane w sprawie i zostaną usunięte z tego urządzenia.",
+    "discard": "Odrzuć",
+    "keepEditing": "Edytuj dalej"
   },
   "shortcuts": {
     "search": "Szukaj",
@@ -248,6 +303,29 @@
   "palette": {
     "placeholder": "Szukaj spraw i rozmów lub uruchom polecenie",
     "noResults": "Nic nie pasuje do „{query}”"
+  },
+  "search": {
+    "placeholder": "Szukaj w stella",
+    "clear": "Wyczyść wyszukiwanie",
+    "cancel": "Anuluj",
+    "recent": "Ostatnie wyszukiwania",
+    "clearRecent": "Wyczyść",
+    "hint": "Szukaj w sprawach, dokumentach, zadaniach, rozmowach i orzecznictwie.",
+    "filters": "Filtry",
+    "noResultsTitle": "Brak wyników",
+    "noResults": "Nic nie pasuje do „{query}”. Spróbuj innych słów lub usuń filtr.",
+    "loadFailed": "Nie udało się wykonać wyszukiwania.",
+    "retry": "Spróbuj ponownie",
+    "type": {
+      "document": "Dokumenty",
+      "matter": "Sprawy",
+      "task": "Zadania",
+      "caseLaw": "Orzecznictwo",
+      "chat": "Rozmowy",
+      "folder": "Foldery",
+      "message": "E-maile",
+      "link": "Linki"
+    }
   },
   "pane": {
     "showList": "Pokaż listę",

@@ -8,6 +8,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
@@ -24,6 +25,7 @@ import {
 } from "@stll/ui/icons";
 import {
   Menu,
+  MenuAnchor,
   MenuItem,
   MenuPopup,
   MenuRadioGroup,
@@ -31,7 +33,6 @@ import {
   MenuSub,
   MenuSubPopup,
   MenuSubTrigger,
-  MenuTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { UNKNOWN_AUTHOR_LABEL } from "@stll/ui/review-author-avatar";
@@ -53,6 +54,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getWeekStart, toISODate } from "@/components/workspaces/entity-utils";
+import { notifyTaskCompletion } from "@/components/workspaces/tasks/task-completion-toast";
 import type { TaskStatus } from "@/components/workspaces/tasks/task-detail-constants";
 import {
   isTaskStatus,
@@ -86,7 +88,7 @@ import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-fil
 import { overviewOptions, workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { flowRunsOptions } from "@/lib/workspaces/queries/flow-runs";
-import { taskKeys } from "@/lib/workspaces/queries/tasks";
+import { taskDetailOptions, taskKeys } from "@/lib/workspaces/queries/tasks";
 import {
   timeEntrySummaryOptions,
   timeEntryTeamSummaryOptions,
@@ -94,6 +96,8 @@ import {
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { ActivityPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel";
 
+import { resolveNextDeadline } from "./overview-next-deadline.logic";
+import type { NextDeadline } from "./overview-next-deadline.logic";
 import { OverviewTimeRead, OverviewTimeTrend } from "./overview-time-read";
 
 type OverviewViewProps = {
@@ -117,6 +121,7 @@ type VirtualAnchor = {
 type UpcomingMenuState = {
   open: boolean;
   anchor: VirtualAnchor | null;
+  opener: HTMLElement | null;
   task: UpcomingTaskContext | null;
 };
 
@@ -176,6 +181,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const [upcomingMenu, setUpcomingMenu] = useState<UpcomingMenuState>({
     open: false,
     anchor: null,
+    opener: null,
     task: null,
   });
   const [, handleCreateFileEntities] = useCreateFileEntities(workspaceId);
@@ -283,6 +289,33 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     },
   });
 
+  // The menu keeps the status it opened with, so the status to go back to is
+  // read when the change is made. The returned promise, not a per-call
+  // `onSuccess`, so the toast survives a closed menu. A failure is reported by
+  // the mutation's own `onError`.
+  const handleMenuStatusChange = (taskId: string, status: TaskStatus) => {
+    const { queryKey } = taskDetailOptions(workspaceId, taskId);
+    const read = () => queryClient.getQueryData(queryKey)?.status;
+    const stored = read();
+    const previous = isTaskStatus(stored) ? stored : currentMenuTaskStatus;
+    const previousKnown = !updateTaskStatus.isPending;
+    const saveStatus = async () => {
+      const saved = await Result.tryPromise(
+        async () => await updateTaskStatus.mutateAsync({ taskId, status }),
+      );
+      if (Result.isOk(saved)) {
+        notifyTaskCompletion({
+          currentStatus: read,
+          next: status,
+          previous: previousKnown ? previous : null,
+          restore: (restored) =>
+            updateTaskStatus.mutate({ taskId, status: restored }),
+        });
+      }
+    };
+    detached(saveStatus(), "overview-view.status");
+  };
+
   const handleTaskContextMenu = useCallback(
     (task: UpcomingTaskContext) => (e: React.MouseEvent) => {
       e.preventDefault();
@@ -292,6 +325,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         anchor: {
           getBoundingClientRect: () => new DOMRect(e.clientX, e.clientY, 0, 0),
         },
+        opener: e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
         task,
       });
     },
@@ -438,9 +472,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   const totalTeamHoursThisWeek = (teamTimeSummary?.totalTeamMinutes ?? 0) / 60;
 
-  // The agenda is already ordered with dated tasks before undated tasks.
-  const nextDeadlineTask = tasks.find((task) => task.dueDate !== null);
-
   return (
     <div className="@container flex flex-1 flex-col gap-6 overflow-y-auto p-4 tabular-nums sm:p-6">
       <OverviewQueryFeedback
@@ -483,30 +514,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           }}
           value={getFormatter().number(data.taskCount)}
         />
-        <StatCard
-          icon={<CalendarClockIcon className="size-4" />}
-          label="workspaces.overview.nextDeadline"
-          onClick={() => {
-            const task = nextDeadlineTask;
-            if (task) {
-              useInspectorTabsStore.getState().openTask({
-                taskId: task.entityId,
-                workspaceId,
-                label: task.name,
-              });
-            }
-          }}
-          sublabel={nextDeadlineTask?.name}
-          value={(() => {
-            const date = nextDeadlineTask?.dueDate;
-            if (!date) {
-              return "—";
-            }
-            return getFormatter().dateTime(toDateTimeEpoch(date), {
-              ...DAY_AND_MONTH_FORMAT,
-              timeZone: "UTC",
-            });
-          })()}
+        <NextDeadlineCard
+          deadline={resolveNextDeadline(tasks, today)}
+          workspaceId={workspaceId}
         />
         {timeBillingEnabled && (
           <StatCard
@@ -576,6 +586,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                 getBoundingClientRect: () =>
                   new DOMRect(e.clientX, e.clientY, 0, 0),
               },
+              opener:
+                e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
               task: null,
             });
           })}
@@ -595,8 +607,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                 <ScrollArea className="min-h-0 flex-1 rounded-lg border">
                   <div className="divide-y">
                     {tasks.map((task) => (
-                      <button
-                        className="hover:bg-accent/50 flex w-full min-w-0 items-center gap-3 px-3 py-2.5 text-start"
+                      <Button
+                        className="block w-full min-w-0"
                         key={task.entityId}
                         onClick={() =>
                           useInspectorTabsStore.getState().openTask({
@@ -610,58 +622,65 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                           name: task.name,
                           status: task.status,
                         })}
-                        type="button"
+                        variant="plain"
                       >
-                        <EntityKindIcon
-                          className="size-4 shrink-0"
-                          kind="task"
-                          status={task.status}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm">{task.name}</p>
-                          <span className="text-muted-foreground flex items-center gap-1 text-xs">
-                            {task.assignedTo !== null && (
-                              <PersonMentionLabel
-                                avatarClassName="size-4 text-[7px]"
-                                mention={{
-                                  name: task.assignedTo,
-                                  image: task.assignedToImage,
-                                  deletedAt: task.assignedToDeletedAt,
-                                }}
-                              />
-                            )}
-                            {task.dueDate && (
-                              <>
-                                {task.assignedTo ? " · " : ""}
-                                {getFormatter().dateTime(
-                                  toDateTimeEpoch(task.dueDate),
-                                  { ...DAY_AND_MONTH_FORMAT, timeZone: "UTC" },
-                                )}
-                                {task.dueDate < today
-                                  ? ` · ${t("tasks.overdue")}`
-                                  : ""}
-                              </>
-                            )}
-                          </span>
-                        </div>
-                      </button>
+                        <span className="hover:bg-accent/50 flex w-full min-w-0 items-center gap-3 px-3 py-2.5">
+                          <EntityKindIcon
+                            className="size-4 shrink-0"
+                            kind="task"
+                            status={task.status}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm">{task.name}</p>
+                            <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                              {task.assignedTo !== null && (
+                                <PersonMentionLabel
+                                  avatarClassName="size-4 text-[7px]"
+                                  mention={{
+                                    name: task.assignedTo,
+                                    image: task.assignedToImage,
+                                    deletedAt: task.assignedToDeletedAt,
+                                  }}
+                                />
+                              )}
+                              {task.dueDate && (
+                                <>
+                                  {task.assignedTo ? " · " : ""}
+                                  {getFormatter().dateTime(
+                                    toDateTimeEpoch(task.dueDate),
+                                    {
+                                      ...DAY_AND_MONTH_FORMAT,
+                                      timeZone: "UTC",
+                                    },
+                                  )}
+                                  {task.dueDate < today
+                                    ? ` · ${t("tasks.overdue")}`
+                                    : ""}
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        </span>
+                      </Button>
                     ))}
                   </div>
                 </ScrollArea>
               );
             }
             return (
-              <button
+              <Button
+                className="flex flex-1"
                 disabled={createTaskOnce.pending}
-                className="text-muted-foreground hover:bg-muted/50 hover:text-foreground flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-3 py-6 text-center text-sm disabled:opacity-64"
                 onClick={() => {
                   detached(handleCreateTask(), "overview-view.create-task");
                 }}
-                type="button"
+                variant="plain"
               >
-                <PlusIcon className="size-3.5" />
-                {t("tasks.newTask")}
-              </button>
+                <span className="text-muted-foreground hover:bg-muted/50 hover:text-foreground flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-6 text-center text-sm in-disabled:opacity-64">
+                  <PlusIcon className="size-3.5" />
+                  {t("tasks.newTask")}
+                </span>
+              </Button>
             );
           })()}
           <Menu
@@ -669,16 +688,16 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               setUpcomingMenu((previous) =>
                 open
                   ? { ...previous, open }
-                  : { open: false, anchor: null, task: null },
+                  : { ...previous, open: false, anchor: null },
               );
             }}
             open={upcomingMenu.open}
           >
-            <MenuTrigger
-              nativeButton={false}
-              render={<span className="sr-only" />}
-            />
-            <MenuPopup anchor={upcomingMenu.anchor ?? undefined}>
+            <MenuAnchor />
+            <MenuPopup
+              anchor={upcomingMenu.anchor ?? undefined}
+              finalFocus={() => upcomingMenu.opener}
+            >
               {upcomingMenu.task === null ? (
                 <MenuItem
                   disabled={createTaskOnce.pending}
@@ -739,10 +758,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                 if (task === null) {
                                   return;
                                 }
-                                updateTaskStatus.mutate({
-                                  taskId: task.entityId,
-                                  status,
-                                });
+                                handleMenuStatusChange(task.entityId, status);
                               }}
                               value={status}
                             >
@@ -876,10 +892,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                         render={
                                           <TooltipTrigger
                                             render={
-                                              <button
+                                              <Button
                                                 aria-label={`${member.name}, ${dayLabel}: ${formatHours(hours)}`}
-                                                className="flex size-6 cursor-pointer items-center justify-center sm:size-7"
-                                                type="button"
+                                                className="inline-flex size-6 items-center justify-center sm:size-7"
+                                                variant="plain"
                                               />
                                             }
                                           />
@@ -1051,6 +1067,53 @@ const OverviewSectionHeader = ({
   </div>
 );
 
+type NextDeadlineCardProps = {
+  deadline: NextDeadline<{ entityId: string; name: string }>;
+  workspaceId: string;
+};
+
+const NextDeadlineCard = ({ deadline, workspaceId }: NextDeadlineCardProps) => {
+  const t = useTranslations();
+  const icon = <CalendarClockIcon className="size-4" />;
+  if (deadline.type === "none") {
+    return (
+      <StatCard
+        icon={icon}
+        label="workspaces.overview.nextDeadline"
+        value="—"
+      />
+    );
+  }
+  const { task } = deadline;
+  const date = getFormatter().dateTime(toDateTimeEpoch(deadline.dueDate), {
+    ...DAY_AND_MONTH_FORMAT,
+    timeZone: "UTC",
+  });
+  return (
+    <StatCard
+      icon={icon}
+      label="workspaces.overview.nextDeadline"
+      onClick={() =>
+        useInspectorTabsStore.getState().openTask({
+          taskId: task.entityId,
+          workspaceId,
+          label: task.name,
+        })
+      }
+      sublabel={task.name}
+      value={
+        deadline.type === "overdue" ? (
+          <span className="text-destructive">
+            {t("tasks.overdue")} · {date}
+          </span>
+        ) : (
+          date
+        )
+      }
+    />
+  );
+};
+
 type StatCardProps = {
   icon: React.ReactNode;
   label:
@@ -1083,13 +1146,13 @@ const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => {
 
   if (onClick) {
     return (
-      <button
-        className="bg-card hover:bg-muted/50 flex cursor-pointer flex-col items-start gap-1.5 rounded-lg border px-4 py-3 text-start"
-        onClick={onClick}
-        type="button"
-      >
-        {content}
-      </button>
+      // The clickable card draws the same card as the static one below and
+      // only adds a hover tint, so a row of stats reads as one set.
+      <Button className="block" onClick={onClick} variant="plain">
+        <span className="bg-card hover:bg-muted/50 flex h-full w-full flex-col items-start gap-1.5 rounded-lg border px-4 py-3">
+          {content}
+        </span>
+      </Button>
     );
   }
 
