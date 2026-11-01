@@ -107,9 +107,19 @@ const readValue = (
 const INTEGER_BOUND = {
   POSITIVE: { minimum: 1, wording: "a positive integer" },
   NON_NEGATIVE: { minimum: 0, wording: "a non-negative integer" },
+  /** `case_law_decisions.parser_version` is a smallint. */
+  PARSER_VERSION: {
+    minimum: 1,
+    maximum: 32_767,
+    wording: "an integer from 1 to 32767",
+  },
 } as const;
 
-type IntegerBound = (typeof INTEGER_BOUND)[keyof typeof INTEGER_BOUND];
+type IntegerBound = {
+  readonly minimum: number;
+  readonly maximum?: number;
+  readonly wording: string;
+};
 
 // The whole value has to be digits. `Number.parseInt` reads a prefix and
 // stops, so "20rows" would pass as 20, "0.5" as 0 and "1e3" as 1: every one
@@ -125,7 +135,8 @@ const boundedInteger = (
   if (
     !DECIMAL_DIGITS.test(raw) ||
     !Number.isSafeInteger(parsed) ||
-    parsed < bound.minimum
+    parsed < bound.minimum ||
+    parsed > (bound.maximum ?? Number.MAX_SAFE_INTEGER)
   ) {
     return invalid(`--${name} must be ${bound.wording}, got: ${raw}`);
   }
@@ -216,7 +227,7 @@ const readScope = (
     const version = boundedInteger(
       parserVersion.value,
       "parser-version",
-      INTEGER_BOUND.POSITIVE,
+      INTEGER_BOUND.PARSER_VERSION,
     );
     if (Result.isError(version)) {
       return version;

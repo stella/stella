@@ -379,21 +379,36 @@ test("a rejected row is quarantined without rolling back its healthy batch sibli
     sql`ALTER TABLE case_law_decisions ADD CONSTRAINT reject_empty_requeue
     CHECK (id <> ${poison} OR fulltext IS NOT NULL)`.inlineParams(),
   );
+  const batches: number[] = [];
   const result = await requeueEmptiedDocuments({
     scopedDb,
     sourceId,
     since: SINCE,
     decisionIds: ids,
+    onBatch: async (outcomes) => {
+      batches.push(outcomes.length);
+    },
+  }).finally(async () => {
+    await testDb.execute(
+      sql`ALTER TABLE case_law_decisions DROP CONSTRAINT reject_empty_requeue`,
+    );
   });
   expect(result).toEqual(
     ids.map((decisionId) => ({
       decisionId,
       outcome:
         decisionId === poison
-          ? { type: "quarantined", reason: "projection-or-update-failed" }
+          ? {
+              type: "quarantined",
+              reason: "projection-or-update-failed",
+              // check_violation: Postgres refused the row's data.
+              sqlState: "23514",
+            }
           : { type: "requeued" },
     })),
   );
+  // Every row was reported through its batch as the batch committed.
+  expect(batches.reduce((sum, count) => sum + count, 0)).toBe(ids.length);
   const stored = await testDb
     .select({ id: caseLawDecisions.id, fulltext: caseLawDecisions.fulltext })
     .from(caseLawDecisions)
@@ -404,7 +419,26 @@ test("a rejected row is quarantined without rolling back its healthy batch sibli
       .filter(({ id }) => id !== poison)
       .every(({ fulltext }) => fulltext === null),
   ).toBe(true);
-  await testDb.execute(
-    sql`ALTER TABLE case_law_decisions DROP CONSTRAINT reject_empty_requeue`,
+});
+
+test("an error that is not about a row's data ends the run and quarantines nothing", async () => {
+  const unavailable = new Error("connection terminated unexpectedly");
+  const failingDb: ScopedDb = async () => {
+    throw unavailable;
+  };
+  const recorded: unknown[] = [];
+  const rejection = await requeueEmptiedDocuments({
+    scopedDb: failingDb,
+    sourceId,
+    since: SINCE,
+    decisionIds: qualifying(),
+    onBatch: async (outcomes) => {
+      recorded.push(...outcomes);
+    },
+  }).then(
+    () => null,
+    (error: unknown) => error,
   );
+  expect(rejection).toMatchObject({ _tag: "EmptiedDocumentBatchError" });
+  expect(recorded).toEqual([]);
 });

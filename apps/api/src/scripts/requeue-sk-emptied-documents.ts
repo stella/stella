@@ -65,6 +65,7 @@ await runScriptWithErrorOutput(async () => {
     process.exit(0);
   }
 
+  let quarantined = 0;
   try {
     const report = await runEmptiedDocumentRepair(command, {
       scopedDb: ingestionDb,
@@ -79,8 +80,10 @@ await runScriptWithErrorOutput(async () => {
     if (report.isErr()) {
       throw report.error;
     }
+    quarantined = report.value.quarantined;
   } finally {
     await resultsFile?.close();
   }
-  process.exit(0);
+  // A quarantined row is a refusal the operator has to read.
+  process.exit(quarantined === 0 ? 0 : 1);
 });

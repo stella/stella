@@ -25,6 +25,7 @@ import {
   synchronizeLockedCaseLawProjectionBatchTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { storesNoCorpusDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import { getPgErrorCode } from "@/api/lib/pg-error";
 
 /**
  * Slovak court decisions whose downloaded document was settled as having
@@ -156,7 +157,20 @@ export const scanEmptiedDocuments = async ({
 type EmptiedDocumentRequeueOutcome =
   | { type: "requeued" }
   | { type: "no-longer-eligible" }
-  | { type: "quarantined"; reason: "projection-or-update-failed" };
+  | {
+      type: "quarantined";
+      reason: "projection-or-update-failed";
+      /** The SQLSTATE Postgres refused the row with: a data or constraint error. */
+      sqlState: string;
+    };
+
+/**
+ * A row only poisons its batch when Postgres refuses its data: a data
+ * exception (class 22) or an integrity constraint (class 23). A lost
+ * connection, a deadlock or a timeout says nothing about any row, so it ends
+ * the run instead of quarantining every row it touches.
+ */
+const POISON_SQLSTATE_CLASSES = new Set(["22", "23"]);
 
 class EmptiedDocumentBatchError extends TaggedError(
   "EmptiedDocumentBatchError",
@@ -261,11 +275,22 @@ const requeueIsolatedBatch = async (
   if (attempted.isOk()) {
     return attempted.value;
   }
+  const sqlState = getPgErrorCode(attempted.error.cause);
+  if (
+    sqlState === undefined ||
+    !POISON_SQLSTATE_CLASSES.has(sqlState.slice(0, 2))
+  ) {
+    throw attempted.error;
+  }
   const { decisionIds } = options;
   if (decisionIds.length === 1) {
     return decisionIds.map((decisionId) => ({
       decisionId,
-      outcome: { type: "quarantined", reason: "projection-or-update-failed" },
+      outcome: {
+        type: "quarantined",
+        reason: "projection-or-update-failed",
+        sqlState,
+      },
     }));
   }
   const middle = Math.floor(decisionIds.length / 2);
@@ -288,6 +313,8 @@ export type RequeueEmptiedDocumentsOptions = {
   sourceId: SafeId<"caseLawSource">;
   since: Date;
   decisionIds: readonly SafeId<"caseLawDecision">[];
+  /** Receives each batch's outcomes as soon as the batch commits. */
+  onBatch?: (outcomes: readonly EmptiedDocumentRowOutcome[]) => Promise<void>;
 };
 
 /**
@@ -298,6 +325,7 @@ export type RequeueEmptiedDocumentsOptions = {
  */
 export const requeueEmptiedDocuments = async ({
   decisionIds,
+  onBatch,
   scopedDb,
   since,
   sourceId,
@@ -318,13 +346,13 @@ export const requeueEmptiedDocuments = async ({
       offset,
       offset + CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE,
     );
-    outcomes.push(
-      ...(await requeueIsolatedBatch(scopedDb, {
-        decisionIds: batch,
-        since,
-        sourceId,
-      })),
-    );
+    const batchOutcomes = await requeueIsolatedBatch(scopedDb, {
+      decisionIds: batch,
+      since,
+      sourceId,
+    });
+    await onBatch?.(batchOutcomes);
+    outcomes.push(...batchOutcomes);
   }
   return outcomes;
 };

@@ -137,9 +137,13 @@ describe("the rest of a replay's command line", () => {
     expect(
       parsed("--adapter", "sk-us", "--parser-version", "12").scope,
     ).toEqual({ type: "parser-version", parserVersion: 12 });
-    for (const value of ["0", "12a", "-1", "1.5"]) {
+    expect(
+      parsed("--adapter", "sk-us", "--parser-version", "32767").scope,
+    ).toEqual({ type: "parser-version", parserVersion: 32_767 });
+    // The column is a smallint: a larger version names no stored row.
+    for (const value of ["0", "12a", "-1", "1.5", "32768"]) {
       expect(rejection("--adapter", "sk-us", "--parser-version", value)).toBe(
-        `--parser-version must be a positive integer, got: ${value}`,
+        `--parser-version must be an integer from 1 to 32767, got: ${value}`,
       );
     }
   });

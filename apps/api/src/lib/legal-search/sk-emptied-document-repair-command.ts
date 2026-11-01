@@ -200,13 +200,20 @@ export type EmptiedDocumentRepairRow = {
   actor: string | null;
 } & (
   | { outcome: "eligible" | "requeued" | "no-longer-eligible" }
-  | { outcome: "quarantined"; failureReason: "projection-or-update-failed" }
+  | {
+      outcome: "quarantined";
+      failureReason: "projection-or-update-failed";
+      /** The SQLSTATE Postgres refused the row with. */
+      sqlState: string;
+    }
 );
 
 export type EmptiedDocumentRepairReport = {
   visited: number;
   matched: number;
   requeued: number;
+  /** Rows Postgres refused; the operator reads them in the results file. */
+  quarantined: number;
   /** The `--after` of the next run; null when the source is exhausted. */
   nextAfter: SafeId<"caseLawDecision"> | null;
 };
@@ -252,6 +259,7 @@ export const runEmptiedDocumentRepair = async (
       visited: scan.visited,
       matched: scan.matched.length,
       requeued: 0,
+      quarantined: 0,
       nextAfter,
     });
   }
@@ -264,35 +272,42 @@ export const runEmptiedDocumentRepair = async (
     );
   }
   const { actor, reason } = command.write;
+  // Each batch is recorded as it commits, so a run stopped partway still
+  // names every row it changed.
   const outcomes = await requeueEmptiedDocuments({
     scopedDb,
     sourceId,
     since: command.since,
     decisionIds: scan.matched,
+    onBatch: async (batch) => {
+      for (const { decisionId, outcome } of batch) {
+        if (outcome.type === "quarantined") {
+          await record({
+            id: decisionId,
+            outcome: "quarantined",
+            failureReason: outcome.reason,
+            sqlState: outcome.sqlState,
+            reason,
+            actor,
+          });
+          continue;
+        }
+        await record({ id: decisionId, outcome: outcome.type, reason, actor });
+      }
+    },
   });
-  for (const { decisionId, outcome } of outcomes) {
-    if (outcome.type === "quarantined") {
-      await record({
-        id: decisionId,
-        outcome: "quarantined",
-        failureReason: outcome.reason,
-        reason,
-        actor,
-      });
-      continue;
-    }
-    await record({ id: decisionId, outcome: outcome.type, reason, actor });
-  }
-  const requeued = outcomes.filter(
-    ({ outcome }) => outcome.type === "requeued",
-  ).length;
+  const countOf = (type: string) =>
+    outcomes.filter(({ outcome }) => outcome.type === type).length;
+  const requeued = countOf("requeued");
+  const quarantined = countOf("quarantined");
   write(
-    `requeued=${String(requeued)} quarantined=${String(outcomes.filter(({ outcome }) => outcome.type === "quarantined").length)} no_longer_eligible=${String(outcomes.filter(({ outcome }) => outcome.type === "no-longer-eligible").length)}`,
+    `requeued=${String(requeued)} quarantined=${String(quarantined)} no_longer_eligible=${String(countOf("no-longer-eligible"))}`,
   );
   return Result.ok({
     visited: scan.visited,
     matched: scan.matched.length,
     requeued,
+    quarantined,
     nextAfter,
   });
 };
