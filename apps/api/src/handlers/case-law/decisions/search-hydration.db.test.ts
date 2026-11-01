@@ -2303,16 +2303,22 @@ test("a probe cursor whose resume position an integer column cannot hold is an i
     const cursor =
       first.nextCursor ?? panic("expected a cursor resuming the probe");
     const [tag, positionCursor, probe] = decodePaginationCursor(cursor) ?? [];
-    if (!isRecord(probe)) {
+    if (
+      typeof tag !== "string" ||
+      typeof positionCursor !== "string" ||
+      !isRecord(probe) ||
+      typeof probe["anchor"] !== "string"
+    ) {
       throw new TypeError("expected a probe position in the cursor");
     }
+    const anchor = probe["anchor"];
     // The issued cursor resumes.
     expect((await listGapped("relevance", cursor)).hits).toEqual([]);
     for (const spanStart of [2 ** 31, -1, 1.5, Number.MAX_SAFE_INTEGER]) {
       const tampered = encodePaginationCursor([
         tag,
         positionCursor,
-        { ...probe, spanStart },
+        { anchor, spanStart },
       ]);
       expect(
         // db-await-in-loop: one refusal per out-of-range position.
@@ -2357,9 +2363,12 @@ test("the provision cursor codec tells a probe cursor from a plain one by its ta
   const probed =
     decodePaginationCursor(codec.encode({ position, probe })) ?? [];
   const [tag] = probed;
+  if (typeof tag !== "string") {
+    throw new TypeError("expected a tag opening the probe cursor");
+  }
   for (const refused of [
     encodePaginationCursor([tag, codec.encode({ position })]),
-    encodePaginationCursor([...probed, "extra"]),
+    encodePaginationCursor([tag, codec.encode({ position }), probe, "extra"]),
     encodePaginationCursor([
       tag,
       codec.encode({ position }),
