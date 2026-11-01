@@ -14,6 +14,7 @@ import {
   normalizeApiError,
   parseApiErrorValue,
   parseApiValidationIssues,
+  PREVIEW_UNAVAILABLE_ERROR_CODE,
 } from "@stll/api-contract";
 import type { ApiValidationIssue } from "@stll/api-contract";
 import {
@@ -30,7 +31,6 @@ import {
   publicCountryUnavailableSchema,
   type PublicLawDomain,
 } from "@stll/api-contract/public-country-capability";
-import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
 import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
@@ -235,7 +235,6 @@ const CODE_ERROR_KEYS = {
   [TIME_ENTRY_RATE_REQUIRED_CODE]: "billing.rates.effectiveRateRequired",
   [IDEMPOTENCY_IN_PROGRESS_CODE]: "errors.apiCodes.idempotencyInProgress",
   [IDEMPOTENCY_KEY_REUSED_CODE]: "errors.apiCodes.idempotencyKeyReused",
-  [GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE]: "caseLaw.pagination.refineForMore",
   ...AI_FAILURE_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
@@ -265,6 +264,7 @@ const CODE_ERROR_KEYS = {
   deepl_key_rejected: "errors.apiCodes.deeplKeyRejected",
   deepl_quota_exceeded: "errors.apiCodes.deeplQuotaExceeded",
   [ENCRYPTED_CONTENT_ERROR_CODE]: "errors.apiCodes.encryptedContent",
+  [PREVIEW_UNAVAILABLE_ERROR_CODE]: "search.previewUnavailable",
   [API_FILE_SECURITY_REJECTED_ERROR_CODE]:
     "errors.apiCodes.fileSecurityRejected",
   forbidden: "errors.apiCodes.forbidden",
@@ -346,6 +346,10 @@ export const apiFieldIssueMessage = (
   );
   return issue === undefined ? undefined : validationIssueMessage(issue);
 };
+
+/** The server has nothing to show for this file; retrying cannot help. */
+export const isPreviewUnavailableError = (error: unknown): boolean =>
+  APIError.is(error) && error.code === PREVIEW_UNAVAILABLE_ERROR_CODE;
 
 export const isDisplayableAPIError = (error: APIError): boolean =>
   isActionAdmissionCode(error.code) ||
