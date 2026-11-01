@@ -75,8 +75,8 @@
   "allowWebsiteAccess": {
     "message": "Atļaut piekļuvi vietnēm"
   },
-  "connectTab": {
-    "message": "Savienot šo stella cilni"
+  "connectStella": {
+    "message": "Savienot stella"
   },
   "adoptTab": {
     "message": "Izmantot šo cilni ar stella"
@@ -97,9 +97,9 @@
     "message": "Pārbauda savienojumu…"
   },
   "statusConnectedElsewhere": {
-    "message": "Ir savienota cita stella cilne"
+    "message": "stella ir savienota citā adresē"
   },
-  "connectTabInstead": {
-    "message": "Tās vietā savienot šo stella cilni"
+  "connectStellaInstead": {
+    "message": "Tā vietā savienot stella šeit"
   }
 }

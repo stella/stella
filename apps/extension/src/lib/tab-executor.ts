@@ -31,6 +31,7 @@ import {
   type TopDocument,
 } from "./snapshot-guard";
 import { frameSnapshotSchema, mergeFrameSnapshots } from "./snapshot-merge";
+import { readStellaTabs } from "./stella-tabs";
 import { BROWSER_CONTROLLED_TAB_STORAGE_KEY } from "./storage-keys";
 import { containControlledTab, forgetContainedTab } from "./tab-containment";
 
@@ -1489,17 +1490,21 @@ export type AdoptControlledTabResult =
 /**
  * Makes a tab the user already has open the controlled tab, so chat can read
  * and act on it without re-navigating. Same origin policy and containment as
- * a tab opened by `open`; the controller's own stella tab is never adopted.
+ * a tab opened by `open`; a tab stella runs in is never adopted, even after
+ * it navigated elsewhere.
  */
 export const adoptControlledTab = async (
   controllerId: string,
   tab: chrome.tabs.Tab,
 ): Promise<AdoptControlledTabResult> => {
-  const controller = await readBrowserController();
+  const [controller, stellaTabs] = await Promise.all([
+    readBrowserController(),
+    readStellaTabs(),
+  ]);
   if (
     controller?.controllerId !== controllerId ||
     tab.id === undefined ||
-    tab.id === controller.tabId ||
+    stellaTabs.has(tab.id) ||
     tab.url === undefined ||
     parseControllableUrl(tab.url) === null
   ) {
