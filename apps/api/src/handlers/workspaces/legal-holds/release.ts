@@ -3,10 +3,11 @@ import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { releaseLegalHold } from "@/api/lib/legal-holds/lifecycle";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
-export default createSafeHandler(
+const releaseMatterLegalHold = createSafeHandler(
   {
     contract: "patch",
     description:
@@ -53,3 +54,11 @@ export default createSafeHandler(
     return outcome;
   },
 );
+
+declareAggregateMutation(releaseMatterLegalHold, {
+  type: "independent",
+  reason:
+    "The organization legal-hold fence serializes placement and release; the hold row and its audit event commit in one transaction.",
+});
+
+export default releaseMatterLegalHold;
