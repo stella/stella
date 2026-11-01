@@ -147,19 +147,32 @@ const batchDelete = createSafeHandler(
 
         // Only the locked entries passed the policy check: drafts among them
         // are deleted and the rest written off.
-        const deleted = await tx
-          .delete(timeEntries)
-          .where(locked.where(eq(timeEntries.status, BILLING_STATUS.DRAFT)))
-          .returning({ id: timeEntries.id });
+        const deleted =
+          locked.ids.length === 0
+            ? []
+            : await tx
+                .delete(timeEntries)
+                .where(
+                  locked.where(
+                    and(
+                      eq(timeEntries.workspaceId, workspaceId),
+                      eq(timeEntries.status, BILLING_STATUS.DRAFT),
+                    ),
+                  ),
+                )
+                .returning({ id: timeEntries.id });
 
-        const writtenOff = await tx
-          .update(timeEntries)
-          .set({
-            status: BILLING_STATUS.WRITTEN_OFF,
-            updatedAt: new Date(),
-          })
-          .where(locked.where())
-          .returning({ id: timeEntries.id });
+        const writtenOff =
+          locked.ids.length === 0
+            ? []
+            : await tx
+                .update(timeEntries)
+                .set({
+                  status: BILLING_STATUS.WRITTEN_OFF,
+                  updatedAt: new Date(),
+                })
+                .where(locked.where(eq(timeEntries.workspaceId, workspaceId)))
+                .returning({ id: timeEntries.id });
 
         await recordAuditEvent(
           tx,

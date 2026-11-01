@@ -256,19 +256,24 @@ const batchUpdate = createSafeHandler(
             }
             // Only the locked rows were checked above; an entry that became
             // approvable after the lock waits for a later request.
-            const updated = await tx
-              .update(timeEntries)
-              .set({
-                status: BILLING_STATUS.APPROVED,
-                approvedByUserId: user.id,
-                approvedAt: now,
-                returnedAt: null,
-                returnedByUserId: null,
-                returnComment: null,
-                updatedAt: now,
-              })
-              .where(locked.where())
-              .returning({ id: timeEntries.id });
+            const updated =
+              locked.ids.length === 0
+                ? []
+                : await tx
+                    .update(timeEntries)
+                    .set({
+                      status: BILLING_STATUS.APPROVED,
+                      approvedByUserId: user.id,
+                      approvedAt: now,
+                      returnedAt: null,
+                      returnedByUserId: null,
+                      returnComment: null,
+                      updatedAt: now,
+                    })
+                    .where(
+                      locked.where(eq(timeEntries.workspaceId, workspaceId)),
+                    )
+                    .returning({ id: timeEntries.id });
             // The rows were locked when read, so each one's status then is
             // the status the approval moved it from.
             const previousStatus = new Map(
@@ -358,16 +363,21 @@ const batchUpdate = createSafeHandler(
             if (violation) {
               return { type: "policy" as const, error: violation };
             }
-            const updated = await tx
-              .update(timeEntries)
-              .set({
-                status: BILLING_STATUS.DRAFT,
-                approvedByUserId: null,
-                approvedAt: null,
-                updatedAt: now,
-              })
-              .where(locked.where())
-              .returning({ id: timeEntries.id });
+            const updated =
+              locked.ids.length === 0
+                ? []
+                : await tx
+                    .update(timeEntries)
+                    .set({
+                      status: BILLING_STATUS.DRAFT,
+                      approvedByUserId: null,
+                      approvedAt: null,
+                      updatedAt: now,
+                    })
+                    .where(
+                      locked.where(eq(timeEntries.workspaceId, workspaceId)),
+                    )
+                    .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
             await recordBillingCapCrossings(tx, {
               workspaceId,
@@ -506,16 +516,21 @@ const batchUpdate = createSafeHandler(
                     fallback: sql`${timeEntries.currency}`,
                   })
                 : undefined;
-            const updated = await tx
-              .update(timeEntries)
-              .set({
-                billable: true,
-                ...(rateAtEntry === undefined ? {} : { rateAtEntry }),
-                ...(currency === undefined ? {} : { currency }),
-                updatedAt: new Date(),
-              })
-              .where(locked.where())
-              .returning({ id: timeEntries.id });
+            const updated =
+              locked.ids.length === 0
+                ? []
+                : await tx
+                    .update(timeEntries)
+                    .set({
+                      billable: true,
+                      ...(rateAtEntry === undefined ? {} : { rateAtEntry }),
+                      ...(currency === undefined ? {} : { currency }),
+                      updatedAt: new Date(),
+                    })
+                    .where(
+                      locked.where(eq(timeEntries.workspaceId, workspaceId)),
+                    )
+                    .returning({ id: timeEntries.id });
             await recordAuditEvent(
               tx,
               buildBatchEvents(updated, action, rateChanges),
@@ -582,11 +597,16 @@ const batchUpdate = createSafeHandler(
             if (violation) {
               return { type: "policy" as const, error: violation };
             }
-            const updated = await tx
-              .update(timeEntries)
-              .set({ billable: false, updatedAt: new Date() })
-              .where(locked.where())
-              .returning({ id: timeEntries.id });
+            const updated =
+              locked.ids.length === 0
+                ? []
+                : await tx
+                    .update(timeEntries)
+                    .set({ billable: false, updatedAt: new Date() })
+                    .where(
+                      locked.where(eq(timeEntries.workspaceId, workspaceId)),
+                    )
+                    .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
             await recordBillingCapCrossings(tx, {
               workspaceId,
