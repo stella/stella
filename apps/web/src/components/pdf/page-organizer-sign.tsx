@@ -7,6 +7,10 @@ import type {
   PdfSignFlow,
   PdfSignTarget,
 } from "@/components/inspector/pdf-sign-action";
+import type {
+  LiveOrganizerOperation,
+  OrganizerOperationRequest,
+} from "@/components/pdf/page-organizer-upload.logic";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 /**
@@ -24,8 +28,14 @@ type PageOrganizerSignActionProps = {
   closeEditor: () => void;
   disabled: boolean;
   isDirty: boolean;
+  beginRequest: (
+    operation: LiveOrganizerOperation,
+  ) => OrganizerOperationRequest;
+  operation: LiveOrganizerOperation;
   /** Saves the page edits as a new version and resolves that version, or `null`. */
-  saveVersion: () => Promise<PdfSignTarget | null>;
+  saveVersion: (
+    request: OrganizerOperationRequest,
+  ) => Promise<PdfSignTarget | null>;
   sign: PageOrganizerSign;
 };
 
@@ -38,6 +48,8 @@ export const PageOrganizerSignAction = ({
   closeEditor,
   disabled,
   isDirty,
+  beginRequest,
+  operation,
   saveVersion,
   sign: { flow: pdfSignFlow, target },
 }: PageOrganizerSignActionProps) => {
@@ -48,11 +60,27 @@ export const PageOrganizerSignAction = ({
         <Button
           disabled={disabled || pdfSignFlow.isConnecting}
           onClick={() => {
+            const request = beginRequest(operation);
             if (isDirty) {
-              pdfSignFlow.startWith(saveVersion);
+              pdfSignFlow.startWith(async () => {
+                const savedTarget = await saveVersion(request);
+                if (savedTarget === null) {
+                  return null;
+                }
+                pdfSignFlow.transferToSigning(
+                  request,
+                  savedTarget,
+                  closeEditor,
+                  true,
+                );
+                return null;
+              });
               return;
             }
-            pdfSignFlow.start(target, closeEditor);
+            pdfSignFlow.startWith(async () => {
+              pdfSignFlow.transferToSigning(request, target, closeEditor);
+              return await Promise.resolve(null);
+            });
           }}
           size="sm"
           {...(isDirty ? { tooltip: tPageEditor("signAfterSave") } : {})}

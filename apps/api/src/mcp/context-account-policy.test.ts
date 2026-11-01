@@ -332,6 +332,9 @@ describe("MCP account authorization", () => {
       }
     }
     expect(REVIEW_ACCOUNT_EXCLUDED_SCOPES).toEqual([
+      "stella:account_export_read",
+      "stella:account_export_write",
+      "stella:organization_create",
       "stella:admin_read",
       "stella:admin_write",
       "stella:billing_write",

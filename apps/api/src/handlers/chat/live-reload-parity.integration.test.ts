@@ -1223,14 +1223,23 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "edit-answer": notModelled(
     "Edit and rerun lives in the session hook, which the harness does not render.",
   ),
+  "edit-message": notModelled(
+    "Editing a sent message lives in the session hook, which the harness does not render; edit-user-message.postgres.test.ts covers the stored history and its reload.",
+  ),
   export: READS_ONLY,
   fork: byCommands("ForkFrom", ForkFrom.allows),
+  "hold-queue-for-message-edit": notModelled(
+    "Holding queued prompts while a message editor is open lives in the session queue, which the harness does not render; user-message-edit-session.dom.test.tsx covers it.",
+  ),
   "improve-prompt": PAGE_STATE,
   "load-older": READS_ONLY,
   "move-to-side": PAGE_STATE,
   "new-chat": byCommands("LeaveThread", LeaveThread.allows),
   "open-created-document": READS_ONLY,
   "open-draft": READS_ONLY,
+  "open-message-editor": notModelled(
+    "Opening the editor only stops a running turn, through the same stop the harness models as its own command.",
+  ),
   "open-playbook": READS_ONLY,
   "refresh-edited-answer": READS_ONLY,
   "remove-queued-message": notModelled(
