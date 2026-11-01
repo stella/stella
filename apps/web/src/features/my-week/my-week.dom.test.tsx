@@ -1,4 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
 
 import { TIME_ENTRIES_APPROVAL_BATCH_MAX } from "@stll/api-contract/limits";
@@ -892,6 +893,38 @@ describe("my week", () => {
       );
     });
     expect(await screen.findByText("Review lease schedule")).toBeTruthy();
+  });
+
+  test("the week label opens a calendar that jumps to the chosen day", async () => {
+    serveWeek({ entries: [], suggestions: [] });
+    // Mid-month, so the chosen day's number appears once in the calendar.
+    mount("2026-03-11");
+    const openedDay = async () => {
+      const days = await screen.findByRole("navigation", {
+        name: messages.timesheets.week.days,
+      });
+      return within(days)
+        .getAllByRole("button")
+        .find((day) => day.getAttribute("aria-current") === "date")
+        ?.textContent;
+    };
+    expect(await openedDay()).toContain("11");
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /\d.*–.*\d/u }));
+    });
+    const target = await waitFor(() =>
+      [
+        ...document.querySelectorAll(
+          '[data-slot="date-picker-popup"] [role="gridcell"], [data-slot="date-picker-popup"] button',
+        ),
+      ].find((cell) => cell.textContent === "12"),
+    );
+    await act(async () => {
+      fireEvent.click(target ?? panic("The calendar shows no day 12"));
+    });
+
+    await waitFor(async () => expect(await openedDay()).toContain("12"));
   });
 
   test("accepting a suggestion logs it in its matter, removes it and updates the totals", async () => {

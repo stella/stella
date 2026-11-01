@@ -6,6 +6,16 @@ import {
   REVIEW_FLAGS_MAX_ITEMS,
 } from "@stll/api-contract";
 import { apiDateSchema, apiDateTimeSchema } from "@stll/api-contract/api-date";
+import type {
+  ContactAddress as SharedContactAddress,
+  ContactBankAccount,
+  ContactBillingAddress,
+  ContactCustomField as SharedContactCustomField,
+  ContactDataBox as SharedContactDataBox,
+  ContactEmail as SharedContactEmail,
+  ContactMetadata as SharedContactMetadata,
+  ContactPhone as SharedContactPhone,
+} from "@stll/api-contract/contact-write";
 
 import type { JsonObject } from "@/api/lib/json-value";
 import {
@@ -418,100 +428,16 @@ const boundingBoxesSchema = v.object({
 export type BoundingBoxes = v.InferOutput<typeof boundingBoxesSchema>;
 export type BoundingBox = BoundingBoxes["boxes"][number];
 
-// -- Billing schemas --
-
-export const bankAccountSchema = v.object({
-  iban: v.exactOptional(v.pipe(v.string(), v.maxLength(34))),
-  bic: v.exactOptional(v.pipe(v.string(), v.maxLength(11))),
-  accountNumber: v.exactOptional(v.pipe(v.string(), v.maxLength(64))),
-  bankName: v.exactOptional(v.pipe(v.string(), v.maxLength(256))),
-  currency: v.exactOptional(currencyCode),
-});
-
-export type BankAccount = v.InferOutput<typeof bankAccountSchema>;
-
-export const billingAddressSchema = v.object({
-  line1: v.exactOptional(v.pipe(v.string(), v.maxLength(512))),
-  line2: v.exactOptional(v.pipe(v.string(), v.maxLength(512))),
-  city: v.exactOptional(v.pipe(v.string(), v.maxLength(256))),
-  state: v.exactOptional(v.pipe(v.string(), v.maxLength(256))),
-  postalCode: v.exactOptional(v.pipe(v.string(), v.maxLength(32))),
-  country: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
-});
-
-export type BillingAddress = v.InferOutput<typeof billingAddressSchema>;
-
-// -- Contact schemas --
-
-export const contactEmailSchema = v.object({
-  type: v.picklist(["work", "personal", "other"]),
-  address: v.pipe(v.string(), v.email(), v.maxLength(320)),
-  isPrimary: v.boolean(),
-  label: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
-});
-
-export type ContactEmail = v.InferOutput<typeof contactEmailSchema>;
-
-export const contactPhoneSchema = v.object({
-  type: v.picklist(["mobile", "office", "home", "fax", "other"]),
-  number: v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
-  isPrimary: v.boolean(),
-  label: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
-});
-
-export type ContactPhone = v.InferOutput<typeof contactPhoneSchema>;
-
-export const contactDataBoxSchema = v.object({
-  id: v.pipe(v.string(), v.regex(/^[A-Za-z0-9]{7}$/u)),
-  isPrimary: v.boolean(),
-  label: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
-});
-
-export type ContactDataBox = v.InferOutput<typeof contactDataBoxSchema>;
-
-export const contactCustomFieldSchema = v.object({
-  id: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
-  label: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
-  value: v.pipe(v.string(), v.maxLength(2000)),
-});
-
-export type ContactCustomField = v.InferOutput<typeof contactCustomFieldSchema>;
-
-const contactMetadataFields = {
-  dataBoxes: v.exactOptional(
-    v.pipe(v.array(contactDataBoxSchema), v.maxLength(20)),
-  ),
-  customFields: v.exactOptional(
-    v.pipe(v.array(contactCustomFieldSchema), v.maxLength(50)),
-  ),
-};
-
-export const contactMetadataSchema = v.object(contactMetadataFields);
-
-export type ContactMetadata = v.InferOutput<typeof contactMetadataSchema>;
+export type BankAccount = ContactBankAccount;
+export type BillingAddress = ContactBillingAddress;
+export type ContactEmail = SharedContactEmail;
+export type ContactPhone = SharedContactPhone;
+export type ContactDataBox = SharedContactDataBox;
+export type ContactCustomField = SharedContactCustomField;
+export type ContactMetadata = SharedContactMetadata;
+export type ContactAddress = SharedContactAddress;
 
 export type ContactPersistedMetadata = ContactMetadata & {
   version: 1;
   custom?: JsonObject;
 };
-
-export const contactAddressSchema = v.object({
-  type: v.picklist([
-    "office",
-    "mailing",
-    "billing",
-    "service",
-    "home",
-    "other",
-  ]),
-  line1: v.pipe(v.string(), v.maxLength(512)),
-  line2: v.exactOptional(v.pipe(v.string(), v.maxLength(512))),
-  city: v.exactOptional(v.pipe(v.string(), v.maxLength(256))),
-  state: v.exactOptional(v.pipe(v.string(), v.maxLength(256))),
-  postalCode: v.exactOptional(v.pipe(v.string(), v.maxLength(32))),
-  country: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
-  isPrimary: v.boolean(),
-  label: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
-});
-
-export type ContactAddress = v.InferOutput<typeof contactAddressSchema>;
