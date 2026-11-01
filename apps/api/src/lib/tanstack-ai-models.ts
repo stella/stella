@@ -1,19 +1,31 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { HarmBlockThreshold, HarmCategory } from "@google/genai";
 import { FetchHttpHandler } from "@smithy/fetch-http-handler";
 import { createModel, extendAdapter } from "@tanstack/ai";
 import type { AnyTextAdapter, ContentPart, ModelMessage } from "@tanstack/ai";
-import { createAnthropicChat } from "@tanstack/ai-anthropic";
-import type { AnthropicTextProviderOptions } from "@tanstack/ai-anthropic";
+import { createAnthropicChatWithClient } from "@tanstack/ai-anthropic";
+import type {
+  AnthropicTextProviderOptions,
+  createAnthropicChat,
+} from "@tanstack/ai-anthropic";
 import { BedrockConverseTextAdapter } from "@tanstack/ai-bedrock";
-import type { BedrockConverseProviderOptions } from "@tanstack/ai-bedrock";
+import type {
+  BedrockConverseProviderOptions,
+  ResolvedBedrockAuth,
+} from "@tanstack/ai-bedrock";
 import { createGeminiChat } from "@tanstack/ai-gemini";
 import type { GeminiTextProviderOptions } from "@tanstack/ai-gemini";
 import { createMistralText } from "@tanstack/ai-mistral";
 import type { MistralTextProviderOptions } from "@tanstack/ai-mistral";
-import { createOpenaiChat } from "@tanstack/ai-openai";
-import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
+import { OpenAITextAdapter } from "@tanstack/ai-openai";
+import type {
+  createOpenaiChat,
+  OpenAITextConfig,
+  OpenAITextProviderOptions,
+} from "@tanstack/ai-openai";
 import type { OpenRouterTextModelOptions } from "@tanstack/ai-openrouter";
 import { panic, Result } from "better-result";
+import OpenAI from "openai";
 import * as v from "valibot";
 
 import {
@@ -77,6 +89,7 @@ import {
 import { withProviderImageInput } from "@/api/lib/chat/provider-image-input";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { validateDataUrl } from "@/api/lib/data-url";
+import { withRetryHintEvidence } from "@/api/lib/errors/provider-retry-evidence";
 import { registerProviderDiagnosticCredentials } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -669,35 +682,107 @@ const createExtendedGeminiAdapter = (
   return gemini(modelId, apiKey);
 };
 
+/**
+ * A provider SDK client sends each request once. The generation layer
+ * (`withProviderRetryWait`) owns every retry, so each send passes the checks
+ * it makes before a dispatch; an SDK retry would send the same request again
+ * below them. `provider-retry-policy.ts` restates what the SDKs retried, and
+ * `tanstack-ai-models.retries.test.ts` holds every provider to one request
+ * per attempt.
+ */
+const SDK_RETRIES_OFF = { maxRetries: 0 } as const;
+
+// The Stainless clients (OpenAI, Anthropic) build every status error in this
+// hook, while its response headers are still at hand: the retry hints join
+// the error's evidence, so the generation layer honours them after TanStack
+// has projected the error into a `RUN_ERROR`.
+class RetryHintAnthropic extends Anthropic {
+  protected override makeStatusError(
+    status: number,
+    error: object,
+    message: string | undefined,
+    headers: Headers,
+  ) {
+    return withRetryHintEvidence(
+      super.makeStatusError(status, error, message, headers),
+      headers,
+    );
+  }
+}
+
+class RetryHintOpenAI extends OpenAI {
+  protected override makeStatusError(
+    status: number,
+    error: object,
+    message: string | undefined,
+    headers: Headers,
+  ) {
+    return withRetryHintEvidence(
+      super.makeStatusError(status, error, message, headers),
+      headers,
+    );
+  }
+}
+
+type AnthropicChatModel = Parameters<typeof createAnthropicChat>[0];
+
 type AnthropicAdapterOptions = {
   modelId: string;
   apiKey: string;
   anthropicWorkspaceId: string | undefined;
 };
 
+const createAnthropicChatWithoutRetries = (
+  model: AnthropicChatModel,
+  apiKey: string,
+  anthropicWorkspaceId: string | undefined,
+) =>
+  createAnthropicChatWithClient(
+    model,
+    new RetryHintAnthropic({
+      apiKey,
+      ...anthropicClientOptions(anthropicWorkspaceId),
+      ...SDK_RETRIES_OFF,
+    }),
+  );
+
 const createExtendedAnthropicAdapter = ({
   modelId,
   apiKey,
   anthropicWorkspaceId,
 }: AnthropicAdapterOptions): AnyTextAdapter => {
-  const anthropic = extendAdapter(createAnthropicChat, [
+  const anthropic = extendAdapter(createAnthropicChatWithoutRetries, [
     createModel(modelId, {
       input: ["text", "image", "document"] as const,
       features: ["structured_outputs"] as const,
     }),
   ]);
-  return anthropic(
-    modelId,
-    apiKey,
-    anthropicClientOptions(anthropicWorkspaceId),
-  );
+  return anthropic(modelId, apiKey, anthropicWorkspaceId);
 };
+
+type OpenAIChatModel = Parameters<typeof createOpenaiChat>[0];
+
+class RetryHintOpenAITextAdapter<
+  TModel extends OpenAIChatModel,
+> extends OpenAITextAdapter<TModel> {
+  constructor(config: OpenAITextConfig, model: TModel) {
+    super(config, model);
+    // The adapter builds its client from `config` and takes no client of
+    // its own; this one is built from the same `config`.
+    this.client = new RetryHintOpenAI(config);
+  }
+}
+
+const createOpenaiChatWithoutRetries = (
+  model: OpenAIChatModel,
+  apiKey: string,
+) => new RetryHintOpenAITextAdapter({ apiKey, ...SDK_RETRIES_OFF }, model);
 
 const createExtendedOpenAIAdapter = (
   modelId: string,
   apiKey: string,
 ): AnyTextAdapter => {
-  const openai = extendAdapter(createOpenaiChat, [
+  const openai = extendAdapter(createOpenaiChatWithoutRetries, [
     createModel(modelId, {
       input: ["text", "image", "document"] as const,
       features: ["structured_outputs"] as const,
@@ -825,6 +910,20 @@ const withInlineImages = (messages: ModelMessage[]): ModelMessage[] =>
 // The AWS SDK's default Node HTTP/2 transport closes Converse streams early in Bun.
 class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
   private readonly requestHandler = new FetchHttpHandler();
+
+  // One attempt per request, as `SDK_RETRIES_OFF` asks of the other
+  // clients: AWS standard mode makes three, and an explicit `maxAttempts`
+  // also outranks `AWS_MAX_ATTEMPTS`.
+  protected override buildClientConfig(
+    resolved: ResolvedBedrockAuth,
+    region: string,
+    endpoint: string | undefined,
+  ) {
+    return {
+      ...super.buildClientConfig(resolved, region, endpoint),
+      maxAttempts: 1,
+    };
+  }
 
   protected override async getClient() {
     const client = await super.getClient();

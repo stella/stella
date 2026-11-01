@@ -335,7 +335,8 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
               );
               requestBodies.push(await request.json());
               requests++;
-              // The first response exercises the 5xx body; the next ends SDK retries.
+              // The first request answers with a 5xx body, the second with a
+              // 4xx one; the SDK sends each once.
               return Response.json(
                 {
                   error: {
@@ -369,27 +370,29 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
               modelOptions: { models: ["fixture/fallback"] },
             };
             const structured = { ...structuredOptions, chatOptions: options };
-            if (path === "structured") {
-              const result = await Result.tryPromise({
-                try: async () => await adapter.structuredOutput(structured),
-                catch: (error) => error,
-              });
-              expect(result.isErr()).toBe(true);
-            } else {
-              const chunks = [];
-              const stream =
-                path === "chat"
-                  ? adapter.chatStream(options)
-                  : adapter.structuredOutputStream?.(structured);
-              if (stream === undefined) {
-                panic(
-                  "Provider adapter did not expose structured output streaming.",
-                );
+            for (const _status of [503, 400]) {
+              if (path === "structured") {
+                const result = await Result.tryPromise({
+                  try: async () => await adapter.structuredOutput(structured),
+                  catch: (error) => error,
+                });
+                expect(result.isErr()).toBe(true);
+              } else {
+                const chunks = [];
+                const stream =
+                  path === "chat"
+                    ? adapter.chatStream(options)
+                    : adapter.structuredOutputStream?.(structured);
+                if (stream === undefined) {
+                  panic(
+                    "Provider adapter did not expose structured output streaming.",
+                  );
+                }
+                for await (const chunk of stream) {
+                  chunks.push(chunk);
+                }
+                expect(chunks.at(-1)?.type).toBe(EventType.RUN_ERROR);
               }
-              for await (const chunk of stream) {
-                chunks.push(chunk);
-              }
-              expect(chunks.at(-1)?.type).toBe(EventType.RUN_ERROR);
             }
             expect(requests).toBe(2);
             for (const body of requestBodies) {
