@@ -1,6 +1,11 @@
 "use client";
 
-import { type ButtonHTMLAttributes, Fragment, type ReactNode } from "react";
+import {
+  type ButtonHTMLAttributes,
+  Fragment,
+  isValidElement,
+  type ReactNode,
+} from "react";
 
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
@@ -272,8 +277,10 @@ const cutsLabel = ({
 /**
  * Each run of adjacent text among the children, cut to the button's width.
  * Adjacent text (`Save {count} files`) stays one run, as it is one flex item
- * in the button's box. Every other child keeps its place, each in a keyed
- * fragment of its own, as positional children carry no keys.
+ * in the button's box; children React renders as nothing (`null`, `false`)
+ * do not split it. Every other child keeps its place in a fragment keyed by
+ * its own key, or by its position when it has none, so keyed children keep
+ * their state when they move.
  */
 const containedLabel = (children: ReactNode): ReactNode => {
   const items: readonly ReactNode[] = Array.isArray(children)
@@ -296,14 +303,19 @@ const containedLabel = (children: ReactNode): ReactNode => {
     }
   };
   for (const child of items) {
+    if (child === null || child === undefined || typeof child === "boolean") {
+      continue;
+    }
     if (typeof child === "string" || typeof child === "number") {
       run.push(child);
       continue;
     }
     closeRun();
-    parts.push(
-      <Fragment key={`part:${String(parts.length)}`}>{child}</Fragment>,
-    );
+    const key =
+      isValidElement(child) && child.key !== null
+        ? `key:${child.key}`
+        : `part:${String(parts.length)}`;
+    parts.push(<Fragment key={key}>{child}</Fragment>);
   }
   closeRun();
   return parts;
