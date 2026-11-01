@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Sign in again to continue with this action.",
     "resendCode": "Send code again to <email>{emailAddress}</email>",
     "selectOrganization": "Select an organization",
+    "sessionExpired": "Session expired",
+    "sessionExpiredDescription": "Sign in from a new tab. What you typed stays on this page.",
     "signIn": "Sign in",
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.",
     "signInWithPassword": "Sign in with password",

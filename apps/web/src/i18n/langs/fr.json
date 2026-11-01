@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Reconnectez-vous pour poursuivre cette action.",
     "resendCode": "Renvoyer le code à <email>{emailAddress}</email>",
     "selectOrganization": "Sélectionner une organisation",
+    "sessionExpired": "Votre session a expiré",
+    "sessionExpiredDescription": "Reconnectez-vous dans un nouvel onglet. Votre saisie reste sur cette page.",
     "signIn": "Se connecter",
     "signInBeforeInvitation": "Vous devez vous connecter avant de pouvoir accepter une invitation à une organisation.",
     "signInWithPassword": "Se connecter avec un mot de passe",

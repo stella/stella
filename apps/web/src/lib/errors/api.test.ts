@@ -7,7 +7,7 @@ import {
 } from "@stll/api-contract";
 
 import messages from "@/i18n/langs/en.json";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 
 import {
   isDisplayableAPIError,
@@ -149,6 +149,57 @@ describe("validation API failures", () => {
 
     expect(error.message).toBe(
       expectedMessage.replace("{limit, number}", "256"),
+    );
+  });
+});
+
+describe("a refusal of who is asking", () => {
+  test.each([
+    {
+      name: "an expired session",
+      status: 401,
+      code: "permission_denied",
+      shown: messages.errors.api.unauthorized,
+    },
+    {
+      name: "a role that does not allow the action",
+      status: 403,
+      code: "permission_denied",
+      shown: messages.errors.api.forbidden,
+    },
+    {
+      name: "a session the auth server refused",
+      status: 401,
+      code: "UNAUTHORIZED",
+      shown: messages.errors.api.unauthorized,
+    },
+    {
+      name: "a bare 401",
+      status: 401,
+      code: undefined,
+      shown: messages.errors.api.unauthorized,
+    },
+  ])("$name shows the status message", ({ status, code, shown }) => {
+    const value = { code, message: "Raw refusal" };
+
+    expect(userErrorMessage({ status, value }, "Generic fallback")).toBe(shown);
+  });
+
+  test("401 and 403 never read the same", () => {
+    expect(messages.errors.api.unauthorized).not.toBe(
+      messages.errors.api.forbidden,
+    );
+  });
+
+  test.each([
+    { status: 401, code: "INVALID_EMAIL_OR_PASSWORD" },
+    { status: 403, code: "EMAIL_NOT_VERIFIED" },
+    { status: 400, code: "permission_denied" },
+  ])("$code on $status keeps the caller's wording", ({ status, code }) => {
+    const value = { code, message: "Raw refusal" };
+
+    expect(userErrorMessage({ status, value }, "Generic fallback")).toBe(
+      "Generic fallback",
     );
   });
 });

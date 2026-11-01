@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Lai turpinātu šo darbību, pierakstieties vēlreiz.",
     "resendCode": "Nosūtīt kodu vēlreiz uz <email>{emailAddress}</email>",
     "selectOrganization": "Izvēlieties organizāciju",
+    "sessionExpired": "Jūsu sesija ir beigusies",
+    "sessionExpiredDescription": "Pierakstieties jaunā cilnē. Ievadītais paliek šajā lapā.",
     "signIn": "Pieslēgties",
     "signInBeforeInvitation": "Lai pieņemtu uzaicinājumu organizācijā, vispirms jāpieslēdzas.",
     "signInWithPassword": "Pierakstīties ar paroli",

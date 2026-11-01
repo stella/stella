@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Selle toimingu jätkamiseks logige uuesti sisse.",
     "resendCode": "Saada kood uuesti aadressile <email>{emailAddress}</email>",
     "selectOrganization": "Valige organisatsioon",
+    "sessionExpired": "Teie seanss on aegunud",
+    "sessionExpiredDescription": "Logige sisse uuel vahekaardil. Sisestatud tekst jääb sellele lehele alles.",
     "signIn": "Logi sisse",
     "signInBeforeInvitation": "Enne organisatsiooni kutse vastuvõtmist peate sisse logima.",
     "signInWithPassword": "Logi sisse parooliga",

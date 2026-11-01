@@ -352,6 +352,28 @@ export const apiFieldIssueMessage = (
   return issue === undefined ? undefined : validationIssueMessage(issue);
 };
 
+/**
+ * Codes that only restate a 401 or 403. `permission_denied` is the API's
+ * refusal for both; the status tells them apart, so the status-keyed message
+ * is the right text. Any other code on those statuses refuses something else
+ * (a wrong password is a 401 too) and stays with the caller's own wording.
+ */
+const AUTH_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  "permission_denied",
+  "SESSION_EXPIRED",
+  "UNAUTHORIZED",
+]);
+
+type AuthRefusalCandidate = { code?: string | undefined; status: number };
+
+/** Whether this is a plain refusal of who is asking, whatever the action. */
+export const isAuthRefusal = ({
+  code,
+  status,
+}: AuthRefusalCandidate): boolean =>
+  (status === 401 || status === 403) &&
+  (code === undefined || AUTH_REFUSAL_CODES.has(code));
+
 /** The server has nothing to show for this file; retrying cannot help. */
 export const isPreviewUnavailableError = (error: unknown): boolean =>
   APIError.is(error) && error.code === PREVIEW_UNAVAILABLE_ERROR_CODE;
@@ -359,6 +381,7 @@ export const isPreviewUnavailableError = (error: unknown): boolean =>
 export const isDisplayableAPIError = (error: APIError): boolean =>
   isActionAdmissionCode(error.code) ||
   (typeof error.code === "string" && isKnownErrorCode(error.code)) ||
+  isAuthRefusal(error) ||
   (error.status === 402 &&
     typeof error.details?.["reason"] === "string" &&
     isUsageRejectionReason(error.details["reason"]));

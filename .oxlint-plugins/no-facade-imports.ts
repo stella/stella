@@ -65,6 +65,8 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/lib/errors/provider-diagnostic",
   "@/lib/errors/provider-setup-guidance",
   "@/lib/errors/query-result",
+  "@/lib/errors/session-expired",
+  "@/lib/errors/session-expired-install",
   "@/lib/errors/telemetry",
   "@/lib/errors/user-safe",
   "@/lib/errors/user-toast",

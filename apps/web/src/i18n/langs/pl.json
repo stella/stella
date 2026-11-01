@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Zaloguj się ponownie, aby kontynuować tę czynność.",
     "resendCode": "Wyślij kod ponownie na <email>{emailAddress}</email>",
     "selectOrganization": "Wybierz organizację",
+    "sessionExpired": "Twoja sesja wygasła",
+    "sessionExpiredDescription": "Zaloguj się w nowej karcie. Wpisana treść pozostanie na tej stronie.",
     "signIn": "Zaloguj się",
     "signInBeforeInvitation": "Musisz się zalogować, zanim będziesz mógł przyjąć zaproszenie do organizacji.",
     "signInWithPassword": "Zaloguj się hasłem",

@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Pro pokračování v této akci se znovu přihlaste.",
     "resendCode": "Poslat kód znovu na <email>{emailAddress}</email>",
     "selectOrganization": "Vyberte organizaci",
+    "sessionExpired": "Vaše sezení vypršelo",
+    "sessionExpiredDescription": "Přihlaste se na nové kartě. To, co jste napsali, na této stránce zůstane.",
     "signIn": "Přihlásit se",
     "signInBeforeInvitation": "Pro přijetí pozvánky do organizace se musíte nejprve přihlásit.",
     "signInWithPassword": "Přihlásit se heslem",
