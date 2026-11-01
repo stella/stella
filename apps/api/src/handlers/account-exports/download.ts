@@ -15,15 +15,31 @@ import {
 } from "@/api/lib/auth";
 import type { CallerOutcome, SessionCaller } from "@/api/lib/auth";
 import { hasAccountExportAuthority } from "@/api/lib/auth/account-export-policy";
-import { errorTag } from "@/api/lib/errors/error-tag";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { logger } from "@/api/lib/observability/logger";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { openS3ObjectStreamWithSignal } from "@/api/lib/s3";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { authenticateAccountExportRequest } from "@/api/mcp/auth";
 import { McpTokenVerificationError } from "@/api/mcp/errors";
+
+const ACCOUNT_EXPORT_DOWNLOAD_VERIFICATION_UNAVAILABLE = failureSink({
+  event: "account_export.download_verification_unavailable",
+  expected: [],
+});
+
+const ACCOUNT_EXPORT_DOWNLOAD_MEMBERSHIP_UNAVAILABLE = failureSink({
+  event: "account_export.download_membership_unavailable",
+  expected: [],
+});
+
+// Authentication answers before the route handler binds its request scope.
+const DOWNLOAD_AUTHENTICATION_SCOPE = {
+  type: "handler",
+  handlerId: "account_export.download_authentication",
+} as const;
 
 type DownloadAuthenticationDependencies = {
   authenticateOAuth?: typeof authenticateAccountExportRequest;
@@ -50,8 +66,10 @@ const authenticateAccountExportDownload = async (
   const authenticated = await authenticateOAuth(authorization.slice(7));
   if (Result.isError(authenticated)) {
     if (authenticated.error instanceof McpTokenVerificationError) {
-      logger.error("account_export.download_verification_unavailable", {
-        errorType: errorTag(authenticated.error),
+      observeFailure(authenticated.error, {
+        sink: ACCOUNT_EXPORT_DOWNLOAD_VERIFICATION_UNAVAILABLE,
+        scope: DOWNLOAD_AUTHENTICATION_SCOPE,
+        request: ctx.request,
       });
       return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
     }
@@ -82,10 +100,16 @@ const authenticateAccountExportDownload = async (
     async () => await resolveOAuthMembership({ userId, organizationId }),
   );
   if (Result.isError(membership)) {
+    observeFailure(membership.error, {
+      sink: ACCOUNT_EXPORT_DOWNLOAD_MEMBERSHIP_UNAVAILABLE,
+      scope: DOWNLOAD_AUTHENTICATION_SCOPE,
+      request: ctx.request,
+    });
     return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
   }
   if (
     membership.value === null ||
+    membership.value.userDeleted ||
     membership.value.memberId !== authenticated.value.memberId
   ) {
     return { ok: false, answer: status(403, AUTH_REJECTION_BODY[403]) };

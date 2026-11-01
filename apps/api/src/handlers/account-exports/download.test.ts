@@ -8,12 +8,14 @@ import { createDownloadPersonalDataExport } from "@/api/handlers/account-exports
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import { status } from "@/api/http/status";
+import * as captureModule from "@/api/lib/analytics/capture";
 import { AUTH_REJECTION_BODY } from "@/api/lib/auth";
 import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
 import { logger } from "@/api/lib/observability/logger";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { authenticateAccountExportRequest } from "@/api/mcp/auth";
+import { McpTokenVerificationError } from "@/api/mcp/errors";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const EXPORT_ID = "11111111-1111-4111-8111-111111111111";
@@ -33,6 +35,16 @@ const tokenSession = (userId: string, scopes: string[]) =>
     scopes,
     credential: { type: "oauth_client" as const, clientId: "cli" },
   });
+
+const causeChain = (error: unknown): unknown[] => {
+  const chain: unknown[] = [];
+  let current: unknown = error;
+  while (current instanceof Error && chain.length < 8) {
+    chain.push(current);
+    current = current.cause;
+  }
+  return chain;
+};
 
 const createDownloadRoute = (membership: { currentId: string | null }) =>
   createDownloadPersonalDataExport({
@@ -145,6 +157,7 @@ describe("account export download route", () => {
     const unauthenticated = await request();
     expect(unauthenticated.status).toBe(401);
   });
+
   test.each([null, "replacement-member"])(
     "requires the token's current membership: %s",
     async (currentId) => {
@@ -170,8 +183,12 @@ describe("account export download route", () => {
     },
   );
 
-  test("reports unavailable verification keys as a server failure", async () => {
+  test("observes unavailable verification keys as a typed server failure", async () => {
     const logged = spyOn(logger, "error").mockImplementation(() => undefined);
+    const captured = spyOn(
+      captureModule,
+      "captureObservedError",
+    ).mockImplementation(() => undefined);
     try {
       await using server = serveForTest(
         createHttpApp({
@@ -186,15 +203,74 @@ describe("account export download route", () => {
       );
       expect(response.status).toBe(500);
       expect(await response.json()).toEqual(AUTH_REJECTION_BODY[500]);
-      expect(logged).toHaveBeenCalledTimes(1);
       expect(logged).toHaveBeenCalledWith(
         "account_export.download_verification_unavailable",
-        {
-          errorType: "McpTokenVerificationError",
-        },
+        expect.objectContaining({
+          "error.type": "McpTokenVerificationError",
+          "failure.sink": "account_export.download_verification_unavailable",
+        }),
       );
+      const observed = captured.mock.calls.map(([error]) => error);
+      expect(observed).toHaveLength(1);
+      expect(observed.at(0)).toBeInstanceOf(McpTokenVerificationError);
     } finally {
       logged.mockRestore();
+      captured.mockRestore();
+    }
+  });
+
+  test("observes a failed membership read as a server failure", async () => {
+    const logged = spyOn(logger, "error").mockImplementation(() => undefined);
+    const captured = spyOn(
+      captureModule,
+      "captureObservedError",
+    ).mockImplementation(() => undefined);
+    const membershipReadFailure = new TypeError("membership read failed");
+    let recorded = 0;
+    try {
+      await using server = serveForTest(
+        createHttpApp({
+          routes: routes(
+            {
+              "/:exportId/download": {
+                GET: createDownloadPersonalDataExport({
+                  authenticateOAuth: async () =>
+                    tokenSession(OWNER_ID, [ACCOUNT_EXPORT_SCOPES.read]),
+                  resolveOAuthMembership: async () => {
+                    throw membershipReadFailure;
+                  },
+                  recordDownload: async () => {
+                    recorded += 1;
+                    return null;
+                  },
+                }),
+              },
+            },
+            { prefix: "/me/data-exports" },
+          ),
+          middleware: [errorBoundary],
+        }),
+      );
+      const response = await server.fetch(
+        new Request(`http://localhost/me/data-exports/${EXPORT_ID}/download`, {
+          headers: { authorization: "Bearer consented" },
+        }),
+      );
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual(AUTH_REJECTION_BODY[500]);
+      expect(recorded).toBe(0);
+      expect(logged).toHaveBeenCalledWith(
+        "account_export.download_membership_unavailable",
+        expect.objectContaining({
+          "failure.sink": "account_export.download_membership_unavailable",
+        }),
+      );
+      const observed = captured.mock.calls.map(([error]) => error);
+      expect(observed).toHaveLength(1);
+      expect(causeChain(observed.at(0))).toContain(membershipReadFailure);
+    } finally {
+      logged.mockRestore();
+      captured.mockRestore();
     }
   });
 });
