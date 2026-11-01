@@ -6,9 +6,11 @@ import { organization, user } from "@/api/db/auth-schema";
 import { contacts } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 import { lockContactCapacity } from "./contact-capacity";
@@ -78,10 +80,15 @@ if (!runPostgresTests || databaseUrl === undefined) {
           return result.value.result.results;
         };
         const stored = async () =>
-          await db
-            .select()
-            .from(contacts)
-            .where(eq(contacts.organizationId, organizationId));
+          await withOwnerOrganizationScope(
+            db,
+            organizationId,
+            async (scoped) =>
+              await scoped
+                .select()
+                .from(contacts)
+                .where(eq(contacts.organizationId, organizationId)),
+          );
         expect(
           (await run("Imported contact")).map(({ status }) => status),
         ).toEqual(["created"]);
@@ -132,16 +139,18 @@ if (!runPostgresTests || databaseUrl === undefined) {
           slug: organizationId,
           createdAt: new Date(),
         });
-        await setup.db.insert(contacts).values({
-          id: contactId,
-          organizationId,
-          type: "person",
-          displayName: "Jana Nováková",
-          externalSource: "address-book",
-          externalId: "person-1",
-          externalChangeKey: "initial",
-          importedAt: new Date("2026-10-14T10:00:00Z"),
-        });
+        await insertOwnerContacts(setup.db, [
+          {
+            id: contactId,
+            organizationId,
+            type: "person",
+            displayName: "Jana Nováková",
+            externalSource: "address-book",
+            externalId: "person-1",
+            externalChangeKey: "initial",
+            importedAt: new Date("2026-10-14T10:00:00Z"),
+          },
+        ]);
         const waitingPid =
           (
             await deleting.sql<
@@ -186,10 +195,15 @@ if (!runPostgresTests || databaseUrl === undefined) {
         const outcome = await deletion;
         expect(outcome.isOk()).toBe(true);
         expect(
-          await setup.db
-            .select({ id: contacts.id })
-            .from(contacts)
-            .where(eq(contacts.id, contactId)),
+          await withOwnerOrganizationScope(
+            setup.db,
+            organizationId,
+            async (scoped) =>
+              await scoped
+                .select({ id: contacts.id })
+                .from(contacts)
+                .where(eq(contacts.id, contactId)),
+          ),
         ).toEqual([]);
       } finally {
         releaseImport.resolve(undefined);

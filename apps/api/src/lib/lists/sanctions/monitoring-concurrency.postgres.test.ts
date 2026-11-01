@@ -26,6 +26,7 @@ import {
   sanctionsSources,
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { commitSanctionsMonitoringBatch } from "@/api/lib/lists/sanctions/monitoring-diff";
 import { drainSanctionsContactMarks } from "@/api/lib/lists/sanctions/monitoring-drain";
@@ -283,14 +284,19 @@ if (!databaseUrl || !runPostgresTests) {
         ).toEqual([]);
         const contact =
           (
-            await controlDb
-              .insert(contacts)
-              .values({
-                organizationId,
-                type: "person",
-                displayName: "Synthetic Concurrent Person",
-              })
-              .returning()
+            await withOwnerOrganizationScope(
+              controlDb,
+              organizationId,
+              async (scoped) =>
+                await scoped
+                  .insert(contacts)
+                  .values({
+                    organizationId,
+                    type: "person",
+                    displayName: "Synthetic Concurrent Person",
+                  })
+                  .returning(),
+            )
           ).at(0) ?? panic("Missing concurrent contact");
         const payload = {
           source: "eu",
@@ -390,10 +396,15 @@ if (!databaseUrl || !runPostgresTests) {
         const edited = Promise.withResolvers<undefined>();
         const releaseEdit = Promise.withResolvers<undefined>();
         const edit = firstDb.transaction(async (tx) => {
-          await tx
-            .update(contacts)
-            .set({ displayName: "Updated Concurrent Person" })
-            .where(eq(contacts.id, contact.id));
+          await withOwnerOrganizationScope(
+            tx,
+            organizationId,
+            async (scoped) =>
+              await scoped
+                .update(contacts)
+                .set({ displayName: "Updated Concurrent Person" })
+                .where(eq(contacts.id, contact.id)),
+          );
           edited.resolve(undefined);
           await releaseEdit.promise;
         });
@@ -414,10 +425,15 @@ if (!databaseUrl || !runPostgresTests) {
         const excluded = Promise.withResolvers<undefined>();
         const releaseExclusion = Promise.withResolvers<undefined>();
         const exclude = firstDb.transaction(async (tx) => {
-          await tx
-            .update(contacts)
-            .set({ sanctionsMonitoringMode: "excluded" })
-            .where(eq(contacts.id, contact.id));
+          await withOwnerOrganizationScope(
+            tx,
+            organizationId,
+            async (scoped) =>
+              await scoped
+                .update(contacts)
+                .set({ sanctionsMonitoringMode: "excluded" })
+                .where(eq(contacts.id, contact.id)),
+          );
           excluded.resolve(undefined);
           await releaseExclusion.promise;
         });
@@ -435,10 +451,15 @@ if (!databaseUrl || !runPostgresTests) {
         expect(await optedOut).toEqual([contact.id]);
         const currentContact =
           (
-            await controlDb
-              .select()
-              .from(contacts)
-              .where(eq(contacts.id, contact.id))
+            await withOwnerOrganizationScope(
+              controlDb,
+              organizationId,
+              async (scoped) =>
+                await scoped
+                  .select()
+                  .from(contacts)
+                  .where(eq(contacts.id, contact.id)),
+            )
           ).at(0) ?? panic("Missing excluded contact");
         expect(monitoringFingerprint(currentContact)).not.toBe(
           result.contactFingerprint,
@@ -543,26 +564,31 @@ if (!databaseUrl || !runPostgresTests) {
           slug: `monitoring-drain-lock-${suffix}`,
           createdAt: new Date(),
         });
-        const created = await controlDb
-          .insert(contacts)
-          .values([
-            {
-              organizationId,
-              type: "person",
-              displayName: "Edit first subject",
-            },
-            {
-              organizationId,
-              type: "person",
-              displayName: "Drain first edit subject",
-            },
-            {
-              organizationId,
-              type: "person",
-              displayName: "Opt-out subject",
-            },
-          ])
-          .returning();
+        const created = await withOwnerOrganizationScope(
+          controlDb,
+          organizationId,
+          async (scoped) =>
+            await scoped
+              .insert(contacts)
+              .values([
+                {
+                  organizationId,
+                  type: "person",
+                  displayName: "Edit first subject",
+                },
+                {
+                  organizationId,
+                  type: "person",
+                  displayName: "Drain first edit subject",
+                },
+                {
+                  organizationId,
+                  type: "person",
+                  displayName: "Opt-out subject",
+                },
+              ])
+              .returning(),
+        );
         editedContactId = created.at(0)?.id;
         drainFirstEditedContactId = created.at(1)?.id;
         optedOutContactId = created.at(2)?.id;
@@ -620,10 +646,15 @@ if (!databaseUrl || !runPostgresTests) {
               )
             ).at(0)?.pid ?? panic("Missing edit transaction backend");
           editPidReady.resolve(pid);
-          await tx
-            .update(contacts)
-            .set({ displayName: "Edit wins before drain" })
-            .where(eq(contacts.id, editedId));
+          await withOwnerOrganizationScope(
+            tx,
+            organizationId,
+            async (scoped) =>
+              await scoped
+                .update(contacts)
+                .set({ displayName: "Edit wins before drain" })
+                .where(eq(contacts.id, editedId)),
+          );
           editStarted.resolve(undefined);
           await releaseEdit.promise;
         });
@@ -651,10 +682,15 @@ if (!databaseUrl || !runPostgresTests) {
           .where(eq(sanctionsContactScreenings.contactId, editedId));
         const editedContact =
           (
-            await controlDb
-              .select()
-              .from(contacts)
-              .where(eq(contacts.id, editedId))
+            await withOwnerOrganizationScope(
+              controlDb,
+              organizationId,
+              async (scoped) =>
+                await scoped
+                  .select()
+                  .from(contacts)
+                  .where(eq(contacts.id, editedId)),
+            )
           ).at(0) ?? panic("Edited monitoring contact missing");
         expect(editedScreenings).toHaveLength(sanctionsSourceIds().length);
         expect(
@@ -697,10 +733,15 @@ if (!databaseUrl || !runPostgresTests) {
               )
             ).at(0)?.pid ?? panic("Missing reverse edit transaction backend");
           reverseEditPidReady.resolve(pid);
-          await tx
-            .update(contacts)
-            .set({ displayName: "Drain wins before edit" })
-            .where(eq(contacts.id, drainFirstEditId));
+          await withOwnerOrganizationScope(
+            tx,
+            organizationId,
+            async (scoped) =>
+              await scoped
+                .update(contacts)
+                .set({ displayName: "Drain wins before edit" })
+                .where(eq(contacts.id, drainFirstEditId)),
+          );
           reverseEditStarted.resolve(undefined);
           await releaseReverseEdit.promise;
         });
@@ -742,10 +783,15 @@ if (!databaseUrl || !runPostgresTests) {
           .where(eq(sanctionsContactScreenings.contactId, drainFirstEditId));
         const drainFirstEditedContact =
           (
-            await controlDb
-              .select()
-              .from(contacts)
-              .where(eq(contacts.id, drainFirstEditId))
+            await withOwnerOrganizationScope(
+              controlDb,
+              organizationId,
+              async (scoped) =>
+                await scoped
+                  .select()
+                  .from(contacts)
+                  .where(eq(contacts.id, drainFirstEditId)),
+            )
           ).at(0) ?? panic("Drain-first edited contact missing");
         expect(refreshedEditScreenings).toHaveLength(
           sanctionsSourceIds().length,
@@ -792,13 +838,18 @@ if (!databaseUrl || !runPostgresTests) {
             asTestRaw<Transaction>(tx),
             organizationId,
           );
-          await tx
-            .update(contacts)
-            .set({
-              displayName: "Drain first, opt-out second",
-              sanctionsMonitoringMode: "excluded",
-            })
-            .where(eq(contacts.id, optedOutId));
+          await withOwnerOrganizationScope(
+            tx,
+            organizationId,
+            async (scoped) =>
+              await scoped
+                .update(contacts)
+                .set({
+                  displayName: "Drain first, opt-out second",
+                  sanctionsMonitoringMode: "excluded",
+                })
+                .where(eq(contacts.id, optedOutId)),
+          );
         });
         running.push(optOut);
         const optOutPid = await optOutPidReady.promise;

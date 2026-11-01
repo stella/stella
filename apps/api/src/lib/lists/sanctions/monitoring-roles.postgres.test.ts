@@ -17,7 +17,8 @@ import {
   sanctionsSources,
   systemAuditRuns,
 } from "@/api/db/schema";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { queueSanctionsMonitoringBackfills } from "@/api/lib/lists/sanctions/monitoring-fanout";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
@@ -32,6 +33,7 @@ import type {
 import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -263,16 +265,13 @@ if (!databaseUrl || !runPostgresTests) {
             createdAt: new Date(),
           })),
         );
-        const seededContacts = await db
-          .insert(contacts)
-          .values(
-            organizations.map((id) => ({
-              organizationId: id,
-              type: "person" as const,
-              displayName: "Scheduler tenant subject",
-            })),
-          )
-          .returning();
+        const seededContacts = organizations.map((id) => ({
+          id: createSafeId<"contact">(),
+          organizationId: id,
+          type: "person" as const,
+          displayName: "Scheduler tenant subject",
+        }));
+        await insertOwnerContacts(db, seededContacts);
         targetId = seededContacts.find(
           ({ organizationId: id }) => id === organizationId,
         )?.id;
@@ -413,9 +412,7 @@ if (!databaseUrl || !runPostgresTests) {
             .where(
               eq(sanctionsOrganizationMarks.organizationId, organizationId),
             );
-          await db
-            .delete(contacts)
-            .where(inArray(contacts.id, [targetId, otherId]));
+          // The organization deletion below takes their contacts with them.
         }
         await db
           .delete(organization)
@@ -459,21 +456,21 @@ if (!databaseUrl || !runPostgresTests) {
             createdAt: base,
           })),
         );
-        const seeded = await db
-          .insert(contacts)
-          .values([
-            {
-              organizationId: failedOrganizationId,
-              type: "person",
-              displayName: "Retry failure subject",
-            },
-            {
-              organizationId: healthyOrganizationId,
-              type: "person",
-              displayName: "Retry healthy subject",
-            },
-          ])
-          .returning();
+        const seeded = [
+          {
+            id: createSafeId<"contact">(),
+            organizationId: failedOrganizationId,
+            type: "person" as const,
+            displayName: "Retry failure subject",
+          },
+          {
+            id: createSafeId<"contact">(),
+            organizationId: healthyOrganizationId,
+            type: "person" as const,
+            displayName: "Retry healthy subject",
+          },
+        ];
+        await insertOwnerContacts(db, seeded);
         failedContactId = seeded.find(
           ({ organizationId }) => organizationId === failedOrganizationId,
         )?.id;
@@ -571,10 +568,16 @@ if (!databaseUrl || !runPostgresTests) {
         await db.execute(
           sql`DROP FUNCTION public.reject_retry_fixture_audit()`,
         );
-        await db
-          .update(contacts)
-          .set({ displayName: "Retry failure changed subject" })
-          .where(eq(contacts.id, failedContactId));
+        const changedContactId = failedContactId;
+        await withOwnerOrganizationScope(
+          db,
+          failedOrganizationId,
+          async (tx) =>
+            await tx
+              .update(contacts)
+              .set({ displayName: "Retry failure changed subject" })
+              .where(eq(contacts.id, changedContactId)),
+        );
         const resetMark =
           (
             await db
@@ -657,9 +660,7 @@ if (!databaseUrl || !runPostgresTests) {
           await db
             .delete(auditLogs)
             .where(inArray(auditLogs.organizationId, organizations));
-          await db
-            .delete(contacts)
-            .where(inArray(contacts.id, [failedContactId, healthyContactId]));
+          // The organization deletion below takes their contacts with them.
         }
         await db
           .delete(organization)

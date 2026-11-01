@@ -6,12 +6,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
-import {
-  contacts,
-  properties,
-  workspaceMembers,
-  workspaces,
-} from "@/api/db/schema";
+import { properties, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
   createMembershipScopedDb,
   createScopedDb,
@@ -27,6 +22,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -82,12 +78,14 @@ const seed = async (db: GatedTestDb): Promise<Fixture> => {
       createdAt: new Date(),
     },
   ]);
-  await db.insert(contacts).values({
-    id: fixture.clientId,
-    organizationId: fixture.organizationId,
-    type: "person",
-    displayName: "Client",
-  });
+  await insertOwnerContacts(db, [
+    {
+      id: fixture.clientId,
+      organizationId: fixture.organizationId,
+      type: "person",
+      displayName: "Client",
+    },
+  ]);
   return fixture;
 };
 

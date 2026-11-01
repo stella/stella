@@ -13,7 +13,6 @@ import {
 } from "@/api/db/rls";
 import {
   aiMemories,
-  contacts,
   entities,
   legalListClaims,
   legalListVerificationRuns,
@@ -46,6 +45,7 @@ import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -575,12 +575,14 @@ describe.skipIf(!enabled)("account export personal data", () => {
           name: "Export matter fixture",
           reference: Bun.randomUUIDv7(),
         });
-        await db.insert(contacts).values({
-          organizationId: organizationA,
-          createdBy: userId,
-          type: "person",
-          displayName: "Organization contact fixture",
-        });
+        await insertOwnerContacts(db, [
+          {
+            organizationId: organizationA,
+            createdBy: userId,
+            type: "person",
+            displayName: "Organization contact fixture",
+          },
+        ]);
         const prepared = await Promise.all(
           organizations.map(async (organizationId, index) => {
             const query = queries.at(index);

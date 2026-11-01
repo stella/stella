@@ -13,7 +13,9 @@ import {
   sanctionsSources,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 import { runMigrations } from "./migration-runner";
@@ -79,7 +81,14 @@ describe.skipIf(!runPostgresTests)("migrated public sanctions reader", () => {
         await admin`INSERT INTO sanctions_edition_entries (edition_id, source_entry_id, content_hash) VALUES (${edition}, 'reader-entry', ${contentHash})`;
         for (const [index, organization] of organizations.entries()) {
           await admin`INSERT INTO organization (id, name, slug, created_at) VALUES (${organization}, 'Reader tenant', ${organization}, now())`;
-          await admin`INSERT INTO contacts (id, organization_id, type, display_name) VALUES (${contacts.at(index)}, ${organization}, 'person', 'Private reader contact')`;
+          await withOwnerOrganizationScope(
+            db,
+            brandPersistedOrganizationId(organization),
+            async (tx) =>
+              await tx.execute(
+                sql`INSERT INTO contacts (id, organization_id, type, display_name) VALUES (${contacts.at(index)}, ${organization}, 'person', 'Private reader contact')`,
+              ),
+          );
           await admin`INSERT INTO workspaces (id, organization_id, name, reference) VALUES (${workspaces.at(index)}, ${organization}, 'Private reader matter', ${organization})`;
           await admin`INSERT INTO entities (id, workspace_id, kind, name) VALUES (${Bun.randomUUIDv7()}, ${workspaces.at(index)}, 'file', 'Private reader file')`;
         }

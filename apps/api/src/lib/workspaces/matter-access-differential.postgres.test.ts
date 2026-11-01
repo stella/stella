@@ -8,7 +8,7 @@ import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
+import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -28,6 +28,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 /**
  * Differential test: every app-side matter access decision agrees with the
@@ -95,12 +96,14 @@ const insertOrganization = async (
     now: new Date(),
   });
   const clientId = createSafeId<"contact">();
-  await tx.insert(contacts).values({
-    id: clientId,
-    organizationId,
-    type: "person",
-    displayName: "Matter access client",
-  });
+  await insertOwnerContacts(tx, [
+    {
+      id: clientId,
+      organizationId,
+      type: "person",
+      displayName: "Matter access client",
+    },
+  ]);
   return clientId;
 };
 

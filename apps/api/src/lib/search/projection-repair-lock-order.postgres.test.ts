@@ -20,6 +20,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
   upsertContactSearchDocument,
@@ -30,6 +31,7 @@ import { persistNativeExtractionProjection } from "@/api/lib/search/process-extr
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -114,13 +116,15 @@ if (!databaseUrl || !runPostgresTests) {
             .update(entities)
             .set({ currentVersionId: versionId })
             .where(eq(entities.id, entityId));
-          await setup.db.insert(contacts).values({
-            id: contactId,
-            organizationId,
-            type: "person",
-            displayName: "Projection contact",
-            firstName: "Projection",
-          });
+          await insertOwnerContacts(setup.db, [
+            {
+              id: contactId,
+              organizationId,
+              type: "person",
+              displayName: "Projection contact",
+              firstName: "Projection",
+            },
+          ]);
           await setup.db.insert(properties).values({
             id: propertyId,
             workspaceId,
@@ -173,7 +177,12 @@ if (!databaseUrl || !runPostgresTests) {
                 await upsertSearchDocument(entityId, { database });
                 return undefined;
               case "contact":
-                await upsertContactSearchDocument(contactId, database);
+                await withOwnerOrganizationScope(
+                  database,
+                  organizationId,
+                  async (tx) =>
+                    await upsertContactSearchDocument(contactId, tx),
+                );
                 return undefined;
               case "workspace":
                 if (parent === "workspace") {
@@ -202,10 +211,15 @@ if (!databaseUrl || !runPostgresTests) {
             .update(entities)
             .set({ name: "Updated projection" })
             .where(eq(entities.id, entityId));
-          await setup.db
-            .update(contacts)
-            .set({ displayName: "Updated projection" })
-            .where(eq(contacts.id, contactId));
+          await withOwnerOrganizationScope(
+            setup.db,
+            organizationId,
+            async (tx) =>
+              await tx
+                .update(contacts)
+                .set({ displayName: "Updated projection" })
+                .where(eq(contacts.id, contactId)),
+          );
           await setup.db
             .update(workspaces)
             .set({ name: "Updated projection" })

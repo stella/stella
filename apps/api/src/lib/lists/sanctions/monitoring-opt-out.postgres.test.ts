@@ -26,6 +26,7 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -65,15 +66,20 @@ if (!runPostgresTests || databaseUrl === undefined) {
       try {
         const contact =
           (
-            await admin
-              .insert(contacts)
-              .values({
-                organizationId,
-                type: "person",
-                displayName: "Synthetic Person",
-                sanctionsMonitoringMode: "excluded",
-              })
-              .returning()
+            await withOwnerOrganizationScope(
+              admin,
+              organizationId,
+              async (tx) =>
+                await tx
+                  .insert(contacts)
+                  .values({
+                    organizationId,
+                    type: "person",
+                    displayName: "Synthetic Person",
+                    sanctionsMonitoringMode: "excluded",
+                  })
+                  .returning(),
+            )
           ).at(0) ?? panic("Contact fixture missing");
         await admin.insert(organizationSettings).values({
           id: createSafeId<"organizationSettings">(),
@@ -114,10 +120,15 @@ if (!runPostgresTests || databaseUrl === undefined) {
             await enableSanctionsMonitoring(tx, options);
           });
         const census = async () => ({
-          contacts: await admin
-            .select()
-            .from(contacts)
-            .where(eq(contacts.organizationId, organizationId)),
+          contacts: await withOwnerOrganizationScope(
+            admin,
+            organizationId,
+            async (tx) =>
+              await tx
+                .select()
+                .from(contacts)
+                .where(eq(contacts.organizationId, organizationId)),
+          ),
           settings: await admin
             .select()
             .from(organizationSettings)
@@ -444,14 +455,19 @@ if (!runPostgresTests || databaseUrl === undefined) {
           });
           const contact =
             (
-              await admin
-                .insert(contacts)
-                .values({
-                  organizationId,
-                  type: "person",
-                  displayName: "Synthetic Person",
-                })
-                .returning()
+              await withOwnerOrganizationScope(
+                admin,
+                organizationId,
+                async (tx) =>
+                  await tx
+                    .insert(contacts)
+                    .values({
+                      organizationId,
+                      type: "person",
+                      displayName: "Synthetic Person",
+                    })
+                    .returning(),
+              )
             ).at(0) ?? panic("Contact missing");
           const fingerprint = monitoringFingerprint(contact);
           const match = {
@@ -728,10 +744,15 @@ if (!runPostgresTests || databaseUrl === undefined) {
           if (operation === "contact-exclude") {
             expect(
               (
-                await admin
-                  .select()
-                  .from(contacts)
-                  .where(eq(contacts.id, contact.id))
+                await withOwnerOrganizationScope(
+                  admin,
+                  organizationId,
+                  async (tx) =>
+                    await tx
+                      .select()
+                      .from(contacts)
+                      .where(eq(contacts.id, contact.id)),
+                )
               ).at(0)?.sanctionsMonitoringMode,
             ).toBe("excluded");
           } else {
