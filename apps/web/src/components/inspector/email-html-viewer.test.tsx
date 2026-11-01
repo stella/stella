@@ -333,6 +333,7 @@ describe("email viewer", () => {
 
     expect(html).toContain('role="alert"');
     expect(html).toContain("Something went wrong");
-    expect(html).toContain(">Try again</button>");
+    // The label may sit in the button's cut-to-fit span.
+    expect(html).toMatch(/>Try again<\/(?:span><\/)?button>/u);
   });
 });
