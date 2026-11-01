@@ -39,6 +39,7 @@ const startBodyServer = async ({
       response.writeHead(first ? 302 : 307, {
         location: first ? "/redirect-two" : "/redirect-final",
         "x-db-queries": first ? "3" : "5",
+        "X-Db-Transactions": first ? "1" : "2",
       });
       response.end();
       return;
@@ -46,6 +47,7 @@ const startBodyServer = async ({
     if (request.url === "/redirect-final") {
       response.writeHead(200, {
         "x-db-queries": "7",
+        "x-db-transactions": "3",
         "content-type": "text/plain",
       });
       response.end("done");
@@ -319,6 +321,12 @@ test("redirect hops retain individual request counts and database query headers"
       "GET /redirect-final": 7,
     });
     expect(result.missingDbQueryCounts).toEqual({});
+    expect(result.transactions).toEqual({
+      "GET /redirect-one": 1,
+      "GET /redirect-two": 2,
+      "GET /redirect-final": 3,
+    });
+    expect(result.missingTransactionCounts).toEqual({});
     expect(result.responseSizeFailures).toEqual({});
   } finally {
     await detach();

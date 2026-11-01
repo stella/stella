@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The shared route-smoke fixture in @stll/scripts validates prestart grant and scale tenant identities with Valibot before API seeding and browser use; the package directly imports the existing catalog dependency."
+}

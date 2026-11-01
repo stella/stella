@@ -1411,6 +1411,7 @@
         "better-result": "catalog:",
         "oxc-parser": "catalog:",
         "oxc-transform-react": "catalog:",
+        "valibot": "catalog:",
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",

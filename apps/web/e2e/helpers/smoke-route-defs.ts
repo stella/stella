@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { TestWorkspace } from "./workspace";
 
 const NONEXISTENT_VERIFICATION_CODE = "abcdmnp239";
+const LISTS_ROUTE_TEMPLATE = "/workspaces/$workspaceId/lists";
 
 export type RouteExpectation =
   | { kind: "rendersInPlace" }
@@ -109,10 +110,8 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: (world) => `/workspaces/${world.workspace.id}/invoices`,
   },
   {
-    // Lists is shown only to callers with list access; the smoke caller has
-    // none, so the route leaves before its loader. Granted rendering is covered
-    // by the route gate tests.
-    template: "/workspaces/$workspaceId/lists",
+    // The baseline caller has no list grant; scale callers are enrolled below.
+    template: LISTS_ROUTE_TEMPLATE,
     path: (world) => `/workspaces/${world.workspace.id}/lists`,
     expectation: { kind: "redirectsTo", to: "/workspaces" },
   },
@@ -166,6 +165,15 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/time/approvals"),
   staticRoute("/time/report"),
 ];
+
+/** The validated scale fixture grants lists to both measured organizations. */
+export const scaleSmokeRouteDef = (def: SmokeRouteDef) =>
+  def.template === LISTS_ROUTE_TEMPLATE
+    ? ({
+        ...def,
+        expectation: { kind: "rendersInPlace" },
+      } satisfies SmokeRouteDef)
+    : def;
 
 // These routes need richer domain setup than cheap route smoke should own.
 // Keeping them explicit means a newly added authenticated route fails the
