@@ -953,6 +953,7 @@ export const assembleSkCourtsDecision = ({
           decisionNature: decodeSkCourtTextList(item.povaha),
           area: decodeSkCourtTextList(detail?.oblast),
           subArea: decodeSkCourtTextList(detail?.podOblast),
+          // parser-output-unchanged: a missing detail still yields undefined; the null check is now written out.
           referencedLegislation:
             detail === null ||
             detail.odkazovanePredpisy === null ||
