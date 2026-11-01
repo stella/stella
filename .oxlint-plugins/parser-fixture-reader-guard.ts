@@ -1,7 +1,9 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import path from "node:path";
 
 import { PARSER_FIXTURE_OWNERS } from "../apps/api/src/tests/helpers/parser-fixture-owners.ts";
 import {
+  filenameForContext,
   getImportedName,
   getImportLocalName,
   getPropertyName,
@@ -13,6 +15,25 @@ import {
 } from "./utils.ts";
 
 const PARSERS = new Set<string>(Object.values(PARSER_FIXTURE_OWNERS).flat());
+
+/** The modules that own case-law parsers: ingestion parsers and adapters, legal-search parsers. */
+/** How a report names a parser read through a computed, non-literal key. */
+const COMPUTED_KEY = "a computed parser key";
+
+const PARSER_MODULE_PATH =
+  /(?:^|\/)(?:handlers\/case-law\/ingestion\/(?:parsers|adapters)|lib\/legal-search\/parsers)(?:\/[^/]+)+$/u;
+
+/**
+ * Whether an import names a parser-owning module. A relative source resolves
+ * against the importing file, so a stub beside a test that exports a parser's
+ * name is not mistaken for the parser.
+ */
+const importsParserModule = (source: string, filename: string): boolean =>
+  PARSER_MODULE_PATH.test(
+    source.startsWith(".")
+      ? path.posix.join(path.posix.dirname(filename), source)
+      : source,
+  );
 
 export default eslintCompatPlugin({
   meta: { name: "parser-fixture-reader-guard" },
@@ -47,11 +68,18 @@ export default eslintCompatPlugin({
               ) {
                 continue;
               }
+              const fromParserModule =
+                isStringLiteral(statement.source) &&
+                importsParserModule(
+                  statement.source.value,
+                  filenameForContext(context),
+                );
               for (const specifier of statement.specifiers) {
                 if (!isAstNode(specifier)) {
                   continue;
                 }
                 if (
+                  fromParserModule &&
                   specifier.type === "ImportNamespaceSpecifier" &&
                   isIdentifier(specifier.local)
                 ) {
@@ -70,6 +98,7 @@ export default eslintCompatPlugin({
                   guards.add(local);
                 }
                 if (
+                  fromParserModule &&
                   imported !== null &&
                   local !== null &&
                   PARSERS.has(imported)
@@ -86,8 +115,18 @@ export default eslintCompatPlugin({
             ) {
               return;
             }
-            const name = getPropertyName(node.property);
-            if (name === null || !PARSERS.has(name)) {
+            // A computed key is read only as a string literal: an identifier
+            // key names a value, not the property, so it could hide a parser.
+            const name =
+              node.computed === true
+                ? isStringLiteral(node.property)
+                  ? node.property.value
+                  : COMPUTED_KEY
+                : getPropertyName(node.property);
+            if (
+              name === null ||
+              (name !== COMPUTED_KEY && !PARSERS.has(name))
+            ) {
               return;
             }
             const parent = node.parent;
@@ -110,7 +149,10 @@ export default eslintCompatPlugin({
             if (
               !isIdentifier(node) ||
               !bindings.has(node.name) ||
-              !isIdentifierReference(node)
+              !isIdentifierReference(node) ||
+              resolveVariable(context, node)?.defs.some(
+                (definition) => definition.type === "ImportBinding",
+              ) !== true
             ) {
               return;
             }
