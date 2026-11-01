@@ -1,5 +1,38 @@
 # @stll/chat
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [[`a2ff7a7`](https://github.com/stella/stella/commit/a2ff7a75f1f1f0d1cc9e64517449fe2462a2e636)]:
+  - @stll/ui@0.61.0
+
+## 0.3.0
+
+### Minor Changes
+
+- [#7634](https://github.com/stella/stella/pull/7634) [`2dd49e7`](https://github.com/stella/stella/commit/2dd49e7fcb9510d0d4e67c67dcd6a8f17dac71e7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/chat/html-to-markdown`, the conversion that turns sanitized chat HTML into the Markdown a sent message is stored as.
+
+### Patch Changes
+
+- Updated dependencies [[`a8532a0`](https://github.com/stella/stella/commit/a8532a054628dc979e3bc7e48d807cb44e2d66b2), [`496eff7`](https://github.com/stella/stella/commit/496eff74a703471be2b2075d24c2e78159e2bc57), [`27375ef`](https://github.com/stella/stella/commit/27375ef28c854e8341c537d18e910ca68b17e883), [`ac06603`](https://github.com/stella/stella/commit/ac06603f5b187b45bc1ca741cf9d2496959eab5a), [`92038d5`](https://github.com/stella/stella/commit/92038d59d484f5f59e36fa35e297cc19bf3e6e2c), [`8f35c0f`](https://github.com/stella/stella/commit/8f35c0f990c12833a18adf4cdb86a69b3681acdc), [`8f35c0f`](https://github.com/stella/stella/commit/8f35c0f990c12833a18adf4cdb86a69b3681acdc)]:
+  - @stll/ui@0.60.0
+  - @stll/ai-catalog@0.9.0
+
+## 0.2.16
+
+### Patch Changes
+
+- Updated dependencies [[`9921a8c`](https://github.com/stella/stella/commit/9921a8c5bd913959aedeb011652319b3da45e4aa), [`92f36ca`](https://github.com/stella/stella/commit/92f36ca0d250a034df4624bab82b173618020099)]:
+  - @stll/ui@0.59.0
+
+## 0.2.15
+
+### Patch Changes
+
+- Updated dependencies [[`ed2a1a6`](https://github.com/stella/stella/commit/ed2a1a6c7d277f9c87034b3dd35b67042da9df05), [`d75e2c0`](https://github.com/stella/stella/commit/d75e2c0cca2ee7a0e9411a2a8754a046110cdad7), [`e2e9d3d`](https://github.com/stella/stella/commit/e2e9d3d9718707b190c09db77c63f1c9ee9136a8)]:
+  - @stll/ui@0.58.0
+
 ## 0.2.14
 
 ### Patch Changes

@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "PL_SN",
   "key": "pl-sn",
-  "parserVersion": 13,
+  "parserVersion": 14,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

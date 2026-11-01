@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "PL_UOKIK",
   "key": "pl-uokik",
-  "parserVersion": 15,
+  "parserVersion": 16,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

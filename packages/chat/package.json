@@ -1,6 +1,6 @@
 {
   "name": "@stll/chat",
-  "version": "0.2.14",
+  "version": "0.3.1",
   "description": "Typed React chat composer, message stream, model selector, and transport runtime primitives.",
   "keywords": [
     "ai",
@@ -32,6 +32,7 @@
     "./runtime": "./src/runtime.ts",
     "./stream": "./src/stream.tsx",
     "./durable-transport": "./src/durable-transport.ts",
+    "./html-to-markdown": "./src/html-to-markdown.ts",
     "./resume-contract": "./src/resume-contract.ts",
     "./link": "./src/link.tsx",
     "./link-detection": "./src/link-detection.ts",
@@ -59,6 +60,8 @@
     "@tanstack/ai-client": "catalog:",
     "@types/hast": "^3.0.5",
     "better-result": "catalog:",
+    "cheerio": "^1.2.0",
+    "domhandler": "^6.0.1",
     "linkify-it": "6.1.0",
     "tldts": "7.4.19",
     "valibot": "catalog:",

@@ -10,7 +10,10 @@
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import {
+  parsePlDecisionContent,
+  PL_DECISION_MARKUP,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
   assemblePlSnParagraphs,
   extractPlSnLines,
@@ -55,6 +58,7 @@ const parseContent = (
     statutes: input.statutes,
     documentId: input.documentId,
     sourceSystem: PL_KIS_SOURCE_SYSTEM,
+    markup: PL_DECISION_MARKUP.PRINTED_LINES,
   });
 
 /** The document's own HTML field. */

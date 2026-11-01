@@ -147,6 +147,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   workspace_member: "team",
   workspace_contact: "team",
   case_law_matter_link: "court",
+  legislation_matter_link: "court",
   case_law_decision_annotation: "court",
   statute_annotation: "court",
   // Organization-scoped, so never part of one matter's activity.

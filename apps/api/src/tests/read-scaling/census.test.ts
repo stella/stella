@@ -3,13 +3,14 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import { isRecord } from "@/api/lib/type-guards";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { apiApp } from "@/api/server";
 
 import {
   ledgerGitEnv,
-  ledgerMergeBase,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
 import { accountExportDownloadScalingScenario } from "./account-exports";
@@ -18,8 +19,13 @@ import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
-import { documentAnnotationScalingScenarios } from "./document-annotations";
+import { dictationScalingScenario } from "./dictation";
+import {
+  documentAnnotationScalingScenarios,
+  markedPdfDownloadScalingScenario,
+} from "./document-annotations";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
+import { legislationMatterLinkScalingScenarios } from "./legislation-matter-links";
 import { exactIconScalingScenario } from "./link-icons";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
@@ -27,6 +33,8 @@ import { mcpScalingScenarios } from "./mcp-scenarios";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import { mobileUpdateScalingScenario } from "./mobile-updates";
 import { myOpenTasksScalingScenario } from "./my-open-tasks";
+import { organizationCreateScalingScenario } from "./organization-create";
+import { organizationSlugScalingScenario } from "./organization-slug";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -44,6 +52,7 @@ import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
+  organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
@@ -56,9 +65,13 @@ const measuredApiScenarios = [
   suggestionRangeScalingScenario,
   mobileClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
+  markedPdfDownloadScalingScenario,
   myOpenTasksScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  ...legislationMatterLinkScalingScenarios,
+  dictationScalingScenario,
+  organizationSlugScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>
@@ -67,7 +80,7 @@ const measuredApiReads = apiApp.routes
   .map(({ method, path: routePath }) => `${method} ${routePath}`);
 
 test("previously measured scenarios retain their handler or tool identity", async () => {
-  const base = ledgerMergeBase({ repoRoot, baseRef: "origin/main" });
+  const base = treeBaseRevision({ repoRoot });
   const readBaseSource = (file: string) => {
     const result = Bun.spawnSync(["git", "show", `${base}:${file}`], {
       cwd: repoRoot,
@@ -235,10 +248,7 @@ for (const { kind, surface, ledger, measured } of [
           label: `${kind}-scaling`,
           remediation:
             "add an exercised scaling case instead of a ledger entry",
-          args: [
-            "--base",
-            ledgerMergeBase({ repoRoot, baseRef: "origin/main" }),
-          ],
+          args: ["--base", treeBaseRevision({ repoRoot })],
         }),
       ).toBe(0);
     });

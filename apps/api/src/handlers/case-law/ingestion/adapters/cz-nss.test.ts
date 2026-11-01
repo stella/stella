@@ -26,7 +26,6 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildCzNssDecision,
   CZ_NSS_CONTINUATION_PAGE_ROWS,
@@ -60,6 +59,7 @@ import {
   isStoredReadUnavailable,
   READ_OUTCOME_METADATA_KEY,
 } from "@/api/lib/errors/read-outcome";
+import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
 import {
   decodeSourceRawEnvelope,
   listingIdentityKey,
@@ -423,10 +423,7 @@ const throughJsonb = (value: unknown): unknown =>
 const SLICE = "2026-06-10";
 
 test("allows the NSS listing endpoints to use their source-specific budget", async () => {
-  installStub({ search: [htmlResponse("", 503)] });
-  const invalidation = await czNssAdapter.fetchPage("2026-08-20:0", {});
-  expect(invalidation.isErr()).toBe(true);
-
+  const originalFetch = globalThis.fetch;
   const originalTimeout = AbortSignal.timeout;
   const pageDeadlines: number[] = [];
   const timeoutSpy = spyOn(AbortSignal, "timeout").mockImplementation(
@@ -436,6 +433,11 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
     },
   );
   try {
+    installStub({ search: [htmlResponse("", 503)] });
+    const invalidation = await czNssAdapter.fetchPage("2026-08-20:0", {});
+    expect(invalidation.isErr()).toBe(true);
+    pageDeadlines.length = 0;
+
     const failedStub = installStub({ search: [htmlResponse("", 503)] });
     const failed = await czNssAdapter.fetchPage("2026-08-20:0", {});
     expect(failed.isErr()).toBe(true);
@@ -462,6 +464,7 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
     expect(pageDeadlines).toEqual([90_000, ...pageStub.timeouts]);
   } finally {
     timeoutSpy.mockRestore();
+    globalThis.fetch = originalFetch;
   }
 });
 

@@ -1,11 +1,10 @@
 /**
  * Slovakia: Zbierka zákonov, Slov-Lex anchors.
  *
- * Two collections, not one: `Zb.` is the federal Czechoslovak collection an
- * act keeps forever (40/1964 Zb. is still the civil code), `Z. z.` is the
- * Slovak one from 1993. Reading either as the other silently merges two
- * different acts that share a number and a year, so the collection is part of
- * the identity, never a display suffix.
+ * The publication year determines the collection: through 1992, `Zb.`
+ * (including Slovak National Council acts); from 1993, `Z. z.`. Slov-Lex
+ * files both under `/zz/`, so year and number identify the work. An explicit
+ * collection contradicting its year must not resolve to that work.
  *
  * `OZ` means 40/1964 Zb. here and 89/2012 Sb. in Prague. That collision is the
  * reason the alias table is profile data and not a shared dictionary.
