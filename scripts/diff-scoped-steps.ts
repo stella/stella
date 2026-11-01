@@ -47,11 +47,7 @@ export const readsBaseRevision = (step: Record<string, unknown>): boolean => {
 
 export type DiffScopeGap =
   /** Inspects changed files; an unchanged dependent can break unseen. */
-  | "dependents"
-  /** Outside a pull request or merge group the diff is empty. */
-  | "empty-off-change"
-  /** The step's condition can never hold for the workflow's triggers. */
-  | "never-runs";
+  "dependents";
 
 export type DiffScope =
   /** The rule is about the change itself (a VERSION bump, new migrations). */
@@ -84,7 +80,7 @@ const DATED_WAIVER =
 const PARSER_VERSIONS =
   "Builds each changed parser's import closure before requiring a version bump.";
 const CODE_QUALITY =
-  "Workspaces run Turbo's affected scope with reverse dependants; on main the comparison is empty, so only a dispatched run checks everything.";
+  "Turbo's affected scope with reverse dependants; on main it compares with the last commit known green, or checks every file when none is known.";
 const RESULT_CONSUMPTION =
   "Checks changed files and every module importing them; outside a pull request or merge group it scans every file.";
 const CHECK_POOL =
@@ -159,12 +155,32 @@ export const DIFF_SCOPED_STEPS = {
   "main-pr-depth.yml:validate#Verify main ancestry": operational(
     "Proves the requested commit is on main.",
   ),
+  "merge-group-hold.yml:merge-group-hold#Check out the trusted target-branch resolver":
+    operational("Checks out the target branch's base resolver; no verdict."),
+  "merge-group-hold.yml:merge-group-hold#Resolve comparison base": operational(
+    "Resolves the merge group's comparison base for the hold check.",
+  ),
+  "merge-group-hold.yml:merge-group-hold#Check out trusted base scripts":
+    operational(
+      "Checks out the hold check from the resolved base; no verdict.",
+    ),
+  "merge-group-hold.yml:merge-group-hold#Refuse held pull requests":
+    diffComplete(
+      "Checks exactly the pull requests between the group's base and head.",
+    ),
+  "merge-group-hold.yml:dequeue-held-pull-request#Check out trusted base scripts":
+    operational(
+      "Checks out the hold check from the pull request's base; no verdict.",
+    ),
+  "merge-group-hold.yml:dequeue-held-pull-request#Restore active hold labels and remove held pull requests from the queue":
+    operational(
+      "Restores hold labels and dequeues the pull request the event names; no verdict on content.",
+    ),
   "main-heavy.yml:validate#Verify main ancestry": operational(
     "Proves the requested commit is on main.",
   ),
-  "visual-preview.yml:preview#Select preview changes": gap(
-    "dependents",
-    "Its path list omits the Playwright runner action and the CI service image inventory the tests use.",
+  "visual-preview.yml:preview#Select preview changes": expands(
+    "Applies the workflow's pull request path filter, which a test binds to every script and action the job runs.",
   ),
   "publish-npm.yml:pack#Verify manual package recovery source": diffComplete(
     "Checks that the recovered package source is an ancestor of main.",
@@ -310,20 +326,14 @@ export const DIFF_SCOPED_STEPS = {
     "dependents",
     "Its path list omits workspace packages the extension imports.",
   ),
-  "ci.yml:code-quality-api#Code quality": gap("empty-off-change", CODE_QUALITY),
+  "ci.yml:code-quality-api#Code quality": expands(CODE_QUALITY),
   "ci.yml:code-quality-api#Result consumption": expands(RESULT_CONSUMPTION),
   "ci.yml:code-quality-web-rest#Run independent code-quality checks":
     operational(CHECK_POOL),
-  "ci.yml:code-quality-web-rest#Code quality (web)": gap(
-    "empty-off-change",
-    CODE_QUALITY,
-  ),
+  "ci.yml:code-quality-web-rest#Code quality (web)": expands(CODE_QUALITY),
   "ci.yml:code-quality-web-rest#Result consumption (web)":
     expands(RESULT_CONSUMPTION),
-  "ci.yml:code-quality-web-rest#Code quality (rest)": gap(
-    "empty-off-change",
-    CODE_QUALITY,
-  ),
+  "ci.yml:code-quality-web-rest#Code quality (rest)": expands(CODE_QUALITY),
   "ci.yml:code-quality-web-rest#Result consumption (rest)":
     expands(RESULT_CONSUMPTION),
   "ci.yml:migration-upgrade-rehearsal#Rehearse the upgrade from the promoted release at scale":
@@ -362,13 +372,5 @@ export const DIFF_SCOPED_STEPS = {
   ),
   "ci.yml:ci-result#Evaluate CI outcome": operational(
     "Aggregates job results for the comparison base.",
-  ),
-  "dependency-audit.yml:audit#Detect lockfile changes": gap(
-    "never-runs",
-    "Conditioned on pull_request in a workflow triggered only by push, schedule and dispatch.",
-  ),
-  "dependency-audit.yml:audit#Audit changed dependency resolutions": gap(
-    "never-runs",
-    "Conditioned on pull_request in a workflow triggered only by push, schedule and dispatch.",
   ),
 } as const satisfies Record<string, DiffScope>;

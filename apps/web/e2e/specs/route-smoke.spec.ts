@@ -10,6 +10,9 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
+
 import {
   partitionRoundRobin,
   resolveE2eExecutionProfile,
@@ -276,11 +279,18 @@ const declareRouteSmokeGroup = ({
             `unenrolled-route-smoke-${token}@stella.dev`,
           );
           const organizationResponse = await negativeRequest.post(
-            `${E2E_API_ORIGIN}/api/auth/organization/create`,
+            `${E2E_API_ORIGIN}/v1/organizations`,
             {
               data: {
-                name: `Unenrolled route smoke ${token}`,
+                name: `Unenrolled route smoke ${token}`.slice(
+                  0,
+                  ORGANIZATION_NAME_MAX_LENGTH,
+                ),
                 slug: `unenrolled-smoke-${token}`,
+              },
+              headers: {
+                "Idempotency-Key": `unenrolled-smoke-${token}`,
+                [CAPABILITY_REQUEST_HEADER]: "organizations.create",
               },
             },
           );
@@ -292,12 +302,12 @@ const declareRouteSmokeGroup = ({
           if (
             typeof organization !== "object" ||
             organization === null ||
-            !("id" in organization) ||
-            typeof organization.id !== "string"
+            !("organizationId" in organization) ||
+            typeof organization.organizationId !== "string"
           ) {
             throw new Error("Organization creation returned no id");
           }
-          negativeOrganizationId = organization.id;
+          negativeOrganizationId = organization.organizationId;
           const activation = await negativeRequest.post(
             `${E2E_API_ORIGIN}/api/auth/organization/set-active`,
             { data: { organizationId: negativeOrganizationId } },

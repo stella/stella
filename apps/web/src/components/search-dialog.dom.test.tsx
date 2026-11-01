@@ -130,6 +130,7 @@ const citationResponse = {
 
 const searchRequestBodies: unknown[] = [];
 let searchHits: readonly GlobalSearchHit[] = [hit];
+let searchResponseGate: Promise<void> | null = null;
 let citationHits = citationResponse.hits;
 const supplementalResource = resourceRef({
   type: RESOURCE_TYPE.CASE_LAW_DECISION,
@@ -161,9 +162,17 @@ globalThis.fetch = Object.assign(
     if (url.pathname.endsWith("/case/decisions/search")) {
       return Response.json({ ...citationResponse, hits: citationHits });
     }
+    if (url.pathname.endsWith("/law/statutes")) {
+      return Response.json({
+        items: [],
+        limit: 25,
+        nextCursor: null,
+      } satisfies PublicLawData<typeof api.law.statutes.get>);
+    }
     if (url.pathname.endsWith("/search")) {
       const body = await request.json();
       searchRequestBodies.push(body);
+      await searchResponseGate;
       return Response.json({
         hits: body.types?.includes("case-law") ? [supplementalHit] : searchHits,
         nextCursor: null,
@@ -216,6 +225,7 @@ afterEach(() => {
   clients.length = 0;
   searchRequestBodies.length = 0;
   searchHits = [hit];
+  searchResponseGate = null;
   citationHits = citationResponse.hits;
   assignUserStorage(undefined);
 });
@@ -294,11 +304,15 @@ const typeQuery = async (
     throw new TypeError("Search dialog combobox must be an input");
   }
   jest.useFakeTimers();
-  await testing.act(async () => {
+  const typed = testing.act(async () => {
     testing.fireEvent.input(input, { target: { value } });
     jest.advanceTimersByTime(301);
   });
+  // React settles an async act on a scheduled task, which a fake clock would
+  // hold forever. Return to real timers before awaiting it, while the render
+  // that starts the search requests is still queued.
   restoreRealTimers();
+  await typed;
   await testing.waitFor(() =>
     expect(testing.screen.getAllByText(expectedTitle).length).toBeGreaterThan(
       0,
@@ -332,6 +346,14 @@ test("a resolved citation is the first keyboard result above matter hits", async
     return citationRouter;
   });
   const input = await typeQuery("22 As 40/2025 - 49", "22 As 40/2025 - 49");
+  expect(searchRequestBodies).toContainEqual(
+    expect.objectContaining({ query: '"22 As 40/2025 - 49"' }),
+  );
+  expect(
+    testing.screen
+      .getByRole("button", { name: messages.common.caseLaw })
+      .getAttribute("aria-expanded"),
+  ).toBe("true");
   const options = testing.screen.getAllByRole("option");
   expect(options.at(0)?.textContent).toContain("22 As 40/2025");
   expect(options.some((option) => option.textContent.includes(hit.title))).toBe(
@@ -363,6 +385,78 @@ test("a resolved citation is the first keyboard result above matter hits", async
   });
   expect(testing.screen.getByTestId("dialog-state").textContent).toBe("closed");
 });
+
+test("citation expansion can be collapsed and ordinary keywords keep their search behavior", async () => {
+  await mount();
+  await typeQuery("22 As 40/2025 - 49", "22 As 40/2025");
+  const caseLaw = testing.screen.getByRole("button", {
+    name: messages.common.caseLaw,
+  });
+  expect(caseLaw.getAttribute("aria-expanded")).toBe("true");
+  await testing.act(async () => {
+    testing.fireEvent.click(caseLaw);
+  });
+  expect(caseLaw.getAttribute("aria-expanded")).toBe("false");
+
+  await typeQuery(hit.title, "engagement");
+  expect(caseLaw.getAttribute("aria-expanded")).toBe("false");
+  expect(searchRequestBodies.at(-1)).toMatchObject({ query: "engagement" });
+  await testing.act(async () => {
+    testing.fireEvent.click(caseLaw);
+  });
+  await typeQuery(hit.title, "agreement");
+  expect(caseLaw.getAttribute("aria-expanded")).toBe("true");
+
+  await typeQuery("22 As 40/2025 - 49", "22 As 40/2025 - 49");
+  expect(caseLaw.getAttribute("aria-expanded")).toBe("true");
+});
+
+test("a citation never displays stale loose keyword hits while its phrase search loads", async () => {
+  await mount();
+  await typeQuery();
+  const gate = Promise.withResolvers<undefined>();
+  searchResponseGate = gate.promise;
+  await typeQuery("22 As 40/2025 - 49", "22 As 40/2025 - 49");
+  expect(
+    testing.screen
+      .getAllByRole("option")
+      .some((option) => option.textContent.includes(hit.title)),
+  ).toBe(false);
+  await testing.act(async () => {
+    gate.resolve(undefined);
+  });
+  await testing.waitFor(() => {
+    expect(
+      testing.screen
+        .getAllByRole("option")
+        .some((option) => option.textContent.includes(hit.title)),
+    ).toBe(true);
+  });
+});
+
+test.each([
+  "22 As 40/2025",
+  "22 As 40/2025 - 49",
+  "ECLI:CZ:NS:2019:25.CDO.1234.2019.1",
+  "89/2012 Sb.",
+])(
+  "citation %s uses a whole phrase for matters and the raw query for Case Law",
+  async (citation) => {
+    await mount();
+    await typeQuery(hit.title, citation);
+    expect(searchRequestBodies).toContainEqual(
+      expect.objectContaining({ query: `"${citation}"` }),
+    );
+    expect(searchRequestBodies).toContainEqual(
+      expect.objectContaining({ query: citation, types: ["case-law"] }),
+    );
+    expect(
+      testing.screen
+        .getByRole("button", { name: messages.common.caseLaw })
+        .getAttribute("aria-expanded"),
+    ).toBe("true");
+  },
+);
 
 test("Case law scope searches only case law and drops matter recents and actions", async () => {
   await mount();
@@ -489,11 +583,11 @@ test("highlighting a citation clears the selected supplemental case-law preview"
   ];
   await mount();
   const input = await typeQuery(hit.title, "22 As 40/2025 - 49");
-  await testing.act(async () => {
-    testing.fireEvent.click(
-      testing.screen.getByRole("button", { name: messages.common.caseLaw }),
-    );
-  });
+  expect(
+    testing.screen
+      .getByRole("button", { name: messages.common.caseLaw })
+      .getAttribute("aria-expanded"),
+  ).toBe("true");
   const supplemental = await testing.screen.findByRole("button", {
     name: supplementalHit.title,
   });
