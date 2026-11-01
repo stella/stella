@@ -175,10 +175,10 @@ over the message XML, takes the same path and files a `data_box` record.
 - The organization's own boxes (`organization_settings.data_box_ids`, edited
   through `organization-settings/correspondence/data-boxes`) decide the
   direction: sent from one is outgoing, sent to one incoming; neither or both
-  leaves it incoming with `directionBasis` `unknown`. Each add or remove
-  re-derives the direction of filed records from their stored envelopes in
-  the matters the administrator can reach, writing only rows whose basis
-  changes, so a repeat converges.
+  leaves it incoming with `directionBasis` `unknown`. Direction is derived from
+  the stored envelope and the current inventory each time a record is read and
+  is never stored: a `data_box` record stores no direction or basis, so adding
+  or removing a box rewrites no filed record.
 - Each file of the message is scanned before anything is written, then stored
   as a document in the `.zfo` file's folder and linked as an attachment. A
   rejected file refuses the whole message; a replay resumes missing ordinals.
