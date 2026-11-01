@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "./e2e-spec-shards-core";
 import { lexShell } from "./install-free-ci";
 
 // Finds every Playwright run a workflow reaches, for the browser suite census
@@ -341,7 +342,7 @@ const walkSteps = (steps: readonly Step[], walk: Walk) => {
         script: run.script,
         filters: args
           .filter((arg) => !arg.startsWith("-") && arg.includes(".spec."))
-          .toSorted(),
+          .toSorted(compareCodeUnit),
         dynamic: args.some((arg) => arg.includes("$")),
       });
     }

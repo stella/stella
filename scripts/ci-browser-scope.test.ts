@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -23,6 +24,26 @@ import { GENERATORS } from "./generated-files";
 import { lexShell } from "./install-free-ci";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+
+// A derived output is not committed: a job that has not generated it yet
+// (a repeated changed test) runs its declared producer first.
+const generatedOutputs = (id: string): readonly string[] => {
+  const generator = GENERATORS.find((candidate) => candidate.id === id);
+  if (generator === undefined) {
+    throw new Error(`Unknown generator ${id}`);
+  }
+  if (
+    !generator.outputs.every((output) => existsSync(path.join(ROOT, output)))
+  ) {
+    const result = Bun.spawnSync([...generator.write], {
+      cwd: ROOT,
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    expect(result.exitCode, generator.write.join(" ")).toBe(0);
+  }
+  return generator.outputs;
+};
 const source = readFileSync(
   path.join(ROOT, ".github/workflows/ci.yml"),
   "utf-8",
@@ -103,7 +124,7 @@ test("browser scope skips unrelated API implementation and preserves every serve
   // Vite starts after this producer restores every declared route projection.
   const routeTree = GENERATORS.find(({ id }) => id === "route-tree");
   expect(routeTree).toBeDefined();
-  for (const output of routeTree?.outputs ?? []) {
+  for (const output of generatedOutputs("route-tree")) {
     tree.set(`/app/${output}`, output);
   }
   const entries = files.filter(

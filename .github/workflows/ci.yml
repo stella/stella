@@ -5440,16 +5440,20 @@ jobs:
 
       - name: Run Playwright shard
         timeout-minutes: ${{ fromJSON(steps.e2e-budget.outputs.minutes) }}
+        # A selected leg planned only for a hosted browser suite (its specs in
+        # e2e_production_suite_specs) has no web specs to run.
         if: >-
           steps.e2e-stack.outcome == 'success'
           && matrix.shard != 'network-baseline'
+          && (needs.ci-plan.outputs.e2e_production_mode != 'selected'
+          || needs.ci-plan.outputs.e2e_production_specs != '[]'
+          || needs.ci-plan.outputs.e2e_production_suite_specs == '[]')
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-playwright-shard.json
           E2E_EXECUTION_PROFILE: ci-production-parallel
           E2E_EXPECT_DEV_ROUTES: "false"
           E2E_MODE: ${{ needs.ci-plan.outputs.e2e_production_mode }}
           E2E_SPECS: ${{ needs.ci-plan.outputs.e2e_production_specs }}
-          E2E_SUITE_SPECS: ${{ needs.ci-plan.outputs.e2e_production_suite_specs }}
         run: |
           set -euo pipefail
           SECONDS=0
@@ -5459,15 +5463,10 @@ jobs:
               ;;
             selected)
               specs_output=$(jq -r '.[]' <<< "$E2E_SPECS")
-              if [[ -z "$specs_output" ]]; then
-                # The leg may run only the changed specs of a hosted suite.
-                [[ "${E2E_SUITE_SPECS:-[]}" != '[]' ]] || {
-                  echo "Selected E2E leg has no specs" >&2
-                  exit 1
-                }
-                echo "No selected web specs; this leg runs the changed browser suite specs."
-                exit 0
-              fi
+              [[ -n "$specs_output" ]] || {
+                echo "Selected E2E leg has no specs" >&2
+                exit 1
+              }
               args=()
               while IFS= read -r spec; do
                 args+=("$spec")

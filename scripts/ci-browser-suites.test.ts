@@ -44,6 +44,7 @@ import {
 } from "./ci-plan-scope";
 import { ROUTE_SMOKE_SPEC_PATH } from "./detect-route-smoke-changes";
 import { GEOMETRY_SPEC_PATH, selectedE2ePlan } from "./e2e-spec-shards";
+import { compareCodeUnit } from "./e2e-spec-shards-core";
 import { type Context, evaluate, type Value } from "./github-expression";
 import { lexShell } from "./install-free-ci";
 import { selectGeometrySpecs } from "./ui-playground-selection";
@@ -84,7 +85,7 @@ const claims = (suite: BrowserSuite, invocation: Invocation) =>
   suite.job === invocation.job &&
   suite.package === invocation.package &&
   suite.script === invocation.script &&
-  JSON.stringify((suite.filters ?? []).toSorted()) ===
+  JSON.stringify([...(suite.filters ?? [])].toSorted(compareCodeUnit)) ===
     JSON.stringify(invocation.filters);
 
 const unclaimed = ({ invocations, problems }: typeof census) => [
@@ -134,17 +135,38 @@ const pullRequestScope = (files: readonly string[]) =>
     { ...DEFAULT_DETECTORS, landingDeploy: () => false },
   );
 
+// The scope outputs this census reads (package checks, browser scope,
+// production e2e inputs) decide by directory and package, so one spec
+// stands for every spec of its directory.
+const scopeByDirectory = new Map<string, ChangedFileScope>();
+const specScope = (spec: string): ChangedFileScope => {
+  const directory = path.posix.dirname(spec);
+  const known = scopeByDirectory.get(directory);
+  if (known !== undefined) {
+    return known;
+  }
+  const scope = pullRequestScope([spec]);
+  scopeByDirectory.set(directory, scope);
+  return scope;
+};
+
 const heavyProofJobs = (): readonly string[] => {
   const step = (jobOf("ci-plan").steps ?? []).find(({ id }) => id === "suites");
   return v.parse(
     v.array(v.string()),
-    JSON.parse(String(step?.env?.["HEAVY_PROOF_JOBS"] ?? "[]")),
+    JSON.parse(v.parse(v.string(), step?.env?.["HEAVY_PROOF_JOBS"])),
   );
 };
 
-// "true" when the expression is true or the string "true".
-const truth = (source: string, context: Context) =>
-  String(evaluate(source, context));
+// An expression's value as the workflow compares it: "true", "false", or
+// the string it produced; anything else reads as "unknown".
+const truth = (source: string, context: Context): string => {
+  const result = evaluate(source, context);
+  if (typeof result === "string") {
+    return result;
+  }
+  return typeof result === "boolean" ? String(result) : "unknown";
+};
 
 const scopeValues = (prefix: string, scope: ChangedFileScope) =>
   Object.fromEntries(
@@ -368,11 +390,11 @@ test("the census follows root scripts, reusable workflows and composite actions"
     ),
   );
   const rootName = rootManifest.name ?? ".";
-  expect(unclaimed(mutated).toSorted()).toEqual(
+  expect(unclaimed(mutated).toSorted(compareCodeUnit)).toEqual(
     [
       `route-smoke / Root: ${rootName} test:browser-root`,
       "new-reusable / .github/workflows/new-browser.yml#check › Composite › Inner: @stll/web test:e2e:soak",
-    ].toSorted(),
+    ].toSorted(compareCodeUnit),
   );
 });
 
@@ -380,17 +402,23 @@ test("registered spec filters are exactly what the workflow passes", () => {
   for (const suite of BROWSER_SUITES) {
     for (const run of runsOf(suite)) {
       expect(run.filters, `${suite.id} ${run.step}`).toEqual(
-        [...(suite.filters ?? [])].toSorted(),
+        [...("filters" in suite ? suite.filters : [])].toSorted(
+          compareCodeUnit,
+        ),
       );
     }
   }
 });
 
-// timeout: Runs the real planners over every spec of each suite; the limit only catches a hang.
-test("every browser suite the merge group selects runs on a pull request that changes it", () => {
-  const heavy = heavyProofJobs();
-  const productionConfig = browserSuiteConfig(browserSuite("production"), ROOT);
-  for (const suite of BROWSER_SUITES) {
+test.each(BROWSER_SUITES.map(({ id }) => id))(
+  "the merge-group browser suite %s runs on a pull request that changes it",
+  (id) => {
+    const suite = browserSuite(id);
+    const heavy = heavyProofJobs();
+    const productionConfig = browserSuiteConfig(
+      browserSuite("production"),
+      ROOT,
+    );
     const specs = browserSuiteSpecs(suite, ROOT);
     const runs = runsOf(suite);
     const { pr } = suite;
@@ -437,7 +465,7 @@ test("every browser suite the merge group selects runs on a pull request that ch
             spec,
           ).toContain(spec);
           const planned = pullRequestBrowserJob({
-            scope: pullRequestScope([spec]),
+            scope: specScope(spec),
             legs: JSON.stringify(legs),
           });
           expect(planned, spec).toEqual({
@@ -461,9 +489,7 @@ test("every browser suite the merge group selects runs on a pull request that ch
           expect(plan.matrix.shard, spec).toContain(1);
           expect(plan.specs, spec).toEqual([]);
           expect(plan.suiteSpecs, spec).toContain(spec);
-          expect(pullRequestScope([spec]).e2e_production_required, spec).toBe(
-            "true",
-          );
+          expect(specScope(spec).e2e_production_required, spec).toBe("true");
         }
         break;
       }
@@ -479,7 +505,7 @@ test("every browser suite the merge group selects runs on a pull request that ch
           expect(selected, spec).toContain(spec);
           expect(
             pullRequestBrowserJob({
-              scope: pullRequestScope([spec]),
+              scope: specScope(spec),
               playgroundSpecs: selected,
             }),
             spec,
@@ -508,9 +534,7 @@ test("every browser suite the merge group selects runs on a pull request that ch
           } else {
             expect(plan.matrix.shard.length, spec).toBeGreaterThan(1);
           }
-          expect(pullRequestScope([spec]).e2e_production_required, spec).toBe(
-            "true",
-          );
+          expect(specScope(spec).e2e_production_required, spec).toBe("true");
         }
         break;
       }
@@ -560,8 +584,8 @@ test("every browser suite the merge group selects runs on a pull request that ch
         throw new Error("Unknown browser suite PR path");
       }
     }
-  }
-}, 300_000);
+  },
+);
 
 const changedSpecSuite = (id: "ui-components" | "extension" | "api-browser") =>
   browserSuite(id);

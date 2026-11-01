@@ -4,7 +4,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { cachedForRepository } from "./ci-repository-cache";
-import { listE2eSpecs } from "./e2e-spec-shards-core";
+import { compareCodeUnit, listE2eSpecs } from "./e2e-spec-shards-core";
 import { readPlaygroundInventory } from "./ui-playground-selection";
 
 // Install-free: ci-plan reads the registry before its dependency install.
@@ -453,7 +453,7 @@ export const browserSuiteSpecs = (
     const filtered = (specs: readonly string[]) =>
       specs
         .filter((spec) => filters.every((filter) => spec.includes(filter)))
-        .toSorted();
+        .toSorted(compareCodeUnit);
     switch (pr.kind) {
       case "ci-browser-leg":
       case "production-leg":

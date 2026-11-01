@@ -4094,14 +4094,12 @@ type PlaywrightSelectionOptions = {
   mode: "full" | "selected";
   specs: string;
   shard?: number;
-  suiteSpecs?: string;
 };
 
 const runPlaywrightSelection = ({
   mode,
   specs,
   shard = 1,
-  suiteSpecs = "[]",
 }: PlaywrightSelectionOptions) => {
   const step = jobSteps(ciJobs["e2e-production-shard"]).find(
     ({ name }) => name === "Run Playwright shard",
@@ -4129,7 +4127,6 @@ const runPlaywrightSelection = ({
         GITHUB_WORKSPACE: nodePath.resolve(import.meta.dir, ".."),
         E2E_MODE: mode,
         E2E_SPECS: specs,
-        E2E_SUITE_SPECS: suiteSpecs,
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -4400,14 +4397,26 @@ test("a selected Playwright leg fails before loading an empty spec list", () => 
   expect(result.stdout.toString()).toBe("");
 });
 
-test("a selected leg without web specs runs only the hosted suites' changed specs", () => {
-  const result = runPlaywrightSelection({
-    mode: "selected",
-    specs: "[]",
-    suiteSpecs: JSON.stringify(["apps/api/e2e/citation-graph.spec.mts"]),
-  });
-  expect(result.exitCode, result.stderr.toString()).toBe(0);
-  expect(result.stdout.toString()).not.toContain("@stll/web");
+test("a selected leg planned only for a hosted browser suite skips the web run", () => {
+  const step = jobSteps(ciJobs["e2e-production-shard"]).find(
+    ({ name }) => name === "Run Playwright shard",
+  );
+  const runs = (mode: string, specs: string, suiteSpecs: string) =>
+    evaluate(step?.if ?? panic("Missing Playwright shard condition"), {
+      values: {
+        "steps.e2e-stack.outcome": "success",
+        "matrix.shard": 1,
+        "needs.ci-plan.outputs.e2e_production_mode": mode,
+        "needs.ci-plan.outputs.e2e_production_specs": specs,
+        "needs.ci-plan.outputs.e2e_production_suite_specs": suiteSpecs,
+      },
+    });
+  const suite = JSON.stringify(["apps/api/e2e/citation-graph.spec.mts"]);
+  const web = JSON.stringify(["apps/web/e2e/specs/guides.spec.ts"]);
+  expect(runs("selected", "[]", suite)).toBe(false);
+  expect(runs("selected", web, suite)).toBe(true);
+  expect(runs("selected", "[]", "[]")).toBe(true);
+  expect(runs("full", "[]", "[]")).toBe(true);
 });
 
 test("production shards keep full-depth core coverage and exclude unrelated fast PRs", () => {
