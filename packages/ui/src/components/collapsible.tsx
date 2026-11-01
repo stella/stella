@@ -27,9 +27,11 @@ const CollapsibleTrigger = (props: CollapsiblePrimitive.Trigger.Props) => (
  * does. Its height eases open and shut with the accordion's timing, so the
  * two disclosures move alike; under reduced motion it snaps.
  *
- * Closed, the content stays in the document as `hidden="until-found"` (as a
- * native `<details>` keeps it), so find-in-page still reaches it and opens
- * the panel. Pass `hiddenUntilFound={false}` to unmount it instead.
+ * Closed, the content stays in the document. Once mounted it is
+ * `hidden="until-found"` (as a native `<details>` keeps it), so find-in-page
+ * reaches it and opens the panel; server-rendered markup carries a plain
+ * `hidden` until hydration, so the search reaches it only after that. Pass
+ * `hiddenUntilFound={false}` to unmount it instead.
  */
 const CollapsiblePanel = ({
   className,

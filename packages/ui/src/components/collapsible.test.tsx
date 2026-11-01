@@ -10,7 +10,7 @@ import {
 } from "./collapsible";
 
 describe("Collapsible", () => {
-  test("a closed panel stays findable, as a native details element keeps it", () => {
+  test("a closed panel renders its content on the server, plainly hidden", () => {
     const markup = renderToStaticMarkup(
       <Collapsible>
         <CollapsibleTrigger>Show details</CollapsibleTrigger>
@@ -18,9 +18,11 @@ describe("Collapsible", () => {
       </Collapsible>,
     );
     expect(markup).toContain('aria-expanded="false"');
-    // Base UI renders the closed panel hidden on the server and switches it
-    // to `hidden="until-found"` once mounted; the content is there either way.
-    expect(markup).toMatch(/ hidden="(?:|until-found)"/u);
+    // Base UI renders the closed panel with a plain `hidden` on the server
+    // and switches it to `hidden="until-found"` once mounted (see the DOM
+    // test), so find-in-page reaches it only after hydration.
+    expect(markup).toMatch(/ hidden=""/u);
+    expect(markup).not.toMatch(/ hidden="until-found"/u);
     expect(markup).toContain("Arguments");
   });
 

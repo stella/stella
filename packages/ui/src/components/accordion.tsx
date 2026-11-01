@@ -8,9 +8,10 @@ import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
 
 /**
- * Closed panels stay in the document as `hidden="until-found"`, so
- * find-in-page reaches their content and opens the section, as it would a
- * native `<details>`. Pass `hiddenUntilFound={false}` (here, or on one
+ * Closed panels stay in the document. Once mounted they are
+ * `hidden="until-found"`, so find-in-page reaches their content and opens
+ * the section, as it would a native `<details>`; server-rendered markup
+ * carries a plain `hidden` until hydration. Pass `hiddenUntilFound={false}` (here, or on one
  * `AccordionPanel`) to unmount closed content instead: a heavy panel that
  * should not render until asked for.
  */
