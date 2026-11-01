@@ -36,7 +36,6 @@ export { foldToAscii } from "./ascii-fold.js";
 export { ASCII_FOLD_TABLE } from "./ascii-fold-table.js";
 export { stripDiacritics, stripDiacriticsForSlug } from "./diacritics.js";
 export { escapeRegExp } from "./escape-regexp.js";
-export { stripInvisibleFormatting } from "./invisible-formatting.js";
 export { arabicNormalize } from "./normalize.js";
 export {
   findSearchMatchRanges,
