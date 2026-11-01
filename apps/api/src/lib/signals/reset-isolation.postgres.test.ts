@@ -11,8 +11,8 @@ import {
 
 import {
   SCOUT_RUN_STATUS,
-  SIGNAL_EVENT_TYPE,
   scoutRuns,
+  SIGNAL_EVENT_TYPE,
   signalEvents,
   signals,
   systemAuditRuns,

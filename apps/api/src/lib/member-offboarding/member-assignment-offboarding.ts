@@ -1,8 +1,8 @@
 import {
   clearMemberAssignments as clearOwnedMemberAssignments,
-  tryLockMemberCleanupWorkspace as tryLockOwnedMemberCleanupWorkspace,
-  tryLockAccountMemberCleanup as tryLockOwnedAccountMemberCleanup,
   removeOrganizationMemberInTransaction as removeOwnedOrganizationMember,
+  tryLockAccountMemberCleanup as tryLockOwnedAccountMemberCleanup,
+  tryLockMemberCleanupWorkspace as tryLockOwnedMemberCleanupWorkspace,
 } from "@/api/lib/member-offboarding/member-assignment-offboarding-owner";
 
 export const clearMemberAssignments = async (

@@ -13,9 +13,9 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import {
   entities,
   featureEnrolments,
-  workspaceMembers,
   flowDefinitions,
   flowUploadTriggerIntents,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";

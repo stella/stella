@@ -21,9 +21,9 @@ import {
   entities,
   featureEnrolments,
   flowDefinitions,
-  flowUploadTriggerIntents,
   flowRuns,
   flowRunSteps,
+  flowUploadTriggerIntents,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -130,8 +130,7 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     triggerSource: FlowTriggerSource = FILE_UPLOAD_SOURCE,
   ) => {
     let expectedScheduleTrigger:
-      | Extract<FlowTrigger, { type: "schedule" }>
-      | undefined;
+      Extract<FlowTrigger, { type: "schedule" }> | undefined;
     if (triggerSource.type === "schedule") {
       const definition = (
         await testDb

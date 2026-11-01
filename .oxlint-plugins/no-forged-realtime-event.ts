@@ -3,7 +3,6 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import { repoRelativePath } from "@stll/portable-path";
 
 import {
-  type ScopeContext,
   filenameForContext,
   getImportedName,
   getPropertyName,
@@ -14,6 +13,7 @@ import {
   patternKeyFor,
   resolveImportedExpressionForEnforcement,
   resolveVariable,
+  type ScopeContext,
   stableInitializer,
   staticStringValue,
   unwrapExpression,

@@ -6,8 +6,8 @@ import * as v from "valibot";
 import {
   RESOURCE_DELETION_OWNERSHIP,
   RESOURCE_TYPE,
-  resourceRef,
   type ResourceDeletion,
+  resourceRef,
 } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";

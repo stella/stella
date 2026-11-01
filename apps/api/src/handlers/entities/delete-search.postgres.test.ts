@@ -8,8 +8,8 @@ import {
   entityVersions,
   searchDocuments,
   workspaceMembers,
-  workspaceSearchDocuments,
   workspaces,
+  workspaceSearchDocuments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";

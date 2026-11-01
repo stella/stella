@@ -1,4 +1,4 @@
-import type { Queue, JobsOptions } from "bullmq";
+import type { JobsOptions, Queue } from "bullmq";
 
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";

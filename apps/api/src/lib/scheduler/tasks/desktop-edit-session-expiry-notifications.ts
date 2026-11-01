@@ -1,6 +1,6 @@
 import type {
-  DesktopEditSessionRealtimeEvent,
   BuiltRealtimeEvent,
+  DesktopEditSessionRealtimeEvent,
 } from "@stll/api-contract";
 import {
   RESOURCE_TYPE,
