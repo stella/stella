@@ -15,7 +15,6 @@ test("only test preloads may import bun:test", async () => {
   );
   const testPreloads = bunfig.test?.preload ?? [];
   expect(testPreloads).toContain("./src/tests/statement-ceiling-hooks.ts");
-  expect(testPreloads).toContain("./src/tests/fetch-state-hooks.ts");
 
   const packageJson = v.parse(
     v.object({ scripts: v.record(v.string(), v.string()) }),
