@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
@@ -76,6 +77,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -3322,7 +3324,11 @@ export const czUsAdapter = defineSourceAdapter({
             // Every closed availability day is accounted for, so there is
             // nothing to list and no request to spend. An unchanged cursor is
             // how this pipeline reads a source with nothing left.
-            return { decisions: [], nextCursor: makeCursor(state) };
+            return {
+              decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.NONE,
+              nextCursor: makeCursor(state),
+            };
           }
           state = rearmed;
         }
@@ -3337,6 +3343,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (state.page > 0 && error instanceof SearchPageDriftError) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor(restartSlice(state)),
             };
           }
@@ -3346,6 +3353,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (state.pass === CRAWL_PASS.VERIFY) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor(
                 afterUnconfirmedSlice(state, now, "listing-now-empty"),
               ),
@@ -3353,6 +3361,7 @@ export const czUsAdapter = defineSourceAdapter({
           }
           return {
             decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: makeCursor(nextSlice(state, now)),
           };
         }
@@ -3363,6 +3372,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (!sliceComplete) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor({
                 ...state,
                 page: state.page + 1,
@@ -3373,6 +3383,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (digest !== state.expectedDigest) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor(
                 afterUnconfirmedSlice(state, now, "digest-mismatch"),
               ),
@@ -3380,6 +3391,7 @@ export const czUsAdapter = defineSourceAdapter({
           }
           return {
             decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: makeCursor(nextSlice(state, now)),
           };
         }
@@ -3393,6 +3405,7 @@ export const czUsAdapter = defineSourceAdapter({
           return {
             decisions,
             itemBuildFailures,
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: makeCursor({
               ...state,
               pass: CRAWL_PASS.VERIFY,
@@ -3406,6 +3419,7 @@ export const czUsAdapter = defineSourceAdapter({
         return {
           decisions,
           itemBuildFailures,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: makeCursor({
             ...state,
             page: state.page + 1,
