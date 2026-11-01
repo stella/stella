@@ -630,7 +630,6 @@
     "guideAllowed": "stella desktop ir atļauts",
     "never": {
       "screenRecording": "Ekrāna ierakstīšana",
-      "microphone": "Mikrofons",
       "camera": "Kamera",
       "keystrokes": "Taustiņsitieni",
       "fullDiskAccess": "Pilna piekļuve diskam",

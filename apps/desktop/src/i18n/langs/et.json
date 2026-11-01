@@ -630,7 +630,6 @@
     "guideAllowed": "stella desktop on lubatud",
     "never": {
       "screenRecording": "Ekraanisalvestus",
-      "microphone": "Mikrofon",
       "camera": "Kaamera",
       "keystrokes": "Klahvivajutused",
       "fullDiskAccess": "Täielik kettale juurdepääs",

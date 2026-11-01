@@ -630,7 +630,6 @@
     "guideAllowed": "O stella desktop tem permissão",
     "never": {
       "screenRecording": "Gravação de tela",
-      "microphone": "Microfone",
       "camera": "Câmera",
       "keystrokes": "Pressionamentos de teclas",
       "fullDiskAccess": "Acesso total ao disco",

@@ -630,7 +630,6 @@
     "guideAllowed": "stella desktop مسموح له",
     "never": {
       "screenRecording": "تسجيل الشاشة",
-      "microphone": "الميكروفون",
       "camera": "الكاميرا",
       "keystrokes": "ضغطات المفاتيح",
       "fullDiskAccess": "الوصول الكامل إلى القرص",

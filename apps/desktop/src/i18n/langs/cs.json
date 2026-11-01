@@ -630,7 +630,6 @@
     "guideAllowed": "stella desktop má povolení",
     "never": {
       "screenRecording": "Záznam obrazovky",
-      "microphone": "Mikrofon",
       "camera": "Kamera",
       "keystrokes": "Stisky kláves",
       "fullDiskAccess": "Plný přístup k disku",
