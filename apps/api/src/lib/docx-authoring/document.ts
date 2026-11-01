@@ -28,7 +28,10 @@ export const stellaDocument = (): Document =>
 export const stellaLandscapeDocument = (): Document => {
   const doc = stellaDocument();
   const portrait = doc.package.document.finalSectionProperties;
-  if (portrait?.pageWidth === undefined || portrait.pageHeight === undefined) {
+  if (portrait === undefined) {
+    return panic("The house preset must declare a page size.");
+  }
+  if (portrait.pageWidth === undefined || portrait.pageHeight === undefined) {
     return panic("The house preset must declare a page size.");
   }
   doc.package.document.finalSectionProperties = {

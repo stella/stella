@@ -82,7 +82,7 @@ const buildRequestLogDetails = ({
     statusCode,
     ...(failureKind === undefined ? {} : { failureKind }),
     ...(errorType === undefined ? {} : { errorType }),
-    ...(reqCtx?.requestId === undefined ? {} : { requestId: reqCtx.requestId }),
+    ...(reqCtx?.requestId !== undefined ? { requestId: reqCtx.requestId } : {}),
     ...(reqCtx?.clientAddressSource
       ? { clientAddressSource: reqCtx.clientAddressSource }
       : {}),

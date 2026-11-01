@@ -24,7 +24,10 @@ const projectTaskListInputSchemas = (
   schemas: AdvertisedSchemas,
 ): AdvertisedSchemas => {
   const body = schemas.body;
-  if (body?.properties === undefined) {
+  if (body === undefined) {
+    return schemas;
+  }
+  if (body.properties === undefined) {
     return schemas;
   }
   const excluded = new Set<string>(LIST_PLACEMENT_FIELDS);
