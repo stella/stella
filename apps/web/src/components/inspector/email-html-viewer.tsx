@@ -50,8 +50,8 @@ import {
 } from "@/lib/files/email-citations";
 import { EMAIL_BODY_FOLD_KIND } from "@/lib/files/email-preview";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
+import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 import { formatFullTimestamp } from "@/lib/relative-time";
-import { revealEnclosingDisclosures } from "@/lib/reveal-disclosures";
 
 /** A header field a citation points at wears the active text mark. */
 const ACTIVE_CITATION_CLASS = textMarkClass({

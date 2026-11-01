@@ -12,7 +12,7 @@ import { SEARCH_HIT_MARK, textMarkHighlightRule } from "@stll/ui/text-mark";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFindSurface } from "@/lib/find-owner";
-import { revealEnclosingDisclosures } from "@/lib/reveal-disclosures";
+import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 
 import {
   buildReaderFindIndex,

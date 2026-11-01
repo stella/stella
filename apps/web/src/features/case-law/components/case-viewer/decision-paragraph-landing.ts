@@ -10,7 +10,7 @@ import {
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { revealEnclosingDisclosures } from "@/lib/reveal-disclosures";
+import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 
 import { decisionParagraphLanding } from "./decision-paragraph-landing.logic";
 

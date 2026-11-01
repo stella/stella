@@ -14,7 +14,8 @@ const { cleanup, render, screen } = await import("@testing-library/react");
 // Base UI disables when it loads before a DOM exists: import after register.
 const { Collapsible, CollapsiblePanel, CollapsibleTrigger } =
   await import("@stll/ui/collapsible");
-const { revealEnclosingDisclosures } = await import("@/lib/reveal-disclosures");
+const { revealEnclosingDisclosures } =
+  await import("@/lib/platform/reveal-disclosures");
 
 afterEach(() => {
   cleanup();
@@ -72,7 +73,11 @@ describe("revealEnclosingDisclosures", () => {
   test("a closed controlled Collapsible opens through its own state", async () => {
     const changes: boolean[] = [];
     render(
-      <ControlledParticipants onOpenChange={(open) => changes.push(open)} />,
+      <ControlledParticipants
+        onOpenChange={(open) => {
+          changes.push(open);
+        }}
+      />,
     );
     const target = screen.getByTestId("cc");
     expect(target.closest('[hidden="until-found"]')).not.toBeNull();
@@ -90,7 +95,9 @@ describe("revealEnclosingDisclosures", () => {
     const paragraph = document.createElement("p");
     document.body.append(paragraph);
     const events: string[] = [];
-    paragraph.addEventListener("beforematch", () => events.push("beforematch"));
+    paragraph.addEventListener("beforematch", () => {
+      events.push("beforematch");
+    });
 
     revealEnclosingDisclosures(paragraph);
 
@@ -102,7 +109,7 @@ describe("revealEnclosingDisclosures", () => {
 
 // Source-text guard: unfolding a disclosure for navigation, find or landing
 // goes through the one helper, so @stll/ui panels are never skipped again.
-const WEB_SOURCE = nodePath.join(import.meta.dirname, "..");
+const WEB_SOURCE = nodePath.join(import.meta.dirname, "..", "..");
 const OWNER = nodePath.join(import.meta.dirname, "reveal-disclosures.ts");
 const DIRECT_OPEN =
   /\.open\s*=\s*true|setAttribute\(\s*["']open["']|closest\(\s*["']details["']/u;

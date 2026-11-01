@@ -5,7 +5,7 @@ import type {
 import type { AnnotationAnchorSource } from "@stll/decision-reader/annotation-anchors";
 import { readerBlockByAnchor } from "@stll/decision-reader/reader-landing";
 
-import { revealEnclosingDisclosures } from "@/lib/reveal-disclosures";
+import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 
 export const readerAnswerAnchors = (
   answers: readonly ReaderAnswer[],

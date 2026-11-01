@@ -29,7 +29,7 @@ import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-
 import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { revealEnclosingDisclosures } from "@/lib/reveal-disclosures";
+import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 
 export type WebDecisionReaderProps = Omit<
   DecisionTextProps,
