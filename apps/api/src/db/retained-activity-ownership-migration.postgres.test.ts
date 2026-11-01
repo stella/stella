@@ -154,9 +154,9 @@ describe.skipIf(!enabled)(
               await session`INSERT INTO audit_logs (id, workspace_id, resource_type, resource_id) VALUES (${ordinaryId}, ${workspaceId}, 'entity', ${ordinaryEntityId})`;
               await session`INSERT INTO notifications (id, workspace_id, kind, entity_type, entity_id) VALUES (${ordinaryId}, ${workspaceId}, 'mention', 'entity', ${ordinaryEntityId})`;
               for (const name of [
-                "20261031202238_retained_activity_feature_ownership",
-                "20261031202338_retained_audit_feature_ownership",
-                "20261031202438_retained_notification_feature_ownership",
+                "20261101043038_retained_activity_feature_ownership",
+                "20261101043138_retained_audit_feature_ownership",
+                "20261101043238_retained_notification_feature_ownership",
               ]) {
                 // db-await-in-loop: each shipped expand migration is one table and one transaction.
                 await session`BEGIN`;

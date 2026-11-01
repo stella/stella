@@ -1,5 +1,0 @@
--- requires: 20261031201038_upload_trigger_settlements
-SET LOCAL lock_timeout = '1s';--> statement-breakpoint
-SET LOCAL statement_timeout = '5s';
-
--- Index construction runs in the registered online phase.

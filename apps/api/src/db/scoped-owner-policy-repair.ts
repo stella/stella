@@ -17,7 +17,7 @@ export const SCOPED_OWNER_POLICY_TABLES = [
 const policies = scopedOwnerPolicyDefinitions(SCOPED_OWNER_POLICY_TABLES);
 
 export const SCOPED_OWNER_POLICIES_REPAIR: OnlineRepair = {
-  introducedBy: "20261031202038_org_scoped_system_work",
+  introducedBy: "20261101042838_org_scoped_system_work",
   name: "scoped-owner-policies",
   readCompletion: async (connection) =>
     (await readMissingPolicies(connection, policies)).length === 0

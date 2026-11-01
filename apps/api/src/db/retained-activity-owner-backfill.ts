@@ -284,7 +284,7 @@ const runPhase = async ({
 export const createRetainedActivityOwnerBackfill = (
   options: RetainedActivityBackfillOptions = {},
 ): OnlineRepair => ({
-  introducedBy: "20261031202438_retained_notification_feature_ownership",
+  introducedBy: "20261101043238_retained_notification_feature_ownership",
   name: REPAIR_NAME,
   readCompletion: async (connection) => {
     for (const phase of PHASES) {
