@@ -6,7 +6,7 @@ import type { Transaction } from "@/api/db/root";
 import { caseLawSources } from "@/api/db/schema";
 import {
   sourceStoredTotalCountQuery,
-  sourceStoredTotalRefreshClaim,
+  sourceStoredTotalRefreshClaimStatement,
 } from "@/api/handlers/case-law/ingestion/source-totals";
 import { createSafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
@@ -137,7 +137,7 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
   test("the production refresh claim uses the source primary key with one bounded row", async () => {
     await db.transaction(async (actualTx) => {
       const tx = asTestRaw<Transaction>(actualTx);
-      const query = sourceStoredTotalRefreshClaim({
+      const query = sourceStoredTotalRefreshClaimStatement({
         tx,
         sourceId: first,
         now: new Date("2026-10-03T12:00:00Z"),
