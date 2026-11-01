@@ -309,3 +309,40 @@ describe("a file that sets its words apart with no-break spaces (II. ÚS 111/201
     expect(text).not.toContain("Pou čenie");
   });
 });
+
+describe("a file that runs a new block onto a finished sentence with plain spaces", () => {
+  test("the next point of the holding opens its own paragraph (III. ÚS 86/05)", async () => {
+    const blocks = await parsedFixture("sk-us-iii-us-86-05", "III. ÚS 86/05");
+    const holding = paragraphs(blocks)
+      .filter((block) => block.role === "holding")
+      .map(textOf);
+    expect(holding.map((text) => /^\d+\./u.exec(text)?.[0])).toEqual([
+      "1.",
+      "2.",
+      "3.",
+      "4.",
+    ]);
+    expect(holding[0]).toEndWith("porušené boli.");
+    expect(holding[1]).toStartWith("2. Zrušuje uznesenie Krajskej prokuratúry");
+  });
+
+  test("a part marker ending the holding's line opens the reasoning (III. ÚS 5/2019)", async () => {
+    const blocks = await parsedFixture("sk-us-iii-us-5-2019", "III. ÚS 5/2019");
+    expect(headings(blocks, 2)).toEqual(["rozhodol:", "Odôvodnenie:"]);
+    const holding = paragraphs(blocks)
+      .filter((block) => block.role === "holding")
+      .map(textOf);
+    expect(holding).toHaveLength(1);
+    expect(holding[0]).toEndWith(
+      "odmieta ako podanú zjavne neoprávnenou osobou.",
+    );
+  });
+
+  test("a citation's number after an abbreviation stays in its sentence", async () => {
+    const blocks = await parsedFixture("sk-us-iii-us-86-05", "III. ÚS 86/05");
+    const opened = paragraphs(blocks)
+      .map(textOf)
+      .filter((text) => /^\d+\. (?:Ústavy|Dohovoru|Trestného)/u.test(text));
+    expect(opened).toEqual([]);
+  });
+});
