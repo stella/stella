@@ -2392,7 +2392,6 @@
     "unverifiedCitationHint": "تعذّر مطابقة هذا الاقتباس مع المستند المصدر.",
     "uploadFiles": "رفع الملفات",
     "urlIdentifier": "المعرّف",
-    "urlIdentifierPlaceholder": "my-organization",
     "user": "المستخدم",
     "value": "القيمة",
     "vatId": "رقم ضريبة القيمة المضافة",
@@ -2443,6 +2442,7 @@
     "scopeMemoryWrite": "إنشاء ذكريات المساعد وتحديثها",
     "scopeOfflineAccess": "إبقاء تسجيل دخولك نشطًا دون الحاجة إلى موافقة متكررة",
     "scopeOnboarding": "ضبط الولايات القضائية للممارسة لمؤسستك",
+    "scopeOrganizationCreate": "إنشاء مؤسسات جديدة ستكون مالكها",
     "scopeProfile": "الوصول إلى معلومات ملفك الشخصي",
     "scopeRead": "قراءة مستنداتك وملفاتك القانونية وجهات اتصالك",
     "scopeReadAnonymized": "قراءة النسخ المُخفاة الهوية من مستنداتك وملفاتك القانونية",
@@ -2969,7 +2969,6 @@
     "failedToVerifyOtp": "تعذّر التحقق من الرمز",
     "matterNotFound": "لم يتم العثور على الملف القانوني",
     "partyAlreadyExists": "جهة الاتصال لديها هذا الدور في الملف القانوني بالفعل",
-    "slugAlreadyTaken": "هذا المعرّف مستخدم بالفعل",
     "uploadFailed": "فشل الرفع"
   },
   "feedback": {
@@ -4722,6 +4721,13 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "تُستخدم الإعدادات الافتراضية"
     },
+    "creationEvaluationLimitReached": "لقد استخدمت جميع الفترات التجريبية للمؤسسات ({limit}). حذف مؤسسة لا يعيد لك فترة تجريبية. استخدم مؤسسة قائمة أو تواصل مع الدعم للحصول على وصول مدفوع.",
+    "creationInvalidName": "أدخل اسمًا صالحًا للمؤسسة (بحد أقصى {maxLength} حرفًا).",
+    "creationNotAllowed": "لا يمكن لهذا الحساب إنشاء مؤسسات.",
+    "creationOutcomeUnknown": "ربما أنشأ الطلب مؤسسة. أعد المحاولة للتحقق من النتيجة.",
+    "creationRateLimited": "تم إنشاء عدد كبير من المؤسسات مؤخرًا. حاول مرة أخرى لاحقًا.",
+    "creationRefused": "تعذّر إنشاء المؤسسة. تحقق من التفاصيل وحاول مرة أخرى.",
+    "creationSlugConflict": "عنوان المؤسسة هذا مستخدم بالفعل. اختر اسمًا أو عنوانًا آخر.",
     "invitations": {
       "cancelInvitation": "إلغاء الدعوة",
       "emailAddressLabel": "عنوان البريد الإلكتروني",
@@ -4736,6 +4742,7 @@
       "statuses": {
         "accepted": "مقبولة",
         "canceled": "ملغاة",
+        "expired": "منتهية الصلاحية",
         "pending": "قيد الانتظار",
         "rejected": "مرفوضة"
       }
@@ -4769,6 +4776,8 @@
       "typeEmailToConfirm": "اكتب {email} للتأكيد",
       "updateRole": "تحديث الدور"
     },
+    "newOrganization": "مؤسسة جديدة",
+    "newOrganizationDescription": "أنشئ مؤسسة ستكون مالكها.",
     "roles": {
       "admin": "المسؤول",
       "descriptions": {
@@ -4784,6 +4793,9 @@
       "owner": "المالك"
     },
     "settingsDescription": "عدّل اسم مؤسستك والمعرّف",
+    "startOver": "البدء من جديد",
+    "startOverDescription": "ربما أنشأ الطلب الأصلي مؤسسة بالفعل. تحقق من مؤسساتك قبل البدء من جديد؛ فقد يؤدي طلب جديد إلى إنشاء مؤسسة أخرى.",
+    "startOverTitle": "هل تريد بدء طلب إنشاء جديد؟",
     "switchOrganization": "تبديل المؤسسة"
   },
   "publicTools": {
@@ -5380,6 +5392,7 @@
         "title": "استخراج الذاكرة",
         "toggleLabel": "اقتراح عناصر الذاكرة من سجلّ الدردشة في الخلفية"
       },
+      "pastInvitations": "الدعوات السابقة",
       "pendingInvitations": "الدعوات المعلَّقة",
       "practiceJurisdictions": "الولايات القضائية",
       "practiceJurisdictionsDescription": "اختر الولايات القضائية ذات الصلة بك.",
@@ -6217,8 +6230,7 @@
   "validation": {
     "invalidEmail": "أدخل عنوان بريد إلكتروني صالحًا.",
     "organizationNameRequired": "اسم المؤسسة مطلوب",
-    "slugFormat": "يجب أن يتكوّن المعرّف من أحرف صغيرة وأرقام وشُرَط",
-    "slugRequired": "المعرّف مطلوب"
+    "slugFormat": "يجب أن يتكوّن المعرّف من أحرف صغيرة وأرقام وشُرَط"
   },
   "verify": {
     "history": "{history, select, refiled {طُبع بالمرجع <bdi>{reference}</bdi>؛ وهو محفوظ الآن بالمرجع <bdi>{currentReference}</bdi> في الملف القانوني <bdi>{matterName}</bdi>.} superseded {يشير هذا المرجع إلى الإصدار {version, number}؛ الإصدار الحالي هو {currentVersion, number}.} other {طُبع بالمرجع <bdi>{reference}</bdi>؛ وهو محفوظ الآن بالمرجع <bdi>{currentReference}</bdi> في الملف القانوني <bdi>{matterName}</bdi>. يشير هذا المرجع إلى الإصدار {version, number}؛ الإصدار الحالي هو {currentVersion, number}.}}",

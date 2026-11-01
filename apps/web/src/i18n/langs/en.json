@@ -2392,7 +2392,6 @@
     "unverifiedCitationHint": "This quote could not be matched to the source document.",
     "uploadFiles": "Upload files",
     "urlIdentifier": "Slug",
-    "urlIdentifierPlaceholder": "my-organization",
     "user": "User",
     "value": "Value",
     "vatId": "VAT ID",
@@ -2443,6 +2442,7 @@
     "scopeMemoryWrite": "Create and update assistant memories",
     "scopeOfflineAccess": "Keep you signed in without repeated approval",
     "scopeOnboarding": "Configure your organization's practice jurisdictions",
+    "scopeOrganizationCreate": "Create new organizations that you will own",
     "scopeProfile": "Access your profile information",
     "scopeRead": "Read your documents, matters, and contacts",
     "scopeReadAnonymized": "Read anonymized versions of your documents and matters",
@@ -2969,7 +2969,6 @@
     "failedToVerifyOtp": "Failed to verify code",
     "matterNotFound": "Matter not found",
     "partyAlreadyExists": "Contact already has this role on the matter",
-    "slugAlreadyTaken": "This slug is already taken",
     "uploadFailed": "Upload failed"
   },
   "feedback": {
@@ -4722,6 +4721,13 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Using defaults"
     },
+    "creationEvaluationLimitReached": "You have used all {limit} organization evaluation periods. Deleting an organization does not restore one. Use an existing organization or contact support for paid access.",
+    "creationInvalidName": "Enter a valid organization name (up to {maxLength} characters).",
+    "creationNotAllowed": "This account cannot create organizations.",
+    "creationOutcomeUnknown": "The request may have created an organization. Retry to check its result.",
+    "creationRateLimited": "Too many organizations were created recently. Try again later.",
+    "creationRefused": "The organization could not be created. Check the details and try again.",
+    "creationSlugConflict": "This organization address is already in use. Choose another name or address.",
     "invitations": {
       "cancelInvitation": "Cancel invitation",
       "emailAddressLabel": "Email address",
@@ -4736,6 +4742,7 @@
       "statuses": {
         "accepted": "Accepted",
         "canceled": "Canceled",
+        "expired": "Expired",
         "pending": "Pending",
         "rejected": "Rejected"
       }
@@ -4769,6 +4776,8 @@
       "typeEmailToConfirm": "Type {email} to confirm",
       "updateRole": "Update role"
     },
+    "newOrganization": "New organization",
+    "newOrganizationDescription": "Create an organization that you will own.",
     "roles": {
       "admin": "Admin",
       "descriptions": {
@@ -4784,6 +4793,9 @@
       "owner": "Owner"
     },
     "settingsDescription": "Edit your organization name and slug",
+    "startOver": "Start over",
+    "startOverDescription": "The original request may already have created an organization. Check your organizations before starting again; a new request could create another organization.",
+    "startOverTitle": "Start a new creation request?",
     "switchOrganization": "Switch organization"
   },
   "publicTools": {
@@ -5380,6 +5392,7 @@
         "title": "Memory extraction",
         "toggleLabel": "Suggest memories from chat history in the background"
       },
+      "pastInvitations": "Past invitations",
       "pendingInvitations": "Pending invitations",
       "practiceJurisdictions": "Jurisdictions",
       "practiceJurisdictionsDescription": "Select the jurisdictions relevant to you.",
@@ -6217,8 +6230,7 @@
   "validation": {
     "invalidEmail": "Enter a valid email address.",
     "organizationNameRequired": "Organization name is required",
-    "slugFormat": "Slug must be lowercase letters, numbers, and hyphens",
-    "slugRequired": "Slug is required"
+    "slugFormat": "Slug must be lowercase letters, numbers, and hyphens"
   },
   "verify": {
     "history": "{history, select, refiled {Printed as <bdi>{reference}</bdi>; now filed as <bdi>{currentReference}</bdi> in <bdi>{matterName}</bdi>.} superseded {This reference points to version {version, number}; the current version is {currentVersion, number}.} other {Printed as <bdi>{reference}</bdi>; now filed as <bdi>{currentReference}</bdi> in <bdi>{matterName}</bdi>. This reference points to version {version, number}; the current version is {currentVersion, number}.}}",

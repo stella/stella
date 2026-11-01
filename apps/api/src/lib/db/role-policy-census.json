@@ -9011,6 +9011,16 @@
   },
   {
     "schema": "public",
+    "table": "organization_creation_requests",
+    "policy": "organization_creation_requests_owner",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('organization_creation_requests'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('organization_creation_requests'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "organization_file_objects",
     "policy": "organization_file_objects_no_delete",
     "command": "DELETE",

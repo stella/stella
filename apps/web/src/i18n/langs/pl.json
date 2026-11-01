@@ -2392,7 +2392,6 @@
     "unverifiedCitationHint": "Nie udało się dopasować tego cytatu do dokumentu źródłowego.",
     "uploadFiles": "Prześlij pliki",
     "urlIdentifier": "Identyfikator URL",
-    "urlIdentifierPlaceholder": "moja-organizacja",
     "user": "Użytkownik",
     "value": "Wartość",
     "vatId": "Numer VAT",
@@ -2443,6 +2442,7 @@
     "scopeMemoryWrite": "Tworzenie i aktualizowanie pamięci asystenta",
     "scopeOfflineAccess": "Utrzymywanie Cię zalogowanym bez konieczności ponownej zgody",
     "scopeOnboarding": "Skonfiguruj jurysdykcje praktyki swojej organizacji",
+    "scopeOrganizationCreate": "Tworzenie nowych organizacji, których będziesz właścicielem",
     "scopeProfile": "Dostęp do Twoich danych profilowych",
     "scopeRead": "Odczyt Twoich dokumentów, spraw i kontaktów",
     "scopeReadAnonymized": "Odczyt zanonimizowanych wersji Twoich dokumentów i spraw",
@@ -2969,7 +2969,6 @@
     "failedToVerifyOtp": "Nie udało się zweryfikować kodu",
     "matterNotFound": "Sprawa nie została znaleziona",
     "partyAlreadyExists": "Kontakt ma już tę rolę w sprawie",
-    "slugAlreadyTaken": "Ten slug jest już zajęty",
     "uploadFailed": "Przesyłanie nie powiodło się"
   },
   "feedback": {
@@ -4722,6 +4721,13 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Używane są ustawienia domyślne"
     },
+    "creationEvaluationLimitReached": "Wykorzystano wszystkie {limit} okresy próbne organizacji. Usunięcie organizacji nie przywraca okresu próbnego. Użyj istniejącej organizacji lub skontaktuj się z pomocą techniczną, aby uzyskać płatny dostęp.",
+    "creationInvalidName": "Wpisz prawidłową nazwę organizacji (maksymalnie {maxLength} znaków).",
+    "creationNotAllowed": "To konto nie może tworzyć organizacji.",
+    "creationOutcomeUnknown": "Żądanie mogło utworzyć organizację. Spróbuj ponownie, aby sprawdzić wynik.",
+    "creationRateLimited": "W ostatnim czasie utworzono zbyt wiele organizacji. Spróbuj ponownie później.",
+    "creationRefused": "Nie udało się utworzyć organizacji. Sprawdź dane i spróbuj ponownie.",
+    "creationSlugConflict": "Ten adres organizacji jest już używany. Wybierz inną nazwę lub inny adres.",
     "invitations": {
       "cancelInvitation": "Anuluj zaproszenie",
       "emailAddressLabel": "Adres e-mail",
@@ -4736,6 +4742,7 @@
       "statuses": {
         "accepted": "Zaakceptowane",
         "canceled": "Anulowane",
+        "expired": "Wygasłe",
         "pending": "Oczekujące",
         "rejected": "Odrzucone"
       }
@@ -4769,6 +4776,8 @@
       "typeEmailToConfirm": "Wpisz {email}, aby potwierdzić",
       "updateRole": "Zaktualizuj rolę"
     },
+    "newOrganization": "Nowa organizacja",
+    "newOrganizationDescription": "Utwórz organizację, której będziesz właścicielem.",
     "roles": {
       "admin": "Administrator",
       "descriptions": {
@@ -4784,6 +4793,9 @@
       "owner": "Właściciel"
     },
     "settingsDescription": "Edytuj nazwę i slug organizacji",
+    "startOver": "Zacznij od nowa",
+    "startOverDescription": "Pierwotne żądanie mogło już utworzyć organizację. Zanim zaczniesz od nowa, sprawdź swoje organizacje; nowe żądanie może utworzyć kolejną organizację.",
+    "startOverTitle": "Wysłać nowe żądanie utworzenia?",
     "switchOrganization": "Przełącz organizację"
   },
   "publicTools": {
@@ -5380,6 +5392,7 @@
         "title": "Wyodrębnianie pamięci",
         "toggleLabel": "Proponuj wpisy do pamięci z historii czatów w tle"
       },
+      "pastInvitations": "Poprzednie zaproszenia",
       "pendingInvitations": "Oczekujące zaproszenia",
       "practiceJurisdictions": "Jurysdykcje",
       "practiceJurisdictionsDescription": "Wybierz jurysdykcje, które są dla Ciebie istotne.",
@@ -6217,8 +6230,7 @@
   "validation": {
     "invalidEmail": "Wpisz prawidłowy adres e-mail.",
     "organizationNameRequired": "Nazwa organizacji jest wymagana",
-    "slugFormat": "Slug może zawierać tylko małe litery, cyfry i myślniki",
-    "slugRequired": "Slug jest wymagany"
+    "slugFormat": "Slug może zawierać tylko małe litery, cyfry i myślniki"
   },
   "verify": {
     "history": "{history, select, refiled {Wydrukowano pod numerem <bdi>{reference}</bdi>; obecnie dokument jest prowadzony pod numerem <bdi>{currentReference}</bdi> w sprawie <bdi>{matterName}</bdi>.} superseded {Ten numer referencyjny wskazuje wersję {version, number}; bieżąca wersja to {currentVersion, number}.} other {Wydrukowano pod numerem <bdi>{reference}</bdi>; obecnie dokument jest prowadzony pod numerem <bdi>{currentReference}</bdi> w sprawie <bdi>{matterName}</bdi>. Ten numer referencyjny wskazuje wersję {version, number}; bieżąca wersja to {currentVersion, number}.}}",

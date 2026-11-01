@@ -28,6 +28,7 @@ export const REPLAY_CAPABLE_ROUTES = [
   },
   { method: "POST", path: "/v1/lists/:workspaceId/generations" },
   { method: "POST", path: "/v1/lists/:workspaceId/sections" },
+  { method: "POST", path: "/v1/organizations" },
   { method: "POST", path: "/v1/reader/annotations" },
   { method: "POST", path: "/v1/saved-time-narratives" },
   { method: "POST", path: "/v1/seller-profiles" },
