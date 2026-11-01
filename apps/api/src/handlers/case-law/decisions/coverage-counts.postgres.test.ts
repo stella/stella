@@ -179,7 +179,7 @@ const createPopulationFixture = async (db: GatedTestDb, schemaName: string) => {
   }
   const migration = await Bun.file(
     new URL(
-      "../../../../drizzle/20261030222000_case_law_population_counts/migration.sql",
+      "../../../../drizzle/20261101022151_case_law_population_counts/migration.sql",
       import.meta.url,
     ),
   ).text();

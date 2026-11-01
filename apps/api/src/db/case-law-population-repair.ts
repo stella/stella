@@ -14,7 +14,7 @@ const MAX_BATCH_SIZE = 256;
 
 /** A row projection is the data checkpoint; the cursor bounds seed discovery. */
 export const CASE_LAW_POPULATION_REPAIR = {
-  introducedBy: "20261030222000_case_law_population_counts",
+  introducedBy: "20261101022151_case_law_population_counts",
   name: CASE_LAW_POPULATION_SEED_REPAIR_NAME,
   readCompletion: async (connection) => {
     const row = (

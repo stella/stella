@@ -1567,7 +1567,7 @@ export const installPgliteCaseLawPopulationCounts = async (
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261030222000_case_law_population_counts",
+      "20261101022151_case_law_population_counts",
       "migration.sql",
     ),
   ).filter((statement) => {

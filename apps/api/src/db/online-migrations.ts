@@ -268,7 +268,7 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     name: "case_law_population_deltas_source_kind_idx",
-    introducedBy: "20261030222000_case_law_population_counts",
+    introducedBy: "20261101022151_case_law_population_counts",
     tableName: "case_law_population_deltas",
     createSql:
       'CREATE INDEX CONCURRENTLY "case_law_population_deltas_source_kind_idx" ON public."case_law_population_deltas" USING btree ("source_id", "kind", "value")',
@@ -278,7 +278,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     name: "case_law_population_projection_activity_idx",
-    introducedBy: "20261030222000_case_law_population_counts",
+    introducedBy: "20261101022151_case_law_population_counts",
     tableName: "case_law_population_projections",
     createSql: `CREATE INDEX CONCURRENTLY "case_law_population_projection_activity_idx" ON public."case_law_population_projections" USING btree ("country", "court", "updated_at" DESC, "source_id", "created_at") WHERE publication = 'published'`,
     definitionBody:
@@ -287,7 +287,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     name: "case_law_population_counts_source_kind_idx",
-    introducedBy: "20261030222000_case_law_population_counts",
+    introducedBy: "20261101022151_case_law_population_counts",
     tableName: "case_law_population_counts",
     createSql:
       'CREATE INDEX CONCURRENTLY "case_law_population_counts_source_kind_idx" ON public."case_law_population_counts" USING btree ("source_id", "kind", "value", "total")',
