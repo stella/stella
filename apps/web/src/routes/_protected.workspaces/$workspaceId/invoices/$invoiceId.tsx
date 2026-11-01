@@ -30,6 +30,14 @@ import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { Skeleton } from "@stll/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@stll/ui/table";
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
@@ -121,7 +129,7 @@ function InvoiceDetailPage() {
 // Stable keys so skeleton rows/cells never fall back to array-index keys.
 const INFO_CELL_KEYS = ["a", "b", "c", "d"] as const;
 const ENTRY_ROW_KEYS = ["a", "b", "c", "d", "e"] as const;
-// Plain `<table>` (not TanStack) with: context, date, narrative, hours, amount.
+// Plain `Table` (not TanStack) with: context, date, narrative, hours, amount.
 const ENTRY_COLUMN_KEYS = [
   "context",
   "date",
@@ -167,26 +175,26 @@ const InvoiceDetailSkeleton = () => (
         <Skeleton className="h-3 w-16" />
       </div>
       <div className="overflow-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b">
+        <Table inset="card" scroll="parent">
+          <TableHeader>
+            <TableRow>
               {ENTRY_COLUMN_KEYS.map((column) => (
-                <th className="px-4 py-2" key={column}>
+                <TableHead key={column}>
                   <Skeleton
                     className={cn(
                       "h-3 w-16",
                       ENTRY_END_ALIGNED_COLUMNS.includes(column) && "ms-auto",
                     )}
                   />
-                </th>
+                </TableHead>
               ))}
-            </tr>
-          </thead>
-          <tbody>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {ENTRY_ROW_KEYS.map((rowKey) => (
-              <tr className="border-b last:border-0" key={rowKey}>
+              <TableRow key={rowKey}>
                 {ENTRY_COLUMN_KEYS.map((column) => (
-                  <td className="px-4 py-2" key={column}>
+                  <TableCell key={column}>
                     <Skeleton
                       className={cn(
                         "h-4 w-3/5",
@@ -194,12 +202,12 @@ const InvoiceDetailSkeleton = () => (
                           "ms-auto w-12",
                       )}
                     />
-                  </td>
+                  </TableCell>
                 ))}
-              </tr>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   </div>
@@ -536,45 +544,37 @@ const InvoiceDetail = ({
               </div>
             ) : (
               <div className="overflow-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-muted-foreground border-b text-start">
-                      <th className="px-4 py-2 font-medium">
-                        {t("chat.composerMenu.context")}
-                      </th>
-                      <th className="px-4 py-2 font-medium">
-                        {t("common.date")}
-                      </th>
-                      <th className="px-4 py-2 font-medium">
-                        {t("billing.narrative")}
-                      </th>
-                      <th className="px-4 py-2 text-end font-medium">
-                        {t("billing.hours")}
-                      </th>
-                      <th className="px-4 py-2 text-end font-medium">
-                        {t("billing.amount")}
-                      </th>
+                <Table inset="card" scroll="parent">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t("chat.composerMenu.context")}</TableHead>
+                      <TableHead>{t("common.date")}</TableHead>
+                      <TableHead>{t("billing.narrative")}</TableHead>
+                      <TableHead align="end">{t("billing.hours")}</TableHead>
+                      <TableHead align="end">{t("billing.amount")}</TableHead>
                       {invoiceStatus === "draft" && (
-                        <th className="w-10 px-4 py-2" />
+                        <TableHead className="w-10" />
                       )}
-                    </tr>
-                  </thead>
-                  <tbody>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {invoice.timeEntries.map((entry) => (
-                      <tr className="border-b last:border-0" key={entry.id}>
-                        <td className="px-4 py-2">
-                          {entry.workItem?.name ?? t("common.matter")}
-                        </td>
-                        <td className="px-4 py-2 tabular-nums">
+                      <TableRow key={entry.id}>
+                        <TableCell className="whitespace-normal">
+                          <span className="leading-5">
+                            {entry.workItem?.name ?? t("common.matter")}
+                          </span>
+                        </TableCell>
+                        <TableCell align="start" numeric>
                           {format.dateTime(
                             plainDateEpoch(entry.dateWorked),
                             MEDIUM_DATE,
                           )}
-                        </td>
-                        <td className="max-w-xs truncate px-4 py-2">
+                        </TableCell>
+                        <TableCell className="max-w-xs" truncate>
                           {entry.invoiceNarrative ?? entry.narrative}
-                        </td>
-                        <td className="px-4 py-2 text-end tabular-nums">
+                        </TableCell>
+                        <TableCell align="end" numeric>
                           {format.number(entry.billedMinutes / 60, {
                             style: "unit",
                             unit: "hour",
@@ -582,15 +582,15 @@ const InvoiceDetail = ({
                             minimumFractionDigits: 1,
                             maximumFractionDigits: 1,
                           })}
-                        </td>
-                        <td className="px-4 py-2 text-end tabular-nums">
+                        </TableCell>
+                        <TableCell align="end" numeric>
                           {formatCurrencyAmount(
                             timeEntryAmount(entry),
                             entry.currency,
                           )}
-                        </td>
+                        </TableCell>
                         {invoiceStatus === "draft" && (
-                          <td className="px-4 py-2">
+                          <TableCell>
                             <Button
                               aria-label={t("common.remove")}
                               className="size-6"
@@ -602,12 +602,12 @@ const InvoiceDetail = ({
                             >
                               <XCircleIcon className="text-muted-foreground size-3.5" />
                             </Button>
-                          </td>
+                          </TableCell>
                         )}
-                      </tr>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
           </div>
@@ -621,42 +621,36 @@ const InvoiceDetail = ({
                 </h3>
               </div>
               <div className="overflow-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-muted-foreground border-b text-start">
-                      <th className="px-4 py-2 font-medium">
-                        {t("common.matter")}
-                      </th>
-                      <th className="px-4 py-2 font-medium">
-                        {t("common.date")}
-                      </th>
-                      <th className="px-4 py-2 font-medium">
-                        {t("common.description")}
-                      </th>
-                      <th className="px-4 py-2 text-end font-medium">
-                        {t("billing.amount")}
-                      </th>
+                <Table inset="card" scroll="parent">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t("common.matter")}</TableHead>
+                      <TableHead>{t("common.date")}</TableHead>
+                      <TableHead>{t("common.description")}</TableHead>
+                      <TableHead align="end">{t("billing.amount")}</TableHead>
                       {invoiceStatus === "draft" && (
-                        <th className="w-10 px-4 py-2" />
+                        <TableHead className="w-10" />
                       )}
-                    </tr>
-                  </thead>
-                  <tbody>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {invoice.expenses.map((expense) => (
-                      <tr className="border-b last:border-0" key={expense.id}>
-                        <td className="px-4 py-2">
-                          {expense.matter?.name ?? "—"}
-                        </td>
-                        <td className="px-4 py-2 tabular-nums">
+                      <TableRow key={expense.id}>
+                        <TableCell className="whitespace-normal">
+                          <span className="leading-5">
+                            {expense.matter?.name ?? "—"}
+                          </span>
+                        </TableCell>
+                        <TableCell align="start" numeric>
                           {format.dateTime(
                             plainDateEpoch(expense.dateIncurred),
                             MEDIUM_DATE,
                           )}
-                        </td>
-                        <td className="max-w-xs truncate px-4 py-2">
+                        </TableCell>
+                        <TableCell className="max-w-xs" truncate>
                           {expense.invoiceDescription ?? expense.description}
-                        </td>
-                        <td className="px-4 py-2 text-end tabular-nums">
+                        </TableCell>
+                        <TableCell align="end" numeric>
                           {formatCurrencyAmount(
                             applyMarkupCents({
                               amountCents: expense.amount,
@@ -664,9 +658,9 @@ const InvoiceDetail = ({
                             }),
                             expense.currency,
                           )}
-                        </td>
+                        </TableCell>
                         {invoiceStatus === "draft" && (
-                          <td className="px-4 py-2">
+                          <TableCell>
                             <Button
                               aria-label={t("common.remove")}
                               className="size-6"
@@ -678,12 +672,12 @@ const InvoiceDetail = ({
                             >
                               <XCircleIcon className="text-muted-foreground size-3.5" />
                             </Button>
-                          </td>
+                          </TableCell>
                         )}
-                      </tr>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </div>
           )}

@@ -291,6 +291,10 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `legislation.boe.text-block.get` | read | stella:read | FEATURE_PUBLIC_LAW | covered by `search_boe_legislation` |
 | `legislation.borme.summary.get` | read | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation borme-summary-get` |
 | `legislation.get` | read | stella:read | FEATURE_PUBLIC_LAW | covered by `read_statute` |
+| `legislation.matter-links.batch.create` | write | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation matter-links-batch-create` |
+| `legislation.matter-links.create` | write | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation matter-links-create` |
+| `legislation.matter-links.delete` | write, destructive | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation matter-links-delete` |
+| `legislation.matter-links.list` | read | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation matter-links-list` |
 | `legislation.search` | read | stella:read | FEATURE_PUBLIC_LAW | curated tool `search_legislation` |
 
 ## lists
@@ -414,6 +418,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
+| `organizations.create` | write | stella:organization_create | — | generic invoke → `stella capability organizations create` |
 | `organizations.slug.update` | write | stella:admin_write | — | generic invoke → `stella capability organizations slug-update` |
 
 ## playbooks
