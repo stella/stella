@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import {
   checkBaseline,
+  checkMigratedMutationTargets,
   inspectMutationQueryInvalidation,
 } from "./check-mutation-query-invalidation.ts";
 import { inspectMutationQuerySources } from "./mutation-query-census.ts";
@@ -921,4 +922,32 @@ export const rename = () => useMutation({ ...options, ${overrides} });
     assertInvalidCannotBeBaselined(findings);
   }
   expect(violations(fixture("onSuccess: () => {}"))).toEqual([]);
+});
+
+test("frozen migration targets may gain a contract but never change or lose one", () => {
+  const committed = {
+    renameEntity: ["entitiesKeys.all", "inboxKeys.all"],
+    addMcpServer: ["catalogueKeys.all"],
+  };
+  expect(
+    checkMigratedMutationTargets({ recorded: committed, committed: null }),
+  ).toEqual([]);
+  expect(
+    checkMigratedMutationTargets({
+      recorded: { ...committed, saveMcpToken: ["catalogueKeys.all"] },
+      committed,
+    }),
+  ).toEqual([]);
+  expect(
+    checkMigratedMutationTargets({
+      recorded: {
+        renameEntity: ["entitiesKeys.all"],
+        saveMcpToken: ["catalogueKeys.all"],
+      },
+      committed,
+    }),
+  ).toEqual([
+    "Changed frozen migration targets: addMcpServer",
+    "Changed frozen migration targets: renameEntity",
+  ]);
 });

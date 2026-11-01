@@ -37,13 +37,13 @@ import {
 } from "@/lib/resource-query-roots.logic";
 import type { ViewLayout } from "@/lib/types";
 import {
-  applyResourceQueryActions,
   getWorkspaceRealtimeQueryActions,
   getWorkspaceReconnectQueryActions,
   RESOURCE_MUTATION_CONTRACTS,
   resourceMutation,
   resourceQueryOptions,
 } from "@/lib/workspace-realtime";
+import { applyResourceQueryActions } from "@/lib/workspace-realtime.test-fixtures";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 import {
@@ -78,19 +78,10 @@ const coverageLayout = {
   columnPinning: [],
 } as const satisfies ViewLayout;
 
-const previousCensusSchema = v.object({
-  mutations: v.array(
-    v.object({
-      kind: v.string(),
-      writes: v.array(v.object({ method: v.string(), route: v.string() })),
-      cacheEffects: v.array(
-        v.object({
-          operation: v.string(),
-          key: v.nullable(v.object({ factory: v.nullable(v.string()) })),
-        }),
-      ),
-    }),
-  ),
+// Frozen when each write moved onto resourceMutation; regenerating the
+// census never rewrites it.
+const migratedTargetsSchema = v.object({
+  migratedMutationTargets: v.record(v.string(), v.array(v.string())),
 });
 
 type PreviousInvalidation = {
@@ -241,52 +232,33 @@ test("independent readers stay fresh across every resource event and reconnect",
   }
 });
 
+const isContractName = (
+  name: string,
+): name is keyof typeof RESOURCE_MUTATION_CONTRACTS =>
+  Object.hasOwn(RESOURCE_MUTATION_CONTRACTS, name);
+
 test("each migrated mutation still invalidates every prior cache target", async () => {
   const root = path.resolve(import.meta.dir, "../../../../");
-  const previousCensus = v.parse(
-    previousCensusSchema,
+  const { migratedMutationTargets } = v.parse(
+    migratedTargetsSchema,
     JSON.parse(
       readFileSync(
-        path.join(root, "scripts/mutation-query-census.json"),
+        path.join(root, "scripts/mutation-query-invalidation-baseline.json"),
         "utf-8",
       ),
     ),
   );
-  // This committed census preserves the cache effects from before helper migration.
-  const mutationNames = Object.keys(RESOURCE_MUTATION_CONTRACTS).filter(
-    (name): name is keyof typeof RESOURCE_MUTATION_CONTRACTS =>
-      Object.hasOwn(RESOURCE_MUTATION_CONTRACTS, name),
-  );
-  for (const mutation of mutationNames) {
-    const contract = RESOURCE_MUTATION_CONTRACTS[mutation];
-    const routes = contract.writes.map(
-      ({ method, route }) => `${method.toLowerCase()} ${route}`,
-    );
-    const previousMutations = previousCensus.mutations.filter(
-      ({ kind, writes }) =>
-        kind !== "wrapper" &&
-        JSON.stringify(
-          writes
-            .map(({ method, route }) => `${method.toLowerCase()} ${route}`)
-            .toSorted(),
-        ) === JSON.stringify(routes.toSorted()),
-    );
-    if (previousMutations.length === 0) {
-      continue;
+  const migrated = Object.entries(migratedMutationTargets);
+  expect(migrated.length).toBeGreaterThan(0);
+  for (const [mutation, factories] of migrated) {
+    if (!isContractName(mutation)) {
+      throw new TypeError(`Frozen targets name no contract: ${mutation}`);
     }
-    const previousEffects = previousMutations.flatMap(({ cacheEffects }) =>
-      cacheEffects.filter(({ operation }) => operation === "invalidateQueries"),
-    );
-    expect(previousEffects.length).toBeGreaterThan(0);
-    const targets = previousEffects.map(({ key }) => {
-      const factory = key?.factory;
-      if (!factory) {
-        throw new TypeError(
-          "Previous invalidation has no resolvable key factory",
-        );
-      }
-      return previousInvalidationFor(factory);
+    expect({ mutation, factories: factories.length > 0 }).toEqual({
+      mutation,
+      factories: true,
     });
+    const targets = factories.map(previousInvalidationFor);
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } },
     });
@@ -305,7 +277,7 @@ test("each migrated mutation still invalidates every prior cache target", async 
           );
         }
       }
-      const rename = resourceMutation({
+      const write = resourceMutation({
         mutation,
         queryClient,
         mutationFn: async ({
@@ -317,10 +289,14 @@ test("each migrated mutation still invalidates every prior cache target", async 
           workspaceId,
         }),
       });
-      await rename({ workspaceId: WORKSPACE_ID, entityId: ENTITY_ID });
+      await write({ workspaceId: WORKSPACE_ID, entityId: ENTITY_ID });
       for (const { readers } of targets) {
         for (const { queryKey } of readers) {
-          expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
+          expect({
+            mutation,
+            queryKey,
+            invalidated: queryClient.getQueryState(queryKey)?.isInvalidated,
+          }).toEqual({ mutation, queryKey, invalidated: true });
         }
       }
     } finally {

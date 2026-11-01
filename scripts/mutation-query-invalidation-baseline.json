@@ -1674,5 +1674,28 @@
     "packages/business-registries/src/entity-checks/run.ts:ENTITY_CHECK_RUNNERS/cz-insolvency:settle:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "packages/business-registries/src/entity-checks/run.ts:ENTITY_CHECK_RUNNERS/cz-vat-reliability:settle:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata.",
     "packages/business-registries/src/entity-checks/run.ts:settle/answer:query:reader": "Existing query reader pending migration to resourceQueryOptions resource metadata."
+  },
+  "migratedMutationTargets": {
+    "transitionInvoice": ["invoicesKeys.all", "timeEntriesKeys.all"],
+    "renameEntity": [
+      "entitiesKeys.all",
+      "entityViewKeys.all",
+      "fileMetadataByFieldQueryRoot",
+      "inboxKeys.all"
+    ],
+    "installCatalogueEntry": [
+      "agentSkillsQueryRoot",
+      "catalogueKeys.all",
+      "mcpQueryRoot"
+    ],
+    "uninstallCatalogueEntry": [
+      "agentSkillsQueryRoot",
+      "catalogueKeys.all",
+      "knowledgeKeys.mcp.all",
+      "mcpQueryRoot"
+    ],
+    "addMcpServer": ["catalogueKeys.all", "knowledgeKeys.mcp.all"],
+    "connectMcpServer": ["catalogueKeys.all", "knowledgeKeys.mcp.all"],
+    "saveMcpToken": ["catalogueKeys.all", "knowledgeKeys.mcp.all"]
   }
 }

@@ -793,30 +793,10 @@ const invalidationReaches = (
   }
 };
 
-/** Applies remote-event and reconnect actions through the write executor. */
-export const applyResourceQueryActions = async (
-  queryClient: QueryClient,
-  actions: readonly WorkspaceRealtimeQueryAction[],
-) => {
-  for (const action of actions) {
-    if (action.type === WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX) {
-      queryClient.removeQueries({ queryKey: action.queryKey, exact: false });
-    }
-  }
-  await invalidateResourceQueries(
-    queryClient,
-    actions
-      .filter(
-        (action) => action.type === WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
-      )
-      .map(({ queryKey }): ResourceQueryInvalidation => ({
-        queryKey,
-        match: "prefix",
-      })),
-  );
-};
-
-/** One cache executor for local writes, remote events, and reconnect recovery. */
+/**
+ * Marks a committed local write's readers stale, then refreshes the active
+ * ones without making the write wait on, or fail with, the refetch.
+ */
 const invalidateResourceQueries = async (
   queryClient: QueryClient,
   invalidations: readonly ResourceQueryInvalidation[],

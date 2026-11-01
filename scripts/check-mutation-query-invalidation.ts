@@ -72,9 +72,51 @@ const MUTATION_SPREAD_OVERRIDES = new Set([
   "scope",
 ]);
 
+const entriesSchema = v.record(v.string(), v.pipe(v.string(), v.regex(/\S/u)));
+
+/**
+ * Per resource-mutation contract, the query-key factories its write
+ * invalidated before it moved onto `resourceMutation`. Recorded once from
+ * the pre-migration census; a contract's list never changes afterwards, so
+ * the migrated write is always checked against what it replaced.
+ */
+const migratedMutationTargetsSchema = v.record(
+  v.string(),
+  v.pipe(v.array(v.pipe(v.string(), v.regex(/\S/u))), v.minLength(1)),
+);
+
 const baselineSchema = v.object({
-  entries: v.record(v.string(), v.pipe(v.string(), v.regex(/\S/u))),
+  entries: entriesSchema,
+  migratedMutationTargets: migratedMutationTargetsSchema,
 });
+
+// Earlier revisions may predate the frozen migration targets.
+const committedBaselineSchema = v.object({
+  entries: entriesSchema,
+  migratedMutationTargets: v.optional(migratedMutationTargetsSchema, {}),
+});
+
+type MigratedMutationTargets = v.InferOutput<
+  typeof migratedMutationTargetsSchema
+>;
+
+/** Frozen targets may gain contracts, never change or lose one. */
+export const checkMigratedMutationTargets = ({
+  recorded,
+  committed,
+}: {
+  recorded: MigratedMutationTargets;
+  committed: MigratedMutationTargets | null;
+}): string[] =>
+  committed === null
+    ? []
+    : Object.entries(committed)
+        .filter(
+          ([mutation, targets]) =>
+            JSON.stringify(recorded[mutation]) !== JSON.stringify(targets),
+        )
+        .map(([mutation]) => `Changed frozen migration targets: ${mutation}`)
+        .toSorted(compareCodeUnit);
 
 type Source = { file: string; text: string };
 type Finding = {
@@ -2045,7 +2087,7 @@ const git = (args: readonly string[]) => {
   const result = Bun.spawnSync(["git", ...args], { cwd: ROOT });
   return result.exitCode === 0 ? result.stdout.toString().trim() : null;
 };
-const committedEntries = (revision: string): Record<string, string> | null => {
+const committedBaseline = (revision: string) => {
   const listed = git(["ls-tree", "--name-only", revision, "--", BASELINE]);
   if (listed === null) {
     return panic("Cannot inspect the committed mutation/query baseline");
@@ -2057,7 +2099,7 @@ const committedEntries = (revision: string): Record<string, string> | null => {
   if (content === null) {
     return panic("Cannot read the committed mutation/query baseline");
   }
-  return v.parse(baselineSchema, JSON.parse(content)).entries;
+  return v.parse(committedBaselineSchema, JSON.parse(content));
 };
 
 export const checkBaseline = ({
@@ -2186,22 +2228,37 @@ const main = () => {
       "Cannot resolve the mutation/query invalidation baseline base revision",
     )
   ).trim();
+  const committed = committedBaseline(baseRevision);
   const result = checkBaseline({
     observed,
     recorded: baseline.entries,
-    committed: committedEntries(baseRevision),
+    committed: committed?.entries ?? null,
     write: process.argv.includes("--write"),
   });
-  if (!result.ok) {
+  const errors = [
+    ...result.errors,
+    ...checkMigratedMutationTargets({
+      recorded: baseline.migratedMutationTargets,
+      committed: committed?.migratedMutationTargets ?? null,
+    }),
+  ];
+  if (errors.length > 0) {
     process.stderr.write(
-      `Mutation/query invalidation baseline failed.\n${result.errors.join("\n")}\n`,
+      `Mutation/query invalidation baseline failed.\n${errors.join("\n")}\n`,
     );
     process.exit(1);
   }
   if (process.argv.includes("--write")) {
     writeFileSync(
       baselinePath,
-      `${JSON.stringify({ entries: result.entries }, null, 2)}\n`,
+      `${JSON.stringify(
+        {
+          entries: result.entries,
+          migratedMutationTargets: baseline.migratedMutationTargets,
+        },
+        null,
+        2,
+      )}\n`,
     );
   }
   process.stdout.write(

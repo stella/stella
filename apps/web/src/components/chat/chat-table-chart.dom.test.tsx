@@ -21,8 +21,10 @@ const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { Streamdown } = await import("streamdown");
 const { ChatTableChart } = await import("./chat-table-chart");
-const { applyResourceQueryActions, getWorkspaceReconnectQueryActions } =
+const { getWorkspaceReconnectQueryActions } =
   await import("@/lib/workspace-realtime");
+const { applyResourceQueryActions } =
+  await import("@/lib/workspace-realtime.test-fixtures");
 
 afterEach(async () => {
   await act(async () => cleanup());
