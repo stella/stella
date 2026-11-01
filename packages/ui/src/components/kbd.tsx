@@ -17,15 +17,23 @@ import { cn } from "../lib/utils";
  * `MenuShortcut` and `TooltipPopup`'s `shortcut` render through it, so a
  * shortcut reads the same in a menu, a tooltip and a hint.
  */
-const Kbd = ({ className, children, keys, ...props }: KbdProps) => {
+const Kbd = ({
+  className,
+  children,
+  keys,
+  variant = "cap",
+  ...props
+}: KbdProps) => {
   const platform = useKbdPlatform();
   return (
     <kbd
       className={cn(
-        "border-border bg-muted text-muted-foreground text-2xs inline-flex h-5 min-w-5 shrink-0 items-center justify-center gap-0.5 rounded border px-1 font-sans leading-none font-medium tabular-nums",
+        "inline-flex shrink-0 items-center justify-center gap-0.5 font-sans leading-none font-medium tabular-nums",
+        KBD_VARIANT_CLASS_NAME[variant],
         className,
       )}
       data-slot="kbd"
+      data-variant={variant}
       {...props}
     >
       {keys === undefined ? children : formatKeys(keys, platform)}
@@ -57,9 +65,23 @@ type KbdKey = string;
 
 type KbdPlatform = "apple" | "other";
 
+/**
+ * - `cap` (default): a boxed key cap, for a shortcut that stands on its own
+ *   (a hint, a tooltip).
+ * - `plain`: the keys as quiet text with no box, for the end of a row of
+ *   labels (a menu item), where caps would crowd it.
+ */
+type KbdVariant = "cap" | "plain";
+
 type KbdProps = React.ComponentProps<"kbd"> & {
   keys?: readonly KbdKey[] | undefined;
+  variant?: KbdVariant | undefined;
 };
+
+const KBD_VARIANT_CLASS_NAME = {
+  cap: "border-border bg-muted text-muted-foreground text-2xs h-5 min-w-5 rounded border px-1",
+  plain: "text-foreground-label text-xs tracking-widest",
+} as const satisfies Record<KbdVariant, string>;
 
 const KEY_LABELS = {
   apple: {
@@ -140,4 +162,11 @@ function useKbdPlatform(): KbdPlatform {
 }
 
 export { Kbd, formatKeys, kbdPlatformOf, useKbdPlatform };
-export type { KbdKey, KbdNamedKey, KbdNavigator, KbdPlatform, KbdProps };
+export type {
+  KbdKey,
+  KbdNamedKey,
+  KbdNavigator,
+  KbdPlatform,
+  KbdProps,
+  KbdVariant,
+};

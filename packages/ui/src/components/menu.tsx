@@ -282,20 +282,18 @@ const MenuSeparator = ({
 
 /**
  * The shortcut at the end of a menu row. Pass `keys` (`["mod", "K"]`) to have
- * it spelled for the reader's platform; see `Kbd`. It drops the key-cap box,
- * which would crowd a row of labels.
+ * it spelled for the reader's platform; see `Kbd`. It is the `plain` `Kbd`,
+ * with no key-cap box, which would crowd a row of labels.
  */
 const MenuShortcut = ({
   className,
   ...props
-}: React.ComponentProps<typeof Kbd>) => (
+}: Omit<React.ComponentProps<typeof Kbd>, "variant">) => (
   <Kbd
-    className={cn(
-      "text-foreground-label ms-auto h-auto min-w-0 border-0 bg-transparent px-0 text-xs tracking-widest",
-      className,
-    )}
+    className={cn("ms-auto", className)}
     data-slot="menu-shortcut"
     {...props}
+    variant="plain"
   />
 );
 
