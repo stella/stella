@@ -493,7 +493,7 @@ const assertOwnerHolder = (aggregate: AggregateName, tx: object): void => {
 // Names an unregistered connection in a refusal: its class and own keys.
 const describeConnection = (database: object): string => {
   const prototype: unknown = Object.getPrototypeOf(database);
-  const constructor = isRecord(prototype) ? prototype["constructor"] : null;
+  const constructor = isRecord(prototype) ? prototype.constructor : null;
   const name =
     typeof constructor === "function" && constructor.name !== ""
       ? constructor.name
