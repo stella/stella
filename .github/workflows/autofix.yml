@@ -635,6 +635,29 @@ jobs:
           done
 
           if (( ${#lint_paths[@]} > 0 )); then
+            # Restrict even safe fixes to the reviewed rule list. Never enable
+            # suggestions or dangerous fixes; CI reports all remaining rules.
+            bun scripts/autofix-safe-rules.ts > "$RUNNER_TEMP/autofix-safe-rule-args"
+            safe_rule_args=()
+            while IFS= read -r arg; do
+              safe_rule_args+=("$arg")
+            done < "$RUNNER_TEMP/autofix-safe-rule-args"
+            # Most pushes give the safe rules nothing to fix. The same rules
+            # without types, plus a syntax scan for what each type-aware safe
+            # rule could report, decide that before the type graph is
+            # prepared. A finding, a warning or a failure of either takes the
+            # full path below.
+            precheck_status=0
+            bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --max-warnings 0 "${safe_rule_args[@]}" "${lint_paths[@]}" || precheck_status=$?
+            if (( precheck_status == 0 )); then
+              bun scripts/autofix-type-aware-precheck.ts "${lint_paths[@]}" || precheck_status=$?
+            fi
+            if (( precheck_status == 0 )); then
+              echo "::notice title=Autofix lint fixes skipped::No safe lint rule reports the changed files."
+              lint_paths=()
+            fi
+          fi
+          if (( ${#lint_paths[@]} > 0 )); then
             # Type-aware fixes need the complete generated type graph. set -e
             # aborts on preparation errors before any fixer runs.
             bun scripts/ci-generated-sources.ts prepare
@@ -649,13 +672,6 @@ jobs:
                 cp -p "$backup/$path" "$path"
               done
             }
-            # Restrict even safe fixes to the reviewed rule list. Never enable
-            # suggestions or dangerous fixes; CI reports all remaining rules.
-            bun scripts/autofix-safe-rules.ts > "$RUNNER_TEMP/autofix-safe-rule-args"
-            safe_rule_args=()
-            while IFS= read -r arg; do
-              safe_rule_args+=("$arg")
-            done < "$RUNNER_TEMP/autofix-safe-rule-args"
             lint_status=0
             bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "${safe_rule_args[@]}" "${lint_paths[@]}" || lint_status=$?
             if (( lint_status > 1 )); then
