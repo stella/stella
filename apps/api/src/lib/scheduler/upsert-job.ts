@@ -5,6 +5,7 @@ import type { OrgScopedTransaction } from "@/api/db/org-scope";
 import type { ScopedTransaction } from "@/api/db/safe-db";
 import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
+import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import {
   type PlatformRunnerFinishState,
   type PlatformSchedulerState,
@@ -349,7 +350,7 @@ export const writeSchedulerJobOperatorPause = async ({
   jobId,
   state,
 }: {
-  db: Pick<ScopedTransaction, "execute">;
+  db: Pick<MaintenanceDb, "execute">;
   jobId: string;
   state: SchedulerJobOperatorPauseState;
 }): Promise<SchedulerOperatorPauseRow[]> =>

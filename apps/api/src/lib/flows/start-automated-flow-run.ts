@@ -33,6 +33,7 @@ import type {
 } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import type { StableExceptionKey } from "@/api/lib/observability/exception-fingerprint";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -305,7 +306,7 @@ const enqueueAutomatedRun = async ({
 
 type AutomatedStartFailure = {
   cause: unknown;
-  event: string;
+  event: StableExceptionKey;
   logContext: StartAutomatedFlowRunArgs["logContext"];
   statementTimeoutMs: number | undefined;
 };

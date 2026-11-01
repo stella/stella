@@ -18,6 +18,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedTransaction } from "@/api/db/safe-db";
 import type { schedulerJobs, SchedulerPayload } from "@/api/db/schema";
 import { withSkipLockedBatch } from "@/api/lib/db/aggregate-lock";
+import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import type { JsonObject } from "@/api/lib/json-value";
 import {
   SCHEDULER_TASK_AUTHORITY,
@@ -204,7 +205,7 @@ type SchedulerBookkeepingOperation = {
     }
   | {
       type: "operator-pause";
-      db: Pick<ScopedTransaction, "execute">;
+      db: Pick<MaintenanceDb, "execute">;
       jobId: string;
       state: SchedulerOperatorPauseState;
     }
@@ -553,6 +554,7 @@ export async function writeSchedulerBookkeeping(
   | void
   | { id: string }[]
   | SchedulerJob
+  | null
   | { id: string; pausedUntil: Date | null }[]
   | { id: string; task: string }[]
   | SchedulerOperatorPauseRow[]

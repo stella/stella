@@ -17,7 +17,10 @@ import {
   activityFeatureOwnerVisibilitySql,
   flowFeatureActorVisibilitySql,
 } from "@/api/lib/flows/visibility";
-import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedEntityId,
+  brandPersistedFlowRunId,
+} from "@/api/lib/safe-id-boundaries";
 
 const liveEntityTargets = (
   event: WorkspaceRealtimeEvent,
@@ -107,7 +110,7 @@ export const workspaceEventProjection = ({
         ? sql<boolean>`EXISTS(
       SELECT 1 FROM ${flowRuns} AS ${sourceRun}
       INNER JOIN ${workspaces} AS ${sourceWorkspace} ON ${sourceWorkspace.id} = ${sourceRun.workspaceId}
-      WHERE ${and(eq(sourceRun.id, toSafeId<"flowRun">(event.data.runId)), eq(sourceRun.workspaceId, workspaceId), eq(sourceWorkspace.organizationId, organizationId))}
+      WHERE ${and(eq(sourceRun.id, brandPersistedFlowRunId(event.data.runId)), eq(sourceRun.workspaceId, workspaceId), eq(sourceWorkspace.organizationId, organizationId))}
     )`
         : sql<boolean>`true`,
   };

@@ -164,8 +164,11 @@ type RecoverUploadFlowTriggerOptions = {
 
 type ReadUploadTriggerDispatchPageOptions = Pick<
   RecoverUploadFlowTriggerOptions,
-  "database" | "now" | "entityId" | "recovery"
->;
+  "database" | "now"
+> & {
+  entityId: RecoverUploadFlowTriggerOptions["entityId"];
+  recovery: RecoverUploadFlowTriggerOptions["recovery"];
+};
 
 const readUploadTriggerDispatchPage = async ({
   database,

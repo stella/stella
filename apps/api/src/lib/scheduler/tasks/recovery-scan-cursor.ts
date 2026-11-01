@@ -74,6 +74,37 @@ export type ScoutRecoveryCursor = v.InferOutput<typeof scoutCursorSchema>;
 export type UploadRecoveryState = v.InferOutput<typeof uploadStateSchema>;
 export type ScoutRecoveryState = v.InferOutput<typeof scoutStateSchema>;
 
+type ScoutRecoveryRow = {
+  organizationId: ScoutRecoveryCursor["organizationId"];
+  sourceKind: ScoutSourceKind;
+  sourceId: string;
+};
+
+/** A pending scout emission's position, with its id branded by source kind. */
+export const scoutRecoveryCursorFor = ({
+  organizationId,
+  sourceKind,
+  sourceId,
+}: ScoutRecoveryRow): ScoutRecoveryCursor => {
+  switch (sourceKind) {
+    case "document-review":
+      return {
+        organizationId,
+        sourceKind,
+        sourceId: brandPersistedDocumentReviewRunId(sourceId),
+      };
+    case "infosoud-hearing":
+      return {
+        organizationId,
+        sourceKind,
+        sourceId: brandPersistedEntityId(sourceId),
+      };
+    default:
+      sourceKind satisfies never;
+      return panic("Unknown scout recovery source kind");
+  }
+};
+
 type RecoveryTask =
   | {
       type: "upload";

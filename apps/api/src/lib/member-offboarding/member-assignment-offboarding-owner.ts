@@ -1392,8 +1392,12 @@ type MemberCleanupWorkspaceOptions = {
 
 type ReadMemberCleanupWorkspacesOptions = Pick<
   MemberCleanupWorkspaceOptions,
-  "tx" | "organizationId"
-> & { affectedWorkspaceIds: SQL; workspacesPerOrganization: number };
+  "tx"
+> & {
+  organizationId: MemberCleanupWorkspaceOptions["organizationId"];
+  affectedWorkspaceIds: SQL;
+  workspacesPerOrganization: number;
+};
 
 const readMemberCleanupWorkspaces = async ({
   tx,

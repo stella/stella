@@ -105,7 +105,7 @@ export async function mutateRecoveryReceipt(
             .insert(flowUploadTriggerIntents)
             .values(op.rows)
             .onConflictDoNothing();
-          return;
+          return undefined;
         case "create-hearing":
           return await tx
             .insert(pendingScoutEmissions)
@@ -129,7 +129,7 @@ export async function mutateRecoveryReceipt(
             });
         case "dequeue-scout":
           await tx.delete(pendingScoutEmissions).where(op.where);
-          return;
+          return undefined;
         case "settle-upload":
           return await tx
             .delete(flowUploadTriggerIntents)

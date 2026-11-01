@@ -53,6 +53,7 @@ import { toHearingRecord } from "@/api/lib/scouts/infosoud-hearings.logic";
 import {
   checkpointRecoveryScan,
   readRecoveryScanState,
+  scoutRecoveryCursorFor,
 } from "./recovery-scan-cursor";
 import type {
   ScoutRecoveryCursor,
@@ -534,11 +535,7 @@ const runScoutEmissionRecovery = async ({
     dispatch:
       dispatchPage.nextCursor === null || last === undefined
         ? null
-        : {
-            organizationId: last.organizationId,
-            sourceKind: last.sourceKind,
-            sourceId: last.sourceId,
-          },
+        : scoutRecoveryCursorFor(last),
   };
   const saved = await checkpointRecoveryScan({
     database: db,
@@ -814,10 +811,6 @@ const reconcileScoutEmissionGrantState = async ({
     cursor:
       page.nextCursor === null || last === undefined
         ? null
-        : {
-            organizationId: last.organizationId,
-            sourceKind: last.sourceKind,
-            sourceId: last.sourceId,
-          },
+        : scoutRecoveryCursorFor(last),
   };
 };

@@ -173,7 +173,7 @@ export async function mutateRecoveryClaim(
             .update(flowUploadTriggerIntents)
             .set({ retryAt: op.retryAt })
             .where(op.where);
-          return;
+          return undefined;
         case "scout-claim":
           return await tx
             .update(pendingScoutEmissions)
@@ -190,7 +190,7 @@ export async function mutateRecoveryClaim(
             .update(pendingScoutEmissions)
             .set({ nextAttemptAt: op.nextAttemptAt, lastError: op.lastError })
             .where(op.where);
-          return;
+          return undefined;
         case "deadline-claim": {
           const count = await transitionScopedCount({
             tx,
