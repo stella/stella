@@ -1492,7 +1492,7 @@
     "audioContent": "Vygenerovaný zvuk",
     "browserExtension": {
       "connect": "Připojit rozšíření",
-      "connectDescription": "Na této kartě klikněte na ikonu rozšíření stella na liště prohlížeče. Pokud se zobrazí žádost o přístup k webům, povolte jej a připojte tuto kartu.",
+      "connectDescription": "Klikněte na ikonu rozšíření stella na liště prohlížeče, povolte přístup k webům, pokud se zobrazí žádost, a připojte stellu. Jedno připojení platí pro všechny vaše karty stelly.",
       "connected": "Rozšíření připojeno",
       "description": "stella pro vás na požádání otevře a přečte webové stránky v samostatné kartě.",
       "install": "Nainstalovat rozšíření",

@@ -1492,7 +1492,7 @@
     "audioContent": "Wygenerowany dźwięk",
     "browserExtension": {
       "connect": "Połącz rozszerzenie",
-      "connectDescription": "W tej karcie kliknij ikonę rozszerzenia stella na pasku przeglądarki. Jeśli pojawi się prośba o dostęp do stron, zezwól na niego i połącz tę kartę.",
+      "connectDescription": "Kliknij ikonę rozszerzenia stella na pasku przeglądarki, zezwól na dostęp do stron, jeśli pojawi się prośba, i połącz stellę. Jedno połączenie obejmuje wszystkie Twoje karty stella.",
       "connected": "Rozszerzenie połączone",
       "description": "Na Twoją prośbę stella może otwierać i czytać strony internetowe w osobnej karcie.",
       "install": "Zainstaluj rozszerzenie",

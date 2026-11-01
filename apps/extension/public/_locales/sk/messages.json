@@ -75,8 +75,8 @@
   "allowWebsiteAccess": {
     "message": "Povoliť prístup k webom"
   },
-  "connectTab": {
-    "message": "Pripojiť túto kartu stelly"
+  "connectStella": {
+    "message": "Pripojiť stellu"
   },
   "adoptTab": {
     "message": "Použiť túto kartu so stellou"
@@ -97,9 +97,9 @@
     "message": "Kontrola pripojenia…"
   },
   "statusConnectedElsewhere": {
-    "message": "Je pripojená iná karta stelly"
+    "message": "stella je pripojená na inej adrese"
   },
-  "connectTabInstead": {
-    "message": "Pripojiť namiesto nej túto kartu stelly"
+  "connectStellaInstead": {
+    "message": "Pripojiť stellu tu"
   }
 }

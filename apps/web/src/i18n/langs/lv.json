@@ -1492,7 +1492,7 @@
     "audioContent": "Ģenerēts audio",
     "browserExtension": {
       "connect": "Savienot paplašinājumu",
-      "connectDescription": "Šajā cilnē noklikšķiniet uz stella paplašinājuma ikonas pārlūka rīkjoslā. Ja tiek prasīts, atļaujiet piekļuvi vietnēm un savienojiet šo cilni.",
+      "connectDescription": "Noklikšķiniet uz stella paplašinājuma ikonas pārlūka rīkjoslā, ja tiek prasīts, atļaujiet piekļuvi vietnēm un savienojiet stella. Viens savienojums der visām jūsu stella cilnēm.",
       "connected": "Paplašinājums savienots",
       "description": "Pēc jūsu lūguma stella var atvērt un lasīt vietnes atsevišķā cilnē.",
       "install": "Instalēt paplašinājumu",

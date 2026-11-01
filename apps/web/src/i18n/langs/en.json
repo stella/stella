@@ -1492,7 +1492,7 @@
     "audioContent": "Generated audio",
     "browserExtension": {
       "connect": "Connect extension",
-      "connectDescription": "Click the stella extension icon in the browser toolbar on this tab, allow website access if asked, and connect this tab.",
+      "connectDescription": "Click the stella extension icon in the browser toolbar, allow website access if asked, and connect stella. One connection covers all your stella tabs.",
       "connected": "Extension connected",
       "description": "stella can open and read websites for you in a separate tab when you ask.",
       "install": "Install extension",
