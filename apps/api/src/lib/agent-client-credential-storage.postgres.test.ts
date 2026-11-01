@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { asc, eq, sql } from "drizzle-orm";
 
@@ -22,13 +22,23 @@ import {
 } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import {
+  DECLARED_SCHEDULER_JOBS,
+  upsertSchedulerJob,
+} from "@/api/lib/scheduler/jobs";
+import { acquireNextDueJob } from "@/api/lib/scheduler/runner";
+import {
   BACKFILL_AGENT_CLIENT_STORAGE_TASK,
   backfillAgentClientStorage,
 } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
+import type {
+  SchedulerDb,
+  SchedulerTaskRegistry,
+} from "@/api/lib/scheduler/types";
 import {
   type GatedTestDb,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 let priorStorageSetting = false;
 beforeEach(() => {
@@ -166,7 +176,7 @@ if (!databaseUrl || !enabled) {
       });
     });
 
-    test("records completion across restarts and accepts an explicit reset", async () => {
+    test("records completion and self-heals later legacy writes", async () => {
       await withStoredValues(databaseUrl, async (db) => {
         await db.transaction(async (tx) => await seed(tx, 2));
         const job = await db.transaction(async (tx) =>
@@ -211,44 +221,77 @@ if (!databaseUrl || !enabled) {
           throw new Error("scheduler fixture missing");
         }
         expect(completed.payload?.["completed"]).toBe(true);
-        expect(completed.enabled).toBe(false);
+        expect(completed.enabled).toBe(true);
         await db.transaction(async (tx) => {
           await seed(tx, 1);
-          await tx
-            .update(schedulerJobs)
-            .set({ enabled: true })
-            .where(eq(schedulerJobs.id, job.id));
-        });
-        const unusedDatabase = new Proxy(db, {
-          get() {
-            throw new Error("completed task must not access storage");
-          },
         });
         await backfillAgentClientStorage({
           ...context,
-          db: unusedDatabase,
-          job: { ...completed, enabled: true },
+          job: completed,
           payload: completed.payload,
         });
-        expect(await countPreviousAgentClientValues(db)).toBe(1);
-        const reset = await db.transaction(async (tx) =>
-          (
-            await tx
-              .update(schedulerJobs)
-              .set({ payload: {}, enabled: true })
-              .where(eq(schedulerJobs.id, job.id))
-              .returning()
-          ).at(0),
+        expect(await countPreviousAgentClientValues(db)).toBe(0);
+      });
+    });
+
+    test("boot registration resumes a job an earlier build disabled at completion", async () => {
+      await withStoredValues(databaseUrl, async (db) => {
+        const declared = DECLARED_SCHEDULER_JOBS.find(
+          ({ task }) => task === BACKFILL_AGENT_CLIENT_STORAGE_TASK,
         );
-        if (!reset) {
-          throw new Error("scheduler fixture missing");
+        if (declared === undefined) {
+          return panic("Agent client storage job is not declared");
         }
+        // The earlier completion path disabled the row and recorded completion.
+        await db.transaction(
+          async (tx) =>
+            await tx.insert(schedulerJobs).values({
+              id: declared.id,
+              task: BACKFILL_AGENT_CLIENT_STORAGE_TASK,
+              schedule: declared.schedule,
+              nextRunAt: new Date(Date.now() - 60_000),
+              enabled: false,
+              payload: { paused: false, completed: true },
+            }),
+        );
+        await db.transaction(async (tx) => await seed(tx, 1));
+        const registry: SchedulerTaskRegistry = new Map([
+          [BACKFILL_AGENT_CLIENT_STORAGE_TASK, backfillAgentClientStorage],
+        ]);
+        const claim = async () =>
+          await acquireNextDueJob({
+            db,
+            leaseMs: 30 * 60_000,
+            registry,
+            runnerId: "agent-client-storage-test",
+          });
+        expect(await claim()).toBeNull();
+
+        // Boot re-asserts the declared enablement; the deployment flag is on.
+        await db.transaction(
+          async (tx) =>
+            await upsertSchedulerJob(
+              { ...declared, enabled: true },
+              asTestRaw<SchedulerDb>(tx),
+            ),
+        );
+        const job = await claim();
+        if (job === null) {
+          return panic("The resumed job was not claimable");
+        }
+        expect(job.payload).toEqual({ paused: false, completed: true });
         await backfillAgentClientStorage({
-          ...context,
-          job: reset,
-          payload: reset.payload,
+          db,
+          job,
+          payload: job.payload,
+          dueAt: DueSlot.of(job),
+          runId: createSafeId<"schedulerJobRun">(),
+          scheduleContinuation: () => undefined,
+          signal: new AbortController().signal,
+          logger,
         });
         expect(await countPreviousAgentClientValues(db)).toBe(0);
+        return undefined;
       });
     });
 

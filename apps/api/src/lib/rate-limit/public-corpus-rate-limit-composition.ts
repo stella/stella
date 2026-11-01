@@ -60,7 +60,10 @@ export const createPublicCorpusRateLimitComposition = ({
     }
   };
   const verifyCrawler = asRouteBudget(async (ctx, inner) => {
-    const routeClass = publicCorpusClassOf(ctx.routeEntry);
+    const routeClass = publicCorpusClassOf(
+      ctx.routeEntry,
+      new URL(ctx.request.url),
+    );
     const crawlerIdentity =
       (routeClass === "browse" || routeClass === "sitemap") &&
       (ctx.request.method === "GET" || ctx.request.method === "HEAD") &&
@@ -98,7 +101,7 @@ export const createPublicCorpusRateLimitComposition = ({
       // A route with a dedicated budget, or a public corpus class with its own
       // buckets, is charged there instead.
       skip: async (request, entry) => {
-        const routeClass = publicCorpusClassOf(entry);
+        const routeClass = publicCorpusClassOf(entry, new URL(request.url));
         return (
           routeClass === "search" ||
           routeClass === "aggregate" ||

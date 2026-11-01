@@ -18,8 +18,10 @@ import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
 import { corpusProjectionRemovalIsPendingTx } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import { eraseDecisionReconciliationPayloadsTx } from "@/api/lib/legal-search/reconciliation-store";
 import type { RemovalEvidence } from "@/api/lib/legal-search/removal-evidence";
+import type { RemovalRetryItem } from "@/api/lib/legal-search/removal-reconciliation-store";
 
 type PublisherRemovalOptions = {
+  retryItem?: RemovalRetryItem | undefined;
   scopedDb: ScopedDb;
   decisionId: SafeId<"caseLawDecision">;
   evidence: RemovalEvidence;
@@ -31,12 +33,14 @@ export const removePublisherDecision = async ({
   scopedDb,
   decisionId,
   evidence,
+  retryItem,
   redact = redactCaseLawDecisionWithSupplementHolders,
 }: PublisherRemovalOptions) => {
   const redacted = await redact({
     scopedDb,
     decisionId,
     evidence,
+    retryItem,
     leaseWaitMs: 0,
   });
   if (redacted.isErr()) {

@@ -46,6 +46,16 @@ it before closing the connection.
   report's scan cap, so a cap applied per generation instead of per run goes
   over the budget.
 
+- Redaction tombstone backfill (`redaction-tombstone-seed.ts`): a full
+  100-decision audit page at 60,000 and 120,000 audited decisions, search rows,
+  reserved uploads and scheduler rows. Repair, inline-raw and settled cohorts
+  exercise the registered v3 task, including its separate publisher-payload
+  cleanup update. Historical rows are loaded with their current guards restored
+  before measurement; cursor advancement, cleanup reservations, audit timestamps
+  and a non-audited live control prove the work happened. The standalone
+  `redaction-tombstones.test.ts` uses an independent clone name; the same
+  scenarios are registered in the corpus gate.
+
 - Global Case Law search (`case-law-search-fixture.ts`): 3,000 and 30,000
   decisions with 200 fixed full-text matches and an 11-row page. Wide section
   bodies exercise TOAST reads. The production statement must fit its buffer

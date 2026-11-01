@@ -18,7 +18,6 @@ import {
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   applyDecisionBatch,
-  MAX_CONSECUTIVE_FAILURES,
   recordIngestionFailures,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch";
 import type {
@@ -191,11 +190,6 @@ const batchHaltReason = (
       // Halting (instead of breaking quietly) keeps the cursor at this page
       // so the unprocessed remainder is not skipped.
       return `Decision cap (${String(maxDecisions)}) reached`;
-    case "failure-streak":
-      return (
-        `${MAX_CONSECUTIVE_FAILURES} consecutive failures; ` +
-        `last: [${stop.tag}] ${stop.message.slice(0, 200)}`
-      );
     case "aborted":
       return CYCLE_HALT_REASON.TIMEOUT;
     default:
@@ -213,8 +207,6 @@ const batchStopKind = (
       return INGESTION_STOP_KIND.INTERNAL_ERROR;
     case "insert-limit":
       return undefined;
-    case "failure-streak":
-      return stop.stopKind;
     case "aborted":
       return INGESTION_STOP_KIND.DEADLINE;
     default:
@@ -294,12 +286,6 @@ const runScopedIngestionPipeline = async ({
   let publisherAnsweredPages = 0;
   /** Track recent cursors to detect parking (stagnation or ping-pong). */
   const recentCursors = new Set<string | null>();
-  /**
-   * Consecutive decision-level failures. Reset on each success.
-   * If this reaches the batch threshold, the adapter is halted for
-   * this cycle to avoid hammering a broken court API.
-   */
-  let consecutiveFailures = 0;
   let haltReason: string | null = null;
   let stopKind: IngestionStopKind | undefined;
   let checkpointObservationOrder = source.checkpointObservationOrder;
@@ -544,7 +530,6 @@ const runScopedIngestionPipeline = async ({
           corpus,
           polarityRules,
           context: { adapterKey: adapter.key, cursor },
-          failureStreak: consecutiveFailures,
           signal: deadline?.signal,
           insertLimit:
             maxDecisions === undefined ? undefined : maxDecisions - inserted,
@@ -555,7 +540,6 @@ const runScopedIngestionPipeline = async ({
       skipped += applied.skipped;
       searchVectorFailures += applied.searchVectorFailures;
       s3UploadFailures += applied.corpusWriteFailures;
-      consecutiveFailures = applied.failureStreak;
       // A reason the batch stopped for wins over the ledger write's own.
       const batchHalt =
         (applied.halt === null

@@ -311,10 +311,11 @@ describe.each([
       type: "unavailable",
       cause: { kind: "too-large", maxBytes: PUBLISHER_BODY_MAX_BYTES },
     });
-    // The stream never ends, so returning at all proves the read stopped;
-    // the pull count proves where.
+    // The stream never ends, so returning at all proves the read stopped. One
+    // chunk detects overflow; the Response and stream layers may each have one
+    // pending pull, but the capped reader never retains those queued chunks.
     expect(state.pulled).toBeLessThanOrEqual(
-      PUBLISHER_BODY_MAX_BYTES / CHUNK_BYTES + 2,
+      PUBLISHER_BODY_MAX_BYTES / CHUNK_BYTES + 3,
     );
   });
 

@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { InfoSoudClient } from "./client.js";
 import {
   InfoSoudAPIError,
   InfoSoudParseError,
   InfoSoudPragueCourtResolutionError,
   InfoSoudRequestError,
+  InfoSoudResponseIdentityError,
 } from "./errors.js";
 
 const jsonResponse = (body: unknown, status = 200): Response =>
@@ -117,6 +120,16 @@ const createCaseSearchResponse = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const createCaseSearchResponseForRequest = (init?: RequestInit) => {
+  const body = parseRequestBody(init);
+  return createCaseSearchResponse({
+    bcVec: Number(body["bcVec"]),
+    cislo: Number(body["cisloSenatu"]),
+    druh: body["druhVeci"],
+    rocnik: Number(body["rocnik"]),
+  });
+};
+
 describe("InfoSoudClient", () => {
   test("maps OS court codes to okresniSoud in request bodies", async () => {
     let requestBody: unknown;
@@ -138,6 +151,124 @@ describe("InfoSoudClient", () => {
       okresniSoud: "OSSCEDC",
       rocnik: "2024",
     });
+  });
+
+  test("rejects and does not cache a case response for a different docket", async () => {
+    let fetchCount = 0;
+    const client = new InfoSoudClient({
+      delayMs: 0,
+      fetch: async () => {
+        fetchCount += 1;
+        return jsonResponse(
+          createCaseSearchResponse(fetchCount === 1 ? { bcVec: 65 } : {}),
+        );
+      },
+    });
+
+    const search = async () =>
+      await client.searchCase({
+        courtCode: "OSSCEDC",
+        spisZn: "1 T 64/2024",
+      });
+    expect(await rejectionOf(search())).toBeInstanceOf(
+      InfoSoudResponseIdentityError,
+    );
+    expect((await search()).bcVec).toBe(64);
+    expect(fetchCount).toBe(2);
+  });
+
+  test("rejects a successful case response for a different court", async () => {
+    const client = new InfoSoudClient({
+      delayMs: 0,
+      fetch: async () =>
+        jsonResponse(
+          createCaseSearchResponse({
+            udalosti: [
+              {
+                datum: "10.04.2025",
+                jednani: [],
+                poradi: 1,
+                udalost: "ZAHAJ_RIZ",
+                udalostId: null,
+                znackaId: {
+                  bcVec: 64,
+                  cisloSenatu: 1,
+                  druhVeci: "T",
+                  organizace: "OSPHA02",
+                  rocnik: 2024,
+                },
+                zruseno: false,
+              },
+            ],
+          }),
+        ),
+    });
+
+    expect(
+      await rejectionOf(
+        client.searchCase({ courtCode: "OSSCEDC", spisZn: "1 T 64/2024" }),
+      ),
+    ).toBeInstanceOf(InfoSoudResponseIdentityError);
+  });
+
+  test("rejects a hearings response for a different docket", async () => {
+    const client = new InfoSoudClient({
+      delayMs: 0,
+      fetch: async () =>
+        jsonResponse({
+          bcVec: 777,
+          cislo: 7,
+          datum: null,
+          druh: "C",
+          jednaciSin: null,
+          nadrizenaOrganizace: null,
+          organizace: "Unrelated court",
+          platneK: null,
+          rocnik: 2026,
+          typ: "SPZN",
+          udalosti: [],
+        }),
+    });
+
+    expect(
+      await rejectionOf(
+        client.searchHearings({
+          courtCode: "OSSCEDC",
+          spisZn: "1 T 64/2024",
+        }),
+      ),
+    ).toBeInstanceOf(InfoSoudResponseIdentityError);
+  });
+
+  test("rejects combined results that name different courts", async () => {
+    const client = new InfoSoudClient({
+      delayMs: 0,
+      fetch: async (input) =>
+        getRequestPath(input) === "/api/v1/rizeni/vyhledej"
+          ? jsonResponse(createCaseSearchResponse())
+          : jsonResponse({
+              bcVec: 64,
+              cislo: 1,
+              datum: null,
+              druh: "T",
+              jednaciSin: null,
+              nadrizenaOrganizace: null,
+              organizace: "Different court",
+              platneK: null,
+              rocnik: 2024,
+              typ: "SPZN",
+              udalosti: [],
+            }),
+    });
+
+    expect(
+      await rejectionOf(
+        client.searchCaseWithHearings({
+          courtCode: "OSSCEDC",
+          spisZn: "1 T 64/2024",
+        }),
+      ),
+    ).toBeInstanceOf(InfoSoudResponseIdentityError);
   });
 
   test("maps NS cases to typOrganizace without requiring an explicit court code", async () => {
@@ -681,9 +812,9 @@ describe("InfoSoudClient", () => {
       // throttle rather than deduplicated.
       cache: false,
       delayMs,
-      fetch: async () => {
+      fetch: async (_, init) => {
         fetchStartedAt.push(Date.now());
-        return jsonResponse(createCaseSearchResponse());
+        return jsonResponse(createCaseSearchResponseForRequest(init));
       },
     });
 
@@ -712,9 +843,9 @@ describe("InfoSoudClient", () => {
     const client = new InfoSoudClient({
       cache: false,
       delayMs,
-      fetch: async () => {
+      fetch: async (_, init) => {
         fetchStartedAt.push(Date.now());
-        return jsonResponse(createCaseSearchResponse());
+        return jsonResponse(createCaseSearchResponseForRequest(init));
       },
     });
 
@@ -789,9 +920,9 @@ describe("InfoSoudClient", () => {
     const client = new InfoSoudClient({
       cache: false,
       delayMs: 0,
-      fetch: async () => {
+      fetch: async (_, init) => {
         fetchCount += 1;
-        return jsonResponse(createCaseSearchResponse());
+        return jsonResponse(createCaseSearchResponseForRequest(init));
       },
     });
 
@@ -819,9 +950,9 @@ describe("InfoSoudClient", () => {
     const client = new InfoSoudClient({
       cache: false,
       delayMs: 0,
-      fetch: async () => {
+      fetch: async (_, init) => {
         fetchCount += 1;
-        return jsonResponse(createCaseSearchResponse());
+        return jsonResponse(createCaseSearchResponseForRequest(init));
       },
     });
 
@@ -846,7 +977,7 @@ describe("InfoSoudClient", () => {
       spisZn: "2 T 65/2024",
     });
 
-    expect(result.bcVec).toBe(64);
+    expect(result.bcVec).toBe(65);
     expect(fetchCount).toBe(1);
   });
 
@@ -861,7 +992,8 @@ describe("InfoSoudClient", () => {
     const client = new InfoSoudClient({
       cache: false,
       delayMs,
-      fetch: async () => jsonResponse(createCaseSearchResponse()),
+      fetch: async (_, init) =>
+        jsonResponse(createCaseSearchResponseForRequest(init)),
     });
 
     const abortController = new AbortController();

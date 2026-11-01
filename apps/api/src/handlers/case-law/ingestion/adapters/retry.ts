@@ -1,3 +1,4 @@
+// parser-output-unchanged: responses within the publisher byte ceiling stream through unchanged; a larger body fails the read as too-large.
 // parser-output-unchanged: [cz-ns] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
 // parser-output-unchanged: [cz-nss] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
 // parser-output-unchanged: [cz-us] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
@@ -69,6 +70,7 @@ import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-con
 import { logger } from "@/api/lib/observability/logger";
 
 import { abortableSleep } from "./publisher-request-gate";
+import { limitPublisherResponse } from "./publisher-response-limit";
 import { publisherTarget } from "./publisher-target";
 import { INGESTION_USER_AGENT, isTimeoutError } from "./utils";
 
@@ -118,10 +120,10 @@ export const fetchPublisher = async (
   url: string | URL,
   { retryPolicy, ...init }: PublisherFetchInit,
 ): Promise<Response> => {
-  if (retryPolicy === "publisher-backoff") {
-    return await retryPublisherRequest(url, init);
-  }
-  const response = await fetchPublisherRequest(url, init);
+  const response =
+    retryPolicy === "publisher-backoff"
+      ? await retryPublisherRequest(url, init)
+      : await fetchPublisherRequest(url, init);
   if (
     isStopStatus(init.refusalMode, response.status) ||
     init.isRateLimitRedirect?.(response)
@@ -137,7 +139,7 @@ export const fetchPublisher = async (
       ...(retryAfter === null ? {} : { retryAfter }),
     });
   }
-  return response;
+  return limitPublisherResponse(response);
 };
 
 type PublisherRateLimitRefusalErrorOptions = {

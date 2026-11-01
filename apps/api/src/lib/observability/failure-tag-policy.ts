@@ -354,6 +354,7 @@ export const TAGGED_FAILURE_REASON = {
   PublicReadCleanupError: "tagged_failure",
   PublisherGateReplyError: "tagged_failure",
   PublisherPacingStopped: "tagged_failure",
+  PublisherResponseTooLargeError: "tagged_failure",
   PublisherTargetError: "tagged_failure",
   PushDeliveryRejectedError: "tagged_failure",
   PushDeliveryRetryError: "upstream_unavailable",

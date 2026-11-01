@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 3,
+  "reason": "The InfoSoud client's parse callbacks refuse a response by throwing a typed client error that its request path maps into the caller's error union; the response identity checks run inside those callbacks and follow the same contract as the existing parse refusals."
+}

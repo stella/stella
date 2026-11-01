@@ -30,7 +30,8 @@ const searchPath = `${STELLA_API_VERSION_PREFIX}/law/statutes/search`;
 const searchKey = scopedGenerator("public-corpus-search");
 /** Whether the route mounted at `path` for `method` spends the search class. */
 const isSearchRoute = (method: string, path: string) =>
-  publicCorpusClassOf({ method, path }) === "search";
+  publicCorpusClassOf({ method, path }, new URL(`http://localhost${path}`)) ===
+  "search";
 const request = (path: string, method = "GET") =>
   new Request(`http://localhost${path}`, { method });
 /**

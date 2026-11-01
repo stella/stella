@@ -53,6 +53,7 @@ import {
 } from "./measurement";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { QUERY_PERF_PROFILES } from "./profiles";
+import { seedRedactionTombstoneScenario } from "./redaction-tombstone-seed";
 import {
   corpusStatementRegistry,
   queryPerfRegistry,
@@ -74,10 +75,19 @@ import { UNBOUNDED_FRESHNESS_STATEMENTS } from "./unbounded-freshness-fixture";
 
 const enabled = process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true";
 const CORPUS_PROFILE_TIMEOUT_MS = 300_000;
-const describeScheduledScenario = (scenario: ScheduledJobScenario) =>
-  scenario.type === "case-law"
-    ? describeServed(scenario.served)
-    : `receipts:${scenario.cohort}:${scenario.rows}`;
+const describeScheduledScenario = (scenario: ScheduledJobScenario) => {
+  switch (scenario.type) {
+    case "case-law":
+      return describeServed(scenario.served);
+    case "request-receipts":
+      return `receipts:${scenario.cohort}:${scenario.rows}`;
+    case "redaction-tombstones":
+      return `redaction:${scenario.cohort}:${scenario.rows}`;
+    default:
+      scenario satisfies never;
+      return panic("Unhandled scheduled measurement scenario");
+  }
+};
 
 const log = (record: Record<string, unknown>) => {
   console.info(JSON.stringify(record));
@@ -643,10 +653,21 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           task: string,
           scenario?: ScheduledJobScenario,
         ) => {
-          if (scenario?.type === "case-law") {
-            await serveCaseLaw(db, scenario.served);
-          } else if (scenario !== undefined) {
-            await seedRequestReceiptScenario(db, scenario);
+          if (scenario !== undefined) {
+            switch (scenario.type) {
+              case "case-law":
+                await serveCaseLaw(db, scenario.served);
+                break;
+              case "request-receipts":
+                await seedRequestReceiptScenario(db, scenario);
+                break;
+              case "redaction-tombstones":
+                await seedRedactionTombstoneScenario(db, scenario);
+                break;
+              default:
+                scenario satisfies never;
+                return panic("Unhandled scheduled measurement seed");
+            }
           }
           const measurement =
             SCHEDULED_JOB_MEASUREMENTS[jobId] ??
