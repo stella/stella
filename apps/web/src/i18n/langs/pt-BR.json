@@ -1358,9 +1358,30 @@
       "none": "Sem configuração"
     },
     "skillNeedsUnavailableTools": "Não é oferecida no chat. Precisa de uma ferramenta que não está disponível lá: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Oculte nomes de clientes, números de conta, endereços e outros dados pessoais antes de compartilhar o conteúdo do caso com provedores de IA. Reversível no lado do cliente; o texto original nunca sai do seu espaço de trabalho.",
+      "ares": "Consulta de empresas tchecas por IČO ou razão social no registro público ARES (registro administrativo de agentes econômicos, equivalente tcheco a uma junta comercial).",
+      "boe": "Legislação consolidada espanhola, diário oficial e BORME (boletim do registro comercial) da API oficial de dados abertos do Boletín Oficial del Estado.",
+      "brreg": "Consulta de empresas norueguesas por organisasjonsnummer ou razão social na API aberta pública Enhetsregisteret da Brreg.",
+      "companiesHouse": "Consulta de empresas britânicas por número de registro na Companies House ou razão social na API de dados públicos da Companies House. Requer uma chave de API gratuita.",
+      "createDocx": "Gere documentos do Word no chat com formatação, tabelas, cabeçalhos e estilos incorporados. O resultado pode ser baixado e editado no Word, LibreOffice e Pages.",
+      "denue": "Consulta de estabelecimentos e unidades econômicas do México por Id de estabelecimento DENUE, nome ou razão social na API oficial DENUE do INEGI. O DENUE é um diretório de estabelecimentos, não o registro societário Registro Público de Comercio. Requer um token gratuito da API do INEGI.",
+      "edgar": "Consulta de companhias abertas dos EUA por Central Index Key (CIK) na API de submissões EDGAR da SEC.",
+      "gcis": "Consulta de empresas taiwanesas por 統一編號 (tongbian, identificação fiscal) ou razão social na API de dados abertos do portal Commerce Industrial Services do Ministério de Assuntos Econômicos (MoEA).",
+      "infosoud": "Consulta de processos judiciais tchecos e calendário de audiências em infosoud.gov.cz. Pesquise por número do processo, tribunal ou parte para obter as datas das audiências e o andamento do processo.",
+      "krs": "Consulta de empresas polonesas por número KRS na API aberta do Krajowy Rejestr Sądowy (KRS) do Ministério da Justiça. Abrange o Rejestr Przedsiębiorców (sociedades empresárias) e o Rejestr Stowarzyszeń (associações e fundações).",
+      "orsr": "Consulta de empresas eslovacas por IČO ou razão social na API JSON do Obchodný register Slovenskej republiky, operada pelo Ministério da Justiça.",
+      "prh": "Consulta de empresas finlandesas por Y-tunnus ou razão social na API aberta AvoinData v3 do Patentti- ja rekisterihallitus (PRH).",
+      "rechercheEntreprises": "Consulta de empresas francesas por SIREN, SIRET ou razão social na API aberta recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Consulta eslovaca por IČO ou nome no Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO), mantido pelo Instituto de Estatística da República Eslovaca. Abrange todas as pessoas jurídicas e empresários, incluindo empresários individuais, associações, fundações e órgãos públicos fora do registro comercial.",
+      "vies": "Validação de números de IVA em toda a UE pela API REST do sistema de troca de informações sobre o IVA (VIES) da Comissão Europeia. Confirma se um número de IVA está registrado no Estado-membro do fornecedor e retorna o nome e o endereço do operador quando o Estado-membro os divulga.",
+      "webSearch": "Pesquise na web pública e leia páginas individuais. As consultas buscam primeiro fontes primárias (tribunais, portais de legislação) quando há uma jurisdição definida; caso contrário, a web aberta. Ativação por conversa."
+    },
     "toolNames": {
       "anonymize": "Anonimizar",
       "createDocx": "Criar DOCX",
+      "gcis": "Registro de empresas GCIS",
+      "vies": "Validação de IVA da UE (VIES)",
       "webSearch": "Pesquisa na web"
     },
     "unavailable": "Ainda não disponível"
@@ -5833,6 +5854,7 @@
       "open": "Aberta"
     },
     "subtasks": "Subtarefas",
+    "taskCompleted": "Tarefa concluída",
     "title": "Tarefas",
     "untitled": "Tarefa sem título",
     "workTypeValues": {
@@ -6731,11 +6753,14 @@
         "empty": "Ainda não há atividade neste caso.",
         "fields": {
           "dueDate": "data de vencimento",
+          "name": "nome",
           "parentFolder": "pasta principal",
           "priority": "prioridade",
           "property": "propriedade",
           "schedule": "programação",
-          "sortOrder": "ordem"
+          "sortOrder": "ordem",
+          "status": "status",
+          "type": "tipo"
         },
         "filterLabel": "Filtrar atividade",
         "filters": {
@@ -6785,8 +6810,18 @@
           "team": "equipe do caso",
           "translation": "tradução"
         },
+        "taskLinks": {
+          "added": "Vinculou {name} a",
+          "addedUnnamed": "Vinculou um item a",
+          "removed": "Desvinculou {name} de",
+          "removedUnnamed": "Desvinculou um item de"
+        },
         "title": "Atividade",
         "updatedFields": "Atualizado: {fields}",
+        "versions": {
+          "added": "Adicionou a versão {version} de",
+          "deleted": "Excluiu a versão {version} de"
+        },
         "views": {
           "list": "Visualização em lista",
           "timeline": "Visualização da linha do tempo"

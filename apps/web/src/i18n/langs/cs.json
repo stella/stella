@@ -1358,9 +1358,30 @@
       "none": "Bez nastavení"
     },
     "skillNeedsUnavailableTools": "V chatu se nenabízí. Potřebuje nástroj, který tam není k dispozici: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Skryje jména klientů, čísla účtů, adresy a další osobní údaje ještě před sdílením obsahu spisu s poskytovateli AI. Anonymizaci lze na straně klienta vrátit zpět a původní text zůstává vždy u vás.",
+      "ares": "Vyhledávání českých firem podle IČO nebo názvu ve veřejném registru ARES (administrativní registr ekonomických subjektů).",
+      "boe": "Španělské konsolidované právní předpisy, denní úřední věstník a BORME (věstník obchodního rejstříku) z oficiálního otevřeného datového rozhraní Boletín Oficial del Estado.",
+      "brreg": "Vyhledávání norských firem podle organisasjonsnummer nebo názvu ve veřejném otevřeném rozhraní Enhetsregisteret (Brreg).",
+      "companiesHouse": "Vyhledávání britských firem podle registračního čísla Companies House nebo názvu přes veřejné datové rozhraní Companies House. Vyžaduje bezplatný klíč API.",
+      "createDocx": "Vytváření dokumentů Word přímo z chatu včetně formátování, tabulek, záhlaví a vložených stylů. Výsledek lze stáhnout a dále upravovat ve Wordu, LibreOffice a Pages.",
+      "denue": "Vyhledávání mexických provozoven a ekonomických jednotek podle identifikátoru provozovny DENUE, názvu nebo obchodní firmy v oficiálním rozhraní DENUE institutu INEGI. DENUE je adresář provozoven, nikoli obchodní rejstřík Registro Público de Comercio. Vyžaduje bezplatný token INEGI API.",
+      "edgar": "Vyhledávání amerických veřejně obchodovaných společností podle Central Index Key (CIK) v rozhraní EDGAR americké komise SEC.",
+      "gcis": "Vyhledávání tchajwanských firem podle 統一編號 (tongbian, daňové identifikační číslo) nebo názvu v otevřeném datovém rozhraní portálu Commerce Industrial Services ministerstva hospodářství (MoEA).",
+      "infosoud": "Vyhledávání českých soudních řízení a kalendář jednání z infosoud.gov.cz. Podle spisové značky, soudu nebo účastníka zjistíte termíny jednání a stav řízení.",
+      "krs": "Vyhledávání polských firem podle čísla KRS v otevřeném rozhraní Krajowy Rejestr Sądowy (KRS) ministerstva spravedlnosti. Zahrnuje Rejestr Przedsiębiorców (podnikatelé) i Rejestr Stowarzyszeń (spolky a nadace).",
+      "orsr": "Vyhledávání slovenských firem podle IČO nebo názvu v rozhraní JSON Obchodného registra Slovenskej republiky, které provozuje ministerstvo spravedlnosti.",
+      "prh": "Vyhledávání finských firem podle Y-tunnus nebo názvu v otevřeném rozhraní AvoinData v3 úřadu Patentti- ja rekisterihallitus (PRH).",
+      "rechercheEntreprises": "Vyhledávání francouzských firem podle SIREN, SIRET nebo názvu v otevřeném rozhraní recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Vyhledávání na Slovensku podle IČO nebo názvu v Registru právnických osob, podnikatelů a orgánů veřejné moci (RPO), který vede Statistický úřad Slovenské republiky. Zahrnuje všechny právnické osoby a podnikatele včetně živnostníků, spolků, nadací a veřejných orgánů mimo obchodní rejstřík.",
+      "vies": "Ověření DIČ v celé EU přes rozhraní REST systému VAT Information Exchange System (VIES) Evropské komise. Potvrdí, zda je DIČ registrováno v členském státě dodavatele, a vrátí název a adresu registrovaného obchodníka, pokud je členský stát zveřejňuje.",
+      "webSearch": "Vyhledávání na veřejném webu a čtení jednotlivých stránek. Pokud je nastavena jurisdikce, dotazy míří nejprve na primární zdroje (soudy, portály s právními předpisy), jinak na otevřený web. Zapíná se pro každou konverzaci zvlášť."
+    },
     "toolNames": {
       "anonymize": "Anonymizovat",
       "createDocx": "Vytvořit DOCX",
+      "gcis": "Rejstřík společností GCIS",
+      "vies": "Ověření DIČ v EU (VIES)",
       "webSearch": "Webové vyhledávání"
     },
     "unavailable": "Zatím nedostupné"
@@ -5833,6 +5854,7 @@
       "open": "Otevřený"
     },
     "subtasks": "Podúkoly",
+    "taskCompleted": "Úkol dokončen",
     "title": "Úkoly",
     "untitled": "Úkol bez názvu",
     "workTypeValues": {
@@ -6731,11 +6753,14 @@
         "empty": "V tomto spisu zatím není žádná aktivita.",
         "fields": {
           "dueDate": "termín",
+          "name": "název",
           "parentFolder": "nadřazená složka",
           "priority": "priorita",
           "property": "vlastnost",
           "schedule": "plán",
-          "sortOrder": "pořadí"
+          "sortOrder": "pořadí",
+          "status": "stav",
+          "type": "typ"
         },
         "filterLabel": "Filtrovat aktivitu",
         "filters": {
@@ -6785,8 +6810,18 @@
           "team": "tým spisu",
           "translation": "překlad"
         },
+        "taskLinks": {
+          "added": "Propojil(a) {name} s úkolem",
+          "addedUnnamed": "Propojil(a) položku s úkolem",
+          "removed": "Odpojil(a) {name} od úkolu",
+          "removedUnnamed": "Odpojil(a) položku od úkolu"
+        },
         "title": "Aktivita",
         "updatedFields": "Aktualizováno: {fields}",
+        "versions": {
+          "added": "Přidal(a) verzi {version} dokumentu",
+          "deleted": "Smazal(a) verzi {version} dokumentu"
+        },
         "views": {
           "list": "Seznam",
           "timeline": "Časová osa"

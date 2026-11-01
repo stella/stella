@@ -47,6 +47,8 @@ const TASK_SLUGS = {
 } as const satisfies Record<PublicToolTask, readonly string[]>;
 
 export type PublicToolBrowseEntry = ToolFilterEntry & {
+  /** The manifest's own wording, searched beside the reader's language. */
+  sourceCopy?: string | undefined;
   author?: string | undefined;
   description: string;
   pinned?: boolean | undefined;
@@ -64,6 +66,7 @@ const matchesSearchQuery = (
   const haystack = [
     entry.displayName,
     entry.description,
+    entry.sourceCopy ?? "",
     entry.author ?? "",
     entry.slug,
     ...entry.tags,

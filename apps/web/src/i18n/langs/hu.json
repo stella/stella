@@ -1358,9 +1358,30 @@
       "none": "Nincs beállítás"
     },
     "skillNeedsUnavailableTools": "A csevegésben nem jelenik meg. Olyan eszközt igényel, amely ott nem érhető el: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Elrejti az ügyfélneveket, számlaszámokat, címeket és más személyes adatokat, mielőtt az ügy tartalma AI-szolgáltatókhoz kerülne. Az ügyféloldalon visszafordítható; az eredeti szöveg soha nem hagyja el a munkaterületét.",
+      "ares": "Cseh cégek keresése IČO vagy cégnév alapján a nyilvános ARES-nyilvántartásban (a gazdasági szereplők közigazgatási nyilvántartása, a cégnyilvántartás cseh megfelelője).",
+      "boe": "Spanyol egységes szerkezetű jogszabályok, napi hivatalos közlöny és BORME (cégközlöny) a Boletín Oficial del Estado hivatalos nyílt adatos API-jából.",
+      "brreg": "Norvég cégek keresése organisasjonsnummer vagy cégnév alapján a Brreg Enhetsregisteret nyilvános, nyílt API-ján.",
+      "companiesHouse": "Brit cégek keresése Companies House-cégjegyzékszám vagy cégnév alapján a Companies House nyilvános adat-API-ján. Ingyenes API-kulcsot igényel.",
+      "createDocx": "Word-dokumentumokat hoz létre a csevegésből formázással, táblázatokkal, fejlécekkel és beágyazott stílusokkal. Az eredmény letölthető, és Wordben, LibreOffice-ban és Pagesben szerkeszthető.",
+      "denue": "Mexikói telephelyek és gazdasági egységek keresése DENUE-telephelyazonosító, név vagy cégnév alapján az INEGI hivatalos DENUE API-ján. A DENUE telephelyjegyzék, nem a Registro Público de Comercio társasági jogi nyilvántartás. Ingyenes INEGI API-tokent igényel.",
+      "edgar": "Amerikai tőzsdei társaságok keresése Central Index Key (CIK) alapján a SEC EDGAR beadvány-API-ján.",
+      "gcis": "Tajvani cégek keresése 統一編號 (tongbian, adóazonosító) vagy cégnév alapján a gazdasági minisztérium (MoEA) Commerce Industrial Services portáljának nyílt adatos API-ján.",
+      "infosoud": "Cseh bírósági ügyek keresése és tárgyalási naptár az infosoud.gov.cz oldalról. Ügyszám, bíróság vagy fél alapján lekérheti a tárgyalási időpontokat és az ügy állását.",
+      "krs": "Lengyel cégek keresése KRS-szám alapján az igazságügyi minisztérium Krajowy Rejestr Sądowy (KRS) nyílt API-ján. Kiterjed a Rejestr Przedsiębiorców (kereskedelmi társaságok) és a Rejestr Stowarzyszeń (egyesületek és alapítványok) nyilvántartásra.",
+      "orsr": "Szlovák cégek keresése IČO vagy cégnév alapján az igazságügyi minisztérium által működtetett Obchodný register Slovenskej republiky JSON API-ján.",
+      "prh": "Finn cégek keresése Y-tunnus vagy cégnév alapján a Patentti- ja rekisterihallitus (PRH) AvoinData v3 nyílt API-ján.",
+      "rechercheEntreprises": "Francia cégek keresése SIREN, SIRET vagy cégnév alapján a recherche-entreprises.api.gouv.fr nyílt API-n (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Szlovák keresés IČO vagy név alapján a Szlovák Köztársaság Statisztikai Hivatala által vezetett Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO) nyilvántartásban. Kiterjed minden jogi személyre és vállalkozóra, így az egyéni vállalkozókra, egyesületekre, alapítványokra és a cégnyilvántartáson kívüli közszervekre is.",
+      "vies": "Uniós adószámok ellenőrzése az Európai Bizottság héa-információcsere-rendszerének (VIES) REST API-ján. Megerősíti, hogy a szám nyilvántartásba van-e véve a szállító tagállamában, és visszaadja a bejegyzett vállalkozás nevét és címét, ha a tagállam közzéteszi azokat.",
+      "webSearch": "Keres a nyilvános weben, és elolvassa az egyes oldalakat. Ha van beállított joghatóság, a lekérdezések először az elsődleges forrásokat érik el (bíróságok, jogszabály-portálok), egyébként a nyílt webet. Beszélgetésenként kapcsolható be."
+    },
     "toolNames": {
       "anonymize": "Anonimizálás",
       "createDocx": "DOCX létrehozása",
+      "gcis": "GCIS cégnyilvántartás",
+      "vies": "Uniós adószám-ellenőrzés (VIES)",
       "webSearch": "Webes keresés"
     },
     "unavailable": "Még nem elérhető"
@@ -5833,6 +5854,7 @@
       "open": "Nyitott"
     },
     "subtasks": "Alfeladatok",
+    "taskCompleted": "Feladat befejezve",
     "title": "Feladatok",
     "untitled": "Névtelen feladat",
     "workTypeValues": {
@@ -6731,11 +6753,14 @@
         "empty": "Ebben az ügyben még nincs tevékenység.",
         "fields": {
           "dueDate": "határidő",
+          "name": "név",
           "parentFolder": "szülőmappa",
           "priority": "prioritás",
           "property": "tulajdonság",
           "schedule": "ütemezés",
-          "sortOrder": "sorrend"
+          "sortOrder": "sorrend",
+          "status": "státusz",
+          "type": "típus"
         },
         "filterLabel": "Tevékenység szűrése",
         "filters": {
@@ -6785,8 +6810,18 @@
           "team": "ügycsapat",
           "translation": "fordítás"
         },
+        "taskLinks": {
+          "added": "Összekapcsolta ezt: {name}, ezzel:",
+          "addedUnnamed": "Összekapcsolt egy elemet ezzel:",
+          "removed": "Leválasztotta ezt: {name}, erről:",
+          "removedUnnamed": "Leválasztott egy elemet erről:"
+        },
         "title": "Tevékenység",
         "updatedFields": "Frissítve: {fields}",
+        "versions": {
+          "added": "Hozzáadta a(z) {version}. verziót ehhez:",
+          "deleted": "Törölte a(z) {version}. verziót innen:"
+        },
         "views": {
           "list": "Listanézet",
           "timeline": "Idővonalnézet"
