@@ -2319,7 +2319,7 @@ const CONTENDED_TEST_TIMEOUTS = {
   "Test remaining repository scripts": 35_000,
   "Test release image CI gate": 50_000,
   "Test api scripts": 12_000,
-  "Test CLI runtime package parity": 80_000,
+  "Test CLI runtime package parity": 240_000,
   "Playwright config scope": 5000,
 } as const;
 

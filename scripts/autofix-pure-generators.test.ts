@@ -56,7 +56,7 @@ const PURE_AUTOFIX = {
   // Static source analysis and pinned formatters render the coverage table and
   // CLI contracts; setup-env supplies static validation defaults, never live data.
   "capability-coverage": "apps/api/scripts/export-capability-catalog.ts",
-  "cli-registry": "codegen",
+  "cli-registry": "codegen:registry",
   // Projects the committed registry snapshot and the derived route map.
   "cli-tool-reference": "packages/cli/scripts/generate-tool-reference.ts",
   // Compiler input discovery and pinned bundlers consume repository sources.
