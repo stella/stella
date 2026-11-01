@@ -297,6 +297,7 @@ const onOwnerScopeTransaction = (
     const parameter = callback.params.at(0);
     if (
       parameter?.type !== "Identifier" ||
+      callback.body === null ||
       redeclares(callback.body, parameter.name)
     ) {
       return false;
