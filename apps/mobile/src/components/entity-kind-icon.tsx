@@ -2,12 +2,18 @@ import {
   FileIcon,
   FileTextIcon,
   FolderIcon,
+  LayersIcon,
   LinkIcon,
   ListTodoIcon,
   MailIcon,
+  MessageSquareIcon,
 } from "@/icons.gen";
 
-/** A matter item's glyph, the web's for its kind (apps/web entity-kind-icon.tsx). */
+/**
+ * A matter item's glyph, the web's for its kind (apps/web entity-kind-icon.tsx).
+ * A matter and a chat, which search lists beside them, draw the glyphs of
+ * their tabs.
+ */
 export const EntityKindIcon = ({
   color,
   kind,
@@ -28,6 +34,10 @@ export const EntityKindIcon = ({
       return <LinkIcon color={color} size={size} />;
     case "document":
       return <FileTextIcon color={color} size={size} />;
+    case "matter":
+      return <LayersIcon color={color} size={size} />;
+    case "chat":
+      return <MessageSquareIcon color={color} size={size} />;
     default:
       return <FileIcon color={color} size={size} />;
   }

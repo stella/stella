@@ -6,6 +6,7 @@ import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import type { Fetch } from "@/connection/http";
 import {
   createAccessTokenSource,
+  createSessionStore,
   type StoredSession,
 } from "@/connection/session";
 
@@ -31,13 +32,20 @@ const SESSION: StoredSession = {
     "https://stella.example.com/v1/mcp/oauth/mobile-client-metadata.json",
   tokenEndpoint: "https://stella.example.com/api/auth/oauth2/token",
   resource: "https://stella.example.com/v1",
+  signInId: "sign-in-1",
   refreshToken: "refresh-1",
   userId: "user-1",
 };
 
 /** A source whose refresh answers `access-1`, so a retried request shows it. */
-const sourceFor = () =>
-  createAccessTokenSource({
+const sourceFor = () => {
+  const store = createSessionStore({
+    read: async () => SESSION,
+    write: async () => {},
+    prepareClear: async () => {},
+    clear: async () => {},
+  });
+  return createAccessTokenSource({
     fetch: async () =>
       Response.json({
         access_token: "access-1",
@@ -48,12 +56,10 @@ const sourceFor = () =>
     initialAccess: { token: "access-0", expiresAt: Number.MAX_SAFE_INTEGER },
     now: () => 0,
     session: SESSION,
-    store: {
-      read: async () => SESSION,
-      write: async () => {},
-      clear: async () => {},
-    },
+    store,
+    generation: store.generation(),
   });
+};
 
 const THREAD_ID = "00000000-0000-7000-8000-000000000002";
 const MESSAGE_ID = "00000000-0000-7000-8000-000000000001";
@@ -598,4 +604,39 @@ describe("stopping a turn", () => {
       },
     ]);
   });
+});
+
+test("stream and cancel requests propagate an unavailable session", async () => {
+  const source = { ...sourceFor(), session: () => undefined };
+  let requests = 0;
+  const fetch: Fetch = async () => {
+    requests += 1;
+    return new Response(null, { status: 503 });
+  };
+  const joined = await joinChatTurn({
+    fetch,
+    source,
+    lastEventId: "last-event",
+    matterId: undefined,
+    onEvent: () => {},
+    signal: new AbortController().signal,
+    threadId: THREAD_ID,
+    turnId: TURN_ID,
+  });
+  expect(joined.isErr() ? joined.error.error._tag : joined.value).toBe(
+    "SignedOutError",
+  );
+  expect(joined.isErr() ? joined.error.lastEventId : undefined).toBe(
+    "last-event",
+  );
+  const cancelled = await cancelChatTurn({
+    fetch,
+    source,
+    threadId: THREAD_ID,
+    turnId: TURN_ID,
+  });
+  expect(cancelled.isErr() ? cancelled.error._tag : cancelled.value).toBe(
+    "SignedOutError",
+  );
+  expect(requests).toBe(0);
 });
