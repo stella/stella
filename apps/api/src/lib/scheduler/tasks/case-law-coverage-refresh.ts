@@ -20,6 +20,7 @@ import {
   lockCaseLawCoverageSnapshot,
   withAggregateSavepoint,
 } from "@/api/lib/db/aggregate-lock";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import {
   logSchedulerBackfillStatus,
   SCHEDULER_BACKFILL_IDS,
@@ -116,17 +117,21 @@ const coverageReadQueue = (
   ): Promise<T> => {
     const run = async (): Promise<T> => {
       if (budget.aborted) {
-        throw new CoverageReadBudgetSpentError("Coverage read budget spent");
+        return await Promise.reject(
+          new CoverageReadBudgetSpentError("Coverage read budget spent"),
+        );
       }
       return await withAggregateSavepoint(tx, async (savepoint) => {
         const value = await read(savepoint);
         // Some public readers return a typed failure instead of rejecting;
         // either form rolls back this read alone.
         if (value instanceof Err) {
-          throw new SchedulerTaskFailure({
-            message: "Case-law coverage read failed",
-            cause: value.error,
-          });
+          return abortTransaction(
+            new SchedulerTaskFailure({
+              message: "Case-law coverage read failed",
+              cause: value.error,
+            }),
+          );
         }
         return value;
       });
