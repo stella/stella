@@ -495,6 +495,22 @@
     "narrativeAssistAlways": "Rédiger les descriptions avec stella AI sans demander",
     "narrativeAssistDescription": "Seuls les titres de fenêtres d’une suggestion sont envoyés ; ils ne sont pas conservés."
   },
+  "dictation": {
+    "title": "Dictée",
+    "description": "Maintenez {shortcut} et parlez. Le texte apparaît dans l'application que vous utilisez. La parole est transcrite sur cet ordinateur et n'est pas conservée.",
+    "modelNeeded": "Le modèle vocal s'exécute sur cet ordinateur.",
+    "download": "Télécharger ({size} Mo)",
+    "downloading": "Téléchargement du modèle vocal : {percent} %",
+    "downloadFailed": "Le modèle vocal n'a pas pu être téléchargé.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, CC BY 4.0.",
+    "shortcutTaken": "Une autre application utilise {shortcut}.",
+    "failure": {
+      "accessibility": "Autorisez l'accès Accessibilité pour que stella puisse écrire dans d'autres applications.",
+      "microphone": "stella n'entend pas votre micro. Vérifiez l'accès au micro dans les Réglages Système.",
+      "modelMissing": "Téléchargez d'abord le modèle vocal.",
+      "transcription": "La transcription a échoué. Réessayez."
+    }
+  },
   "shortcut": {
     "title": "Raccourci du presse-papiers",
     "description": "Ouvre l'historique du presse-papiers depuis n'importe quelle app.",

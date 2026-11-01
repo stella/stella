@@ -495,6 +495,22 @@
     "narrativeAssistAlways": "Escrever descrições com stella AI sem perguntar",
     "narrativeAssistDescription": "Só os títulos de janela de uma sugestão são enviados; eles não são armazenados."
   },
+  "dictation": {
+    "title": "Ditado",
+    "description": "Segure {shortcut} e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita neste computador e não é armazenada.",
+    "modelNeeded": "O modelo de voz é executado neste computador.",
+    "download": "Baixar ({size} MB)",
+    "downloading": "Baixando o modelo de voz: {percent}%",
+    "downloadFailed": "Não foi possível baixar o modelo de voz.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, CC BY 4.0.",
+    "shortcutTaken": "Outro aplicativo está usando {shortcut}.",
+    "failure": {
+      "accessibility": "Permita o acesso à Acessibilidade para que a stella possa digitar em outros aplicativos.",
+      "microphone": "A stella não consegue ouvir seu microfone. Verifique o acesso ao microfone nos Ajustes do Sistema.",
+      "modelMissing": "Baixe primeiro o modelo de voz.",
+      "transcription": "A transcrição falhou. Tente novamente."
+    }
+  },
   "shortcut": {
     "title": "Atalho da área de transferência",
     "description": "Abre o histórico da área de transferência em qualquer app.",

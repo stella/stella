@@ -14,6 +14,13 @@ mod bridge;
 mod chatgpt_auth;
 mod chatgpt_auth_commands;
 mod clipboard;
+mod dictation;
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+mod dictation_audio;
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+mod dictation_engine;
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+mod dictation_worker;
 mod clipboard_commands;
 #[cfg(target_os = "macos")]
 mod clipboard_image_export;
@@ -95,6 +102,18 @@ pub fn run_codex_token_helper() -> Option<i32> {
   codex_managed_token_broker::run_token_helper(&args)
 }
 
+/// Runs the speech worker when the process was started as one, and returns
+/// its exit code; `None` for an ordinary launch.
+pub fn run_dictation_worker() -> Option<i32> {
+  #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+  {
+    let args = std::env::args_os().collect::<Vec<_>>();
+    dictation_worker::run_if_requested(&args)
+  }
+  #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+  None
+}
+
 pub fn run() {
   logging::init();
 
@@ -159,6 +178,7 @@ pub fn run() {
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
     .manage(clipboard_window::ClipboardEditorSessions::default())
     .manage(clipboard_window::ClipboardStartupTrace::default())
+    .manage(dictation::DictationState::load())
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),
     ))
@@ -509,6 +529,8 @@ pub fn run() {
           }
         });
       }
+
+      dictation::start_at_launch(&handle);
 
       tracing::info!("stella desktop started");
       Ok(())

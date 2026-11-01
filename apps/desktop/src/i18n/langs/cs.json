@@ -495,6 +495,22 @@
     "narrativeAssistAlways": "Psát popisy pomocí stella AI bez ptaní",
     "narrativeAssistDescription": "Odešlou se jen názvy oken daného návrhu a nikde se neukládají."
   },
+  "dictation": {
+    "title": "Diktování",
+    "description": "Podržte {shortcut} a mluvte. Text se objeví v aplikaci, kterou právě používáte. Řeč se převádí na tomto počítači a neukládá se.",
+    "modelNeeded": "Řečový model běží na tomto počítači.",
+    "download": "Stáhnout ({size} MB)",
+    "downloading": "Stahování řečového modelu: {percent} %",
+    "downloadFailed": "Řečový model se nepodařilo stáhnout.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, CC BY 4.0.",
+    "shortcutTaken": "Zkratku {shortcut} používá jiná aplikace.",
+    "failure": {
+      "accessibility": "Povolte přístup Zpřístupnění, aby stella mohla psát do jiných aplikací.",
+      "microphone": "stella neslyší váš mikrofon. Zkontrolujte přístup k mikrofonu v Nastavení systému.",
+      "modelMissing": "Nejprve stáhněte řečový model.",
+      "transcription": "Převod se nezdařil. Zkuste to znovu."
+    }
+  },
   "shortcut": {
     "title": "Zkratka schránky",
     "description": "Otevře historii schránky z libovolné aplikace.",
