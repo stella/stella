@@ -17,7 +17,8 @@ export type RoleCensus = {
 };
 
 type CensusRow = {
-  role: string;
+  /** Null for the PUBLIC pseudo-role, so no role name can pose as it. */
+  role: string | null;
   kind: "attribute" | "membership" | "privilege";
   value: string;
 };
@@ -33,10 +34,25 @@ export type PolicyCensus = {
   withCheck: string | null;
 };
 
-export type Census = {
+/**
+ * PUBLIC's grants and effective privileges hold for every role, so they are
+ * recorded once here and each role lists only what it holds beyond them.
+ * Likewise a column privilege is listed only where the table privilege of
+ * the same name does not already imply it.
+ */
+export type RolePrivilegeCensus = {
+  public: string[];
   roles: RoleCensus[];
+};
+
+export type Census = RolePrivilegeCensus & {
   policies: PolicyCensus[];
 };
+
+/** A missing role fails loudly: absence never reads as "no privileges". */
+export const rolePrivileges = (census: RolePrivilegeCensus, role: string) =>
+  census.roles.find((entry) => entry.role === role)?.privileges ??
+  panic(`Role ${role} is missing from the privilege census`);
 
 const rolePrivilegeCensusQuery = `
     WITH
@@ -140,8 +156,25 @@ const rolePrivilegeCensusQuery = `
       ) privilege(object_kind, privilege_type)
       WHERE privilege.object_kind = object_acl.kind
     ),
+    -- Role OID 0 is PUBLIC in aclitem entries and in the has_*_privilege
+    -- functions, so PUBLIC's effective privileges are read once and every
+    -- role's privileges are recorded only where they go beyond them.
+    audited_roles AS (
+      SELECT oid FROM application_roles
+      UNION ALL
+      SELECT 0::oid
+    ),
     role_privileges AS (
       SELECT role.oid AS role_oid, candidate.*,
+             -- A table privilege implies the same privilege on each column.
+             CASE WHEN candidate.kind = 'column'
+               THEN pg_catalog.has_table_privilege(role.oid, candidate.object_oid, candidate.privilege_type)
+               ELSE false
+             END AS relation_effective,
+             CASE WHEN candidate.kind = 'column'
+               THEN pg_catalog.has_table_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               ELSE false
+             END AS relation_grantable,
              CASE candidate.kind
                WHEN 'database' THEN pg_catalog.has_database_privilege(role.oid, candidate.object_oid, candidate.privilege_type)
                WHEN 'schema' THEN pg_catalog.has_schema_privilege(role.oid, candidate.object_oid, candidate.privilege_type)
@@ -166,7 +199,7 @@ const rolePrivilegeCensusQuery = `
                WHEN 'type' THEN pg_catalog.has_type_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
                WHEN 'large_object' THEN pg_catalog.has_largeobject_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
              END AS grantable
-      FROM application_roles role
+      FROM audited_roles role
       CROSS JOIN privilege_candidates candidate
     ),
     set_reachable_acl AS (
@@ -223,24 +256,34 @@ const rolePrivilegeCensusQuery = `
       JOIN application_roles member ON member.oid = membership.member
       JOIN pg_catalog.pg_roles parent ON parent.oid = membership.parent
       UNION ALL
-      SELECT role.rolname, 'privilege', acl.kind || ':' || acl.object_name || ':' ||
+      SELECT role.rolname, 'privilege',
+             acl.kind || ':' || acl.object_name || ':' ||
              acl.privilege_type || ':EFFECTIVE'
       FROM role_privileges acl
-      JOIN application_roles role ON role.oid = acl.role_oid
+      LEFT JOIN application_roles role ON role.oid = acl.role_oid
+      LEFT JOIN role_privileges public_acl
+        ON acl.role_oid <> 0
+       AND public_acl.role_oid = 0
+       AND public_acl.kind = acl.kind
+       AND public_acl.object_oid = acl.object_oid
+       AND public_acl.sub_id = acl.sub_id
+       AND public_acl.privilege_type = acl.privilege_type
       WHERE acl.effective
+        AND NOT acl.relation_effective
+        AND public_acl.effective IS NOT TRUE
       UNION ALL
       SELECT role.rolname, 'privilege', acl.kind || ':' || acl.object_name || ':' ||
              acl.privilege_type || ':EFFECTIVE_GRANTABLE'
       FROM role_privileges acl
       JOIN application_roles role ON role.oid = acl.role_oid
-      WHERE acl.grantable
+      WHERE acl.grantable AND NOT acl.relation_grantable
       UNION ALL
       SELECT role.rolname, 'privilege', acl.kind || ':' || acl.object_name || ':' ||
              acl.privilege_type || ':SET_REACHABLE'
       FROM set_reachable_acl acl
       JOIN application_roles role ON role.oid = acl.role_oid
       UNION ALL
-      SELECT CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE grantee.rolname END,
+      SELECT grantee.rolname,
              'privilege', acl.kind || ':' || acl.object_name || ':' ||
              acl.privilege_type || ':GRANTOR:' || grantor.rolname ||
              ':GRANTABLE:' || acl.is_grantable
@@ -294,8 +337,16 @@ export const readRolePrivilegeCensus = async (
     ORDER BY schemaname, tablename, policyname
   `);
 
+  const publicPrivileges: string[] = [];
   const census = new Map<string, RoleCensus>();
   for (const row of rows) {
+    if (row.role === null) {
+      if (row.kind !== "privilege") {
+        return panic(`PUBLIC cannot hold a census ${row.kind}`);
+      }
+      publicPrivileges.push(row.value);
+      continue;
+    }
     const entry = census.get(row.role) ?? {
       role: row.role,
       attributes: [],
@@ -318,18 +369,28 @@ export const readRolePrivilegeCensus = async (
     }
     census.set(row.role, entry);
   }
-  return { roles: [...census.values()], policies };
+  return {
+    public: publicPrivileges,
+    roles: [...census.values()],
+    policies,
+  };
 };
 
-const censusLines = (census: RoleCensus[]) =>
-  census.flatMap(({ role, attributes, memberships, privileges }) => [
+// PostgreSQL reserves the lowercase name, so no role line can collide with it.
+const censusLines = (census: RolePrivilegeCensus) => [
+  ...census.public.map((privilege) => `public ${privilege}`),
+  ...census.roles.flatMap(({ role, attributes, memberships, privileges }) => [
     `${role} role`,
     ...attributes.map((attribute) => `${role} attribute:${attribute}`),
     ...memberships.map((membership) => `${role} membership:${membership}`),
     ...privileges.map((privilege) => `${role} ${privilege}`),
-  ]);
+  ]),
+];
 
-const assertCensus = (expected: RoleCensus[], actual: RoleCensus[]) => {
+const assertCensus = (
+  expected: RolePrivilegeCensus,
+  actual: RolePrivilegeCensus,
+) => {
   const expectedLines = new Set(censusLines(expected));
   const actualLines = new Set(censusLines(actual));
   const removed = [...expectedLines]
@@ -371,18 +432,22 @@ const assertPolicyCensus = (
 };
 
 export const readExpectedCensus = (): Census => ({
-  roles: roleCensus,
+  ...roleCensus,
   policies: policyCensus,
 });
 
 export const assertCompleteCensus = (expected: Census, actual: Census) => {
-  assertCensus(expected.roles, actual.roles);
+  assertCensus(expected, actual);
   assertPolicyCensus(expected.policies, actual.policies);
 };
 
 const formatCensus = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
 
 export const writeRolePrivilegeCensus = (census: Census) => {
-  writeFileSync(censusPath, formatCensus(census.roles));
+  const rolePrivilegeCensus: RolePrivilegeCensus = {
+    public: census.public,
+    roles: census.roles,
+  };
+  writeFileSync(censusPath, formatCensus(rolePrivilegeCensus));
   writeFileSync(policyCensusPath, formatCensus(census.policies));
 };
