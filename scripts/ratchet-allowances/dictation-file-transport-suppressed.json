@@ -1,5 +1,0 @@
-{
-  "metric": "capability-file-transport-suppressed",
-  "delta": 1,
-  "reason": "packages/cli/capabilities/dictation.transcribe.json requires a transient audio file uploaded through REST multipart; the generic JSON capability transport cannot carry that required file input."
-}

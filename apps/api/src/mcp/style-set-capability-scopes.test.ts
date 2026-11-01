@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 
 import { MCP_DOCUMENTS_RESOURCE_SCOPES } from "@/api/mcp/constants";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 
 import { parseCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-load";
 
-const capabilityCatalog = parseCapabilityCatalog(readCapabilityCatalog());
+const capabilityCatalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (capabilityCatalog === null) {
   throw new TypeError("Invalid capability catalog");
 }

@@ -138,8 +138,7 @@ const TYPESCRIPT6_COMPATIBILITY = {
   astro: {
     dependency: "typescript",
     packagePath: "apps/landing/package.json",
-    script:
-      "bun --cwd=../../packages/cli run codegen:runtime && bun --bun astro check",
+    script: "bun --bun astro check",
     specifier: "catalog:ts6",
   },
   astroCheck: {

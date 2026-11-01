@@ -1537,12 +1537,14 @@ jobs:
   # untrusted run never generates.
   generated-sources:
     needs: ci-plan
+    # A push to main also caches its generated sources by commit, so a pull
+    # request can restore its merge base's capability catalog.
     if: >-
       (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
       needs.ci-plan.outputs.run_required != 'false'
       && (
-      inputs.heavy_only != true
+      (inputs.heavy_only != true || github.event_name == 'push')
       && (
         needs.ci-plan.outputs.trusted == 'true'
         || github.event_name == 'workflow_dispatch'
@@ -2199,13 +2201,11 @@ jobs:
 
       - name: Capability catalog drift guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # The committed capability catalog (every `tool`/`covered` safe handler,
-        # projected to id + input schema + permissions + scope + access +
-        # destructive) must match the live handler graph. `--check` regenerates
-        # it in-memory and byte-compares against the committed JSON, so a handler
-        # or mapping-table change cannot silently ship a stale catalog.
-        # Regenerate: `bun --env-file=apps/api/.env
-        # apps/api/scripts/export-capability-catalog.ts`.
+        # The capability catalog is derived from the live handler graph and
+        # never committed. `--check` derives it in memory, fails on any catalog
+        # error, and byte-compares the committed coverage table, so a handler or
+        # mapping-table change cannot silently ship a stale table.
+        # Regenerate: `bun apps/api/scripts/export-capability-catalog.ts`.
         run: |
           bun apps/api/scripts/export-capability-catalog.ts --check
 
@@ -2803,6 +2803,38 @@ jobs:
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
+
+      # The CLI contract changeset guard compares the merge base's capability
+      # catalog with the head's. The restored head sources hold the head's;
+      # the merge base commit's generated-source cache holds its own, under
+      # the producer's key and path. On a miss the guard derives that catalog
+      # from source and says so.
+      - name: Identify merge base generated sources
+        id: base_sources
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+        run: |
+          merge_base=$(git merge-base "origin/$BASE_REF" HEAD)
+          rm -rf "$RUNNER_TEMP/generated-sources"
+          echo "key=generated-sources-v1-$RUNNER_OS-$RUNNER_ARCH-$merge_base" >> "$GITHUB_OUTPUT"
+          {
+            echo "CLI_CONTRACT_HEAD_CATALOG=$GITHUB_WORKSPACE/packages/cli/capabilities"
+            echo "CLI_CONTRACT_BASE_CATALOG=$RUNNER_TEMP/generated-sources/files/packages/cli/capabilities"
+          } >> "$GITHUB_ENV"
+      - name: Restore merge base generated sources
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+        with:
+          path: ${{ runner.temp }}/generated-sources
+          key: ${{ steps.base_sources.outputs.key }}
 
       - name: Prepare route network manifest
         env:

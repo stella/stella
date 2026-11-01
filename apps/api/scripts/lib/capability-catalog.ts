@@ -1352,8 +1352,8 @@ export const compareScopeStrictness = ({
  * The six write-only OAuth grants. A capability whose `access` is `read` must
  * never resolve to one of these — a read-only credential (`stella:read` /
  * `stella:admin_read`) would then be unable to invoke it. Enforced structurally
- * by the exporter's read-scope guard AND the `read-capabilities-with-write-scope`
- * ratchet, so the class stays impossible even if the resolver is later changed.
+ * by the exporter's read-scope guard, so the class stays impossible even if the
+ * resolver is later changed.
  */
 export const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set(
   MCP_WRITE_ONLY_RESOURCE_SCOPES,

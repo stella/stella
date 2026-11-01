@@ -28,6 +28,15 @@ checks:
     # Worst pilot test 153.3 s; 400 s allows about 2.5x contention headroom.
     run: bun test --timeout 400000 scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
 
+  - name: Test CLI contract changeset guard over derived catalogs
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Derives two revisions' capability catalogs in a disposable clone of the checkout."
+    id: cli_contract_derived
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test CLI contract changeset guard over derived catalogs')) }}
+    # Two private revision exports each build the MCP Apps and the catalog.
+    run: bun test --timeout 300000 scripts/cli-contract-derived.test.ts
+
   - name: Generated files manifest guard
     env:
       CI_CHECK_KIND: STATIC
@@ -103,8 +112,9 @@ checks:
       CI_CHECK_CONTEXT: "CLI runtime pack test selects a real merge-base against origin/main."
     id: cli_runtime_parity
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-    # Worst pilot test 31.52 s; 80 s allows about 2.5x contention headroom.
-    run: bun test --timeout 80000 scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
+    # Fresh packs derive the capability catalog from API sources after
+    # building the MCP Apps; the pack test sets its own budget.
+    run: bun test --timeout 240000 scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
 
   # Root script tests belong to no workspace package, so no scoped test
   # run reaches them. Other steps call some by path; this runs every
@@ -832,6 +842,22 @@ checks:
     run: |
       bun apps/api/scripts/capability-description-guard.ts --self-test
       bun apps/api/scripts/capability-description-guard.ts
+
+  - name: Capability file-transport ledger
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_129
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Capability file-transport ledger')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_129 != 'true') }}
+    # A capability suppressed from the generic transport (a byte response or
+    # a required file input) is unreachable from the CLI and executors, so
+    # each one is listed by exact id in
+    # apps/api/capability-file-transport-ledger.json over the catalog derived
+    # in memory. A new suppression fails, and a capability made invocable
+    # again must delete its line, so the list can only shrink.
+    run: |
+      bun apps/api/scripts/capability-file-transport-guard.ts --self-test
+      bun apps/api/scripts/capability-file-transport-guard.ts
 
   - name: MCP coverage guard
     env:

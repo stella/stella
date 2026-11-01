@@ -5,7 +5,6 @@ import * as v from "valibot";
 
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
 import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import type { PermissionInput } from "@stll/permissions";
 import { roles } from "@stll/permissions";
 
@@ -47,6 +46,7 @@ import {
   selectableOperations,
 } from "@/api/mcp/write-tool-authority";
 import { callMcpToolOverHttp } from "@/api/tests/helpers/mcp-http-tool-call";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { parseCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-load";
@@ -206,7 +206,7 @@ const catalogEntrySchema = v.object({
 });
 const rawCatalog = v.parse(
   v.array(catalogEntrySchema),
-  readCapabilityCatalog(),
+  repositoryCapabilityCatalog,
 );
 
 /** Catalog endpoints the catalog attributes to a curated tool, by tool name. */
@@ -752,7 +752,7 @@ const bakedListings: readonly RegistryToolListing[] = registrySnapshot.map(
     inputSchema: entry.inputSchema,
   }),
 );
-const cliCatalogEntries = parseCapabilityCatalog(readCapabilityCatalog());
+const cliCatalogEntries = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (cliCatalogEntries === null) {
   throw new TypeError("Invalid capability catalog");
 }

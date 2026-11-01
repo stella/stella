@@ -630,7 +630,9 @@ test("CLI runtime determinism remains a fresh generation proof", () => {
     new URL("check-cli-runtime-generation.ts", import.meta.url),
     "utf-8",
   );
-  expect(source).toContain('["packages/cli/src/codegen.ts", "--runtime-only"]');
+  expect(source).toContain(
+    '["packages/cli/scripts/codegen.ts", "--runtime-only"]',
+  );
   expect(source).not.toContain('"codegen:runtime"');
 });
 
@@ -865,14 +867,10 @@ test("API boot entry points prepare capability runtime sources before starting",
     new URL("../apps/api/Dockerfile", import.meta.url),
     "utf-8",
   );
-  expect(
-    docker.indexOf("RUN bun apps/api/scripts/generate-capability-runtime.ts"),
-  ).toBeGreaterThanOrEqual(0);
-  expect(
-    docker.indexOf("RUN bun apps/api/scripts/generate-capability-runtime.ts"),
-  ).toBeLessThan(docker.indexOf("RUN bun build"));
+  // The runtime derives its catalog from the handler graph, which embeds the
+  // MCP App bundles, so the bundles are built first.
   const runtime = docker.indexOf(
-    "RUN bun apps/api/scripts/generate-capability-runtime.ts",
+    "bun --env-file=apps/api/.env.example apps/api/scripts/generate-capability-runtime.ts",
   );
   const contracts = docker.indexOf(
     "bun apps/api/scripts/generate-mcp-app-contracts.ts",
@@ -880,9 +878,10 @@ test("API boot entry points prepare capability runtime sources before starting",
   const bundles = docker.indexOf(
     "bun packages/mcp-apps/scripts/build-mcp-apps.ts",
   );
-  expect(contracts).toBeGreaterThan(runtime);
+  expect(contracts).toBeGreaterThanOrEqual(0);
   expect(bundles).toBeGreaterThan(contracts);
-  expect(bundles).toBeLessThan(docker.indexOf("RUN bun build"));
+  expect(runtime).toBeGreaterThan(bundles);
+  expect(runtime).toBeLessThan(docker.indexOf("RUN bun build"));
   expect(api.scripts["generate:capability-runtime"]).toContain(
     "bun ../../scripts/prepare-mcp-apps.ts",
   );

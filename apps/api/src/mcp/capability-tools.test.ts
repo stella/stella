@@ -60,6 +60,7 @@ import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
@@ -109,10 +110,8 @@ const { listStaticMcpToolDefinitions } =
   await import("@/api/mcp/static-tool-definitions");
 const { listMcpResources, readMcpResource } =
   await import("@/api/mcp/resources");
-const { readCapabilityCatalog } =
-  await import("@stll/cli/capability-catalog-data");
 const { parseCatalog } = await import("@/api/mcp/capability-tools");
-const capabilityCatalog = parseCatalog(readCapabilityCatalog());
+const capabilityCatalog = parseCatalog(repositoryCapabilityCatalog);
 
 const requiresVerificationGrant = (entry: (typeof capabilityCatalog)[number]) =>
   "featureId" in entry &&

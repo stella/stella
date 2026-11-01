@@ -1,27 +1,39 @@
 import { expect, test } from "bun:test";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { borrowDependencies } from "./borrowed-dependencies";
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
-const CAPABILITIES = "packages/cli/capabilities";
+const HANDLERS = "apps/api/src/handlers";
 const SNAPSHOT = "packages/cli/src/generated/registry-snapshot.json";
-const CODEGEN = "packages/cli/src/codegen.ts";
+const CODEGEN = "packages/cli/scripts/codegen.ts";
 const CHECKER = "scripts/check-cli-runtime-generation.ts";
 const OUTPUTS = [
   "packages/cli/src/generated/route-map.ts",
   "packages/cli/src/generated/tool-annotations.ts",
 ] as const;
 const PROBES = [
-  { name: "zz-probe-a", capabilityId: "zz-capability-a.list", position: 1 },
-  { name: "zz-probe-b", capabilityId: "zz-capability-b.list", position: 50 },
+  {
+    name: "zz-probe-a",
+    capabilityId: "notifications.zz-probe-a.list",
+    domain: "notifications",
+    position: 1,
+  },
+  {
+    name: "zz-probe-b",
+    capabilityId: "contacts.zz-probe-b.list",
+    domain: "contacts",
+    position: 50,
+  },
 ] as const;
 
 // Insert one complete listing without rewriting any existing listing. Separate
@@ -62,28 +74,52 @@ const addProbe = (
   return lines.join("\n");
 };
 
-// Each capability is its own committed shard, so a probe adds one new file.
-const capabilityShard = ({ capabilityId }: (typeof PROBES)[number]) =>
-  `${CAPABILITIES}/${capabilityId}.json`;
+const capabilityHandler = ({ domain, name }: (typeof PROBES)[number]) =>
+  `${HANDLERS}/${domain}/${name}/list.ts`;
+
+const capabilityRoutes = ({ domain }: (typeof PROBES)[number]) =>
+  `${HANDLERS}/${domain}/routes.ts`;
 
 const addCapability = (checkout: string, probe: (typeof PROBES)[number]) => {
-  const { capabilityId } = probe;
-  const shard = path.join(checkout, capabilityShard(probe));
-  expect(existsSync(shard)).toBe(false);
-  const capability = {
-    id: capabilityId,
-    description: "List synthetic capability merge probes.",
-    handlerKind: "root",
-    access: "read",
-    destructive: false,
+  const { domain, name } = probe;
+  const handler = path.join(checkout, capabilityHandler(probe));
+  expect(existsSync(handler)).toBe(false);
+  mkdirSync(path.dirname(handler), { recursive: true });
+  writeFileSync(
+    handler,
+    `import { Result } from "better-result";
+import * as v from "valibot";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+
+export default createSafeRootHandler({
+  contract: "patch",
+  description: "List synthetic capability merge probes.",
+  permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  access: "read",
+  query: v.object({}),
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "notification_inbox",
     consumesServices: false,
-    scope: "stella:read",
-    transport: { type: "json" },
-    permissions: {},
-    inputSchema: { query: { type: "object", properties: {} } },
-    mcp: { type: "capability", reason: "billing_admin" },
-  };
-  writeFileSync(shard, `${JSON.stringify(capability)}\n`);
+  },
+}, async function* () {
+  return Result.ok({ items: [] });
+});
+`,
+  );
+  const routes = path.join(checkout, capabilityRoutes(probe));
+  const source = readFileSync(routes, "utf-8");
+  const anchor = `export const ${domain}Route = routes(\n  {`;
+  expect(source).toContain(anchor);
+  writeFileSync(
+    routes,
+    `import mergeProbe from "@/api/handlers/${domain}/${name}/list";\n${source.replace(
+      anchor,
+      () => `${anchor}\n    "/${name}": { GET: mergeProbe },`,
+    )}`,
+  );
 };
 
 const runtimeBytes = (checkout: string) =>
@@ -133,12 +169,10 @@ test.skipIf(!process.env["CI"])(
         [process.execPath, "--cwd=packages/cli", "run", "codegen:runtime"],
         cwd,
       );
+    // Runtime preparation builds the MCP Apps from the clone's own workspace
+    // packages, so dependencies are borrowed without redirecting those.
     const linkDependencies = (cwd: string) =>
-      symlinkSync(
-        path.join(REPO_ROOT, "node_modules"),
-        path.join(cwd, "node_modules"),
-        "dir",
-      );
+      borrowDependencies(REPO_ROOT, cwd);
 
     try {
       await succeed(
@@ -169,19 +203,20 @@ test.skipIf(!process.env["CI"])(
         const source = path.join(checkout, SNAPSHOT);
         writeFileSync(source, addProbe(readFileSync(source, "utf-8"), probe));
         addCapability(checkout, probe);
-        const shard = capabilityShard(probe);
+        const handler = capabilityHandler(probe);
+        const routes = capabilityRoutes(probe);
         await generate(checkout);
         const bytes = runtimeBytes(checkout);
         expect(bytes[OUTPUTS[0]]).toContain(probe.name);
         expect(bytes[OUTPUTS[1]]).toContain(probe.name);
         expect(bytes[OUTPUTS[0]]).toContain(probe.capabilityId);
-        await succeed(["git", "add", SNAPSHOT, shard], checkout);
+        await succeed(["git", "add", SNAPSHOT, handler, routes], checkout);
         const staged = await succeed(
           ["git", "diff", "--cached", "--name-only"],
           checkout,
         );
         expect(staged.split("\n").toSorted()).toEqual(
-          [SNAPSHOT, shard].toSorted(),
+          [SNAPSHOT, handler, routes].toSorted(),
         );
         await succeed(
           ["git", "commit", "--quiet", "-m", "test: add runtime merge probe"],

@@ -46,6 +46,13 @@ export const MINIMUM_BUDGET_SECONDS: Readonly<
     "Code quality (web)": CODE_CHECK_EXECUTION_BUDGET_MS / 1000,
     "Code quality (rest)": CODE_CHECK_EXECUTION_BUDGET_MS / 1000,
   },
+  // Each derives capability catalogs from private revision exports, building
+  // the MCP Apps first, inside per-test timeouts of their own.
+  "ci-checks-rest": {
+    "Test CLI runtime package parity": 600,
+    "Release CLI coupling guard": 600,
+    "CLI contract changeset guard": 600,
+  },
 };
 
 /** max(p99 x 3, p95 x 5, 5 min, the check's own minimum), in whole minutes. */

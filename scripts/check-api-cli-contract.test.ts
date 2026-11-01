@@ -130,7 +130,10 @@ describe("API and CLI release contract", () => {
     expect(cliPackage.scripts["codegen:version"]).toBe(
       "bun run src/codegen-version.ts",
     );
-    expect(cliPackage.scripts.codegen).toContain(
+    // Full codegen derives the catalog, then regenerates the registry
+    // projections and the baked version.
+    expect(cliPackage.scripts.codegen).toContain("bun run codegen:registry");
+    expect(cliPackage.scripts["codegen:registry"]).toContain(
       "bun run src/codegen-version.ts",
     );
 
@@ -235,8 +238,10 @@ describe("API and CLI release contract", () => {
     expect(releaseSmoke).toContain(`grep -F '"message":"scheduler.started"'`);
     expect(migrationSmoke).toContain("curl -fsS http://127.0.0.1:3001/live");
     expect(migrationSmoke).toContain(`grep -q '"message":"scheduler.started"'`);
+    // Catalog discovery imports handlers that embed MCP App bundles, so the
+    // bundles are prepared before the runtime generator reads them.
     expect(apiPackage.scripts["generate:capability-runtime"]).toBe(
-      "bun scripts/generate-capability-runtime.ts && bun ../../scripts/prepare-mcp-apps.ts",
+      "bun ../../scripts/prepare-mcp-apps.ts && bun scripts/generate-capability-runtime.ts",
     );
     const prepareRuntime = migrationSmoke.indexOf(
       "bun --filter @stll/api generate:capability-runtime",

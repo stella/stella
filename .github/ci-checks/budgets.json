@@ -162,6 +162,10 @@
       "p95Seconds": 142,
       "p99Seconds": 142
     },
+    "Test CLI contract changeset guard over derived catalogs": {
+      "minutes": 30,
+      "samples": 0
+    },
     "Generated files manifest guard": {
       "minutes": 49,
       "samples": 19,
@@ -193,7 +197,7 @@
       "p99Seconds": 15
     },
     "Test CLI runtime package parity": {
-      "minutes": 5,
+      "minutes": 10,
       "samples": 19,
       "p95Seconds": 35,
       "p99Seconds": 35
@@ -277,13 +281,13 @@
       "p99Seconds": 0
     },
     "Release CLI coupling guard": {
-      "minutes": 5,
+      "minutes": 10,
       "samples": 19,
       "p95Seconds": 0,
       "p99Seconds": 0
     },
     "CLI contract changeset guard": {
-      "minutes": 5,
+      "minutes": 10,
       "samples": 19,
       "p95Seconds": 0,
       "p99Seconds": 0
@@ -537,6 +541,10 @@
       "samples": 18,
       "p95Seconds": 1,
       "p99Seconds": 1
+    },
+    "Capability file-transport ledger": {
+      "minutes": 30,
+      "samples": 0
     },
     "MCP coverage guard": {
       "minutes": 5,

@@ -34,8 +34,9 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 
-import { loadBakedCapabilityCatalog } from "../../../../../../packages/cli/src/capability-catalog-load";
+import { parseCapabilityCatalog } from "../../../../../../packages/cli/src/capability-catalog-load";
 import { deriveCapabilityLeaf } from "../../../../../../packages/cli/src/generate-capability-tree";
 import { runCapabilityCommand } from "../../../../../../packages/cli/src/run-capability-command";
 import { respondToMcpLifecycle } from "../../../../../../packages/cli/tests/mcp-test-lifecycle";
@@ -276,7 +277,7 @@ const seed = async (db: GatedTestDb) => {
       },
     });
   const cliRead = async () => {
-    const entry = loadBakedCapabilityCatalog()?.find(
+    const entry = parseCapabilityCatalog(repositoryCapabilityCatalog)?.find(
       (candidate) => candidate.id === "lists.verifications.get",
     );
     if (entry === undefined) {

@@ -25,15 +25,18 @@
 //
 // Modes:
 //   bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts
-//       regenerate the committed catalog JSON
+//       regenerate coverage and embedded API runtime data
 //   bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts --check
-//       drift guard: regenerate in-memory, byte-compare against the committed
-//       JSON, exit 1 with a diff summary on mismatch
+//       drift guard: regenerate in memory and compare coverage
+//   bun apps/api/scripts/export-capability-catalog.ts --catalog-only [--out <dir>]
+//       write the npm package shards (--check compares them instead); --out
+//       names another shard directory than packages/cli/capabilities
 //
 // Env-dependent by design (it imports the handler graph, which validates the API
 // env at module load), so run under `bun --env-file=apps/api/.env`. Wired into
 // `bun run verify` and CI next to the CLI registry-snapshot drift guard.
 import { panic, Result } from "better-result";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import { printError } from "@stll/errors";
@@ -48,7 +51,6 @@ import type { RouteNode } from "../../../packages/cli/src/route-types";
 // generated command path through the same `buildCliRouteTree` codegen uses, so
 // collision fallbacks (curated command wins, capability relocates under
 // `stella capability <domain> <action>`) are never hand-replicated here.
-import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
 import type { Middleware, RouteEntry } from "../src/http/route";
 import type { CapabilityTransport } from "../src/lib/capability-transport";
 import {
@@ -66,10 +68,6 @@ import type { HandlerKind } from "../src/lib/safe-handler-factories";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import type { McpReadClass, McpToolDefinition } from "../src/mcp/tool-types";
 import { WRITE_PRIMITIVE_SCOPES } from "../src/mcp/write-primitive-scopes";
-import {
-  generateCapabilityCatalogRuntime,
-  generateCapabilityRuntime,
-} from "./generate-capability-runtime";
 import {
   type AccessResolution,
   CANONICAL_ACTION_VERBS,
@@ -124,6 +122,7 @@ import {
   REPO_ROOT,
 } from "./lib/enumerate-safe-handlers";
 import { assertFeatureAccessDeclarations } from "./lib/feature-access-declarations";
+import { writeCapabilityRuntime } from "./lib/write-capability-runtime";
 
 const CATALOG_PATH = path.resolve(REPO_ROOT, "packages/cli/capabilities");
 
@@ -937,8 +936,8 @@ const collectClassGuardErrors = ({
   // or a read-only credential (`stella:read` / `stella:admin_read`) could not
   // invoke it. The access-keyed resolver above already downgrades reads to their
   // domain read tier, so this can only fire if that resolver is later broken —
-  // which is exactly when it must fail the export (companion to the
-  // `read-capabilities-with-write-scope` ratchet over the committed catalog).
+  // which is exactly when it must fail the export. The catalog is derived,
+  // never committed, so no hand-edited copy can bypass this.
   for (const entry of entries) {
     if (entry.access === "read" && WRITE_ONLY_SCOPES.has(entry.scope)) {
       errors.push(
@@ -1761,18 +1760,50 @@ const computeCliCommandPaths = async (
   return { cliCommandPathById, errors };
 };
 
+// Discovery imports descriptor helpers that consume these bindings. Seed only
+// the absent module; the runtime generator replaces it with the real bindings.
+const buildRepositoryCatalog = async () => {
+  const bindings = new URL(
+    "../src/mcp/generated/capability-feature-bindings.ts",
+    import.meta.url,
+  );
+  if (!(await Bun.file(bindings).exists())) {
+    await mkdir(new URL("./", bindings), { recursive: true });
+    await Bun.write(
+      bindings,
+      "export const CAPABILITY_FEATURE_BINDINGS = new Map<string, string>();\n",
+    );
+  }
+  return buildCatalog();
+};
+
+let repositoryCatalog: ReturnType<typeof buildRepositoryCatalog> | undefined;
+
+/** Build repository contract data without requiring the npm package's shards. */
+export const buildCapabilityCatalog = async () => {
+  repositoryCatalog ??= buildRepositoryCatalog();
+  const { entries, errors } = await repositoryCatalog;
+  if (errors.length > 0) {
+    panic(`Capability catalog generation failed:\n${errors.join("\n")}`);
+  }
+  // Match the npm contract's canonical object-key order as well as its values:
+  // CLI flag ordering follows schema property insertion order.
+  return entries.map((entry) => {
+    const shard: unknown = JSON.parse(serializeCapabilityShard(entry));
+    return shard;
+  });
+};
+
 // Repeated calls rescan handler files; already imported modules remain warm.
 // Callers must start a new process when changing an existing handler's source.
 export const exportCapabilityCatalog = async (
   mode: "write" | "check",
+  catalogOnly = false,
+  catalogDirectory = CATALOG_PATH,
 ): Promise<number> => {
   const checkMode = mode === "check";
-  if (
-    !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
-  ) {
-    await generateCapabilityCatalogRuntime();
-  }
-  const { entries, errors, internalWaiverCounts } = await buildCatalog();
+  const { entries, errors, internalWaiverCounts } =
+    await buildRepositoryCatalog();
 
   if (errors.length > 0) {
     printErrors(errors);
@@ -1835,25 +1866,31 @@ export const exportCapabilityCatalog = async (
     internalWaiverCounts,
   });
 
-  const catalogDrift = await syncCapabilityShards({
-    directory: CATALOG_PATH,
-    shards: catalogShards,
-    mode,
-  });
+  const catalogDrift = catalogOnly
+    ? await syncCapabilityShards({
+        directory: catalogDirectory,
+        shards: catalogShards,
+        mode,
+      })
+    : [];
   if (!checkMode) {
-    await generateCapabilityRuntime();
-    await Bun.write(COVERAGE_DOC_PATH, doc);
+    if (!catalogOnly) {
+      await writeCapabilityRuntime(entries);
+      await Bun.write(COVERAGE_DOC_PATH, doc);
+    }
     process.stderr.write(
-      `export-capability-catalog: wrote ${entries.length} capability shards\n`,
+      `export-capability-catalog: wrote ${catalogOnly ? "npm shards" : "coverage and runtime"} for ${entries.length} capabilities\n`,
     );
     return 0;
   }
-  const committedDoc = await Bun.file(COVERAGE_DOC_PATH)
-    .text()
-    .catch(() => null);
+  const committedDoc = catalogOnly
+    ? doc
+    : await Bun.file(COVERAGE_DOC_PATH)
+        .text()
+        .catch(() => null);
   if (catalogDrift.length === 0 && committedDoc === doc) {
     console.log(
-      `export-capability-catalog: OK. ${entries.length} capability shards are up to date.`,
+      `export-capability-catalog: OK. ${entries.length} capabilities are up to date.`,
     );
     return 0;
   }
@@ -1870,9 +1907,18 @@ export const exportCapabilityCatalog = async (
 // time and never unrefs it, so this one-off script's event loop would hang. The
 // work is done here; exit explicitly like export-mcp-tool-registry.ts.
 if (import.meta.main) {
+  const out = process.argv.indexOf("--out");
+  const catalogDirectory =
+    out === -1
+      ? CATALOG_PATH
+      : path.resolve(
+          process.argv.at(out + 1) ?? panic("--out requires a directory"),
+        );
   process.exit(
     await exportCapabilityCatalog(
       process.argv.includes("--check") ? "check" : "write",
+      process.argv.includes("--catalog-only"),
+      catalogDirectory,
     ),
   );
 }

@@ -5,7 +5,6 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { apiRoutes } from "@/api/api-routes";
@@ -61,10 +60,11 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-const capabilityCatalog = parseCatalog(readCapabilityCatalog());
+const capabilityCatalog = parseCatalog(repositoryCapabilityCatalog);
 
 const FLAG = "FEATURE_TIME_BILLING";
 const FEATURE_ID = "time-billing";

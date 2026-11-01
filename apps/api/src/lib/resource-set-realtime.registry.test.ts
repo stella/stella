@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
-
 import { parseCatalog } from "@/api/mcp/capability-tools";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 
 // Every write capability states what it announces to open tabs (`realtime` on
 // its handler config): a resource set, or `noResourceSetUpdates(reason)`. The
@@ -195,7 +194,7 @@ const loadDeclaration = async (id: string): Promise<Declaration | null> => {
   return isRecord(realtime) ? realtime : undefined;
 };
 
-const catalog = parseCatalog(readCapabilityCatalog());
+const catalog = parseCatalog(repositoryCapabilityCatalog);
 
 const declarations = await Promise.all(
   catalog.map(async (entry) => ({

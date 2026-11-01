@@ -74,7 +74,6 @@ import type {
 } from "@/api/mcp/tool-types";
 
 import { RESERVED_FLAGS } from "../../../packages/cli/src/annotations";
-import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
 import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
 import { uploadCommand } from "../../../packages/cli/src/commands/upload";
 import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
@@ -84,6 +83,7 @@ import type {
   RegistryToolListing,
   RouteNode,
 } from "../../../packages/cli/src/route-types";
+import { buildCapabilityCatalog } from "../scripts/export-capability-catalog";
 import { sameCliFlagValue } from "./lib/cli-flag-score";
 import { composeCliToolInput } from "./lib/cli-tool-input";
 import { runEvalModelTurn } from "./lib/model-turn";
@@ -155,8 +155,8 @@ const parseRegistryListings = (raw: unknown): RegistryToolListing[] => {
   return listings;
 };
 
-const loadCapabilityCatalog = () => {
-  const catalogRaw = readCapabilityCatalog();
+const loadCapabilityCatalog = async () => {
+  const catalogRaw = await buildCapabilityCatalog();
   const entries = parseCapabilityCatalog(catalogRaw);
   if (entries === null) {
     return panic(
@@ -166,7 +166,7 @@ const loadCapabilityCatalog = () => {
   return entries;
 };
 
-const CAPABILITY_CATALOG = loadCapabilityCatalog();
+const CAPABILITY_CATALOG = await loadCapabilityCatalog();
 
 const buildCliSchemaTree = (): RouteNode => {
   const listings = parseRegistryListings(
@@ -2707,3 +2707,5 @@ const main = async () => {
 };
 
 await main();
+
+process.exit(0);

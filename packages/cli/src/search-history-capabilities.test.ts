@@ -7,7 +7,9 @@ import {
   deriveCapabilityLeaf,
 } from "./generate-capability-tree.js";
 
-const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+const repositoryCapabilityCatalog = readCapabilityCatalog();
+
+const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (catalog === null) {
   throw new TypeError("Invalid capability catalog");
 }

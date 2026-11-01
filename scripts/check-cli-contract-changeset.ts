@@ -3,9 +3,23 @@
 // A generated CLI contract change must ship with the CLI. The broad changeset
 // gate intentionally accepts an empty changeset for unrelated release work;
 // this narrower guard is the contract-specific backstop.
+//
+// The capability catalog is generated, never committed. When a change touches
+// what the catalog is derived from, the guard compares the merge base's and
+// the head's catalogs, so a handler input-schema or capability change needs
+// release metadata like any other contract change. CI hands it catalogs it
+// already produced: the head's from the restored generated sources, the merge
+// base's from the generated-source cache of that commit. A catalog CI could
+// not hand over is derived from that revision's sources in a private export,
+// and the miss is logged; a derivation that fails fails the guard.
 
+import { existsSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 
+import {
+  deriveRevisionCatalog,
+  type RevisionCatalog,
+} from "./capability-catalog-revision";
 import { isChangesetEntry } from "./changeset-guard";
 import {
   canonicalJson,
@@ -13,7 +27,9 @@ import {
   changesetNamesCli,
   CLI_CONTRACT_SURFACE_PATHS,
   compareStableVersions,
+  readCapabilityShards,
 } from "./check-cli-release-coupling";
+import { GENERATORS, matchesGeneratedGlob } from "./generated-files";
 
 const DEFAULT_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI_PACKAGE = "packages/cli";
@@ -252,18 +268,120 @@ const report = (verdict: CliContractChangeVerdict): number => {
 
 type GuardOptions = { readonly root: string; readonly base: string };
 
-export const runCliContractGuard = ({ root, base }: GuardOptions): number => {
+/** Derives one revision's catalog shards into a private directory. */
+export type CatalogDeriver = (
+  root: string,
+  revision: string,
+) => RevisionCatalog;
+
+const CATALOG_PART = `${CLI_PACKAGE}/capability-catalog.json`;
+
+const isCatalogPath = (file: string): boolean =>
+  file === CATALOG_PART || file.startsWith(`${CLI_PACKAGE}/capabilities/`);
+
+const CATALOG_SOURCES = ((): readonly string[] => {
+  const generator = GENERATORS.find(({ id }) => id === "capability-catalog");
+  if (generator === undefined) {
+    return panic("the generator manifest has no capability-catalog entry");
+  }
+  return [...generator.inputs, ...(generator.checkInputs ?? [])];
+})();
+
+/** Whether a change touches anything the capability catalog is derived from. */
+export const touchesCatalogSources = (
+  changedFiles: readonly string[],
+): boolean =>
+  changedFiles.some((file) =>
+    CATALOG_SOURCES.some((glob) => matchesGeneratedGlob(glob, file)),
+  );
+
+const deriveCatalogText = (
+  derive: CatalogDeriver,
+  root: string,
+  revision: string,
+): string => {
+  const catalog = derive(root, revision);
+  if (catalog.status === "failed") {
+    return panic(
+      `${catalog.command} failed, so the ${revision} capability catalog cannot be compared`,
+    );
+  }
+  try {
+    return readCapabilityShards(catalog.directory);
+  } finally {
+    rmSync(catalog.directory, { recursive: true, force: true });
+  }
+};
+
+const deriveFromSources: CatalogDeriver = (root, revision) =>
+  deriveRevisionCatalog({ repoRoot: root, revision });
+
+/** Shard directories CI already produced for the head and the merge base. */
+export type ProducedCatalogs = {
+  readonly head?: string;
+  readonly base?: string;
+};
+
+const producedCatalogsFromEnvironment = (): ProducedCatalogs => {
+  const head = process.env["CLI_CONTRACT_HEAD_CATALOG"];
+  const base = process.env["CLI_CONTRACT_BASE_CATALOG"];
+  return {
+    ...(head === undefined || head === "" ? {} : { head }),
+    ...(base === undefined || base === "" ? {} : { base }),
+  };
+};
+
+type CatalogTextOptions = {
+  readonly produced: string | undefined;
+  readonly derive: CatalogDeriver;
+  readonly root: string;
+  readonly revision: string;
+};
+
+const catalogText = ({
+  produced,
+  derive,
+  root,
+  revision,
+}: CatalogTextOptions): string => {
+  if (
+    produced !== undefined &&
+    existsSync(produced) &&
+    readdirSync(produced).some((file) => file.endsWith(".json"))
+  ) {
+    return readCapabilityShards(produced);
+  }
+  if (produced !== undefined) {
+    process.stderr.write(
+      `::warning::cli-contract-changeset: no produced capability catalog at ${produced}; deriving ${revision} from its sources.\n`,
+    );
+  }
+  return deriveCatalogText(derive, root, revision);
+};
+
+type ContractGuardOptions = GuardOptions & {
+  readonly deriveCatalog?: CatalogDeriver;
+  readonly producedCatalogs?: ProducedCatalogs;
+};
+
+export const runCliContractGuard = ({
+  root,
+  base,
+  deriveCatalog = deriveFromSources,
+  producedCatalogs = producedCatalogsFromEnvironment(),
+}: ContractGuardOptions): number => {
   const mergeBaseResult = git(["merge-base", base, "HEAD"], root);
   if (!mergeBaseResult.ok || mergeBaseResult.stdout.trim() === "") {
     return panic(`git merge-base ${base} HEAD failed`);
   }
   const mergeBase = mergeBaseResult.stdout.trim();
+  // The catalog is compared as derived from sources below, never as files.
   const contractPaths = [
     ...new Set([
       ...generatedContractPaths(root, mergeBase),
       ...generatedContractPaths(root, "HEAD"),
     ]),
-  ];
+  ].filter((file) => !isCatalogPath(file));
   const changedFiles = gitPaths(
     [
       "diff",
@@ -276,14 +394,31 @@ export const runCliContractGuard = ({ root, base }: GuardOptions): number => {
     ],
     root,
   );
+  const catalogChanged =
+    touchesCatalogSources(changedFiles) &&
+    catalogText({
+      produced: producedCatalogs.base,
+      derive: deriveCatalog,
+      root,
+      revision: mergeBase,
+    }) !==
+      catalogText({
+        produced: producedCatalogs.head,
+        derive: deriveCatalog,
+        root,
+        revision: "HEAD",
+      });
   return report(
     decideCliContractChange({
-      changedFiles: readSemanticContractChanges(
-        root,
-        mergeBase,
-        changedFiles,
-        contractPaths,
-      ),
+      changedFiles: [
+        ...readSemanticContractChanges(
+          root,
+          mergeBase,
+          changedFiles,
+          contractPaths,
+        ),
+        ...(catalogChanged ? [CATALOG_PART] : []),
+      ],
       cliChangesets: readCliChangesets(root),
       baseCliVersion: readBaseCliVersion(mergeBase, root),
       headCliVersion: readHeadCliVersion(root),
