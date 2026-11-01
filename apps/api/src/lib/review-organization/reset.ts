@@ -38,6 +38,11 @@ import {
 } from "@/api/lib/email/normalized-email";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
+import {
+  lockOrganizationForWholeOrganizationWork,
+  organizationHasActiveHold,
+  settleOrganizationHoldRead,
+} from "@/api/lib/legal-holds/holds";
 import { LIMITS } from "@/api/lib/limits";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
@@ -268,7 +273,7 @@ class ReviewMembershipChangedError extends TaggedError(
  */
 export type MembershipFence = {
   tripped: boolean;
-  assert: (tx: Pick<Transaction, "select">) => Promise<void>;
+  assert: (tx: Transaction) => Promise<void>;
 };
 
 export const createMembershipFence = (
@@ -278,18 +283,24 @@ export const createMembershipFence = (
   const fence: MembershipFence = {
     tripped: false,
     assert: async (tx) => {
+      // The organization row lock also takes the object-intent lifecycle lock
+      // and the exclusive legal-hold fence, and the membership read below
+      // reads the hold state under them: every deletion in the transaction
+      // then answers its hold check without another statement.
       if (!fence.tripped) {
-        await tx
-          .select({ id: organization.id })
-          .from(organization)
-          .where(eq(organization.id, target.organizationId))
-          .for("update");
+        await lockOrganizationForWholeOrganizationWork({
+          tx,
+          organizationId: target.organizationId,
+        });
       }
       const members = fence.tripped
         ? null
         : await readBounded(
             tx
-              .select({ userId: member.userId })
+              .select({
+                userId: member.userId,
+                activeHold: organizationHasActiveHold(target.organizationId),
+              })
               .from(member)
               .where(eq(member.organizationId, target.organizationId))
               .orderBy(asc(member.userId)),
@@ -297,7 +308,7 @@ export const createMembershipFence = (
           );
       const sole =
         members?.type === "complete" ? members.rows.at(0) : undefined;
-      if (sole?.userId !== target.userId) {
+      if (sole === undefined || sole.userId !== target.userId) {
         fence.tripped = true;
         abortTransaction(
           new ReviewMembershipChangedError({
@@ -305,6 +316,14 @@ export const createMembershipFence = (
               "The review organization has members other than the review account",
           }),
         );
+      }
+      const hold = await settleOrganizationHoldRead({
+        tx,
+        organizationId: target.organizationId,
+        activeHold: sole.activeHold,
+      });
+      if (hold.isErr()) {
+        abortTransaction(hold.error);
       }
       await afterCheck?.();
     },

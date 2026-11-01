@@ -27,6 +27,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockLegalHoldOrganizations,
+  lockOrganizationRowWithLegalHoldFence,
   readLockedLegalHolds,
 } from "@/api/lib/db/aggregate-lock";
 
@@ -62,6 +63,8 @@ type FenceMode = "share" | "update";
 type TransactionHoldState = {
   fences: Map<string, FenceMode>;
   clear: Set<string>;
+  /** Organizations this transaction read without any active hold. */
+  clearOrganizations: Set<string>;
 };
 const transactionHoldStates = new WeakMap<Transaction, TransactionHoldState>();
 
@@ -70,7 +73,11 @@ const holdStateOf = (tx: Transaction): TransactionHoldState => {
   if (existing !== undefined) {
     return existing;
   }
-  const created: TransactionHoldState = { fences: new Map(), clear: new Set() };
+  const created: TransactionHoldState = {
+    fences: new Map(),
+    clear: new Set(),
+    clearOrganizations: new Set(),
+  };
   transactionHoldStates.set(tx, created);
   return created;
 };
@@ -125,7 +132,72 @@ export const lockLegalHoldOrganization = async ({
  * target this transaction proved clear before must be checked again.
  */
 export const forgetClearHoldTargets = (tx: Transaction) => {
-  holdStateOf(tx).clear.clear();
+  const state = holdStateOf(tx);
+  state.clear.clear();
+  state.clearOrganizations.clear();
+};
+
+/**
+ * Open a transaction that works on a whole organization (the review reset):
+ * one statement locks the organization row, takes the object-intent lifecycle
+ * lock and the exclusive hold fence, in the order every deletion takes them.
+ * Later takes of either lock in this transaction are no-ops. Returns whether
+ * the organization exists.
+ */
+export const lockOrganizationForWholeOrganizationWork = async ({
+  tx,
+  organizationId,
+}: {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+}): Promise<boolean> => {
+  const exists = await lockOrganizationRowWithLegalHoldFence({
+    tx,
+    organizationId,
+  });
+  if (exists) {
+    holdStateOf(tx).fences.set(organizationId, "update");
+  }
+  return exists;
+};
+
+/**
+ * Whether the organization has an active hold, as a column for a statement
+ * that runs after the organization's fence in the same transaction.
+ */
+export const organizationHasActiveHold = (
+  organizationId: SafeId<"organization">,
+): SQL<boolean> =>
+  sql<boolean>`EXISTS (SELECT 1 FROM ${legalHolds} WHERE ${legalHolds.organizationId} = ${organizationId} AND ${legalHolds.releasedAt} IS NULL)`;
+
+/**
+ * Settle an `organizationHasActiveHold` read taken under this transaction's
+ * fence. A clear organization answers every later hold check in the
+ * transaction without a statement; an active hold refuses with the holds
+ * that block it.
+ */
+export const settleOrganizationHoldRead = async ({
+  tx,
+  organizationId,
+  activeHold,
+}: {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  activeHold: boolean;
+}): Promise<Result<void, LegalHoldActiveError>> => {
+  const state = holdStateOf(tx);
+  if (state.fences.get(organizationId) === undefined) {
+    return panic("A hold read must follow the organization's fence");
+  }
+  if (!activeHold) {
+    state.clearOrganizations.add(organizationId);
+    return Result.ok();
+  }
+  return await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "organization" },
+  });
 };
 
 const heldWorkspace = sql`coalesce(${legalHolds.workspaceId}, (SELECT e.workspace_id FROM ${entities} e WHERE e.id = ${legalHolds.entityId}))`;
@@ -248,7 +320,10 @@ const holdsBlockingAcross = async ({
   }
   const state = holdStateOf(tx);
   const key = clearTargetKey(organizationIds, target);
-  if (state.clear.has(key)) {
+  if (
+    state.clear.has(key) ||
+    organizationIds.every((id) => state.clearOrganizations.has(id))
+  ) {
     return { type: "clear" };
   }
   await fenceOrganizations({

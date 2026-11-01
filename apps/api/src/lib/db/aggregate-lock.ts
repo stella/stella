@@ -3163,6 +3163,68 @@ export const lockLegalHoldOrganizations = async ({
   return rows;
 };
 
+/**
+ * The organization's object-intent advisory lock key. Writers share it while
+ * reserving storage; a lifecycle (matter or organization teardown) takes it
+ * exclusively.
+ */
+export const organizationObjectIntentLockKey = (
+  organizationId: SafeId<"organization">,
+): string => `buffer-object:${organizationId}`;
+
+// The lifecycle lock is an exclusive transaction-scoped advisory lock, held
+// until the transaction ends: a second take in the same transaction is a no-op
+// and runs no statement.
+const lifecycleLockedOrganizations = new WeakMap<Transaction, Set<string>>();
+
+const noteLifecycleLock = (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+) => {
+  const locked = lifecycleLockedOrganizations.get(tx) ?? new Set<string>();
+  locked.add(organizationId);
+  lifecycleLockedOrganizations.set(tx, locked);
+};
+
+/** Close the organization's object intents to writers for a lifecycle. */
+export const lockOrganizationObjectIntentsForLifecycle = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+): Promise<void> => {
+  if (lifecycleLockedOrganizations.get(tx)?.has(organizationId) === true) {
+    return;
+  }
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${organizationObjectIntentLockKey(organizationId)}))`,
+  );
+  noteLifecycleLock(tx, organizationId);
+};
+
+/**
+ * For a transaction that works on a whole organization (the review reset):
+ * lock its row FOR UPDATE, then take the object-intent lifecycle lock and the
+ * exclusive legal-hold fence, in the order every deletion takes them, all in
+ * one statement. Later takes of the lifecycle lock in this transaction are
+ * no-ops. Returns whether the organization exists.
+ */
+export const lockOrganizationRowWithLegalHoldFence = async ({
+  tx,
+  organizationId,
+}: {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+}): Promise<boolean> => {
+  const rows = executedRows(
+    await tx.execute(
+      sql`SELECT ordered.id FROM (SELECT ${organization.id} AS id FROM ${organization} WHERE ${organization.id} = ${organizationId} FOR UPDATE) ordered CROSS JOIN LATERAL (SELECT pg_advisory_xact_lock(hashtext(${organizationObjectIntentLockKey(organizationId)})), pg_advisory_xact_lock(${LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE}, hashtext(ordered.id))) fence`,
+    ),
+  ).map((row) => v.parse(legalHoldOrganizationRowSchema, row));
+  if (rows.length > 0) {
+    noteLifecycleLock(tx, organizationId);
+  }
+  return rows.length > 0;
+};
+
 /** In-flight upload cancellation keeps content belonging to held matters. */
 export const lockAccountDeletionPendingUploads = async ({
   tx,

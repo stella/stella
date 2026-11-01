@@ -33,10 +33,10 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import {
-  lockOrganizationObjectIntentsForLifecycle,
   preserveBufferObjectCleanupIntents,
   releaseObjectCleanupIntentsForLifecycle,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { lockOrganizationObjectIntentsForLifecycle } from "@/api/lib/db/aggregate-lock";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import {

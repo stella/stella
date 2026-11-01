@@ -2083,12 +2083,6 @@
   },
   {
     "file": "apps/api/src/lib/buffer-intent-reconciliation.ts",
-    "fingerprint": "555b587df5887d268f7d958b30de9d67d52763f18121a48688c6a05bdcf21ef4",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/buffer-intent-reconciliation.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/buffer-intent-reconciliation.ts",
     "fingerprint": "636494394370a5b7279846c43a94a4f22bdb340f3746939aa068c290ae72f842",
     "count": 1,
     "reason": "pg_advisory_xact_lock_shared( in apps/api/src/lib/buffer-intent-reconciliation.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -3472,12 +3466,6 @@
     "fingerprint": "8644d0c19cd309fedfd542e032ff1a8e1cd33f4f2787839b9789ba9fdf33420d",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/review-organization/reset.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/review-organization/reset.ts",
-    "fingerprint": "94bd0c0b2f58f11fc2086985df1df1f53a261673f2353822f3a31444d90658bb",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/review-organization/reset.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/review-organization/reset.ts",

@@ -10,11 +10,11 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { lockOrganizationObjectIntentsForLifecycle } from "@/api/lib/buffer-intent-reconciliation";
 import {
   lockMatterAccessAssignments,
   lockMatterAccessWorkspaceRows,
   lockMemberAccessRow,
+  lockOrganizationObjectIntentsForLifecycle,
   lockWorkspaceLifecycle,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
