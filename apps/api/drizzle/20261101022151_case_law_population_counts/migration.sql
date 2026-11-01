@@ -36,7 +36,7 @@ GRANT SELECT (id, kind, country, source_id, value, delta) ON public.case_law_pop
 -- stella-migration-safety: reviewed security-definer - read-only bounded backlog assertion with fixed search path; exposes no queue rows or operational checkpoint
 CREATE FUNCTION public.case_law_population_backlog_within_window()
 RETURNS boolean LANGUAGE plpgsql STABLE SECURITY DEFINER
-SET search_path = pg_catalog, public, pg_temp
+SET search_path = pg_catalog, pg_temp
 AS $function$
 BEGIN
   RETURN (SELECT count(*) FROM (SELECT id FROM public.case_law_population_deltas ORDER BY id LIMIT 16385) bounded) <= 16384;
@@ -106,7 +106,7 @@ GRANT SELECT (source_id, country, court, created_at, updated_at, publication) ON
 -- stella-migration-safety: reviewed security-definer - bounded read-only freshness metadata; no queue rows or source data exposed
 CREATE FUNCTION public.read_case_law_population_freshness()
 RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = pg_catalog, public, pg_temp
+SET search_path = pg_catalog, pg_temp
 AS $function$
   SELECT jsonb_build_object(
     'status', CASE WHEN public.case_law_population_backlog_within_window() THEN 'current' ELSE 'stale' END,
@@ -153,7 +153,7 @@ REVOKE ALL ON FUNCTION public.case_law_population_buckets(public.case_law_decisi
 -- stella-migration-safety: reviewed security-definer - trigger-only function with fixed search path and PUBLIC execute revoked; appends only derived public population deltas
 CREATE FUNCTION public.apply_case_law_population_projection()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog, public, pg_temp
+SET search_path = pg_catalog, pg_temp
 AS $function$
 DECLARE
   delta_sql text;
@@ -190,7 +190,7 @@ FOR EACH STATEMENT EXECUTE FUNCTION public.apply_case_law_population_projection(
 -- stella-migration-safety: reviewed security-definer - trigger-only function with fixed search path and PUBLIC execute revoked; only projects transition-table decisions in their transaction
 CREATE FUNCTION public.project_case_law_population_decision()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog, public, pg_temp
+SET search_path = pg_catalog, pg_temp
 AS $function$
 BEGIN
   IF TG_OP = 'DELETE' THEN
@@ -198,13 +198,13 @@ BEGIN
     USING old_decisions d WHERE p.decision_id = d.id;
     RETURN NULL;
   END IF;
-  INSERT INTO public.case_law_population_projections (decision_id, source_id, country, buckets, court, created_at, updated_at, publication)
+  INSERT INTO public.case_law_population_projections AS projection (decision_id, source_id, country, buckets, court, created_at, updated_at, publication)
   SELECT d.id, d.source_id, d.country, public.case_law_population_buckets(d::public.case_law_decisions), d.court, d.created_at, d.updated_at,
     CASE WHEN public.case_law_statute_citation_is_published(d.metadata, d.redacted_at) THEN 'published' ELSE 'unpublished' END
   FROM new_decisions d
   ORDER BY d.id
   ON CONFLICT ON CONSTRAINT case_law_population_projections_pkey DO UPDATE SET source_id = EXCLUDED.source_id, country = EXCLUDED.country, buckets = EXCLUDED.buckets, court = EXCLUDED.court, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at, publication = EXCLUDED.publication
-  WHERE (case_law_population_projections.source_id, case_law_population_projections.country, case_law_population_projections.buckets, case_law_population_projections.court, case_law_population_projections.created_at, case_law_population_projections.updated_at, case_law_population_projections.publication)
+  WHERE (projection.source_id, projection.country, projection.buckets, projection.court, projection.created_at, projection.updated_at, projection.publication)
     IS DISTINCT FROM (EXCLUDED.source_id, EXCLUDED.country, EXCLUDED.buckets, EXCLUDED.court, EXCLUDED.created_at, EXCLUDED.updated_at, EXCLUDED.publication);
   RETURN NULL;
 END
@@ -333,7 +333,7 @@ REVOKE ALL ON FUNCTION public.seed_case_law_population_counts(integer) FROM PUBL
 -- stella-migration-safety: reviewed security-definer - read-only readiness assertion with fixed search path; exposes no operational checkpoint or corpus data
 CREATE FUNCTION public.assert_case_law_population_ready()
 RETURNS boolean LANGUAGE plpgsql STABLE SECURITY DEFINER
-SET search_path = pg_catalog, public, pg_temp
+SET search_path = pg_catalog, pg_temp
 AS $function$
 DECLARE
   phase text;
