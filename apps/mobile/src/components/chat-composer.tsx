@@ -1,6 +1,13 @@
 import { useState } from "react";
 
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import { useTranslations } from "use-intl";
 
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
@@ -91,14 +98,20 @@ export const ChatComposer = ({
   const ready = `${round} bg-foreground`;
   const muted = `${round} bg-secondary`;
 
+  // iOS 26's Liquid Glass: the box is a glass capsule floating over the
+  // screen, as the platform's own message fields are. Elsewhere it keeps the
+  // web's bordered box.
+  const glass = Platform.OS === "ios" && isLiquidGlassAvailable();
+  const Box = glass ? GlassBox : BorderedBox;
+
   return (
-    <View className="bg-background gap-1 px-3 pt-1 pb-2">
+    <View className={`${glass ? "" : "bg-background"} gap-1 px-3 pt-1 pb-2`}>
       {notice === undefined ? null : (
         <Text accessibilityLiveRegion="polite" className="px-1" variant="error">
           {notice}
         </Text>
       )}
-      <View className={`${COMPOSER_BOX_CLASS} border-border`}>
+      <Box>
         {files.attachments.length === 0 ? null : (
           <ScrollView
             contentContainerStyle={styles.chips}
@@ -161,10 +174,22 @@ export const ChatComposer = ({
             </Pressable>
           )}
         </View>
-      </View>
+      </Box>
     </View>
   );
 };
+
+/** The web's bordered message box, from its composer tokens. */
+const BorderedBox = ({ children }: React.PropsWithChildren) => (
+  <View className={`${COMPOSER_BOX_CLASS} border-border`}>{children}</View>
+);
+
+/** The message box as a Liquid Glass capsule. */
+const GlassBox = ({ children }: React.PropsWithChildren) => (
+  <GlassView glassEffectStyle="regular" isInteractive style={styles.glass}>
+    {children}
+  </GlassView>
+);
 
 /** What the composer says went wrong: with a file just added, else with the last send. */
 function useNoticeText(
@@ -237,6 +262,10 @@ const CHIP_STATUS = {
 >;
 
 const styles = StyleSheet.create({
+  // Rounded to half the one-line row (54pt), so one line reads as a capsule.
+  glass: {
+    borderRadius: 27,
+  },
   chips: {
     gap: 8,
     paddingHorizontal: 8,

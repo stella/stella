@@ -1,5 +1,29 @@
 # @stll/ui
 
+## 0.60.0
+
+### Minor Changes
+
+- [#7202](https://github.com/stella/stella/pull/7202) [`ac06603`](https://github.com/stella/stella/commit/ac06603f5b187b45bc1ca741cf9d2496959eab5a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Restore the public sortable Kanban interaction layer used by external consumers. Preserve keyboard navigation through virtual rows and empty matrix cells, identity-bound touch dragging, drag previews, settled drop targets, and collapsed-band peeking alongside the current board primitives.
+
+- [#7605](https://github.com/stella/stella/pull/7605) [`92038d5`](https://github.com/stella/stella/commit/92038d59d484f5f59e36fa35e297cc19bf3e6e2c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a field variant to ComboboxTrigger that uses the shared form-control appearance and accommodates wrapping selected labels.
+
+- [#7573](https://github.com/stella/stella/pull/7573) [`8f35c0f`](https://github.com/stella/stella/commit/8f35c0f990c12833a18adf4cdb86a69b3681acdc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DayCalendar` blocks shorter than one label line (`DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX`) draw their surface only; their accessible label and tooltip still carry them.
+
+- [#7573](https://github.com/stella/stella/pull/7573) [`8f35c0f`](https://github.com/stella/stella/commit/8f35c0f990c12833a18adf4cdb86a69b3681acdc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DayCalendar` entries take a `suggestion` state: a lighter, dashed block rendered as a button that calls the block's `onActivate` without starting a range selection. Any block can carry a `tooltip`.
+
+### Patch Changes
+
+- [#7354](https://github.com/stella/stella/pull/7354) [`a8532a0`](https://github.com/stella/stella/commit/a8532a054628dc979e3bc7e48d807cb44e2d66b2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a wrapping Button layout that grows with multi-line labels at every breakpoint.
+
+- [#7702](https://github.com/stella/stella/pull/7702) [`496eff7`](https://github.com/stella/stella/commit/496eff74a703471be2b2075d24c2e78159e2bc57) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DatePickerPopover` takes a `triggerLabel` that replaces the formatted date in its trigger.
+
+## 0.59.1
+
+### Patch Changes
+
+- [#7301](https://github.com/stella/stella/pull/7301) [`db3c4a8`](https://github.com/stella/stella/commit/db3c4a84467e039acf34f980a5418b35db6c2454) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A scroll area's viewport is the containing block of what is positioned inside it, so an absolutely positioned descendant, such as a visually hidden label, stays inside the scroll instead of giving an ancestor a scrollbar of its own.
+
 ## 0.59.0
 
 ### Minor Changes

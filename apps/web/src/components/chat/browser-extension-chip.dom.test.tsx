@@ -1,12 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, beforeEach, expect, jest, test } from "bun:test";
+import { DetachedWindowAPI } from "happy-dom";
 
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
   BROWSER_EXTENSION_STATUS,
+  BROWSER_EXTENSION_STORE_URL,
   type BrowserExtensionResponse,
   type BrowserExtensionStatus,
+  PRODUCTION_STELLA_ORIGINS,
 } from "@stll/api-contract/browser-control";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
@@ -14,7 +17,9 @@ import arMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
-GlobalRegistrator.register({ url: "https://app.stella.test" });
+// Not a hosted origin: the store build never connects here, so no store link.
+const TEST_URL = "https://app.stella.test";
+GlobalRegistrator.register({ url: TEST_URL });
 const { act, cleanup, fireEvent, render, screen } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
@@ -30,6 +35,14 @@ const originalNavigator = Object.getOwnPropertyDescriptor(
   "navigator",
 );
 let unmountBridge: (() => void) | undefined;
+
+const visit = (url: string) => {
+  const happyDom: unknown = Reflect.get(globalThis, "happyDOM");
+  if (!(happyDom instanceof DetachedWindowAPI)) {
+    throw new TypeError("Missing HappyDOM browser lifecycle");
+  }
+  happyDom.setURL(url);
+};
 
 beforeEach(() => {
   Object.defineProperty(globalThis, "navigator", {
@@ -48,6 +61,7 @@ afterEach(() => {
   unmountBridge?.();
   unmountBridge = undefined;
   restoreRealTimers();
+  visit(TEST_URL);
   if (originalNavigator) {
     Object.defineProperty(globalThis, "navigator", originalNavigator);
   } else {
@@ -84,14 +98,23 @@ const report = async ({
   });
 };
 
-const showChip = (installUrl?: string) =>
+const showChip = () =>
   render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <BrowserExtensionChip
-        {...(installUrl === undefined ? {} : { installUrl })}
-      />
+      <BrowserExtensionChip />
     </IntlProvider>,
   );
+
+const openInstallPopover = async () => {
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: messages.chat.browserExtension.install,
+    }),
+  );
+  expect(
+    await screen.findByText(messages.chat.browserExtension.installDescription),
+  ).toBeTruthy();
+};
 
 // Total over the contract: adding a bridge state requires choosing and exercising its UI.
 const states = {
@@ -202,23 +225,25 @@ test("the connected tooltip explains the separate website tab", async () => {
   ).toBeTruthy();
 });
 
-test("the install popover links to the supplied store destination", async () => {
-  await states[BROWSER_EXTENSION_STATUS.notInstalled]();
-  const installUrl = "https://example.test/extension";
-  showChip(installUrl);
-  fireEvent.click(
-    screen.getByRole("button", {
+for (const origin of PRODUCTION_STELLA_ORIGINS) {
+  test(`the install popover links to the extension store on ${origin}`, async () => {
+    visit(`${origin}/chat`);
+    await states[BROWSER_EXTENSION_STATUS.notInstalled]();
+    showChip();
+    await openInstallPopover();
+    const link = screen.getByRole("link", {
       name: messages.chat.browserExtension.install,
-    }),
-  );
-  expect(
-    await screen.findByText(messages.chat.browserExtension.installDescription),
-  ).toBeTruthy();
-  const link = screen.getByRole("link", {
-    name: messages.chat.browserExtension.install,
+    });
+    expect(link.getAttribute("href")).toBe(BROWSER_EXTENSION_STORE_URL);
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
   });
-  expect(link.getAttribute("href")).toBe(installUrl);
-  expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+}
+
+test("the install popover stays text-only where the store build never connects", async () => {
+  await states[BROWSER_EXTENSION_STATUS.notInstalled]();
+  showChip();
+  await openInstallPopover();
+  expect(screen.queryByRole("link")).toBeNull();
 });
 
 test("pongs update the mounted chip and a missing controller never shows connected", async () => {

@@ -1,0 +1,5 @@
+{
+  "metric": "web-lib-top-level-entries",
+  "delta": 2,
+  "reason": "The shared time-zone picker separates searchable option logic from its reusable UI component."
+}

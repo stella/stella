@@ -399,6 +399,7 @@
         "expo-dev-client": "~58.0.14",
         "expo-document-picker": "~58.0.4",
         "expo-font": "~58.0.9",
+        "expo-glass-effect": "~58.0.4",
         "expo-linking": "~58.0.14",
         "expo-notifications": "~58.1.6",
         "expo-router": "~58.0.25",
@@ -712,7 +713,7 @@
     },
     "packages/ai-catalog": {
       "name": "@stll/ai-catalog",
-      "version": "0.8.2",
+      "version": "0.9.0",
       "dependencies": {
         "valibot": "catalog:",
       },
@@ -869,7 +870,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.2.16",
+      "version": "0.3.0",
       "dependencies": {
         "@ag-ui/core": "1.0.3",
         "@stll/ai-catalog": "workspace:^",
@@ -877,6 +878,8 @@
         "@tanstack/ai-client": "catalog:",
         "@types/hast": "^3.0.5",
         "better-result": "catalog:",
+        "cheerio": "^1.2.0",
+        "domhandler": "^6.0.1",
         "linkify-it": "6.1.0",
         "tldts": "7.4.19",
         "valibot": "catalog:",
@@ -917,7 +920,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "6.2.2",
+      "version": "6.3.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1580,7 +1583,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.59.0",
+      "version": "0.60.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1594,6 +1597,8 @@
         "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
         "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
         "@base-ui/react": "catalog:",
+        "@dnd-kit/core": "^6.3.1",
+        "@dnd-kit/sortable": "^10.0.0",
         "@happy-dom/global-registrator": "21.0.4",
         "@playwright/test": "^1.63.0",
         "@stll/playwright-tools": "workspace:*",
@@ -1617,6 +1622,8 @@
         "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
         "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
         "@base-ui/react": "^1.7.0",
+        "@dnd-kit/core": "^6.3.1",
+        "@dnd-kit/sortable": "^10.0.0",
         "@playwright/test": "^1.63.0",
         "@tanstack/react-virtual": "^3.14.13",
         "@types/react": ">=19",
@@ -1675,7 +1682,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.15.1",
+      "version": "0.15.2",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
@@ -2289,6 +2296,14 @@
     "@csstools/selector-specificity": ["@csstools/selector-specificity@6.0.0", "", { "peerDependencies": { "postcss-selector-parser": "^7.1.1" } }, "sha512-4sSgl78OtOXEX/2d++8A83zHNTgwCJMaR24FvsYL7Uf/VS8HZk9PTwR51elTbGqMuwH3szLvvOXEaVnqn0Z3zA=="],
 
     "@ctrl/tinycolor": ["@ctrl/tinycolor@4.2.0", "", {}, "sha512-kzyuwOAQnXJNLS9PSyrk0CWk35nWJW/zl/6KvnTBMFK65gm7U1/Z5BqjxeapjZCIhQcM/DsrEmcbRwDyXyXK4A=="],
+
+    "@dnd-kit/accessibility": ["@dnd-kit/accessibility@3.1.1", "", { "dependencies": { "tslib": "^2.0.0" }, "peerDependencies": { "react": ">=16.8.0" } }, "sha512-2P+YgaXF+gRsIihwwY1gCsQSYnu9Zyj2py8kY5fFvUM1qm2WA2u639R6YNVfU4GWr+ZM5mqEsfHZZLoRONbemw=="],
+
+    "@dnd-kit/core": ["@dnd-kit/core@6.3.1", "", { "dependencies": { "@dnd-kit/accessibility": "^3.1.1", "@dnd-kit/utilities": "^3.2.2", "tslib": "^2.0.0" }, "peerDependencies": { "react": ">=16.8.0", "react-dom": ">=16.8.0" } }, "sha512-xkGBRQQab4RLwgXxoqETICr6S5JlogafbhNsidmrkVv2YRs5MLwpjoF2qpiGjQt8S9AoxtIV603s0GIUpY5eYQ=="],
+
+    "@dnd-kit/sortable": ["@dnd-kit/sortable@10.0.0", "", { "dependencies": { "@dnd-kit/utilities": "^3.2.2", "tslib": "^2.0.0" }, "peerDependencies": { "@dnd-kit/core": "^6.3.0", "react": ">=16.8.0" } }, "sha512-+xqhmIIzvAYMGfBYYnbKuNicfSsk4RksY2XdmJhT+HAC01nix6fHCztU68jooFiMUB01Ky3F0FyOvhG/BZrWkg=="],
+
+    "@dnd-kit/utilities": ["@dnd-kit/utilities@3.2.2", "", { "dependencies": { "tslib": "^2.0.0" }, "peerDependencies": { "react": ">=16.8.0" } }, "sha512-+MKAJEOfaBe5SmV6t34p80MMKhjvUz0vRrvVJbPT0WElzaOJ/1xs+D+KDv+tD/NE5ujfrChEcshd4fLn0wpiqg=="],
 
     "@drizzle-team/brocli": ["@drizzle-team/brocli@0.12.0", "", {}, "sha512-mlUE+rZ8CatQekLhnaiN91Iemdd+e2gFKooGlnRB3oPTL3VghLfX24dx7HrzMNeC1JrIB/0kpsfyty3f5HNfxQ=="],
 

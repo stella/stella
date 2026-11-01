@@ -47,6 +47,7 @@ import {
   CASE_LAW_PARSED_SOURCE_VALIDATION,
 } from "./case-law-parsed-source-hash-repair";
 import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
+import { CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR } from "./case-law-source-config-object-repair";
 import {
   CHAT_CONTENT_V3_CONSTRAINTS,
   CHAT_CONTENT_V3_REPAIR,
@@ -99,6 +100,10 @@ import {
 import { DEFAULT_MIGRATION_TIMING, timed } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
 import {
+  NOTIFICATION_TASK_ASSIGNED_CONSTRAINT_VALIDATIONS,
+  NOTIFICATION_TASK_ASSIGNED_CONSTRAINTS,
+} from "./notification-task-assigned-constraint-validation";
+import {
   createIndexConcurrently,
   createOnlineTableGate,
   declaresOnlineBuild,
@@ -148,6 +153,10 @@ import {
   TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
   TIME_ENTRY_SUBMITTED_CONSTRAINTS,
 } from "./time-entry-submitted-constraint-validation";
+import {
+  USAGE_ACTION_TYPE_CONSTRAINT_VALIDATION,
+  USAGE_ACTION_TYPE_CONSTRAINTS,
+} from "./usage-action-type-constraint-validation";
 
 // Catalog work keeps a short lock budget; every statement that locks a table
 // runs through the gate in `online-ddl.ts`, which lifts it and watches the
@@ -967,6 +976,8 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS,
   EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
   TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
+  USAGE_ACTION_TYPE_CONSTRAINT_VALIDATION,
+  ...NOTIFICATION_TASK_ASSIGNED_CONSTRAINT_VALIDATIONS,
   CONTACT_VAT_ID_REPAIR,
   INVOICE_SENT_AT_BACKFILL,
   INVOICE_LEGACY_PAYMENT_BACKFILL,
@@ -982,6 +993,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL,
   LEGAL_LIST_SOURCE_DECISION_BACKFILL,
   CASE_LAW_SITEMAP_PACKING_ENROLLMENT,
+  CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR,
 ];
 
 /**
@@ -1009,6 +1021,8 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
     ...EMAIL_UNDELIVERABLE_CONSTRAINTS,
     ...TIME_ENTRY_SUBMITTED_CONSTRAINTS,
+    ...USAGE_ACTION_TYPE_CONSTRAINTS,
+    ...NOTIFICATION_TASK_ASSIGNED_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
     ...IMPORT_PROVENANCE_CONSTRAINTS,
   ];
