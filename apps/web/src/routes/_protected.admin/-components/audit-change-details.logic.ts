@@ -6,7 +6,17 @@ export type AuditChangeRow =
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const FIELD_DIFF_KEYS = new Set(["old", "new", "before", "after"]);
+const isFieldDiffKey = (key: string): boolean => {
+  switch (key) {
+    case "old":
+    case "new":
+    case "before":
+    case "after":
+      return true;
+    default:
+      return false;
+  }
+};
 
 const isFieldDiff = (
   value: unknown,
@@ -18,7 +28,7 @@ const isFieldDiff = (
 } =>
   isRecord(value) &&
   Object.keys(value).length > 0 &&
-  Object.keys(value).every((key) => FIELD_DIFF_KEYS.has(key));
+  Object.keys(value).every(isFieldDiffKey);
 
 /**
  * Audit `changes` as field rows. Writers record `{ field: { old, new } }` or

@@ -59,3 +59,14 @@ test("the chosen person stays listed when no member or loaded entry names them",
     }),
   ).toEqual([member("u-1", "First Member")]);
 });
+
+test("before the first page loads, members and the chosen person are still offered", () => {
+  const departed = { userId: "u-9", name: "u-9", email: null, image: null };
+  expect(
+    auditPersonOptions({
+      members: [member("u-1", "First Member")],
+      entries: undefined,
+      selected: departed,
+    }),
+  ).toEqual([member("u-1", "First Member"), departed]);
+});

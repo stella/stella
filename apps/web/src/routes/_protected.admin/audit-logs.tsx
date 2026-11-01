@@ -137,7 +137,7 @@ function AuditPersonFilter({
   onValueChange,
 }: {
   value: MemberOption | null;
-  entries: readonly AuditLogItem[];
+  entries: readonly AuditLogItem[] | undefined;
   onValueChange: (person: MemberOption | null) => void;
 }) {
   const t = useTranslations();
@@ -395,7 +395,7 @@ function AuditLogsPage() {
             {/* Filters Row */}
             <div className="bg-muted/30 grid grid-cols-1 items-end gap-2 rounded-lg border p-4 md:grid-cols-2 xl:grid-cols-4">
               <AuditPersonFilter
-                entries={data?.items ?? []}
+                entries={data?.items}
                 onValueChange={(person) =>
                   handleFilterChange(setFilterPerson, person)
                 }
