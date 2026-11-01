@@ -1,29 +1,12 @@
-import { readerBlockByAnchor } from "@stll/decision-reader/reader-landing";
+import {
+  READER_BREADCRUMB_CLEARANCE,
+  readerBlockByAnchor,
+} from "@stll/decision-reader/reader-landing";
 
 const READER_BREADCRUMB_UPDATE_MS = 200;
-export const READER_BREADCRUMB_CLEARANCE = 64;
 
 const readerBreadcrumbCutoff = (viewport: HTMLElement) =>
   viewport.getBoundingClientRect().top + READER_BREADCRUMB_CLEARANCE;
-
-type ScrollReaderBreadcrumbToHeadingOptions = {
-  viewport: HTMLElement;
-  target: HTMLElement;
-};
-
-export const scrollReaderBreadcrumbToHeading = ({
-  viewport,
-  target,
-}: ScrollReaderBreadcrumbToHeadingOptions): void => {
-  // Round toward the heading so an integer scroll position crosses the cutoff.
-  viewport.scrollTo({
-    top: Math.ceil(
-      viewport.scrollTop +
-        target.getBoundingClientRect().top -
-        readerBreadcrumbCutoff(viewport),
-    ),
-  });
-};
 
 const nodeRange = (node: Node) => {
   const range = document.createRange();

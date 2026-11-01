@@ -40,6 +40,19 @@
     "answerNeedsInput": "Šai atbildei nepieciešama jūsu ievade. Turpiniet to stella tīmekļa lietotnē.",
     "answerFailed": "Atbildi neizdevās pabeigt.",
     "composerMenu": "Atvērt pielikumu un rīku izvēlni",
+    "attachFile": "Pievienot failu",
+    "attachment": "Pielikums",
+    "fileTooLarge": "Fails pārsniedz {maxSize} ierobežojumu",
+    "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
+    "unsupportedFileType": "Neatbalstīts faila tips",
+    "uploadFailed": "Neizdevās apstrādāt failu",
+    "scanDocument": "Skenēt dokumentu",
+    "removeAttachment": "Noņemt {name}",
+    "attachmentReading": "Sagatavo…",
+    "attachmentUploading": "Augšupielādē…",
+    "pickFailed": "Neizdevās atvērt failu atlasītāju. Mēģiniet vēlreiz.",
+    "sendFileRefused": "Neizdevās nosūtīt failu, tāpēc ziņa netika nosūtīta. Noņemiet failu un mēģiniet vēlreiz.",
+    "sendFileNotAnonymizable": "Šī saruna ir anonimizēta, un stella nevarēja anonimizēt vienu no failiem, tāpēc nekas netika nosūtīts. Noņemiet failu un mēģiniet vēlreiz.",
     "pickTitle": "Izvēlieties sarunu",
     "pickDescription": "Izvēlieties pavedienu no saraksta vai sāciet jaunu ar +."
   },
@@ -61,7 +74,8 @@
       "none": "Bez datuma",
       "today": "Šodien",
       "tomorrow": "Rīt",
-      "nextWeek": "Pēc nedēļas"
+      "nextWeek": "Pēc nedēļas",
+      "pick": "Izvēlēties datumu"
     },
     "due": {
       "overdue": "Nokavēti",
@@ -76,7 +90,14 @@
     "statusFailed": "Uzdevumu neizdevās mainīt. Mēģiniet vēlreiz.",
     "pickTitle": "Izvēlieties uzdevumu",
     "pickDescription": "Izvēlieties uzdevumu no saraksta, lai to redzētu šeit.",
-    "openMatter": "Atvērt lietu"
+    "openMatter": "Atvērt lietu",
+    "assignedTo": "Piešķirts",
+    "nobody": "Nav piešķirts",
+    "assign": "Piešķirt",
+    "doneAssigning": "Gatavs",
+    "someone": "Kāds",
+    "membersFailed": "Neizdevās ielādēt lietas dalībniekus.",
+    "assignFailed": "Uzdevumu neizdevās piešķirt. Mēģiniet vēlreiz."
   },
   "matters": {
     "emptyTitle": "Lietu vēl nav",
@@ -120,7 +141,9 @@
     },
     "add": "Pievienot",
     "scanDocument": "Skenēt dokumentu",
-    "newTask": "Jauns uzdevums"
+    "newTask": "Jauns uzdevums",
+    "uploadDocument": "Augšupielādēt dokumentu",
+    "uploadFailed": "Dokumentu neizdevās augšupielādēt. Mēģiniet vēlreiz."
   },
   "entity": {
     "type": "Veids",
@@ -142,7 +165,16 @@
     "preview": "Atvērt priekšskatījumu",
     "previewDescription": "Šis fails tiek atvērts sistēmas priekšskatījumā.",
     "unrendered": "Šo dokumentu šeit nevar parādīt, taču sistēmas priekšskatījums, iespējams, to atvērs.",
-    "details": "Detalizēta informācija"
+    "details": "Detalizēta informācija",
+    "zoomOut": "Tālināt",
+    "zoomIn": "Tuvināt",
+    "zoomFit": "Pielāgot platumam",
+    "fit": "Platums",
+    "appearance": {
+      "system": "Izskats: automātisks",
+      "light": "Izskats: gaišs",
+      "dark": "Izskats: tumšs"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -170,7 +202,8 @@
     "server": "Serveris",
     "signOut": "Atslēgties",
     "deleteAccount": "Dzēst kontu",
-    "deleteAccountHint": "Atver jūsu kontu tīmeklī, kur varat to dzēst kopā ar visu, kas ir jūsu."
+    "deleteAccountHint": "Atver jūsu kontu tīmeklī, kur varat to dzēst kopā ar visu, kas ir jūsu.",
+    "signOutFailed": "Neizdevās pabeigt izrakstīšanos. Mēģiniet vēlreiz."
   },
   "header": {
     "search": "Meklēt"
@@ -184,6 +217,7 @@
     "headnote": "Kopsavilkums",
     "textUnavailable": "Šim nolēmumam teksts nav pieejams",
     "openSource": "Atvērt sākotnējo avotu",
+    "openFailed": "Saiti neizdevās atvērt.",
     "loadFailed": "Tiesu praksi neizdevās ielādēt.",
     "share": "Kopīgot"
   },
@@ -269,6 +303,29 @@
   "palette": {
     "placeholder": "Meklējiet lietas un sarunas vai izpildiet komandu",
     "noResults": "Nekas neatbilst “{query}”"
+  },
+  "search": {
+    "placeholder": "Meklēt stella",
+    "clear": "Notīrīt meklēšanu",
+    "cancel": "Atcelt",
+    "recent": "Nesenie meklējumi",
+    "clearRecent": "Notīrīt",
+    "hint": "Meklējiet lietās, dokumentos, uzdevumos, sarunās un tiesu praksē.",
+    "filters": "Filtri",
+    "noResultsTitle": "Nav rezultātu",
+    "noResults": "Nekas neatbilst “{query}”. Izmēģiniet citus vārdus vai noņemiet filtru.",
+    "loadFailed": "Meklēšanu neizdevās veikt.",
+    "retry": "Mēģināt vēlreiz",
+    "type": {
+      "document": "Dokumenti",
+      "matter": "Lietas",
+      "task": "Uzdevumi",
+      "caseLaw": "Tiesu prakse",
+      "chat": "Sarunas",
+      "folder": "Mapes",
+      "message": "E-pasti",
+      "link": "Saites"
+    }
   },
   "pane": {
     "showList": "Rādīt sarakstu",

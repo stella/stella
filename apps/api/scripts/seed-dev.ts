@@ -126,6 +126,7 @@ import type {
 import { buildMarketingAgentThread } from "./seed-marketing-agent-thread";
 import { seedMarketingCaseLaw } from "./seed-marketing-case-law";
 import { writeSeedRecentFiles } from "./seed-recents";
+import { seedSlovakFirm } from "./seed-slovak-firm";
 import { seedTemplates } from "./seed-templates";
 import {
   ensurePrimarySeedUserInOrganization,
@@ -5053,6 +5054,7 @@ export const userFileCleanupKeys = ({
 };
 
 export async function seed(organizationId?: string, userId?: string) {
+  const now = new Date();
   requireLocalDevOpen("Seeding");
   const ORG_ID = toSafeId<"organization">(organizationId ?? DEFAULT_ORG_ID);
   let USER_ID = userId ?? DEFAULT_USER_ID;
@@ -6291,6 +6293,9 @@ export async function seed(organizationId?: string, userId?: string) {
       .onConflictDoNothing();
   });
   console.log("  Issuing setup: seller profile, VAT rates, number series");
+
+  await seedSlovakFirm({ db, primaryUserId: USER_ID, now });
+  console.log("  Slovak firm: separate EUR time and invoicing scenario");
 
   // 14. Templates & clauses (knowledge base)
   await seedTemplates(ORG_ID, seedUserIds);

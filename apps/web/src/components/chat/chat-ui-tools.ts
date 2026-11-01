@@ -9,6 +9,7 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
+  isChatPastedTextPart,
   isServerChatToolCall,
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
@@ -1385,7 +1386,14 @@ export const consumeReaderAnnotationWriteToolCalls = ({
   return hasWrite;
 };
 
-export const getUserMessageHtmlHistory = (
+/**
+ * The user's sent messages, newest first, as their text parts hold them: the
+ * composer's markup for one just sent, stored Markdown once the server has
+ * it. `userMessageComposerContent` reads either back into the composer.
+ * Pasted-text parts are attachments of the message, not its text, so they
+ * stay out: joined in, they would mix plain text into the composer markup.
+ */
+export const getUserMessageHistory = (
   messages: readonly PersistedChatMessage[],
 ) => {
   const history: string[] = [];
@@ -1398,7 +1406,11 @@ export const getUserMessageHtmlHistory = (
 
     const textParts: string[] = [];
     for (const part of message.parts) {
-      if (part.type === "text" && part.content.trim()) {
+      if (
+        part.type === "text" &&
+        !isChatPastedTextPart(part) &&
+        part.content.trim()
+      ) {
         textParts.push(part.content);
       }
     }
