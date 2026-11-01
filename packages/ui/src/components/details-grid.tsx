@@ -222,7 +222,11 @@ const DetailsItem = ({
         {isEmptyValue(children) ? (
           // A fact with no value still holds its row, so the reader sees it
           // was looked for; the dash is drawn, not read.
-          <span className="text-foreground-disabled" data-slot="details-empty">
+          <span
+            aria-hidden="true"
+            className="text-foreground-disabled"
+            data-slot="details-empty"
+          >
             —
           </span>
         ) : (

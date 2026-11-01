@@ -80,6 +80,18 @@ describe("DetailsItem empty value", () => {
     expect(markup).toContain("—");
   });
 
+  test("the dash is drawn, not read", () => {
+    const markup = renderToStaticMarkup(
+      <DetailsGrid>
+        <DetailsItem label="Judge">{null}</DetailsItem>
+      </DetailsGrid>,
+    );
+
+    expect(markup).toMatch(
+      /<span[^>]*aria-hidden="true"[^>]*data-slot="details-empty"/u,
+    );
+  });
+
   test("keeps zero and real values", () => {
     const markup = renderToStaticMarkup(
       <DetailsGrid>
