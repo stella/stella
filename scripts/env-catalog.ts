@@ -1502,6 +1502,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_VERIFY",
   "QUERY_PERF_CHANGED_PATHS",
   "QUERY_PERF_SCOPE_UNKNOWN",
+  // CI migration planning hands the schema import check its changed-paths file.
+  "CHANGED_PATHS",
   // CI playground planning passes the selected and complete spec sets to the
   // shard planner, together with the desktop scope decision.
   "UI_PLAYGROUND_CHANGED_PATHS",
@@ -1675,6 +1677,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "JOURNEY_REGISTRY_TIMEOUT_MS",
   "JOURNEY_RELEASES_API_URL",
   "JOURNEY_RETRY_PAUSE_SECONDS",
+  "JOURNEY_SEARCH_SLOT",
   "JOURNEY_SIGN_IN",
   "JOURNEY_SMOKE_SESSION_URL",
   "JOURNEY_TIMEOUT_SECONDS",
@@ -1926,6 +1929,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "AWS_REGION",
   "AWS_SECRET_ACCESS_KEY",
   "AWS_SESSION_TOKEN",
+  "CARGO_CFG_TARGET_ARCH",
+  "CARGO_CFG_TARGET_OS",
   "CARGO_MANIFEST_DIR",
   "CARGO_PKG_VERSION",
   "CI",

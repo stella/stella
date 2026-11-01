@@ -15,6 +15,7 @@ const CURATED_WRITE_CAPABILITIES = {
   configure_template_fields: {
     noCapabilityReason: "This native tool owns template configuration.",
   },
+  create_organization: ["organizations.create"],
   create_reader_annotation: {
     noCapabilityReason: "This native tool owns reader annotations.",
   },

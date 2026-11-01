@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Fetch } from "@/connection/http";
-import { createAccessTokenSource } from "@/connection/session";
+import {
+  createAccessTokenSource,
+  createSessionStore,
+} from "@/connection/session";
 import type { StoredSession } from "@/connection/session";
 
 import {
@@ -12,6 +15,7 @@ import {
 } from "./document-upload";
 
 const SESSION: StoredSession = {
+  signInId: "sign-in-1",
   serverUrl: "https://stella.example.com",
   issuer: "https://stella.example.com/api/auth",
   clientId:
@@ -71,16 +75,19 @@ const world = (storage: number) => {
     }
     return Response.json({ ok: true });
   };
+  const store = createSessionStore({
+    read: async () => SESSION,
+    write: async () => {},
+    prepareClear: async () => {},
+    clear: async () => {},
+  });
   const source = createAccessTokenSource({
     fetch,
     initialAccess: { token: "access-0", expiresAt: Number.MAX_SAFE_INTEGER },
     now: () => 0,
     session: SESSION,
-    store: {
-      read: async () => SESSION,
-      write: async () => {},
-      clear: async () => {},
-    },
+    store,
+    generation: store.generation(),
   });
   return { fetch, requests, source };
 };

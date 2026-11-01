@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import type { AbstractIntlMessages } from "use-intl";
 
 import { listSkillMetadata, readSkillDisplayName } from "@stll/skills";
+import { STARTER_SKILLS } from "@stll/skills/starter-skills";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -14,8 +16,13 @@ const { QueryClient, QueryClientProvider } =
 const { act, cleanup, renderHook, waitFor } =
   await import("@testing-library/react");
 const { createTranslator, IntlProvider } = await import("use-intl");
-const { BUILT_IN_SKILL_COPY, useSkillLabel, useSkillsPages } =
-  await import("@/lib/knowledge/built-in-skills");
+const {
+  BUILT_IN_SKILL_COPY,
+  localizeStarterSkill,
+  STARTER_SKILL_COPY,
+  useSkillLabel,
+  useSkillsPages,
+} = await import("@/lib/knowledge/built-in-skills");
 const { skillsOptions } = await import("@/lib/knowledge/queries");
 const { toSafeId } = await import("@/lib/safe-id");
 const englishMessages = (await import("@/i18n/langs/en.json")).default;
@@ -76,7 +83,26 @@ const installedRow = {
   createdAt: "2026-01-01T00:00:00.000Z",
 } as const;
 
-const seededClient = () => {
+const summarizeSeed = STARTER_SKILLS[0];
+
+const starterRow = {
+  ...installedRow,
+  id: toSafeId<"agentSkill">("skill-2"),
+  scope: "private",
+  origin: "default",
+  slug: summarizeSeed.slug,
+  name: summarizeSeed.name,
+  description: summarizeSeed.description,
+  command: summarizeSeed.command,
+  body: summarizeSeed.body,
+} as const;
+
+const authoredStarterRow = { ...starterRow, origin: "authored" } as const;
+
+type InstalledRow =
+  typeof authoredStarterRow | typeof installedRow | typeof starterRow;
+
+const seededClient = (installed: InstalledRow[] = [installedRow]) => {
   const queryClient = new QueryClient();
   queryClient.setQueryData(skillsOptions(ORGANIZATION_ID, USER_ID).queryKey, {
     pageParams: [""],
@@ -84,7 +110,7 @@ const seededClient = () => {
       {
         builtIn: [builtInRow],
         canManageTeam: false,
-        installed: [installedRow],
+        installed,
         limit: 50,
         nextCursor: null,
       },
@@ -93,8 +119,12 @@ const seededClient = () => {
   return queryClient;
 };
 
-const renderInLocale = <Result,>(useHook: () => Result, initial: Locale) => {
-  const queryClient = seededClient();
+const renderInLocale = <Result,>(
+  useHook: () => Result,
+  initial: Locale,
+  installed?: InstalledRow[],
+) => {
+  const queryClient = seededClient(installed);
   const locale = { current: initial };
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>
@@ -132,6 +162,109 @@ describe("built-in skill copy", () => {
   });
 });
 
+// Starter copy has no placeholders, and a plain walk spares the compiler the
+// typing of every key in both catalogues.
+const readCopy = (catalogue: AbstractIntlMessages) => (key: string) => {
+  let node: AbstractIntlMessages | string | undefined = catalogue;
+  for (const part of key.split(".")) {
+    node = typeof node === "object" ? node[part] : undefined;
+  }
+  if (typeof node !== "string") {
+    throw new TypeError(`No message at ${key}`);
+  }
+  return node;
+};
+
+type LocalizedCopy = {
+  body: string | null;
+  description: string;
+  name: string;
+};
+
+describe("starter skill copy", () => {
+  const english = readCopy(englishMessages);
+  const czech = readCopy(czechMessages);
+
+  test("covers exactly the seeded skills, in the seeded English", () => {
+    expect(Object.keys(STARTER_SKILL_COPY).toSorted()).toEqual(
+      STARTER_SKILLS.map(({ slug }) => slug).toSorted(),
+    );
+    for (const seed of STARTER_SKILLS) {
+      const copy = STARTER_SKILL_COPY[seed.slug];
+      expect({
+        body: english(copy.body),
+        description: english(copy.description),
+        name: english(copy.name),
+      }).toEqual({
+        body: seed.body,
+        description: seed.description,
+        name: seed.name,
+      });
+    }
+  });
+
+  test("an untouched starter reads entirely in the reader's language", () => {
+    for (const seed of STARTER_SKILLS) {
+      const copy = STARTER_SKILL_COPY[seed.slug];
+      const localized: LocalizedCopy = localizeStarterSkill(seed, (key) =>
+        czech(key),
+      );
+      expect(localized).toEqual({
+        ...seed,
+        body: czech(copy.body),
+        description: czech(copy.description),
+        name: czech(copy.name),
+      });
+      expect(localized.name).not.toBe(seed.name);
+      expect(localized.description).not.toBe(seed.description);
+      expect(localized.body).not.toBe(seed.body);
+    }
+  });
+
+  test("each field a member edited stays theirs, the others still translate", () => {
+    const copy = STARTER_SKILL_COPY[summarizeSeed.slug];
+    const translated = {
+      body: czech(copy.body),
+      description: czech(copy.description),
+      name: czech(copy.name),
+    };
+    const typed = "Typed by a member";
+    const localize = (
+      edit: { body: string } | { description: string } | { name: string },
+    ) =>
+      localizeStarterSkill({ ...summarizeSeed, ...edit }, (key) => czech(key));
+
+    expect(localize({ body: typed })).toMatchObject({
+      ...translated,
+      body: typed,
+    });
+    expect(localize({ description: typed })).toMatchObject({
+      ...translated,
+      description: typed,
+    });
+    expect(localize({ name: typed })).toMatchObject({
+      ...translated,
+      name: typed,
+    });
+  });
+
+  test("a renamed starter, which has a new slug, shows what is stored", () => {
+    const row = { ...summarizeSeed, slug: "our-summary-a1b2", name: "Ours" };
+    expect(localizeStarterSkill(row, (key) => czech(key))).toEqual(row);
+  });
+
+  test("a body the list left out stays left out", () => {
+    const localized: LocalizedCopy = localizeStarterSkill(
+      { ...summarizeSeed, body: null },
+      (key) => czech(key),
+    );
+    expect(localized.body).toBeNull();
+    expect(localized.name).toBe(
+      czech(STARTER_SKILL_COPY[summarizeSeed.slug].name),
+    );
+  });
+});
+
 describe("useSkillsPages", () => {
   test("titles built-in rows in the reader's language and follows a switch", async () => {
     const { result, switchTo } = renderInLocale(
@@ -158,6 +291,48 @@ describe("useSkillsPages", () => {
     expect(result.current?.pages.at(0)?.builtIn.at(0)).toMatchObject({
       description: english.description,
       name: english.name,
+    });
+  });
+
+  test("shows an untouched starter in the reader's language and follows a switch", async () => {
+    const { result, switchTo } = renderInLocale(
+      () =>
+        useSkillsPages({
+          organizationId: ORGANIZATION_ID,
+          userId: USER_ID,
+        }).data?.pages.at(0)?.installed,
+      "cs",
+      [starterRow],
+    );
+    const czech = LOCALES.cs.knowledge.agentSkills.starter.summarize;
+
+    await waitFor(() => {
+      expect(result.current?.at(0)).toMatchObject(czech);
+    });
+
+    await act(async () => {
+      switchTo("en");
+    });
+    expect(result.current?.at(0)).toMatchObject({
+      body: summarizeSeed.body,
+      description: summarizeSeed.description,
+      name: summarizeSeed.name,
+    });
+  });
+
+  test("leaves a skill a member wrote word for word as they stored it", async () => {
+    const { result } = renderInLocale(
+      () =>
+        useSkillsPages({
+          organizationId: ORGANIZATION_ID,
+          userId: USER_ID,
+        }).data?.pages.at(0)?.installed,
+      "cs",
+      [authoredStarterRow],
+    );
+
+    await waitFor(() => {
+      expect(result.current).toEqual([authoredStarterRow]);
     });
   });
 });
@@ -195,5 +370,32 @@ describe("useSkillLabel", () => {
       ];
     }, "cs");
     expect(result.current).toEqual(["Our playbooks", "nda"]);
+  });
+
+  test("titles an unrenamed starter in the reader's language", async () => {
+    const { result, switchTo } = renderInLocale(() => {
+      const skillLabel = useSkillLabel();
+      return [
+        skillLabel({
+          skillDisplayName: summarizeSeed.name,
+          skillId: "skill-2",
+          skillName: summarizeSeed.slug,
+        }),
+        skillLabel({
+          skillDisplayName: "My summary",
+          skillId: "skill-2",
+          skillName: summarizeSeed.slug,
+        }),
+      ];
+    }, "cs");
+    expect(result.current).toEqual([
+      LOCALES.cs.knowledge.agentSkills.starter.summarize.name,
+      "My summary",
+    ]);
+
+    await act(async () => {
+      switchTo("en");
+    });
+    expect(result.current).toEqual([summarizeSeed.name, "My summary"]);
   });
 });
