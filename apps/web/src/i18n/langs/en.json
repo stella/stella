@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Sign in again to continue with this action.",
     "resendCode": "Send code again to <email>{emailAddress}</email>",
     "selectOrganization": "Select an organization",
+    "sessionExpired": "Session expired",
+    "sessionExpiredDescription": "Sign in from a new tab. What you typed stays on this page.",
     "signIn": "Sign in",
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.",
     "signInWithPassword": "Sign in with password",
@@ -891,6 +893,24 @@
       "title": "Suggested from your activity",
       "unnamedRecord": "Matter record"
     },
+    "timeReport": {
+      "billableHours": "Billable hours",
+      "billableShare": "Billable share",
+      "change": "Change: {value}",
+      "changePoints": "Change in percentage points: {value}",
+      "collapse": "Collapse {name}",
+      "empty": "Record time to fill this report.",
+      "expand": "Expand {name}",
+      "internal": "Internal",
+      "pendingEntries": "Awaiting approval",
+      "period": "Period",
+      "privacy": "This report uses recorded time entries only. Desktop activity stays on each device.",
+      "title": "Team time report",
+      "tooLargeToLoad": "This report is too large to load. Shorten the range or show weeks or months as columns.",
+      "tooManyCells": "This report is too large to show here. Shorten the range or show weeks or months as columns, or export it as CSV.",
+      "total": "Total",
+      "unbilledValue": "Unbilled billable value"
+    },
     "timerActive": "Timer running",
     "timesheets": "Timesheets",
     "total": "Total",
@@ -928,6 +948,7 @@
     "desktopUnavailable": "Connect or update stella desktop.",
     "featureUnavailable": "This feature is unavailable.",
     "ocrUnavailable": "OCR is unavailable.",
+    "openSettings": "Open settings",
     "translationMissing": "No translation provider is configured."
   },
   "caseLaw": {
@@ -1104,9 +1125,9 @@
     "loadingMore": "Loading more...",
     "marginFilter": {
       "label": "Cited provisions filter",
-      "paragraph": "{count, plural, =0 {No provisions cited in ¶{paragraph}} one {# provision cited in ¶{paragraph}} other {# provisions cited in ¶{paragraph}}}",
-      "selection": "{count, plural, =0 {No provisions cited in the selection} one {# provision cited in the selection} other {# provisions cited in the selection}}",
-      "unnumberedParagraph": "{count, plural, =0 {No provisions cited in this paragraph} one {# provision cited in this paragraph} other {# provisions cited in this paragraph}}"
+      "paragraph": "{count, plural, one {# provision cited in ¶{paragraph}} other {# provisions cited in ¶{paragraph}}}",
+      "selection": "{count, plural, one {# provision cited in the selection} other {# provisions cited in the selection}}",
+      "unnumberedParagraph": "{count, plural, one {# provision cited in this paragraph} other {# provisions cited in this paragraph}}"
     },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# decision was already saved here} other {# decisions were already saved here}}",
@@ -2392,7 +2413,6 @@
     "unverifiedCitationHint": "This quote could not be matched to the source document.",
     "uploadFiles": "Upload files",
     "urlIdentifier": "Slug",
-    "urlIdentifierPlaceholder": "my-organization",
     "user": "User",
     "value": "Value",
     "vatId": "VAT ID",
@@ -2443,6 +2463,7 @@
     "scopeMemoryWrite": "Create and update assistant memories",
     "scopeOfflineAccess": "Keep you signed in without repeated approval",
     "scopeOnboarding": "Configure your organization's practice jurisdictions",
+    "scopeOrganizationCreate": "Create new organizations that you will own",
     "scopeProfile": "Access your profile information",
     "scopeRead": "Read your documents, matters, and contacts",
     "scopeReadAnonymized": "Read anonymized versions of your documents and matters",
@@ -2969,7 +2990,6 @@
     "failedToVerifyOtp": "Failed to verify code",
     "matterNotFound": "Matter not found",
     "partyAlreadyExists": "Contact already has this role on the matter",
-    "slugAlreadyTaken": "This slug is already taken",
     "uploadFailed": "Upload failed"
   },
   "feedback": {
@@ -3035,6 +3055,7 @@
     },
     "compareChangeSummary": "Changes by type",
     "compareCreated": "Tracked-changes document created",
+    "compareDocxOnly": "Compare (DOCX only)",
     "compareFailed": "Comparison failed",
     "compareNeedsTwoVersions": "Upload another DOCX version to compare.",
     "compareNoChanges": "No supported differences were found.",
@@ -3090,6 +3111,7 @@
     "selectVersion": "Select a version",
     "setLabel": "Set label",
     "showDiff": "Show diff",
+    "showText": "Show text",
     "showVersionList": "Show version history",
     "uploadDate": "Upload date",
     "uploadNewVersion": "Upload new version",
@@ -4049,6 +4071,28 @@
       "skippedReasonOutsideSkillFolder": "Outside the skill folder",
       "skippedReasonUnsupportedExtension": "File type not supported",
       "skippedReasonUnsupportedFolder": "Not in a resource folder",
+      "starter": {
+        "compare": {
+          "body": "Compare two versions of this document and list every material change with its location.",
+          "description": "List every material change between two versions",
+          "name": "Compare versions"
+        },
+        "draft": {
+          "body": "Draft a measured response to this letter. Keep the tone professional, address each point raised, and flag any open questions for me to confirm.",
+          "description": "Draft a professional reply to a letter",
+          "name": "Draft a response"
+        },
+        "risks": {
+          "body": "Review this document for legal risks, missing protections, and ambiguous clauses. Cite the specific clause for each finding.",
+          "description": "Spot legal risks and ambiguous clauses",
+          "name": "Find risks"
+        },
+        "summarize": {
+          "body": "Summarise this document. Cover parties, key obligations, dates, financial terms, and any termination or liability provisions.",
+          "description": "Get a structured summary of the key terms",
+          "name": "Summarise a document"
+        }
+      },
       "uploadHelp": "Use a SKILL.md file or a .zip folder containing SKILL.md and optional read-only resources.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "Version: {version}"
@@ -4722,7 +4766,15 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Using defaults"
     },
+    "creationEvaluationLimitReached": "You have used all {limit} organization evaluation periods. Deleting an organization does not restore one. Use an existing organization or contact support for paid access.",
+    "creationInvalidName": "Enter a valid organization name (up to {maxLength} characters).",
+    "creationNotAllowed": "This account cannot create organizations.",
+    "creationOutcomeUnknown": "The request may have created an organization. Retry to check its result.",
+    "creationRateLimited": "Too many organizations were created recently. Try again later.",
+    "creationRefused": "The organization could not be created. Check the details and try again.",
+    "creationSlugConflict": "This organization address is already in use. Choose another name or address.",
     "invitations": {
+      "cancelConfirmDescription": "The invitation link sent to {email} will stop working. To invite them again, send a new invitation.",
       "cancelInvitation": "Cancel invitation",
       "emailAddressLabel": "Email address",
       "emailAddressPlaceholder": "user@example.com",
@@ -4730,12 +4782,14 @@
       "inviteMember": "Invite member",
       "inviteMemberDescription": "Send an invitation to join your organization",
       "invited": "Invited",
+      "keepInvitation": "Keep invitation",
       "noInvitationsFound": "No invitations found",
       "resendInvitation": "Resend invitation",
       "sendInvitation": "Send invitation",
       "statuses": {
         "accepted": "Accepted",
         "canceled": "Canceled",
+        "expired": "Expired",
         "pending": "Pending",
         "rejected": "Rejected"
       }
@@ -4769,6 +4823,8 @@
       "typeEmailToConfirm": "Type {email} to confirm",
       "updateRole": "Update role"
     },
+    "newOrganization": "New organization",
+    "newOrganizationDescription": "Create an organization that you will own.",
     "roles": {
       "admin": "Admin",
       "descriptions": {
@@ -4784,6 +4840,9 @@
       "owner": "Owner"
     },
     "settingsDescription": "Edit your organization name and slug",
+    "startOver": "Start over",
+    "startOverDescription": "The original request may already have created an organization. Check your organizations before starting again; a new request could create another organization.",
+    "startOverTitle": "Start a new creation request?",
     "switchOrganization": "Switch organization"
   },
   "publicTools": {
@@ -4960,6 +5019,7 @@
     "caseLawEmptyState": "Start typing to search court decisions.",
     "caseLawMatchingDecisions": "{count, plural, one {# matching decision} other {# matching decisions}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ matching decision} other {#+ matching decisions}}",
+    "chatCoveragePartial": "Not every chat was searched in full.",
     "continueInChat": "Continue in chat",
     "dateFrom": "From",
     "dateTo": "To",
@@ -5096,8 +5156,8 @@
       "desktopDocumentsTitle": "Desktop document editing",
       "desktopDownloadMac": "Download for macOS",
       "desktopDownloadOtherMac": "On Windows? Download for Windows",
-      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments",
       "desktopDownloadWindows": "Download for Windows",
+      "desktopDownloadWindowsArm": "On a Windows ARM device? Download the ARM version",
       "desktopHeroTitle": "Your clipboard, ready when you need it",
       "desktopInstallMacStep": "Open the DMG and drag stella desktop to Applications.",
       "desktopInstallOpenStep": "Open stella desktop once. Clipboard appears immediately and remains available from the macOS menu bar or Windows system tray.",
@@ -5318,6 +5378,7 @@
         "legal_list_item": "legal list item",
         "legal_list_verification": "legal list verification",
         "legal_resolve": "legal reference lookup",
+        "legislation_matter_link": "legislation matter link",
         "machine_api_key": "machine API key",
         "mcp_connection": "MCP connection",
         "mcp_gateway_tool": "MCP gateway tool",
@@ -5379,6 +5440,7 @@
         "title": "Memory extraction",
         "toggleLabel": "Suggest memories from chat history in the background"
       },
+      "pastInvitations": "Past invitations",
       "pendingInvitations": "Pending invitations",
       "practiceJurisdictions": "Jurisdictions",
       "practiceJurisdictionsDescription": "Select the jurisdictions relevant to you.",
@@ -5771,6 +5833,7 @@
       "open": "Open"
     },
     "subtasks": "Subtasks",
+    "taskCompleted": "Task completed",
     "title": "Tasks",
     "untitled": "Untitled task",
     "workTypeValues": {
@@ -6216,8 +6279,7 @@
   "validation": {
     "invalidEmail": "Enter a valid email address.",
     "organizationNameRequired": "Organization name is required",
-    "slugFormat": "Slug must be lowercase letters, numbers, and hyphens",
-    "slugRequired": "Slug is required"
+    "slugFormat": "Slug must be lowercase letters, numbers, and hyphens"
   },
   "verify": {
     "history": "{history, select, refiled {Printed as <bdi>{reference}</bdi>; now filed as <bdi>{currentReference}</bdi> in <bdi>{matterName}</bdi>.} superseded {This reference points to version {version, number}; the current version is {currentVersion, number}.} other {Printed as <bdi>{reference}</bdi>; now filed as <bdi>{currentReference}</bdi> in <bdi>{matterName}</bdi>. This reference points to version {version, number}; the current version is {currentVersion, number}.}}",
@@ -6284,6 +6346,7 @@
     },
     "createNewWorkspace": "Create new matter",
     "defaultName": "Untitled",
+    "deleteFromMatter": "Delete from matter…",
     "deleteItem": "Delete item",
     "deleteItems": "Delete {count, plural, one {# item} other {# items}}",
     "deleteItemsDescription": "Are you sure you want to delete {count, plural, one {# item} other {# items}}? This action cannot be undone.",
@@ -6379,6 +6442,7 @@
       "downloadSearchablePdf": "Searchable PDF",
       "downloadWithComments": "Download with comments",
       "emptyFile": "The file is empty.",
+      "fileTooLarge": "The file is larger than {limit, number} MB.",
       "includeReferenceNumber": "Include reference number",
       "itemLimitReached": "This matter has reached its item limit.",
       "maxEntitiesReached": "Maximum number of items reached",
@@ -6668,11 +6732,14 @@
         "empty": "No activity in this matter yet.",
         "fields": {
           "dueDate": "due date",
+          "name": "name",
           "parentFolder": "parent folder",
           "priority": "priority",
           "property": "property",
           "schedule": "schedule",
-          "sortOrder": "order"
+          "sortOrder": "order",
+          "status": "status",
+          "type": "type"
         },
         "filterLabel": "Filter activity",
         "filters": {
@@ -6722,8 +6789,18 @@
           "team": "matter team",
           "translation": "translation"
         },
+        "taskLinks": {
+          "added": "Linked {name} to",
+          "addedUnnamed": "Linked an item to",
+          "removed": "Unlinked {name} from",
+          "removedUnnamed": "Unlinked an item from"
+        },
         "title": "Matter activity",
         "updatedFields": "Updated {fields}",
+        "versions": {
+          "added": "Added version {version} of",
+          "deleted": "Deleted version {version} of"
+        },
         "views": {
           "list": "List view",
           "timeline": "Timeline view"

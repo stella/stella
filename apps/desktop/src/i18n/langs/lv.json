@@ -484,7 +484,7 @@
     "evidenceTitles": "Nosaukumi",
     "evidenceApps": "Lietotnes",
     "rangeEmpty": "Šajā posmā nekas netika reģistrēts.",
-    "calendarHint": "Atveriet ieteikumu ar pārtrauktu līniju, lai to pārskatītu, vai velciet kolonnā Darbība, lai sagatavotu ierakstu jebkuram posmam.",
+    "calendarHint": "Atveriet ieteikumu ar pārtrauktu līniju, lai to pārskatītu, vai velciet kolonnā Laika ieraksti, lai sagatavotu ierakstu jebkuram posmam.",
     "narrativeAiPrompt": "Rakstīt aprakstu ar stella AI? Tiek nosūtīti tikai šī ieteikuma logu nosaukumi; tie netiek saglabāti.",
     "narrativeAiNo": "Nē",
     "narrativeAiApprove": "Apstiprināt",

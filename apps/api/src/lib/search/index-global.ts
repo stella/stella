@@ -10,7 +10,10 @@ import {
   resourceRef,
 } from "@stll/api-contract";
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
-import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
+import {
+  GLOBAL_SEARCH_CHAT_COVERAGE,
+  GLOBAL_SEARCH_RESULT_LIMIT,
+} from "@stll/api-contract/search";
 import { compareCodeUnit } from "@stll/collation";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
@@ -31,7 +34,6 @@ import { readPublicDecisionLanguageAlternatesForGroupKeys } from "@/api/lib/case
 import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
-import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { escapeLike } from "@/api/lib/escape-like";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { LIMITS } from "@/api/lib/limits";
@@ -91,7 +93,10 @@ import {
   projectChatSearchCandidates,
   readChatCandidateBatches,
 } from "@/api/lib/search/withdrawn-chat-candidates";
-import type { ChatSearchCandidateRow } from "@/api/lib/search/withdrawn-chat-candidates";
+import type {
+  ChatCandidateRead,
+  ChatSearchCandidateRow,
+} from "@/api/lib/search/withdrawn-chat-candidates";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const REINDEX_BATCH_SIZE = 100;
@@ -520,6 +525,14 @@ const facetBuckets = (
     .toSorted((a, b) => b.count - a.count || compareCodeUnit(a.value, b.value));
 
 const totalFrom = (rows: CountRow[]): number => Number(rows.at(0)?.total ?? 0);
+
+const readChatLeg = async (
+  condition: boolean,
+  read: () => Promise<ChatCandidateRead>,
+): Promise<ChatCandidateRead> =>
+  condition
+    ? await read()
+    : { rows: [], coverage: GLOBAL_SEARCH_CHAT_COVERAGE.COMPLETE };
 
 const rowsWhen = async <Row extends RawRow>(
   condition: boolean,
@@ -1014,7 +1027,7 @@ const readGlobalSearch = async (
   const chatSourceOrder = hasSearchQuery
     ? sql`ms.created_at, ms.message_id`
     : sql`ms.created_at DESC, ms.message_id DESC`;
-  const chatPromise = rowsWhen(
+  const chatPromise = readChatLeg(
     !restrictToEntities && shouldSearchType(selected, "chat"),
     async () => {
       const readPage = async (
@@ -1073,16 +1086,15 @@ const readGlobalSearch = async (
       LIMIT ${rowLimit}
     `);
       if (!hasSearchQuery) {
-        return await readPage(searchCursor, fetchLimit);
+        return {
+          rows: await readPage(searchCursor, fetchLimit),
+          coverage: GLOBAL_SEARCH_CHAT_COVERAGE.COMPLETE,
+        };
       }
-      const read = await readChatCandidateBatches({
+      return await readChatCandidateBatches({
         readBatch: async (batchCursor) =>
           await readPage(batchCursor, LIMITS.searchChatCandidateThreadsMax + 1),
       });
-      if (read.isErr()) {
-        return abortTransaction(read.error);
-      }
-      return read.value;
     },
   );
 
@@ -1361,7 +1373,7 @@ const readGlobalSearch = async (
     matterRows,
     contactRows,
     caseLawRows,
-    chatRows,
+    chatRead,
     entityCount,
     matterCount,
     contactCount,
@@ -1394,7 +1406,7 @@ const readGlobalSearch = async (
 
   const projectedChatRows = await projectChatSearchCandidates({
     database,
-    rows: chatRows,
+    rows: chatRead.rows,
     query,
     cursor: searchCursor,
     limit: fetchLimit,
@@ -1473,6 +1485,7 @@ const readGlobalSearch = async (
       },
       totalCount,
       nextCursor: page.nextCursor,
+      chatCoverage: chatRead.coverage,
     },
     caseLawLanguageGroups,
   };

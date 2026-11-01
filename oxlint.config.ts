@@ -467,6 +467,10 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-inert-autofocus.fixture.tsx", [
     "no-inert-autofocus/no-inert-autofocus",
   ]),
+  fixtureRuleOverride("no-optional-chain-null-compare.fixture.ts", [
+    "no-optional-chain-null-compare/no-optional-chain-null-compare",
+    "no-optional-chain-null-compare/no-optional-chain-absent-match",
+  ]),
   fixtureRuleOverride("no-constructed-fetch-object.fixture.ts", [
     "no-constructed-fetch-object/no-constructed-fetch-object",
   ]),
@@ -494,6 +498,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-justified-reader-text.fixture.tsx", [
     "no-justified-reader-text/no-justified-reader-text",
+  ]),
+  fixtureRuleOverride("no-raw-reader-scroll.fixture.ts", [
+    "no-raw-reader-scroll/no-raw-reader-scroll",
   ]),
   fixtureRuleOverride("no-sm-breakpoint-in-desktop.fixture.tsx", [
     "no-sm-breakpoint-in-desktop/no-sm-breakpoint-in-desktop",
@@ -563,6 +570,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-global-testing-library-screen",
     "bun-test-hygiene/no-unmanaged-database-client",
     "bun-test-hygiene/no-forced-database-drop",
+    "bun-test-hygiene/require-fetch-after-all",
     "bun-test-hygiene/no-wait-for-under-fake-timers",
     "bun-test-hygiene/require-module-mock-reset",
   ]),
@@ -1893,6 +1901,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
     "./.oxlint-plugins/no-inert-autofocus.ts",
+    "./.oxlint-plugins/no-optional-chain-null-compare.ts",
     "./.oxlint-plugins/no-constructed-fetch-object.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
@@ -1959,6 +1968,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
+    "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
     "./.oxlint-plugins/no-raw-parser-html.ts",
@@ -2061,6 +2071,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-test-state.ts",
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
+    "./.oxlint-plugins/inspector-header-title.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
     "./.oxlint-plugins/no-hover-only-reveal.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
@@ -2081,6 +2092,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/no-auto-hyphenation-in-reader.ts",
     "./.oxlint-plugins/no-justified-reader-text.ts",
+    "./.oxlint-plugins/no-raw-reader-scroll.ts",
     "./.oxlint-plugins/no-sm-breakpoint-in-desktop.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
@@ -2419,6 +2431,7 @@ const config = defineConfig({
         "bun-test-hygiene/no-identical-title": "error",
         "bun-test-hygiene/no-promise-matchers": "error",
         "bun-test-hygiene/no-forced-database-drop": "error",
+        "bun-test-hygiene/require-fetch-after-all": "error",
         "bun-test-hygiene/no-wait-for-under-fake-timers": "error",
         "bun-test-hygiene/require-module-mock-reset": "error",
         "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
@@ -3034,6 +3047,12 @@ const config = defineConfig({
                 utilities: ["transition-[height]"],
               },
               {
+                path: "packages/ui/src/components/collapsible.tsx",
+                reason:
+                  "Collapsible panel is a disclosure: it opens from zero to the height it owns, with the accordion's timing.",
+                utilities: ["transition-[height]"],
+              },
+              {
                 path: "packages/ui/src/components/outline-rail.tsx",
                 reason:
                   "Outline rail marker animates the width and height it owns as the active section changes.",
@@ -3101,7 +3120,10 @@ const config = defineConfig({
       // The desktop shell runs in the system WebView of its minimum macOS
       // version, which predates `Array#toSorted` and `Array#toReversed`; sort
       // or reverse a fresh array there (apps/desktop/tests/webview-baseline).
-      files: ["apps/desktop/src/**/*.{ts,tsx}"],
+      files: [
+        "apps/desktop/src/**/*.{ts,tsx}",
+        "packages/ui/src/calendar/day-calendar.logic.ts",
+      ],
       rules: {
         "unicorn/no-array-sort": "off",
         "unicorn/no-array-reverse": "off",
@@ -3718,6 +3740,16 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        "apps/web/src/components/inspector/**/*.tsx",
+        "apps/web/src/**/*{inspector,side-panel}*.tsx",
+        ".oxlint-plugins/__fixtures__/inspector-header-title.fixture.tsx",
+      ],
+      rules: {
+        "inspector-header-title/inspector-header-title": "error",
+      },
+    },
+    {
       // Icon-only actions need visible hover/focus affordance for sighted users;
       // aria-label alone is not discoverable. Decorative icons are ignored.
       files: [
@@ -3993,6 +4025,25 @@ const config = defineConfig({
       excludeFiles: ["**/*.test.tsx"],
       rules: {
         "no-justified-reader-text/no-justified-reader-text": "error",
+      },
+    },
+    {
+      // A reader's controls bar floats over the top of its text: a jump lands
+      // below it through `scrollReaderToBlock`, the rule's one owner.
+      files: [
+        "packages/decision-reader/src/**/*.{ts,tsx}",
+        "apps/web/src/components/legal-reader/**/*.{ts,tsx}",
+        "apps/web/src/features/case-law/**/*.{ts,tsx}",
+        "apps/web/src/features/statutes/**/*.{ts,tsx}",
+        "apps/web/src/routes/law/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-reader-scroll.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.{ts,tsx}",
+        "packages/decision-reader/src/reader-landing.ts",
+      ],
+      rules: {
+        "no-raw-reader-scroll/no-raw-reader-scroll": "error",
       },
     },
     {
@@ -4469,6 +4520,22 @@ const config = defineConfig({
       },
     },
     {
+      // Product sources are clean; tests and scripts follow the dated
+      // changed-lines rollout in scripts/guard-rollouts.
+      files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/test-support/**",
+        "**/tests/**",
+        "**/e2e/**",
+      ],
+      rules: {
+        "no-optional-chain-null-compare/no-optional-chain-null-compare":
+          "error",
+      },
+    },
+    {
       // On React Native the global Response and Request are the whatwg-fetch
       // polyfill, which reads a stream body as "[object ReadableStream]".
       // Tests stub fetch with real responses and stay out of scope.
@@ -4641,6 +4708,15 @@ const config = defineConfig({
       ],
       rules: {
         "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
+          "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-bare-case-law-source-ingestion-lease.fixture.ts",
+      ],
+      rules: {
+        "no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease":
           "error",
       },
     },
@@ -5533,6 +5609,14 @@ const config = defineConfig({
       excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
         "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
+          "error",
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts"],
+      rules: {
+        "no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease":
           "error",
       },
     },

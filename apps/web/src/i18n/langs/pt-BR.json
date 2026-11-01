@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Entre novamente para continuar com esta ação.",
     "resendCode": "Enviar código novamente para <email>{emailAddress}</email>",
     "selectOrganization": "Selecione uma organização",
+    "sessionExpired": "Sua sessão expirou",
+    "sessionExpiredDescription": "Entre em uma nova aba. O que você digitou continua nesta página.",
     "signIn": "Faça login",
     "signInBeforeInvitation": "Você precisa fazer login antes de aceitar um convite para uma organização.",
     "signInWithPassword": "Entrar com senha",
@@ -891,6 +893,24 @@
       "title": "Sugestões a partir da sua atividade",
       "unnamedRecord": "Registro do caso"
     },
+    "timeReport": {
+      "billableHours": "Horas faturáveis",
+      "billableShare": "Percentual faturável",
+      "change": "Variação: {value}",
+      "changePoints": "Variação em pontos percentuais: {value}",
+      "collapse": "Recolher {name}",
+      "empty": "Registre horas para preencher este relatório.",
+      "expand": "Expandir {name}",
+      "internal": "Interno",
+      "pendingEntries": "Aguardando aprovação",
+      "period": "Período",
+      "privacy": "Este relatório usa somente lançamentos de horas registrados. A atividade no computador permanece em cada dispositivo.",
+      "title": "Relatório de horas da equipe",
+      "tooLargeToLoad": "Este relatório é grande demais para ser carregado. Encurte o período ou mostre semanas ou meses como colunas.",
+      "tooManyCells": "Este relatório é grande demais para ser exibido aqui. Encurte o período, mostre semanas ou meses como colunas ou exporte-o como CSV.",
+      "total": "Total geral",
+      "unbilledValue": "Valor faturável não faturado"
+    },
     "timerActive": "Temporizador em execução",
     "timesheets": "Planilhas de horas",
     "total": "Total",
@@ -928,6 +948,7 @@
     "desktopUnavailable": "Conecte ou atualize o stella desktop.",
     "featureUnavailable": "Este recurso está indisponível.",
     "ocrUnavailable": "O OCR está indisponível.",
+    "openSettings": "Abrir configurações",
     "translationMissing": "Nenhum serviço de tradução está configurado."
   },
   "caseLaw": {
@@ -1104,9 +1125,9 @@
     "loadingMore": "Carregando mais...",
     "marginFilter": {
       "label": "Filtro de dispositivos citados",
-      "paragraph": "{count, plural, =0 {Nenhum dispositivo citado no ¶{paragraph}} one {# dispositivo citado no ¶{paragraph}} many {# de dispositivos citados no ¶{paragraph}} other {# dispositivos citados no ¶{paragraph}}}",
-      "selection": "{count, plural, =0 {Nenhum dispositivo citado na seleção} one {# dispositivo citado na seleção} many {# de dispositivos citados na seleção} other {# dispositivos citados na seleção}}",
-      "unnumberedParagraph": "{count, plural, =0 {Nenhum dispositivo citado neste parágrafo} one {# dispositivo citado neste parágrafo} many {# de dispositivos citados neste parágrafo} other {# dispositivos citados neste parágrafo}}"
+      "paragraph": "{count, plural, one {# dispositivo citado no ¶{paragraph}} many {# de dispositivos citados no ¶{paragraph}} other {# dispositivos citados no ¶{paragraph}}}",
+      "selection": "{count, plural, one {# dispositivo citado na seleção} many {# de dispositivos citados na seleção} other {# dispositivos citados na seleção}}",
+      "unnumberedParagraph": "{count, plural, one {# dispositivo citado neste parágrafo} many {# de dispositivos citados neste parágrafo} other {# dispositivos citados neste parágrafo}}"
     },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# decisão já estava salva aqui} other {# decisões já estavam salvas aqui}}",
@@ -2392,7 +2413,6 @@
     "unverifiedCitationHint": "Não foi possível associar esta citação ao documento de origem.",
     "uploadFiles": "Carregar arquivos",
     "urlIdentifier": "Identificador de URL",
-    "urlIdentifierPlaceholder": "minha-organização",
     "user": "Usuário",
     "value": "Valor",
     "vatId": "Número de IVA",
@@ -2443,6 +2463,7 @@
     "scopeMemoryWrite": "Criar e atualizar as memórias do assistente",
     "scopeOfflineAccess": "Manter você conectado sem exigir aprovação repetida",
     "scopeOnboarding": "Configure as jurisdições de atuação da sua organização",
+    "scopeOrganizationCreate": "Criar novas organizações das quais você será proprietário",
     "scopeProfile": "Acesse as informações do seu perfil",
     "scopeRead": "Leia seus documentos, casos e contatos",
     "scopeReadAnonymized": "Leia versões anônimas de seus documentos e casos",
@@ -2969,7 +2990,6 @@
     "failedToVerifyOtp": "Falha ao verificar o código",
     "matterNotFound": "Caso não encontrado",
     "partyAlreadyExists": "O contato já tem este papel no caso",
-    "slugAlreadyTaken": "Este slug já está em uso",
     "uploadFailed": "Falha no upload"
   },
   "feedback": {
@@ -3035,6 +3055,7 @@
     },
     "compareChangeSummary": "Mudanças por tipo",
     "compareCreated": "Documento de alterações controladas criado",
+    "compareDocxOnly": "Comparar (somente DOCX)",
     "compareFailed": "Falha na comparação",
     "compareNeedsTwoVersions": "Carregue outra versão DOCX para comparar.",
     "compareNoChanges": "Nenhuma diferença suportada foi encontrada.",
@@ -3090,6 +3111,7 @@
     "selectVersion": "Selecione uma versão",
     "setLabel": "Definir rótulo",
     "showDiff": "Mostrar diferença",
+    "showText": "Mostrar texto",
     "showVersionList": "Mostrar histórico de versões",
     "uploadDate": "Data de upload",
     "uploadNewVersion": "Carregar nova versão",
@@ -4049,6 +4071,28 @@
       "skippedReasonOutsideSkillFolder": "Fora da pasta da habilidade",
       "skippedReasonUnsupportedExtension": "Tipo de arquivo não compatível",
       "skippedReasonUnsupportedFolder": "Não está em uma pasta de recursos",
+      "starter": {
+        "compare": {
+          "body": "Compare duas versões deste documento e liste cada alteração relevante com sua localização.",
+          "description": "Liste cada alteração relevante entre duas versões",
+          "name": "Comparar versões"
+        },
+        "draft": {
+          "body": "Redija uma resposta ponderada a esta carta. Mantenha o tom profissional, trate de cada ponto levantado e aponte as questões em aberto para eu confirmar.",
+          "description": "Redija uma resposta profissional a uma carta",
+          "name": "Redigir uma resposta"
+        },
+        "risks": {
+          "body": "Analise este documento em busca de riscos jurídicos, proteções ausentes e cláusulas ambíguas. Cite a cláusula específica de cada achado.",
+          "description": "Identifique riscos jurídicos e cláusulas ambíguas",
+          "name": "Identificar riscos"
+        },
+        "summarize": {
+          "body": "Resuma este documento. Aborde as partes, as principais obrigações, as datas, as condições financeiras e eventuais cláusulas de rescisão ou responsabilidade.",
+          "description": "Obtenha um resumo estruturado das principais condições",
+          "name": "Resumir um documento"
+        }
+      },
       "uploadHelp": "Use um arquivo SKILL.md ou uma pasta .zip contendo SKILL.md e recursos opcionais somente leitura.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/caminho/para/habilidade",
       "version": "Versão: {version}"
@@ -4722,7 +4766,15 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Usando os padrões"
     },
+    "creationEvaluationLimitReached": "Você já utilizou todos os {limit} períodos de avaliação de organizações. Excluir uma organização não restaura um período de avaliação. Use uma organização existente ou entre em contato com o suporte para obter acesso pago.",
+    "creationInvalidName": "Digite um nome de organização válido (até {maxLength} caracteres).",
+    "creationNotAllowed": "Esta conta não pode criar organizações.",
+    "creationOutcomeUnknown": "A solicitação pode ter criado uma organização. Tente novamente para verificar o resultado.",
+    "creationRateLimited": "Muitas organizações foram criadas recentemente. Tente novamente mais tarde.",
+    "creationRefused": "Não foi possível criar a organização. Confira os dados e tente novamente.",
+    "creationSlugConflict": "Este endereço de organização já está em uso. Escolha outro nome ou endereço.",
     "invitations": {
+      "cancelConfirmDescription": "O link do convite enviado para {email} deixará de funcionar. Para convidar essa pessoa novamente, envie um novo convite.",
       "cancelInvitation": "Cancelar convite",
       "emailAddressLabel": "Endereço de e-mail",
       "emailAddressPlaceholder": "usuário@exemplo.com",
@@ -4730,12 +4782,14 @@
       "inviteMember": "Convidar membro",
       "inviteMemberDescription": "Envie um convite para ingressar na sua organização",
       "invited": "Convidado",
+      "keepInvitation": "Manter convite",
       "noInvitationsFound": "Nenhum convite encontrado",
       "resendInvitation": "Reenviar convite",
       "sendInvitation": "Enviar convite",
       "statuses": {
         "accepted": "Aceito",
         "canceled": "Cancelado",
+        "expired": "Expirado",
         "pending": "Pendente",
         "rejected": "Rejeitado"
       }
@@ -4769,6 +4823,8 @@
       "typeEmailToConfirm": "Digite {email} para confirmar",
       "updateRole": "Atualizar função"
     },
+    "newOrganization": "Nova organização",
+    "newOrganizationDescription": "Crie uma organização da qual você será proprietário.",
     "roles": {
       "admin": "Administrador",
       "descriptions": {
@@ -4784,6 +4840,9 @@
       "owner": "Proprietário"
     },
     "settingsDescription": "Edite o nome e o slug da sua organização",
+    "startOver": "Recomeçar",
+    "startOverDescription": "A solicitação original pode já ter criado uma organização. Confira suas organizações antes de recomeçar; uma nova solicitação pode criar outra organização.",
+    "startOverTitle": "Iniciar uma nova solicitação de criação?",
     "switchOrganization": "Mudar de organização"
   },
   "publicTools": {
@@ -4960,6 +5019,7 @@
     "caseLawEmptyState": "Comece a digitar para pesquisar decisões judiciais.",
     "caseLawMatchingDecisions": "{count, plural, one {# decisão correspondente} other {# decisões correspondentes}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ decisão correspondente} other {#+ decisões correspondentes}}",
+    "chatCoveragePartial": "Nem todas as conversas foram pesquisadas por completo.",
     "continueInChat": "Continuar no chat",
     "dateFrom": "De",
     "dateTo": "Para",
@@ -5096,8 +5156,8 @@
       "desktopDocumentsTitle": "Edição de documentos no computador",
       "desktopDownloadMac": "Baixar para macOS",
       "desktopDownloadOtherMac": "No Windows? Baixar para Windows",
-      "desktopDownloadOtherWindows": "Ou obtenha o instalador .msi para implantações gerenciadas por TI",
       "desktopDownloadWindows": "Baixar para Windows",
+      "desktopDownloadWindowsArm": "Windows em ARM? Baixar a versão para ARM",
       "desktopHeroTitle": "Sua área de transferência, pronta quando você precisar",
       "desktopInstallMacStep": "Abra o DMG e arraste o stella desktop para Aplicativos.",
       "desktopInstallOpenStep": "Abra o stella desktop uma vez. A área de transferência aparece na hora e continua disponível pela barra de menus do macOS ou pela bandeja do sistema do Windows.",
@@ -5318,6 +5378,7 @@
         "legal_list_item": "entrada da lista jurídica",
         "legal_list_verification": "verificação da lista jurídica",
         "legal_resolve": "consulta de referência jurídica",
+        "legislation_matter_link": "vínculo entre legislação e caso",
         "machine_api_key": "chave de API da máquina",
         "mcp_connection": "conexão MCP",
         "mcp_gateway_tool": "ferramenta de gateway MCP",
@@ -5379,6 +5440,7 @@
         "title": "Extração de memória",
         "toggleLabel": "Sugerir memórias do histórico de chat em segundo plano"
       },
+      "pastInvitations": "Convites anteriores",
       "pendingInvitations": "Convites pendentes",
       "practiceJurisdictions": "Jurisdições",
       "practiceJurisdictionsDescription": "Selecione as jurisdições relevantes para você.",
@@ -5771,6 +5833,7 @@
       "open": "Aberta"
     },
     "subtasks": "Subtarefas",
+    "taskCompleted": "Tarefa concluída",
     "title": "Tarefas",
     "untitled": "Tarefa sem título",
     "workTypeValues": {
@@ -6216,8 +6279,7 @@
   "validation": {
     "invalidEmail": "Insira um endereço de e-mail válido.",
     "organizationNameRequired": "O nome da organização é obrigatório",
-    "slugFormat": "O slug deve conter letras minúsculas, números e hifens",
-    "slugRequired": "O slug é obrigatório"
+    "slugFormat": "O slug deve conter letras minúsculas, números e hifens"
   },
   "verify": {
     "history": "{history, select, refiled {Impresso com a referência <bdi>{reference}</bdi>; agora está arquivado com a referência <bdi>{currentReference}</bdi> no caso <bdi>{matterName}</bdi>.} superseded {Esta referência aponta para a versão {version, number}; a versão atual é a {currentVersion, number}.} other {Impresso com a referência <bdi>{reference}</bdi>; agora está arquivado com a referência <bdi>{currentReference}</bdi> no caso <bdi>{matterName}</bdi>. Esta referência aponta para a versão {version, number}; a versão atual é a {currentVersion, number}.}}",
@@ -6284,6 +6346,7 @@
     },
     "createNewWorkspace": "Criar novo caso",
     "defaultName": "Sem título",
+    "deleteFromMatter": "Excluir do caso…",
     "deleteItem": "Excluir item",
     "deleteItems": "Excluir {count, plural, one {# item} many {# itens} other {# itens}}",
     "deleteItemsDescription": "Tem certeza de que deseja excluir {count, plural, one {# item} many {# itens} other {# itens}}? Esta ação não pode ser desfeita.",
@@ -6379,6 +6442,7 @@
       "downloadSearchablePdf": "PDF pesquisável",
       "downloadWithComments": "Baixar com comentários",
       "emptyFile": "O arquivo está vazio.",
+      "fileTooLarge": "O arquivo é maior que {limit, number} MB.",
       "includeReferenceNumber": "Incluir número de referência",
       "itemLimitReached": "Este assunto atingiu o limite de itens.",
       "maxEntitiesReached": "Número máximo de itens atingido",
@@ -6668,11 +6732,14 @@
         "empty": "Ainda não há atividade neste caso.",
         "fields": {
           "dueDate": "data de vencimento",
+          "name": "nome",
           "parentFolder": "pasta principal",
           "priority": "prioridade",
           "property": "propriedade",
           "schedule": "programação",
-          "sortOrder": "ordem"
+          "sortOrder": "ordem",
+          "status": "status",
+          "type": "tipo"
         },
         "filterLabel": "Filtrar atividade",
         "filters": {
@@ -6722,8 +6789,18 @@
           "team": "equipe do caso",
           "translation": "tradução"
         },
+        "taskLinks": {
+          "added": "Vinculou {name} a",
+          "addedUnnamed": "Vinculou um item a",
+          "removed": "Desvinculou {name} de",
+          "removedUnnamed": "Desvinculou um item de"
+        },
         "title": "Atividade",
         "updatedFields": "Atualizado: {fields}",
+        "versions": {
+          "added": "Adicionou a versão {version} de",
+          "deleted": "Excluiu a versão {version} de"
+        },
         "views": {
           "list": "Visualização em lista",
           "timeline": "Visualização da linha do tempo"

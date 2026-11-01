@@ -78,6 +78,7 @@ describe("search handler workspace scoping", () => {
       facets: { editor: [], mimeType: [], type: [], workspace: [] },
       hits: [],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 0,
     });
   });

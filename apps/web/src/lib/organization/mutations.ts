@@ -98,10 +98,6 @@ export const useCancelInvitation = () => {
       });
 
       if (result.error) {
-        notifyUserError(
-          toAuthClientError(result.error),
-          t("errors.actionFailed"),
-        );
         throw toAuthClientError(result.error);
       }
 

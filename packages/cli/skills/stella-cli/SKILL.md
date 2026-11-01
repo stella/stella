@@ -41,7 +41,7 @@ every command accepts `--server <url>` to target another one. A default
 login requests the working set of scopes (everything but organization
 administration writes and one-off setup); pass `--scopes` to request an
 explicit set. The
-default scopes are `openid profile email offline_access stella:read stella:search stella:templates stella:documents_write stella:matters_write stella:contacts_write stella:chat stella:knowledge_write stella:billing_write stella:admin_read stella:skills stella:feedback`.
+default scopes are `openid profile email offline_access stella:read stella:search stella:templates stella:documents_write stella:matters_write stella:contacts_write stella:chat stella:knowledge_write stella:billing_write stella:admin_read stella:skills stella:feedback stella:organization_create`.
 `stella auth whoami` shows the active session; `stella auth logout` clears it.
 
 ## Conventions every agent must know
@@ -139,6 +139,7 @@ requires (request it at `stella auth login --scopes`).
 | matter | `stella matter list` | read | paginated |
 | matter | `stella matter remove-member` | admin_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter save` | matters_write | destructive (needs `--yes` off a TTY) |
+| organization | `stella organization create` | organization_create |  |
 | organization | `stella organization set-jurisdictions` | onboarding | destructive (needs `--yes` off a TTY) |
 | organization | `stella organization update-settings` | admin_write |  |
 | playbook | `stella playbook list` | read | paginated |
@@ -329,6 +330,9 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --reassign-to
 - `stella matter save`
   - optional: --matter-id, --name, --client-id, --reference, --billing-reference, --status (active|archived)
+- `stella organization create`
+  - `--name` — Name of the new organization. (string)
+  - optional: --slug
 - `stella organization set-jurisdictions` — no flags; pass `--input` with jurisdictions
 - `stella organization update-settings`
   - optional: --matter-number-pattern, --matter-number-padding, --matter-numbering-enabled, --prompt-caching-enabled, --document-processing-mode (off|searchable-text), --time-minimum-unit-minutes, --time-edit-window-days, --time-locked-through-month, --time-narrative-required, --time-zone
@@ -413,8 +417,8 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 447
-capability commands from the server's capability catalog: every safe handler
+Beyond the curated commands above, the CLI generates capability commands
+from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;
 multi-segment capability actions are flattened with hyphens into `<action>`.
@@ -437,7 +441,7 @@ multi-segment capability actions are flattened with hyphens into `<action>`.
 ### When no curated command fits
 
 The curated commands above cover common tasks; anything else goes through the
-generic capability path. Current domains: `account-exports`, `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `client-invoices`, `contacts`, `document-translations`, `document-types`, `documents`, `docx-suggestions`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `memories`, `notifications`, `number-series`, `organization-settings`, `organizations`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `search`, `search-history`, `seller-profiles`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
+generic capability path. Current domains: `account-exports`, `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `client-invoices`, `contacts`, `document-translations`, `document-types`, `documents`, `docx-suggestions`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `memories`, `notifications`, `number-series`, `organization-settings`, `organizations`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `search-history`, `seller-profiles`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
 
 - Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"value","fieldId":"value","targetLang":"value","engine":"deepl","output":"translated"}}'`.
 - Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id>`.
