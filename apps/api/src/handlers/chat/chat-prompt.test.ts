@@ -104,7 +104,7 @@ test("checking browser state asks for a resend only on a website request", () =>
       status: "checking",
     }),
   ).toContain(
-    `${ONLY_ON_A_WEBSITE_REQUEST}to send the message again in a moment;`,
+    `${ONLY_ON_A_WEBSITE_REQUEST}to send the message again in a moment, before you answer another way`,
   );
 });
 
@@ -119,7 +119,7 @@ test.each([
       status: "connected",
     });
     expect(line).toContain(
-      `${ONLY_ON_A_WEBSITE_REQUEST}to reload this stella tab to use the browser extension;`,
+      `${ONLY_ON_A_WEBSITE_REQUEST}to reload this stella tab to use the browser extension, before you answer another way`,
     );
     expect(line).toContain(OTHERWISE_NO_EXTENSION_MENTION);
   },
@@ -132,7 +132,7 @@ test("not-paired browser state names the connect step only on a website request"
       status: "not-paired",
     }),
   ).toContain(
-    `${ONLY_ON_A_WEBSITE_REQUEST}to click the stella extension icon in the browser toolbar on this stella tab and connect the tab;`,
+    `${ONLY_ON_A_WEBSITE_REQUEST}to click the stella extension icon in the browser toolbar on this stella tab and connect the tab, before you answer another way`,
   );
 });
 
