@@ -495,6 +495,22 @@
     "narrativeAssistAlways": "Leírások írása stella AI-jal kérdés nélkül",
     "narrativeAssistDescription": "Csak egy javaslat ablakcímei kerülnek elküldésre, és nem tárolódnak."
   },
+  "dictation": {
+    "title": "Diktálás",
+    "description": "Tartsa lenyomva a(z) {shortcut} billentyűt, és beszéljen. A szöveg a használt alkalmazásban jelenik meg. A beszéd átírása ezen a számítógépen történik, és nem kerül tárolásra.",
+    "modelNeeded": "A beszédmodell ezen a számítógépen fut.",
+    "download": "Letöltés ({size} MB)",
+    "downloading": "A beszédmodell letöltése: {percent}%",
+    "downloadFailed": "A beszédmodellt nem sikerült letölteni.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, CC BY 4.0.",
+    "shortcutTaken": "Egy másik alkalmazás használja ezt: {shortcut}.",
+    "failure": {
+      "accessibility": "Engedélyezze a Kisegítő lehetőségek hozzáférést, hogy a stella más alkalmazásokba írhasson.",
+      "microphone": "A stella nem hallja a mikrofont. Ellenőrizze a mikrofon-hozzáférést a Rendszerbeállításokban.",
+      "modelMissing": "Először töltse le a beszédmodellt.",
+      "transcription": "Az átírás nem sikerült. Próbálja újra."
+    }
+  },
   "shortcut": {
     "title": "Vágólap-billentyűparancs",
     "description": "Bármely alkalmazásból megnyitja a vágólap előzményeit.",

@@ -58,6 +58,7 @@ import { accountPresentation } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
 import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import { commandErrorMessage } from "./command-error";
+import { DictationSetting } from "./DictationSetting";
 import { PermissionsSection } from "./PermissionsSection";
 import { ShortcutSetting } from "./ShortcutSetting";
 
@@ -431,6 +432,9 @@ const GeneralPane = ({
       </PanelGroup>
       <PanelGroup>
         <ShortcutSetting />
+      </PanelGroup>
+      <PanelGroup>
+        <DictationSetting />
       </PanelGroup>
       <AgentSubscriptionsSection
         renderGroup={(content) => (

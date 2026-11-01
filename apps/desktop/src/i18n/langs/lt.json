@@ -495,6 +495,22 @@
     "narrativeAssistAlways": "Rašyti aprašus su stella AI neklausiant",
     "narrativeAssistDescription": "Siunčiami tik pasiūlymo langų pavadinimai; jie nesaugomi."
   },
+  "dictation": {
+    "title": "Diktavimas",
+    "description": "Laikykite {shortcut} ir kalbėkite. Tekstas atsiras naudojamoje programoje. Kalba perrašoma šiame kompiuteryje ir nesaugoma.",
+    "modelNeeded": "Kalbos modelis veikia šiame kompiuteryje.",
+    "download": "Atsisiųsti ({size} MB)",
+    "downloading": "Atsisiunčiamas kalbos modelis: {percent} %",
+    "downloadFailed": "Kalbos modelio atsisiųsti nepavyko.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, CC BY 4.0.",
+    "shortcutTaken": "{shortcut} naudoja kita programa.",
+    "failure": {
+      "accessibility": "Leiskite prieigą prie pritaikymo neįgaliesiems funkcijų, kad „stella“ galėtų rašyti kitose programose.",
+      "microphone": "„stella“ negirdi mikrofono. Patikrinkite prieigą prie mikrofono sistemos nustatymuose.",
+      "modelMissing": "Pirmiausia atsisiųskite kalbos modelį.",
+      "transcription": "Perrašyti nepavyko. Bandykite dar kartą."
+    }
+  },
   "shortcut": {
     "title": "Iškarpinės spartusis klavišas",
     "description": "Atidaro iškarpinės istoriją iš bet kurios programos.",
