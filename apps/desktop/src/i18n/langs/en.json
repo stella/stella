@@ -495,7 +495,7 @@
     "evidenceTitles": "Titles",
     "evidenceApps": "Apps",
     "rangeEmpty": "Nothing was recorded in this range.",
-    "calendarHint": "Open a dashed suggestion to review it, or drag across Activity to draft an entry for any range.",
+    "calendarHint": "Open a dashed suggestion to review it, or drag across Time entries to draft an entry for any range.",
     "narrativeAiPrompt": "Write the description with stella AI? Only this suggestion's window titles are sent; they are not stored.",
     "narrativeAiNo": "No",
     "narrativeAiApprove": "Approve",
@@ -505,6 +505,22 @@
     "narrativeAiFailed": "stella AI could not write a description. The template stays.",
     "narrativeAssistAlways": "Write descriptions with stella AI without asking",
     "narrativeAssistDescription": "Only a suggestion's window titles are sent; they are not stored."
+  },
+  "dictation": {
+    "title": "Dictation",
+    "description": "Hold {shortcut} and speak. The text appears in the app you are using. Speech is transcribed on this computer and is not stored.",
+    "modelNeeded": "The speech model runs on this computer.",
+    "download": "Download ({size} MB)",
+    "downloading": "Downloading the speech model: {percent}%",
+    "downloadFailed": "The speech model could not be downloaded.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
+    "shortcutTaken": "Another app is using {shortcut}.",
+    "failure": {
+      "accessibility": "Allow Accessibility access so stella can type into other apps.",
+      "microphone": "stella could not hear your microphone. Check Microphone access in System Settings.",
+      "modelMissing": "Download the speech model first.",
+      "transcription": "Transcription failed. Try again."
+    }
   },
   "shortcut": {
     "title": "Clipboard shortcut",
@@ -625,7 +641,6 @@
     "guideAllowed": "stella desktop is allowed",
     "never": {
       "screenRecording": "Screen recording",
-      "microphone": "Microphone",
       "camera": "Camera",
       "keystrokes": "Keystrokes",
       "fullDiskAccess": "Full Disk Access",

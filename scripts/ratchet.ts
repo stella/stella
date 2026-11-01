@@ -1102,12 +1102,6 @@ const countCodeMatches = ({
     ? countMatches(stripComments({ content, file }), pattern)
     : 0;
 
-// A known scope gap is one `gap(` decision in the diff-scoped step census.
-const DIFF_SCOPE_GAP = /\bgap\(\s*"/gu;
-
-const countDiffScopeGaps: FileCounter = (content) =>
-  countMatches(content, DIFF_SCOPE_GAP);
-
 const LEGACY_REALTIME_INVALIDATION_PRODUCER =
   /(?:["']invalidate-query["']|\bREALTIME_EVENT_TYPE\.INVALIDATE_QUERY\b|\binvalidate(?:Organization)?Query\s*:\s*true\b|\bbroadcast(?:QueryInvalidationTo(?:Organization|TargetWorkspace)|Invalidation)\s*\()/gu;
 
@@ -1336,27 +1330,33 @@ const countInlineClipboardWrites = (content: string): number =>
   countMatches(content, CLIPBOARD_WRITE_CALL);
 
 /**
- * Direct `isRedistributable(x)` calls, counted from the syntax tree.
+ * Calls whose callee is the bare identifier `name`, counted from the syntax
+ * tree.
  *
  * A text scan cannot tell a call from a mention: it counts the word inside a
- * comment explaining the gate, inside a string, and `source.isRedistributable(...)`
- * on some unrelated object. This counts a call whose callee is the bare
- * identifier — the shape the gate replaced — and nothing else.
+ * comment or a string, and `object.name(...)` on some unrelated object.
  */
-const countDirectRedistributableCalls: FileCounter = (content, { file }) => {
-  const { program } = parseSyntax({ fileName: file, text: content });
+const countCallsTo =
+  (name: string): FileCounter =>
+  (content, { file }) => {
+    const { program } = parseSyntax({ fileName: file, text: content });
+    let total = 0;
+    walk(program, (node) => {
+      if (
+        node.type === "CallExpression" &&
+        isIdentifierNamed(node.callee, name)
+      ) {
+        total += 1;
+      }
+    });
+    return total;
+  };
 
-  let total = 0;
-  walk(program, (node) => {
-    if (
-      node.type === "CallExpression" &&
-      isIdentifierNamed(node.callee, "isRedistributable")
-    ) {
-      total += 1;
-    }
-  });
-  return total;
-};
+// Direct `isRedistributable(x)` calls: the shape the gate replaced.
+const countDirectRedistributableCalls = countCallsTo("isRedistributable");
+
+// A known scope gap is one `gap(...)` decision in the diff-scoped step census.
+const countDiffScopeGaps = countCallsTo("gap");
 
 // A satisfies tie only checks fresh literal keys. Forwarded domain objects
 // need projectionPayload's recursive exactness gate before return annotations.
@@ -6653,6 +6653,26 @@ const unsignalledSkipSelfTestFailures = (): string[] => {
   return failures;
 };
 
+// Every call form counts; a mention in a comment or a string does not.
+const diffScopeGapSelfTestFailures = (): string[] =>
+  [
+    { code: 'const a = { x: gap("needs-base", "why") };', expected: 1 },
+    { code: "const a = { x: gap(KIND, REASON) };", expected: 1 },
+    {
+      code: '// gap("needs-base", "why")\nconst s = \'gap("x")\';',
+      expected: 0,
+    },
+  ].flatMap(({ code, expected }) => {
+    const counted = countDiffScopeGaps(code, {
+      file: "scripts/diff-scoped-steps.ts",
+    });
+    return counted === expected
+      ? []
+      : [
+          `diff-scope-gaps counted ${counted}, expected ${expected}, for: ${code.replaceAll("\n", " ")}`,
+        ];
+  });
+
 const projectionTieSelfTestFailures = (): string[] => {
   const failures: string[] = [];
   const projectionTieCases = [
@@ -7573,6 +7593,8 @@ const runSelfTest = (): number => {
         );
       }
     }
+
+    failures.push(...diffScopeGapSelfTestFailures());
 
     failures.push(...projectionTieSelfTestFailures());
 

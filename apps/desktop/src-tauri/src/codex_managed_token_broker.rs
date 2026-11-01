@@ -658,8 +658,10 @@ mod tests {
     stream
       .set_read_timeout(Some(Duration::from_secs(10)))
       .unwrap();
-    stream.write_all(request).unwrap();
-    stream.shutdown(std::net::Shutdown::Write).unwrap();
+    // The broker closes a refused peer at once, so these can lose that race;
+    // only the response says what the broker decided.
+    let _ = stream.write_all(request);
+    let _ = stream.shutdown(std::net::Shutdown::Write);
     let mut response = Vec::new();
     let _ = stream.read_to_end(&mut response);
     response
