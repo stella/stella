@@ -1502,6 +1502,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_VERIFY",
   "QUERY_PERF_CHANGED_PATHS",
   "QUERY_PERF_SCOPE_UNKNOWN",
+  // CI migration planning hands the schema import check its changed-paths file.
+  "CHANGED_PATHS",
   // CI playground planning passes the selected and complete spec sets to the
   // shard planner, together with the desktop scope decision.
   "UI_PLAYGROUND_CHANGED_PATHS",

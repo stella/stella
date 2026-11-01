@@ -121,34 +121,47 @@ const advanceClock = async (milliseconds: number) => {
   );
 };
 
+type ReaderAnswerStatus = ReaderAnswer["messages"][number]["status"];
+
 /**
- * Resolve once the decision's cached answers hold a streaming claim.
- *
- * The response body settles over a load-dependent number of event-loop
- * turns, so a fixed count of flushes passes locally and fails on a busy
- * runner. The cache notifies synchronously on every write; subscribe before
- * the hook mounts.
+ * Settles once the cached reader answers reach a status, whatever number of
+ * event loop turns the response takes. The cache event fires inside the
+ * query's notification batch, so one zero-time turn afterwards renders it.
  */
-const streamingClaimCached = async (
+const cachedLastStatus = async (
   client: InstanceType<typeof QueryClient>,
+  reached: (status: ReaderAnswerStatus | undefined) => boolean,
 ) => {
   const { queryKey } = readerAnswersOptions({
     decisionId: "decision-1",
     organizationId: user.activeOrganizationId,
     userId: user.id,
   });
-  const { promise, resolve } = Promise.withResolvers<undefined>();
-  const unsubscribe = client.getQueryCache().subscribe(() => {
+  const { promise, resolve } = Promise.withResolvers<
+    ReaderAnswerStatus | undefined
+  >();
+  const check = () => {
     const status = client
       .getQueryData(queryKey)
       ?.at(0)
       ?.messages.at(-1)?.status;
-    if (status === "streaming") {
+    if (reached(status)) {
       unsubscribe();
-      resolve(undefined);
+      resolve(status);
     }
+  };
+  const unsubscribe = client.getQueryCache().subscribe(check);
+  check();
+  return await promise;
+};
+
+const renderCachedStatus = async (
+  cached: ReturnType<typeof cachedLastStatus>,
+) => {
+  await act(async () => {
+    await cached;
   });
-  return promise;
+  await advanceClock(0);
 };
 
 const fakeServer = (
@@ -1340,7 +1353,10 @@ test.each(["never", "hanging"] as const)(
   async (settlement) => {
     const server = pollingServer(settlement);
     const { client, wrapper } = setup();
-    const claimCached = streamingClaimCached(client);
+    const claimed = cachedLastStatus(
+      client,
+      (status) => status === "streaming",
+    );
     jest.useFakeTimers();
     Object.defineProperty(AbortSignal, "timeout", {
       configurable: true,
@@ -1358,19 +1374,16 @@ test.each(["never", "hanging"] as const)(
         }),
       { wrapper },
     );
-    await act(async () => {
-      await claimCached;
-    });
-    // Deliver the scheduled observer notification without advancing the
-    // 5000 ms recovery deadline.
-    await advanceClock(0);
+    // Wait for the mounted query to cache the claim without advancing the 5000 ms recovery deadline.
+    await renderCachedStatus(claimed);
     expect(hook.result.current.answers.at(0)?.messages.at(-1)?.status).toBe(
       "streaming",
     );
+    const failed = cachedLastStatus(client, (status) => status === "failed");
     server.releaseRecovery();
     await advanceClock(300);
     await advanceClock(5000);
-    await advanceClock(0);
+    await renderCachedStatus(failed);
     expect(hook.result.current.answers.at(0)?.messages.at(-1)).toMatchObject({
       status: "failed",
       errorCode: "timeout",

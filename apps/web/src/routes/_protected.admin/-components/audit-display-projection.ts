@@ -50,6 +50,8 @@ export const AUDIT_RESOURCE_PROJECTIONS = {
     "settings.organization.auditResourceKinds.billing_code",
   [AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK]:
     "settings.organization.auditResourceKinds.case_law_matter_link",
+  [AUDIT_RESOURCE_TYPE.LEGISLATION_MATTER_LINK]:
+    "settings.organization.auditResourceKinds.legislation_matter_link",
   [AUDIT_RESOURCE_TYPE.CASE_LAW_DECISION_ANNOTATION]:
     "settings.organization.auditResourceKinds.case_law_decision_annotation",
   [AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER]:

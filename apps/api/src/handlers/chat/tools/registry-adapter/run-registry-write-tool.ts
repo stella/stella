@@ -110,6 +110,8 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
   // Non-projectable (`chatProjectable: false`): chat files feedback through
   // its own UI. Wired only to keep this map exhaustive.
   submit_feedback: FEEDBACK_TOOL_HANDLERS.submit_feedback,
+  // Account-level creation is intentionally excluded from chat projection.
+  create_organization: RESEARCH_ADMIN_TOOL_HANDLERS.create_organization,
 } satisfies Record<RegistryWriteToolName, McpToolHandler>;
 
 type ProjectableRegistryWriteToolName = ChatProjectableToolName<

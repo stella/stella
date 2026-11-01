@@ -8011,6 +8011,46 @@
   },
   {
     "schema": "public",
+    "table": "legislation_matter_links",
+    "policy": "workspace_delete",
+    "command": "DELETE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(workspace_id = ANY ((( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting))::uuid[]))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "legislation_matter_links",
+    "policy": "workspace_insert",
+    "command": "INSERT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "(workspace_id = ANY ((( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting))::uuid[]))"
+  },
+  {
+    "schema": "public",
+    "table": "legislation_matter_links",
+    "policy": "workspace_select",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(workspace_id = ANY ((( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting))::uuid[]))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "legislation_matter_links",
+    "policy": "workspace_update",
+    "command": "UPDATE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(workspace_id = ANY ((( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting))::uuid[]))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
     "table": "legislation_search_documents",
     "policy": "case_law_global_access",
     "command": "SELECT",
@@ -8968,6 +9008,16 @@
     "permissive": "PERMISSIVE",
     "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('organization_configured_access'::regclass)::oid)))",
     "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('organization_configured_access'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "organization_creation_requests",
+    "policy": "organization_creation_requests_owner",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('organization_creation_requests'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('organization_creation_requests'::regclass)::oid)))"
   },
   {
     "schema": "public",
