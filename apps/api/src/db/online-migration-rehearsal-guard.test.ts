@@ -14,6 +14,7 @@ import type { OnlineRepairRehearsalRecord } from "./online-migration-rehearsal-g
 const repair = (name: string) =>
   ({
     name,
+    introducedBy: "20260101000000_rehearsal_fixture",
     readCompletion: async () => ({ type: "complete" }) as const,
     repair: async () => ({ type: "complete" }) as const,
   }) satisfies OnlineRepair;

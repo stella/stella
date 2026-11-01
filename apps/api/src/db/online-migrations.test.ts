@@ -2528,6 +2528,7 @@ describe("online repair observations", () => {
         let attempted = false;
         return {
           name: initial,
+          introducedBy: "20260101000000_rehearsal_fixture",
           readCompletion: async (): Promise<OnlineRepairCompletion> => {
             if (
               initial === "complete" ||
@@ -2575,6 +2576,7 @@ describe("online repair observations", () => {
     let attempts = 0;
     const repair = {
       name: "resume",
+      introducedBy: "20260101000000_rehearsal_fixture",
       readCompletion: async (): Promise<OnlineRepairCompletion> =>
         attempts >= 2
           ? { type: "complete" }
@@ -2588,6 +2590,7 @@ describe("online repair observations", () => {
     } satisfies OnlineRepair;
     const later = {
       name: "later",
+      introducedBy: "20260101000000_rehearsal_fixture",
       readCompletion: async () => ({ type: "complete" }) as const,
       repair: async () => ({ type: "complete" }) as const,
     } satisfies OnlineRepair;
@@ -2623,15 +2626,16 @@ describe("online repair observations", () => {
     let calls = 0;
     const repair = {
       name: "historical",
+      introducedBy: "20260101000000_rehearsal_fixture",
       readCompletion: async () => ({ type: "complete" }) as const,
       repair: async () => {
         calls += 1;
         return { type: "complete" } as const;
       },
     } satisfies OnlineRepair;
-    await assertOnlineMigrationsApplied(createHarness().pool, {
+    await reportOnlineMigrations(createHarness().pool, {
       repairs: [repair],
-      observeRepair: (record) => {
+      observeRepair: (record: OnlineRepairRehearsalRecord) => {
         records.push(record);
       },
     });
@@ -2644,6 +2648,7 @@ describe("online repair observations", () => {
     const records: OnlineRepairRehearsalRecord[] = [];
     const repair = {
       name: "broken",
+      introducedBy: "20260101000000_rehearsal_fixture",
       readCompletion: async () =>
         ({ type: "incomplete", reason: "rows left" }) as const,
       repair: async () => ({ type: "complete" }) as const,
@@ -2670,6 +2675,7 @@ describe("online repair observations", () => {
     const failure = new TypeError("read unavailable");
     const repair = {
       name: "unreadable",
+      introducedBy: "20260101000000_rehearsal_fixture",
       readCompletion: async () => {
         throw failure;
       },
