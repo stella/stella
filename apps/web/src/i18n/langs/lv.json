@@ -928,6 +928,7 @@
     "desktopUnavailable": "Savienojiet vai atjauniniet stella desktop.",
     "featureUnavailable": "Šī funkcija nav pieejama.",
     "ocrUnavailable": "OCR nav pieejams.",
+    "openSettings": "Atvērt iestatījumus",
     "translationMissing": "Nav konfigurēts neviens tulkošanas pakalpojums."
   },
   "caseLaw": {
@@ -4729,6 +4730,7 @@
     "creationRefused": "Organizāciju neizdevās izveidot. Pārbaudiet datus un mēģiniet vēlreiz.",
     "creationSlugConflict": "Šī organizācijas adrese jau tiek izmantota. Izvēlieties citu nosaukumu vai adresi.",
     "invitations": {
+      "cancelConfirmDescription": "Uz {email} nosūtītā uzaicinājuma saite vairs nedarbosies. Lai uzaicinātu šo personu vēlreiz, nosūtiet jaunu uzaicinājumu.",
       "cancelInvitation": "Atcelt uzaicinājumu",
       "emailAddressLabel": "E-pasta adrese",
       "emailAddressPlaceholder": "lietotajs@example.com",
@@ -4736,6 +4738,7 @@
       "inviteMember": "Uzaicināt dalībnieku",
       "inviteMemberDescription": "Nosūtīt uzaicinājumu pievienoties jūsu organizācijai",
       "invited": "Uzaicināts",
+      "keepInvitation": "Paturēt uzaicinājumu",
       "noInvitationsFound": "Uzaicinājumi nav atrasti",
       "resendInvitation": "Nosūtīt uzaicinājumu atkārtoti",
       "sendInvitation": "Nosūtīt uzaicinājumu",
@@ -6297,6 +6300,7 @@
     },
     "createNewWorkspace": "Izveidot jaunu lietu",
     "defaultName": "Bez nosaukuma",
+    "deleteFromMatter": "Dzēst no lietas…",
     "deleteItem": "Dzēst vienību",
     "deleteItems": "Dzēst {count, plural, zero {# vienību} one {# vienību} other {# vienības}}",
     "deleteItemsDescription": "Vai tiešām vēlaties dzēst {count, plural, zero {# vienību} one {# vienību} other {# vienības}}? Šo darbību nevar atsaukt.",

@@ -928,6 +928,7 @@
     "desktopUnavailable": "Prijunkite arba atnaujinkite stella desktop.",
     "featureUnavailable": "Ši funkcija nepasiekiama.",
     "ocrUnavailable": "OCR nepasiekiamas.",
+    "openSettings": "Atidaryti nustatymus",
     "translationMissing": "Nesukonfigūruota jokia vertimo paslauga."
   },
   "caseLaw": {
@@ -4729,6 +4730,7 @@
     "creationRefused": "Organizacijos sukurti nepavyko. Patikrinkite duomenis ir bandykite dar kartą.",
     "creationSlugConflict": "Šis organizacijos adresas jau naudojamas. Pasirinkite kitą pavadinimą arba adresą.",
     "invitations": {
+      "cancelConfirmDescription": "Adresu {email} išsiųsta kvietimo nuoroda nebeveiks. Norėdami pakviesti šį asmenį dar kartą, išsiųskite naują kvietimą.",
       "cancelInvitation": "Atšaukti kvietimą",
       "emailAddressLabel": "El. pašto adresas",
       "emailAddressPlaceholder": "naudotojas@example.com",
@@ -4736,6 +4738,7 @@
       "inviteMember": "Pakviesti narį",
       "inviteMemberDescription": "Išsiųsti kvietimą prisijungti prie jūsų organizacijos",
       "invited": "Pakviesta",
+      "keepInvitation": "Palikti kvietimą",
       "noInvitationsFound": "Kvietimų nerasta",
       "resendInvitation": "Išsiųsti kvietimą pakartotinai",
       "sendInvitation": "Išsiųsti kvietimą",
@@ -6297,6 +6300,7 @@
     },
     "createNewWorkspace": "Sukurti naują bylą",
     "defaultName": "Be pavadinimo",
+    "deleteFromMatter": "Ištrinti iš bylos…",
     "deleteItem": "Ištrinti elementą",
     "deleteItems": "Ištrinti {count, plural, one {# elementą} few {# elementus} other {# elementų}}",
     "deleteItemsDescription": "Ar tikrai norite ištrinti {count, plural, one {# elementą} few {# elementus} other {# elementų}}? Šio veiksmo negalima atšaukti.",

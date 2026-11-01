@@ -928,6 +928,7 @@
     "desktopUnavailable": "Conecta o actualiza stella desktop.",
     "featureUnavailable": "Esta función no está disponible.",
     "ocrUnavailable": "El OCR no está disponible.",
+    "openSettings": "Abrir configuración",
     "translationMissing": "No hay ningún servicio de traducción configurado."
   },
   "caseLaw": {
@@ -4729,6 +4730,7 @@
     "creationRefused": "No se ha podido crear la organización. Revisa los datos e inténtalo de nuevo.",
     "creationSlugConflict": "Esta dirección de organización ya está en uso. Elige otro nombre u otra dirección.",
     "invitations": {
+      "cancelConfirmDescription": "El enlace de invitación enviado a {email} dejará de funcionar. Para volver a invitar a esta persona, envíe una nueva invitación.",
       "cancelInvitation": "Cancelar invitación",
       "emailAddressLabel": "Dirección de correo electrónico",
       "emailAddressPlaceholder": "usuario@example.com",
@@ -4736,6 +4738,7 @@
       "inviteMember": "Invitar miembro",
       "inviteMemberDescription": "Enviar una invitación para unirse a su organización",
       "invited": "Invitado",
+      "keepInvitation": "Mantener invitación",
       "noInvitationsFound": "No se encontraron invitaciones",
       "resendInvitation": "Reenviar invitación",
       "sendInvitation": "Enviar invitación",
@@ -6297,6 +6300,7 @@
     },
     "createNewWorkspace": "Crear nuevo asunto",
     "defaultName": "Sin título",
+    "deleteFromMatter": "Eliminar del asunto…",
     "deleteItem": "Eliminar elemento",
     "deleteItems": "Eliminar {count, plural, one {# elemento} other {# elementos}}",
     "deleteItemsDescription": "¿Está seguro de que desea eliminar {count, plural, one {# elemento} other {# elementos}}? Esta acción no se puede deshacer.",

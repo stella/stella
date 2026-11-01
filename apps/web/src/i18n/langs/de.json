@@ -928,6 +928,7 @@
     "desktopUnavailable": "stella desktop verbinden oder aktualisieren.",
     "featureUnavailable": "Diese Funktion ist nicht verfügbar.",
     "ocrUnavailable": "OCR ist nicht verfügbar.",
+    "openSettings": "Einstellungen öffnen",
     "translationMissing": "Kein Übersetzungsdienst ist eingerichtet."
   },
   "caseLaw": {
@@ -4729,6 +4730,7 @@
     "creationRefused": "Die Organisation konnte nicht erstellt werden. Prüfen Sie die Angaben und versuchen Sie es erneut.",
     "creationSlugConflict": "Diese Organisationsadresse wird bereits verwendet. Wählen Sie einen anderen Namen oder eine andere Adresse.",
     "invitations": {
+      "cancelConfirmDescription": "Der an {email} gesendete Einladungslink funktioniert dann nicht mehr. Um diese Person erneut einzuladen, senden Sie eine neue Einladung.",
       "cancelInvitation": "Einladung stornieren",
       "emailAddressLabel": "E-Mail-Adresse",
       "emailAddressPlaceholder": "benutzer@example.com",
@@ -4736,6 +4738,7 @@
       "inviteMember": "Mitglied einladen",
       "inviteMemberDescription": "Senden Sie eine Einladung zu Ihrer Organisation",
       "invited": "Eingeladen",
+      "keepInvitation": "Einladung behalten",
       "noInvitationsFound": "Keine Einladungen gefunden",
       "resendInvitation": "Einladung erneut senden",
       "sendInvitation": "Einladung senden",
@@ -6297,6 +6300,7 @@
     },
     "createNewWorkspace": "Neue Akte erstellen",
     "defaultName": "Ohne Titel",
+    "deleteFromMatter": "Aus der Akte löschen…",
     "deleteItem": "Element löschen",
     "deleteItems": "{count, plural, one {# Element} other {# Elemente}} löschen",
     "deleteItemsDescription": "Sind Sie sicher, dass Sie {count, plural, one {# Element} other {# Elemente}} löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",

@@ -928,6 +928,7 @@
     "desktopUnavailable": "اربط تطبيق stella desktop أو حدّثه.",
     "featureUnavailable": "هذه الميزة غير متاحة.",
     "ocrUnavailable": "التعرف الضوئي على الحروف غير متاح.",
+    "openSettings": "فتح الإعدادات",
     "translationMissing": "لم يتم إعداد أي خدمة ترجمة."
   },
   "caseLaw": {
@@ -4729,6 +4730,7 @@
     "creationRefused": "تعذّر إنشاء المؤسسة. تحقق من التفاصيل وحاول مرة أخرى.",
     "creationSlugConflict": "عنوان المؤسسة هذا مستخدم بالفعل. اختر اسمًا أو عنوانًا آخر.",
     "invitations": {
+      "cancelConfirmDescription": "سيتوقف رابط الدعوة المرسل إلى {email} عن العمل. لدعوة هذا الشخص مرة أخرى، أرسل دعوة جديدة.",
       "cancelInvitation": "إلغاء الدعوة",
       "emailAddressLabel": "عنوان البريد الإلكتروني",
       "emailAddressPlaceholder": "user@example.com",
@@ -4736,6 +4738,7 @@
       "inviteMember": "دعوة عضو",
       "inviteMemberDescription": "أرسل دعوة للانضمام إلى مؤسستك",
       "invited": "تمت الدعوة",
+      "keepInvitation": "الإبقاء على الدعوة",
       "noInvitationsFound": "لم يُعثر على دعوات",
       "resendInvitation": "إعادة إرسال الدعوة",
       "sendInvitation": "إرسال الدعوة",
@@ -6297,6 +6300,7 @@
     },
     "createNewWorkspace": "إنشاء ملف قانوني جديد",
     "defaultName": "بدون عنوان",
+    "deleteFromMatter": "حذف من الملف القانوني…",
     "deleteItem": "حذف العنصر",
     "deleteItems": "حذف {count, plural, zero {لا عناصر} one {عنصر واحد} two {عنصرين} few {# عناصر} many {# عنصرًا} other {# عنصر}}",
     "deleteItemsDescription": "هل أنت متأكد من رغبتك في حذف {count, plural, zero {لا عناصر} one {عنصر واحد} two {عنصرين} few {# عناصر} many {# عنصرًا} other {# عنصر}}؟ لا يمكن التراجع عن هذا الإجراء.",
