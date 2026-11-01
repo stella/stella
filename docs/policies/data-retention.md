@@ -127,12 +127,16 @@ Handler: `apps/api/src/handlers/templates/delete.ts`
 | Application logs                    | Per hosting provider retention policy                        |
 
 Stella does not impose minimum retention periods on user
-content. Deletion is immediate and irreversible upon request.
+content. Deletion is immediate and irreversible upon request,
+except for a single document version: deleting one sets its
+`deletedAt` and keeps its row and objects with the document.
+Deleting the document removes all of its versions.
 
 ## Enforcement
 
 - Hard-delete behaviour is enforced by the absence of
-  soft-delete columns in the schema.
+  soft-delete columns in the schema, apart from
+  `entity_versions.deleted_at`, the document version tombstone.
 - Cascade and restrict FK constraints are defined in
   `apps/api/src/db/schema/` and enforced by PostgreSQL.
 - Entity, workspace, and organization deletion records durable cleanup work in
