@@ -67,7 +67,7 @@ const keyPart = (part: string): string =>
  * in several organizations on one server keeps one list for all of them.
  */
 export const recentSearchesKey = (serverUrl: string, userId: string): string =>
-  `stella.recent-searches.${keyPart(serverUrl)}.${keyPart(userId)}`;
+  `recent-searches.${keyPart(serverUrl)}.${keyPart(userId)}`;
 
 /**
  * Deletes the ending session's recent searches from the device, so a
