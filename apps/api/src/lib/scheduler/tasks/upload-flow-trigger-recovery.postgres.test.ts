@@ -294,8 +294,8 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
             name: "second-receipt.pdf",
             createdBy: fixture.userId,
           });
-          await withOrgScopedFixtureTransaction({
-            tx: db,
+          await withOrgScopedFixture({
+            database: db,
             workspaceId: fixture.workspaceId,
             fn: async (fixtureTx) =>
               await fixtureTx.insert(flowUploadTriggerIntents).values({
@@ -340,8 +340,8 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                 .returning()
             ).at(0) ?? panic("Expected a persisted upload recovery job");
 
-          let releaseBlocker = () => undefined;
-          let announceLock = () => undefined;
+          let releaseBlocker: () => void = () => undefined;
+          let announceLock: () => void = () => undefined;
           const lockHeld = new Promise<void>((resolve) => {
             announceLock = resolve;
           });
@@ -364,7 +364,9 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
           const shortDeadlineDb = asTestRaw<SchedulerDb>({
             select: db.select.bind(db),
             query: db.query,
-            transaction: async (operation) => {
+            transaction: async (
+              operation: Parameters<typeof transaction>[0],
+            ) => {
               const result = await transaction(async (tx) => {
                 const session = tx._.session;
                 const prepare = session.prepareQuery.bind(session);
@@ -445,7 +447,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                   .from(schedulerJobs)
                   .where(eq(schedulerJobs.id, definition.id))
               ).at(0) ?? panic("Missing dispatch-phase recovery job");
-            expect(dispatchJob.payload?.recoveryScan).toMatchObject({
+            expect(dispatchJob.payload?.["recoveryScan"]).toMatchObject({
               phase: "dispatch",
             });
             const firstRun = invoke(shortDeadlineDb, dispatchJob);
@@ -471,7 +473,7 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                   .from(schedulerJobs)
                   .where(eq(schedulerJobs.id, definition.id))
               ).at(0) ?? panic("Missing checkpointed upload recovery job");
-            expect(checkpointed.payload?.recoveryScan).toMatchObject({
+            expect(checkpointed.payload?.["recoveryScan"]).toMatchObject({
               census: {
                 definitionId: fixture.definitionId,
               },

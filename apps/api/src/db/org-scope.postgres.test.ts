@@ -83,7 +83,7 @@ describe.skipIf(!enabled)(
               )}`,
             });
             if (proof.isErr()) {
-              return panic("Missing receipt scope fixture");
+              panic("Missing receipt scope fixture");
             }
             const operation = {
               type: "dequeue-scout" as const,
@@ -122,7 +122,7 @@ describe.skipIf(!enabled)(
               where: eq(workspaces.id, a.workspaceId),
             });
             if (proof.isErr()) {
-              return panic("Missing notice source scope");
+              panic("Missing notice source scope");
             }
             const operation = {
               type: "completion-notice-pending" as const,
@@ -171,7 +171,7 @@ describe.skipIf(!enabled)(
               where: eq(pendingScoutEmissions.sourceId, sourceA),
             });
             if (proof.isErr()) {
-              return panic("Missing claim source scope");
+              panic("Missing claim source scope");
             }
             const operation = {
               type: "scout-retry" as const,
@@ -223,7 +223,7 @@ describe.skipIf(!enabled)(
               where: eq(pendingScoutEmissions.sourceId, sourceA),
             });
             if (proof.isErr()) {
-              return panic("Missing grant source scope");
+              panic("Missing grant source scope");
             }
             await withOrgScope({
               tx,
@@ -274,7 +274,7 @@ describe.skipIf(!enabled)(
               where: eq(workspaces.id, a.workspaceId),
             });
             if (proof.isErr()) {
-              return panic("Missing search source scope");
+              panic("Missing search source scope");
             }
             const operation = {
               type: "sync-workspace-activity" as const,

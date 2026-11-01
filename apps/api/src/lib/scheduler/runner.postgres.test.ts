@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { asc, eq, inArray } from "drizzle-orm";
 
@@ -218,6 +219,9 @@ if (!databaseUrl || !runPostgresTests) {
               .where(eq(schedulerJobs.id, jobId));
             expect(row?.payload).toEqual(payload);
           }
+          const finalPayload =
+            expectedPayloads.at(-1)?.payload ??
+            panic("Missing final semantic payload");
 
           await writeSearchSemanticTimestampsState({
             db,
@@ -248,7 +252,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(rowsById).toEqual({
             [jobId]: {
               enabled: true,
-              payload: expectedPayloads.at(-1)?.payload,
+              payload: finalPayload,
             },
             [otherTaskJobId]: {
               enabled: true,
@@ -271,7 +275,7 @@ if (!databaseUrl || !runPostgresTests) {
             .where(eq(schedulerJobs.id, jobId));
           expect(completed).toEqual({
             enabled: false,
-            payload: expectedPayloads.at(-1)?.payload,
+            payload: finalPayload,
           });
         } finally {
           await db

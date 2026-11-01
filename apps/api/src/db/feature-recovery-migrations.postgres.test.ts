@@ -275,7 +275,7 @@ describe.skipIf(!enabled)(
                 }),
               ).toBe(complete);
             } finally {
-              session.release();
+              await session.release();
             }
           },
         );

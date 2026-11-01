@@ -282,14 +282,16 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
               workspaceId: f.pausedWorkspaceId,
               fn: async (fixtureTx) =>
                 await fixtureTx.insert(pendingScoutEmissions).values(
-                  prefixIds.map((sourceId) => ({
-                    organizationId: f.organizationId,
-                    workspaceId: f.pausedWorkspaceId,
-                    sourceKind: "infosoud-hearing",
-                    sourceId,
-                    status: "pending",
-                    nextAttemptAt: now,
-                  })),
+                  prefixIds.map(
+                    (sourceId): typeof pendingScoutEmissions.$inferInsert => ({
+                      organizationId: f.organizationId,
+                      workspaceId: f.pausedWorkspaceId,
+                      sourceKind: "infosoud-hearing",
+                      sourceId,
+                      status: "pending",
+                      nextAttemptAt: now,
+                    }),
+                  ),
                 ),
             });
             await client.db.insert(entities).values({
@@ -347,8 +349,9 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
                 job,
                 payload: job.payload,
                 runId: createSafeId<"schedulerJobRun">(),
-                scheduleContinuation: (nextRunAt) =>
-                  continuations.push(nextRunAt),
+                scheduleContinuation: (nextRunAt) => {
+                  continuations.push(nextRunAt);
+                },
                 signal: new AbortController().signal,
                 logger,
               });

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
@@ -54,23 +54,6 @@ type OperatorActivitySummaryContract = {
   unavailable_reasons: Record<string, string>;
 };
 
-type Equal<Left, Right> =
-  (<Value>() => Value extends Left ? 1 : 2) extends <
-    Value,
-  >() => Value extends Right ? 1 : 2
-    ? (<Value>() => Value extends Right ? 1 : 2) extends <
-        Value,
-      >() => Value extends Left ? 1 : 2
-      ? true
-      : false
-    : false;
-type Assert<T extends true> = T;
-type OperatorActivitySummaryIsAggregateOnly = Assert<
-  Equal<OperatorActivitySummary, OperatorActivitySummaryContract>
->;
-const OPERATOR_SUMMARY_CONTRACT_MATCHES =
-  true satisfies OperatorActivitySummaryIsAggregateOnly;
-
 const OPERATOR_AGGREGATE_PROJECTION = [
   "week_index",
   "active_orgs",
@@ -89,7 +72,7 @@ const propertyPath = (node: ts.Expression): string[] => {
   if (ts.isPropertyAccessExpression(node)) {
     return [...propertyPath(node.expression), node.name.text];
   }
-  if (ts.isElementAccessExpression(node) && node.argumentExpression) {
+  if (ts.isElementAccessExpression(node)) {
     const argument = node.argumentExpression;
     if (ts.isStringLiteral(argument)) {
       return [...propertyPath(node.expression), argument.text];
@@ -213,12 +196,13 @@ const scanSource = (filename: string, source: string): SourceScan => {
       }
 
       if (
+        method !== undefined &&
         [
           "findMany",
           "findFirst",
           "findFirstOrThrow",
           "findManyWithCache",
-        ].includes(method ?? "")
+        ].includes(method)
       ) {
         const queryIndex = calleePath.lastIndexOf("query");
         const relation =
@@ -427,7 +411,7 @@ const hasIndirectNotificationVisibility = (name: string, source: string) =>
 
 describe("feature-owned retained activity readers", () => {
   test("every production audit and notification reader applies owner admission", () => {
-    expect(OPERATOR_SUMMARY_CONTRACT_MATCHES).toBe(true);
+    expectTypeOf<OperatorActivitySummary>().toEqualTypeOf<OperatorActivitySummaryContract>();
     const sources = productionSources();
     const auditReaders = sources.filter(({ readers }) =>
       readers.some(({ table }) => table === "auditLogs"),

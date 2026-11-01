@@ -161,12 +161,12 @@ describe("removeWorkspaceMember", () => {
         from: (table: unknown) => {
           selectedTables.push(table);
           return {
-            innerJoin: () => ({
-              ...createSelectQueryMock([]).from(),
-              innerJoin: () => ({
-                where: () => ({ as: () => ({}) }),
+            innerJoin: () =>
+              Object.assign(createSelectQueryMock([]).from(), {
+                innerJoin: () => ({
+                  where: () => ({ as: () => ({}) }),
+                }),
               }),
-            }),
             where: () => ({
               orderBy: () => createSelectQueryMock([]).from().where().orderBy(),
               limit: createSelectQueryMock(

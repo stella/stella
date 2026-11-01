@@ -68,7 +68,7 @@ if (!databaseUrl || !enabled) {
               where: eq(flowDefinitions.id, definitionAId),
             });
             if (proof.isErr()) {
-              return panic("Missing flow scope fixture");
+              panic("Missing flow scope fixture");
             }
             await withOrgScope({
               tx,

@@ -16,6 +16,8 @@ import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-names";
 import {
   RECOVERY_COHORTS,
   RECOVERY_READ_SIZES,
+} from "@/api/tests/query-perf/recovery-measurement";
+import {
   recoveryMeasurementRuns,
   SCHEDULED_JOB_MEASUREMENTS,
   scheduledJobMeasurementViolations,
@@ -98,17 +100,16 @@ describe("read budget declarations", () => {
       if (measurement.type !== "recovery") {
         panic(`Expected recovery measurement for ${jobId}`);
       }
-      const owner = recoveryOwners.find(
-        ([, identity]) => identity.jobId === jobId,
-      );
-      expect(owner).toBeDefined();
-      expect(measurement.task).toBe(owner?.[1].task);
-      expect(measurement.scenarios.every(({ job }) => job === owner?.[0])).toBe(
+      const [ownerJob, ownerIdentity] =
+        recoveryOwners.find(([, identity]) => identity.jobId === jobId) ??
+        panic(`Missing recovery owner for ${jobId}`);
+      expect(measurement.task).toBe(ownerIdentity.task);
+      expect(measurement.scenarios.every(({ job }) => job === ownerJob)).toBe(
         true,
       );
-      expect(measurement.scenarios.map(({ cohort }) => cohort)).toEqual(
-        RECOVERY_COHORTS,
-      );
+      expect(measurement.scenarios.map(({ cohort }) => cohort)).toEqual([
+        ...RECOVERY_COHORTS,
+      ]);
     }
 
     const actualCases = recoveryMeasurementRuns().map(

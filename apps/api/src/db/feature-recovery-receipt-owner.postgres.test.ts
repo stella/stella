@@ -102,7 +102,11 @@ describe.skipIf(!enabled)("feature recovery receipts", () => {
           ).toEqual([{ id: 1 }]);
         }
       } finally {
-        await client.unsafe("ROLLBACK").finally(() => client.release());
+        try {
+          await client.unsafe("ROLLBACK");
+        } finally {
+          await client.release();
+        }
       }
     });
   });

@@ -100,7 +100,7 @@ test("semantic repair checkpoints expose only named state transitions", () => {
   type State = Parameters<
     typeof writeSearchSemanticTimestampsState
   >[0]["state"];
-  expectTypeOf<State>().toMatchTypeOf<{ type: "complete" }>();
+  expectTypeOf<{ type: "complete" }>().toExtend<State>();
   expectTypeOf<{
     type: "arbitrary";
     payload: { toJSON: () => string };

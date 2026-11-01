@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
