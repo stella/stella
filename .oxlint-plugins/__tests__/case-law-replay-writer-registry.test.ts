@@ -32,7 +32,7 @@ describe.serial("replay writer classifications", () => {
     const tracked = execFileSync(
       "git",
       ["ls-tree", "--name-only", base, relative],
-      { cwd: root, encoding: "utf-8" },
+      { cwd: root, encoding: "utf-8", maxBuffer: 2 ** 30 },
     ).trim();
     if (tracked === "") {
       return;
@@ -40,6 +40,7 @@ describe.serial("replay writer classifications", () => {
     const previous = execFileSync("git", ["show", `${base}:${relative}`], {
       cwd: root,
       encoding: "utf-8",
+      maxBuffer: 2 ** 30,
     });
     expect(
       addedPendingOwners(
