@@ -4972,7 +4972,7 @@
     "caseLawEmptyState": "Pradėkite rašyti, kad ieškotumėte teismų sprendimų.",
     "caseLawMatchingDecisions": "{count, plural, one {# atitinkantis sprendimas} few {# atitinkantys sprendimai} many {# atitinkančio sprendimo} other {# atitinkančių sprendimų}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ atitinkantis sprendimas} few {#+ atitinkantys sprendimai} many {#+ atitinkančio sprendimo} other {#+ atitinkančių sprendimų}}",
-    "chatCoveragePartial": "Kai kurie pokalbiai išnagrinėti tik iš dalies.",
+    "chatCoveragePartial": "Ne visi pokalbiai išnagrinėti iki galo.",
     "continueInChat": "Tęsti pokalbyje",
     "dateFrom": "Nuo",
     "dateTo": "Iki",

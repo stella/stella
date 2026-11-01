@@ -4972,7 +4972,7 @@
     "caseLawEmptyState": "Začněte psát pro vyhledávání v soudních rozhodnutích.",
     "caseLawMatchingDecisions": "{count, plural, one {# odpovídající rozhodnutí} few {# odpovídající rozhodnutí} many {# odpovídajícího rozhodnutí} other {# odpovídajících rozhodnutí}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ odpovídající rozhodnutí} few {#+ odpovídající rozhodnutí} many {#+ odpovídajícího rozhodnutí} other {#+ odpovídajících rozhodnutí}}",
-    "chatCoveragePartial": "Některé chaty byly prohledány jen částečně.",
+    "chatCoveragePartial": "Ne všechny chaty byly prohledány celé.",
     "continueInChat": "Pokračovat v chatu",
     "dateFrom": "Od",
     "dateTo": "Do",

@@ -568,6 +568,23 @@ test("partial chat coverage keeps every result and names what was not searched",
   expect(testing.screen.getAllByText(hit.title).length).toBeGreaterThan(0);
 });
 
+test("a partial search with no results still says what was not searched", async () => {
+  searchChatCoverage = GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL;
+  searchHits = [];
+  await mount();
+  const input = testing.screen.getByRole("combobox", {
+    name: messages.common.search,
+  });
+  testing.fireEvent.input(input, { target: { value: "engagement" } });
+  await testing.waitFor(() =>
+    expect(
+      testing.screen.getByText(messages.search.chatCoveragePartial, {
+        exact: false,
+      }),
+    ).toBeTruthy(),
+  );
+});
+
 test("complete chat coverage adds no note to the result count", async () => {
   await mount();
   await typeQuery();

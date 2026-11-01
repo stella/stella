@@ -678,9 +678,15 @@ const resolveCitationSearchDisplay = ({
   };
 };
 
+/** `shown` gates the pages the same way the first page's counts are gated. */
 const isChatCoveragePartial = (
-  page: { chatCoverage: GlobalSearchChatCoverage } | null | undefined,
-) => page?.chatCoverage === GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL;
+  shown: boolean,
+  data: { pages: { chatCoverage: GlobalSearchChatCoverage }[] } | undefined,
+) =>
+  shown &&
+  data?.pages.some(
+    ({ chatCoverage }) => chatCoverage === GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL,
+  ) === true;
 
 export const SearchDialog = ({
   open,
@@ -1016,7 +1022,10 @@ export const SearchDialog = ({
   const editorBuckets = facets ? facets.editor : EMPTY_FACET_BUCKETS;
   const workspaceBuckets = facets ? facets.workspace : EMPTY_FACET_BUCKETS;
   const totalCount = firstPage?.totalCount ?? 0;
-  const chatCoveragePartial = isChatCoveragePartial(firstPage);
+  const chatCoveragePartial = isChatCoveragePartial(
+    firstPage !== undefined,
+    data,
+  );
   const filterTypesKey = filters.types.join("|");
   const filterKindsKey = filters.kinds.join("|");
   const filterMimeTypesKey = filters.mimeTypes.join("|");
@@ -2217,6 +2226,7 @@ export const SearchDialog = ({
                         }}
                       />
                       <SearchResultsContent
+                        chatCoveragePartial={chatCoveragePartial}
                         onRetry={() => {
                           detached(
                             refetchSearch(),
@@ -2758,10 +2768,12 @@ const SearchRecentsScreen = ({
 };
 
 const SearchResultsContent = ({
+  chatCoveragePartial,
   children,
   onRetry,
   status,
 }: {
+  chatCoveragePartial: boolean;
   children: ReactElement;
   onRetry: () => void;
   status: SearchResultsStatus;
@@ -2807,6 +2819,7 @@ const SearchResultsContent = ({
             {status.query === null
               ? t("common.noResults")
               : t("search.noResults", { query: status.query })}
+            {chatCoveragePartial ? ` ${t("search.chatCoveragePartial")}` : null}
           </p>
         </div>
       );

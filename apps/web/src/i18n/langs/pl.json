@@ -4972,7 +4972,7 @@
     "caseLawEmptyState": "Zacznij pisać, aby przeszukać orzeczenia sądowe.",
     "caseLawMatchingDecisions": "{count, plural, one {# pasujące orzeczenie} few {# pasujące orzeczenia} many {# pasujących orzeczeń} other {# pasującego orzeczenia}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ pasujące orzeczenie} few {#+ pasujące orzeczenia} many {#+ pasujących orzeczeń} other {#+ pasującego orzeczenia}}",
-    "chatCoveragePartial": "Niektóre czaty przeszukano tylko częściowo.",
+    "chatCoveragePartial": "Nie wszystkie czaty przeszukano w całości.",
     "continueInChat": "Kontynuuj na czacie",
     "dateFrom": "Od",
     "dateTo": "Do",

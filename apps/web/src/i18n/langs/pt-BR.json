@@ -4972,7 +4972,7 @@
     "caseLawEmptyState": "Comece a digitar para pesquisar decisões judiciais.",
     "caseLawMatchingDecisions": "{count, plural, one {# decisão correspondente} other {# decisões correspondentes}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ decisão correspondente} other {#+ decisões correspondentes}}",
-    "chatCoveragePartial": "Algumas conversas foram pesquisadas apenas em parte.",
+    "chatCoveragePartial": "Nem todas as conversas foram pesquisadas por completo.",
     "continueInChat": "Continuar no chat",
     "dateFrom": "De",
     "dateTo": "Para",

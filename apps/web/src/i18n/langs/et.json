@@ -4972,7 +4972,7 @@
     "caseLawEmptyState": "Alustage tippimist, et otsida kohtulahendeid.",
     "caseLawMatchingDecisions": "{count, plural, one {# sobiv kohtulahend} other {# sobivat kohtulahendit}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ sobiv kohtulahend} other {#+ sobivat kohtulahendit}}",
-    "chatCoveragePartial": "Mõnda vestlust otsiti ainult osaliselt.",
+    "chatCoveragePartial": "Kõiki vestlusi ei otsitud täielikult.",
     "continueInChat": "Jätka vestluses",
     "dateFrom": "Alates",
     "dateTo": "Kuni",
