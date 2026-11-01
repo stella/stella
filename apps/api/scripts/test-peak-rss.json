@@ -7448,7 +7448,7 @@
         "job": "measure-2"
       }
     },
-    "src/handlers/invoices/pdf/render.sk-golden.test.ts": {
+    "src/lib/billing/invoice-pdf/render.sk-golden.test.ts": {
       "peakMb": 231,
       "baselineMb": 218,
       "source": {
@@ -7456,7 +7456,7 @@
         "job": "measure-3"
       }
     },
-    "src/handlers/invoices/pdf/render.test.ts": {
+    "src/lib/billing/invoice-pdf/render.test.ts": {
       "peakMb": 239,
       "baselineMb": 202,
       "source": {
@@ -7464,7 +7464,7 @@
         "job": "measure-1"
       }
     },
-    "src/handlers/invoices/pdf/typst/render-typst.test.ts": {
+    "src/lib/billing/invoice-pdf/typst/render-typst.test.ts": {
       "peakMb": 254,
       "baselineMb": 216,
       "source": {
@@ -7472,7 +7472,7 @@
         "job": "measure-2"
       }
     },
-    "src/handlers/invoices/pdf/typst/session.test.ts": {
+    "src/lib/billing/invoice-pdf/typst/session.test.ts": {
       "peakMb": 336,
       "baselineMb": 218,
       "source": {

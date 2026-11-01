@@ -7,6 +7,19 @@
     "ignore": "Ak ste túto pozvánku nečakali, tento e-mail môžete ignorovať.",
     "subject": "Boli ste pozvaní do organizácie {organizationName}"
   },
+  "invoiceLink": {
+    "action": "{documentType, select, credit_note {Zobraziť dobropis} advance {Zobraziť zálohovú faktúru} other {Zobraziť faktúru}}",
+    "amountDue": "Na úhradu: {amount}",
+    "body": "{firmName} vám posiela {documentType, select, credit_note {dobropis} advance {zálohovú faktúru} other {faktúru}}. Po otvorení uvidíte podrobnosti a môžete si stiahnuť PDF.",
+    "dueDate": "Dátum splatnosti: {date}",
+    "expires": "Odkaz je platný do {date}.",
+    "heading": "{documentType, select, credit_note {Dobropis} advance {Zálohová faktúra} other {Faktúra}} {invoiceNumber}",
+    "ignore": "Tento e-mail doručila služba stella za odosielateľa {firmName}. Ak ste ho nečakali, môžete ho ignorovať.",
+    "messageFrom": "Správa od odosielateľa {firmName}",
+    "preview": "{firmName} vám posiela {documentType, select, credit_note {dobropis} advance {zálohovú faktúru} other {faktúru}} {invoiceNumber}",
+    "reply": "Ak chcete kontaktovať odosielateľa {firmName}, odpovedzte na tento e-mail.",
+    "subject": "{documentType, select, credit_note {Dobropis} advance {Zálohová faktúra} other {Faktúra}} {invoiceNumber} od {firmName}"
+  },
   "newDeviceLogin": {
     "action": "Skontrolovať relácie",
     "body": "Do vášho účtu sa niekto prihlásil z nového zariadenia alebo miesta.",

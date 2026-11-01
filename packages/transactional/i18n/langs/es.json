@@ -7,6 +7,19 @@
     "ignore": "Si no esperaba esta invitación, puede ignorar este correo electrónico.",
     "subject": "Ha sido invitado a unirse a {organizationName}"
   },
+  "invoiceLink": {
+    "action": "{documentType, select, credit_note {Ver factura rectificativa} advance {Ver factura de anticipo} other {Ver factura}}",
+    "amountDue": "Importe pendiente: {amount}",
+    "body": "{firmName} le ha enviado {documentType, select, credit_note {una factura rectificativa} advance {una factura de anticipo} other {una factura}}. Abra el enlace para ver los detalles y descargar el PDF.",
+    "dueDate": "Fecha de vencimiento: {date}",
+    "expires": "El enlace es válido hasta el {date}.",
+    "heading": "{documentType, select, credit_note {Factura rectificativa} advance {Factura de anticipo} other {Factura}} {invoiceNumber}",
+    "ignore": "stella ha entregado este correo en nombre de {firmName}. Si no lo esperaba, puede ignorarlo.",
+    "messageFrom": "Mensaje de {firmName}",
+    "preview": "{firmName} le ha enviado {documentType, select, credit_note {la factura rectificativa} advance {la factura de anticipo} other {la factura}} {invoiceNumber}",
+    "reply": "Responda a este correo para contactar con {firmName}.",
+    "subject": "{documentType, select, credit_note {Factura rectificativa} advance {Factura de anticipo} other {Factura}} {invoiceNumber} de {firmName}"
+  },
   "newDeviceLogin": {
     "action": "Revisar sesiones",
     "body": "Se ha iniciado sesión en su cuenta desde un nuevo dispositivo o ubicación.",

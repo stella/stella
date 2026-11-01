@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { INVOICE_SEND_UPDATE_COLUMNS } from "@/api/db/schema";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { withIsolatedPostgresCluster } from "@/api/tests/isolated-postgres-cluster";
@@ -498,6 +499,20 @@ describePostgres("database role privilege census", () => {
           { cause: error },
         );
       }
+      // Column grants intentionally do not count as a table-wide UPDATE.
+      const invoiceSendColumns = await database.unsafe(`
+        SELECT attribute.attname AS column
+        FROM pg_catalog.pg_attribute attribute
+        WHERE attribute.attrelid = 'public.invoice_sends'::regclass
+          AND attribute.attnum > 0 AND NOT attribute.attisdropped
+          AND pg_catalog.has_column_privilege('stella', attribute.attrelid, attribute.attnum, 'UPDATE')
+        ORDER BY attribute.attname
+      `);
+      expect(invoiceSendColumns).toEqual(
+        INVOICE_SEND_UPDATE_COLUMNS.map(({ name }) => name)
+          .toSorted()
+          .map((column) => ({ column })),
+      );
       expect(
         await database.unsafe(`SELECT
         has_function_privilege('stella', 'public.stella_chat_run_text_boundaries()', 'EXECUTE') AS runtime,

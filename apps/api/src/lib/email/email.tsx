@@ -4,6 +4,9 @@ import * as v from "valibot";
 import type { FeedbackReportInput } from "@stll/api-contract/feedback";
 import * as BetterAuthOTP from "@stll/transactional/emails/better-auth-otp";
 import { subject as betterAuthOTPSubject } from "@stll/transactional/emails/better-auth-otp-subject";
+import * as InvoiceLink from "@stll/transactional/emails/invoice-link";
+import type { InvoiceLinkEmailProps } from "@stll/transactional/emails/invoice-link";
+import { subject as invoiceLinkSubject } from "@stll/transactional/emails/invoice-link-subject";
 import * as NewDeviceLogin from "@stll/transactional/emails/new-device-login";
 import { subject as newDeviceLoginSubject } from "@stll/transactional/emails/new-device-login-subject";
 import * as OrganizationInvitation from "@stll/transactional/emails/organization-invitation";
@@ -331,5 +334,32 @@ export const sendReportExportStatusEmail = async ({
     from: getTransactionalEmailFrom(),
     to: email,
     ...rendered,
+  });
+};
+
+type SendInvoiceLinkEmailOptions = InvoiceLinkEmailProps & {
+  to: string;
+  /** The firm's address: the platform sends, the firm receives the replies. */
+  replyTo: string;
+};
+
+/** One invoice link to one recipient; nothing is attached. */
+export const sendInvoiceLinkEmail = async ({
+  to,
+  replyTo,
+  ...props
+}: SendInvoiceLinkEmailOptions) => {
+  const { html, text } = renderEmail(<InvoiceLink.Email {...props} />);
+  await getTransport().send({
+    from: getTransactionalEmailFrom(),
+    to,
+    replyTo,
+    subject: invoiceLinkSubject(props.lang, {
+      documentType: props.documentType,
+      invoiceNumber: props.invoiceNumber,
+      firmName: props.firmName,
+    }),
+    html,
+    text,
   });
 };

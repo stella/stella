@@ -21,24 +21,25 @@ import entry19 from "./expenseCapacity";
 import entry20 from "./fileComparisonCapacity";
 import entry21 from "./flowEffect";
 import entry22 from "./folioPublication";
-import entry23 from "./legislationAmendments";
-import entry24 from "./mcpOAuthState";
-import entry25 from "./memberPrefix";
-import entry26 from "./memory";
-import entry27 from "./organizationObjectIntentLifecycle";
-import entry28 from "./organizationObjectIntentWriter";
-import entry29 from "./personalCatalog";
-import entry30 from "./professionalUseAcceptance";
-import entry31 from "./rateTableWorkspace";
-import entry32 from "./readerAnnotation";
-import entry33 from "./readerAnswer";
-import entry34 from "./requestReceipt";
-import entry35 from "./sampleCase";
-import entry36 from "./scoutRun";
-import entry37 from "./searchHistory";
-import entry38 from "./searchProjectionRepair";
-import entry39 from "./signal";
-import entry40 from "./signingSession";
+import entry23 from "./invoiceSends";
+import entry24 from "./legislationAmendments";
+import entry25 from "./mcpOAuthState";
+import entry26 from "./memberPrefix";
+import entry27 from "./memory";
+import entry28 from "./organizationObjectIntentLifecycle";
+import entry29 from "./organizationObjectIntentWriter";
+import entry30 from "./personalCatalog";
+import entry31 from "./professionalUseAcceptance";
+import entry32 from "./rateTableWorkspace";
+import entry33 from "./readerAnnotation";
+import entry34 from "./readerAnswer";
+import entry35 from "./requestReceipt";
+import entry36 from "./sampleCase";
+import entry37 from "./scoutRun";
+import entry38 from "./searchHistory";
+import entry39 from "./searchProjectionRepair";
+import entry40 from "./signal";
+import entry41 from "./signingSession";
 
 export default {
   "accountDeletionRequest": entry0,
@@ -64,22 +65,23 @@ export default {
   "fileComparisonCapacity": entry20,
   "flowEffect": entry21,
   "folioPublication": entry22,
-  "legislationAmendments": entry23,
-  "mcpOAuthState": entry24,
-  "memberPrefix": entry25,
-  "memory": entry26,
-  "organizationObjectIntentLifecycle": entry27,
-  "organizationObjectIntentWriter": entry28,
-  "personalCatalog": entry29,
-  "professionalUseAcceptance": entry30,
-  "rateTableWorkspace": entry31,
-  "readerAnnotation": entry32,
-  "readerAnswer": entry33,
-  "requestReceipt": entry34,
-  "sampleCase": entry35,
-  "scoutRun": entry36,
-  "searchHistory": entry37,
-  "searchProjectionRepair": entry38,
-  "signal": entry39,
-  "signingSession": entry40,
+  "invoiceSends": entry23,
+  "legislationAmendments": entry24,
+  "mcpOAuthState": entry25,
+  "memberPrefix": entry26,
+  "memory": entry27,
+  "organizationObjectIntentLifecycle": entry28,
+  "organizationObjectIntentWriter": entry29,
+  "personalCatalog": entry30,
+  "professionalUseAcceptance": entry31,
+  "rateTableWorkspace": entry32,
+  "readerAnnotation": entry33,
+  "readerAnswer": entry34,
+  "requestReceipt": entry35,
+  "sampleCase": entry36,
+  "scoutRun": entry37,
+  "searchHistory": entry38,
+  "searchProjectionRepair": entry39,
+  "signal": entry40,
+  "signingSession": entry41,
 } as const;

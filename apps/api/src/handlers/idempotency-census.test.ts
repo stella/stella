@@ -1079,6 +1079,11 @@ const ROOT_MUTATION_DISPOSITIONS = {
 } as const satisfies Record<string, RootMutationDisposition>;
 
 const CREATE_MUTATION_DISPOSITIONS = {
+  "src/handlers/invoices/sends/create.ts": {
+    type: "non-replay",
+    reason:
+      "SMTP and SES delivery cannot roll back with a JSON response receipt: the send commits pending state before transport and records delivery in a separate transaction.",
+  },
   "src/handlers/invoices/payments/create.ts": {
     type: "non-replay",
     reason:

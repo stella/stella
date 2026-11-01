@@ -29,11 +29,13 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import { exportPaidDate } from "@/api/lib/billing/invoice-export-records";
 import {
   INVOICE_LEGACY_PAYMENT_BACKFILL,
   INVOICE_SENT_AT_BACKFILL,
   LEGACY_PAYMENT_NOTE,
 } from "@/api/lib/billing/invoice-payment-backfill";
+import { INVOICE_CREDITED_AMOUNT_EXTRA } from "@/api/lib/billing/invoice-payments";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { effectiveOrganizationTimeZone } from "@/api/lib/organization-time-zone";
@@ -47,7 +49,6 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import { exportPaidDate } from "../export-records";
 import readInvoiceById from "../get";
 import readInvoices from "../list";
 import transitionInvoice from "../transition";
@@ -766,8 +767,13 @@ describe("invoice payments", () => {
           const invoice =
             (await tx.query.invoices.findFirst({
               where: { id: { eq: invoiceId } },
-              columns: { status: true, paidAt: true },
-              with: { payments: { columns: { paidOn: true, voidedAt: true } } },
+              columns: { status: true, paidAt: true, totalAmount: true },
+              extras: INVOICE_CREDITED_AMOUNT_EXTRA,
+              with: {
+                payments: {
+                  columns: { amount: true, paidOn: true, voidedAt: true },
+                },
+              },
             })) ?? panic("Expected legacy invoice");
           const storedSettings =
             (await tx.query.organizationSettings.findFirst({

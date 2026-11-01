@@ -719,12 +719,14 @@
       },
       "linkedExpenses": "Gastos vinculados",
       "linkedTimeEntries": "Registros de tiempo vinculados",
+      "markSent": "Marcar como enviada",
       "noEntries": "No hay registros vinculados a esta factura",
       "noInvoices": "Aún no hay facturas",
       "paidAt": "Pagada el",
       "payments": {
         "amountTooHigh": "El importe supera el pendiente de {amount}.",
         "confirmVoid": "El pago queda registrado como anulado y deja de computarse en esta factura.",
+        "credited": "Abonada",
         "empty": "Aún no hay pagos registrados",
         "method": "Forma de pago",
         "methods": {
@@ -737,6 +739,8 @@
         "paidOn": "Fecha de pago",
         "partiallyPaid": "Pagada parcialmente",
         "record": "Registrar pago",
+        "refundAmount": "Reembolso pendiente {amount}",
+        "refundDue": "Reembolso pendiente",
         "summary": "Pagado {paid}, pendiente {outstanding}",
         "title": "Pagos",
         "void": "Anular pago",
@@ -744,6 +748,42 @@
       },
       "removeEntries": "Eliminar registros",
       "send": "Enviar",
+      "sendByEmail": "Enviar por correo",
+      "sending": {
+        "failed": "No se pudo enviar la factura",
+        "historyEmpty": "Esta factura aún no se ha enviado por correo.",
+        "historyTitle": "Enviada por correo",
+        "linkInfo": "Los destinatarios reciben un enlace seguro para ver y descargar la factura. No se adjunta nada al correo.",
+        "linkStatus": {
+          "active": "Enlace activo",
+          "expired": "Enlace caducado",
+          "failed": "No entregada",
+          "pending": "Enviando",
+          "revoked": "Enlace revocado"
+        },
+        "loadFailed": "No se pudo cargar el historial de envíos.",
+        "message": "Mensaje (opcional)",
+        "messagePlaceholder": "Una nota breve para los destinatarios",
+        "messageTooLong": "El mensaje puede tener como máximo {max, number} caracteres.",
+        "notDelivered": "No entregada a {addresses}",
+        "notOpened": "Aún no abierta",
+        "opened": "Abierta el {date}",
+        "recipients": "Destinatarios",
+        "recipientsHint": "Una dirección por línea o separadas por comas, como máximo {max, number}.",
+        "recipientsInvalid": "Revise las direcciones de correo.",
+        "recipientsRequired": "Añada al menos una dirección de correo.",
+        "recipientsTooMany": "Envíe a {max, number} direcciones como máximo a la vez.",
+        "replyTo": "Las respuestas llegan a {address}.",
+        "revoke": "Revocar enlace",
+        "revokeConfirm": "Los destinatarios ya no podrán abrir la factura con este enlace. Vuelva a enviar la factura para darles uno nuevo.",
+        "revokeTitle": "¿Revocar este enlace?",
+        "revoked": "Se revocó el enlace",
+        "sendAgain": "Enviar de nuevo",
+        "sent": "Factura enviada",
+        "sentBy": "{date}, enviada por {name}",
+        "sentPartial": "Factura enviada, pero no se pudo entregar a estas direcciones: {addresses}",
+        "title": "Enviar factura {number}"
+      },
       "statuses": {
         "draft": "Borrador",
         "finalized": "Finalizada",
@@ -857,6 +897,7 @@
       "legalName": "Nombre legal",
       "registerEntry": "Inscripción registral",
       "registrationId": "Número de registro",
+      "replyEmail": "Correo para respuestas",
       "setDefault": "Establecer como predeterminado",
       "title": "Perfiles de vendedor",
       "vatPayerHelp": "Las facturas de este vendedor cobran IVA. Desactívelo para una persona registrada que tiene número de IVA pero no es sujeto pasivo.",
@@ -3988,6 +4029,33 @@
     "showPane": "Mostrar panel",
     "swapViews": "Intercambiar la vista principal y el panel lateral",
     "title": "Panel de inspección"
+  },
+  "invoiceLink": {
+    "credited": "Esta factura se ha abonado en su totalidad; no hay importe pendiente.",
+    "downloadEInvoice": {
+      "isdoc": "Descargar ISDOC",
+      "peppol_sk": "Descargar factura electrónica (Peppol)",
+      "ubl": "Descargar factura electrónica (UBL)"
+    },
+    "downloadFailed": "No se pudo descargar el archivo",
+    "failure": {
+      "busy": {
+        "body": "Espere un minuto y vuelva a abrir el enlace.",
+        "title": "Demasiados intentos"
+      },
+      "error": {
+        "body": "Inténtelo más tarde. Si sigue fallando, pida al remitente que vuelva a enviar la factura.",
+        "title": "No se pudo abrir la factura"
+      },
+      "unavailable": {
+        "body": "Puede haber caducado o haber sido revocado. Pida un enlace nuevo al remitente.",
+        "title": "Este enlace ya no está disponible"
+      }
+    },
+    "overpaid": "Ha pagado {amount} más de lo debido; el remitente le debe ese importe.",
+    "paid": "Esta factura está pagada.",
+    "paymentQr": "Código QR de pago",
+    "validUntil": "Este enlace es válido hasta el {date}."
   },
   "knowledge": {
     "agentSkills": {

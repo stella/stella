@@ -719,12 +719,14 @@
       },
       "linkedExpenses": "Powiązane wydatki",
       "linkedTimeEntries": "Powiązane wpisy czasu",
+      "markSent": "Oznacz jako wysłaną",
       "noEntries": "Brak wpisów powiązanych z tą fakturą",
       "noInvoices": "Brak faktur",
       "paidAt": "Zapłacono",
       "payments": {
         "amountTooHigh": "Kwota przekracza pozostałą do zapłaty kwotę {amount}.",
         "confirmVoid": "Płatność pozostanie w ewidencji jako anulowana i nie będzie już zaliczana na poczet tej faktury.",
+        "credited": "Skorygowana",
         "empty": "Nie zarejestrowano jeszcze żadnych płatności",
         "method": "Forma płatności",
         "methods": {
@@ -737,6 +739,8 @@
         "paidOn": "Data płatności",
         "partiallyPaid": "Częściowo zapłacona",
         "record": "Zarejestruj płatność",
+        "refundAmount": "Do zwrotu {amount}",
+        "refundDue": "Do zwrotu",
         "summary": "Zapłacono {paid}, pozostało {outstanding}",
         "title": "Płatności",
         "void": "Anuluj płatność",
@@ -744,6 +748,42 @@
       },
       "removeEntries": "Usuń wpisy",
       "send": "Wyślij",
+      "sendByEmail": "Wyślij e-mailem",
+      "sending": {
+        "failed": "Nie udało się wysłać faktury",
+        "historyEmpty": "Ta faktura nie została jeszcze wysłana e-mailem.",
+        "historyTitle": "Wysłane e-mailem",
+        "linkInfo": "Odbiorcy otrzymają bezpieczny link do wyświetlenia i pobrania faktury. Do wiadomości nic nie jest załączane.",
+        "linkStatus": {
+          "active": "Link aktywny",
+          "expired": "Link wygasł",
+          "failed": "Nie doręczono",
+          "pending": "Wysyłanie",
+          "revoked": "Link unieważniony"
+        },
+        "loadFailed": "Nie udało się wczytać historii wysyłek.",
+        "message": "Wiadomość (opcjonalnie)",
+        "messagePlaceholder": "Krótka notatka dla odbiorców",
+        "messageTooLong": "Wiadomość może mieć maksymalnie {max, number} znaków.",
+        "notDelivered": "Nie doręczono na {addresses}",
+        "notOpened": "Jeszcze nie otwarto",
+        "opened": "Otwarto {date}",
+        "recipients": "Odbiorcy",
+        "recipientsHint": "Każdy adres w osobnym wierszu lub oddzielony przecinkiem, maksymalnie {max, number}.",
+        "recipientsInvalid": "Sprawdź adresy e-mail.",
+        "recipientsRequired": "Dodaj co najmniej jeden adres e-mail.",
+        "recipientsTooMany": "Jednorazowo można wysłać na maksymalnie {max, number} adresów.",
+        "replyTo": "Odpowiedzi trafią na {address}.",
+        "revoke": "Unieważnij link",
+        "revokeConfirm": "Odbiorcy nie otworzą już faktury za pomocą tego linku. Wyślij fakturę ponownie, aby przekazać nowy link.",
+        "revokeTitle": "Unieważnić ten link?",
+        "revoked": "Link został unieważniony",
+        "sendAgain": "Wyślij ponownie",
+        "sent": "Faktura wysłana",
+        "sentBy": "{date}, nadawca: {name}",
+        "sentPartial": "Faktura wysłana, ale nie udało się jej doręczyć na adresy: {addresses}",
+        "title": "Wyślij fakturę {number}"
+      },
       "statuses": {
         "draft": "Wersja robocza",
         "finalized": "Zatwierdzona",
@@ -857,6 +897,7 @@
       "legalName": "Nazwa prawna",
       "registerEntry": "Wpis do rejestru",
       "registrationId": "Numer rejestracyjny",
+      "replyEmail": "E-mail do odpowiedzi",
       "setDefault": "Ustaw jako domyślny",
       "title": "Profile sprzedawcy",
       "vatPayerHelp": "Faktury tego sprzedawcy naliczają VAT. Wyłącz dla osoby zarejestrowanej, która ma numer VAT, ale nie jest czynnym podatnikiem.",
@@ -3988,6 +4029,33 @@
     "showPane": "Pokaż panel",
     "swapViews": "Zamień widok główny z panelem bocznym",
     "title": "Inspektor"
+  },
+  "invoiceLink": {
+    "credited": "Ta faktura została w całości skorygowana; nic nie jest do zapłaty.",
+    "downloadEInvoice": {
+      "isdoc": "Pobierz ISDOC",
+      "peppol_sk": "Pobierz e-fakturę (Peppol)",
+      "ubl": "Pobierz e-fakturę (UBL)"
+    },
+    "downloadFailed": "Nie udało się pobrać pliku",
+    "failure": {
+      "busy": {
+        "body": "Odczekaj minutę i otwórz link ponownie.",
+        "title": "Zbyt wiele prób"
+      },
+      "error": {
+        "body": "Spróbuj ponownie później. Jeśli problem się powtarza, poproś nadawcę o ponowne wysłanie faktury.",
+        "title": "Nie udało się otworzyć faktury"
+      },
+      "unavailable": {
+        "body": "Mógł wygasnąć lub zostać unieważniony. Poproś nadawcę o nowy link.",
+        "title": "Ten link nie jest już dostępny"
+      }
+    },
+    "overpaid": "Zapłacono o {amount} więcej niż należało; nadawca jest Ci winien tę kwotę.",
+    "paid": "Ta faktura została opłacona.",
+    "paymentQr": "Kod QR do płatności",
+    "validUntil": "Link jest ważny do {date}."
   },
   "knowledge": {
     "agentSkills": {

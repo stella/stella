@@ -618,6 +618,15 @@ const accountAccessMismatches = (definitions: readonly WriteTool[]): string[] =>
 
 // --- Surfaces -----------------------------------------------------------------
 
+// An enrolled member holds every self-serve enrolment, prerequisites included.
+const SELF_SERVE_ENROLMENTS = Object.entries(FEATURE_REGISTRY)
+  .filter(([, definition]) => definition.enrolment === "self-serve")
+  .map(([featureId]) => ({
+    featureId,
+    userId: "user_1",
+    organizationId: "org_1",
+  }));
+
 const mcpContextFor = (role: MemberRole): AuthorizedMcpRequestContext =>
   asTestRaw<AuthorizedMcpRequestContext>({
     grantedScopes: [],
@@ -629,7 +638,7 @@ const mcpContextFor = (role: MemberRole): AuthorizedMcpRequestContext =>
       userId: "user_1",
       organizationId: "org_1",
       decisions: new Map(
-        Object.entries(FEATURE_REGISTRY).map(([featureId, definition]) => [
+        Object.keys(FEATURE_REGISTRY).map((featureId) => [
           featureId,
           decideFeatureAccess({
             registry: FEATURE_REGISTRY,
@@ -644,10 +653,7 @@ const mcpContextFor = (role: MemberRole): AuthorizedMcpRequestContext =>
                 [{ type: "organization" as const, organizationId: "org_1" }],
               ]),
             ),
-            enrolments:
-              definition.enrolment === "self-serve"
-                ? [{ featureId, userId: "user_1", organizationId: "org_1" }]
-                : [],
+            enrolments: SELF_SERVE_ENROLMENTS,
           }),
         ]),
       ),

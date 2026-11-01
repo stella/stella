@@ -60,6 +60,11 @@ export const brandPersistedSellerProfileId = (
   sellerProfileId: string,
 ): SafeId<"sellerProfile"> => toSafeId<"sellerProfile">(sellerProfileId);
 
+/** A send id read back from the invoice link lookup. */
+export const brandPersistedInvoiceSendId = (
+  id: string,
+): SafeId<"invoiceSend"> => toSafeId<"invoiceSend">(id);
+
 export const brandPersistedVatRateId = (id: string): SafeId<"vatRate"> =>
   toSafeId<"vatRate">(id);
 

@@ -1952,7 +1952,7 @@ export const invoicePolicies = (table: InvoicePolicyColumns) => {
  * whole-invoice access, so a caller never sees part of an invoice it cannot open.
  */
 export const completeInvoiceVisibilityPolicy = (
-  tableName: "invoice_lines" | "invoice_payments",
+  tableName: "invoice_lines" | "invoice_payments" | "invoice_sends",
   table: { invoiceId: p.AnyPgColumn },
 ) =>
   p.pgPolicy(`${tableName}_complete_invoice`, {

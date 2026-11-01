@@ -719,12 +719,14 @@
       },
       "linkedExpenses": "Despesas vinculadas",
       "linkedTimeEntries": "Entradas de tempo vinculadas",
+      "markSent": "Marcar como enviada",
       "noEntries": "Nenhuma entrada vinculada a esta fatura",
       "noInvoices": "Ainda não há faturas",
       "paidAt": "Pago em",
       "payments": {
         "amountTooHigh": "O valor é maior que o saldo em aberto de {amount}.",
         "confirmVoid": "O pagamento continua registrado como cancelado e deixa de ser abatido desta fatura.",
+        "credited": "Creditada",
         "empty": "Nenhum pagamento registrado ainda",
         "method": "Forma de pagamento",
         "methods": {
@@ -737,6 +739,8 @@
         "paidOn": "Data do pagamento",
         "partiallyPaid": "Paga parcialmente",
         "record": "Registrar pagamento",
+        "refundAmount": "Reembolso devido {amount}",
+        "refundDue": "Reembolso devido",
         "summary": "Pago {paid}, em aberto {outstanding}",
         "title": "Pagamentos",
         "void": "Cancelar pagamento",
@@ -744,6 +748,42 @@
       },
       "removeEntries": "Remover entradas",
       "send": "Enviar",
+      "sendByEmail": "Enviar por e-mail",
+      "sending": {
+        "failed": "Não foi possível enviar a fatura",
+        "historyEmpty": "Esta fatura ainda não foi enviada por e-mail.",
+        "historyTitle": "Enviada por e-mail",
+        "linkInfo": "Os destinatários recebem um link seguro para ver e baixar a fatura. Nada é anexado ao e-mail.",
+        "linkStatus": {
+          "active": "Link ativo",
+          "expired": "Link expirado",
+          "failed": "Não entregue",
+          "pending": "Enviando",
+          "revoked": "Link revogado"
+        },
+        "loadFailed": "Não foi possível carregar o histórico de envios.",
+        "message": "Mensagem (opcional)",
+        "messagePlaceholder": "Uma nota curta para os destinatários",
+        "messageTooLong": "A mensagem pode ter no máximo {max, number} caracteres.",
+        "notDelivered": "Não entregue para {addresses}",
+        "notOpened": "Ainda não aberta",
+        "opened": "Aberta em {date}",
+        "recipients": "Destinatários",
+        "recipientsHint": "Um endereço por linha ou separados por vírgulas, no máximo {max, number}.",
+        "recipientsInvalid": "Verifique os endereços de e-mail.",
+        "recipientsRequired": "Adicione pelo menos um endereço de e-mail.",
+        "recipientsTooMany": "Envie para no máximo {max, number} endereços de cada vez.",
+        "replyTo": "As respostas vão para {address}.",
+        "revoke": "Revogar link",
+        "revokeConfirm": "Os destinatários não poderão mais abrir a fatura com este link. Envie a fatura novamente para dar a eles um novo link.",
+        "revokeTitle": "Revogar este link?",
+        "revoked": "O link foi revogado",
+        "sendAgain": "Enviar novamente",
+        "sent": "Fatura enviada",
+        "sentBy": "{date}, enviada por {name}",
+        "sentPartial": "Fatura enviada, mas não foi possível entregar nestes endereços: {addresses}",
+        "title": "Enviar fatura {number}"
+      },
       "statuses": {
         "draft": "Rascunho",
         "finalized": "Finalizado",
@@ -857,6 +897,7 @@
       "legalName": "Nome legal",
       "registerEntry": "Registro empresarial",
       "registrationId": "Número de registro",
+      "replyEmail": "E-mail para respostas",
       "setDefault": "Definir como padrão",
       "title": "Perfis de vendedor",
       "vatPayerHelp": "As faturas deste vendedor cobram IVA. Desative para uma pessoa registrada que tem número de IVA, mas não é contribuinte.",
@@ -3988,6 +4029,33 @@
     "showPane": "Mostrar painel",
     "swapViews": "Trocar a visualização principal e o painel lateral",
     "title": "Inspetor"
+  },
+  "invoiceLink": {
+    "credited": "Esta fatura foi totalmente creditada; não há valor a pagar.",
+    "downloadEInvoice": {
+      "isdoc": "Baixar ISDOC",
+      "peppol_sk": "Baixar fatura eletrônica (Peppol)",
+      "ubl": "Baixar fatura eletrônica (UBL)"
+    },
+    "downloadFailed": "Não foi possível baixar o arquivo",
+    "failure": {
+      "busy": {
+        "body": "Aguarde um minuto e abra o link novamente.",
+        "title": "Muitas tentativas"
+      },
+      "error": {
+        "body": "Tente novamente mais tarde. Se o problema continuar, peça ao remetente que envie a fatura novamente.",
+        "title": "Não foi possível abrir a fatura"
+      },
+      "unavailable": {
+        "body": "Ele pode ter expirado ou sido revogado. Peça um novo link ao remetente.",
+        "title": "Este link não está mais disponível"
+      }
+    },
+    "overpaid": "Você pagou {amount} a mais do que o devido; o remetente lhe deve esse valor.",
+    "paid": "Esta fatura está paga.",
+    "paymentQr": "QR code de pagamento",
+    "validUntil": "Este link é válido até {date}."
   },
   "knowledge": {
     "agentSkills": {

@@ -7,6 +7,19 @@
     "ignore": "Jeśli nie spodziewałeś się tego zaproszenia, możesz zignorować tę wiadomość.",
     "subject": "Zostałeś zaproszony do organizacji {organizationName}"
   },
+  "invoiceLink": {
+    "action": "{documentType, select, credit_note {Wyświetl fakturę korygującą} advance {Wyświetl fakturę zaliczkową} other {Wyświetl fakturę}}",
+    "amountDue": "Do zapłaty: {amount}",
+    "body": "{firmName} przesyła {documentType, select, credit_note {fakturę korygującą} advance {fakturę zaliczkową} other {fakturę}}. Otwórz ją, aby zobaczyć szczegóły i pobrać PDF.",
+    "dueDate": "Termin płatności: {date}",
+    "expires": "Link jest ważny do {date}.",
+    "heading": "{documentType, select, credit_note {Faktura korygująca} advance {Faktura zaliczkowa} other {Faktura}} {invoiceNumber}",
+    "ignore": "Ten e-mail dostarczyła usługa stella w imieniu nadawcy {firmName}. Jeśli ta wiadomość jest nieoczekiwana, możesz ją zignorować.",
+    "messageFrom": "Wiadomość od nadawcy {firmName}",
+    "preview": "{firmName} przesyła {documentType, select, credit_note {fakturę korygującą} advance {fakturę zaliczkową} other {fakturę}} {invoiceNumber}",
+    "reply": "Aby skontaktować się z nadawcą {firmName}, odpowiedz na tę wiadomość.",
+    "subject": "{documentType, select, credit_note {Faktura korygująca} advance {Faktura zaliczkowa} other {Faktura}} {invoiceNumber} od {firmName}"
+  },
   "newDeviceLogin": {
     "action": "Sprawdź sesje",
     "body": "Na Twoje konto zalogowano się z nowego urządzenia lub lokalizacji.",

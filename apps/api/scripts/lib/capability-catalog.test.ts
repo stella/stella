@@ -32,6 +32,7 @@ import {
   resolveHandlerKind,
   resolveScope,
   returnsInlineFileResponse,
+  reviewedInvoiceManagementEndpoints,
   scanBinarySchemaFields,
   scanContextFidelity,
   scanFileResponseReturns,
@@ -41,6 +42,61 @@ import {
   serializeDispatchModule,
   writePrimitivesImportedBy,
 } from "./capability-catalog";
+
+describe("reviewed invoice management admission", () => {
+  test("normal invoice access needs billing availability and refuses caller-feature gates", () => {
+    const billing: Middleware = async (_context, inner) => await inner();
+    const invitation: Middleware = async (_context, inner) => await inner();
+    const classify = (stage: Middleware): RouteGate =>
+      stage === billing
+        ? { kind: "deployment-feature", flag: "FEATURE_TIME_BILLING" }
+        : { kind: "feature-access", featureId: "invoice-links" };
+    const config = { permissions: { invoice: ["update"] } };
+    const definition = {
+      access: "workspace",
+      config,
+      run: async () => ({}),
+    } satisfies RouteDefinition;
+    const endpoint = {
+      file: "apps/api/src/handlers/invoices/sends/list.ts",
+      definition,
+      config,
+    };
+    const route = {
+      path: "/sends",
+      method: "GET",
+      definition,
+      middleware: [billing],
+    } satisfies RouteEntry;
+    expect(
+      reviewedInvoiceManagementEndpoints({
+        routes: [route],
+        endpoints: [endpoint],
+        classify,
+      }),
+    ).toEqual([endpoint]);
+    for (const middleware of [[], [billing, invitation], [invitation]]) {
+      expect(() =>
+        reviewedInvoiceManagementEndpoints({
+          routes: [{ ...route, middleware }],
+          endpoints: [endpoint],
+          classify,
+        }),
+      ).toThrow(
+        "Invoice management requires invoice:update and only time-billing deployment availability",
+      );
+    }
+    expect(() =>
+      reviewedInvoiceManagementEndpoints({
+        routes: [route],
+        endpoints: [],
+        classify,
+      }),
+    ).toThrow(
+      "Every reviewed invoice management route must identify exactly one discovered handler",
+    );
+  });
+});
 
 describe("deriveCapabilityId", () => {
   test("joins the handler-relative path with dots for a default export", () => {

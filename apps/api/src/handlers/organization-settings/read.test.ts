@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 import { parseTimeZoneId } from "@stll/time";
 
 import { env } from "@/api/env";
@@ -24,6 +25,8 @@ import {
   NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const emptySnapshot = createFeatureAccessSnapshot({
   organizationId: "org_test",
@@ -338,4 +341,14 @@ describe.serial("undeclared feature deployment discovery", () => {
       restoreRuntimeMode();
     }
   });
+});
+
+test("invoice link deployment discovery follows the configured flag", () => {
+  for (const enabled of [false, true]) {
+    testState.setConfig("FEATURE_INVOICE_LINKS", enabled);
+    expect(
+      projectOrganizationSettingsRow(null, emptySnapshot).deploymentFeatures
+        .invoiceLinks,
+    ).toBe(enabled);
+  }
 });

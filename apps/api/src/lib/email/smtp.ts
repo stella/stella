@@ -51,8 +51,15 @@ export const createSMTPTransport = (
   });
 
   return {
-    async send({ from, to, subject, html, text }) {
-      await transporter.sendMail({ from, to, subject, html, text });
+    async send({ from, to, subject, html, text, replyTo }) {
+      await transporter.sendMail({
+        from,
+        to,
+        subject,
+        html,
+        text,
+        ...(replyTo === undefined ? {} : { replyTo }),
+      });
     },
   };
 };

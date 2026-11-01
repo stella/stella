@@ -132,6 +132,7 @@ const useInvoiceColumns = (): InvoiceColumn[] => {
       cell: (invoice) => (
         <InvoiceStatusBadge
           partiallyPaid={isPartiallyPaid(invoice)}
+          settlement={invoice.settlement}
           status={invoice.status}
         />
       ),

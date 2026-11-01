@@ -54,6 +54,7 @@ import { flowRunsRoute } from "@/api/handlers/flows/run-route";
 import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
 import { healthRoute } from "@/api/handlers/health/routes";
 import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
+import { invoiceLinksRoute } from "@/api/handlers/invoice-links/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
 import { legalResolveRoute } from "@/api/handlers/legal-resolve/routes";
@@ -188,6 +189,7 @@ export const apiRoutes = mount([
   visualSandboxRoute,
   aiAutocompleteRoute,
   feedbackPublicRoute,
+  invoiceLinksRoute,
   memoriesRoute,
   notificationsRoute,
   timeApprovalQueueRoute,

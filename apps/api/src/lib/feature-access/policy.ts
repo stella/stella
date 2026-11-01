@@ -111,7 +111,10 @@ const decideSingleFeatureAccess = ({
           case "organization":
             return true;
           case "member":
-            return normalizeEmail(grant.email) === email;
+            return (
+              definition.grantScope !== "organization" &&
+              normalizeEmail(grant.email) === email
+            );
           default: {
             grant satisfies never;
             return panic("Feature access requires a supported grant type");

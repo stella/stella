@@ -44,6 +44,7 @@ import {
   fields,
   invoiceLines,
   invoices,
+  invoiceSends,
   organizationSettings,
   pdfSigningSessions,
   requestIdempotencyReceipts,
@@ -1229,6 +1230,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         first: sql`${0x0f_10_cc_a9}::integer`,
         second: sql`hashtext(${options.id})`,
         order: [options.aggregate, options.id],
+      };
+    case "invoiceSendCapacity":
+      return {
+        first: sql`hashtext('invoice-send-capacity')`,
+        second: sql`hashtext(${options.id.organizationId})`,
+        order: [options.aggregate, options.id.organizationId],
       };
     case "contactCapacity":
       return {
@@ -2757,6 +2764,35 @@ export const lockInvoiceInStatus = async (
   return invoice;
 };
 
+type LockInvoiceSendDeliveryOptions = {
+  invoiceId: SafeId<"invoice">;
+  organizationId: SafeId<"organization">;
+  sendId: SafeId<"invoiceSend">;
+};
+
+/** Lock the child only after its invoice and complete matter set are held. */
+export const lockInvoiceSendDelivery = async (
+  tx: Transaction,
+  { invoiceId, organizationId, sendId }: LockInvoiceSendDeliveryOptions,
+) => {
+  const rows = await tx
+    .select({
+      deliveryStatus: invoiceSends.deliveryStatus,
+      revokedAt: invoiceSends.revokedAt,
+    })
+    .from(invoiceSends)
+    .where(
+      and(
+        eq(invoiceSends.id, sendId),
+        eq(invoiceSends.invoiceId, invoiceId),
+        eq(invoiceSends.organizationId, organizationId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return rows.at(0);
+};
+
 /** Caller holds the timer-owner and complete matter advisory set. */
 export const lockBillingTimeEntrySources = async (
   tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">,
@@ -2800,6 +2836,7 @@ export const lockOriginalInvoice = async (
       documentType: invoices.documentType,
       currency: invoices.currency,
       totalAmount: invoices.totalAmount,
+      sentAt: invoices.sentAt,
     })
     .from(invoices)
     .where(

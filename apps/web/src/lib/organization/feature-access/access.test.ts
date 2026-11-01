@@ -37,7 +37,7 @@ describe.serial("caller feature admission", () => {
         declaredFeatureIds: Object.values(CALLER_FEATURE).map(
           (registered) => registered.id,
         ),
-        deploymentFeatures: { legalLists: false },
+        deploymentFeatures: { legalLists: false, invoiceLinks: true },
       };
       const read = spyOn(queryClient, "query").mockResolvedValue({
         ...discovery,

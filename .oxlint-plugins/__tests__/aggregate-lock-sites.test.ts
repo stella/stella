@@ -4,10 +4,28 @@ import {
   aggregateLockBaseline,
   aggregateLockBaselineProblems,
   aggregateLockSites,
+  aggregateLockSourceIncluded,
 } from "../aggregate-lock-sites.ts";
 
 const file = "apps/api/src/handlers/example.ts";
 describe("aggregate lock confinement", () => {
+  test("only the exact pure invoice-lock fragment shares the canonical owner boundary", () => {
+    expect(
+      aggregateLockSourceIncluded(
+        "apps/api/src/lib/db/aggregate-lock/invoice-transition-source.ts",
+      ),
+    ).toBe(false);
+    expect(
+      aggregateLockSourceIncluded(
+        "apps/api/src/lib/db/aggregate-lock/neighbor.ts",
+      ),
+    ).toBe(true);
+    expect(
+      aggregateLockSourceIncluded(
+        "apps/api/src/lib/db/invoice-transition-source.ts",
+      ),
+    ).toBe(true);
+  });
   test("rejects raw API transaction boundaries including computed spellings", () => {
     for (const method of [
       ".transaction",

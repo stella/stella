@@ -6,6 +6,7 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import * as agentSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
+import { RETAINED_USER_ATTRIBUTION_COLUMNS } from "@/api/tests/helpers/user-attribution-retention";
 
 import {
   ORGANIZATION_MEMBER_CLEANUP_COLUMNS,
@@ -231,16 +232,15 @@ const RETAINED_MEMBER_COLUMNS = {
     "Screening review attribution; current membership gates review actions.",
   "sanctions_screening_events.reviewer_id":
     "Screening decision history; attribution grants no membership or review authority.",
-  "audit_logs.user_id": "Audit performer history.",
   "feature_enrolments.user_id":
     "The person's own feature opt-in; access also requires current membership, and the row cascades with the user and organization.",
   "audit_logs.trigger_user_id": "Audit trigger history.",
   "audit_logs.approved_by_user_id": "Audit approval history.",
   "buffer_object_cleanup_intents.writer_user_id":
     "Storage erasure receipt; retained for cleanup.",
+  "invoice_sends.sent_by_user_id":
+    "Invoice delivery history; links remain valid after account deletion.",
   "time_entries.approved_by_user_id": "Billing approval history.",
-  "invoice_payments.recorded_by": "Billing payment attribution history.",
-  "invoice_payments.voided_by": "Billing payment reversal attribution history.",
   "time_entries.returned_by_user_id": "Billing return history.",
   "usage_allocations.seat_scope_user_id":
     "Accounting scope; active seat assignment is membership-bound.",
@@ -674,7 +674,12 @@ const organizationPath: RemovalPath = {
   cleanup: new Set(
     ORGANIZATION_MEMBER_CLEANUP_COLUMNS.map(([column]) => columnKey(column)),
   ),
-  retained: new Map(Object.entries(RETAINED_MEMBER_COLUMNS)),
+  retained: new Map([
+    ...Object.entries(RETAINED_MEMBER_COLUMNS),
+    ...RETAINED_USER_ATTRIBUTION_COLUMNS.map(
+      ({ column, reason }) => [columnKey(column), reason] as const,
+    ),
+  ]),
 };
 const matterPath: RemovalPath = {
   name: "matter",
@@ -683,6 +688,9 @@ const matterPath: RemovalPath = {
   ),
   retained: new Map([
     ...Object.entries(RETAINED_MEMBER_COLUMNS),
+    ...RETAINED_USER_ATTRIBUTION_COLUMNS.map(
+      ({ column, reason }) => [columnKey(column), reason] as const,
+    ),
     ...Object.entries(MATTER_REMOVAL_RETAINED_COLUMNS),
   ]),
 };
@@ -777,6 +785,9 @@ describe("member removal schema coverage", () => {
             ...matterPath,
             retained: new Map([
               ...Object.entries(RETAINED_MEMBER_COLUMNS),
+              ...RETAINED_USER_ATTRIBUTION_COLUMNS.map(
+                ({ column, reason }) => [columnKey(column), reason] as const,
+              ),
               ...matterOnly,
             ]),
           },

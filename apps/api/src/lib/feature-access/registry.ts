@@ -14,10 +14,12 @@ type FeatureDefinition = {
   // parser-output-unchanged: enrolment kinds gate access only, never parsed decision output
   enrolment: "invitation" | "self-serve" | "general-availability";
   deploymentFeature?: DeploymentFeatureFlag;
+  grantScope?: "organization";
   prerequisites?: readonly string[];
   ownership?: {
     handlerDirectories: readonly string[];
     tableSchemaFiles: readonly string[];
+    tableSchemas?: Readonly<Record<string, readonly string[]>>;
     conditionalTableSchemas?: Readonly<Record<string, readonly string[]>>;
     coreModules: readonly string[];
     conditionalModules?: readonly string[];
@@ -124,6 +126,63 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
           type: "admitted",
           module: "apps/api/src/handlers/chat/tools/chat-tools.ts",
           admission: "isMcpDescriptorFeatureEnabled",
+        },
+      ],
+    },
+  },
+  "invoice-links": {
+    enrolment: "invitation",
+    grantScope: "organization",
+    deploymentFeature: "FEATURE_INVOICE_LINKS",
+    prerequisites: ["time-billing"],
+    ownership: {
+      handlerDirectories: ["apps/api/src/handlers/invoices/sends"],
+      tableSchemaFiles: [],
+      tableSchemas: {
+        "apps/api/src/db/schema/billing.ts": ["invoiceSends"],
+      },
+      coreModules: [
+        "apps/api/src/lib/billing/invoice-links.ts",
+        "apps/api/src/lib/billing/invoice-send-delivery.ts",
+      ],
+      dispatchModules: [
+        // Shared lock infrastructure checks invoice scope; callers own feature admission.
+        {
+          type: "admitted",
+          module: "apps/api/src/lib/db/aggregate-lock.ts",
+          admission: "invoiceInMatter",
+          specifier: "@/api/lib/billing/invoice-scope",
+        },
+        // Database and lifecycle registries describe metadata; they do not read tenant data.
+        {
+          type: "registry",
+          module: "apps/api/src/db/database-relations.ts",
+          registry: "databaseRelations",
+        },
+        {
+          type: "registry",
+          module: "apps/api/src/lib/db/transition-specs.ts",
+          registry: "TRANSITIONS",
+        },
+        // Token handlers admit the token's organization through their verifier.
+        ...["view", "download"].map((name) => ({
+          type: "admitted" as const,
+          module: `apps/api/src/handlers/invoice-links/${name}.ts`,
+          admission: "verifyInvoiceLinkCaller",
+          specifier: "@/api/handlers/invoice-links/link-access",
+        })),
+        // Lifecycle transitions withdraw authority even without a feature grant.
+        {
+          type: "admitted",
+          module: "apps/api/src/lib/db/transitions.ts",
+          admission: "revokeInvoiceLinksAfterTransition",
+          specifier: "@/api/lib/billing/invoice-send-revocation",
+        },
+        {
+          type: "admitted",
+          module: "apps/api/src/handlers/invoice-links/link-access.ts",
+          admission: "isOrganizationFeatureEnabled",
+          specifier: "@/api/lib/feature-access/organization",
         },
       ],
     },

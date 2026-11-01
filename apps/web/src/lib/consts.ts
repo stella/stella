@@ -113,6 +113,9 @@ export const SIDE_RAIL_TAB_ICON_SIZE_PX = 14 as const;
 
 export const STALE_TIME = {
   INFINITE: Number.POSITIVE_INFINITY,
+  ONE: {
+    MINUTE: 60 * 1000,
+  },
   FIVE: {
     MINUTES: 5 * 60 * 1000,
   },

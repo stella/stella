@@ -25,6 +25,7 @@ import type { Identity as ExpenseCapacityIdentity } from "./expenseCapacity";
 import type { Identity as FieldIdentity } from "./field";
 import type { Identity as FileComparisonCapacityIdentity } from "./fileComparisonCapacity";
 import type { Identity as FolioCollabRoomIdentity } from "./folioCollabRoom";
+import type { Identity as InvoiceSendCapacityIdentity } from "./invoiceSendCapacity";
 import type { Identity as LegislationAmendmentWorkIdentity } from "./legislationAmendmentWork";
 import type { Identity as McpOAuthStateIdentity } from "./mcpOAuthState";
 import type { Identity as MemberCleanupIdentity } from "./memberCleanup";
@@ -79,6 +80,7 @@ export type AggregateIdentities = {
   "field": FieldIdentity;
   "fileComparisonCapacity": FileComparisonCapacityIdentity;
   "folioCollabRoom": FolioCollabRoomIdentity;
+  "invoiceSendCapacity": InvoiceSendCapacityIdentity;
   "legislationAmendmentWork": LegislationAmendmentWorkIdentity;
   "mcpOAuthState": McpOAuthStateIdentity;
   "memberCleanup": MemberCleanupIdentity;

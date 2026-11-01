@@ -16,6 +16,13 @@ import {
   freeTierInvariantViolation,
 } from "./env-schema";
 
+test("invoice links require explicit deployment enablement", () => {
+  const schema = envApiServerSchema.FEATURE_INVOICE_LINKS;
+  expect(v.parse(schema, undefined)).toBe(false);
+  expect(v.parse(schema, "false")).toBe(false);
+  expect(v.parse(schema, "true")).toBe(true);
+});
+
 test("generated views require explicit deployment enablement", () => {
   expect(v.parse(envApiServerSchema.FEATURE_GENERATED_VIEWS, undefined)).toBe(
     false,

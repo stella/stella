@@ -13,8 +13,10 @@ import { user as authUser } from "@/api/db/auth-schema";
 import {
   BILLING_STATUS,
   featureEnrolments,
+  INVOICE_PAYMENT_ORIGIN,
   INVOICE_STATUS,
   invoiceLines,
+  invoicePayments,
   invoices,
   timeEntries,
 } from "@/api/db/schema";
@@ -560,6 +562,80 @@ describe("invoice document types", () => {
     expect(await addLine(loser.id, 1000)).toMatchObject({
       totals: { grossAmountMinor: -1210 },
     });
+  });
+
+  test("issuing and voiding credit notes settles and reopens their original", async () => {
+    const statusOf = async (invoiceId: SafeId<"invoice">) => {
+      const [row] = await testDb
+        .select({ status: invoices.status, paidAt: invoices.paidAt })
+        .from(invoices)
+        .where(eq(invoices.id, invoiceId));
+      return row ?? panic("Expected the original invoice");
+    };
+    const issuedCredit = async (
+      originalInvoiceId: SafeId<"invoice">,
+      netAmount: number,
+    ) => {
+      const creditId = createdId(await createCredit(originalInvoiceId));
+      expect(await addLine(creditId, netAmount)).toMatchObject({
+        totals: { netAmountMinor: -netAmount },
+      });
+      expect(await changeStatus(creditId, "finalize")).toEqual({
+        id: creditId,
+      });
+      return creditId;
+    };
+
+    const settlementOf = async (invoiceId: SafeId<"invoice">) =>
+      await getInvoice.handler(
+        contextFor(getInvoice.handler, {
+          params: { workspaceId: ids.wsA1, invoiceId },
+          body: {},
+        }),
+      );
+
+    // Credited in full: nothing is due, but no money was received, so the
+    // original keeps its issued status and gets no payment time.
+    const credited = await seedOriginal();
+    const fullCredit = await issuedCredit(credited, 1000);
+    expect(await statusOf(credited)).toEqual({
+      status: INVOICE_STATUS.FINALIZED,
+      paidAt: null,
+    });
+    expect(await settlementOf(credited)).toMatchObject({
+      outstandingAmount: 0,
+      settlement: { kind: "credited" },
+    });
+    // Taking the credit back reopens it.
+    expect(await changeStatus(fullCredit, "void")).toEqual({ id: fullCredit });
+    expect(await settlementOf(credited)).toMatchObject({
+      outstandingAmount: 1210,
+      settlement: { kind: "open" },
+    });
+
+    // A partial credit leaves the original open until a payment covers the rest.
+    const partlyPaid = await seedOriginal();
+    await testDb.insert(invoicePayments).values({
+      id: createSafeId<"invoicePayment">(),
+      organizationId: ids.orgA,
+      invoiceId: partlyPaid,
+      amount: cents(605),
+      paidOn: "2026-09-30",
+      method: "bank_transfer",
+      origin: INVOICE_PAYMENT_ORIGIN.RECORDED,
+      recordedBy: ids.userA1,
+    });
+    expect((await statusOf(partlyPaid)).status).toBe(INVOICE_STATUS.FINALIZED);
+    const partCredit = await issuedCredit(partlyPaid, 500);
+    // The payment and the credit note together cover 1210: paid by payment.
+    expect((await statusOf(partlyPaid)).status).toBe(INVOICE_STATUS.PAID);
+    expect(await settlementOf(partlyPaid)).toMatchObject({
+      settlement: { kind: "paid" },
+    });
+    expect(await changeStatus(partCredit, "revert_to_draft")).toEqual({
+      id: partCredit,
+    });
+    expect((await statusOf(partlyPaid)).status).toBe(INVOICE_STATUS.FINALIZED);
   });
 
   test("linked credit notes protect original transitions and deletion", async () => {
