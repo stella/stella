@@ -10,9 +10,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  type CatalogDeriver,
   decideCliContractChange,
   generatedContractPaths,
   parseCliContractArgs,
+  runCliContractGuard as runGuardInProcess,
+  touchesCatalogSources,
 } from "./check-cli-contract-changeset";
 import { CLI_CONTRACT_SURFACE_PATHS } from "./check-cli-release-coupling";
 
@@ -400,5 +403,118 @@ describe("CLI contract changeset guard integration", () => {
       runGit(root, ["commit", "-am", "rename generated contract"]);
       expect(runCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
     });
+  });
+});
+
+describe("CLI contract changeset guard over derived catalogs", () => {
+  const HANDLER = "apps/api/src/handlers/matters/list.ts";
+  const handlerSource = (query: string) =>
+    `export const config = { contract: "patch", query: ${query} };\n`;
+
+  // Stands in for the catalog export: the revision's handler declares the
+  // capability's input schema, and no shard is ever committed.
+  const derivations: string[] = [];
+  const deriveFromHandler: CatalogDeriver = (root, revision) => {
+    derivations.push(revision);
+    const directory = mkdtempSync(path.join(tmpdir(), "stella-derived-"));
+    const source = Bun.spawnSync(["git", "show", `${revision}:${HANDLER}`], {
+      cwd: root,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const query = /query: (\{.*\}) \}/u.exec(source.stdout.toString())?.[1];
+    if (query !== undefined) {
+      writeFileSync(
+        path.join(directory, "matters.list.json"),
+        JSON.stringify({ id: "matters.list", inputSchema: JSON.parse(query) }),
+      );
+    }
+    return { status: "derived", directory };
+  };
+
+  const withSourceFixture = (callback: (root: string) => void): void => {
+    const root = mkdtempSync(path.join(tmpdir(), "stella-cli-contract-src-"));
+    derivations.length = 0;
+    try {
+      for (const [file, content] of [
+        [
+          "packages/cli/package.json",
+          '{"name":"@stll/cli","version":"1.2.13"}\n',
+        ],
+        ["packages/cli/src/generated/registry-snapshot.json", "[]\n"],
+        [".changeset/README.md", "# Changesets\n"],
+        [HANDLER, handlerSource('{"type":"object"}')],
+      ] as const) {
+        mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+        writeFileSync(path.join(root, file), content);
+      }
+      runGit(root, ["init", "-b", "main"]);
+      runGit(root, ["config", "user.email", "test@example.com"]);
+      runGit(root, ["config", "user.name", "Test"]);
+      runGit(root, ["add", "."]);
+      runGit(root, ["commit", "-m", "base"]);
+      runGit(root, ["checkout", "-b", "feature"]);
+      return callback(root);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+
+  const commit = (root: string, file: string, content: string) => {
+    mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    writeFileSync(path.join(root, file), content);
+    runGit(root, ["add", file]);
+    runGit(root, ["commit", "-m", `change ${file}`]);
+  };
+
+  const guard = (root: string) =>
+    runGuardInProcess({ root, base: "main", deriveCatalog: deriveFromHandler });
+
+  test("a handler input-schema change without a changeset fails", () => {
+    withSourceFixture((root) => {
+      commit(
+        root,
+        HANDLER,
+        handlerSource(
+          '{"type":"object","properties":{"limit":{"type":"number"}}}',
+        ),
+      );
+      expect(guard(root)).toBe(1);
+      expect(derivations).toHaveLength(2);
+      commit(
+        root,
+        ".changeset/cli.md",
+        '---\n"@stll/cli": patch\n---\n\nAccept a limit.\n',
+      );
+      expect(guard(root)).toBe(0);
+    });
+  });
+
+  test("a handler change that keeps the derived catalog needs no changeset", () => {
+    withSourceFixture((root) => {
+      commit(
+        root,
+        HANDLER,
+        `// Reformatted.\n${handlerSource('{"type":"object"}')}`,
+      );
+      expect(guard(root)).toBe(0);
+      expect(derivations).toHaveLength(2);
+    });
+  });
+
+  test("a change outside the catalog sources derives nothing", () => {
+    withSourceFixture((root) => {
+      commit(root, "docs/notes.md", "Notes.\n");
+      expect(guard(root)).toBe(0);
+      expect(derivations).toEqual([]);
+    });
+  });
+
+  test("catalog sources cover handlers and shared packages", () => {
+    expect(touchesCatalogSources([HANDLER])).toBe(true);
+    expect(touchesCatalogSources(["packages/api-contract/src/x.ts"])).toBe(
+      true,
+    );
+    expect(touchesCatalogSources(["docs/notes.md"])).toBe(false);
   });
 });

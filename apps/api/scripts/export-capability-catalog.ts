@@ -936,8 +936,8 @@ const collectClassGuardErrors = ({
   // or a read-only credential (`stella:read` / `stella:admin_read`) could not
   // invoke it. The access-keyed resolver above already downgrades reads to their
   // domain read tier, so this can only fire if that resolver is later broken —
-  // which is exactly when it must fail the export (companion to the
-  // `read-capabilities-with-write-scope` ratchet over the committed catalog).
+  // which is exactly when it must fail the export. The catalog is derived,
+  // never committed, so no hand-edited copy can bypass this.
   for (const entry of entries) {
     if (entry.access === "read" && WRITE_ONLY_SCOPES.has(entry.scope)) {
       errors.push(

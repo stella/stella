@@ -52,6 +52,11 @@
       "@stll/cli",
       "scripts/**"
     ],
+    "Test CLI contract changeset guard over derived catalogs": [
+      "@stll/api",
+      "@stll/cli",
+      "scripts/**"
+    ],
     "Test remaining repository scripts": ["**"],
     "Test release image CI gate": [
       ".github/actions/**",
@@ -385,6 +390,7 @@
     "Model task default evidence guard": ["**"],
     "Model catalog snapshot drift check": ["@stll/ai-catalog"],
     "Capability description ledger": ["@stll/api", "@stll/cli"],
+    "Capability file-transport ledger": ["@stll/api", "@stll/cli"],
     "MCP coverage guard": ["@stll/api", "@stll/cli"],
     "MCP surface baseline self-test": ["@stll/errors"],
     "Offline catalogue pinned-content policy": ["**"],

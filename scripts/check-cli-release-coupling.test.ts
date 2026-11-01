@@ -38,6 +38,8 @@ const NO_INSTALL_FILES = [
   SCRIPT,
   "scripts/changeset-guard.ts",
   "scripts/changeset-entry.ts",
+  "scripts/capability-catalog-revision.ts",
+  "scripts/borrowed-dependencies.ts",
   "packages/collation/src/collation.ts",
 ] as const;
 

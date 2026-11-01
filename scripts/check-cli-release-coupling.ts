@@ -44,6 +44,7 @@ import path from "node:path";
 
 // Relative: CI runs this before the dependency install.
 import { compareCodeUnit } from "../packages/collation/src/collation";
+import { deriveRevisionCatalog } from "./capability-catalog-revision";
 import { isChangesetEntry } from "./changeset-guard";
 
 // Computed filesystem reads retain these repository Markdown inputs.
@@ -614,7 +615,8 @@ const readPublishedCli = (): PublishedCli => {
   return { latest: parsed["dist-tags.latest"], versions: parsed.versions };
 };
 
-const readCapabilityShards = (directory: string): string => {
+/** Canonical catalog text assembled from one directory of capability shards. */
+export const readCapabilityShards = (directory: string): string => {
   if (!existsSync(directory)) {
     return panic(
       `${directory} is missing: the capability catalog is generated, never committed`,
@@ -664,32 +666,15 @@ export const readHeadSurface = (
     readCapabilityShards(catalogDirectory),
   );
 
-/**
- * Derives the head's capability catalog into a private directory, so the
- * comparison never reads a stale or concurrently rewritten checkout copy. The
- * handler graph validates the API environment when it loads; the committed
- * example supplies static defaults, and no configuration enters the catalog.
- */
+/** Derives the head revision's catalog without writing to the checkout. */
 const generateHeadCatalog = (root: string): string => {
-  const directory = mkdtempSync(path.join(tmpdir(), "stella-cli-catalog-"));
-  for (const command of [
-    ["bun", "scripts/prepare-mcp-apps.ts"],
-    [
-      "bun",
-      "--env-file=apps/api/.env.example",
-      "apps/api/scripts/export-capability-catalog.ts",
-      "--catalog-only",
-      "--out",
-      directory,
-    ],
-  ]) {
-    if (!run(command, root).ok) {
-      return panic(
-        `${command.join(" ")} failed, so the head capability catalog cannot be compared`,
-      );
-    }
+  const catalog = deriveRevisionCatalog({ repoRoot: root, revision: "HEAD" });
+  if (catalog.status === "failed") {
+    return panic(
+      `${catalog.command} failed, so the head capability catalog cannot be compared`,
+    );
   }
-  return directory;
+  return catalog.directory;
 };
 
 /** Published versions before the shard cutover contain the monolithic catalog. */

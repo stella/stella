@@ -36,7 +36,6 @@ import { analyse } from "scslre";
 import { compareCodeUnit } from "@stll/collation";
 
 import { GRADED_HANDLER_CODE_REASON } from "../apps/api/src/lib/errors/graded-handler-codes";
-import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
 import {
   type CallExpression,
   type EcmaScriptModule,
@@ -1811,103 +1810,14 @@ const countSliceOwnedWebComponents: RepoCounter = (context) => {
 
 // --- Metric table -----------------------------------------------------------
 
-// A capability whose input schema exceeded the exporter's byte cap
-// (`MAX_CAPABILITY_SCHEMA_BYTES` in apps/api/scripts/lib/capability-catalog.ts).
-// A capability whose schema was dropped for size degraded to an opaque
-// `--input` JSON blob: no typed CLI flags, no discoverable shape, and nothing
-// failed to say so. The exporter no longer has that escape hatch — it hoists
-// repeated subschemas into `$defs` and errors on anything still over the byte
-// cap — so this counter now guards the absence of the pathway rather than
-// burning it down. Counting the committed artifact (rather than re-running the
-// exporter) keeps the scan cheap and deterministic.
-const countTruncatedCapabilitySchemas = (content: string): number => {
-  const entry: unknown = JSON.parse(content);
-  return Number(
-    typeof entry === "object" &&
-      entry !== null &&
-      "inputSchemaTruncated" in entry &&
-      entry.inputSchemaTruncated === true,
-  );
-};
-
 // Capabilities carrying no authored `description` are tracked by exact id in
 // apps/api/capability-description-ledger.json, not by an aggregate count here:
 // see apps/api/scripts/capability-description-guard.ts. Any set of the same
 // size satisfies a count, so it could not name the gap an author had just
 // closed, nor force that entry to be deleted in the same change as the prose.
-
-// A capability suppressed from the generic transport by its `transport`
-// disposition: it returns bytes (`file-response`/`file-both`), or it REQUIRES a
-// file input. Suppressed entries are dropped from the CLI tree
-// (`insertCapabilities`) and refused pre-execution by capability executors, so
-// each one is a capability an agent surface simply cannot reach. This metric
-// freezes that count: a newly file-shaped capability cannot silently disappear
-// from both clients, and the burn-down is a reviewed baseline bump rather than a
-// side effect. A capability with an OPTIONAL file input is NOT counted — its
-// JSON modes stay invokable (the file field is withheld), which is the shape of
-// a real burn-down rather than a relabelling. The unit is a suppressed
-// capability, so an entry blocked on both legs counts once. Counting the
-// committed artifact keeps the scan cheap and deterministic.
-const countFileTransportSuppressed = (content: string): number => {
-  const entry: unknown = JSON.parse(content);
-  if (typeof entry !== "object" || entry === null) {
-    return 0;
-  }
-  const transport: unknown = Object.hasOwn(entry, "transport")
-    ? Object.getOwnPropertyDescriptor(entry, "transport")?.value
-    : undefined;
-  if (typeof transport !== "object" || transport === null) {
-    return 0;
-  }
-  const type: unknown = Object.getOwnPropertyDescriptor(
-    transport,
-    "type",
-  )?.value;
-  if (type === "file-response" || type === "file-both") {
-    return 1;
-  }
-  if (type !== "file-input") {
-    return 0;
-  }
-  const input: unknown = Object.getOwnPropertyDescriptor(
-    transport,
-    "input",
-  )?.value;
-  if (typeof input !== "object" || input === null) {
-    return 0;
-  }
-  return Number(
-    Object.getOwnPropertyDescriptor(input, "required")?.value === true,
-  );
-};
-
-// A READ capability that requires a write-only OAuth grant is unreachable by a
-// read-only credential
-// (`stella:read` / `stella:admin_read`): the exporter's read-scope guard
-// prevents it, and this ratchet freezes the count at 0 over the committed
-// catalog so a regression fails CI even if the exporter guard were bypassed
-// (e.g. a hand-edited JSON). The scope classification is shared with the
-// exporter, so the guard cannot omit a newly classified write-only scope.
-const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set(
-  MCP_WRITE_ONLY_RESOURCE_SCOPES,
-);
-
-const countReadCapabilitiesWithWriteScope = (content: string): number => {
-  const entry: unknown = JSON.parse(content);
-  if (typeof entry !== "object" || entry === null) {
-    return 0;
-  }
-  const read = (key: string): unknown =>
-    Object.hasOwn(entry, key)
-      ? Object.getOwnPropertyDescriptor(entry, key)?.value
-      : undefined;
-  const scope = read("scope");
-  return Number(
-    read("access") === "read" &&
-      typeof scope === "string" &&
-      WRITE_ONLY_SCOPES.has(scope),
-  );
-};
+// Capabilities suppressed from the generic transport are ledgered the same way
+// (apps/api/scripts/capability-file-transport-guard.ts) over the catalog the
+// exporter derives in memory, since no catalog file is committed to count.
 
 /**
  * Compound (hyphenated) entries in the closed `DOMAIN_ACTION_VERBS` list. A
@@ -3648,39 +3558,6 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/web/src/**/*.{ts,tsx}"],
     exclude: isExcludedSource,
     count: countCrossSliceImports(crossesRoutePrivate),
-  },
-  {
-    scope: "file",
-    id: "capability-schemas-truncated",
-    description:
-      "capabilities carrying `inputSchemaTruncated`, the flag that used to mark a schema dropped for size. The exporter now $defs-compacts schemas and FAILS on one still over the byte cap, so this can only be reached by reintroducing the truncation pathway: it stays at 0",
-    include: ["packages/cli/capabilities/*.json"],
-    // Generated artifacts are the subject here, so the shared source
-    // exclusions (which skip `.gen.`/generated paths) must not apply.
-    exclude: () => false,
-    count: countTruncatedCapabilitySchemas,
-  },
-  {
-    scope: "file",
-    id: "capability-file-transport-suppressed",
-    description:
-      "capabilities whose transport disposition suppresses them from the generic transport (a file response, or a REQUIRED file input): dropped from the CLI tree and refused by capability executors, so no agent surface can reach them. An OPTIONAL file input is not counted — its JSON modes stay invokable",
-    include: ["packages/cli/capabilities/*.json"],
-    // Generated artifacts are the subject here, so the shared source
-    // exclusions (which skip `.gen.`/generated paths) must not apply.
-    exclude: () => false,
-    count: countFileTransportSuppressed,
-  },
-  {
-    scope: "file",
-    id: "read-capabilities-with-write-scope",
-    description:
-      "read capabilities whose required scope is a write-only grant (admin/billing/documents/knowledge/matters _write), unreachable by a read-only credential; the exporter's access-keyed scope resolver keeps this at 0",
-    include: ["packages/cli/capabilities/*.json"],
-    // Generated artifacts are the subject here, so the shared source
-    // exclusions (which skip `.gen.`/generated paths) must not apply.
-    exclude: () => false,
-    count: countReadCapabilitiesWithWriteScope,
   },
   {
     scope: "file",
@@ -6103,68 +5980,6 @@ const writeFixture = (root: string, rel: string, content: string): void => {
   writeFileSync(full, content);
 };
 
-// Two truncated entries among four, plus shapes the counter must NOT count:
-// `inputSchemaTruncated: false`, and an entry that simply omits the field.
-const SELF_TEST_CAPABILITY_CATALOG = [
-  { id: "alpha.create", inputSchemaTruncated: true },
-  { id: "beta.read", inputSchemaTruncated: false },
-  { id: "gamma.update" },
-  { id: "delta.delete", inputSchemaTruncated: true },
-  // Transport shapes: required file input, file response, BOTH legs (must count
-  // once, not twice), a plain JSON transport, and an OPTIONAL file input (the
-  // fileless-exposed shape, which must NOT count — it stays invokable).
-  {
-    id: "eta.create",
-    transport: {
-      type: "file-input",
-      input: { field: "file", required: true, mediaTypes: [] },
-      alternative: { type: "none", reason: "fixture" },
-    },
-  },
-  {
-    id: "theta.get",
-    transport: {
-      type: "file-response",
-      response: { mediaTypes: ["application/pdf"] },
-      alternative: { type: "none", reason: "fixture" },
-    },
-  },
-  {
-    id: "iota.update",
-    transport: {
-      type: "file-both",
-      input: { field: "file", required: true, mediaTypes: [] },
-      response: { mediaTypes: ["application/pdf"] },
-      alternative: { type: "none", reason: "fixture" },
-    },
-  },
-  { id: "kappa.delete", transport: { type: "json" } },
-  {
-    id: "kappa.prefill",
-    transport: {
-      type: "file-input",
-      input: { field: "file", required: false, mediaTypes: [] },
-      alternative: { type: "none", reason: "fixture" },
-    },
-  },
-  // Read-scope shapes: two reads on a write-only scope MUST count, a read on a
-  // read scope and a write on a write scope must NOT.
-  { id: "lambda.list", access: "read", scope: "stella:matters_write" },
-  { id: "mu.get", access: "read", scope: "stella:admin_write" },
-  { id: "nu.get", access: "read", scope: "stella:read" },
-  { id: "xi.create", access: "write", scope: "stella:matters_write" },
-];
-// Two truncated entries in the catalog fixture.
-const EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS = 2;
-// Three suppressed entries (required file input, file response, and the
-// both-legs entry counted ONCE) in the catalog fixture; the plain JSON entry
-// and the OPTIONAL-file-input entry are excluded.
-const EXPECTED_FILE_TRANSPORT_SUPPRESSED = 3;
-// Two read-on-write-scope entries (`lambda.list`, `mu.get`) in the catalog
-// fixture; the read-on-read-scope and write-on-write-scope entries, and every
-// earlier fixture entry lacking access/scope, are excluded.
-const EXPECTED_READ_CAPABILITIES_WITH_WRITE_SCOPE = 2;
-
 // The two better-result convention counters share one shape of check: the
 // fixture count matches, and the boundary fixture file stays out of the
 // per-file map.
@@ -7010,13 +6825,6 @@ const runSelfTest = (): number => {
       "apps/api/src/lib/api-handlers.ts",
       SELF_TEST_RESULT_BOUNDARY_FILE,
     );
-    for (const capability of SELF_TEST_CAPABILITY_CATALOG) {
-      writeFixture(
-        root,
-        `packages/cli/capabilities/${capability.id}.json`,
-        `${JSON.stringify(capability)}\n`,
-      );
-    }
     // Both handler globs the subject-gate metric covers, plus the gate module
     // itself, so the exclusion is exercised rather than assumed.
     writeFixture(
@@ -7453,40 +7261,6 @@ const runSelfTest = (): number => {
     if (detachedPromiseMetric.count !== EXPECTED_DETACHED_PROMISES) {
       failures.push(
         `detached-promise-review-sites counted ${detachedPromiseMetric.count}, expected ${EXPECTED_DETACHED_PROMISES}`,
-      );
-    }
-
-    const truncatedCapabilityMetric = requireSnapshot(
-      snapshot,
-      "capability-schemas-truncated",
-    );
-    if (
-      truncatedCapabilityMetric.count !== EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS
-    ) {
-      failures.push(
-        `capability-schemas-truncated counted ${truncatedCapabilityMetric.count}, expected ${EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS}`,
-      );
-    }
-
-    const fileTransportMetric = requireSnapshot(
-      snapshot,
-      "capability-file-transport-suppressed",
-    );
-    if (fileTransportMetric.count !== EXPECTED_FILE_TRANSPORT_SUPPRESSED) {
-      failures.push(
-        `capability-file-transport-suppressed counted ${fileTransportMetric.count}, expected ${EXPECTED_FILE_TRANSPORT_SUPPRESSED}`,
-      );
-    }
-
-    const readWriteScopeMetric = requireSnapshot(
-      snapshot,
-      "read-capabilities-with-write-scope",
-    );
-    if (
-      readWriteScopeMetric.count !== EXPECTED_READ_CAPABILITIES_WITH_WRITE_SCOPE
-    ) {
-      failures.push(
-        `read-capabilities-with-write-scope counted ${readWriteScopeMetric.count}, expected ${EXPECTED_READ_CAPABILITIES_WITH_WRITE_SCOPE}`,
       );
     }
 
