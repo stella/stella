@@ -43,7 +43,8 @@ const assertMcpGate = (workflow: string) => {
   ).toContain("steps.proof-readiness.outputs.status == 'ready'");
 };
 
-type ProbeName = "search" | "legislation" | "coverage";
+const PROBE_NAMES = ["search", "legislation", "coverage"] as const;
+type ProbeName = (typeof PROBE_NAMES)[number];
 type ProbeStub = { status: string; body: string; transportExit?: number };
 type PreflightCase = {
   stubs?: Partial<Record<ProbeName, ProbeStub>>;
@@ -193,12 +194,10 @@ const probeLabels: Record<ProbeName, string> = {
   legislation: "legislation-search",
   coverage: "case-law-coverage",
 };
-const failureCases = (Object.keys(probeLabels) as ProbeName[]).flatMap(
-  (probe) => [
-    ...unavailable.map((stub) => ({ probe, stub })),
-    ...invalid[probe].map((body) => ({ probe, stub: { status: "200", body } })),
-  ],
-);
+const failureCases = PROBE_NAMES.flatMap((probe) => [
+  ...unavailable.map((stub) => ({ probe, stub })),
+  ...invalid[probe].map((body) => ({ probe, stub: { status: "200", body } })),
+]);
 
 test.each(failureCases)(
   "an unavailable or invalid $probe answer fails clearly ($stub.status, $stub.body)",
