@@ -1,0 +1,293 @@
+{
+  "fulltext": "Justice Invented Cedar\n\n1. This synthetic dispute concerns a blue boundary marker. The invented appeal raises one question.\n\n2. Compare Invented Grove and section 2.\n\n3. The synthetic appeal is allowed.",
+  "sections": [
+    {
+      "index": 0,
+      "type": "argumentation",
+      "title": null,
+      "text": "Justice Invented Cedar\n\n1. This synthetic dispute concerns a blue boundary marker. The invented appeal raises one question.\n\n2. Compare Invented Grove and section 2.\n\n3. The synthetic appeal is allowed."
+    }
+  ],
+  "documentAst": {
+    "version": 1,
+    "source": {
+      "system": "caselaw.nationalarchives.gov.uk",
+      "documentId": "d-00000000-0000-4000-8000-000000000001",
+      "webUrl": "https://caselaw.nationalarchives.gov.uk/d-00000000-0000-4000-8000-000000000001",
+      "printUrl": ""
+    },
+    "metadata": {
+      "caseNumber": "[2026] UKSC 900001",
+      "court": "UKSC",
+      "decisionDate": "2026-01-02",
+      "ecli": null,
+      "decisionType": "judgment",
+      "keywords": [],
+      "statutes": []
+    },
+    "blocks": [
+      {
+        "type": "paragraph",
+        "id": "front-matter-0",
+        "anchorId": "front-matter-0",
+        "role": "front-matter",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "\n      "
+          },
+          {
+            "type": "text",
+            "text": "[2026] UKSC 900001"
+          }
+        ],
+        "plainText": "[2026] UKSC 900001"
+      },
+      {
+        "type": "paragraph",
+        "id": "front-matter-1",
+        "anchorId": "front-matter-1",
+        "role": "front-matter",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "\n      "
+          },
+          {
+            "type": "text",
+            "text": "Invented Amber"
+          },
+          {
+            "type": "text",
+            "text": " v "
+          },
+          {
+            "type": "text",
+            "text": "Invented Birch"
+          }
+        ],
+        "plainText": "Invented Amber v Invented Birch"
+      },
+      {
+        "type": "paragraph",
+        "id": "front-matter-2",
+        "anchorId": "front-matter-2",
+        "role": "front-matter",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "\n      "
+          },
+          {
+            "type": "text",
+            "text": "Justice Invented Cedar"
+          }
+        ],
+        "plainText": "Justice Invented Cedar"
+      },
+      {
+        "type": "paragraph",
+        "id": "front-matter-3",
+        "anchorId": "front-matter-3",
+        "role": "front-matter",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "\n      "
+          },
+          {
+            "type": "text",
+            "text": "2 January 2026"
+          }
+        ],
+        "plainText": "2 January 2026"
+      },
+      {
+        "type": "paragraph",
+        "id": "front-matter-4",
+        "anchorId": "front-matter-4",
+        "role": "counsel",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "\n      "
+          },
+          {
+            "type": "text",
+            "text": "Invented Elm, instructed by Invented Fir Solicitors."
+          }
+        ],
+        "plainText": "Invented Elm, instructed by Invented Fir Solicitors."
+      },
+      {
+        "type": "paragraph",
+        "id": "front-matter-5",
+        "anchorId": "front-matter-5",
+        "role": "front-matter",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "\n      "
+          },
+          {
+            "type": "text",
+            "text": "On appeal from "
+          },
+          {
+            "type": "link",
+            "href": "https://caselaw.nationalarchives.gov.uk/ewca/civ/2025/900002",
+            "children": [
+              {
+                "type": "text",
+                "text": "[2025] EWCA Civ 900002"
+              }
+            ]
+          }
+        ],
+        "plainText": "On appeal from [2025] EWCA Civ 900002"
+      },
+      {
+        "type": "heading",
+        "id": "argumentation-6",
+        "anchorId": "argumentation-6",
+        "level": 1,
+        "role": "section-heading",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "\n      "
+          },
+          {
+            "type": "text",
+            "text": "\n        "
+          },
+          {
+            "type": "text",
+            "text": "Justice Invented Cedar"
+          }
+        ],
+        "plainText": "Justice Invented Cedar"
+      },
+      {
+        "type": "paragraph",
+        "id": "para_1",
+        "anchorId": "para_1",
+        "role": "argumentation",
+        "number": 1,
+        "inlines": [
+          {
+            "type": "text",
+            "text": "\n          "
+          },
+          {
+            "type": "text",
+            "text": "1."
+          },
+          {
+            "type": "text",
+            "text": " "
+          },
+          {
+            "type": "text",
+            "text": "This synthetic dispute concerns a blue boundary marker. The "
+          },
+          {
+            "type": "bold",
+            "children": [
+              {
+                "type": "text",
+                "text": "invented"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": " appeal raises one question."
+          }
+        ],
+        "plainText": "1. This synthetic dispute concerns a blue boundary marker. The invented appeal raises one question."
+      },
+      {
+        "type": "paragraph",
+        "id": "para_2",
+        "anchorId": "para_2",
+        "role": "argumentation",
+        "number": 2,
+        "inlines": [
+          {
+            "type": "text",
+            "text": "\n          "
+          },
+          {
+            "type": "text",
+            "text": "2."
+          },
+          {
+            "type": "text",
+            "text": " "
+          },
+          {
+            "type": "text",
+            "text": "Compare "
+          },
+          {
+            "type": "link",
+            "href": "https://caselaw.nationalarchives.gov.uk/uksc/2024/900003",
+            "children": [
+              {
+                "type": "text",
+                "text": "Invented Grove"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": " and "
+          },
+          {
+            "type": "link",
+            "href": "http://www.legislation.gov.uk/id/ukpga/2099/900001/section/2",
+            "children": [
+              {
+                "type": "text",
+                "text": "section 2"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": "."
+          }
+        ],
+        "plainText": "2. Compare Invented Grove and section 2."
+      },
+      {
+        "type": "paragraph",
+        "id": "para_3",
+        "anchorId": "para_3",
+        "role": "argumentation",
+        "number": 3,
+        "inlines": [
+          {
+            "type": "text",
+            "text": "\n          "
+          },
+          {
+            "type": "text",
+            "text": "3."
+          },
+          {
+            "type": "text",
+            "text": " "
+          },
+          {
+            "type": "text",
+            "text": "The synthetic appeal is allowed. "
+          }
+        ],
+        "plainText": "3. The synthetic appeal is allowed."
+      }
+    ]
+  },
+  "parserVersion": 4
+}

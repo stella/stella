@@ -30,6 +30,7 @@ import {
   organizationFileUsageHandlerError,
 } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -194,9 +195,15 @@ export const createCreateWorkspaceDocumentTools = ({
 
     const docxResult = await markdownToStellaDocx(markdown);
     if (Result.isError(docxResult)) {
-      captureError(docxResult.error, {
-        source: "create_matter_document",
-      });
+      captureError(
+        docxResult.error,
+        handlerErrorContext(
+          "tools.createCreateWorkspaceDocumentTools.docxResult_error",
+          {
+            source: "create_matter_document",
+          },
+        ),
+      );
       throw new ChatToolError({
         kind: "server-defect",
         message: "The document body could not be converted to DOCX.",

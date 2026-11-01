@@ -31,6 +31,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { processDocumentProcessingRun } from "@/api/lib/document-processing-queue";
@@ -999,7 +1000,7 @@ const createContext = ({
     promptCachingEnabled: false,
     recordAuditEvent: async () => undefined,
     request: new Request(`https://example.test/workspaces/${workspaceId}`),
-    route: "/test/uploads",
+    route: "/v1/uploads/:workspaceId/presign" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
     session: { activeOrganizationId: organizationId },

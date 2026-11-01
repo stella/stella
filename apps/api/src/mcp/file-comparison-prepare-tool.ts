@@ -223,7 +223,7 @@ const presignInput = async ({
     expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
     contentType: DOCX_MIME_TYPE,
     contentLength: file.size,
-    sha256Base64: Buffer.from(file.sha256Hex, "hex").toString("base64"),
+    sha256Base64: Buffer.from(file.sha256Hex, "hex").toBase64(),
     scope: { organizationId, workspaceId: null },
     tagAsTemporaryUpload: true,
   });
@@ -268,10 +268,20 @@ export const reserveFileComparisonInputs = async ({
     presignInput({ dependencies, file: target, organizationId, userId }),
   ]);
   if (Result.isError(reservedBase)) {
-    return Result.err(internalFailureResult(reservedBase.error));
+    return Result.err(
+      internalFailureResult(
+        reservedBase.error,
+        "mcp.reserveFileComparisonInputs.reservedBase_error",
+      ),
+    );
   }
   if (Result.isError(reservedTarget)) {
-    return Result.err(internalFailureResult(reservedTarget.error));
+    return Result.err(
+      internalFailureResult(
+        reservedTarget.error,
+        "mcp.reserveFileComparisonInputs.reservedTarget_error",
+      ),
+    );
   }
 
   const expiresAt = fileComparisonExpiry(FILE_COMPARISON_INPUT_TTL_SECONDS);
@@ -308,7 +318,12 @@ export const reserveFileComparisonInputs = async ({
       }),
   );
   if (Result.isError(inserted)) {
-    return Result.err(internalFailureResult(inserted.error));
+    return Result.err(
+      internalFailureResult(
+        inserted.error,
+        "mcp.reserveFileComparisonInputs.inserted_error",
+      ),
+    );
   }
 
   return Result.ok({

@@ -96,6 +96,17 @@ export const onboardingNavigation = (
   replace: true,
 });
 
+/**
+ * On to the destination once a sign-in step is done. It goes by `href`, since
+ * `to` drops a fragment, and an OAuth sign-in carries its signed query in one.
+ */
+export const destinationNavigation = (
+  redirectTo: string,
+): { href: string; replace: boolean } => ({
+  href: redirectTo,
+  replace: true,
+});
+
 const ONBOARDING_LANDING = "/chat";
 
 /** The end of onboarding: the destination, or chat when there is none. */

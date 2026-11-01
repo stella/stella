@@ -21,6 +21,7 @@ import {
 } from "./action-admission-refusal.js";
 import { decodeAccessTokenClaims } from "./auth/jwt.js";
 import { RESOURCE_SCOPE_PREFIX } from "./auth/scopes.js";
+import { parseIds } from "./batch/ids.js";
 import type { Context } from "./context.js";
 import { expandSchemaDefs } from "./expand-schema-defs.js";
 import { flagKey } from "./flag-name.js";
@@ -254,10 +255,10 @@ const parseBoundedNumber = (
 const asFlagString = (value: unknown): string | null =>
   typeof value === "string" ? value : null;
 
-const coerceArrayFlag = (
+const coerceArrayFlag = async (
   flagSpec: FlagSpec,
   value: unknown,
-): Result<unknown, string> => {
+): Promise<Result<unknown, string>> => {
   const raw: string[] = [];
   for (const element of Array.isArray(value) ? value : []) {
     const asString = asFlagString(element);
@@ -267,6 +268,9 @@ const coerceArrayFlag = (
     raw.push(asString);
   }
   if (flagSpec.kind === "string-array") {
+    if (/(?:^|[._])ids$|Ids$/u.test(flagSpec.prop)) {
+      return parseIds(raw);
+    }
     return Result.ok(raw);
   }
   if (flagSpec.kind === "enum-array") {
@@ -615,6 +619,7 @@ type ErrorEnvelope = {
   hint: string | undefined;
   issues: readonly ErrorIssue[];
   retryable?: boolean;
+  retryAfterMs?: number;
   contactUrl?: string;
   requestId: string | undefined;
 };
@@ -646,7 +651,7 @@ const parseErrorIssues = (error: Record<string, unknown>): ErrorIssue[] => {
 
 /**
  * Parse the structured tool-error envelope
- * (`{"error":{"code","message","hint?","issues?","retryable?"}}`) a modern
+ * (`{"error":{"code","message","hint?","issues?","retryable?","retryAfterMs?"}}`) a modern
  * server tags every tool failure with. Unknown fields are ignored, so a newer
  * server that grows the envelope never breaks this parser. Returns `null` for a
  * legacy plain-text or bare-`{code}` error so the caller falls back to today's
@@ -674,6 +679,11 @@ export const errorEnvelope = (payload: unknown): ErrorEnvelope | null => {
     requestId: parseRequestId(error["requestId"]),
     ...(typeof error["retryable"] === "boolean"
       ? { retryable: error["retryable"] }
+      : {}),
+    ...(typeof error["retryAfterMs"] === "number" &&
+    Number.isFinite(error["retryAfterMs"]) &&
+    error["retryAfterMs"] >= 0
+      ? { retryAfterMs: error["retryAfterMs"] }
       : {}),
     ...(typeof error["contactUrl"] === "string"
       ? { contactUrl: error["contactUrl"] }
@@ -743,7 +753,7 @@ export const classifyToolError = (payload: unknown): ExitCode => {
  * hide `confirm`; after human approval the reserved --yes flow injects
  * `confirm: true` for a leaf marked destructive.
  */
-const specHasConfirmGate = (spec: LeafCommandSpec): boolean => {
+export const specHasConfirmGate = (spec: LeafCommandSpec): boolean => {
   const properties = spec.inputSchema["properties"];
   return isRecord(properties) && "confirm" in properties;
 };
@@ -1128,6 +1138,7 @@ export const toolErrorLines = (
     message: string;
     code?: string;
     retryable?: boolean;
+    retryAfterMs?: number;
     contactUrl?: string;
     hint: string | undefined;
     issues: readonly { path: string; message: string }[];

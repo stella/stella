@@ -2,7 +2,7 @@ import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 import type { HttpStringInput } from "@stll/api-contract/http-input";
 
-import type { CachePolicy } from "@/api/http/cache";
+import type { RouteCachePolicy } from "@/api/http/cache";
 import type { RequestContext } from "@/api/http/context";
 import type { BodyMode } from "@/api/http/input";
 
@@ -42,6 +42,8 @@ export type RouteConfig = {
   readonly response?: ResponseSchemas;
   /** How the body is read; by content type unless the route says otherwise. */
   readonly bodyMode?: BodyMode;
+  /** Tightens global multipart admission before the request body is buffered. */
+  readonly requestBodyMaxBytes?: number;
 };
 
 /**
@@ -95,8 +97,8 @@ type RouteDefinitionConfig = RouteConfig & Readonly<Record<string, unknown>>;
 export type RouteDefinition = {
   readonly config: RouteDefinitionConfig;
   readonly access: RouteAccess;
-  /** How long a successful answer may be cached; absent means not at all. */
-  readonly cache?: CachePolicy;
+  /** Kept publicly, or never kept (absent); a private lifetime is per answer. */
+  readonly cache?: RouteCachePolicy;
   /** `own`: the route answers CORS itself; the API's credentialed CORS stays off. */
   readonly cors?: "own";
   readonly run: (request: RouteRequest) => Promise<unknown>;

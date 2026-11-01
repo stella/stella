@@ -2,13 +2,34 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import type { SchemaClient } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin } from "better-auth";
 import { sessionMiddleware } from "better-auth/api";
+import { panic } from "better-result";
 import * as v from "valibot";
 
-import type { VerifiedOAuthClientBrand } from "@stll/api-contract";
+import type {
+  McpOAuthScope,
+  OAuthConsentClient,
+  VerifiedOAuthClientBrand,
+} from "@stll/api-contract";
+import {
+  MOBILE_CLIENT_METADATA_PATH,
+  MOBILE_REDIRECT_URIS,
+} from "@stll/api-contract/mobile-client";
+import {
+  CLI_CLIENT_METADATA_PATH,
+  LOOPBACK_REDIRECT_PATH,
+} from "@stll/cli/client-metadata-document";
 
 import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
+import type { OAUTH_REGISTRATION_SCOPE_POLICY } from "@/api/lib/db/oauth-scope-policy";
+import { isLoopbackRedirectUri } from "@/api/lib/oauth-loopback-registration";
 
 type HttpsUrl = `https://${string}`;
+
+/** The brands only stella's own origins can verify. */
+type FirstPartyBrand = Extract<
+  VerifiedOAuthClientBrand,
+  "stella" | "stella_ios"
+>;
 
 /**
  * A third-party OAuth client location taken from the vendor's own
@@ -26,7 +47,7 @@ type VerifiedClientUrl = VerifiedClientLocation & {
    * platform redirect that serves connectors anyone can publish proves the
    * platform, not the publisher, so it verifies without naming a product.
    */
-  readonly brand: Exclude<VerifiedOAuthClientBrand, "stella"> | null;
+  readonly brand: Exclude<VerifiedOAuthClientBrand, FirstPartyBrand> | null;
 };
 
 const CLAUDE_DOCS =
@@ -84,31 +105,52 @@ const VERIFIED_THIRD_PARTY_REDIRECTS: readonly VerifiedClientUrl[] = [
   },
 ];
 
+type VerifiedClientId = VerifiedClientUrl & {
+  /**
+   * The most a client identified by this document may be granted: "elevated"
+   * keeps the scopes self-registered clients never get, "open" withholds them
+   * as for a registered client.
+   */
+  readonly scopePolicy: (typeof OAUTH_REGISTRATION_SCOPE_POLICY)[McpOAuthScope];
+};
+
 /** Client ID Metadata Document URLs of widely used third-party clients. */
-const VERIFIED_THIRD_PARTY_CLIENT_IDS: readonly VerifiedClientUrl[] = [
+const VERIFIED_THIRD_PARTY_CLIENT_IDS: readonly VerifiedClientId[] = [
+  // Claude on the web, desktop and mobile: the document Anthropic hosts for
+  // the hosted apps, whose only redirect is the hosted callback above. It may
+  // be granted what Claude is granted when it registers that callback.
+  {
+    exact: "https://claude.ai/oauth/mcp-oauth-client-metadata",
+    source: CLAUDE_DOCS,
+    brand: "claude",
+    scopePolicy: "open",
+  },
   // Claude Code (loopback redirects, attested by this document).
   {
     exact: "https://claude.ai/oauth/claude-code-client-metadata",
     source: CLAUDE_DOCS,
     brand: "claude_code",
+    scopePolicy: "elevated",
   },
   {
     exact: "https://chatgpt.com/oauth/client.json",
     source: CHATGPT_DOCS,
     brand: "chatgpt",
+    scopePolicy: "elevated",
   },
   // Codex CLI (loopback redirects, attested by this document).
   {
     exact: "https://chatgpt.com/oauth/codex/client.json",
     source: CODEX_DOCS,
     brand: "codex",
+    scopePolicy: "elevated",
   },
 ];
 
-const findVerifiedUrl = (
+const findVerifiedUrl = <Entry extends VerifiedClientUrl>(
   url: URL,
-  entries: readonly VerifiedClientUrl[],
-): VerifiedClientUrl | undefined => {
+  entries: readonly Entry[],
+): Entry | undefined => {
   if (
     url.protocol !== "https:" ||
     url.username !== "" ||
@@ -132,7 +174,112 @@ const findVerifiedUrl = (
   });
 };
 
-/** Stella's own origins: every redirect under them is first-party. */
+/**
+ * How a first-party client's redirect URI is checked.
+ *
+ * - `loopback`: RFC 8252 §7.3, an http loopback host on any port, at `path`.
+ * - `exact`: one of `uris`, as written (private-use schemes).
+ * - `document_origin`: `path` on the origin that publishes the client's
+ *   document.
+ */
+type FirstPartyRedirect =
+  | { readonly type: "loopback"; readonly path: `/${string}` }
+  | { readonly type: "exact"; readonly uris: readonly string[] }
+  | { readonly type: "document_origin"; readonly path: `/${string}` };
+
+type FirstPartyOAuthClientEntry = {
+  /**
+   * The client's public id is this path on one of stella's own origins: the
+   * URL of the client metadata document stella publishes for it, which the
+   * provider resolves in process (`withOwnClientDocuments`).
+   */
+  readonly documentPath: `/${string}`;
+  readonly redirect: FirstPartyRedirect;
+  readonly brand: FirstPartyBrand;
+};
+
+/**
+ * stella's own OAuth clients, which may hold elevated scopes. Only these are
+ * first-party: a client is one when its id is exactly an entry's document URL,
+ * never by its name or redirects, so a dynamically registered client (whose
+ * id the server generates) never is.
+ * The desktop app signs in with a device-bound link grant, not OAuth, so it
+ * has no entry.
+ */
+export const FIRST_PARTY_OAUTH_CLIENTS = {
+  cli: {
+    documentPath: CLI_CLIENT_METADATA_PATH,
+    redirect: { type: "loopback", path: LOOPBACK_REDIRECT_PATH },
+    brand: "stella",
+  },
+  mobile: {
+    documentPath: MOBILE_CLIENT_METADATA_PATH,
+    redirect: { type: "exact", uris: MOBILE_REDIRECT_URIS },
+    brand: "stella_ios",
+  },
+  // stella connecting to an MCP server as a client.
+  mcp_connector: {
+    documentPath: "/v1/mcp/oauth/client-metadata.json",
+    redirect: { type: "document_origin", path: "/v1/mcp/oauth/callback" },
+    brand: "stella",
+  },
+} as const satisfies Record<string, FirstPartyOAuthClientEntry>;
+
+export type FirstPartyOAuthClient = keyof typeof FIRST_PARTY_OAUTH_CLIENTS;
+
+type FirstPartyOAuthClientMatch = {
+  readonly entry: (typeof FIRST_PARTY_OAUTH_CLIENTS)[FirstPartyOAuthClient];
+  /** The stella origin publishing the client's document. */
+  readonly origin: string;
+};
+
+/**
+ * The first-party client `clientId` names: exactly an entry's document URL on
+ * one of stella's own origins.
+ */
+export const findFirstPartyOAuthClient = (
+  clientId: string,
+  verifiedOrigins: readonly string[],
+): FirstPartyOAuthClientMatch | undefined => {
+  const url = URL.parse(clientId);
+  if (!url || !verifiedOrigins.includes(url.origin)) {
+    return undefined;
+  }
+  const entry = Object.values(FIRST_PARTY_OAUTH_CLIENTS).find(
+    ({ documentPath }) => clientId === new URL(documentPath, url.origin).href,
+  );
+  return entry && { entry, origin: url.origin };
+};
+
+/** Whether a first-party client may be sent its code at `redirectUri`. */
+export const isFirstPartyRedirectAllowed = (
+  { entry: { redirect }, origin }: FirstPartyOAuthClientMatch,
+  redirectUri: string,
+): boolean => {
+  switch (redirect.type) {
+    case "loopback": {
+      const url = URL.parse(redirectUri);
+      return (
+        url !== null &&
+        isLoopbackRedirectUri(redirectUri) &&
+        url.username === "" &&
+        url.password === "" &&
+        url.pathname === redirect.path &&
+        url.search === "" &&
+        url.hash === ""
+      );
+    }
+    case "exact":
+      return redirect.uris.includes(redirectUri);
+    case "document_origin":
+      return redirectUri === new URL(redirect.path, origin).href;
+    default:
+      redirect satisfies never;
+      return panic("Unhandled first-party redirect shape");
+  }
+};
+
+/** stella's own https origins, which publish its first-party client documents. */
 export const getVerifiedOAuthOrigins = (configuredUrls: readonly string[]) =>
   configuredUrls.flatMap((value) => {
     const url = URL.parse(value);
@@ -150,63 +297,112 @@ export const getVerifiedOAuthOrigins = (configuredUrls: readonly string[]) =>
   });
 
 /**
- * Whether a client identified by a client metadata document is a known one:
- * its document lives under Stella's own origins or at a documented location.
+ * Whether a client identified by a client metadata document may hold elevated
+ * scopes: it is a first-party client, or its document is at a documented
+ * location whose entry allows them.
  */
-export const isVerifiedClientMetadataDocument = (
+export const mayMetadataDocumentClientHoldElevatedScopes = (
   clientId: string,
   verifiedOrigins: readonly string[],
 ): boolean => {
+  if (findFirstPartyOAuthClient(clientId, verifiedOrigins)) {
+    return true;
+  }
   const url = URL.parse(clientId);
   return (
-    url?.username === "" &&
-    url.password === "" &&
-    (verifiedOrigins.includes(url.origin) ||
-      findVerifiedUrl(url, VERIFIED_THIRD_PARTY_CLIENT_IDS) !== undefined)
+    url !== null &&
+    findVerifiedUrl(url, VERIFIED_THIRD_PARTY_CLIENT_IDS)?.scopePolicy ===
+      "elevated"
   );
 };
 
-/**
- * The brand a location verifies, or `null` when it verifies none. Stella's own
- * origins are first-party; otherwise the location must match a documented
- * third-party entry exactly.
- */
-const brandOfLocation = (
+/** The brand a location verifies, `"unbranded"`, or `null` when it verifies none. */
+type LocationEvidence = VerifiedOAuthClientBrand | "unbranded" | null;
+
+const thirdPartyEvidence = (
   url: URL | null,
   entries: readonly VerifiedClientUrl[],
-  verifiedOrigins: readonly string[],
-): VerifiedOAuthClientBrand | "unbranded" | null => {
-  if (!url) {
-    return null;
-  }
-  if (
-    url.username === "" &&
-    url.password === "" &&
-    verifiedOrigins.includes(url.origin)
-  ) {
-    return "stella";
-  }
-  const entry = findVerifiedUrl(url, entries);
+): LocationEvidence => {
+  const entry = url ? findVerifiedUrl(url, entries) : undefined;
   if (!entry) {
     return null;
   }
   return entry.brand ?? "unbranded";
 };
 
-type OAuthConsentClient = Pick<
+type RegisteredConsentClient = Pick<
   SchemaClient,
   "clientId" | "name" | "redirectUris" | "clientDiscoveryId"
 >;
 
 /**
+ * A metadata document client is first-party when its id is a first-party
+ * document URL and every redirect it holds fits that client's shape;
+ * otherwise its document must be at a documented third-party location.
+ */
+const documentEvidence = (
+  client: RegisteredConsentClient,
+  clientUrl: URL | null,
+  verifiedOrigins: readonly string[],
+): LocationEvidence => {
+  const firstParty = findFirstPartyOAuthClient(
+    client.clientId,
+    verifiedOrigins,
+  );
+  if (!firstParty) {
+    return thirdPartyEvidence(clientUrl, VERIFIED_THIRD_PARTY_CLIENT_IDS);
+  }
+  const redirectsFit = client.redirectUris?.every((uri) =>
+    isFirstPartyRedirectAllowed(firstParty, uri),
+  );
+  return redirectsFit === true ? firstParty.entry.brand : null;
+};
+
+/**
+ * Verified only when every location is, and branded only when they all name
+ * the same product. The registered name travels only with an unbranded
+ * client, as its own claim.
+ */
+const consentClient = (
+  evidence: readonly LocationEvidence[],
+  claimedName: string | null,
+): OAuthConsentClient => {
+  const brands = new Set(evidence);
+  if (brands.size === 0 || brands.has(null)) {
+    return { type: "unverified", name: claimedName };
+  }
+  const [onlyBrand] = brands;
+  if (
+    brands.size === 1 &&
+    onlyBrand !== undefined &&
+    onlyBrand !== null &&
+    onlyBrand !== "unbranded"
+  ) {
+    return { type: "verified", brand: onlyBrand };
+  }
+  return { type: "verified_unbranded", name: claimedName };
+};
+
+/**
+ * Where a redirect sends the authorization code, as the consent screen shows
+ * it: the host of an http(s) redirect, and the scheme (with its authority, if
+ * any) of a private-use one, so a look-alike client name cannot hide which
+ * application receives the code.
+ */
+const redirectTarget = (url: URL): string =>
+  url.protocol === "http:" || url.protocol === "https:"
+    ? url.host
+    : `${url.protocol}${url.host ? `//${url.host}` : ""}`;
+
+/**
  * What the consent screen may claim about a client. A client identified by a
- * metadata document is verified by where that document lives; any other client
- * by every one of its redirect URIs. `verifiedBrand` names the product only
- * when that evidence points at a single one; the registered `client_name` is
- * shown as the client's own claim and never selects a brand.
+ * metadata document is verified by its document (see `documentEvidence`); any
+ * other client by every one of its redirect URIs, and only as a documented
+ * third party, so a registered client is never first-party. The registered
+ * name never selects a brand.
  */
 export const getOAuthConsentInfo = (
-  client: OAuthConsentClient,
+  client: RegisteredConsentClient,
   verifiedOrigins: readonly string[],
 ) => {
   const redirects = client.redirectUris
@@ -216,35 +412,21 @@ export const getOAuthConsentInfo = (
     ? URL.parse(client.clientId)
     : null;
   const evidence = client.clientDiscoveryId
-    ? [
-        brandOfLocation(
-          clientUrl,
-          VERIFIED_THIRD_PARTY_CLIENT_IDS,
-          verifiedOrigins,
-        ),
-      ]
+    ? [documentEvidence(client, clientUrl, verifiedOrigins)]
     : redirects.map((url) =>
-        brandOfLocation(url, VERIFIED_THIRD_PARTY_REDIRECTS, verifiedOrigins),
+        thirdPartyEvidence(url, VERIFIED_THIRD_PARTY_REDIRECTS),
       );
-  const unverified =
-    evidence.length === 0 || evidence.some((brand) => brand === null);
-  const brands = new Set(evidence);
-  const [onlyBrand] = brands;
   return {
-    client_name: client.name ?? null,
-    redirectHosts: [
-      ...new Set(redirects.flatMap((url) => (url?.host ? [url.host] : []))),
+    client: consentClient(evidence, client.name || null),
+    redirectTargets: [
+      ...new Set(
+        redirects.flatMap((url) => {
+          const target = url ? redirectTarget(url) : "";
+          return target ? [target] : [];
+        }),
+      ),
     ],
     clientIdHost: clientUrl?.host ?? null,
-    unverified,
-    verifiedBrand:
-      !unverified &&
-      brands.size === 1 &&
-      onlyBrand !== undefined &&
-      onlyBrand !== null &&
-      onlyBrand !== "unbranded"
-        ? onlyBrand
-        : null,
   };
 };
 

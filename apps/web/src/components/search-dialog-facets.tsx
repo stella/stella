@@ -25,9 +25,10 @@ import type {
 } from "@/components/search-dialog.shared";
 import type { TimeFilter } from "@/components/search-filters.logic";
 import { useFormatter } from "@/i18n/formatting-context";
+import { queryView } from "@/lib/query-view.logic";
 import { searchFacetOptions, TIME_PRESETS } from "@/lib/search";
 import type { SearchableFacet, TimePreset } from "@/lib/search";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type FacetGroupProps = {
   title: string;
@@ -235,8 +236,8 @@ export const SearchableFacetGroup = ({
     }),
     enabled: isSearching && searchParams.enabled,
   });
-  const searchDataView = useQueryView(searchDataQuery);
-  useQueryViewError(searchDataView);
+  const searchDataView = queryView(searchDataQuery);
+  useQueryViewError(searchDataView, "SearchableFacetGroup:query");
   const searchData =
     searchDataView.type === "items" ? searchDataView.items : undefined;
   const resolveLabel = (bucket: FacetBucket): string =>

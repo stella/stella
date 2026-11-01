@@ -34,6 +34,7 @@ const decision = ({
   court: "Nejvyšší soud",
   decisionDate: "2026-01-14",
   decisionType: "Rozsudek",
+  decisionTypeKind: null,
   ecli: null,
   headnote:
     headnote === null

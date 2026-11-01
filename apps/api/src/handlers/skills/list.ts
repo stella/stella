@@ -58,7 +58,9 @@ const config = {
     "`stella` for an unedited stella starter skill, `unattributed` for other system " +
     "writes and former members. Every skill carries `invocation`: `auto` when " +
     "the assistant may use it on its own, `manual` when it runs only on the " +
-    "user's request. Also reports " +
+    "user's request. An installed skill bound to one matter or client carries " +
+    "`boundWorkspaceId` or `boundClientId`, and is listed only to members who " +
+    "reach it. Also reports " +
     "whether you may manage team skills.",
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -267,6 +269,8 @@ const listSkills = createSafeRootHandler(
             contentHash: agentSkills.contentHash,
             enabled: agentSkills.enabled,
             invocation: agentSkills.invocation,
+            boundWorkspaceId: agentSkills.boundWorkspaceId,
+            boundClientId: agentSkills.boundClientId,
             command: agentSkills.command,
             body: sql<string | null>`
               case

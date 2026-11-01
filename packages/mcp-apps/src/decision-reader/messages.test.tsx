@@ -86,3 +86,31 @@ for (const { locale, dateText, unavailableText } of [
     expect(html).toContain(`<p>${unavailableText}</p>`);
   });
 }
+
+for (const { statuteTitle, eli, jurisdiction } of [
+  {
+    statuteTitle: "Zákon č. 89/2012 Sb., občanský zákoník",
+    eli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
+    jurisdiction: "CZE",
+  },
+  {
+    statuteTitle: "Zákon č. 300/2005 Z. z. Trestný zákon",
+    eli: "https://www.slov-lex.sk/eli/sk/zz/2005/300",
+    jurisdiction: "SVK",
+  },
+]) {
+  test(`reader preserves the supplied act identification: ${statuteTitle}`, () => {
+    expect(
+      readerMessages("en").provisionActText({
+        documentId: "statute",
+        eli,
+        jurisdiction,
+        anchorId: "paragraf-1",
+        provisionLabel: "§ 1",
+        statuteTitle,
+        versionValidFrom: null,
+        versionCount: 1,
+      }),
+    ).toBe(statuteTitle);
+  });
+}

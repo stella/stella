@@ -370,9 +370,9 @@ export const targetOf = ({
   ref,
   role,
 }: BrowserControlElement) => ({
+  context,
+  href,
   name,
   ref,
   role,
-  ...(context === undefined ? {} : { context }),
-  ...(href === undefined ? {} : { href }),
 });

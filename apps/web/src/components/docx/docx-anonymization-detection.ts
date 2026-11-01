@@ -258,12 +258,24 @@ export const startAnonymizationDetection = ({
             requestKey: cacheKey,
           })
         ) {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey: "startAnonymizationDetection.run:failure",
+            scope: {
+              type: "handler",
+              handlerId: "startAnonymizationDetection.run:failure",
+            },
+          });
           run();
           return;
         }
         failedKey = cacheKey;
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "startAnonymizationDetection.run:failure-2",
+          scope: {
+            type: "handler",
+            handlerId: "startAnonymizationDetection.run:failure-2",
+          },
+        });
         status = "error";
         publishDetectionStatus(fieldId);
       });

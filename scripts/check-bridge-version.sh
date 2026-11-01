@@ -36,6 +36,20 @@ bridge_files=(
   packages/api-contract/src/desktop-edit-file-types.ts
 )
 
+# The modules the bridge calls are part of its surface: how account.rs
+# authorizes a request, or what the session manager reports, is what the web
+# app sees. Reading them from bridge.rs keeps a newly called module covered.
+bridge_source=apps/desktop/src-tauri/src/bridge.rs
+if [[ -f "$bridge_source" ]]; then
+  while IFS= read -r module; do
+    for candidate in "apps/desktop/src-tauri/src/$module.rs" "apps/desktop/src-tauri/src/$module"; do
+      if [[ -e "$candidate" ]]; then
+        bridge_files+=("$candidate")
+      fi
+    done
+  done < <(grep -oE 'crate::[a-z_]+' "$bridge_source" | sed 's/^crate:://' | sort -u)
+fi
+
 bridge_changed=false
 for f in "${bridge_files[@]}"; do
   if ! git diff --quiet "$base_ref...HEAD" -- "$f"; then
@@ -59,7 +73,7 @@ version_re='^pub const BRIDGE_VERSION: u32 = ([0-9]+);'
 
 extract_version() {
   local content="$1" line
-  line=$(printf '%s\n' "$content" | grep -E "$version_re" | head -n 1 || true)
+  line=$(grep -m 1 -E "$version_re" <<<"$content" || true)
   if [[ -z "$line" ]]; then
     echo ""
     return
@@ -88,17 +102,14 @@ if [[ -z "$new_version" ]]; then
 fi
 
 if (( new_version <= old_version )); then
+  {
+    echo "::error::Bridge surface changed but BRIDGE_VERSION did not strictly increase ($old_version -> $new_version)."
+    echo
+    echo "A change to one of these files implies the bridge protocol that"
+    echo "the web app talks to has shifted:"
+    printf '  - %s\n' "${bridge_files[@]}"
+  } >&2
   cat >&2 <<MSG
-::error::Bridge surface changed but BRIDGE_VERSION did not strictly increase ($old_version -> $new_version).
-
-A change to one of these files implies the bridge protocol that
-the web app talks to has shifted:
-  - apps/desktop/src-tauri/src/bridge.rs
-  - apps/desktop/src-tauri/src/commands.rs
-  - apps/desktop/src-tauri/src/types.rs
-  - apps/desktop/src/shared/rpc.gen.ts
-  - apps/desktop/src/shared/rpc.ts
-  - packages/api-contract/src/desktop-edit-file-types.ts
 
 Bump BRIDGE_VERSION in $types_path to a value greater than $old_version
 (and add a string to BRIDGE_CAPABILITIES if you added a new endpoint)

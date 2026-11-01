@@ -5,12 +5,13 @@ import { chatMessageAcceptedEditSchema } from "@stll/api-contract/chat-message-r
 
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import { writeChatMessageRevisionOnTx } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 export const revisionParams = v.object({
@@ -139,7 +140,13 @@ const acceptMessageRevision = createSafeRootHandler(
       ),
     );
     if (result.type === "ok") {
-      upsertChatThreadSearchDocument(threadId).catch(captureError);
+      upsertChatThreadSearchDocument(threadId).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "acceptMessageRevision.upsertChatThreadSearchDocument",
+          ),
+        ),
+      );
     }
     return revisionResult(result);
   },

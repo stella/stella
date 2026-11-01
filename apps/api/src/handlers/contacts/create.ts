@@ -2,43 +2,34 @@ import { panic, Result } from "better-result";
 import { count, eq } from "drizzle-orm";
 import * as v from "valibot";
 
-import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
+import { contactCreateFieldsSchema } from "@stll/api-contract/contact-write";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
-import {
-  bankAccountSchema,
-  billingAddressSchema,
-  contactAddressSchema,
-  contactEmailSchema,
-  contactMetadataSchema,
-  contactPhoneSchema,
-} from "@/api/db/schema-validators";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
+import { fingerprintContactImport } from "@/api/handlers/contacts/contact-import-receipt";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import {
   dateOfBirthToColumns,
   validatePersonDetails,
 } from "@/api/handlers/contacts/person-details";
-import { createContactTypeSchema } from "@/api/handlers/contacts/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { SafeId } from "@/api/lib/branded-types";
-import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
-import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
-import {
-  invoiceLanguageSchema,
-  minorUnitAmountSchema,
-  resourceIdSchema,
-  userIdSchema,
-} from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { externalRefSchema } from "@/api/lib/imports/external-ref";
+import {
+  externalRefValues,
+  readExternalRefIds,
+} from "@/api/lib/imports/upsert-by-external-id";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -46,43 +37,8 @@ import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
 export const createContactBodySchema = v.object({
   id: resourceIdSchema("contact"),
-  type: createContactTypeSchema,
-  prefix: v.optional(v.pipe(v.string(), v.maxLength(32))),
-  firstName: v.optional(v.pipe(v.string(), v.maxLength(256))),
-  middleName: v.optional(v.pipe(v.string(), v.maxLength(256))),
-  lastName: v.optional(v.pipe(v.string(), v.maxLength(256))),
-  suffix: v.optional(v.pipe(v.string(), v.maxLength(32))),
-  dateOfBirth: v.optional(dateOfBirthSchema),
-  nationalityCodes: v.optional(nationalityCodesSchema),
-  organizationName: v.optional(v.pipe(v.string(), v.maxLength(512))),
-  displayName: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
-  notes: v.optional(v.string()),
-  emails: v.optional(v.pipe(v.array(contactEmailSchema), v.maxLength(20))),
-  phones: v.optional(v.pipe(v.array(contactPhoneSchema), v.maxLength(20))),
-  addresses: v.optional(v.pipe(v.array(contactAddressSchema), v.maxLength(10))),
-  metadata: v.optional(contactMetadataSchema),
-  tags: v.optional(v.pipe(v.array(v.string()), v.maxLength(50))),
-  color: v.optional(v.pipe(v.string(), v.maxLength(32))),
-  registrationNumber: v.optional(
-    v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH)),
-  ),
-  taxId: v.optional(
-    v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH)),
-  ),
-  vatId: v.optional(
-    v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH)),
-  ),
-  vatPayer: v.optional(v.nullable(v.boolean())),
-  bankAccounts: v.optional(v.pipe(v.array(bankAccountSchema), v.maxLength(10))),
-  billingAddress: v.optional(billingAddressSchema),
-  defaultHourlyRate: v.optional(minorUnitAmountSchema(0)),
-  currency: v.optional(v.pipe(v.string(), v.minLength(3), v.maxLength(3))),
-  paymentTermDays: v.optional(
-    v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(365)),
-  ),
-  invoiceLanguage: v.optional(v.nullable(invoiceLanguageSchema)),
-  originatingAttorneyId: v.optional(userIdSchema),
-  responsibleAttorneyId: v.optional(userIdSchema),
+  ...contactCreateFieldsSchema.entries,
+  external: v.optional(externalRefSchema),
 });
 
 export type CreateContactBody = v.InferOutput<typeof createContactBodySchema>;
@@ -177,6 +133,11 @@ export const insertContactRow = async ({
       invoiceLanguage: body.invoiceLanguage,
       originatingAttorneyId: body.originatingAttorneyId,
       responsibleAttorneyId: body.responsibleAttorneyId,
+      ...externalRefValues({
+        external: body.external ?? null,
+        externalChangeKey: fingerprintContactImport([body]),
+        importedAt: new Date(),
+      }),
       createdBy: userId,
     })
     .returning();
@@ -206,6 +167,7 @@ export const insertContactRow = async ({
 type CreateContactOutcome =
   | { kind: "limit_reached" }
   | { kind: "invalid_attorney" }
+  | { kind: "external_ref_taken"; contactId: SafeId<"contact"> }
   | { kind: "created"; row: typeof contacts.$inferSelect | undefined };
 
 // Shared contact-creation logic reused by the HTTP handler and the
@@ -233,6 +195,21 @@ export const createContactHandler = async function* ({
       );
       if (wouldExceed) {
         return { kind: "limit_reached" };
+      }
+
+      // The capacity lock serializes contact creation in the organization,
+      // so this read cannot race another create of the same ref.
+      if (body.external !== undefined) {
+        const existing = await readExternalRefIds({
+          tx,
+          table: contacts,
+          organizationId,
+          refs: [body.external],
+        });
+        const [contactId] = existing.values();
+        if (contactId !== undefined) {
+          return { kind: "external_ref_taken", contactId };
+        }
       }
 
       const attorneyIds: string[] = [];
@@ -270,6 +247,15 @@ export const createContactHandler = async function* ({
     );
   }
 
+  if (outcome.kind === "external_ref_taken") {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: `Contact ${outcome.contactId} already has this external source and id`,
+      }),
+    );
+  }
+
   if (outcome.kind === "invalid_attorney") {
     return Result.err(
       new HandlerError({
@@ -281,7 +267,11 @@ export const createContactHandler = async function* ({
 
   const created = outcome.row ?? panic("Contact insert returned no row");
 
-  flushContactSearchRepairs([created.id]).catch(captureError);
+  flushContactSearchRepairs([created.id]).catch(
+    createErrorCapture(
+      handlerErrorContext("createContactHandler.flushContactSearchRepairs"),
+    ),
+  );
 
   return Result.ok(created);
 };
@@ -290,13 +280,10 @@ const createContact = createSafeRootHandler(
   {
     contract: "patch",
     description:
-      "Create a contact in the organization address book. type (person or " +
-      "organization), displayName, and the contact id are supplied in the " +
-      "body; names, emails, phones, addresses, tags, registration and tax " +
-      "numbers, bank and billing details, default hourly rate, payment " +
-      "terms, and originating or responsible attorneys are optional. Refused " +
-      "once the organization holds its maximum number of contacts, or when " +
-      "an attorney id is not a member of the organization.",
+      "Create an organization address-book contact. Supply id, type " +
+      "(person or organization) and displayName; other fields are optional. " +
+      "Refuses the contact limit, attorney IDs outside this organization, " +
+      "and an external source/id already used by another contact.",
     permissions: { contact: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "save_contact" },

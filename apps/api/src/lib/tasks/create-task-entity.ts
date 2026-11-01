@@ -16,7 +16,7 @@ import {
   type WorkObligationSource,
   workspaces,
 } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -32,6 +32,7 @@ import {
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import {
@@ -42,6 +43,11 @@ import {
   lockTaskAssignmentMembers,
   writeTaskAssignments,
 } from "@/api/lib/tasks/assignment-membership";
+import {
+  fileTaskAssignedNotifications,
+  taskAssignedNotifications,
+} from "@/api/lib/tasks/assignment-notifications";
+import type { FileTaskAssignedNotifications } from "@/api/lib/tasks/assignment-notifications";
 import {
   deployedTaskFeatures,
   type TaskDeploymentFeatures,
@@ -125,6 +131,7 @@ export type CreateTaskEntityHandlerProps = SafeDbOrTx & {
   entityId?: SafeId<"entity">;
   features?: TaskDeploymentFeatures;
   workObligationSource?: CreateTaskWorkObligationSource;
+  fileNotifications?: FileTaskAssignedNotifications;
 };
 
 export const createTaskEntityHandler = async function* ({
@@ -138,6 +145,7 @@ export const createTaskEntityHandler = async function* ({
     entityId: requestedEntityId,
     features = deployedTaskFeatures(),
     workObligationSource,
+    fileNotifications = fileTaskAssignedNotifications,
   } = props;
   const agendaKind = body.agendaKind ?? AGENDA_ITEM_KIND.TASK;
   const taskStatus = body.status ?? "open";
@@ -410,17 +418,20 @@ export const createTaskEntityHandler = async function* ({
         });
       }
 
-      if (validAssigneeIds.length > 0) {
-        await writeTaskAssignments({
-          tx,
-          workspaceId,
-          assignments: validAssigneeIds.map((assigneeId) => ({
-            entityId,
-            userId: assigneeId,
-            role: "assignee",
-          })),
-        });
-      }
+      const writtenAssignments = await writeTaskAssignments({
+        tx,
+        workspaceId,
+        assignments: validAssigneeIds.map((assigneeId) => ({
+          entityId,
+          userId: assigneeId,
+          role: "assignee",
+        })),
+      });
+      const notifications = await taskAssignedNotifications(tx, {
+        actorUserId: userId,
+        workspaceId,
+        written: writtenAssignments,
+      });
 
       if (governsWork) {
         await createWorkObligation({
@@ -481,7 +492,7 @@ export const createTaskEntityHandler = async function* ({
 
       await enqueueEntitySearchRepairs(tx, [entityId]);
 
-      return { ok: true as const, entityId };
+      return { ok: true as const, entityId, notifications };
     }),
   );
 
@@ -496,8 +507,16 @@ export const createTaskEntityHandler = async function* ({
 
   // A caller-provided transaction has not committed yet. Its owner flushes
   // after commit so the repair worker cannot race an invisible entity.
+  // Assignment notifications wait for the same commit: filed now, they would
+  // point a colleague at a task that may still roll back. The callers that
+  // pass a transaction today assign only their own actor, so they owe none.
   if (props.tx === undefined) {
-    flushEntitySearchRepairs([txResult.entityId]).catch(captureError);
+    fileNotifications(txResult.notifications);
+    flushEntitySearchRepairs([txResult.entityId]).catch(
+      createErrorCapture(
+        handlerErrorContext("createTaskEntityHandler.flushEntitySearchRepairs"),
+      ),
+    );
   }
 
   return Result.ok({ entityId: txResult.entityId });

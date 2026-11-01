@@ -9,6 +9,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   createFeatureAccessSnapshot,
@@ -47,6 +48,9 @@ const workspaceId = toSafeId<"workspace">("ws_test123");
 const userId = toSafeId<"user">("user_abc");
 const sourceEntityId = toSafeId<"entity">(
   "11111111-1111-4111-8111-111111111248",
+);
+const assignmentId = toSafeId<"taskAssignee">(
+  "22222222-2222-4222-8222-222222222248",
 );
 
 /** Mock scopedDb that throws if called (validates early return). */
@@ -105,7 +109,7 @@ const createHandlerContext = ({
     request: new Request(`https://example.test/v1/tasks/${workspaceId}`, {
       method: "PUT",
     }),
-    route: "/v1/tasks/:workspaceId",
+    route: "/v1/tasks/:workspaceId" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
   });
@@ -274,7 +278,14 @@ describe("createTaskHandler validation", () => {
           }
           return table === entityVersions
             ? entityVersionInsertResult(values)
-            : { onConflictDoUpdate: async () => [] };
+            : {
+                onConflictDoUpdate: () => ({
+                  returning: async () =>
+                    (Array.isArray(values) ? values : [values]).map(
+                      (value) => ({ ...value, id: assignmentId }),
+                    ),
+                }),
+              };
         },
         select: () => ({ onConflictDoUpdate: async () => [] }),
       }),
@@ -282,6 +293,7 @@ describe("createTaskHandler validation", () => {
         set: () => ({ where: async () => [] }),
       }),
     });
+    const filed: unknown[] = [];
 
     const result = await Result.gen(() =>
       createTaskEntityHandler({
@@ -291,12 +303,92 @@ describe("createTaskHandler validation", () => {
         recordAuditEvent: async () => {},
         body: { name: "Prepare filing" },
         features: TASK_FEATURES_DISABLED,
+        fileNotifications: (rows) => {
+          filed.push(...rows);
+        },
       }),
     );
 
     expect(Result.isOk(result)).toBe(true);
     expect(assigneeRows).toEqual([
       expect.objectContaining({ userId, role: "assignee" }),
+    ]);
+    // Assigning yourself is not news.
+    expect(filed).toEqual([]);
+  });
+
+  test("tells a colleague assigned at creation who assigned them", async () => {
+    const colleagueId = toSafeId<"user">("user_colleague");
+    const { safeDb } = createScopedDbMock({
+      execute: async () => [{ id: workspaceId }],
+      $count: async () => 0,
+      select: () => ({
+        from: (table: unknown) =>
+          table === workspaces
+            ? createSelectQueryMock([
+                {
+                  organizationId: "org_test123",
+                  actorName: "Ada Lovelace",
+                  writeId: "7",
+                },
+              ]).from()
+            : createSelectQueryMock(
+                table === workspaceMembers || table === member
+                  ? [{ userId }, { userId: colleagueId }]
+                  : [],
+              ).from(),
+      }),
+      insert: (table: unknown) => ({
+        values: (
+          values: Record<string, unknown> | Record<string, unknown>[],
+        ) =>
+          table === entityVersions
+            ? entityVersionInsertResult(values)
+            : {
+                onConflictDoUpdate: () => ({
+                  returning: async () =>
+                    (Array.isArray(values) ? values : [values]).map(
+                      (value) => ({ ...value, id: assignmentId }),
+                    ),
+                }),
+              },
+        select: () => ({ onConflictDoUpdate: async () => [] }),
+      }),
+      update: () => ({
+        set: () => ({ where: async () => [] }),
+      }),
+    });
+    const filed: unknown[] = [];
+
+    const result = await Result.gen(() =>
+      createTaskEntityHandler({
+        safeDb,
+        workspaceId,
+        userId,
+        recordAuditEvent: async () => {},
+        body: { name: "Draft the reply", assigneeIds: [colleagueId, userId] },
+        features: TASK_FEATURES_DISABLED,
+        fileNotifications: (rows) => {
+          filed.push(...rows);
+        },
+      }),
+    );
+
+    if (!Result.isOk(result)) {
+      expect.unreachable("the task was not created");
+    }
+    const { entityId } = result.value;
+    expect(filed).toEqual([
+      {
+        kind: "task_assigned",
+        metadata: { actorName: "Ada Lovelace" },
+        entityType: "task",
+        entityId,
+        workspaceId,
+        organizationId: "org_test123",
+        userId: colleagueId,
+        idempotencyKey: `task_assigned:${entityId}:${colleagueId}:${assignmentId}:7`,
+      },
     ]);
   });
 

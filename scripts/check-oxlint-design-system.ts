@@ -82,6 +82,7 @@ if (process.argv.at(2) === CHILD_MODE) {
     process.execPath,
     [import.meta.filename, CHILD_MODE],
     {
+      maxBuffer: 2 ** 30,
       cwd: ROOT,
       encoding: "utf-8",
       env: {

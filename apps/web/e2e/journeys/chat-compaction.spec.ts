@@ -13,8 +13,10 @@ import { JOURNEY_TAG } from "../playwright.journeys.config";
 
 const TURN_FILLER = "Clause ".repeat(25_000);
 const MAX_TURNS = 16;
-// Allow the five-minute background compactor cadence and its one-minute run budget.
-const COMPACTION_SETTLE_MS = 6 * 60_000;
+// The compactor's worst case after the thread is marked due: its five-minute
+// cadence, one runner wait (a minute), one sweep (under a minute) and the
+// compactor's one-minute run budget.
+const COMPACTION_SETTLE_MS = 8 * 60_000;
 // One mock-model turn, from send to its persisted reply.
 const TURN_SETTLE_MS = 2 * 60_000;
 const CHAT_THREAD_PATH = /\/chat\/([0-9a-f-]{36})$/u;

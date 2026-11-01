@@ -1,7 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 
 import { isChatTurnInFlight } from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { getChatRuntimeContextKind } from "@/features/chat/chat-query-contract";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { emitDevCanaryError } from "@/lib/dev-canary";
@@ -19,6 +21,7 @@ import type { ChatRuntime } from "./chat-runtime";
 import {
   chatContextCapabilityFingerprint,
   chatThreadCacheKey,
+  chatThreadOptions,
   invalidateChatThread,
   invalidateChatThreadLists,
 } from "./queries";
@@ -247,6 +250,37 @@ const chatRuntimeRegistry = new LifecycleRegistry<
   string,
   ChatRuntimeRegistryEntry
 >();
+
+/** How each registered runtime reads its thread as the server stores it:
+ *  the thread query it was built from, read again. */
+const storedThreadReaders = new WeakMap<
+  ChatRuntime,
+  () => Promise<ChatThreadFetched>
+>();
+
+/**
+ * Put the thread back on `runtime`'s page as the server stores it, after a
+ * request the server did not accept. The thread query is read again, so the
+ * registry reconciles against the same stored history the page then shows:
+ * an unchanged history keeps this runtime, a changed one rebuilds from it.
+ * When the stored thread cannot be read (the request failed, or the runtime
+ * was built with no thread query to read), the page goes back to
+ * `fallback`, the messages it showed before the request, but not as stored
+ * history: the request's error stays on the page, since the server may have
+ * changed the thread after all, and the thread query reloads it later.
+ */
+export const showStoredChatThread = async (
+  runtime: ChatRuntime,
+  fallback: PersistedChatMessage[],
+): Promise<void> => {
+  const read = storedThreadReaders.get(runtime);
+  const stored = read === undefined ? undefined : await Result.tryPromise(read);
+  if (stored === undefined || Result.isError(stored)) {
+    runtime.setMessages(fallback);
+    return;
+  }
+  runtime.showStoredMessages(stored.value.messages);
+};
 
 const advanceAcknowledgedApprovalSeed = ({
   runtime,
@@ -598,7 +632,13 @@ export const acquireChatRuntime = ({
     initialMessages: data.messages,
     key,
     onError: (error) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "acquireChatRuntime:failure",
+        scope: {
+          type: "handler",
+          handlerId: `chat-runtime.${key.scope}.${getChatRuntimeContextKind(context)}`,
+        },
+      });
       // The server persists a failed terminal outcome before emitting
       // RUN_ERROR. Reconcile the ephemeral TanStack error runtime with that
       // durable message metadata just as a successful finish does.
@@ -617,6 +657,16 @@ export const acquireChatRuntime = ({
     },
     reloadThread: refreshPersistedThread,
   });
+  if (context !== undefined) {
+    storedThreadReaders.set(
+      runtime,
+      async () =>
+        await queryClient.query({
+          ...chatThreadOptions({ activeOrganizationId, context, key }),
+          staleTime: 0,
+        }),
+    );
+  }
   chatRuntimeRegistry.set(registryKey, {
     runtime,
     seed,

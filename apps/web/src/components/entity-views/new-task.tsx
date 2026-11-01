@@ -18,8 +18,10 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
@@ -40,6 +42,7 @@ export const NewEntityViewTask = ({
   agendaKind = "task",
   assigneeUserId,
 }: NewEntityViewTaskProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
@@ -48,8 +51,8 @@ export const NewEntityViewTask = ({
   const dataQuery = useQuery(
     workspacesNavigationOptions({ organizationId, userId }),
   );
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "NewEntityViewTask:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const pendingRef = useRef(false);
   const [pending, setPending] = useState(false);
@@ -61,9 +64,12 @@ export const NewEntityViewTask = ({
     setPending(true);
     const result = await Result.tryPromise(async () =>
       unwrapApiResponse(
-        await api
-          .tasks({ workspaceId: toSafeId<"workspace">(selectedWorkspaceId) })
-          .put({
+        await idempotentSubmit.run({
+          operation: JSON.stringify([
+            'api.tasks({workspaceId:toSafeId<"workspace">(selectedWorkspaceId)})',
+            { workspaceId: toSafeId<"workspace">(selectedWorkspaceId) },
+          ]),
+          body: {
             name: t("tasks.untitled"),
             status,
             agendaKind,
@@ -75,11 +81,24 @@ export const NewEntityViewTask = ({
                       ? []
                       : [toSafeId<"user">(assigneeUserId)],
                 }),
-          }),
+          },
+          send: async (body) =>
+            api
+              .tasks({
+                workspaceId: toSafeId<"workspace">(selectedWorkspaceId),
+              })
+              .put(body),
+        }),
       ),
     );
     if (result.isErr()) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "NewEntityViewTask.create:failure",
+        scope: {
+          type: "handler",
+          handlerId: "NewEntityViewTask.create:failure",
+        },
+      });
       notifyUserError(result.error, t("common.unexpectedError"));
     } else {
       await Promise.all([

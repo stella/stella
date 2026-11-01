@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
+import { API } from "tsrs/unstable/async";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -15,7 +15,7 @@ import {
   runCustomLintTests,
 } from "./run-custom-lint-tests";
 
-test("the runner census preserves standard array join types", () => {
+test("the runner census preserves standard array join types", async () => {
   const directory = mkdtempSync(path.join(tmpdir(), "runner-census-types-"));
   const filename = path.join(directory, "fixture.ts");
   try {
@@ -28,30 +28,37 @@ declare const dataRow: string;
 rows.push(dataRow);
 `,
     );
-    const program = ts.createProgram({
-      rootNames: [filename],
-      options: {
-        noEmit: true,
-        strict: true,
-        skipLibCheck: true,
-        esModuleInterop: true,
-        target: ts.ScriptTarget.ESNext,
-        module: ts.ModuleKind.Preserve,
-        moduleResolution: ts.ModuleResolutionKind.Bundler,
-        types: [],
-      },
-    });
-    const fixture = program.getSourceFile(filename);
-    if (fixture === undefined) {
-      panic("The array join type fixture was not loaded");
-    }
-    expect(
-      program
-        .getSemanticDiagnostics(fixture)
-        .map((diagnostic) =>
-          ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+    const config = path.join(directory, "tsconfig.json");
+    writeFileSync(
+      config,
+      JSON.stringify({
+        files: [filename],
+        compilerOptions: {
+          noEmit: true,
+          strict: true,
+          skipLibCheck: true,
+          esModuleInterop: true,
+          target: "ESNext",
+          module: "Preserve",
+          moduleResolution: "Bundler",
+          types: [],
+        },
+      }),
+    );
+    const api = new API({ cwd: directory });
+    try {
+      const snapshot = await api.createSnapshot({ openProjects: [config] });
+      const project =
+        snapshot.getConfiguredProject(config) ??
+        panic("The array join type fixture was not loaded");
+      expect(
+        (await project.program.getSemanticDiagnostics([filename])).map(
+          ({ text }) => text,
         ),
-    ).toEqual([]);
+      ).toEqual([]);
+    } finally {
+      await api.close();
+    }
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

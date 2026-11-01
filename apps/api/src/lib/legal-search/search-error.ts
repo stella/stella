@@ -1,5 +1,7 @@
 import { TaggedError } from "better-result";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 /**
  * Why a provider cursor cannot be continued. Named rather than flagged,
  * because every answer requires a fresh first page and only the reason tells
@@ -18,7 +20,11 @@ export class InvalidLegalSearchCursorError extends TaggedError(
 )<{
   message: string;
   reason: InvalidLegalSearchCursorReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 /**
  * A legal-search provider could not complete an otherwise valid query.

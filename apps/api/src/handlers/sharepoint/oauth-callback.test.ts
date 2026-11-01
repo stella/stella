@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { createSharepointOAuthCallback } from "@/api/handlers/sharepoint/oauth-callback";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -57,6 +58,7 @@ const failingLookupContext = (
   request: Request = new Request("https://api.test/sharepoint/oauth/callback"),
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
+    route: "/v1/sharepoint/oauth/callback" satisfies ApiRoutePath,
     query: { code: "auth-code", state: "state-token" },
     request,
     safeDb: queuedSafeDb([error]),

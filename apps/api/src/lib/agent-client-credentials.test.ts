@@ -23,8 +23,8 @@ afterEach(() => {
   env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
 });
 
-const credential = Buffer.alloc(32, 0x2a).toString("hex");
-const alternateKey = Buffer.alloc(32, 0x2b).toString("hex");
+const credential = Buffer.alloc(32, 0x2a).toHex();
+const alternateKey = Buffer.alloc(32, 0x2b).toHex();
 
 describe("stored agent credential reads", () => {
   test("selects the configured write format and accepts both read formats", async () => {
@@ -123,7 +123,7 @@ describe("stored agent credential reads", () => {
         ...process.env,
         CONTENT_ENCRYPTION_KEY:
           process.env["CONTENT_ENCRYPTION_KEY"] === alternateKey
-            ? Buffer.alloc(32, 0x2c).toString("hex")
+            ? Buffer.alloc(32, 0x2c).toHex()
             : alternateKey,
         STORED_AGENT_TEST_CREDENTIAL: storedCredential,
       },
@@ -152,7 +152,7 @@ describe("stored agent credential reads", () => {
           import { Result } from "better-result";
           import { encryptAgentClientCredential, readAgentClientCredential } from "./src/agent-auth/credentials.ts";
           import { HandlerError } from "./src/lib/errors/tagged-errors.ts";
-          const credential = Buffer.alloc(32, 0x2a).toString("hex");
+          const credential = Buffer.alloc(32, 0x2a).toHex();
           let upgrades = 0;
           const write = await encryptAgentClientCredential(credential);
           const read = await readAgentClientCredential({

@@ -15,6 +15,7 @@ import {
 } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import { loadAccessibleMcpWorkspaces } from "@/api/mcp/context";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
@@ -68,6 +69,9 @@ const OBJECT_STORAGE = "reads or writes DOCX files in object storage";
 const TOOL_COVERAGE = {
   search: excluded(SEARCH_INDEX),
   fetch: excluded(SEARCH_INDEX),
+  create_organization: excluded(
+    "dispatches the organizations.create HTTP capability; its output is covered by the organization creation PostgreSQL tests",
+  ),
   list_matters: RUN,
   read_contact: RUN,
   read_content_across_matters: excluded(SEARCH_INDEX),
@@ -417,6 +421,10 @@ const createOrganization = async (): Promise<Caller> => {
     name: "Firm",
     slug: `firm-${organizationId}`,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(testDb, {
+    organizationId,
+    now: new Date(),
   });
   await testDb.insert(member).values({
     id: mintAuthProviderIdValue(),

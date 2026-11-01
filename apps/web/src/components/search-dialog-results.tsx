@@ -43,13 +43,14 @@ import type { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { formatHotkeyForPlatform } from "@/lib/hotkeys";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { resolveRecentFilePreviewFieldId } from "@/lib/search";
 import type { SearchAISummaryParams } from "@/lib/search";
 import type {
   RecentFileWithIdentity,
   RecentSearch,
 } from "@/lib/search-recents";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 
 type SearchSummaryData = NonNullable<
@@ -93,8 +94,10 @@ export const CommandActionItem = ({
         >
           <Icon className="text-muted-foreground size-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{action.title}</span>
+          {/* A shortcut hint means nothing without a keyboard, so a
+              touch-first device drops it. */}
           {action.hotkey && (
-            <kbd className="bg-muted text-muted-foreground text-3xs pointer-events-none inline-flex h-5 shrink-0 items-center gap-1 rounded border px-1.5 font-medium select-none">
+            <kbd className="bg-muted text-muted-foreground text-3xs pointer-events-none inline-flex h-5 shrink-0 items-center gap-1 rounded border px-1.5 font-medium select-none pointer-coarse:hidden">
               {formatHotkeyForPlatform(action.hotkey, hotkeyPlatform)}
             </kbd>
           )}
@@ -128,7 +131,8 @@ export const SearchSummaryItem = ({
       <CapabilityAction action={{ capability: "ai" }} surface="control">
         {(capabilityProps) => (
           <Button
-            className="mb-2 h-auto w-full items-start justify-start gap-3 rounded-md px-2.5 py-2.5 text-start whitespace-normal sm:h-auto"
+            layout="wrap"
+            className="mb-2 w-full gap-3 rounded-md px-2.5 py-2.5"
             disabled={isPending}
             onClick={onClick}
             variant={isError ? "destructive-outline" : "outline"}
@@ -461,8 +465,8 @@ const RecentFileTypeIcon = ({ file }: { file: RecentFileWithIdentity }) => {
     ...entityOptions(file.workspaceId, file.entityId),
     enabled: false,
   });
-  const entityView = useQueryView(entityQuery);
-  useQueryViewError(entityView);
+  const entityView = queryView(entityQuery);
+  useQueryViewError(entityView, "RecentFileTypeIcon:query");
   const entity = entityView.type === "items" ? entityView.items : undefined;
   const fieldId = entity
     ? resolveRecentFilePreviewFieldId({

@@ -7,6 +7,8 @@ export const CEE_DIACRITICS = "ěščřžýáíéůú ĚŠČŘŽ ľĺŕô ąćę
 
 const line = (index: number) =>
   ({
+    workspaceId: "matter-one",
+    workspaceName: "Contract review",
     description: `Právní služby ${index + 1}: příprava podání, jednání s protistranou a revize smluvní dokumentace`,
     quantity: "2.5000",
     unit: "h",

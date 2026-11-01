@@ -8,6 +8,7 @@ import * as v from "valibot";
 
 import { parseTimeZoneId } from "@stll/time";
 
+import { routeSearchRefusals } from "@/__fixtures__/route-shell/route-search-totality";
 import {
   authFixtureBeforeLoadData,
   authFixtureLoaderData,
@@ -26,7 +27,7 @@ import {
   publicFixtureReadySelector,
   publicRouteExceptions,
 } from "@/__fixtures__/route-shell/route-shell-public-fixtures";
-import type { api } from "@/lib/api";
+import type { api, WebApiRoutes } from "@/lib/api";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { sessionOptions } from "@/lib/auth-query-options";
 import { toSafeId } from "@/lib/safe-id";
@@ -34,7 +35,15 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 type RouteShellProviderFixtureOptions = {
   mode: "public-knowledge" | "legacy-tools";
-  suite?: "leaf-shells" | "law-hosts" | "professional-use";
+  suite?:
+    | "leaf-shells"
+    | "law-hosts"
+    | "professional-use"
+    | "route-search"
+    | "chat-composer"
+    | "case-search";
+  /** The router's reading of a URL, which the route-search suite checks with. */
+  parseSearch?: (searchStr: string) => Record<string, unknown>;
 };
 
 const FIXTURE_AUDIENCE = { anonymous: "anonymous", member: "member" } as const;
@@ -53,6 +62,7 @@ const fixtureRouteSchema = v.object({
       ),
     ),
     loader: v.optional(v.unknown()),
+    validateSearch: v.optional(v.unknown()),
     staticData: v.optional(
       v.looseObject({
         appFrame: v.optional(v.picklist(["none", "member", "knowledge"])),
@@ -223,7 +233,13 @@ const installFixtureNetwork = () => {
   };
   const unexpectedRequests: string[] = [];
   const requests: string[] = [];
-  const state: { audience: FixtureAudience } = {
+  const state: {
+    audience: FixtureAudience;
+    response?: (request: Request) =>
+      | Response
+      | undefined
+      | Promise<Response | undefined>;
+  } = {
     audience: FIXTURE_AUDIENCE.anonymous,
   };
   const professionalUseState: { status: "accepted" | "required" } = {
@@ -265,6 +281,7 @@ const installFixtureNetwork = () => {
     timeLockedThroughMonth: null,
     timeNarrativeRequired: false,
     timeZone,
+    primaryJurisdictionTimeZone: timeZone,
     timeZoneSource: "organization",
   } satisfies NonNullable<
     Awaited<ReturnType<(typeof api)["organization-settings"]["get"]>>["data"]
@@ -273,6 +290,10 @@ const installFixtureNetwork = () => {
     id: toSafeId<"workspace">("00000000-0000-4000-8000-000000000001"),
     organizationId: session.activeOrganizationId,
     name: "Fixture matter",
+    externalSource: null,
+    externalId: null,
+    externalChangeKey: null,
+    importedAt: null,
     reference: "2026/1",
     clientId: null,
     leadUserId: null,
@@ -287,11 +308,15 @@ const installFixtureNetwork = () => {
     Awaited<ReturnType<ReturnType<typeof api.workspaces>["get"]>>["data"]
   >;
   globalThis.fetch = Object.assign(
-    async (input: RequestInfo | URL) => {
+    async (input: RequestInfo | URL, init?: RequestInit) => {
       await settleFixtureRequest();
       const url = input instanceof Request ? input.url : String(input);
       const pathname = new URL(url, window.location.origin).pathname;
       requests.push(pathname);
+      const customResponse = await state.response?.(new Request(input, init));
+      if (customResponse !== undefined) {
+        return customResponse;
+      }
       if (pathname === "/api/auth/get-session") {
         return Response.json(
           state.audience === "member" ? { session, user } : null,
@@ -343,7 +368,54 @@ const installFixtureNetwork = () => {
         >);
       }
       if (/^\/v1\/chat\/threads\/[0-9a-f-]{36}\/messages$/u.test(pathname)) {
+        if (new URL(url).searchParams.get("allowMissingThread") === "true") {
+          return Response.json({
+            activeSkill: null,
+            activeTurnId: null,
+            attachedFiles: { fileCount: 0, files: [] },
+            context: {
+              estimatedTokens: 0,
+              triggerTokens: 0,
+              cacheStableTokens: 0,
+              summarizedMessageCount: 0,
+              breakdown: {
+                promptTokens: 0,
+                toolTokens: 0,
+                summaryTokens: 0,
+                attachmentTokens: 0,
+                conversationTokens: 0,
+              },
+            },
+            contextMatterIds: [],
+            forkProvenance: { type: "none" },
+            lastActivityAt: null,
+            messages: [],
+            model: null,
+            olderCursor: null,
+            reasoningEffort: null,
+            threadExists: false,
+            threadRevision: null,
+            usedAnonymization: false,
+            webSearchAvailable: false,
+            webSearchEnabled: false,
+          } satisfies WebApiRoutes["chat"]["threads"][":threadId"]["messages"]["get"]["response"][200]);
+        }
         return Response.json({ message: "Not found" }, { status: 404 });
+      }
+      if (pathname === "/v1/skills") {
+        return Response.json({
+          builtIn: [],
+          installed: [],
+          canManageTeam: false,
+          limit: 100,
+          nextCursor: null,
+        } satisfies WebApiRoutes["skills"]["get"]["response"][200]);
+      }
+      if (pathname === "/v1/chat/skill-availability") {
+        return Response.json({
+          unavailable: [],
+          unavailableHere: [],
+        } satisfies WebApiRoutes["chat"]["skill-availability"]["get"]["response"][200]);
       }
       if (pathname === "/v1/chat/threads") {
         return Response.json({
@@ -424,7 +496,7 @@ const installFixtureNetwork = () => {
         return Response.json({
           decisions: 0,
           updatedAt: null,
-          courts: [],
+          health: "unknown",
         } satisfies NonNullable<
           Awaited<ReturnType<typeof api.case.decisions.status.get>>["data"]
         >);
@@ -455,6 +527,19 @@ const installFixtureNetwork = () => {
           },
         } satisfies NonNullable<
           Awaited<ReturnType<(typeof api)["search-history"]["get"]>>["data"]
+        >);
+      }
+      // The sidebar's Time link counts the entries waiting for approval.
+      if (pathname === "/v1/time-entries/approval-queue") {
+        return Response.json({
+          items: [],
+          nextCursor: null,
+          limit: 1,
+          pendingCount: 0,
+        } satisfies NonNullable<
+          Awaited<
+            ReturnType<(typeof api)["time-entries"]["approval-queue"]["get"]>
+          >["data"]
         >);
       }
       if (pathname === "/health") {
@@ -490,12 +575,17 @@ const installFixtureNetwork = () => {
   };
 };
 const loadFixtureRuntime = async (
-  { mode, suite = "leaf-shells" }: RouteShellProviderFixtureOptions,
+  {
+    mode,
+    suite = "leaf-shells",
+    parseSearch,
+  }: RouteShellProviderFixtureOptions,
   network: ReturnType<typeof installFixtureNetwork>,
 ) => {
   // Isomorphic functions run their browser half here, as the test preload
   // (src/test-setup.ts) arranges for every test.
   const { routeTree } = await import("@/router");
+  const { Route: otpRoute } = await import("@/routes/auth/otp");
   const { createAppQueryClient } = await import("@/lib/react-query");
   const { professionalUseOptions } = await import("@/lib/auth-queries");
   const { createMemoryHistory, createRouter, RouterProvider, useMatches } =
@@ -517,7 +607,7 @@ const loadFixtureRuntime = async (
     }
     await initializeI18n();
   };
-  const { useFormatter, useLocale } = await import("@/i18n/formatting-context");
+  const { useFormatter, useFormattingLocale } = await import("@/i18n/formatting-context");
   const { useRouteErrorLifecycle } =
     await import("@/lib/analytics/route-error-lifecycle-context");
   const { ApiVersionMismatchReporter } =
@@ -531,6 +621,8 @@ const loadFixtureRuntime = async (
   const { noopAnalytics } = await import("@/lib/analytics/noop");
   const { createRouteErrorLifecycleController } =
     await import("@/lib/analytics/route-error-lifecycle");
+  const { parseRouteSearch, stringifyRouteSearch } =
+    await import("@/route-search-params");
 
   const createFixtureRouter = (initialEntry: string) => {
     const queryClient = createAppQueryClient();
@@ -540,6 +632,8 @@ const loadFixtureRuntime = async (
     const caughtErrors: Error[] = [];
     const router = createRouter({
       routeTree,
+      parseSearch: parseRouteSearch,
+      stringifySearch: stringifyRouteSearch,
       defaultOnCatch: (error) => {
         caughtErrors.push(
           error instanceof Error ? error : new Error(String(error)),
@@ -622,10 +716,12 @@ const loadFixtureRuntime = async (
   return {
     mode,
     suite,
+    parseSearch,
     createFixtureRouter,
     professionalUseOptions,
     census,
     registeredRoutes,
+    otpRoute,
     ancestors,
     isLegacyTool,
     uiLeaves,
@@ -641,7 +737,7 @@ const loadFixtureRuntime = async (
     waitFor,
     initializeI18n: initializeFixtureI18n,
     useFormatter,
-    useLocale,
+    useFormattingLocale,
     useRouteErrorLifecycle,
     ApiVersionMismatchReporter,
     useAuthenticatedUser,
@@ -655,7 +751,7 @@ const loadFixtureRuntime = async (
     ...network,
   };
 };
-type FixtureRuntime = Awaited<ReturnType<typeof loadFixtureRuntime>>;
+export type FixtureRuntime = Awaited<ReturnType<typeof loadFixtureRuntime>>;
 const fixtureSearch = (routeId: string, email: string) => {
   switch (routeId) {
     case "/auth/otp":
@@ -699,12 +795,64 @@ const declareCensus = (fixture: FixtureRuntime) => {
   const {
     mode,
     suite,
+    parseSearch,
     registeredRoutes,
     isLegacyTool,
     uiLeaves,
     selectedLeaves,
     hasUi,
   } = fixture;
+  if (suite === "route-search") {
+    const readSearch =
+      parseSearch ??
+      panic("The route-search suite needs the router's search parser.");
+    test("every route opens whatever its URL's search carries", () => {
+      expect(
+        routeSearchRefusals(
+          registeredRoutes,
+          (routeId) => fixtureSearch(routeId, "reader@example.com"),
+          readSearch,
+        ),
+      ).toEqual([]);
+    });
+    test("changing the OTP email reloads its actual loader for that address", async () => {
+      const { otpRoute } = fixture;
+      const loader = otpRoute.options.loader;
+      if (typeof loader !== "function") {
+        panic("The actual OTP route must declare its loader");
+      }
+      const loadedEmails: string[] = [];
+      otpRoute.options.loader = (args): unknown => {
+        loadedEmails.push(args.context.otpEmail);
+        return loader(args);
+      };
+      fixture.state.audience = "anonymous";
+      const { router, queryClient, caughtErrors } = fixture.createFixtureRouter(
+        "/auth/otp?email=first%40example.test",
+      );
+      try {
+        await router.load();
+        expect(loadedEmails).toEqual(["first@example.test"]);
+        await router.navigate({
+          to: "/auth/otp",
+          search: { email: "second@example.test" },
+        });
+        expect(loadedEmails).toEqual([
+          "first@example.test",
+          "second@example.test",
+        ]);
+        expect(
+          router.state.matches.find((match) => match.routeId === "/auth/otp")
+            ?.status,
+        ).toBe("success");
+        expect(caughtErrors).toEqual([]);
+      } finally {
+        await queryClient.cancelQueries();
+        queryClient.clear();
+        otpRoute.options.loader = loader;
+      }
+    });
+  }
   if (suite === "leaf-shells") {
     test(`${mode}: every top-level UI section declares its runtime frame scope`, () => {
       expect(
@@ -753,7 +901,7 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
     waitFor,
     initializeI18n,
     useFormatter,
-    useLocale,
+    useFormattingLocale,
     useRouteErrorLifecycle,
     ApiVersionMismatchReporter,
     useAuthenticatedUser,
@@ -830,7 +978,7 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
         };
         const Probe = () => {
           const formatter = useFormatter();
-          const locale = useLocale();
+          const locale = useFormattingLocale();
           const lifecycle = useRouteErrorLifecycle();
           const maybeUser = useMaybeAuthenticatedUser();
           const routeId = useMatches({
@@ -879,7 +1027,7 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
           component: protectedLeaf ? Probe : Page,
           beforeLoad: protectedLeaf
             ? undefined
-            : () => authFixtureBeforeLoadData(route.id),
+            : () => authFixtureBeforeLoadData(route.id, user.email),
           loader,
         });
         await initializeI18n();
@@ -1186,7 +1334,7 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
     fixture.unexpectedRequests.length = 0;
     caseRoute.update({
       component: CasePage,
-      beforeLoad: () => authFixtureBeforeLoadData(caseRoute.id),
+      beforeLoad: () => authFixtureBeforeLoadData(caseRoute.id, fixture.user.email),
       loader: () => publicFixtureLoaderData(caseRoute.id),
     });
     await fixture.initializeI18n();
@@ -1374,6 +1522,14 @@ export const declareRouteShellProviderFixture = async (
   declareLeafCases(fixture);
   await declareLawCases(fixture);
   declareProfessionalUseCases(fixture);
+  if (options.suite === "case-search") {
+    const { declareCaseSearchNavigationCases } =
+      await import("./case-search-navigation-fixture");
+    declareCaseSearchNavigationCases(fixture);
+    const { declareStatuteSearchNavigationCases } =
+      await import("./statute-search-navigation-fixture");
+    declareStatuteSearchNavigationCases(fixture);
+  }
   const {
     suite,
     selectedLeaves,
@@ -1405,4 +1561,5 @@ export const declareRouteShellProviderFixture = async (
       );
     }
   });
+  return fixture;
 };

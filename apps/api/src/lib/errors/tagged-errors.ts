@@ -1,3 +1,4 @@
+// parser-output-unchanged: registers typed error fingerprint dimensions without changing error payloads or parser results.
 // parser-output-unchanged: [pl-courts] ParseXmlError moved to its parser module; successful parser output is identical.
 // parser-output-unchanged: [pl-sn] ParseXmlError moved to its parser module; successful parser output is identical.
 // parser-output-unchanged: [pl-kio] ParseXmlError moved to its parser module; successful parser output is identical.
@@ -31,6 +32,7 @@ import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission
 import { TimeoutError } from "@stll/concurrency/with-timeout";
 import {
   declareFailureClass,
+  declareFingerprintFields,
   type FailureReason,
   FetchBoundaryError,
 } from "@stll/errors";
@@ -185,13 +187,21 @@ type HandlerErrorBaseProps<
    *  path, so a caller can fix the exact entries it sent rather than parsing
    *  the summary message. */
   issues?: HandlerErrorValidationIssue[] | undefined;
+  workspaceId?: string | undefined;
   retryable?: boolean | undefined;
   retryAfterMs?: number | undefined;
 };
 
 export type HandlerErrorProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
-> = HandlerErrorBaseProps<TStatus> & HandlerErrorRetryAdvice;
+> = HandlerErrorBaseProps<TStatus> &
+  HandlerErrorRetryAdvice &
+  // Gateway/availability statuses must state their semantics; the status alone
+  // cannot distinguish an upstream outage from configuration or output defects.
+  (
+    | { status: Exclude<HandlerErrorStatusCode, 502 | 503> }
+    | { code: HandlerErrorCode }
+  );
 
 // TaggedError(...) cannot reference the class type parameter in the base
 // expression, so the base uses the wide props type and the subclass narrows
@@ -213,6 +223,7 @@ export class HandlerError<
   declare stepUp?: HandlerErrorStepUp | undefined;
   declare requiredFields?: HandlerErrorMissingRequiredField[] | undefined;
   declare issues?: HandlerErrorValidationIssue[] | undefined;
+  declare workspaceId?: string | undefined;
 
   constructor(props: HandlerErrorProps<TStatus>) {
     super(props);
@@ -230,6 +241,7 @@ export class HandlerError<
     this.stepUp = props.stepUp;
     this.requiredFields = props.requiredFields;
     this.issues = props.issues;
+    this.workspaceId = props.workspaceId;
   }
 }
 
@@ -294,7 +306,11 @@ export class UsageLimitExceededError extends TaggedError(
   required: number;
   available: number;
   reason: UsageLimitExceededReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 export class HealthCheckError extends TaggedError("HealthCheckError")<{
   message: string;
@@ -405,9 +421,10 @@ export class CorpusMemberDigestMismatchError extends TaggedError(
 }> {}
 
 /**
- * A stored document AST carried vocabulary this reader does not declare:
- * a block role, a block kind, or an inline kind. The read served the
- * document with those degraded (see `persistedAstDegradations` in
+ * A stored document AST carried vocabulary this reader does not declare
+ * (a block role, a block kind, or an inline kind) or head matter after the
+ * body. The read served the document with those degraded (see
+ * `persistedAstDegradations` and `headMatterOrderDegradations` in
  * `@stll/legal-ast/document-ast`); this is telemetry only, so the row is
  * visible: either a writer newer than this reader, or a row written past
  * the ingestion boundary that needs repair.
@@ -417,6 +434,17 @@ export class StoredAstDegradedError extends TaggedError(
 )<{
   message: string;
   degradations: readonly PersistedAstDegradation[];
+}> {}
+
+export const STORED_CORPUS_VALIDATION_CODE = "stored_corpus_invalid";
+
+/** Stored JSON failed its reader contract; contains diagnostics only, never payloads. */
+export class StoredCorpusValidationError extends TaggedError(
+  "StoredCorpusValidationError",
+)<{
+  message: string;
+  code: typeof STORED_CORPUS_VALIDATION_CODE;
+  paths: readonly string[];
 }> {}
 
 /** Validation/domain-layer errors: no valid inputs, invalid config. */
@@ -549,7 +577,11 @@ export class SandboxError extends TaggedError("SandboxError")<{
    */
   logs?: readonly string[];
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 /** Integration-layer errors: AI failures, parse failures, external I/O. */
 export class WorkflowIntegrationError extends TaggedError(
@@ -757,7 +789,11 @@ export class SubprocessError extends TaggedError("SubprocessError")<{
   exitCode: number | null;
   termination: SubprocessTermination | null;
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["termination.reason"]);
+  }
+}
 
 export type ExtractionWorkerTermination = {
   reason: SubprocessTerminationReason;
@@ -806,7 +842,11 @@ export class ExtractionWorkerError extends TaggedError(
   termination: ExtractionWorkerTermination | null;
   /** Parser error class recovered from worker stderr; null for termination. */
   workerErrorClass: string | null;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["termination.reason"]);
+  }
+}
 
 /**
  * A scheduler job exceeded its per-job execution ceiling. The task promise

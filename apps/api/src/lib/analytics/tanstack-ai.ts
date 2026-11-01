@@ -38,6 +38,7 @@ import { sanitizeHandoffDiagnosticText } from "@/api/lib/errors/handoff-diagnost
 import { ModelRunError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { emitPromptCacheMetric } from "@/api/lib/observability/request-metrics";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
@@ -383,18 +384,41 @@ const recordTanStackConsumption = async ({
   });
 
   if (Result.isError(result)) {
-    captureTelemetryError(result.error, {
-      organization_id: metering.organizationId,
-      source: "usage.tanstack_ai",
-      trace_id: config.traceId,
-    });
+    captureTelemetryError(
+      result.error,
+      handlerErrorContext("analytics.recordTanStackConsumption.result_error", {
+        organization_id: metering.organizationId,
+        source: "usage.tanstack_ai",
+        trace_id: config.traceId,
+      }),
+    );
   }
 };
 
-export const createTanStackAIAnalyticsCallbacks = (
-  { analytics = getServerAnalytics(), ...config }: TanStackAIAnalyticsProps,
-  resolvedModel?: Omit<ResolvedTanStackTextModelInfo, "availability">,
+/**
+ * What a root callbacks instance and every `forModel` descendant share. A
+ * caller binds a model with `forModel`, the descendant's middleware records
+ * a failed run, and the caller's own catch reports the same failure on the
+ * root: both report into one ledger, so the failure is recorded once.
+ */
+type CallbacksFamily = {
+  readonly analytics: ServerAnalytics;
+  readonly generationFailures: GenerationFailureLedger;
+};
+
+/** Failure records the family has made. Only the family root creates it. */
+type GenerationFailureLedger = {
+  /** A failure of this family has been recorded, from any member. */
+  recorded: boolean;
+};
+
+const createFamilyMember = (
+  family: CallbacksFamily,
+  config: Omit<TanStackAIAnalyticsProps, "analytics">,
+  resolvedModel:
+    Omit<ResolvedTanStackTextModelInfo, "availability"> | undefined,
 ): TanStackAIAnalyticsCallbacks => {
+  const { analytics } = family;
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;
   const modelTask = config.modelTask ?? "chat";
   // Group attachment is derived centrally so call sites cannot forget it:
@@ -438,7 +462,6 @@ export const createTanStackAIAnalyticsCallbacks = (
     runs.set(ctx.runId, created);
     return created;
   };
-  let hasCapturedGenerationError = false;
 
   const resolveAnalyticsModelInfo =
     (): ResolvedTanStackTextModelInfo | null => {
@@ -455,7 +478,10 @@ export const createTanStackAIAnalyticsCallbacks = (
                 selectedModelId,
                 config.orgAIConfig,
                 modelTask,
-                { dataClass: config.dataClass, modelTier: config.modelTier },
+                {
+                  dataClass: config.dataClass,
+                  modelTier: config.modelTier,
+                },
               )
             : getTanStackTextModelInfoForTask(modelTask, config.orgAIConfig, {
                 dataClass: config.dataClass,
@@ -482,13 +508,15 @@ export const createTanStackAIAnalyticsCallbacks = (
     error: unknown,
     context?: { durationMs: number; run: RunAnalyticsState | undefined },
   ) => {
-    // Each middleware terminal hook owns one run. The catch-path fallback
-    // has no run identity, and the SDK rethrows a different Error instance.
-    // Preserve fallback deduplication without suppressing concurrent runs.
-    if (context === undefined && hasCapturedGenerationError) {
+    // Each middleware terminal hook owns one run, so every failed run is
+    // recorded, concurrent ones included. The catch-path fallback has no run
+    // identity, and the SDK rethrows a different Error instance: it records
+    // only when no member of the family has recorded a failure, since the
+    // run that failed may have been bound by `forModel` on a descendant.
+    if (context === undefined && family.generationFailures.recorded) {
       return;
     }
-    hasCapturedGenerationError = true;
+    family.generationFailures.recorded = true;
     const resolvedModelInfo = resolveAnalyticsModelInfo();
 
     // Classified kinds (quota, billing, retired model, provider outage) are
@@ -548,11 +576,14 @@ export const createTanStackAIAnalyticsCallbacks = (
       logger.warn("tanstack_ai.generation.failed", attributes);
     } else {
       logger.error("tanstack_ai.generation.failed", attributes);
-      captureTelemetryError(error, {
-        feature: config.feature,
-        organization_id: analyticsOrganizationId ?? "",
-        trace_id: config.traceId,
-      });
+      captureTelemetryError(
+        error,
+        handlerErrorContext(`analytics.generation.${config.feature}.${kind}`, {
+          feature: config.feature,
+          organization_id: analyticsOrganizationId ?? "",
+          trace_id: config.traceId,
+        }),
+      );
     }
 
     // Standard-schema failure record for LLM observability: the error class
@@ -679,10 +710,13 @@ export const createTanStackAIAnalyticsCallbacks = (
     });
     if (Result.isError(usageSnapshot)) {
       // The payload itself is unreadable: neither side effect can use it.
-      captureTelemetryError(usageSnapshot.error, {
-        source: "usage.tanstack_ai",
-        trace_id: config.traceId,
-      });
+      captureTelemetryError(
+        usageSnapshot.error,
+        handlerErrorContext("analytics.meterUsage.usageSnapshot_error", {
+          source: "usage.tanstack_ai",
+          trace_id: config.traceId,
+        }),
+      );
       return;
     }
     run.outputTokens = usageSnapshot.value.completionTokens;
@@ -749,10 +783,13 @@ export const createTanStackAIAnalyticsCallbacks = (
         catch: (error) => error,
       });
       if (Result.isError(consumptionArgs)) {
-        captureTelemetryError(consumptionArgs.error, {
-          source: "usage.tanstack_ai",
-          trace_id: config.traceId,
-        });
+        captureTelemetryError(
+          consumptionArgs.error,
+          handlerErrorContext("analytics.meterUsage.consumptionArgs_error", {
+            source: "usage.tanstack_ai",
+            trace_id: config.traceId,
+          }),
+        );
       } else {
         const consumption = recordTanStackConsumption(
           consumptionArgs.value,
@@ -760,11 +797,14 @@ export const createTanStackAIAnalyticsCallbacks = (
           // A rejected deferred settles inside the stream lifecycle;
           // capture it here so it cannot surface as an unhandled
           // rejection there.
-          captureTelemetryError(error, {
-            organization_id: metering.organizationId,
-            source: "usage.tanstack_ai",
-            trace_id: config.traceId,
-          });
+          captureTelemetryError(
+            error,
+            handlerErrorContext("analytics.consumption", {
+              organization_id: metering.organizationId,
+              source: "usage.tanstack_ai",
+              trace_id: config.traceId,
+            }),
+          );
         });
         ctx.defer(consumption);
       }
@@ -790,17 +830,19 @@ export const createTanStackAIAnalyticsCallbacks = (
       catch: (error) => error,
     });
     if (Result.isError(captured)) {
-      captureTelemetryError(captured.error, {
-        source: "analytics.tanstack_ai",
-        trace_id: config.traceId,
-      });
+      captureTelemetryError(
+        captured.error,
+        handlerErrorContext("analytics.meterUsage.captured_error", {
+          source: "analytics.tanstack_ai",
+          trace_id: config.traceId,
+        }),
+      );
     }
   };
 
   return {
     captureError: captureGenerationError,
-    forModel: (model) =>
-      createTanStackAIAnalyticsCallbacks({ ...config, analytics }, model),
+    forModel: (model) => createFamilyMember(family, config, model),
     usageMetering: config.usageMetering,
     middleware: {
       name: "stella-tanstack-analytics",
@@ -895,3 +937,18 @@ export const createTanStackAIAnalyticsCallbacks = (
     },
   };
 };
+
+/**
+ * Callbacks for one feature's model calls. `forModel` binds a request to a
+ * resolved model and keeps the family's shared state, so a failure is
+ * recorded once whichever member reports it.
+ */
+export const createTanStackAIAnalyticsCallbacks = ({
+  analytics = getServerAnalytics(),
+  ...config
+}: TanStackAIAnalyticsProps): TanStackAIAnalyticsCallbacks =>
+  createFamilyMember(
+    { analytics, generationFailures: { recorded: false } },
+    config,
+    undefined,
+  );

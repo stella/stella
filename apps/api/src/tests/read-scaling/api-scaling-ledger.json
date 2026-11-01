@@ -1207,6 +1207,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "DELETE /v1/me/push-devices/:token",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "DELETE /v1/memories/:memoryId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1675,6 +1679,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/chat/threads/:threadId/connectors/:toolCallId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/chat/threads/:threadId/export",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1825,6 +1833,10 @@
     {
       "id": "POST /v1/desktop/presence",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/desktop/time-entries/narrative",
+      "reason": "Model-backed surface over a bounded request; it reads only organization AI settings and persists nothing, awaiting the write harness for statements and emitted response bytes."
     },
     {
       "id": "POST /v1/dev/clean",
@@ -2567,6 +2579,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/time-entries/me/submissions",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/time-timers/:id/confirm",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2783,6 +2799,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "PUT /v1/client-invoices/:clientId",
+      "reason": "Creates one invoice and claims selected work within a transaction; awaits the write scaling harness."
+    },
+    {
       "id": "PUT /v1/contacts",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2840,6 +2860,10 @@
     },
     {
       "id": "PUT /v1/lists/:workspaceId/item-fact-details",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/me/push-devices",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {

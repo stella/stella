@@ -9,6 +9,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   maskWebSearchKey,
   validateWebSearchKey,
@@ -80,10 +81,14 @@ const updateWebSearchKey = createSafeRootHandler(
           );
         }
       }
-      captureError(error);
+      captureError(
+        error,
+        handlerErrorContext("organizationsettings.updateWebSearchKey"),
+      );
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not reach the provider to validate the key",
         }),
       );

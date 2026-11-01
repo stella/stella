@@ -10,6 +10,9 @@ import { API_KEY_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 
 export const DESKTOP_REGISTRY_KEY_CONFIG = "desktop-registry";
 export const DESKTOP_REGISTRY_KEY_PREFIX = DESKTOP_ACCOUNT_POLICY.keyPrefix;
+/** Plaintext characters stored to identify a credential: prefix plus a tail. */
+export const DESKTOP_REGISTRY_KEY_START_LENGTH =
+  DESKTOP_REGISTRY_KEY_PREFIX.length + 6;
 // Foreground use rotates the credential and renews its inactivity deadline.
 export const DESKTOP_REGISTRY_KEY_SECONDS =
   DESKTOP_ACCOUNT_POLICY.credentialLifetimeSeconds;

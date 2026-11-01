@@ -80,6 +80,10 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
     skipped: number;
   } | null>(null);
   const mutation = useSettingsMutation({
+    exceptionScope: (command) => ({
+      type: "handler",
+      handlerId: `settings.vat-rate.${command.type}`,
+    }),
     mutationFn: sendVatRateCommand,
     invalidate: vatRatesKeys.all(organizationId),
   });

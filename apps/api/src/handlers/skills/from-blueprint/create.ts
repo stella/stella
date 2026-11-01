@@ -10,14 +10,15 @@ import {
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import {
+  authorizeSkillBinding,
+  skillBindingBodyFields,
+} from "@/api/handlers/skills/skill-binding";
 import { skillRequirableToolNames } from "@/api/lib/agent-skills/required-tools-validation";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  authorizeSkillInstallScope,
-  installSkill,
-} from "@/api/lib/skills/install";
+import { installSkill } from "@/api/lib/skills/install";
 import type { ParsedSkillPackage } from "@/api/lib/skills/skill-package";
 
 import { uniqueSlug } from "../slug";
@@ -27,6 +28,7 @@ const encoder = new TextEncoder();
 const fromBlueprintBodySchema = v.object({
   scope: v.picklist(AGENT_SKILL_SCOPES),
   blueprintId: v.picklist(BLUEPRINT_IDS),
+  ...skillBindingBodyFields,
 });
 
 const config = {
@@ -41,7 +43,10 @@ const config = {
     "SKILL.md skeleton with placeholder resource files. The draft is " +
     "installed disabled and under a fresh slug, so the same blueprint can be " +
     "used more than once, and stays fully editable afterwards. Team scope " +
-    "requires admin or owner.",
+    "requires admin or owner, unless the draft is bound to a matter " +
+    "(`boundWorkspaceId`) the caller reaches; `boundClientId` binds it to one " +
+    "client (admins and owners only). A bound skill is visible and usable " +
+    "only there, and the binding cannot change later.",
   permissions: { agentSkill: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: skillRealtimeUpdates,
@@ -109,13 +114,18 @@ const fromBlueprint = createSafeRootHandler(
     session,
     user,
   }) {
-    const authorization = authorizeSkillInstallScope({
-      memberRole,
-      scope: body.scope,
-    });
-    if (Result.isError(authorization)) {
-      return Result.err(authorization.error);
-    }
+    const binding = {
+      boundClientId: body.boundClientId ?? null,
+      boundWorkspaceId: body.boundWorkspaceId ?? null,
+    };
+    yield* Result.await(
+      authorizeSkillBinding({
+        binding,
+        memberRole,
+        safeDb,
+        scope: body.scope,
+      }),
+    );
 
     const parsed = buildParsedBlueprint(body.blueprintId);
     if (!parsed) {
@@ -129,6 +139,7 @@ const fromBlueprint = createSafeRootHandler(
     // so the same blueprint can be used more than once.
     const installed = yield* Result.await(
       installSkill({
+        binding,
         enabled: false,
         memberRole,
         origin: "authored",

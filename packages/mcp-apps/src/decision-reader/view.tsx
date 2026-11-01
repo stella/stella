@@ -5,12 +5,13 @@ import { DirectionProvider } from "@base-ui/react/direction-provider";
 import { createFormatter } from "use-intl";
 
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
+import { statuteListSchemeFor } from "@stll/api-contract/statute-list-schemes";
 import { DecisionIdentity } from "@stll/decision-reader/decision-identity";
 import { BlockRenderer } from "@stll/decision-reader/document-ast-text";
 import type { TextAnchor } from "@stll/decision-reader/document-ast-text";
 import { ReaderPresentationProvider } from "@stll/decision-reader/reader-adapters";
 import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
+import { Button, ButtonTextRun } from "@stll/ui/button";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
 import type { ProvisionPreview } from "../shared/generated/contracts";
@@ -62,18 +63,16 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
         !host.bridge.supportsTools() && anchor.url === null ? (
           children
         ) : (
-          <button
-            type="button"
-            className="underline underline-offset-2"
+          <ButtonTextRun
             onClick={() =>
               host.bridge.detached(
                 openDecisionAnchor(anchor, linkHost),
-                "open cited decision",
+                "decisionReader.openCitedDecision",
               )
             }
           >
             {children}
-          </button>
+          </ButtonTextRun>
         ),
     });
   }
@@ -86,18 +85,16 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
         !host.bridge.supportsTools() && anchor.url === null ? (
           children
         ) : (
-          <button
-            type="button"
-            className="underline underline-offset-2"
+          <ButtonTextRun
             onClick={() =>
               host.bridge.detached(
                 openProvisionAnchor(anchor, linkHost),
-                "preview cited provision",
+                "decisionReader.previewCitedProvision",
               )
             }
           >
             {children}
-          </button>
+          </ButtonTextRun>
         ),
     });
   }
@@ -137,7 +134,7 @@ const McpDecisionMetadata = ({
               onClick={() =>
                 host.bridge.detached(
                   host.bridge.openLink(webUrl),
-                  "open decision in stella",
+                  "decisionReader.openDecisionInStella",
                 )
               }
             >
@@ -172,6 +169,7 @@ const McpProvisionPreview = ({
   openInStella: string;
 }) => {
   const previewUrl = preview.url;
+  const statuteLists = statuteListSchemeFor(preview.country);
   return (
     <aside className="mt-4 space-y-2" lang={preview.language} dir="ltr">
       {previewUrl !== null && (
@@ -180,7 +178,7 @@ const McpProvisionPreview = ({
           onClick={() =>
             host.bridge.detached(
               host.bridge.openLink(previewUrl),
-              "open provision in stella",
+              "decisionReader.openProvisionInStella",
             )
           }
         >
@@ -199,6 +197,7 @@ const McpProvisionPreview = ({
           }}
           activeMatchIndex={-1}
           rangesByPieceId={{}}
+          statuteLists={statuteLists}
           variant="statute"
           anchorPresentation="embedded"
         />
@@ -328,7 +327,7 @@ export const ReaderView = ({
               <Button
                 variant="outline"
                 onClick={() =>
-                  host.bridge.detached(host.retry(), "retry decision read")
+                  host.bridge.detached(host.retry(), "decisionReader.retry")
                 }
               >
                 {messages.retry}
@@ -395,7 +394,7 @@ export const ReaderView = ({
                 onClick={() =>
                   host.bridge.detached(
                     host.loadNext(),
-                    "load next decision page",
+                    "decisionReader.loadNextPage",
                   )
                 }
               >

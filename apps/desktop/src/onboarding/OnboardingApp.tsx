@@ -159,7 +159,7 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
             <p className="text-sm" role="alert">
               {t("errorLoad")}
             </p>
-            <Button onClick={onRetry} size="sm" variant="outline">
+            <Button onClick={onRetry} variant="outline">
               {t("tryAgain")}
             </Button>
           </div>

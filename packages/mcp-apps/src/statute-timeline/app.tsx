@@ -130,12 +130,13 @@ const Timeline = ({
             {history.items.map((version) => (
               <li key={version.documentId}>
                 <Button
+                  layout="wrap"
                   data-version-id={version.documentId}
                   variant={
                     selectedId === version.documentId ? "secondary" : "outline"
                   }
                   aria-pressed={selectedId === version.documentId}
-                  className="h-auto max-w-full flex-wrap text-start whitespace-normal"
+                  className="max-w-full flex-wrap"
                   onClick={() => select(version.documentId)}
                 >
                   <span>{windowLabel(version)}</span>
@@ -155,7 +156,8 @@ const Timeline = ({
               <VersionLabel version={selected} />
               <div className="flex flex-wrap gap-2">
                 <Button
-                  className="h-auto max-w-full whitespace-normal"
+                  layout="wrap"
+                  className="max-w-full"
                   variant="outline"
                   disabled={!canCompare}
                   aria-pressed={mode === "comparison"}
@@ -174,7 +176,7 @@ const Timeline = ({
                           bridge.openLink(selectedUrl.href, (message) =>
                             setRead({ status: "error", message }),
                           ),
-                          "open provision version",
+                          "statuteTimeline.openProvisionVersion",
                         )
                       }
                     >
@@ -193,10 +195,13 @@ const Timeline = ({
       {read.status === "loading" && <p role="status">{t("loading")}</p>}
       {history.nextCursor !== null && (
         <Button
-          className="h-auto max-w-full whitespace-normal"
+          layout="wrap"
+          className="max-w-full"
           variant="outline"
           disabled={!bridge.supportsTools() || read.status === "loading"}
-          onClick={() => bridge.detached(loadMore(), "page provision history")}
+          onClick={() =>
+            bridge.detached(loadMore(), "statuteTimeline.loadMore")
+          }
         >
           {t("timelineLoadMore")}
         </Button>
@@ -272,7 +277,7 @@ const App = () => {
                 <p>{result.message ?? locale.messages.error}</p>
                 <Button
                   onClick={() =>
-                    bridge.detached(bridge.retry(), "retry provision history")
+                    bridge.detached(bridge.retry(), "statuteTimeline.retry")
                   }
                 >
                   {locale.messages.retry}
@@ -290,4 +295,4 @@ const App = () => {
 const root =
   document.querySelector("#app") ?? panic("Statute timeline mount is missing");
 createRoot(root).render(<App />);
-bridge.detached(bridge.connect(), "connect statute timeline");
+bridge.detached(bridge.connect(), "statuteTimeline.connect");

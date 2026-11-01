@@ -1,7 +1,6 @@
 import type { MouseEvent } from "react";
 
 import { panic } from "better-result";
-import { useFormatter } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
@@ -14,6 +13,7 @@ import {
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
 import type { ChatHistoryItem } from "@/features/chat/queries";
+import { useFormatter } from "@/i18n/formatting-context";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { toSafeId } from "@/lib/safe-id";

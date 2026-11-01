@@ -3,21 +3,37 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import { isRecord } from "@/api/lib/type-guards";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { apiApp } from "@/api/server";
 
 import {
   ledgerGitEnv,
-  ledgerMergeBase,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
+import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
 import { claimCommentScalingScenarios } from "./claim-comments";
+import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
+import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
+import { dictationScalingScenario } from "./dictation";
+import {
+  documentAnnotationScalingScenarios,
+  markedPdfDownloadScalingScenario,
+} from "./document-annotations";
+import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { exactIconScalingScenario } from "./link-icons";
+import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
+import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
+import { mobileUpdateScalingScenario } from "./mobile-updates";
+import { myOpenTasksScalingScenario } from "./my-open-tasks";
+import { organizationCreateScalingScenario } from "./organization-create";
+import { organizationSlugScalingScenario } from "./organization-slug";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -30,15 +46,30 @@ import {
   scalingCoverageViolations,
   withNewWriteRoutes,
 } from "./surface";
+import { suggestionRangeScalingScenario } from "./time-suggestion-range";
 import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
+  organizationCreateScalingScenario,
+  matterVocabularyScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  decisionFilterValidationScalingScenario,
+  accountExportDownloadScalingScenario,
+  clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
+  suggestionRangeScalingScenario,
+  mobileClientMetadataScalingScenario,
+  ...documentAnnotationScalingScenarios,
+  markedPdfDownloadScalingScenario,
+  myOpenTasksScalingScenario,
+  mobileUpdateScalingScenario,
+  ...invoicePaymentScalingScenarios,
+  dictationScalingScenario,
+  organizationSlugScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>
@@ -47,7 +78,7 @@ const measuredApiReads = apiApp.routes
   .map(({ method, path: routePath }) => `${method} ${routePath}`);
 
 test("previously measured scenarios retain their handler or tool identity", async () => {
-  const base = ledgerMergeBase({ repoRoot, baseRef: "origin/main" });
+  const base = treeBaseRevision({ repoRoot });
   const readBaseSource = (file: string) => {
     const result = Bun.spawnSync(["git", "show", `${base}:${file}`], {
       cwd: repoRoot,
@@ -159,27 +190,18 @@ test("every MCP scenario names a registered tool", () => {
   }
 });
 
-// The HTTP core lists a route without the trailing slash Elysia gave a
-// prefix's index route; a base ledger may still spell it with one.
-const withoutTrailingSlash = (entries: string[]) =>
-  entries.map((entry) =>
-    entry.endsWith("/") && !entry.endsWith(" /") ? entry.slice(0, -1) : entry,
-  );
-
-for (const { kind, surface, ledger, measured, normalizeBaseEntries } of [
+for (const { kind, surface, ledger, measured } of [
   {
     kind: "api",
     surface: apiScalingSurface(apiApp.routes),
     ledger: apiLedger,
     measured: measuredApiReads,
-    normalizeBaseEntries: withoutTrailingSlash,
   },
   {
     kind: "mcp",
     surface: mcpScalingSurface(DEFAULT_MCP_TOOL_DEFINITIONS),
     ledger: mcpLedger,
     measured: mcpScalingScenarios.map(({ name }) => name),
-    normalizeBaseEntries: undefined,
   },
 ]) {
   describe(`${kind} scaling census`, () => {
@@ -214,7 +236,7 @@ for (const { kind, surface, ledger, measured, normalizeBaseEntries } of [
           // A write route this change mounts may enter with its reason.
           normalizeBaseEntries: (base) =>
             withNewWriteRoutes({
-              base: normalizeBaseEntries?.(base) ?? base,
+              base,
               current: parseScalingLedger(
                 JSON.stringify(ledger),
                 `${kind}-scaling`,
@@ -224,10 +246,7 @@ for (const { kind, surface, ledger, measured, normalizeBaseEntries } of [
           label: `${kind}-scaling`,
           remediation:
             "add an exercised scaling case instead of a ledger entry",
-          args: [
-            "--base",
-            ledgerMergeBase({ repoRoot, baseRef: "origin/main" }),
-          ],
+          args: ["--base", treeBaseRevision({ repoRoot })],
         }),
       ).toBe(0);
     });

@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -7,10 +8,16 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowLeftIcon, XIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import {
+  type Availability,
+  filterAvailable,
+} from "@/lib/platform/requirements.logic";
+import { usePlatformCapabilities } from "@/lib/platform/use-platform-capabilities";
 
 /**
  * Shared header strip used at the top of every inspector tab —
@@ -28,6 +35,20 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
  * the slot consistently.
  */
 
+/**
+ * One tab-type-specific header button. `requires` is mandatory so every
+ * action states where it is worth offering; the header drops the ones the
+ * device or layout cannot use instead of letting them crowd the name.
+ */
+export type HeaderAction = {
+  /** Stable key, unique within one header. */
+  id: string;
+  requires: Availability;
+  render: () => ReactNode;
+};
+
+const NO_HEADER_ACTIONS: readonly HeaderAction[] = [];
+
 type RenameState = {
   /** Whether the label is currently being edited inline. */
   active: boolean;
@@ -41,8 +62,8 @@ type RenameState = {
   /** Optional element appended after the input — e.g. a file extension. */
   suffix?: ReactNode;
   /**
-   * Optional action rendered between the input and Done (e.g. the chat
-   * tab's title-suggest wand). See `InlineEdit`'s `action` slot for the
+   * Optional action rendered after the input (e.g. the chat tab's
+   * title-suggest wand). See `InlineEdit`'s `action` slot for the
    * required press/click trigger semantics.
    */
   action?: ReactNode;
@@ -74,17 +95,19 @@ type InspectorTabHeaderProps = {
    */
   rename?: RenameState;
   /**
-   * Matter slot rendered after the dot separator. Caller supplies
-   * the widget — a navigation link for files, a context picker for
-   * chats. Hidden while the label is being renamed to keep the
-   * row uncluttered.
+   * Matter slot rendered after the dot separator, or under the name
+   * on compact layouts. Caller supplies the widget — a navigation
+   * link for files, a context picker for chats. Hidden while the
+   * label is being renamed to keep the row uncluttered.
    */
   matter?: ReactNode;
   /**
    * Tab-type-specific buttons (zoom controls, edit/save, print,
    * "open in big view", …). Rendered before the universal close.
+   * Both are hidden while renaming: the inspector is narrow, and the
+   * name needs the whole row to stay readable.
    */
-  actions?: ReactNode;
+  actions?: readonly HeaderAction[];
   onClose: () => void;
 };
 
@@ -94,15 +117,26 @@ export const InspectorTabHeader = ({
   onLabelContextMenu,
   rename,
   matter,
-  actions,
+  actions = NO_HEADER_ACTIONS,
   onClose,
 }: InspectorTabHeaderProps) => {
   const tCommon = useTranslations("common");
   const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
+  const renaming = rename?.active === true;
+  const visibleActions = filterAvailable(actions, usePlatformCapabilities());
 
   return (
-    <div className="flex h-12 shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3">
-      <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+    <div
+      className="flex h-12 shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3"
+      data-slot="inspector-panel-header"
+    >
+      {/* Only the label clips: the field's focus ring is drawn outside it. */}
+      <div
+        className={cn(
+          "flex min-w-0 items-center gap-2",
+          !renaming && "overflow-hidden",
+        )}
+      >
         <Button
           aria-label={tCommon("back")}
           className="-ms-1 md:hidden"
@@ -125,38 +159,53 @@ export const InspectorTabHeader = ({
             value={rename.value}
           />
         ) : (
-          <span
-            className={cn(
-              "overflow-hidden text-xs font-medium text-ellipsis whitespace-pre",
-              onStartRename !== undefined && "cursor-text",
+          // Compact layouts stack the matter under the name, the way a
+          // sidebar row puts its client under the matter, so the name gets
+          // the whole width instead of sharing one line with the chip.
+          <div className="flex min-w-0 flex-col items-start text-xs font-medium md:flex-row md:items-center md:gap-2">
+            <TruncatedText
+              aria-label={label}
+              className={cn(
+                "max-w-full whitespace-pre",
+                onStartRename !== undefined && "cursor-text",
+              )}
+              onContextMenu={onLabelContextMenu}
+              onDoubleClick={onStartRename}
+              tabIndex={0}
+              tooltip={label}
+            >
+              <UserText>{label}</UserText>
+            </TruncatedText>
+            {matter !== undefined && (
+              <>
+                <span
+                  aria-hidden="true"
+                  className="text-foreground-subtle hidden text-xs md:inline"
+                >
+                  ·
+                </span>
+                <span className="flex max-w-full min-w-0">{matter}</span>
+              </>
             )}
-            onContextMenu={onLabelContextMenu}
-            onDoubleClick={onStartRename}
+          </div>
+        )}
+      </div>
+      {renaming ? null : (
+        <div className="flex shrink-0 items-center gap-1 ps-4">
+          {visibleActions.map((action) => (
+            <Fragment key={action.id}>{action.render()}</Fragment>
+          ))}
+          <Button
+            aria-label={tCommon("close")}
+            onClick={onClose}
+            size="icon-xs"
+            title={tCommon("close")}
+            variant="ghost"
           >
-            <UserText>{label}</UserText>
-          </span>
-        )}
-        {matter !== undefined && !rename?.active && (
-          <>
-            <span aria-hidden="true" className="text-foreground-subtle text-xs">
-              ·
-            </span>
-            {matter}
-          </>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center gap-1 ps-4">
-        {actions}
-        <Button
-          aria-label={tCommon("close")}
-          onClick={onClose}
-          size="icon-xs"
-          title={tCommon("close")}
-          variant="ghost"
-        >
-          <XIcon className="size-3.5" />
-        </Button>
-      </div>
+            <XIcon className="size-3.5" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

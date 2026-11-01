@@ -3,6 +3,7 @@ import { inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import type { Transaction } from "@/api/db/root";
 import { auditLogs } from "@/api/db/schema";
@@ -30,7 +31,6 @@ import {
   LEGAL_LISTS_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,

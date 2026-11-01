@@ -18,7 +18,7 @@ import {
   snapshotOfCurrentVersion,
 } from "@/api/handlers/entities/copy-utils";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -32,6 +32,7 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   requestNativeExtractionRuns,
   SEARCH_INDEX_OWNER,
@@ -88,6 +89,19 @@ const defaultDuplicateEntityDependencies = {
   flushEntitySearchRepairs,
   requestNativeExtractionRuns,
 } satisfies DuplicateEntityDependencies;
+
+const DUPLICATE_CAPTURE_CONTEXT = {
+  searchRepair: handlerErrorContext("duplicateEntityHandler.rejection"),
+  documentProcessing: handlerErrorContext(
+    "duplicateEntityHandler.handoffCommittedDocumentProcessingRuns",
+  ),
+  pdfDerivative: handlerErrorContext(
+    "duplicateEntityHandler.enqueuePdfDerivativeOrMarkFailed",
+  ),
+  imageThumbnail: handlerErrorContext(
+    "duplicateEntityHandler.enqueueImageThumbnailOrMarkFailed",
+  ),
+} as const;
 
 const duplicateEntityHandler = async function* ({
   safeDb,
@@ -186,7 +200,13 @@ const duplicateEntityHandler = async function* ({
   });
   if (Result.isError(fileMappings)) {
     await rollbackS3Copies(copiedS3Keys);
-    captureError(fileMappings.error, { workspaceId, sourceEntityId });
+    captureError(
+      fileMappings.error,
+      handlerErrorContext(
+        "entities.duplicateEntityHandler.fileMappings_error",
+        { workspaceId, sourceEntityId },
+      ),
+    );
     return Result.err(
       new HandlerError({ status: 500, message: "Failed to copy files" }),
     );
@@ -248,12 +268,12 @@ const duplicateEntityHandler = async function* ({
         SEARCH_INDEX_OWNER.durableExtraction
       ],
     ])
-    .catch(captureError);
+    .catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.searchRepair));
 
   handoffCommittedDocumentProcessingRuns({
     enqueue: dependencies.enqueueDocumentProcessingRun,
     runIds: txResult.nativeExtractionRunIds,
-  }).catch(captureError);
+  }).catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.documentProcessing));
 
   // The copies reference fresh file IDs, so each needs its own
   // PDF/thumbnail derivatives.
@@ -266,7 +286,7 @@ const duplicateEntityHandler = async function* ({
       organizationId,
       userId,
       workspaceId,
-    }).catch(captureError);
+    }).catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.pdfDerivative));
     enqueueImageThumbnailOrMarkFailed({
       entityId: fileField.entityId,
       fieldId: fileField.fieldId,
@@ -275,7 +295,7 @@ const duplicateEntityHandler = async function* ({
       organizationId,
       userId,
       workspaceId,
-    }).catch(captureError);
+    }).catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.imageThumbnail));
   }
 
   return Result.ok({

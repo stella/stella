@@ -162,6 +162,48 @@ for (const entry of ["error", "add", "update", "promise"]) {
   });
 }
 
+test("a plain error toast counts down and closes on its own", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.goto(fixturePath);
+  await page.getByRole("button", { name: "plain error", exact: true }).click();
+  await page.mouse.move(0, 0);
+  const title = page.locator('[data-slot="toast-title"]');
+  await expect(title).toHaveText("Plain failure");
+  await expect(page.locator('[data-slot="toast-countdown"]')).toBeVisible();
+  await page.clock.fastForward(10_000);
+  await expect(title).toHaveCount(0);
+});
+
+for (const { entry, outcome } of [
+  { entry: "plain to described", outcome: "persistent" },
+  { entry: "plain to action", outcome: "persistent" },
+  { entry: "described type patch", outcome: "persistent" },
+  { entry: "action type patch", outcome: "persistent" },
+  { entry: "clear description", outcome: "timed" },
+  { entry: "clear action", outcome: "timed" },
+  { entry: "clear action props", outcome: "timed" },
+  { entry: "explicit eight second description", outcome: "timed" },
+  { entry: "explicit eight second title", outcome: "timed" },
+  { entry: "explicit persistent type", outcome: "persistent" },
+  { entry: "explicit update wins", outcome: "timed" },
+  { entry: "explicit infinity title", outcome: "persistent" },
+] as const) {
+  test(`toast ${entry} retains the merged timeout policy`, async ({ page }) => {
+    await page.clock.install();
+    await page.goto(fixturePath);
+    await page.getByRole("button", { name: entry, exact: true }).click();
+    await page.mouse.move(0, 0);
+    const title = page.locator('[data-slot="toast-title"]');
+    const countdown = page.locator('[data-slot="toast-countdown"]');
+    await expect(title).toHaveText("Update failure");
+    await expect(countdown).toHaveCount(outcome === "timed" ? 1 : 0);
+    await page.clock.fastForward(10_000);
+    await expect(title).toHaveCount(outcome === "timed" ? 0 : 1);
+  });
+}
+
 test("success toasts retain their automatic timeout", async ({ page }) => {
   await page.clock.install();
   await page.goto(fixturePath);

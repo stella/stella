@@ -2,100 +2,33 @@ import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
+import { updateContactBodySchema } from "@stll/api-contract/contact-write";
 import { currencyMinorUnitDigits } from "@stll/money";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
-import {
-  bankAccountSchema,
-  billingAddressSchema,
-  contactAddressSchema,
-  contactEmailSchema,
-  contactMetadataSchema,
-  contactPhoneSchema,
-} from "@/api/db/schema-validators";
 import { mergeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import {
   dateOfBirthFromColumns,
   dateOfBirthToColumns,
   validatePersonDetails,
 } from "@/api/handlers/contacts/person-details";
-import { contactTypeSchema } from "@/api/handlers/contacts/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { patchContactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { SafeId } from "@/api/lib/branded-types";
-import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
-import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
-import {
-  invoiceLanguageSchema,
-  minorUnitAmountSchema,
-  resourceIdSchema,
-  userIdSchema,
-} from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
-
-const updateContactBodySchema = v.object({
-  type: v.optional(contactTypeSchema),
-  prefix: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(32)))),
-  firstName: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
-  middleName: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
-  lastName: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
-  suffix: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(32)))),
-  dateOfBirth: v.optional(v.nullable(dateOfBirthSchema)),
-  nationalityCodes: v.optional(v.nullable(nationalityCodesSchema)),
-  organizationName: v.optional(
-    v.nullable(v.pipe(v.string(), v.maxLength(512))),
-  ),
-  displayName: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
-  notes: v.optional(v.nullable(v.string())),
-  emails: v.optional(
-    v.nullable(v.pipe(v.array(contactEmailSchema), v.maxLength(20))),
-  ),
-  phones: v.optional(
-    v.nullable(v.pipe(v.array(contactPhoneSchema), v.maxLength(20))),
-  ),
-  addresses: v.optional(
-    v.nullable(v.pipe(v.array(contactAddressSchema), v.maxLength(10))),
-  ),
-  metadata: v.optional(v.nullable(contactMetadataSchema)),
-  tags: v.optional(v.nullable(v.pipe(v.array(v.string()), v.maxLength(50)))),
-  color: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(32)))),
-  registrationNumber: v.optional(
-    v.nullable(v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH))),
-  ),
-  taxId: v.optional(
-    v.nullable(v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH))),
-  ),
-  vatId: v.optional(
-    v.nullable(v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH))),
-  ),
-  vatPayer: v.optional(v.nullable(v.boolean())),
-  bankAccounts: v.optional(
-    v.nullable(v.pipe(v.array(bankAccountSchema), v.maxLength(10))),
-  ),
-  billingAddress: v.optional(v.nullable(billingAddressSchema)),
-  defaultHourlyRate: v.optional(v.nullable(minorUnitAmountSchema(0))),
-  currency: v.optional(
-    v.nullable(v.pipe(v.string(), v.minLength(3), v.maxLength(3))),
-  ),
-  paymentTermDays: v.optional(
-    v.nullable(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(365))),
-  ),
-  invoiceLanguage: v.optional(v.nullable(invoiceLanguageSchema)),
-  originatingAttorneyId: v.optional(v.nullable(userIdSchema)),
-  responsibleAttorneyId: v.optional(v.nullable(userIdSchema)),
-});
 
 const updateContactParamsSchema = v.object({
   contactId: resourceIdSchema("contact"),
@@ -214,6 +147,8 @@ const lockExistingContact = async ({
 // Shared contact-update logic reused by the HTTP handler and the
 // `save_contact` MCP tool, so both emit identical audit events and
 // search-index writes.
+const CONTACT_REPAIR_KEY = "updateContactHandler.flushContactSearchRepairs";
+
 export const updateContactHandler = async function* ({
   safeDb,
   organizationId,
@@ -411,7 +346,9 @@ export const updateContactHandler = async function* ({
     return Result.ok(outcome.row);
   }
 
-  flushContactSearchRepairs([contactId]).catch(captureError);
+  flushContactSearchRepairs([contactId]).catch(
+    createErrorCapture(handlerErrorContext(CONTACT_REPAIR_KEY)),
+  );
 
   return Result.ok(outcome.row);
 };

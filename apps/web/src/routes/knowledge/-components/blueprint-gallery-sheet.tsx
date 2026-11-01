@@ -29,12 +29,25 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
+import type { MatterOption } from "@/components/workspaces/matter-combobox";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
 
-type SkillScope = "team" | "private";
+import { SkillAvailabilityField } from "./skill-availability-field";
+import {
+  coerceSkillAvailability,
+  skillBindingBody,
+} from "./skill-availability.logic";
+import type {
+  SkillAvailability,
+  SkillBindingBody,
+  SkillScope,
+} from "./skill-availability.logic";
+
 type BlueprintId =
   "check-against-rules" | "intake-to-draft" | "answer-from-sources" | "blank";
 type BlueprintCardId = Exclude<BlueprintId, "blank">;
@@ -76,6 +89,28 @@ const BlueprintGallerySheetBody = ({
   const t = useTranslations();
   const tGallery = useTranslations("knowledge.skills.blueprintGallery");
   const [scope, setScope] = useState<SkillScope>("private");
+  const [availability, setAvailability] =
+    useState<SkillAvailability>("everywhere");
+  const [matter, setMatter] = useState<MatterOption | null>(null);
+  const [client, setClient] = useState<MatterDraftClient | null>(null);
+  // `null` while the chosen matter or client is still missing.
+  const binding = skillBindingBody({
+    availability,
+    clientId: client?.id ?? null,
+    matterId: matter?.id ?? null,
+  });
+  const changeScope = (next: SkillScope) => {
+    setScope(next);
+    setAvailability(
+      coerceSkillAvailability({ availability, canManageTeam, scope: next }),
+    );
+  };
+  const resetForm = () => {
+    setScope("private");
+    setAvailability("everywhere");
+    setMatter(null);
+    setClient(null);
+  };
 
   // Literal keys per card so a stale/missing key fails typecheck without
   // widening to the full TranslationKey union (which would force a values arg).
@@ -115,11 +150,23 @@ const BlueprintGallerySheetBody = ({
     };
   };
 
+  const submitIntent = useIdempotentSubmit();
   const create = useMutation({
-    mutationFn: async (id: BlueprintId) => {
-      const response = await api.skills["from-blueprint"].post({
-        scope,
-        blueprintId: id,
+    mutationFn: async ({
+      bindingFields,
+      id,
+    }: {
+      bindingFields: SkillBindingBody;
+      id: BlueprintId;
+    }) => {
+      const response = await submitIntent.run({
+        operation: "skills.from-blueprint",
+        body: { scope, blueprintId: id, ...bindingFields },
+        send: async (body) => {
+          const reply = await api.skills["from-blueprint"].post(body);
+          unwrapApiResponse(reply);
+          return reply;
+        },
       });
       return { id: unwrapApiResponse(response).id };
     },
@@ -134,13 +181,19 @@ const BlueprintGallerySheetBody = ({
     },
   });
 
-  const pendingId = create.isPending ? create.variables : undefined;
+  const pendingId = create.isPending ? create.variables.id : undefined;
+  const createFrom = (id: BlueprintId) => {
+    if (binding !== null) {
+      create.mutate({ bindingFields: binding, id });
+    }
+  };
+  const cannotCreate = create.isPending || binding === null;
 
   return (
     <DialogPopup className="sm:max-w-2xl">
       <DialogFormState
-        dirty={scope !== "private"}
-        onDiscard={() => setScope("private")}
+        dirty={scope !== "private" || availability !== "everywhere"}
+        onDiscard={resetForm}
       />
       <DialogHeader>
         <DialogTitle>{tGallery("title")}</DialogTitle>
@@ -148,7 +201,8 @@ const BlueprintGallerySheetBody = ({
       </DialogHeader>
 
       <DialogPanel className="flex flex-col gap-3">
-        {canManageTeam && (
+        {/* Members may share with the team too, bound to one matter. */}
+        <div className="flex flex-col gap-2">
           <div className="flex items-center justify-end gap-2">
             <label
               className="text-muted-foreground text-xs"
@@ -159,7 +213,7 @@ const BlueprintGallerySheetBody = ({
             <Select
               onValueChange={(value) => {
                 if (value === "team" || value === "private") {
-                  setScope(value);
+                  changeScope(value);
                 }
               }}
               value={scope}
@@ -177,16 +231,26 @@ const BlueprintGallerySheetBody = ({
               </SelectPopup>
             </Select>
           </div>
-        )}
+          <SkillAvailabilityField
+            availability={availability}
+            canManageTeam={canManageTeam}
+            client={client}
+            matter={matter}
+            onAvailabilityChange={setAvailability}
+            onClientChange={setClient}
+            onMatterChange={setMatter}
+            scope={scope}
+          />
+        </div>
 
         {CARDS.map((card) => {
           const text = cardText(card.id);
           return (
             <button
               className="border-border hover:border-foreground/30 hover:bg-muted/40 flex items-start gap-3 rounded-lg border p-4 text-start disabled:opacity-60"
-              disabled={create.isPending}
+              disabled={cannotCreate}
               key={card.id}
-              onClick={() => create.mutate(card.id)}
+              onClick={() => createFrom(card.id)}
               type="button"
             >
               <span className="bg-muted text-foreground flex size-9 shrink-0 items-center justify-center rounded-md">
@@ -219,8 +283,8 @@ const BlueprintGallerySheetBody = ({
             straight in the editor and fills the skill in there. */}
         <button
           className="text-muted-foreground hover:text-foreground flex items-center rounded-md border border-dashed px-4 py-3 text-start text-sm disabled:opacity-60"
-          disabled={create.isPending}
-          onClick={() => create.mutate("blank")}
+          disabled={cannotCreate}
+          onClick={() => createFrom("blank")}
           type="button"
         >
           {pendingId === "blank" && (

@@ -19,9 +19,11 @@ const config = {
   description:
     "Read one agent skill in full: its instruction body, scope, origin, " +
     "version, license, compatibility, source URL, slash command, invocation " +
-    "(`auto` or `manual`: whether the assistant may use it on its own), and every " +
+    "(`auto` or `manual`: whether the assistant may use it on its own), the " +
+    "matter (`boundWorkspaceId`) or client (`boundClientId`) it is bound to, and every " +
     "resource file with its content. A team skill is readable by every " +
-    "member of the organization; a private one only by its author.",
+    "member of the organization, a bound one only by members who reach its " +
+    "matter or client; a private one only by its author.",
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -55,6 +57,8 @@ const getSkill = createSafeRootHandler(
             contentHash: agentSkills.contentHash,
             enabled: agentSkills.enabled,
             invocation: agentSkills.invocation,
+            boundWorkspaceId: agentSkills.boundWorkspaceId,
+            boundClientId: agentSkills.boundClientId,
             body: agentSkills.body,
             command: agentSkills.command,
             createdAt: agentSkills.createdAt,

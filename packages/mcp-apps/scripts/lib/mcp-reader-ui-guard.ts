@@ -1,4 +1,4 @@
-import { ts } from "@stll/scripts/src/typescript-program";
+import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 export const MCP_READER_UI_APP_DIRECTORIES = [
   "case-law-results",
@@ -15,27 +15,17 @@ type InspectMcpReaderUiOptions = {
 };
 
 const parseModule = ({ file, text }: ReaderModule) =>
-  ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
-const nodesOf = (source: ts.Node): ts.Node[] => {
-  const nodes: ts.Node[] = [];
-  const visit = (node: ts.Node) => {
+  parseSource(file, text).program;
+const nodesOf = (source: Node): Node[] => {
+  const nodes: Node[] = [];
+  walk(source, (node) => {
     nodes.push(node);
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+  });
   return nodes;
 };
-const exported = (node: ts.Node) =>
-  ts.canHaveModifiers(node) &&
-  ts
-    .getModifiers(node)
-    ?.some(({ kind }) => kind === ts.SyntaxKind.ExportKeyword);
-const hasJsx = (node: ts.Node) =>
+const hasJsx = (node: Node) =>
   nodesOf(node).some(
-    (child) =>
-      ts.isJsxElement(child) ||
-      ts.isJsxSelfClosingElement(child) ||
-      ts.isJsxFragment(child),
+    (child) => child.type === "JSXElement" || child.type === "JSXFragment",
   );
 const isReaderOwner = (file: string) =>
   file.startsWith("packages/decision-reader/") ||
@@ -44,37 +34,45 @@ const isReaderOwner = (file: string) =>
 const sharedComponentNames = (sharedModules: readonly ReaderModule[]) => {
   const components = new Set<string>();
   for (const module of sharedModules) {
-    for (const node of parseModule(module).statements) {
-      if (
-        ts.isExportDeclaration(node) &&
-        node.exportClause &&
-        ts.isNamedExports(node.exportClause)
-      ) {
-        for (const binding of node.exportClause.elements) {
-          if (!binding.isTypeOnly && /^[A-Z][a-z]/u.test(binding.name.text)) {
-            components.add(binding.name.text);
+    for (const statement of parseModule(module).body) {
+      if (statement.type === "ExportNamedDeclaration") {
+        for (const binding of statement.specifiers) {
+          const name =
+            binding.exported.type === "Identifier"
+              ? binding.exported.name
+              : binding.exported.value;
+          if (binding.exportKind !== "type" && /^[A-Z][a-z]/u.test(name)) {
+            components.add(name);
           }
         }
       }
-      if (!exported(node)) {
+      if (
+        statement.type !== "ExportNamedDeclaration" &&
+        statement.type !== "ExportDefaultDeclaration"
+      ) {
+        continue;
+      }
+      const node = statement.declaration;
+      if (!node) {
         continue;
       }
       if (
-        (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) &&
-        node.name &&
-        /^[A-Z][a-z]/u.test(node.name.text)
+        (node.type === "FunctionDeclaration" ||
+          node.type === "ClassDeclaration") &&
+        node.id &&
+        /^[A-Z][a-z]/u.test(node.id.name)
       ) {
-        components.add(node.name.text);
+        components.add(node.id.name);
       }
-      if (!ts.isVariableStatement(node)) {
+      if (node.type !== "VariableDeclaration") {
         continue;
       }
-      for (const declaration of node.declarationList.declarations) {
+      for (const declaration of node.declarations) {
         if (
-          ts.isIdentifier(declaration.name) &&
-          /^[A-Z][a-z]/u.test(declaration.name.text)
+          declaration.id.type === "Identifier" &&
+          /^[A-Z][a-z]/u.test(declaration.id.name)
         ) {
-          components.add(declaration.name.text);
+          components.add(declaration.id.name);
         }
       }
     }
@@ -88,38 +86,40 @@ const schemaAstKinds = (astModules: readonly ReaderModule[]) => {
   for (const module of astModules) {
     for (const node of nodesOf(parseModule(module))) {
       if (
-        ts.isPropertyAssignment(node) &&
-        node.name.getText() === "type" &&
-        ts.isCallExpression(node.initializer)
+        node.type !== "Property" ||
+        node.key.type !== "Identifier" ||
+        node.key.name !== "type" ||
+        node.value.type !== "CallExpression"
       ) {
-        const value = node.initializer.arguments.at(0);
-        if (value && ts.isStringLiteral(value)) {
-          astKinds.add(value.text);
-        }
+        continue;
+      }
+      const value = node.value.arguments.at(0);
+      if (value?.type === "Literal" && typeof value.value === "string") {
+        astKinds.add(value.value);
       }
     }
   }
   return astKinds;
 };
 
-const blockRendererBindings = (nodes: readonly ts.Node[]) => {
+const blockRendererBindings = (nodes: readonly Node[]) => {
   const rendererNames = new Set<string>();
   for (const node of nodes) {
     if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier) &&
-      node.moduleSpecifier.text === "@stll/decision-reader/document-ast-text" &&
-      node.importClause?.namedBindings &&
-      ts.isNamedImports(node.importClause.namedBindings)
+      node.type !== "ImportDeclaration" ||
+      node.source.value !== "@stll/decision-reader/document-ast-text"
     ) {
-      for (const binding of node.importClause.namedBindings.elements) {
-        if (
-          (binding.propertyName?.text ?? binding.name.text) ===
-            "BlockRenderer" &&
-          !binding.isTypeOnly
-        ) {
-          rendererNames.add(binding.name.text);
-        }
+      continue;
+    }
+    for (const binding of node.specifiers) {
+      if (
+        binding.type === "ImportSpecifier" &&
+        (binding.imported.type === "Identifier"
+          ? binding.imported.name
+          : binding.imported.value) === "BlockRenderer" &&
+        binding.importKind !== "type"
+      ) {
+        rendererNames.add(binding.local.name);
       }
     }
   }
@@ -127,7 +127,7 @@ const blockRendererBindings = (nodes: readonly ts.Node[]) => {
 };
 
 type InspectLocalReaderNodeOptions = {
-  node: ts.Node;
+  node: Node;
   file: string;
   components: ReadonlySet<string>;
   astKinds: ReadonlySet<string>;
@@ -141,35 +141,54 @@ const inspectLocalReaderNode = ({
   issues,
 }: InspectLocalReaderNodeOptions) => {
   const name =
-    (ts.isVariableDeclaration(node) ||
-      ts.isFunctionDeclaration(node) ||
-      ts.isClassDeclaration(node)) &&
-    node.name &&
-    ts.isIdentifier(node.name)
-      ? node.name.text
+    (node.type === "VariableDeclarator" ||
+      node.type === "FunctionDeclaration" ||
+      node.type === "ClassDeclaration") &&
+    node.id?.type === "Identifier"
+      ? node.id.name
       : undefined;
   if (name && components.has(name)) {
     issues.push(`${file}: local ${name} duplicates shared reader UI`);
   }
   // A renamed renderer cannot evade ownership by switching on AST kinds and painting JSX.
-  if (!ts.isFunctionLike(node) || !hasJsx(node)) {
+  if (
+    ![
+      "FunctionDeclaration",
+      "FunctionExpression",
+      "ArrowFunctionExpression",
+    ].includes(node.type) ||
+    !hasJsx(node)
+  ) {
     return;
   }
   const rendersAst = nodesOf(node).some((child) => {
-    if (ts.isCaseClause(child) && ts.isStringLiteral(child.expression)) {
-      return astKinds.has(child.expression.text);
+    if (
+      child.type === "SwitchCase" &&
+      child.test?.type === "Literal" &&
+      typeof child.test.value === "string"
+    ) {
+      return astKinds.has(child.test.value);
     }
-    if (!ts.isBinaryExpression(child)) {
+    if (
+      child.type !== "BinaryExpression" &&
+      child.type !== "LogicalExpression" &&
+      child.type !== "AssignmentExpression"
+    ) {
       return false;
     }
     return (
       [child.left, child.right].some(
-        (operand) => ts.isStringLiteral(operand) && astKinds.has(operand.text),
+        (operand) =>
+          operand.type === "Literal" &&
+          typeof operand.value === "string" &&
+          astKinds.has(operand.value),
       ) &&
       [child.left, child.right].some(
         (operand) =>
-          ts.isPropertyAccessExpression(operand) &&
-          operand.name.text === "type",
+          operand.type === "MemberExpression" &&
+          !operand.computed &&
+          operand.property.type === "Identifier" &&
+          operand.property.name === "type",
       )
     );
   });
@@ -213,9 +232,9 @@ export const inspectMcpReaderUi = ({
     }
     usesBlockRenderer ||= nodes.some(
       (node) =>
-        (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
-        ts.isIdentifier(node.tagName) &&
-        rendererNames.has(node.tagName.text),
+        node.type === "JSXOpeningElement" &&
+        node.name.type === "JSXIdentifier" &&
+        rendererNames.has(node.name.name),
     );
   }
   if (

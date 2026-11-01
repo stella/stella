@@ -15,6 +15,7 @@ import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-se
 import { finalizeAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
+  authorizeUploadConsent,
   authorizeUploadPurpose,
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
@@ -51,6 +52,7 @@ import {
 import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { getS3, readS3ObjectBounded } from "@/api/lib/s3";
@@ -192,6 +194,13 @@ const finalizeUpload = createSafeHandler(
     });
     if (Result.isError(authorization)) {
       return Result.err(authorization.error);
+    }
+    const consent = authorizeUploadConsent({
+      grantedScopes: session.grantedScopes,
+      purpose: pending.purpose,
+    });
+    if (Result.isError(consent)) {
+      return Result.err(consent.error);
     }
     // A finished upload answers with its stored result at once; only work
     // that still has to read the file waits for capacity.
@@ -498,13 +507,39 @@ const deleteStagedUploadObjects = async ({
   stage,
   uploadId,
   workspaceId,
-}: StagedUploadKeyProps & { stage: string }) => {
+}: StagedUploadKeyProps & { stage: "tmp-cleanup-after-reject" }) => {
   for (const key of tmpUploadKeys({ organizationId, uploadId, workspaceId })) {
     await getS3()
       .delete(key)
       .catch((deleteError: unknown) =>
-        captureError(deleteError, { key, stage, uploadId }),
+        captureError(
+          deleteError,
+          handlerErrorContext(`uploads.cleanup.${stage}`, {
+            key,
+            stage,
+            uploadId,
+          }),
+        ),
       );
+  }
+};
+
+const observePostPromotion = async (
+  afterPromote: () => void,
+  uploadId: SafeId<"pendingUpload">,
+) => {
+  const postPromoteResult = await Result.tryPromise(async () => {
+    afterPromote();
+    await Promise.resolve();
+  });
+  if (Result.isError(postPromoteResult)) {
+    captureError(
+      postPromoteResult.error,
+      handlerErrorContext("uploads.runFinalize.postPromoteResult_error", {
+        uploadId,
+        stage: "post-promote",
+      }),
+    );
   }
 };
 
@@ -719,26 +754,20 @@ const runFinalize = async function* ({
 
   const afterPromote = purposeOk.value.afterPromote;
   if (afterPromote) {
-    const postPromoteResult = await Result.tryPromise(async () => {
-      afterPromote();
-      await Promise.resolve();
-    });
-    if (Result.isError(postPromoteResult)) {
-      captureError(postPromoteResult.error, {
-        uploadId: claimed.id,
-        stage: "post-promote",
-      });
-    }
+    await observePostPromotion(afterPromote, claimed.id);
   }
 
   // 6. Tmp cleanup. Bucket lifecycle catches anything we miss.
   await getS3()
     .delete(tmpKey)
     .catch((deleteError: unknown) =>
-      captureError(deleteError, {
-        uploadId: claimed.id,
-        stage: "tmp-cleanup-after-promote",
-      }),
+      captureError(
+        deleteError,
+        handlerErrorContext("uploads.runFinalize.deleteError", {
+          uploadId: claimed.id,
+          stage: "tmp-cleanup-after-promote",
+        }),
+      ),
     );
 
   return Result.ok({ finalizedResult: purposeOk.value.finalizedResult });

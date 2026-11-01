@@ -1,14 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import {
-  afterAll,
-  afterEach,
-  describe,
-  expect,
-  jest,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
+
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { WebApiRoutes } from "@/lib/api";
 import type { WorkspaceNavigationItem } from "@/lib/memory-api";
@@ -23,11 +17,11 @@ GlobalRegistrator.register({
 // A hung test fails instead of holding the run. Assertions compare strings
 // and booleans, never DOM nodes: a failing match on a node makes the runner
 // print the whole document graph.
-setDefaultTimeout(10_000);
 
 const previousFetch = globalThis.fetch;
 const testing = await import("@testing-library/react");
-const query = await import("@tanstack/react-query");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
 const { useSyncExternalStore } = await import("react");
 const { IntlProvider } = await import("use-intl");
@@ -133,7 +127,7 @@ const fullServer = (): Server => ({
 const listRequests: URL[] = [];
 const deleteRequests: URL[] = [];
 const unexpected: string[] = [];
-const clients: InstanceType<typeof query.QueryClient>[] = [];
+const clients: InstanceType<typeof QueryClient>[] = [];
 
 type ServedThread = {
   slice: ThreadSlice;
@@ -256,7 +250,7 @@ afterAll(async () => {
 });
 
 const createClient = () => {
-  const client = new query.QueryClient({
+  const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   clients.push(client);
@@ -339,7 +333,7 @@ const openHistory = async (initial: ChatHistorySearch = {}) => {
   const ui = testing.render(
     <AnalyticsContext value={noopAnalytics}>
       <RenderLoopGuard>
-        <query.QueryClientProvider client={createClient()}>
+        <QueryClientProvider client={createClient()}>
           {/* Pin calendar grouping without freezing Date.now(), which the
               debounce uses to decide whether its trailing timer can fire. */}
           <IntlProvider
@@ -354,7 +348,7 @@ const openHistory = async (initial: ChatHistorySearch = {}) => {
               </AuthenticatedUserProvider>
             </FormattingProvider>
           </IntlProvider>
-        </query.QueryClientProvider>
+        </QueryClientProvider>
       </RenderLoopGuard>
     </AnalyticsContext>,
   );
@@ -531,29 +525,24 @@ describe("chat history page", () => {
     serve(fullServer());
     const { navigateTo, searchChanges, ui } = await openHistory();
     const field = ui.getByRole("searchbox", { name: messages.common.search });
+    restoreRealTimers();
     await testing.waitFor(() =>
       expect(threadLink(ui, TODAY_GLOBAL.title)).toBeDefined(),
     );
 
-    jest.useFakeTimers();
-    try {
-      await testing.act(async () => {
-        testing.fireEvent.change(field, { target: { value: "lease" } });
-      });
-      // The URL moves on before the typing's debounce fires.
-      await navigateTo({ q: "claim" });
-      await testing.act(async () => {
-        jest.advanceTimersByTime(1000);
-      });
-    } finally {
-      jest.useRealTimers();
-    }
+    await testing.act(async () => {
+      testing.fireEvent.change(field, { target: { value: "lease" } });
+    });
+    // The URL moves on before the typing's debounce fires.
+    await navigateTo({ q: "claim" });
+    await testing.act(async () => {
+      // real-time: this assertion covers expiry of the abandoned debounce.
+      await sleep(1000);
+    });
 
     expect(inputValue(field)).toBe("claim");
     expect(searchChanges).toEqual([]);
-    await testing.waitFor(() =>
-      expect(threadLink(ui, THIS_WEEK_IN_A.title)).toBeDefined(),
-    );
+    expect(threadLink(ui, THIS_WEEK_IN_A.title)).toBeDefined();
     expect(ui.queryByText(OLDER_IN_B.title)).toBeNull();
     expect(
       listRequests.map((url) => url.searchParams.get("search")),

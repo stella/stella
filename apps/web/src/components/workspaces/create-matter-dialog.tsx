@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -26,7 +27,10 @@ import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { ContactPicker } from "@/components/contact-picker";
+import {
+  CONTACT_PICKER_SUGGESTIONS,
+  ContactPicker,
+} from "@/components/contact-picker";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { getPossibleDuplicateMatters } from "@/components/workspaces/create-matter-dialog.logic";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
@@ -36,15 +40,14 @@ import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
-import { createUuid } from "@/lib/uuid";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateWorkspace } from "@/lib/workspaces/mutations";
 import { workspacesOptions } from "@/lib/workspaces/queries";
 
-const SelectedClient = ({
+export const SelectedClient = ({
   client,
   onClear,
   clearLabel,
@@ -83,18 +86,26 @@ const toActionErrorTitle = ({
 }) => userErrorFromThrown(error, fallback);
 
 export const CreateMatterDialog = () => {
-  const { closeDialog, dialog } = useCreateMatterStore(
-    useShallow((s) => ({
-      closeDialog: s.closeDialog,
-      dialog: s.dialog,
-    })),
-  );
+  const { closeDialog, dialog, finishClosing, returnFocus } =
+    useCreateMatterStore(
+      useShallow((s) => ({
+        closeDialog: s.closeDialog,
+        dialog: s.dialog,
+        finishClosing: s.finishClosing,
+        returnFocus: s.returnFocus,
+      })),
+    );
   const isOpen = dialog.status === "open";
-  const draftClient = dialog.status === "open" ? dialog.draftClient : null;
-  const onCreated = dialog.status === "open" ? dialog.onCreated : undefined;
+  const draftClient = dialog.status !== "closed" ? dialog.draftClient : null;
+  const onCreated = dialog.status !== "closed" ? dialog.onCreated : undefined;
 
   return (
     <Dialog
+      onOpenChangeComplete={(open) => {
+        if (!open) {
+          finishClosing();
+        }
+      }}
       onOpenChange={(open) => {
         if (!open) {
           closeDialog();
@@ -102,11 +113,12 @@ export const CreateMatterDialog = () => {
       }}
       open={isOpen}
     >
-      {isOpen ? (
+      {dialog.status !== "closed" ? (
         <CreateMatterDialogBody
           closeDialog={closeDialog}
           draftClient={draftClient}
           key={draftClient?.id ?? "new"}
+          returnFocus={returnFocus}
           {...(onCreated === undefined ? {} : { onCreated })}
         />
       ) : null}
@@ -118,12 +130,14 @@ type CreateMatterDialogBodyProps = {
   closeDialog: () => void;
   draftClient: MatterDraftClient | null;
   onCreated?: (workspaceId: string) => void | Promise<void>;
+  returnFocus: RefObject<HTMLElement | null>;
 };
 
 const CreateMatterDialogBody = ({
   closeDialog,
   draftClient,
   onCreated,
+  returnFocus,
 }: CreateMatterDialogBodyProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
@@ -139,8 +153,8 @@ const CreateMatterDialogBody = ({
   const workspacesDataQuery = useChromeQuery({
     ...workspacesOptions(currentUser.activeOrganizationId),
   });
-  const workspacesDataView = useQueryView(workspacesDataQuery);
-  useQueryViewError(workspacesDataView);
+  const workspacesDataView = queryView(workspacesDataQuery);
+  useQueryViewError(workspacesDataView, "CreateMatterDialogBody:query");
   const workspacesData =
     workspacesDataView.type === "items" ? workspacesDataView.items : undefined;
 
@@ -149,12 +163,9 @@ const CreateMatterDialogBody = ({
   };
 
   const handleCreateClient = async (displayName: string, type: ContactType) => {
-    const id = toSafeId<"contact">(createUuid());
-
     const result = await Result.tryPromise(
       async () =>
         await createContact.mutateAsync({
-          id,
           type,
           displayName,
         }),
@@ -176,7 +187,7 @@ const CreateMatterDialogBody = ({
     });
 
     setSelectedClient({
-      id,
+      id: result.value.id,
       displayName,
       type,
     });
@@ -257,7 +268,7 @@ const CreateMatterDialogBody = ({
         });
 
   return (
-    <DialogPopup className="max-w-md">
+    <DialogPopup className="max-w-md" finalFocus={returnFocus}>
       <DialogFormState
         dirty={name !== "" || selectedClient?.id !== draftClient?.id}
         onDiscard={() => {
@@ -325,6 +336,7 @@ const CreateMatterDialogBody = ({
                 ? t("workspaces.parties.changeClient")
                 : t("workspaces.parties.noClientOptional")
             }
+            suggestions={CONTACT_PICKER_SUGGESTIONS.recentClients}
           />
           {selectedClient === null ? (
             <p className="text-muted-foreground text-xs">

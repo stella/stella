@@ -14,7 +14,7 @@ import {
   redirect,
   useNavigate,
 } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -33,36 +33,54 @@ import { getInitials } from "@stll/ui/initials";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import {
+  OAuthAccountList,
+  OAuthAccountRow,
+  useOAuthAccountSwitch,
+} from "@/components/oauth-consent/oauth-account";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { refreshAuthQueries } from "@/lib/auth-queries";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import {
   notifyAuthClientError,
   notifyUserError,
 } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   getOauthHashFragment,
   getOauthRedirectUrl,
+  getSignedOauthQuery,
   getSignedOauthQueryFromHash,
+  hasOauthPrompt,
   hasSignedOauthQuery,
 } from "@/lib/oauth-provider";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { createSlug, getOrganizationSchema } from "@/lib/organization/utils";
+import { getOrganizationSchema } from "@/lib/organization/utils";
+import { queryView } from "@/lib/query-view.logic";
 import {
+  destinationNavigation,
   isAcceptInvitationRedirect,
   normalizeRedirectTo,
   onboardingNavigation,
 } from "@/lib/redirect";
-import { schemaFormOptions, toFormErrors } from "@/lib/schema";
-import { useQueryView } from "@/lib/use-query-view";
+import {
+  optionalFlagSearchSchema,
+  schemaFormOptions,
+  toFormErrors,
+} from "@/lib/schema";
+import { routeSearchSchema } from "@/route-search-params";
 
-const searchSchema = v.object({
-  devQuickStart: v.optional(v.boolean()),
+const searchSchema = routeSearchSchema({
+  devQuickStart: optionalFlagSearchSchema,
   redirectTo: v.optional(v.pipe(v.string(), v.transform(normalizeRedirectTo))),
 });
 
@@ -108,7 +126,7 @@ export const Route = createFileRoute("/auth/organization")({
       (context.session.activeOrganizationId ||
         isAcceptInvitationRedirect(search.redirectTo ?? "/"))
     ) {
-      throw redirect({ to: search.redirectTo ?? "/", replace: true });
+      throw redirect(destinationNavigation(search.redirectTo ?? "/"));
     }
 
     return { isOauthPostLoginFromSearch, userId: context.session.userId };
@@ -158,9 +176,7 @@ const OrganizationSkeleton = () => (
 
 const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
   const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
-  const organizationView = useQueryView(
-    useQuery(organizationListOptions(userId)),
-  );
+  const organizationView = queryView(useQuery(organizationListOptions(userId)));
   const redirectTo = Route.useSearch({ select: (search) => search.redirectTo });
   const isOauthPostLoginFromSearch = Route.useRouteContext({
     select: (context) => context.isOauthPostLoginFromSearch,
@@ -168,6 +184,17 @@ const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
   const isOauthPostLogin =
     isOauthPostLoginFromSearch ||
     (hydrated && getSignedOauthQueryFromHash(window.location.hash) !== null);
+  // A client asking for account selection gets this step even for a single
+  // membership, so the account can still be switched before consent.
+  const isAccountSelection =
+    hydrated &&
+    hasOauthPrompt(
+      getSignedOauthQuery({
+        hash: window.location.hash,
+        searchStr: window.location.search,
+      }),
+      "select_account",
+    );
 
   if (hydrated && organizationView.type === "empty" && !isOauthPostLogin) {
     return <Navigate {...onboardingNavigation(redirectTo)} />;
@@ -195,6 +222,7 @@ const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
       <QueryViewFeedback view={organizationView} />
       {organizationView.type === "items" ? (
         <OrganizationList
+          isAccountSelection={isAccountSelection}
           isOauthPostLogin={isOauthPostLogin}
           organizations={organizationView.items}
         />
@@ -205,7 +233,44 @@ const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
   );
 };
 
+/**
+ * Who the organizations below belong to, with the same switch the consent step
+ * offers: signing in as someone else resumes the same authorization request.
+ */
+const SignedInAccount = ({ disabled }: { disabled: boolean }) => {
+  const t = useTranslations();
+  const email = Route.useRouteContext({ select: (ctx) => ctx.user?.email });
+  const switchAccount = useOAuthAccountSwitch();
+  const { isPending, mutate } = useMutation({
+    mutationFn: switchAccount,
+    onSuccess: (outcome) => {
+      if (outcome.isErr()) {
+        notifyUserError(outcome.error, t("errors.actionFailed"));
+      }
+    },
+  });
+
+  if (!email) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3">
+      <OAuthAccountList>
+        <OAuthAccountRow
+          disabled={disabled || isPending}
+          email={email}
+          onAccountSwitch={() => {
+            mutate();
+          }}
+        />
+      </OAuthAccountList>
+    </div>
+  );
+};
+
 type OrganizationListProps = {
+  isAccountSelection: boolean;
   isOauthPostLogin: boolean;
   organizations: { id: string; name: string; slug: string }[];
 };
@@ -229,7 +294,7 @@ const completeOrganizationFlow = async ({
   await refreshAuthQueries(queryClient);
 
   if (!isOauthPostLogin) {
-    await navigate({ to: redirectTo, replace: true });
+    await navigate(destinationNavigation(redirectTo));
     return;
   }
 
@@ -250,6 +315,7 @@ const completeOrganizationFlow = async ({
 };
 
 const OrganizationList = ({
+  isAccountSelection,
   isOauthPostLogin,
   organizations,
 }: OrganizationListProps) => {
@@ -279,12 +345,17 @@ const OrganizationList = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "OrganizationList:failure",
+        scope: { type: "handler", handlerId: "OrganizationList:failure" },
+      });
     },
   });
 
-  // Auto-select when there's only one organization
-  const singleOrg = organizations.length === 1 ? organizations[0] : null;
+  // Auto-select when there is only one organization, unless the client asked
+  // for account selection.
+  const singleOrg =
+    organizations.length === 1 && !isAccountSelection ? organizations[0] : null;
   const autoSelected = useRef(false);
   useExternalSyncEffect(() => {
     if (singleOrg && !autoSelected.current && !isSelectPending) {
@@ -314,6 +385,7 @@ const OrganizationList = ({
       <FrameHeader>
         <FrameTitle>{t("auth.selectOrganization")}</FrameTitle>
         <FrameDescription>{t("auth.chooseOrganization")}</FrameDescription>
+        <SignedInAccount disabled={isSelectPending} />
       </FrameHeader>
       <FramePanel className="flex flex-col gap-2">
         {organizations.map((org) => (
@@ -349,49 +421,66 @@ const CreateOrganizationForm = ({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  const createIntent = useIdempotentSubmit();
+  const creationFlight = useSingleFlight();
+
   const form = useForm(
     schemaFormOptions({
       schema: getOrganizationSchema(),
       defaultValues: { name: "", slug: "" },
       submitValues: "schema-output",
-      onSubmit: async ({ value, formApi }) => {
-        const { data: slugCheckData, error: slugCheckError } =
-          await authClient.organization.checkSlug({
-            slug: value.slug,
-          });
+      onSubmit: async ({ value }) => {
+        const createResult = await Result.tryPromise({
+          try: async () =>
+            await invokeCapability("organizations.create", async (request) =>
+              unwrapApiResponse(
+                await api.organizations.post(
+                  {
+                    name: value.name,
+                    ...(value.slug === undefined ? {} : { slug: value.slug }),
+                  },
+                  {
+                    ...request,
+                    headers: {
+                      "Idempotency-Key": createIntent.prepare({
+                        body: value,
+                        operation: "organizations.create",
+                      }).headers["Idempotency-Key"],
+                      ...request.headers,
+                    },
+                  },
+                ),
+              ),
+            ),
+          catch: (error) => error,
+        });
 
-        if (slugCheckError) {
-          analytics.captureError(toAuthClientError(slugCheckError));
-          notifyAuthClientError(slugCheckError, t("errors.actionFailed"));
+        if (Result.isError(createResult)) {
+          analytics.captureError(createResult.error, {
+            fingerprintKey: "CreateOrganizationForm.onSubmit:failure-2",
+            scope: {
+              type: "handler",
+              handlerId: "CreateOrganizationForm.onSubmit:failure-2",
+            },
+          });
+          notifyUserError(createResult.error, t("errors.actionFailed"));
           return;
         }
-
-        if (!slugCheckData.status) {
-          formApi.setErrorMap({
-            onSubmit: { fields: { slug: t("errors.slugAlreadyTaken") } },
-          });
-          return;
-        }
-
-        const { data, error: createError } =
-          await authClient.organization.create({
-            name: value.name,
-            slug: value.slug,
-          });
-
-        if (createError) {
-          analytics.captureError(toAuthClientError(createError));
-          notifyAuthClientError(createError, t("errors.actionFailed"));
-          return;
-        }
+        const data = createResult.value;
 
         const { error: setActiveError } =
           await authClient.organization.setActive({
-            organizationId: data.id,
+            organizationId: data.organizationId,
           });
 
         if (setActiveError) {
-          analytics.captureError(toAuthClientError(setActiveError));
+          analytics.captureError(toAuthClientError(setActiveError), {
+            fingerprintKey: "CreateOrganizationForm.onSubmit:failure-3",
+            scope: {
+              type: "handler",
+              handlerId: "CreateOrganizationForm.onSubmit:failure-3",
+            },
+          });
           notifyAuthClientError(setActiveError, t("errors.actionFailed"));
           return;
         }
@@ -405,7 +494,13 @@ const CreateOrganizationForm = ({
             status: "created",
           });
         } catch (error) {
-          analytics.captureError(error);
+          analytics.captureError(error, {
+            fingerprintKey: "CreateOrganizationForm.onSubmit:failure-4",
+            scope: {
+              type: "handler",
+              handlerId: "CreateOrganizationForm.onSubmit:failure-4",
+            },
+          });
           notifyUserError(error, t("errors.actionFailed"));
         }
       },
@@ -419,13 +514,17 @@ const CreateOrganizationForm = ({
       <FrameHeader>
         <FrameTitle>{t("auth.createOrganization")}</FrameTitle>
         <FrameDescription>{t("auth.createFirstOrganization")}</FrameDescription>
+        <SignedInAccount disabled={false} />
       </FrameHeader>
       <FramePanel>
         <Form
           errors={formErrors}
           onSubmit={(event) => {
             event.preventDefault();
-            detached(form.handleSubmit(), "auth-organization.submit");
+            detached(
+              creationFlight.run(async () => await form.handleSubmit()),
+              "auth-organization.submit",
+            );
           }}
         >
           <form.Field name="name">
@@ -435,11 +534,7 @@ const CreateOrganizationForm = ({
                 <Input
                   autoFocus
                   onBlur={field.handleBlur}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    field.handleChange(value);
-                    form.setFieldValue("slug", createSlug(value));
-                  }}
+                  onChange={(event) => field.handleChange(event.target.value)}
                   placeholder={t("auth.organizationNamePlaceholder")}
                   required
                   value={field.state.value}
@@ -456,8 +551,6 @@ const CreateOrganizationForm = ({
                   dir="ltr"
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
-                  placeholder={t("common.urlIdentifierPlaceholder")}
-                  required
                   value={field.state.value}
                 />
                 <FieldError />

@@ -4,6 +4,7 @@ import fc from "fast-check";
 import type { Document as FolioDocument } from "@stll/docx-core/model";
 import { hasBlockInlines } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { assertProperty } from "@stll/property-testing";
 
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
@@ -518,6 +519,44 @@ describe("parseUsDecisionHtml", () => {
         text: DISSENT_TEXT,
         role: "dissent",
       });
+    });
+
+    // A concurring judge agrees with the outcome: the opinion is that
+    // judge's argumentation, not a dissent.
+    test.each([
+      ["Odlišné stanovisko sudcu A. B.", "dissent"],
+      ["Odlišné stanovisko sudkyne A. B.", "dissent"],
+      ["Paralelní stanovisko soudkyně A. B.", "argumentation"],
+      ["Konkurujúce stanovisko sudcov A. B. a C. D.", "argumentation"],
+    ] as const)("shares CS/SK opinion roles at %s", (opinionLine, role) => {
+      const lines = [
+        "Odůvodnění:",
+        `1. ${MAJORITY_TEXT}`,
+        opinionLine,
+        `2. ${DISSENT_TEXT}`,
+      ].map((text) => ({
+        kind: "body" as const,
+        value: normalizeInlineLine([{ type: "text", text }]),
+      }));
+      const blocks = courtParagraphNumbers(classifyUsDocumentLines(lines), {
+        parser: "cz-us",
+        caseNumber: "test",
+      });
+      expect(blocks).toContainEqual(
+        expect.objectContaining({
+          type: "heading",
+          plainText: opinionLine,
+          role: "section-heading",
+        }),
+      );
+      expect(blocks).toContainEqual(
+        expect.objectContaining({
+          type: "paragraph",
+          plainText: DISSENT_TEXT,
+          number: 2,
+          role,
+        }),
+      );
     });
 
     test("keeps the number the court printed on the opinion heading", () => {
@@ -1311,3 +1350,84 @@ for (const destination of ["header", "footer"] as const) {
     },
   );
 }
+
+describe("CZ printed lines read as paragraphs", () => {
+  /** A printed line of I. ÚS 549/2000, ending at the margin mid-sentence. */
+  const WRAPPED_LINE =
+    "stížnosti stěžovatelů A. M., bytem SRN,  a O. M., bytem, SRN, obou";
+  const rtfOf = (lines: readonly string[]): string =>
+    `{\\rtf1\\ansi \\pard ${lines.join("\\par ")}\\par}`;
+
+  /** Characters the reader trims while reading `count` lines of one paragraph. */
+  const trimmedCharacters = (count: number) => {
+    let characters = 0;
+    const lines = usDocumentLinesOf(
+      readRtfString(
+        rtfOf([...Array.from({ length: count }, () => WRAPPED_LINE), "konec."]),
+      ),
+      {
+        normalize: (nodes) => {
+          const line = normalizeInlineLine(nodes);
+          characters += line.plainText.length;
+          return line;
+        },
+      },
+    );
+    return { characters, lines };
+  };
+
+  test("trims each line of a long paragraph once, not the paragraph per line", () => {
+    const small = trimmedCharacters(200);
+    const large = trimmedCharacters(400);
+
+    expect(small.lines).toHaveLength(1);
+    expect(large.lines).toHaveLength(1);
+    // Every line once as it joins and the paragraph once as it closes:
+    // twice the text, whatever the paragraph's length.
+    const text = (count: number) => count * (WRAPPED_LINE.length + 1);
+    expect(small.characters).toBeGreaterThanOrEqual(text(200));
+    expect(small.characters).toBeLessThanOrEqual(2 * text(200) + 100);
+    expect(large.characters).toBeLessThanOrEqual(2 * text(400) + 100);
+  });
+
+  test("keeps sentences of one width and the ruling after takto: apart", () => {
+    const sentences = Array.from({ length: 4 }, () => [
+      "Ústavní soud posoudil návrh a neshledal jej důvodným.",
+      "Napadené rozhodnutí obecného soudu bylo řádně odůvodněno.",
+    ]).flat();
+    const { documentAst } = parseUsDecisionHtml({
+      html: `
+        <html><body>
+          <span id="lblDecisionForm">NÁLEZ</span>
+          <input id="docContentHidden" value="${rtfOf([
+            "Ústavní soud rozhodl o ústavní stížnosti takto:",
+            "Ústavní stížnost se zamítá.",
+            "Odůvodnění",
+            ...sentences,
+          ])}" />
+        </body></html>
+      `,
+      caseNumber: "I.ÚS 100/25",
+      ecli: undefined,
+      court: "Ústavní soud",
+      decisionDate: undefined,
+      decisionType: undefined,
+    });
+
+    expect(
+      documentAst.blocks.find(
+        (block) => block.type === "paragraph" && block.role === "holding",
+      )?.plainText,
+    ).toBe("Ústavní stížnost se zamítá.");
+    expect(
+      documentAst.blocks
+        .filter(
+          (block) => block.type === "paragraph" && block.role === undefined,
+        )
+        .map((block) => block.plainText),
+    ).toEqual([
+      "Ústavní soud rozhodl o ústavní stížnosti takto:",
+      ...sentences,
+    ]);
+  });
+});

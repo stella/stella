@@ -143,7 +143,8 @@ export const EvidenceReferencesDialog = ({
                   key={`${reference.workspaceId}/${reference.entityId}/${reference.entityVersionId}/${reference.fieldId}`}
                 >
                   <Button
-                    className="h-auto min-h-11 w-full justify-start text-start whitespace-normal"
+                    layout="wrap"
+                    className="w-full"
                     disabled={reference.workspaceId !== workspaceId}
                     onClick={() => {
                       onOpenChange(false);
@@ -244,7 +245,13 @@ const EvidenceFilePicker = ({
     if (controller.current?.signal.aborted !== false) {
       return;
     }
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "EvidenceFilePicker.reportInsertError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "EvidenceFilePicker.reportInsertError:failure",
+      },
+    });
     notifyUserError(error, t("folio.evidenceUnavailable"));
   };
   const insert = useMutation({
@@ -340,7 +347,8 @@ const EvidenceFilePicker = ({
         {files?.map((file) => (
           <li key={file.fieldId}>
             <Button
-              className="h-auto min-h-11 w-full justify-start text-start whitespace-normal"
+              layout="wrap"
+              className="w-full"
               disabled={insert.isPending}
               onClick={() => insert.mutate(file)}
               tooltip={t("folio.insertEvidence")}

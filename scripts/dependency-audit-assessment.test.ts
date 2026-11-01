@@ -1,0 +1,893 @@
+import { describe, expect, test } from "bun:test";
+
+import type { Advisory, BaselineEntry } from "./dependency-audit";
+import { lapsedAcceptances } from "./dependency-audit-acceptance";
+import {
+  assessAdvisories,
+  installableReleases,
+  installableVersions,
+  readReleaseAgePolicy,
+} from "./dependency-audit-assessment";
+import { planDependencyAuditRemediation } from "./dependency-audit-remediation";
+
+const lockfile = await Bun.file(
+  new URL("fixtures/dependency-audit/bun-lock.json", import.meta.url),
+).text();
+const zod = {
+  id: "GHSA-mrhx-c7xc-m3w5",
+  package: "zod",
+  severity: "high",
+  title:
+    "Zod can exhaust memory while validating oversized constrained collections",
+  vulnerableVersions: "<4.6.6",
+} satisfies Advisory;
+const sdk = {
+  id: "GHSA-22jm-h49p-29qw",
+  package: "@modelcontextprotocol/sdk",
+  severity: "high",
+  title:
+    "MCP TypeScript SDK: Experimental tasks were not tied to the session that created them",
+  vulnerableVersions: ">=1.24.0 <1.32.0",
+} satisfies Advisory;
+const acceptance = {
+  ...zod,
+  owner: "supply-chain",
+  reason: "Consumers require major 3",
+  expiresOn: "2026-11-23",
+  affectedPaths: ["@mcp-ui/client/zod", "@expo/cli/zod"],
+} satisfies BaselineEntry;
+const versions = new Map([
+  ["zod", ["3.25.76", "4.6.5", "4.6.6", "4.6.7"]],
+  ["@modelcontextprotocol/sdk", ["1.31.0", "1.32.0", "1.32.1"]],
+]);
+
+describe("every advisory is assessed against its actual resolutions", () => {
+  test("names all parents that cannot accept a patched major", () => {
+    const result = assessAdvisories({
+      advisories: [zod],
+      accepted: [acceptance],
+      lockfile,
+      manifest: {},
+      versions,
+    });
+    expect(result).toHaveLength(1);
+    const state = result.at(0)?.disposition;
+    expect(state?.status).toBe("upstream_blocked");
+    if (state?.status !== "upstream_blocked") {
+      throw new Error("Expected upstream blockers");
+    }
+    expect(
+      state.blockers.some((blocker) =>
+        blocker.includes("@mcp-ui/client requires zod ^3.23.8"),
+      ),
+    ).toBe(true);
+    expect(
+      state.blockers.some((blocker) =>
+        blocker.includes("@expo/cli requires zod ^3.25.76"),
+      ),
+    ).toBe(true);
+    expect(result.at(0)?.acceptance?.owner).toBe("supply-chain");
+  });
+
+  test("a second advisory cannot disappear behind an accepted advisory", () => {
+    for (const field of ["resolutions", "overrides"]) {
+      const result = assessAdvisories({
+        advisories: [zod, sdk],
+        accepted: [acceptance],
+        lockfile: lockfile.replaceAll(
+          "@modelcontextprotocol/sdk@1.32.1",
+          "@modelcontextprotocol/sdk@1.31.0",
+        ),
+        manifest: { [field]: { "@modelcontextprotocol/sdk": "1.31.0" } },
+        versions,
+      });
+      expect(result.map(({ advisory }) => advisory.id)).toEqual([
+        zod.id,
+        sdk.id,
+      ]);
+      expect(result.at(1)?.disposition.status).toBe(
+        field === "resolutions" ? "fix_available" : "pinned_resolution_blocked",
+      );
+      if (field === "overrides") {
+        expect(result.at(1)?.action).toContain(
+          `package.json ${field}.@modelcontextprotocol/sdk=1.31.0`,
+        );
+      }
+    }
+  });
+
+  test("a selectable compatible patch is fix_available", () => {
+    const [result] = assessAdvisories({
+      advisories: [sdk],
+      accepted: [],
+      lockfile: lockfile.replaceAll(
+        "@modelcontextprotocol/sdk@1.32.1",
+        "@modelcontextprotocol/sdk@1.31.0",
+      ),
+      manifest: {},
+      versions,
+    });
+    expect(result?.disposition.status).toBe("fix_available");
+    expect(result?.action).toContain("1.32.1");
+  });
+
+  test("an acceptance remains explicit when a compatible patch exists", () => {
+    const entry = {
+      ...acceptance,
+      ...sdk,
+      affectedPaths: ["@modelcontextprotocol/sdk"],
+    };
+    const [result] = assessAdvisories({
+      advisories: [sdk],
+      accepted: [entry],
+      lockfile: lockfile.replaceAll(
+        "@modelcontextprotocol/sdk@1.32.1",
+        "@modelcontextprotocol/sdk@1.31.0",
+      ),
+      manifest: {},
+      versions,
+    });
+    expect(result?.disposition.status).toBe("accepted");
+    expect(result?.acceptance?.expiresOn).toBe("2026-11-23");
+  });
+
+  test("acceptance never extends to a new vulnerable path", () => {
+    const newPath = lockfile.replace(
+      '"packages": {',
+      '"packages": { "new-parent/zod": ["zod@3.25.76", "", {}],',
+    );
+    expect(() =>
+      assessAdvisories({
+        advisories: [zod],
+        accepted: [acceptance],
+        lockfile: newPath,
+        manifest: {},
+        versions,
+      }),
+    ).toThrow("does not cover lockfile paths: new-parent/zod");
+  });
+
+  test("missing registry evidence and duplicate acceptances fail closed", () => {
+    expect(() =>
+      assessAdvisories({
+        advisories: [zod],
+        accepted: [],
+        lockfile,
+        manifest: {},
+        versions: new Map(),
+      }),
+    ).toThrow("Missing registry versions");
+    expect(() =>
+      assessAdvisories({
+        advisories: [zod],
+        accepted: [acceptance, acceptance],
+        lockfile,
+        manifest: {},
+        versions,
+      }),
+    ).toThrow("Duplicate acceptance");
+  });
+});
+
+test("every direct manifest requirement participates in pin classification", () => {
+  const directLockfile = JSON.stringify({
+    packages: {
+      "@modelcontextprotocol/sdk": ["@modelcontextprotocol/sdk@1.31.0", "", {}],
+    },
+  });
+  for (const field of [
+    "dependencies",
+    "devDependencies",
+    "optionalDependencies",
+    "peerDependencies",
+    "overrides",
+    "resolutions",
+  ]) {
+    const [result] = assessAdvisories({
+      advisories: [sdk],
+      accepted: [],
+      lockfile: directLockfile,
+      manifest: { [field]: { "@modelcontextprotocol/sdk": "1.31.0" } },
+      versions,
+    });
+    expect(result?.disposition.status).toBe(
+      field === "resolutions" ? "fix_available" : "pinned_resolution_blocked",
+    );
+    if (field !== "resolutions") {
+      expect(result?.action).toContain(
+        `package.json ${field}.@modelcontextprotocol/sdk=1.31.0`,
+      );
+    }
+  }
+});
+
+test("direct requirements can permit a patched release in another major", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, vulnerableVersions: ">=1.24.0 <2.0.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        "@modelcontextprotocol/sdk": [
+          "@modelcontextprotocol/sdk@1.31.0",
+          "",
+          {},
+        ],
+      },
+    }),
+    manifest: { dependencies: { "@modelcontextprotocol/sdk": ">=1.31.0" } },
+    versions: new Map([["@modelcontextprotocol/sdk", ["1.31.0", "2.0.0"]]]),
+  });
+  expect(result?.disposition.status).toBe("fix_available");
+});
+
+test("a repository resolution can move a copy past an exact parent pin", () => {
+  const advisory = { ...sdk, package: "joi", vulnerableVersions: "<18.3.1" };
+  const [result] = assessAdvisories({
+    advisories: [advisory],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        mailauth: ["mailauth@4.0.0", "", { dependencies: { joi: "18.0.0" } }],
+        "mailauth/joi": ["joi@18.0.0", "", {}],
+      },
+    }),
+    manifest: { resolutions: { "mailauth/joi": "18.0.0" } },
+    versions: new Map([["joi", ["18.0.0", "18.3.1"]]]),
+  });
+
+  expect(result?.disposition.status).toBe("fix_available");
+  expect(result?.resolutionPaths).toEqual([
+    {
+      copyPath: "mailauth/joi",
+      resolution: "mailauth/joi",
+      requirement: "*",
+      repositoryResolution: true,
+    },
+  ]);
+  expect(
+    planDependencyAuditRemediation({
+      assessments: result === undefined ? [] : [result],
+      now: new Date("2026-10-31T12:00:00Z"),
+    }).pins,
+  ).toEqual(new Map([["mailauth/joi", "18.3.1"]]));
+});
+
+test("a parent-qualified resolution governs its hoisted copy", () => {
+  const advisory = { ...sdk, package: "joi", vulnerableVersions: "<18.3.1" };
+  const [result] = assessAdvisories({
+    advisories: [advisory],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        mailauth: ["mailauth@7.1.1", "", { dependencies: { joi: "18.2.9" } }],
+        joi: ["joi@18.2.9", "", {}],
+      },
+    }),
+    manifest: { resolutions: { "mailauth/joi": "18.2.9" } },
+    versions: new Map([["joi", ["18.2.9", "18.3.1"]]]),
+  });
+
+  expect(result?.disposition.status).toBe("fix_available");
+  expect(result?.resolutionPaths).toEqual([
+    {
+      copyPath: "joi",
+      resolution: "mailauth/joi",
+      requirement: "*",
+      repositoryResolution: true,
+    },
+  ]);
+});
+
+test("an accepted blocked advisory does not veto its sibling's fix", () => {
+  const blockedAdvisory = {
+    ...sdk,
+    id: "GHSA-blocked-0000-0000",
+    package: "example",
+    vulnerableVersions: ">=1.5.0",
+  };
+  const fixableAdvisory = {
+    ...sdk,
+    id: "GHSA-fixable-0000-0000",
+    package: "example",
+    vulnerableVersions: "<1.5.1",
+  };
+  const assessments = assessAdvisories({
+    advisories: [blockedAdvisory, fixableAdvisory],
+    accepted: [
+      {
+        ...blockedAdvisory,
+        owner: "supply-chain",
+        reason: "No forward release outside the range",
+        expiresOn: "2026-11-23",
+        affectedPaths: ["example"],
+      },
+    ],
+    lockfile: JSON.stringify({
+      packages: {
+        parent: ["parent@1.0.0", "", { dependencies: { example: "^1.5.0" } }],
+        example: ["example@1.5.0", "", {}],
+      },
+    }),
+    manifest: {},
+    versions: new Map([["example", ["1.5.0", "1.5.1"]]]),
+  });
+
+  expect(
+    planDependencyAuditRemediation({
+      assessments,
+      now: new Date("2026-10-31T12:00:00Z"),
+    }).pins,
+  ).toEqual(new Map([["example", "1.5.1"]]));
+});
+
+test("every parent resolution governing a shared hoisted copy is planned", () => {
+  const advisory = { ...sdk, package: "example", vulnerableVersions: "<1.4.1" };
+  const [result] = assessAdvisories({
+    advisories: [advisory],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        one: ["one@1.0.0", "", { dependencies: { example: "1.4.0" } }],
+        two: ["two@1.0.0", "", { dependencies: { example: "1.4.0" } }],
+        example: ["example@1.4.0", "", {}],
+      },
+    }),
+    manifest: {
+      resolutions: { "one/example": "1.4.0", "two/example": "1.4.0" },
+    },
+    versions: new Map([["example", ["1.4.0", "1.4.1"]]]),
+  });
+
+  expect(result?.resolutionPaths.map(({ resolution }) => resolution)).toEqual([
+    "one/example",
+    "two/example",
+  ]);
+  expect(
+    planDependencyAuditRemediation({
+      assessments: result === undefined ? [] : [result],
+      now: new Date("2026-10-31T12:00:00Z"),
+    }).pins,
+  ).toEqual(
+    new Map([
+      ["one/example", "1.4.1"],
+      ["two/example", "1.4.1"],
+    ]),
+  );
+});
+
+test("safe releases below the affected range never count as patched upgrades", () => {
+  const advisory = {
+    ...sdk,
+    package: "example",
+    vulnerableVersions: ">=2.0.0 <2.3.1",
+  };
+  const directLockfile = JSON.stringify({
+    packages: { example: ["example@2.2.0", "", {}] },
+  });
+  for (const published of [
+    ["1.9.0", "2.2.0", "2.3.1"],
+    ["1.9.0", "2.2.0"],
+  ]) {
+    const [result] = assessAdvisories({
+      advisories: [advisory],
+      accepted: [],
+      lockfile: directLockfile,
+      manifest: { resolutions: { example: ">=1.0.0 <2.3.1" } },
+      versions: new Map([["example", published]]),
+    });
+    const state = result?.disposition;
+    expect(state?.status).toBe(
+      published.includes("2.3.1") ? "fix_available" : "upstream_blocked",
+    );
+    if (
+      state?.status !== "fix_available" &&
+      state?.status !== "upstream_blocked"
+    ) {
+      throw new Error("Expected a blocked upgrade");
+    }
+    expect(
+      state.status === "fix_available"
+        ? state.installableVersions
+        : state.patchedVersions,
+    ).toEqual(published.includes("2.3.1") ? ["2.3.1"] : []);
+    expect(result?.action).not.toContain("1.9.0");
+  }
+});
+
+const multiLineAssessment = ({
+  locked,
+  requirement,
+  published,
+}: {
+  locked: string;
+  requirement: string;
+  published: string[];
+}) =>
+  assessAdvisories({
+    advisories: [
+      {
+        ...sdk,
+        package: "example",
+        vulnerableVersions: ">=1.0.0 <1.2.3 || >=2.0.0 <2.1.1",
+      },
+    ],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        app: ["app@1.0.0", "", { dependencies: { example: requirement } }],
+        example: [`example@${locked}`, "", {}],
+      },
+    }),
+    manifest: {},
+    versions: new Map([["example", published]]),
+  }).at(0)?.disposition;
+
+test("an advisory offers only patches accepted by its resolution path", () => {
+  expect(
+    multiLineAssessment({
+      locked: "1.2.2",
+      requirement: "^1.0.0",
+      published: ["1.2.2", "1.2.3", "2.1.0", "2.1.1"],
+    }),
+  ).toEqual({
+    status: "fix_available",
+    installableVersions: ["1.2.3"],
+    quarantinedVersions: [],
+  });
+});
+
+test("a workspace manifest pin blocks the fix like a root pin", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<1.0.1" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      workspaces: {
+        "": { name: "root" },
+        "apps/web": { name: "web", dependencies: { example: "1.0.0" } },
+      },
+      packages: { example: ["example@1.0.0", "", {}] },
+    }),
+    manifest: {},
+    versions: new Map([["example", ["1.0.0", "1.0.1"]]]),
+  });
+  expect(result?.disposition).toEqual({
+    status: "pinned_resolution_blocked",
+    pins: ["apps/web/package.json dependencies.example=1.0.0"],
+    blockers: [],
+    patchedVersions: ["1.0.1"],
+  });
+});
+
+test("each workspace requirement is judged against the copy it resolves to", () => {
+  const assess = (published: string[]) =>
+    assessAdvisories({
+      advisories: [
+        {
+          ...sdk,
+          package: "example",
+          vulnerableVersions: ">=1.0.0 <1.2.3 || >=2.0.0 <2.1.1",
+        },
+      ],
+      accepted: [],
+      lockfile: JSON.stringify({
+        workspaces: {
+          "": { name: "root" },
+          "apps/one": { name: "one", dependencies: { example: "^1.0.0" } },
+          "apps/two": { name: "two", dependencies: { example: "^2.0.0" } },
+        },
+        packages: {
+          example: ["example@1.2.2", "", {}],
+          "two/example": ["example@2.1.0", "", {}],
+        },
+      }),
+      manifest: {},
+      versions: new Map([["example", published]]),
+    }).at(0)?.disposition;
+  expect(assess(["1.2.2", "1.2.3", "2.1.0", "2.1.1"])).toEqual({
+    status: "upstream_blocked",
+    blockers: [
+      "no single patched release satisfies every affected resolution path",
+    ],
+    patchedVersions: ["1.2.3", "2.1.1"],
+  });
+  expect(assess(["1.2.2", "1.2.3", "2.1.0"])).toEqual({
+    status: "upstream_blocked",
+    blockers: [
+      "apps/two/package.json requires example ^2.0.0 (two/example@2.1.0)",
+    ],
+    patchedVersions: ["1.2.3"],
+  });
+});
+
+test("an override that blocks one copy's only forward patch is a pin", () => {
+  const [result] = assessAdvisories({
+    advisories: [
+      {
+        ...sdk,
+        package: "example",
+        vulnerableVersions: ">=1.0.0 <1.2.3 || >=2.0.0 <2.1.1",
+      },
+    ],
+    accepted: [],
+    lockfile: JSON.stringify({
+      workspaces: {
+        "": { name: "root" },
+        "apps/one": { name: "one", dependencies: { example: "^1.0.0" } },
+        "apps/two": { name: "two", dependencies: { example: "^2.0.0" } },
+      },
+      packages: {
+        example: ["example@1.2.2", "", {}],
+        "two/example": ["example@2.1.0", "", {}],
+      },
+    }),
+    manifest: { overrides: { example: "<=2.1.0" } },
+    versions: new Map([["example", ["1.2.2", "1.2.3", "2.1.0", "2.1.1"]]]),
+  });
+  expect(result?.disposition).toEqual({
+    status: "pinned_resolution_blocked",
+    pins: ["package.json overrides.example=<=2.1.0"],
+    blockers: [],
+    patchedVersions: ["1.2.3", "2.1.1"],
+  });
+});
+
+test("an override replaces the parent range it widens", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<2.0.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        app: ["app@1.0.0", "", { dependencies: { example: "^1.0.0" } }],
+        example: ["example@1.0.0", "", {}],
+      },
+    }),
+    manifest: { overrides: { example: ">=1.0.0" } },
+    versions: new Map([["example", ["1.0.0", "1.9.9", "2.0.0"]]]),
+  });
+  expect(result?.disposition).toEqual({
+    status: "fix_available",
+    installableVersions: ["2.0.0"],
+    quarantinedVersions: [],
+  });
+});
+
+test("a root requirement never hides a locked copy without a forward patch", () => {
+  const [result] = assessAdvisories({
+    advisories: [
+      {
+        ...sdk,
+        package: "example",
+        vulnerableVersions: ">=1.0.0 <1.2.3 || >=2.0.0 <2.1.1",
+      },
+    ],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        example: ["example@1.2.2", "", {}],
+        "other/example": ["example@2.1.0", "", {}],
+      },
+    }),
+    manifest: { dependencies: { example: ">=1.0.0" } },
+    versions: new Map([["example", ["1.2.2", "1.2.3", "2.1.0"]]]),
+  });
+  expect(result?.disposition).toEqual({
+    status: "upstream_blocked",
+    blockers: ["other/example@2.1.0: no patched release in resolved major"],
+    patchedVersions: ["1.2.3"],
+  });
+});
+
+test("a patch on an older release line is no upgrade for a newer locked copy", () => {
+  expect(
+    multiLineAssessment({
+      locked: "2.1.0",
+      requirement: ">=1.0.0",
+      published: ["1.2.3", "2.1.0"],
+    })?.status,
+  ).toBe("upstream_blocked");
+});
+
+test("a compatible security patch in release-age quarantine is actionable", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<=1.4.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        parent: ["parent@1.0.0", "", { dependencies: { example: "^1.4.0" } }],
+        example: ["example@1.4.0", "", {}],
+      },
+    }),
+    manifest: {},
+    versions: new Map([["example", ["1.4.0"]]]),
+    quarantinedReleases: new Map([
+      [
+        "example",
+        [{ version: "1.4.1", installableSince: "2026-11-01T04:44:07.718Z" }],
+      ],
+    ]),
+  });
+  expect(result?.disposition).toEqual({
+    status: "fix_in_quarantine",
+    package: "example",
+    installableVersions: [],
+    quarantinedVersions: [
+      {
+        version: "1.4.1",
+        installableSince: "2026-11-01T04:44:07.718Z",
+      },
+    ],
+  });
+  expect(result?.action).toContain(
+    "minimumReleaseAgeExcludes with # quarantine-expires: 2026-11-01T04:44:07.718Z",
+  );
+});
+
+test("remediation scopes an older-major fix away from a safe newer-major copy", () => {
+  const assessments = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<=1.4.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        parent: ["parent@1.0.0", "", { dependencies: { example: "^1.0.0" } }],
+        newer: ["newer@1.0.0", "", { dependencies: { example: "^2.0.0" } }],
+        example: ["example@1.4.0", "", {}],
+        "newer/example": ["example@2.0.0", "", {}],
+      },
+    }),
+    manifest: { resolutions: { "newer/example": "2.0.0" } },
+    versions: new Map([["example", ["1.4.0", "1.4.1", "2.0.0"]]]),
+  });
+
+  const plan = planDependencyAuditRemediation({
+    assessments,
+    now: new Date("2026-10-31T12:00:00.000Z"),
+  });
+  expect([...plan.pins]).toEqual([["parent/example", "1.4.1"]]);
+  expect(plan.pins.has("newer/example")).toBe(false);
+});
+
+test("remediation may use a package-wide resolution when every copy accepts it", () => {
+  const assessments = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<=1.4.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        one: ["one@1.0.0", "", { dependencies: { example: "^1.0.0" } }],
+        two: ["two@1.0.0", "", { dependencies: { example: "^1.4.0" } }],
+        example: ["example@1.4.0", "", {}],
+      },
+    }),
+    manifest: {},
+    versions: new Map([["example", ["1.4.0", "1.4.1"]]]),
+  });
+
+  const plan = planDependencyAuditRemediation({
+    assessments,
+    now: new Date("2026-10-31T12:00:00.000Z"),
+  });
+  expect([...plan.pins]).toEqual([["example", "1.4.1"]]);
+});
+
+test("a repository resolution can move an exact parent pin to a quarantined patch", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<=1.4.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        parent: ["parent@1.0.0", "", { dependencies: { example: "1.4.0" } }],
+        example: ["example@1.4.0", "", {}],
+      },
+    }),
+    manifest: { resolutions: { example: "1.4.0" } },
+    versions: new Map([["example", ["1.4.0"]]]),
+    quarantinedReleases: new Map([
+      [
+        "example",
+        [{ version: "1.4.1", installableSince: "2026-11-01T04:44:07.718Z" }],
+      ],
+    ]),
+  });
+  expect(result?.disposition.status).toBe("fix_in_quarantine");
+});
+
+test("a root override cannot move to a quarantined patch", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<=1.4.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: { example: ["example@1.4.0", "", {}] },
+    }),
+    manifest: { overrides: { example: "1.4.0" } },
+    versions: new Map([["example", ["1.4.0"]]]),
+    quarantinedReleases: new Map([
+      [
+        "example",
+        [{ version: "1.4.1", installableSince: "2026-11-01T00:00:00.000Z" }],
+      ],
+    ]),
+  });
+  expect(result?.disposition.status).toBe("pinned_resolution_blocked");
+});
+
+test("the quarantine action names the lowest release that fixes the advisory", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<=1.4.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: { example: ["example@1.4.0", "", {}] },
+    }),
+    manifest: {},
+    versions: new Map([["example", ["1.4.0"]]]),
+    quarantinedReleases: new Map([
+      [
+        "example",
+        [
+          { version: "1.4.2", installableSince: "2026-11-02T00:00:00.000Z" },
+          { version: "1.4.1", installableSince: "2026-11-01T00:00:00.000Z" },
+        ],
+      ],
+    ]),
+  });
+  expect(result?.action).toContain(
+    "quarantine-expires: 2026-11-01T00:00:00.000Z, then pin 1.4.1",
+  );
+});
+
+test("an advisory without any patched release remains upstream blocked", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "*" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: { example: ["example@1.4.0", "", {}] },
+    }),
+    manifest: {},
+    versions: new Map([["example", ["1.4.0"]]]),
+  });
+  expect(result?.disposition.status).toBe("upstream_blocked");
+});
+
+test("a pinned disposition keeps the upstream blockers of other copies", () => {
+  const [result] = assessAdvisories({
+    advisories: [
+      {
+        ...sdk,
+        package: "example",
+        vulnerableVersions: "<1.0.1 || >=2.0.0 <2.0.1",
+      },
+    ],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        lib: ["lib@1.0.0", "", { dependencies: { example: "2.0.0" } }],
+        example: ["example@1.0.0", "", {}],
+        "lib/example": ["example@2.0.0", "", {}],
+      },
+    }),
+    manifest: { dependencies: { example: "1.0.0" } },
+    versions: new Map([["example", ["1.0.0", "1.0.1", "2.0.0", "2.0.1"]]]),
+  });
+  expect(result?.disposition).toEqual({
+    status: "pinned_resolution_blocked",
+    pins: ["package.json dependencies.example=1.0.0"],
+    blockers: ["lib requires example 2.0.0 (lib/example@2.0.0)"],
+    patchedVersions: ["1.0.1", "2.0.1"],
+  });
+  expect(result?.action).toContain(
+    "then upgrade the blocking parent: lib requires example 2.0.0",
+  );
+});
+
+describe("installable versions honour the release-age quarantine", () => {
+  const policy = readReleaseAgePolicy(
+    [
+      "[install]",
+      "minimumReleaseAge = 432_000",
+      "minimumReleaseAgeExcludes = [",
+      '  "excluded",',
+      "]",
+      "",
+    ].join("\n"),
+  );
+  const now = new Date("2026-10-27T08:00:00.000Z");
+  const publishedAt = {
+    created: "2013-06-19T17:20:36.004Z",
+    "1.4.0": "2026-03-24T21:44:34.668Z",
+    "1.4.1": "2026-10-27T04:44:07.718Z",
+  };
+
+  test("a release younger than the minimum age is not installable yet", () => {
+    expect(
+      installableVersions({
+        name: "node-forge",
+        versions: ["1.4.0", "1.4.1"],
+        publishedAt,
+        policy,
+        now,
+      }),
+    ).toEqual(["1.4.0"]);
+    expect(
+      installableVersions({
+        name: "node-forge",
+        versions: ["1.4.0", "1.4.1"],
+        publishedAt,
+        policy,
+        now: new Date("2026-11-01T04:44:07.718Z"),
+      }),
+    ).toEqual(["1.4.0", "1.4.1"]);
+  });
+
+  test("an excluded package installs a fresh release, and a version without a publish time never", () => {
+    expect(
+      installableVersions({
+        name: "excluded",
+        versions: ["1.4.0", "1.4.1"],
+        publishedAt,
+        policy,
+        now,
+      }),
+    ).toEqual(["1.4.0", "1.4.1"]);
+    expect(
+      installableVersions({
+        name: "node-forge",
+        versions: ["1.4.0", "9.9.9"],
+        publishedAt,
+        policy,
+        now,
+      }),
+    ).toEqual(["1.4.0"]);
+  });
+
+  test("remediation sees a patch before its acceptance lapses", () => {
+    const installableAt = new Date("2026-11-01T04:44:07.718Z");
+    const afterOneHour = new Date(installableAt.getTime() + 60 * 60 * 1000);
+    const releases = installableReleases({
+      name: "node-forge",
+      versions: ["1.4.0", "1.4.1"],
+      publishedAt,
+      policy,
+      now: afterOneHour,
+    });
+    const audit = {
+      id: "GHSA-test-node-forge",
+      package: "node-forge",
+      severity: "high",
+      title: "test advisory",
+      vulnerableVersions: "<=1.4.0",
+    } satisfies Advisory;
+    const [assessment] = assessAdvisories({
+      advisories: [audit],
+      accepted: [],
+      lockfile: JSON.stringify({
+        packages: { "node-forge": ["node-forge@1.4.0", "", {}] },
+      }),
+      manifest: { dependencies: { "node-forge": "^1.4.0" } },
+      versions: new Map([
+        ["node-forge", releases.map(({ version }) => version)],
+      ]),
+    });
+    expect(assessment?.disposition.status).toBe("fix_available");
+
+    const accepted = [
+      { id: audit.id, package: audit.package, untilPatched: true },
+    ];
+    const releasesForPackage = () => releases;
+    expect(
+      lapsedAcceptances({
+        accepted,
+        current: [audit],
+        today: "2026-11-01",
+        now: afterOneHour,
+        releasesForPackage,
+      }),
+    ).toEqual([]);
+    expect(
+      lapsedAcceptances({
+        accepted,
+        current: [audit],
+        today: "2026-11-02",
+        now: new Date(installableAt.getTime() + 24 * 60 * 60 * 1000 + 1000),
+        releasesForPackage,
+      }),
+    ).toHaveLength(1);
+  });
+});

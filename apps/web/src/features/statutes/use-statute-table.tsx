@@ -30,6 +30,7 @@ import {
 import { readStoredJson } from "@/lib/stored-json";
 
 const STATUTE_LAYOUT_STORE: PublicLawTableLayoutStore<StatuteTableLayout> = {
+  exceptionScope: { type: "handler", handlerId: "public-law.statute-layout" },
   storageKey: "statute_table_layout",
   read: (raw) =>
     statuteTableLayouts(readStoredJson(raw, StoredStatuteLayoutSchema) ?? {}),

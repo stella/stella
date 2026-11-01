@@ -6,6 +6,7 @@ import type { RawHeaders } from "@/api/http/route-input";
 import { status } from "@/api/http/status";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import type { AccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
 import type {
   AuditRecorderFactory,
   MemberCaller,
@@ -33,7 +34,7 @@ export type CapabilityHandlerContext = HandlerContext<
   RawHeaders
 > &
   MemberCaller &
-  Partial<WorkspaceCaller>;
+  Partial<WorkspaceCaller> & { accountAuthority: AccountCapabilityAuthority };
 
 const recorderFactory =
   (
@@ -83,19 +84,22 @@ const mcpMemberCaller = async (
     organizationId: context.organizationId,
     userId: context.userId,
   };
-  const {
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    managedAIResidency,
-  } = await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
+  const orgSettings = await (context.testDependencies?.loadOrgSettingsForAuth?.(
+    reader,
+  ) ??
     operationDatabaseScope.scopedDb(
       async (tx) => await loadOrgSettingsForAuth(tx, reader),
     ));
 
   return {
     user: { id: context.userId, email: context.userEmail },
-    session: { id: null, activeOrganizationId: context.organizationId },
+    session: {
+      id: null,
+      activeOrganizationId: context.organizationId,
+      ...(context.sessionCredentialType === undefined
+        ? {}
+        : { credentialType: context.sessionCredentialType }),
+    },
     ...(featureAccessSnapshot === undefined ? {} : { featureAccessSnapshot }),
     scopedDb: operationDatabaseScope.scopedDb,
     safeDb: operationDatabaseScope.safeDb,
@@ -121,10 +125,7 @@ const mcpMemberCaller = async (
     // The credential's attenuation travels with the role, so every check the
     // handler makes spends only what this credential was granted.
     memberRole: mcpMemberAuthority(context),
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    managedAIResidency,
+    ...orgSettings,
     recordAuditEvent: context.recordAuditEvent,
     createAuditRecorder: recorderFactory(context, request, null),
   };
@@ -138,17 +139,30 @@ const mcpMemberCaller = async (
  */
 export const capabilityHandlerContext = async ({
   capabilityId,
+  idempotency,
   context,
   input,
-  request,
+  request: rpcRequest,
   workspaceId,
 }: {
   capabilityId: string;
+  idempotency?: { type: "replay" };
   context: McpRequestResources;
   input: { body: unknown; params: unknown; query: unknown };
   request: Request;
   workspaceId: SafeId<"workspace"> | undefined;
 }): Promise<CapabilityHandlerContext> => {
+  const headers = new Headers(rpcRequest.headers);
+  if (idempotency === undefined) {
+    headers.delete("Idempotency-Key");
+  }
+  // Only a replay-enabled handler can consume a per-call transport key.
+  // Its receipt fingerprints the validated capability input, not the RPC body.
+  const request = new Request(rpcRequest.url, {
+    method: rpcRequest.method,
+    headers,
+    signal: rpcRequest.signal,
+  });
   const member = await mcpMemberCaller(context, request);
   if (
     workspaceId !== undefined &&
@@ -178,6 +192,10 @@ export const capabilityHandlerContext = async ({
     headers: {},
     status,
     ...member,
+    accountAuthority: {
+      credential: context.credential,
+      grantedScopes: context.grantedScopes,
+    },
     ...workspace,
   };
 };

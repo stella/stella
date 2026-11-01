@@ -6,8 +6,8 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { StellaMark } from "@stll/ui/stella-mark";
 
+import { StellaAppIcon } from "../shared/StellaAppIcon";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
@@ -67,9 +67,7 @@ export const ConnectStep = ({ onBack, onContinue, snapshot }: StepProps) => {
         {waiting && !snapshot.linked ? t("connectWaiting") : t("connectBody")}
       </p>
       <div className="bg-card mt-5 flex items-center gap-3 rounded-xl border px-4 py-3">
-        <div className="bg-primary text-primary-foreground grid size-9 shrink-0 place-items-center rounded-lg">
-          <StellaMark className="size-5" />
-        </div>
+        <StellaAppIcon className="size-9 rounded-lg" />
         <div className="min-w-0 flex-1">
           {snapshot.linked && account ? (
             <BidiText as="p" className="truncate text-sm font-medium">
@@ -101,7 +99,6 @@ export const ConnectStep = ({ onBack, onContinue, snapshot }: StepProps) => {
             onClick={() => {
               void signIn();
             }}
-            size="sm"
           >
             {t("connectSignIn")}
           </Button>

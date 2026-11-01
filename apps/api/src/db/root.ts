@@ -1,20 +1,61 @@
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { APIError } from "better-auth/api";
+import { panic, Result } from "better-result";
+import { and, eq } from "drizzle-orm";
+import * as v from "valibot";
+
+import {
+  ORGANIZATION_EVALUATION_LIMIT,
+  ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
+} from "@stll/api-contract/organization-create";
+import { createOpaqueOrganizationSlug } from "@stll/auth-model";
+import { classifyFailure, declareFailureClass } from "@stll/errors";
+
+import { member, organization, user } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
+import { organizationCreationRequests as receipts } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
 import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
+import type { getAuth } from "@/api/lib/auth";
+import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   instrumentSqlTransactionCounts,
   queryCountLogger,
 } from "@/api/lib/db-query-counter";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import {
+  lockMemberAccessRow,
+  withAggregateLock,
+  withAggregateSavepoint,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  claimOrganizationEvaluation,
+  recordOrganizationCreationAudit,
+} from "@/api/lib/db/audit-recording";
+import type { AuditRecorder } from "@/api/lib/db/audit-recording";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
 import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
+import { meterSqlClient } from "@/api/lib/db/meter-client";
 import { readAuditedActivitySummary } from "@/api/lib/db/operator-activity/read";
 import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
+import { runWithOrganizationSlugUpdate } from "@/api/lib/db/organization-slug-update-scope";
+import { PARTNER_CLIENT_TYPE } from "@/api/lib/db/partner-client-contract";
+import {
+  changePartnerOAuthClientInTransaction,
+  createPartnerOAuthClientInTransaction,
+} from "@/api/lib/db/partner-client-operator";
+import type {
+  ChangePartnerOAuthClientOptions,
+  CreatePartnerOAuthClientOptions,
+} from "@/api/lib/db/partner-client-operator";
 import type { createReviewAccountOrganizationStore } from "@/api/lib/db/review-account-organization-store";
 import { instrumentRootPoolTransactions } from "@/api/lib/db/root-pool-reservation";
 import { readRootPoolSnapshot } from "@/api/lib/db/root-pool-snapshot";
@@ -27,13 +68,24 @@ import type {
   ChangeServiceOAuthClientOptions,
   CreateServiceOAuthClientOptions,
 } from "@/api/lib/db/service-client-operator";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { fingerprintRequest } from "@/api/lib/idempotency/request-receipts";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
+import { isMemberRole } from "@/api/lib/member-roles";
 import { createRootPoolWindow } from "@/api/lib/observability/root-pool-window";
 import {
+  hasMemberPermission,
+  withCurrentMemberRole,
+} from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
+import type {
   authorizeSyntheticSession,
   readSyntheticSessionAuthority,
+  SyntheticSessionAuthorityReader,
 } from "@/api/lib/synthetic-principal/session-authority";
-import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import type { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -67,7 +119,7 @@ const nativeRootClient = createSqlClient({
   },
 });
 const rootClient = instrumentRootPoolTransactions(
-  nativeRootClient,
+  meterSqlClient(nativeRootClient),
   rootPoolWindow,
 );
 
@@ -174,14 +226,11 @@ export const bindOwnerSyntheticSessionAuthorityReader =
   async (options) =>
     await readAuthority(rootDb, options);
 
-/** Request handlers receive the bounded reader, never the owner database. */
-export const ownerSyntheticSessionAuthorityReader =
-  bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
-
-/** Better Auth receives a bounded session decision, never the owner database. */
-export const authorizeOwnerSyntheticSession = async (
-  current: Parameters<typeof authorizeSyntheticSession>[1],
-) => await authorizeSyntheticSession(rootDb, current);
+/** Better Auth binds its session decision without exporting the owner handle. */
+export const bindOwnerSyntheticSessionAuthorizer =
+  (authorize: typeof authorizeSyntheticSession) =>
+  async (current: Parameters<typeof authorizeSyntheticSession>[1]) =>
+    await authorize(rootDb, current);
 
 export type RootDatabase = typeof rootDb;
 export type Transaction = TransactionOf<RootDatabase>;
@@ -211,9 +260,447 @@ export const changeServiceOAuthClient = async (
     async (tx) =>
       await changeServiceOAuthClientInTransaction({ ...options, tx }),
   );
+/** Whether a client is an operator-registered partner client. */
+export const isPartnerOAuthClient = async (clientId: string) =>
+  (await readOAuthClientBinding(rootDb, clientId))?.type ===
+  PARTNER_CLIENT_TYPE;
+/** Partner clients are global (no organization); each user consents. */
+export const createPartnerOAuthClient = async (
+  options: CreatePartnerOAuthClientOptions,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) =>
+      await createPartnerOAuthClientInTransaction({ ...options, tx }),
+  );
+export const changePartnerOAuthClient = async (
+  options: ChangePartnerOAuthClientOptions,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) =>
+      await changePartnerOAuthClientInTransaction({ ...options, tx }),
+  );
 export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
   await withAggregateTransaction(
     rootDb,
     async (tx) =>
       await recordLegalResolveAuditInTransaction({ ...options, tx }),
   );
+
+// Migrated databases use PostgreSQL's inline UNIQUE name; schema-sync databases
+// use Drizzle's name. Both also have the explicitly named unique index.
+const SLUG_UNIQUE_CONSTRAINTS = [
+  "organization_slug_key",
+  "organization_slug_unique",
+  "organization_slug_uidx",
+] as const;
+
+/** Better Auth and both schema origins report a taken organization slug. */
+const isSlugConflict = (error: unknown) =>
+  (error instanceof APIError &&
+    (error.body?.code === "ORGANIZATION_ALREADY_EXISTS" ||
+      error.body?.code === "ORGANIZATION_SLUG_ALREADY_TAKEN")) ||
+  SLUG_UNIQUE_CONSTRAINTS.some((constraint) =>
+    isPgConstraintError(error, PG_ERROR.UNIQUE_VIOLATION, constraint),
+  );
+
+const updatedOrganizationSchema = v.object({ slug: v.string() });
+const slugConflict = () =>
+  new HandlerError({
+    status: 409,
+    code: "organization_slug_conflict",
+    message:
+      "This organization slug is already taken. Choose another slug or use the opaque option.",
+  });
+
+type ChangeOrganizationSlugOptions = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  memberRole: AuthorizedMemberRole;
+  slug: string;
+  recordAuditEvent: AuditRecorder;
+  auth: ReturnType<typeof getAuth>;
+};
+
+class OrganizationSlugUpdateError extends HandlerError<500> {
+  override readonly name = "OrganizationSlugUpdateError";
+  static {
+    declareFailureClass(this, "tagged_failure");
+  }
+  constructor(cause: unknown) {
+    super({
+      status: 500,
+      code: "organization_slug_update_failed",
+      message: "Could not change the organization slug.",
+      cause,
+    });
+  }
+}
+
+/** Auth tables deny application writes; the owner transaction binds the plugin write and audit. */
+export const changeOrganizationSlug = async ({
+  organizationId,
+  userId,
+  memberRole,
+  slug,
+  recordAuditEvent,
+  auth,
+}: ChangeOrganizationSlugOptions) =>
+  await Result.tryPromise({
+    try: async () =>
+      await withAggregateTransaction(rootDb, async (tx) => {
+        await withAggregateLock({
+          tx,
+          aggregate: "organization",
+          id: organizationId,
+          mode: "update",
+        });
+        const current = (
+          await tx
+            .select({ slug: organization.slug })
+            .from(organization)
+            .where(eq(organization.id, organizationId))
+            .limit(1)
+        ).at(0);
+        const membership = await lockMemberAccessRow({
+          tx,
+          organizationId,
+          userId,
+          mode: "share",
+        });
+        if (
+          !current ||
+          !membership ||
+          !isMemberRole(membership.role) ||
+          !hasMemberPermission(
+            withCurrentMemberRole(memberRole, membership.role),
+            {
+              organization: ["update"],
+            },
+          )
+        ) {
+          return abortTransaction(
+            new HandlerError({
+              status: 403,
+              message:
+                "Only organization owners and admins may change its slug.",
+            }),
+          );
+        }
+        const actor = (
+          await tx
+            .select({ user })
+            .from(user)
+            .innerJoin(
+              member,
+              and(
+                eq(member.userId, user.id),
+                eq(member.organizationId, organizationId),
+              ),
+            )
+            .where(eq(user.id, userId))
+            .limit(1)
+        ).at(0);
+        if (!actor) {
+          return abortTransaction(
+            new HandlerError({
+              status: 401,
+              message: "The account is no longer available.",
+            }),
+          );
+        }
+        // This server-only endpoint receives the already authenticated principal, not a
+        // new credential. Its adapter stays inside the transaction; organization hooks run.
+        const context = {
+          ...(await auth.$context),
+          adapter: drizzleAdapter(
+            tx,
+            AUTH_DATABASE_ADAPTER_OPTIONS,
+          )(auth.options),
+          getSession: async () =>
+            await Promise.resolve({
+              user: actor.user,
+              session: { activeOrganizationId: organizationId },
+            }),
+        };
+        const updated: unknown = await runWithOrganizationSlugUpdate(
+          { organizationId, userId, slug },
+          async () =>
+            await auth.organizationUpdateEndpoint({
+              headers: new Headers(),
+              context,
+              body: { organizationId, data: { slug } },
+            }),
+        );
+        const result = v.parse(updatedOrganizationSchema, updated);
+        if (current.slug !== result.slug) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+            resourceId: organizationId,
+            changes: { slug: { old: current.slug, new: result.slug } },
+          });
+        }
+        return result;
+      }),
+    catch: (cause: unknown) => {
+      if (HandlerError.is(cause)) {
+        return cause;
+      }
+      if (isSlugConflict(cause)) {
+        return slugConflict();
+      }
+      return new OrganizationSlugUpdateError(cause);
+    },
+  });
+
+const MAX_SLUG_ATTEMPTS = 20;
+
+const createSlugConflict = () =>
+  new HandlerError({
+    status: 409,
+    code: "organization_slug_conflict",
+    message: "Organization slug is already in use.",
+    hint: "Call organizations.create with a different slug, or omit slug to generate one.",
+  });
+
+export type CreateOrganizationOptions = {
+  userId: SafeId<"user">;
+  name: string;
+  slug?: string;
+  evaluation: "grant" | "none";
+  idempotencyKey: string | null;
+};
+
+export type OrganizationCreationDependencies = {
+  fillRandom?: (bytes: Uint8Array) => void;
+  database?: Pick<RootDatabase, "transaction">;
+  createOrganization: (input: {
+    transaction: Transaction;
+    body: {
+      name: string;
+      slug: string;
+      userId: SafeId<"user">;
+      keepCurrentActiveOrganization: true;
+    };
+  }) => Promise<{ id: string; name: string; slug: string }>;
+};
+
+type OrganizationProviderDependencies = Required<
+  Pick<OrganizationCreationDependencies, "createOrganization" | "fillRandom">
+> & { transaction: Transaction };
+
+const createWithAvailableSlug = async (
+  {
+    userId,
+    name,
+    slug,
+  }: Pick<CreateOrganizationOptions, "userId" | "name" | "slug">,
+  {
+    createOrganization,
+    fillRandom,
+    transaction,
+  }: OrganizationProviderDependencies,
+) => {
+  const created = await Result.tryPromise(
+    {
+      try: async () => {
+        const candidate = slug ?? createOpaqueOrganizationSlug(fillRandom);
+        return await withAggregateSavepoint(
+          transaction,
+          async (tx) =>
+            await createOrganization({
+              transaction: tx,
+              body: {
+                name,
+                slug: candidate,
+                userId,
+                keepCurrentActiveOrganization: true,
+              },
+            }),
+        );
+      },
+      catch: (cause) => cause,
+    },
+    {
+      retry: {
+        times: MAX_SLUG_ATTEMPTS - 1,
+        delayMs: 0,
+        backoff: "constant",
+        shouldRetry: (cause) => slug === undefined && isSlugConflict(cause),
+      },
+    },
+  );
+  if (created.isOk()) {
+    return created;
+  }
+  if (isSlugConflict(created.error)) {
+    return Result.err(createSlugConflict());
+  }
+  if (created.error instanceof APIError && created.error.statusCode === 403) {
+    return Result.err(
+      new HandlerError({
+        status: 403,
+        code: "account_access_unavailable",
+        message: "Organization creation is unavailable for this account.",
+        hint: "Sign in with an unrestricted account.",
+      }),
+    );
+  }
+  return Result.err(
+    classifyFailure(
+      new HandlerError({
+        status: 500,
+        code: "internal_error",
+        message: "Organization creation could not be completed.",
+        cause: created.error,
+      }),
+      "tagged_failure",
+    ),
+  );
+};
+
+/** Organization, lifecycle defaults, evaluation claim, audit and receipt commit together. */
+export const createOrganizationForAccount = async (
+  { userId, name, slug, evaluation, idempotencyKey }: CreateOrganizationOptions,
+  {
+    database = rootDb,
+    createOrganization,
+    fillRandom = (bytes) => {
+      crypto.getRandomValues(bytes);
+    },
+  }: OrganizationCreationDependencies,
+) => {
+  const fingerprint = fingerprintRequest({
+    method: "POST",
+    route: "organizations.create",
+    body: { name, slug },
+    params: {},
+    query: {},
+  });
+  const key = idempotencyKey;
+  if (key !== null && (key.length === 0 || key.length > 128)) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        code: "invalid_idempotency_key",
+        message: "Idempotency-Key must contain 1 to 128 characters.",
+      }),
+    );
+  }
+  return await Result.tryPromise({
+    try: async () =>
+      await withAggregateTransaction(database, async (tx) => {
+        if (key !== null) {
+          const claimed = await tx
+            .insert(receipts)
+            .values({ userId, key, fingerprint })
+            .onConflictDoNothing()
+            .returning({ key: receipts.key });
+          if (claimed.length === 0) {
+            const receipt = (
+              await tx
+                .select()
+                .from(receipts)
+                .where(and(eq(receipts.userId, userId), eq(receipts.key, key)))
+                .limit(1)
+            ).at(0);
+            if (receipt === undefined) {
+              panic("Conflicting organization receipt disappeared");
+            }
+            if (receipt.fingerprint !== fingerprint) {
+              return abortTransaction(
+                new HandlerError({
+                  status: 409,
+                  code: "idempotency_key_reused",
+                  message: "This key identifies a different creation request.",
+                  hint: "Retry the original input, or use a new Idempotency-Key for a new organization.",
+                }),
+              );
+            }
+            if (
+              receipt.organizationId !== null &&
+              receipt.name !== null &&
+              receipt.slug !== null
+            ) {
+              return {
+                organizationId: receipt.organizationId,
+                name: receipt.name,
+                slug: receipt.slug,
+                role: "owner" as const,
+              };
+            }
+            return abortTransaction(
+              new HandlerError({
+                status: 409,
+                code: "idempotency_in_progress",
+                message: "Organization creation is still pending.",
+                hint: "Retry with the same Idempotency-Key later. If it remains pending, contact support; do not create a second organization.",
+              }),
+            );
+          }
+        }
+        switch (evaluation) {
+          case "grant":
+            if (!(await claimOrganizationEvaluation(tx, userId))) {
+              return abortTransaction(
+                new HandlerError({
+                  status: 403,
+                  code: ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
+                  message: `This account has used all ${ORGANIZATION_EVALUATION_LIMIT} lifetime organization evaluation periods.`,
+                  hint: "Use an existing organization or contact support to arrange paid access. Deleting an organization does not restore an evaluation period.",
+                }),
+              );
+            }
+            break;
+          case "none":
+            break;
+          default:
+            evaluation satisfies never;
+            return panic("Unhandled organization evaluation request");
+        }
+        const created = await createWithAvailableSlug(
+          { userId, name, ...(slug === undefined ? {} : { slug }) },
+          { createOrganization, fillRandom, transaction: tx },
+        );
+        if (created.isErr()) {
+          return abortTransaction(created.error);
+        }
+        const result = {
+          organizationId: brandPersistedOrganizationId(created.value.id),
+          name: created.value.name,
+          slug: created.value.slug,
+          role: "owner" as const,
+        };
+        await recordOrganizationCreationAudit(tx, {
+          userId,
+          organizationId: result.organizationId,
+          evaluation,
+        });
+        if (key !== null) {
+          await tx
+            .update(receipts)
+            .set({
+              organizationId: result.organizationId,
+              name: result.name,
+              slug: result.slug,
+            })
+            .where(and(eq(receipts.userId, userId), eq(receipts.key, key)));
+        }
+        return result;
+      }),
+    catch: (cause) =>
+      HandlerError.is(cause)
+        ? cause
+        : classifyFailure(
+            new HandlerError({
+              status: 500,
+              code: "internal_error",
+              message: "Organization creation could not be completed.",
+              cause,
+            }),
+            "tagged_failure",
+          ),
+  });
+};

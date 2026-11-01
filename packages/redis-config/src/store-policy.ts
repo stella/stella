@@ -1,5 +1,6 @@
 import { Result, TaggedError } from "better-result";
 
+import type { FingerprintFields } from "@stll/errors/fingerprint-fields";
 import { Temporal } from "@stll/time";
 
 export type StoreClass = "durable-coordination" | "cache";
@@ -13,7 +14,11 @@ export class StoreUnavailableError extends TaggedError(
 )<{
   message: string;
   reason: "unavailable";
-}> {}
+}> {
+  static readonly stellaExceptionFingerprintFields = [
+    "reason",
+  ] as const satisfies FingerprintFields<StoreUnavailableError>;
+}
 
 const POLICY_REFRESH_MS = 60_000;
 const POLICY_TIMEOUT_MS = 250;

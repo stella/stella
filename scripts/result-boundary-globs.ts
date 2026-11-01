@@ -32,12 +32,28 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/features/law-search-history/**/*.ts",
   "apps/desktop/src/activity/**/*.ts",
   "apps/desktop/src/activity/**/*.tsx",
+  "apps/api/src/handlers/mobile-updates/**/*.ts",
+  "apps/mobile/src/app/matter/**/*.{ts,tsx}",
+  "apps/mobile/src/connection/**/*.{ts,tsx}",
+  "apps/mobile/src/i18n/**/*.{ts,tsx}",
+  "apps/mobile/src/state/**/*.{ts,tsx}",
+  "apps/mobile/src/app/thread/**/*.{ts,tsx}",
+  "apps/mobile/src/app/law/**/*.{ts,tsx}",
+  "apps/mobile/src/app/task/**/*.{ts,tsx}",
+  "apps/mobile/src/app/timers/**/*.{ts,tsx}",
+  "apps/mobile/src/app/scan/**/*.{ts,tsx}",
+  "apps/mobile/src/components/ui/**/*.{ts,tsx}",
+  "apps/mobile/src/native/**/*.{ts,tsx}",
+  "apps/mobile/src/widgets/**/*.{ts,tsx}",
+  "apps/mobile/src/app/document/**/*.{ts,tsx}",
+  "apps/mobile/src/components/document-viewer/**/*.{ts,tsx}",
   "apps/visual-preview/src/**/*.ts",
   "apps/api/src/handlers/public-cors.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-response-budget.ts",
   "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts",
   "apps/api/src/lib/auth/**/*.ts",
+  "apps/api/src/handlers/organizations/**/*.ts",
   "apps/api/src/handlers/account-exports/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
   "apps/api/src/handlers/ai-config/**/*.ts",
@@ -47,11 +63,13 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/billing-codes/**/*.ts",
   "apps/api/src/handlers/clauses/**/*.ts",
   "apps/api/src/handlers/contacts/**/*.ts",
+  "apps/api/src/handlers/client-invoices/**/*.ts",
   "apps/api/src/handlers/desktop-feature-access/**/*.ts",
   "apps/api/src/handlers/desktop-presence/**/*.ts",
   "apps/api/src/handlers/desktop-registry/**/*.ts",
   "apps/api/src/handlers/desktop-time-entries/**/*.ts",
   "apps/api/src/handlers/dev/**/*.ts",
+  "apps/api/src/handlers/dictation/**/*.ts",
   "apps/api/src/handlers/document-translations/**/*.ts",
   "apps/api/src/handlers/document-types/**/*.ts",
   "apps/api/src/handlers/documents/**/*.ts",
@@ -72,6 +90,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/number-series/**/*.ts",
   "apps/api/src/handlers/vat-rates/**/*.ts",
   "apps/api/src/handlers/organization-settings/**/*.ts",
+  "apps/api/src/handlers/organizations/**/*.ts",
   "apps/api/src/handlers/public-knowledge/**/*.ts",
   "apps/api/src/handlers/reports/**/*.ts",
   "apps/api/src/handlers/saved-time-narratives/**/*.ts",
@@ -98,6 +117,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
+  "apps/api/src/lib/imports/**/*.ts",
   "apps/api/src/lib/docx-authoring/**/*.ts",
   "apps/api/src/lib/email/correspondence/**/*.ts",
   "apps/api/src/lib/email/inbound/**/*.ts",
@@ -107,11 +127,13 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/fields/**/*.ts",
   "apps/api/src/lib/files/pdf-signing/**/*.ts",
   "apps/api/src/lib/github/**/*.ts",
+  "apps/api/src/lib/idempotency/**/*.ts",
   "apps/api/src/lib/infosoud/**/*.ts",
   "apps/api/src/lib/json-schema/**/*.ts",
   "apps/api/src/lib/lists/**/*.ts",
   "apps/api/src/lib/load/**/*.ts",
   "apps/api/src/lib/machine-api-keys/**/*.ts",
+  "apps/api/src/lib/push/**/*.ts",
   "apps/api/src/lib/synthetic-principal/**/*.ts",
   "apps/api/src/lib/markdown/**/*.ts",
   "apps/api/src/lib/mcp-connectors/**/*.ts",
@@ -131,6 +153,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/views/**/*.ts",
   "apps/api/src/lib/work-obligations/**/*.ts",
   "apps/api/src/lib/workspaces/**/*.ts",
+  "apps/api/src/lib/write-contract/**/*.ts",
   "apps/desktop/src/onboarding/**/*.{ts,tsx}",
   "apps/desktop/src/registry/**/*.{ts,tsx}",
   "apps/web/src/components/ai-elements/**/*.{ts,tsx}",
@@ -160,15 +183,19 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/features/guides/**/*.{ts,tsx}",
   "apps/web/src/features/inbox/**/*.{ts,tsx}",
   "apps/web/src/features/knowledge/**/*.{ts,tsx}",
+  "apps/web/src/features/my-week/**/*.{ts,tsx}",
+  "apps/web/src/features/time-review/**/*.{ts,tsx}",
   "apps/web/src/features/time-timers/**/*.{ts,tsx}",
   "apps/web/src/features/workspaces/**/*.{ts,tsx}",
   "apps/web/src/lib/capabilities/**/*.{ts,tsx}",
   "apps/web/src/lib/deepl/**/*.{ts,tsx}",
   "apps/web/src/lib/drag-and-drop/**/*.{ts,tsx}",
+  "apps/web/src/lib/idempotency/**/*.{ts,tsx}",
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
   "apps/web/src/lib/law-search-history/**/*.{ts,tsx}",
   "apps/web/src/lib/legal/**/*.{ts,tsx}",
   "apps/web/src/lib/persisted-state/**/*.ts",
+  "apps/web/src/lib/platform/**/*.ts",
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
   "apps/web/src/lib/statutes/**/*.ts",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
@@ -200,6 +227,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/invoicing/src/**/*.ts",
   "packages/legal-atlas/src/**/*.ts",
   "packages/mojibake/src/**/*.ts",
+  "packages/parameter-store/src/**/*.ts",
   "packages/permissions/src/**/*.ts",
   "packages/portable-path/src/**/*.ts",
   "packages/redis-config/src/**/*.ts",
@@ -209,15 +237,23 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/sha256/src/**/*.ts",
   "packages/start-runtime/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
+  "packages/test-state/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
+  "packages/transcript/src/**/*.ts",
   "packages/uuid-codec/src/**/*.ts",
   "packages/workspace-model/src/**/*.ts",
   "packages/workspace-ui/src/**/*.{ts,tsx}",
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // Adapter definitions return typed stored-read failures; the existing replay
+  // callback protocol consumes those failures through Promise rejection.
+  "apps/api/src/lib/legal-search/stored-raw-reparse-boundary.ts",
   // MCP request handlers translate typed gateway failures into SDK protocol errors.
   "apps/api/src/mcp/server-core.ts",
+  // The tools/call callback observer preserves the SDK's result/rejection contract;
+  // it records thrown failures and rethrows the original value to the protocol owner.
+  "apps/api/src/mcp/observe-tool-call.ts",
   // Process startup consumes login refusals through Promise rejection before accepting work.
   "apps/api/src/lib/db/assert-database-login-posture.ts",
   // The HTTP core turns thrown pipeline failures (a malformed body, an unknown
@@ -237,6 +273,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Browser startup captures detector installation failures in its outer Result.
   "apps/web/src/lib/analytics/web-hang/web-hang-detector.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
+  // Better Auth organization hooks reject invalid slug operations through APIError.
+  "apps/api/src/lib/auth/organization-slug-hooks.ts",
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
   "apps/api/src/lib/auth/request-budget-hooks.ts",
@@ -260,6 +298,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/document-translation/run-queue.ts",
   "apps/api/src/lib/entity-deletion-cleanup-queue.ts",
   "apps/api/src/lib/file-derivative-queue.ts",
+  // BullMQ retries an attempt only when its processor rejects.
+  "apps/api/src/lib/push/push-delivery-worker.ts",
   "apps/api/src/lib/flows/flow-run-worker.ts",
   "apps/api/src/lib/document-deadline-scout-worker.ts",
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",
@@ -305,6 +345,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Handed to TanStack's connection adapter, which consumes rejections: a
   // refused response travels back as a thrown `APIError`, not as a `Result`.
   "apps/web/src/features/chat/chat-fetch.ts",
+  // TanStack Router reads the chat thread loader's redirect and its unchanged
+  // load failure only through rejection.
+  "apps/web/src/routes/_protected.chat/-thread-scope-redirect-boundary.ts",
   // TanStack's fetch and connection adapters consume Response/rejection;
   // this transport cannot return Result across the SDK callback boundary.
   "packages/chat/src/durable-transport.ts",

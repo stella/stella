@@ -3,7 +3,11 @@ import { afterAll, describe, expect, expectTypeOf, test } from "bun:test";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createApiClient } from "./index";
-import type { ApiClientOptions } from "./index";
+import type {
+  ApiClientOptions,
+  ApiTransportError,
+  ScopedResponse,
+} from "./index";
 
 type Echo = {
   readonly method: string;
@@ -48,6 +52,7 @@ type TestRoutes = {
         headers: unknown;
         response: { 200: Echo; 422: { readonly message: string } };
       };
+      special: { patch: ItemRoute };
       ":itemId": {
         get: ItemRoute;
         patch: ItemRoute;
@@ -378,18 +383,312 @@ describe("createApiClient", () => {
 
     // Type-only: bun's `expectTypeOf` checks at compile time, so the
     // assertions name types rather than walking a value's runtime chain.
-    expectTypeOf<Parameters<typeof api.items.post>[0]>().toEqualTypeOf<{
+    expectTypeOf<Parameters<typeof api.items.post>[0]>().toExtend<{
       name: string;
       count?: number;
     }>();
+    expectTypeOf<{ name: string; count?: number }>().toExtend<
+      Parameters<typeof api.items.post>[0]
+    >();
     expectTypeOf<Parameters<typeof api.filter.get>[0]>().toExtend<{
       readonly query: { status: "open" | "closed" };
     }>();
     expectTypeOf<
       Awaited<ReturnType<ReturnType<typeof api.items>["get"]>>["error"]
-    >().toEqualTypeOf<{
-      readonly status: 404;
-      readonly value: { readonly message: string };
-    } | null>();
+    >().toEqualTypeOf<
+      | {
+          readonly status: 404;
+          readonly value: { readonly message: string };
+        }
+      | ApiTransportError
+      | null
+    >();
+  });
+});
+
+const jsonResponse = () =>
+  new Response(JSON.stringify({ items: [1] }), {
+    headers: { "content-type": "application/json" },
+  });
+
+const testFetcher = (
+  handler: (
+    input: Parameters<typeof fetch>[0],
+    init: Parameters<typeof fetch>[1],
+  ) => Promise<Response>,
+): typeof fetch => Object.assign(handler, { preconnect: () => undefined });
+
+class CloneTrackedResponse extends Response {
+  cloneCalls = 0;
+
+  override clone() {
+    this.cloneCalls += 1;
+    return super.clone();
+  }
+}
+
+test("scoped observers retain declared methods and parameter names across concurrent requests", async () => {
+  const seen: unknown[] = [];
+  const transportSymbols: symbol[][] = [];
+  const scopedClient = createApiClient<TestRoutes>("https://api.example", {
+    fetcher: testFetcher(async (_input, init) => {
+      transportSymbols.push(Object.getOwnPropertySymbols(init ?? {}));
+      await Promise.resolve();
+      return jsonResponse();
+    }),
+    onScopedResponse: async ({ response, scope }) => {
+      seen.push(scope);
+      expect(response.status).toBe(200);
+      await Promise.resolve();
+    },
+  });
+  await Promise.all([
+    scopedClient.v1.items({ itemId: "first-private-id" }).get(),
+    scopedClient.v1.items({ itemId: "second-private-id" }).patch({}),
+  ]);
+  expect(seen).toContainEqual({
+    type: "request",
+    method: "GET",
+    routeTemplate: "/v1/items/:itemId",
+  });
+  expect(seen).toContainEqual({
+    type: "request",
+    method: "PATCH",
+    routeTemplate: "/v1/items/:itemId",
+  });
+  expect(seen).toHaveLength(2);
+  expect(JSON.stringify(seen)).not.toContain("private-id");
+  expect(transportSymbols).toEqual([[], []]);
+});
+
+test("scoped observation leaves streamed success bodies for the caller", async () => {
+  const chunks = ['{"items":', "[1]}"];
+  const encoder = new TextEncoder();
+  let chunkIndex = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const chunk = chunks.at(chunkIndex);
+      if (chunk === undefined) {
+        controller.close();
+        return;
+      }
+      chunkIndex += 1;
+      controller.enqueue(encoder.encode(chunk));
+    },
+  });
+  const response = new CloneTrackedResponse(body, {
+    headers: { "content-type": "application/json" },
+  });
+  let observed: ScopedResponse | undefined;
+  const scopedClient = createApiClient<TestRoutes>("https://api.example", {
+    fetcher: testFetcher(async () => response),
+    onScopedResponse: ({ response: observedResponse }) => {
+      observed = observedResponse;
+    },
+  });
+
+  const result = await scopedClient.v1.answers.json.get();
+
+  expect(result.data).toEqual({ items: [1] });
+  expect(observed).toBe(response);
+  expect(response.cloneCalls).toBe(0);
+  expect(response.bodyUsed).toBe(true);
+});
+
+test("scoped clients resolve the current default fetch at request time", async () => {
+  const previousFetch = globalThis.fetch;
+  const observed: string[] = [];
+  const scopedClient = createApiClient<TestRoutes>("https://api.example", {
+    onScopedResponse: ({ scope }) => {
+      observed.push(scope.routeTemplate);
+    },
+  });
+  let calls = 0;
+  globalThis.fetch = testFetcher(async () => {
+    calls += 1;
+    return jsonResponse();
+  });
+  try {
+    await scopedClient.v1.answers.json.get();
+    expect(calls).toBe(1);
+    expect(observed).toEqual(["/v1/answers/json"]);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test.each(["request", "scoped-response", "response"] as const)(
+  "preserves the %s boundary rejection without decoding a response",
+  async (boundary) => {
+    const failure = new Error(`Failed ${boundary}`);
+    const response = jsonResponse();
+    let fetchCalls = 0;
+    const fail = () => {
+      throw failure;
+    };
+    const scopedClient = createApiClient<TestRoutes>("https://api.example", {
+      ...(boundary === "request" ? { onRequest: fail } : {}),
+      fetcher: async () => {
+        fetchCalls += 1;
+        return response;
+      },
+      ...(boundary === "scoped-response" ? { onScopedResponse: fail } : {}),
+      ...(boundary === "response" ? { onResponse: fail } : {}),
+    });
+    expect(await rejectionOf(scopedClient.v1.answers.json.get())).toBe(failure);
+    expect(fetchCalls).toBe(boundary === "request" ? 0 : 1);
+    expect(response.bodyUsed).toBe(false);
+  },
+);
+
+test.each([
+  [new TypeError("Failed to fetch"), "network"],
+  [new DOMException("Cancelled", "AbortError"), "aborted"],
+  [new DOMException("Timed out", "TimeoutError"), "timeout"],
+] as const)("returns a typed %s transport failure", async (failure, kind) => {
+  const scopedClient = createApiClient<TestRoutes>("https://api.example", {
+    fetcher: async () => {
+      throw failure;
+    },
+  });
+
+  const result = await scopedClient.v1.answers.json.get();
+  expect(result.data).toBeNull();
+  expect(result.error).toEqual({
+    kind,
+    cause: failure,
+    status: 0,
+    value: null,
+  });
+  expect(result.status).toBe(0);
+  expect(result.response.type).toBe("error");
+});
+
+test("scoped and ordinary observers see the same unread response before decoding", async () => {
+  const response = jsonResponse();
+  const order: string[] = [];
+  const scopedClient = createApiClient<TestRoutes>("https://api.example", {
+    fetcher: async () => response,
+    onScopedResponse: ({ response: observed }) => {
+      expect(observed).toBe(response);
+      expect(response.bodyUsed).toBe(false);
+      order.push("scoped");
+    },
+    onResponse: (observed) => {
+      expect(observed).toBe(response);
+      expect(response.bodyUsed).toBe(false);
+      order.push("ordinary");
+    },
+  });
+  const result = await scopedClient.v1.answers.json.get();
+  expect(order).toEqual(["scoped", "ordinary"]);
+  expect(result.response).toBe(response);
+  expect(result.data).toEqual({ items: [1] });
+});
+
+describe("request replay header policy", () => {
+  const key = "intent-key";
+  const headerSources = [
+    {
+      clientOptions: { headers: { "Idempotency-Key": key } },
+      requestOptions: {},
+    },
+    {
+      clientOptions: { headers: () => ({ "idempotency-key": key }) },
+      requestOptions: {},
+    },
+    {
+      clientOptions: {
+        fetch: { headers: new Headers({ "IDEMPOTENCY-KEY": key }) },
+      },
+      requestOptions: {},
+    },
+    {
+      clientOptions: {},
+      requestOptions: { headers: { "Idempotency-Key": key } },
+    },
+    {
+      clientOptions: {},
+      requestOptions: { fetch: { headers: [["Idempotency-Key", key]] } },
+    },
+    {
+      clientOptions: {
+        headers: { "Idempotency-Key": "default" },
+        fetch: { headers: { "Idempotency-Key": "fetch-default" } },
+      },
+      requestOptions: {
+        headers: { "Idempotency-Key": key },
+        fetch: { headers: { "Idempotency-Key": "fetch-request" } },
+      },
+    },
+  ] satisfies readonly {
+    clientOptions: ApiClientOptions;
+    requestOptions: { headers?: Record<string, string>; fetch?: RequestInit };
+  }[];
+
+  test("all merged header channels obey the replay policy at transport", async () => {
+    for (const { clientOptions, requestOptions } of headerSources) {
+      for (const eligible of [false, true]) {
+        const observed: (string | null)[] = [];
+        const api = client({
+          ...clientOptions,
+          requestReplayRoutes: eligible
+            ? [{ method: "POST", path: "/v1/items" }]
+            : [],
+          onRequest: (_path, init) => {
+            observed.push(new Headers(init.headers).get("Idempotency-Key"));
+          },
+        });
+        const result = await api.items.post(
+          { name: "Created" },
+          requestOptions,
+        );
+        expect(observed).toEqual([key]);
+        expect(result.data?.headers["idempotency-key"]).toBe(
+          eligible ? key : undefined,
+        );
+      }
+    }
+  });
+
+  test("eligibility binds method and template even when literal and dynamic paths coincide", async () => {
+    const api = client({
+      headers: { "Idempotency-Key": key },
+      requestReplayRoutes: [{ method: "patch", path: "/v1/items/:itemId" }],
+    });
+    const replay = await api.items({ itemId: "special" }).patch({});
+    const literal = await api.items.special.patch({});
+    const otherMethod = await api.items({ itemId: "special" }).delete();
+    expect(replay.data?.path).toBe(literal.data?.path);
+    expect(replay.data?.headers["idempotency-key"]).toBe(key);
+    expect(literal.data?.headers["idempotency-key"]).toBeUndefined();
+    expect(otherMethod.data?.headers["idempotency-key"]).toBeUndefined();
+  });
+
+  test("a request hook cannot restore an ineligible replay header", async () => {
+    for (const replace of [false, true]) {
+      const api = client({
+        requestReplayRoutes: [],
+        onRequest: (_path, init) => {
+          if (replace) {
+            init.headers = { "Idempotency-Key": key };
+          } else if (init.headers instanceof Headers) {
+            init.headers.set("Idempotency-Key", key);
+          }
+        },
+      });
+      const result = await api.items.post({ name: "Created" });
+      expect(result.data?.headers["idempotency-key"]).toBeUndefined();
+    }
+  });
+
+  test("clients without a replay policy omit submission keys", async () => {
+    for (const { clientOptions, requestOptions } of headerSources) {
+      const result = await client(clientOptions).items.post(
+        { name: "Created" },
+        requestOptions,
+      );
+      expect(result.data?.headers["idempotency-key"]).toBeUndefined();
+    }
   });
 });
