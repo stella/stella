@@ -34,7 +34,7 @@ const PHONE_ROUTE_DEFS = SMOKE_ROUTE_DEFS.filter(
   (def) => def.expectation?.kind !== "redirectsTo",
 );
 
-test.describe.serial("pages fit a phone", () => {
+test.describe("pages fit a phone", () => {
   let apiRequest: APIRequestContext;
   let world: SmokeWorld | null = null;
 

@@ -187,7 +187,7 @@ export const WorkspaceBreadcrumb = ({
         render={
           <button
             aria-label={changeColorLabel}
-            className="hover:bg-muted cursor-pointer rounded p-0.5"
+            className="hover:bg-muted cursor-pointer rounded p-0.5 pointer-coarse:p-1.25"
             type="button"
           >
             <MatterIcon
@@ -266,7 +266,7 @@ export const WorkspaceBreadcrumb = ({
     if (showMatterNumber && workspace.reference) {
       return (
         <button
-          className="text-foreground-muted hover:text-muted-foreground cursor-text text-sm whitespace-pre"
+          className="text-foreground-muted hover:text-muted-foreground cursor-text py-0.5 text-sm whitespace-pre"
           onClick={() => refRename.startEditing(workspace.reference)}
           type="button"
         >
@@ -309,6 +309,7 @@ export const WorkspaceBreadcrumb = ({
               return (
                 <>
                   <MatterColorContextPicker
+                    className="pointer-coarse:size-6"
                     label={changeColorLabel}
                     matter={workspace}
                   >
@@ -337,6 +338,7 @@ export const WorkspaceBreadcrumb = ({
             return (
               <>
                 <MatterColorContextPicker
+                  className="pointer-coarse:size-6"
                   label={changeColorLabel}
                   matter={workspace}
                 >
@@ -353,7 +355,7 @@ export const WorkspaceBreadcrumb = ({
                   activeProps={{
                     className: "text-foreground font-semibold",
                   }}
-                  className="hover:text-foreground inline-flex max-w-80 items-center gap-1.5 font-semibold"
+                  className="hover:text-foreground inline-flex max-w-80 min-w-0 items-center gap-1.5 font-semibold"
                   onContextMenu={(e) => {
                     e.preventDefault();
                     startEditingName();
