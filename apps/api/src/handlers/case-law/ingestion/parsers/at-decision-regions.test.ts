@@ -168,7 +168,7 @@ describe("Austrian decision regions", () => {
   for (const { name, fixture, caseNumber, expected } of RIS_CASES) {
     it(`reads the court's parts, not the publisher's labels: ${name}`, async () => {
       const blocks = await risBlocks(fixture, caseNumber);
-      expect(rolesOf(blocks, expected)).toEqual(expected);
+      expect<Expected>(rolesOf(blocks, expected)).toEqual(expected);
     });
   }
 
@@ -189,7 +189,9 @@ describe("Austrian decision regions", () => {
       ["Nach § 5 Abs. 2", "argumentation"],
       ["Wien, am 14. Juli 2026", "closing"],
     ] as const satisfies Expected;
-    expect(rolesOf(parsed.documentAst.blocks, expected)).toEqual(expected);
+    expect<Expected>(rolesOf(parsed.documentAst.blocks, expected)).toEqual(
+      expected,
+    );
   });
 });
 
