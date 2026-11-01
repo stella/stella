@@ -51,14 +51,15 @@ test("a text label is one run cut to the button's width", () => {
   expect(view.getByTestId("glyph").parentElement).toBe(button);
 });
 
+const OpenMatter = ({ withGlyph }: { withGlyph: boolean }) => (
+  <Button>
+    Open {withGlyph && <svg aria-hidden="true" />}
+    {null} matter
+  </Button>
+);
+
 test("children that render nothing do not split a label", () => {
-  const hidden = false;
-  const view = render(
-    <Button>
-      Open {hidden && <svg aria-hidden="true" />}
-      {null} matter
-    </Button>,
-  );
+  const view = render(<OpenMatter withGlyph={false} />);
 
   const button = view.getByRole("button", { name: "Open matter" });
   const labels = button.querySelectorAll('[data-slot="button-label"]');
