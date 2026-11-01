@@ -107,7 +107,12 @@ const TooltipPopup = ({
           {shortcut === undefined ? (
             children
           ) : (
-            <span className="flex items-center gap-2">
+            // The keys move under a label too long to share the line, rather
+            // than be clipped by the viewport.
+            <span
+              className="flex flex-wrap items-center gap-x-2 gap-y-1"
+              data-slot="tooltip-shortcut-row"
+            >
               {children}
               <Kbd keys={shortcut} />
             </span>
