@@ -103,25 +103,31 @@ export type ActivityBlock = DayCalendarRange & {
 };
 
 type TopicDraft = DayCalendarRange & {
+  /** Recorded time in the stretch, pauses left out. */
+  durationMs: number;
   matter: DesktopTimeEntryMatterCandidate | null;
+  /** In time order: stretches only ever join their neighbours in time order. */
   sources: MatchedSegment[];
   topic: string;
 };
 
-const draftDurationMs = (draft: TopicDraft) =>
-  draft.sources.reduce(
-    (sum, segment) => sum + segment.endMs - segment.startMs,
-    0,
-  );
+/** Appends a later stretch to an earlier one, in place and without a sort; the
+ * earlier one keeps its topic. */
+const appendDraft = (earlier: TopicDraft, later: TopicDraft) => {
+  for (const source of later.sources) {
+    earlier.sources.push(source);
+  }
+  earlier.endMs = Math.max(earlier.endMs, later.endMs);
+  earlier.durationMs += later.durationMs;
+};
 
-const joinDrafts = (into: TopicDraft, from: TopicDraft): TopicDraft => ({
-  ...into,
-  endMs: Math.max(into.endMs, from.endMs),
-  sources: [...into.sources, ...from.sources].sort(
-    (left, right) => left.startMs - right.startMs,
-  ),
-  startMs: Math.min(into.startMs, from.startMs),
-});
+/** A later stretch takes in the earlier, short one before it and keeps its own
+ * topic. */
+const prependDraft = (later: TopicDraft, earlier: TopicDraft) => {
+  later.sources = [...earlier.sources, ...later.sources];
+  later.startMs = Math.min(later.startMs, earlier.startMs);
+  later.durationMs += earlier.durationMs;
+};
 
 /** Neighbouring drafts of one topic, a pause apart at most, as one. */
 const joinSameTopic = (drafts: readonly TopicDraft[]): TopicDraft[] => {
@@ -133,7 +139,7 @@ const joinSameTopic = (drafts: readonly TopicDraft[]): TopicDraft[] => {
       last.topic === draft.topic &&
       draft.startMs - last.endMs <= TOPIC_BRIDGE_GAP_MS
     ) {
-      joined[joined.length - 1] = joinDrafts(last, draft);
+      appendDraft(last, draft);
       continue;
     }
     joined.push(draft);
@@ -179,7 +185,7 @@ const preferredNeighbour = (
       ? null
       : (other.topic === draft.topic ? 4 : 0) +
         (other.matter === null ? 2 : 0) +
-        draftDurationMs(other) / Number.MAX_SAFE_INTEGER;
+        other.durationMs / Number.MAX_SAFE_INTEGER;
   const beforeRank = rank(before, draft.startMs - (before?.endMs ?? 0));
   const afterRank = rank(
     after,
@@ -197,10 +203,12 @@ const preferredNeighbour = (
 /**
  * The Activity column, one block per topic: consecutive time on one matter is
  * one block whatever apps it moved through, and time no matter claimed groups
- * by the document or window title it was on. A pause of up to
- * {@link TOPIC_BRIDGE_GAP_MS} does not split a block. A stretch too short to
- * hold a label line joins its neighbour unless it is a matter's own time, so
- * quick switching never draws slivers and a matter's time always shows. Every
+ * by the document or window title it was on. A stretch too short to hold a
+ * label line joins its neighbour unless it is a matter's own time, so quick
+ * switching never draws slivers and a matter's time always shows. A pause is
+ * time with nothing recorded: one of up to {@link TOPIC_BRIDGE_GAP_MS} does
+ * not split a block, so a matter's time around a quick look at another app is
+ * one block as long as each pause on either side of that look is short. Every
  * segment lands in exactly one block.
  */
 export const activityBlocks = (
@@ -231,6 +239,7 @@ export const activityBlocks = (
           left.startMs - right.startMs || left.endMs - right.endMs,
       )
       .map((segment) => ({
+        durationMs: segment.endMs - segment.startMs,
         endMs: segment.endMs,
         matter: segment.matter,
         sources: [segment],
@@ -240,7 +249,7 @@ export const activityBlocks = (
   );
   // Quick switching: consecutive stretches with no matter, each too short for
   // a label, are one stretch named by the topic it spent longest on.
-  const runs: { draft: TopicDraft; loose: boolean }[] = [];
+  const runs: { draft: TopicDraft; loose: boolean; merged: boolean }[] = [];
   for (const draft of drafts) {
     const last = runs.at(-1);
     const loose = isLoose(draft);
@@ -249,22 +258,26 @@ export const activityBlocks = (
       last?.loose === true &&
       draft.startMs - last.draft.endMs <= TOPIC_BRIDGE_GAP_MS
     ) {
-      const merged = joinDrafts(last.draft, draft);
-      last.draft = {
-        ...merged,
-        topic: dominantTopic(merged.sources, topicOf),
-      };
+      appendDraft(last.draft, draft);
+      last.merged = true;
       continue;
     }
-    runs.push({ draft, loose });
+    runs.push({ draft, loose, merged: false });
+  }
+  for (const run of runs) {
+    if (run.merged) {
+      run.draft.topic = dominantTopic(run.draft.sources, topicOf);
+    }
   }
   // A stretch still too short for a label joins a neighbour.
   const placed: TopicDraft[] = [];
   let carried: TopicDraft | null = null;
   for (const [index, run] of runs.entries()) {
-    const draft: TopicDraft =
-      carried === null ? run.draft : joinDrafts(run.draft, carried);
-    carried = null;
+    const { draft } = run;
+    if (carried !== null) {
+      prependDraft(draft, carried);
+      carried = null;
+    }
     if (!run.loose || !isLoose(draft)) {
       placed.push(draft);
       continue;
@@ -276,7 +289,7 @@ export const activityBlocks = (
         if (before === undefined) {
           return panic("A short activity stretch has no earlier neighbour");
         }
-        placed[placed.length - 1] = joinDrafts(before, draft);
+        appendDraft(before, draft);
         break;
       case "after":
         carried = draft;

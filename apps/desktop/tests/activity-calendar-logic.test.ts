@@ -163,6 +163,41 @@ describe("activity blocks", () => {
     ]);
   });
 
+  test("a quick look at another app between two short pauses keeps a matter in one block", () => {
+    const { segments } = day([
+      segment({ from: 0, to: 10, matterId: "lease" }),
+      // A minute's pause, a minute in the inbox, a minute and a half's pause.
+      segment({ from: 11, to: 12, app: "browser", title: "Inbox" }),
+      segment({ from: 13.5, to: 25, matterId: "lease" }),
+    ]);
+    expect(
+      activityBlocks(segments, 30).map((block) => [
+        block.matter?.id,
+        block.startMs,
+        block.endMs,
+        block.sources.length,
+      ]),
+    ).toEqual([["lease", ms(0), ms(25), 3]]);
+  });
+
+  test("a pause longer than the bridge on either side of a quick look splits the matter", () => {
+    const { segments } = day([
+      segment({ from: 0, to: 10, matterId: "lease" }),
+      segment({ from: 13, to: 14, app: "browser", title: "Inbox" }),
+      segment({ from: 15, to: 25, matterId: "lease" }),
+    ]);
+    expect(
+      activityBlocks(segments, 30).map((block) => [
+        block.matter?.id,
+        block.startMs,
+        block.endMs,
+      ]),
+    ).toEqual([
+      ["lease", ms(0), ms(10)],
+      ["lease", ms(13), ms(25)],
+    ]);
+  });
+
   test("time no matter claimed splits by the document it was on", () => {
     const { segments } = day([
       segment({ from: 0, to: 25, title: "Board minutes.docx" }),
