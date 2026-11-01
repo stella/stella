@@ -544,6 +544,11 @@ export type ProviderStreamRetryOptions<T> = ProviderRetryOptions & {
   isPreamble?: ((item: T) => boolean) | undefined;
   /** The failure an item reports in-band (a `RUN_ERROR`), if it is one. */
   failureOf?: ((item: T) => unknown) | undefined;
+  /**
+   * Whether the attempt acted before its first output (a resumed run's
+   * pending tool ran): such an attempt is not sent again, whatever failed.
+   */
+  actedBeforeOutput?: (() => boolean) | undefined;
 };
 
 /**
@@ -560,6 +565,7 @@ export const withProviderStreamRetryWait = async function* <T>({
   open,
   isPreamble = () => false,
   failureOf = () => undefined,
+  actedBeforeOutput,
   deadlineAt,
   random = Math.random,
 }: ProviderStreamRetryOptions<T>): AsyncIterable<T> {
@@ -568,7 +574,9 @@ export const withProviderStreamRetryWait = async function* <T>({
     let started = false;
     let retryAfterMs: number | undefined;
     const retryDelayOf = (error: unknown) =>
-      retryDelayWithin({ abortSignal, deadlineAt, error, random, retries });
+      actedBeforeOutput?.() === true
+        ? undefined
+        : retryDelayWithin({ abortSignal, deadlineAt, error, random, retries });
     try {
       for await (const item of open()) {
         if (started) {
@@ -813,12 +821,17 @@ const admittedAbortController = ({
   }
 };
 
+type ChatRunMiddleware = NonNullable<
+  StreamChatChunksOptions["middleware"]
+>[number];
+
 /**
  * A chat run's chunks, opened again while the run fails before its first
  * output (`withProviderStreamRetryWait`): a `RUN_STARTED` is all it may have
- * shown, and its `RUN_ERROR` decides the retry. A run that offers tools is
- * retried the same way: a tool runs only after the model's call to it, which
- * is output, so nothing has acted before a retried failure.
+ * shown, and its `RUN_ERROR` decides the retry. A tool runs only after the
+ * model's call to it, which is output, except a resumed run's pending tool,
+ * which the engine runs before its first request: `retryGuard`, a middleware
+ * the run must carry, records that, and such an attempt is not sent again.
  *
  * @yields The chunks of the attempt that answered, or of the last attempt.
  */
@@ -829,18 +842,31 @@ export const withProviderChatRunRetry = <TChunk extends PublicStreamChunk>({
 }: {
   abortSignal: AbortSignal | undefined;
   model: ResolvedTanStackTextModel;
-  /** Opens the run; called once per attempt. */
-  open: () => AsyncIterable<TChunk>;
-}): AsyncIterable<TChunk> =>
-  withProviderStreamRetryWait({
+  /** Opens the run with `retryGuard` among its middleware; called once per
+   *  attempt. */
+  open: (retryGuard: ChatRunMiddleware) => AsyncIterable<TChunk>;
+}): AsyncIterable<TChunk> => {
+  let acted = false;
+  const retryGuard: ChatRunMiddleware = {
+    name: "stella-provider-retry-guard",
+    onBeforeToolCall: () => {
+      acted = true;
+    },
+  };
+  return withProviderStreamRetryWait({
     abortSignal,
-    open,
+    open: () => {
+      acted = false;
+      return open(retryGuard);
+    },
     isPreamble: (chunk) => chunk.type === EventType.RUN_STARTED,
     failureOf: (chunk) =>
       chunk.type === EventType.RUN_ERROR
         ? tanStackRunError(chunk, model)
         : undefined,
+    actedBeforeOutput: () => acted,
   });
+};
 
 /** Each attempt of a chat run checks its admission again. */
 const retriedChatRunChunks = (
@@ -849,7 +875,13 @@ const retriedChatRunChunks = (
   withProviderChatRunRetry({
     abortSignal: admitted.abortController?.signal,
     model: admitted.model,
-    open: () => streamChatChunks(admittedChatRunOptions(admitted)),
+    open: (retryGuard) => {
+      const options = admittedChatRunOptions(admitted);
+      return streamChatChunks({
+        ...options,
+        middleware: [...(options.middleware ?? []), retryGuard],
+      });
+    },
   });
 
 export const collectTanStackTextRun = async (

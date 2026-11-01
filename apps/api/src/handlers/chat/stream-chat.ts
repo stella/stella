@@ -1813,7 +1813,7 @@ const runChatAttempt = async function* ({
   const stream = withProviderChatRunRetry({
     abortSignal,
     model,
-    open: () =>
+    open: (retryGuard) =>
       streamChatChunks({
         ...chatAttemptRequestOptions({
           caching,
@@ -1866,6 +1866,7 @@ const runChatAttempt = async function* ({
             tenantWorkspaceIds,
             threadId,
           }),
+          retryGuard,
         ],
       }),
   });

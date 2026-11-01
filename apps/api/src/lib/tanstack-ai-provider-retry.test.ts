@@ -11,6 +11,10 @@ import {
   ModelDeadlineExceededError,
   ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
+import {
+  markProviderAdapterError,
+  providerAdapterEvidence,
+} from "@/api/lib/errors/provider-call-failure";
 import { PROVIDER_RETRY_WAIT_CAP_MS } from "@/api/lib/errors/provider-retry-delay";
 import {
   isTransientProviderFailure,
@@ -96,34 +100,42 @@ const TRANSIENT = [
     providerFailure({ provider: "openai", status: 409, kind: "unknown" }),
   ],
   [
-    "a connection failure",
-    Object.assign(new Error("Connection error."), {
-      name: "APIConnectionError",
-    }),
-  ],
-  [
-    "a request timeout an SDK raised",
-    Object.assign(new Error("Request timed out."), {
-      name: "APIConnectionTimeoutError",
-    }),
-  ],
-  [
-    "a network reset",
-    Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }),
-  ],
-  [
-    "a refused connection under an SDK's connection failure",
-    Object.assign(new Error("Connection error."), {
-      name: "APIConnectionError",
-      cause: Object.assign(new TypeError("Unable to connect"), {
-        code: "ConnectionRefused",
+    "a connection failure the provider adapter raised",
+    markProviderAdapterError(
+      Object.assign(new Error("Connection error."), {
+        name: "APIConnectionError",
       }),
-    }),
+    ),
   ],
   [
-    "a refused connection the runtime raised",
-    Object.assign(new TypeError("Unable to connect"), {
-      code: "ConnectionRefused",
+    "a request timeout the provider adapter raised",
+    markProviderAdapterError(
+      Object.assign(new Error("Request timed out."), {
+        name: "APIConnectionTimeoutError",
+      }),
+    ),
+  ],
+  [
+    "a network reset the provider adapter raised",
+    markProviderAdapterError(
+      Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }),
+    ),
+  ],
+  [
+    "a refused connection under the adapter's connection failure",
+    markProviderAdapterError(
+      Object.assign(new Error("Connection error."), {
+        name: "APIConnectionError",
+        cause: Object.assign(new TypeError("Unable to connect"), {
+          code: "ConnectionRefused",
+        }),
+      }),
+    ),
+  ],
+  [
+    "a refused connection a provider run reported in-band",
+    new Error("Generation failed", {
+      cause: providerAdapterEvidence({ code: "ConnectionRefused" }),
     }),
   ],
   [
@@ -167,6 +179,22 @@ const PERMANENT = [
     providerFailure({ status: 200, kind: "provider_stream_incomplete" }),
   ],
   ["an application error", new Error("not a provider failure")],
+  [
+    "a refused connection outside the provider adapter (an MCP server)",
+    Object.assign(new TypeError("Unable to connect"), {
+      code: "ECONNREFUSED",
+    }),
+  ],
+  [
+    "a reset connection outside the provider adapter (a cache call)",
+    Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }),
+  ],
+  [
+    "an SDK connection failure outside the provider adapter",
+    Object.assign(new Error("Connection error."), {
+      name: "APIConnectionError",
+    }),
+  ],
   [
     "a cancellation",
     Object.assign(new Error("aborted"), { name: "AbortError" }),
@@ -618,10 +646,11 @@ describe("a chat turn's provider stream (withProviderChatRunRetry)", () => {
       withProviderChatRunRetry({
         abortSignal: undefined,
         model,
-        open: () =>
+        open: (retryGuard) =>
           streamChatChunks({
             adapter: model.adapter,
             messages: [{ role: "user", content: "Reply." }],
+            middleware: [retryGuard],
             threadId: "t-1",
           }),
       }),
@@ -649,11 +678,12 @@ describe("a chat turn's provider stream (withProviderChatRunRetry)", () => {
       withProviderChatRunRetry({
         abortSignal: undefined,
         model,
-        open: () =>
+        open: (retryGuard) =>
           streamChatChunks({
             adapter: model.adapter,
             agentLoopStrategy: maxIterations(3),
             messages: [{ role: "user", content: "Look it up." }],
+            middleware: [retryGuard],
             threadId: "t-1",
             tools: [lookup],
           }),
@@ -662,5 +692,104 @@ describe("a chat turn's provider stream (withProviderChatRunRetry)", () => {
     expect(requests).toEqual(["tool-call-then-outage", "rate-limited"]);
     expect(calls).toEqual(["lookup"]);
     expect(types.at(-1)).toBe(EventType.RUN_ERROR);
+  });
+
+  test("a socket failure outside the provider adapter is not sent again", async () => {
+    const { model, requests } = scriptedAdapter(["answer"]);
+    let opened = 0;
+    // An MCP connection or a middleware's cache call refused before the
+    // request went out.
+    const refused = {
+      name: "connector",
+      onStart: () => {
+        throw Object.assign(new TypeError("Unable to connect"), {
+          code: "ECONNREFUSED",
+        });
+      },
+    };
+    const outcome = await Result.tryPromise({
+      try: async () =>
+        await chatRunTypes(
+          withProviderChatRunRetry({
+            abortSignal: undefined,
+            model,
+            open: (retryGuard) => {
+              opened += 1;
+              return streamChatChunks({
+                adapter: model.adapter,
+                messages: [{ role: "user", content: "Reply." }],
+                middleware: [refused, retryGuard],
+                threadId: "t-1",
+              });
+            },
+          }),
+        ),
+      catch: (error: unknown) => error,
+    });
+    expect(opened).toBe(1);
+    expect(requests.length).toBeLessThanOrEqual(1);
+    if (Result.isOk(outcome)) {
+      expect(outcome.value.at(-1)).toBe(EventType.RUN_ERROR);
+    }
+  });
+
+  test("a resumed run whose pending tool ran is not sent again after a failure", async () => {
+    const { model, requests } = scriptedAdapter(["answer"]);
+    const calls: string[] = [];
+    let opened = 0;
+    const lookup = toolDefinition({
+      name: "lookup",
+      description: "Looks a value up",
+      inputSchema: toTanStackToolSchema(v.object({})),
+    }).server(async () => {
+      calls.push("lookup");
+      return { value: 1 };
+    });
+    // A transient failure after the tool ran and before any output.
+    const outage = {
+      name: "after-tool",
+      onAfterToolCall: () => {
+        throw Object.assign(new Error("Service Unavailable"), {
+          status: 503,
+        });
+      },
+    };
+    await Result.tryPromise({
+      try: async () =>
+        await chatRunTypes(
+          withProviderChatRunRetry({
+            abortSignal: undefined,
+            model,
+            open: (retryGuard) => {
+              opened += 1;
+              return streamChatChunks({
+                adapter: model.adapter,
+                agentLoopStrategy: maxIterations(3),
+                messages: [
+                  { role: "user", content: "Look it up." },
+                  {
+                    role: "assistant",
+                    content: null,
+                    toolCalls: [
+                      {
+                        id: "call-1",
+                        type: "function",
+                        function: { name: "lookup", arguments: "{}" },
+                      },
+                    ],
+                  },
+                ],
+                middleware: [retryGuard, outage],
+                threadId: "t-1",
+                tools: [lookup],
+              });
+            },
+          }),
+        ),
+      catch: (error: unknown) => error,
+    });
+    expect(calls).toEqual(["lookup"]);
+    expect(opened).toBe(1);
+    expect(requests.length).toBeLessThanOrEqual(1);
   });
 });
