@@ -5330,6 +5330,7 @@
         "legal_list_item": "õigusnimekirja kirje",
         "legal_list_verification": "õigusnimekirja kontroll",
         "legal_resolve": "õigusviite otsing",
+        "legislation_matter_link": "õigusakti seos toimikuga",
         "machine_api_key": "masina API-võti",
         "mcp_connection": "MCP-ühendus",
         "mcp_gateway_tool": "MCP-lüüsi tööriist",

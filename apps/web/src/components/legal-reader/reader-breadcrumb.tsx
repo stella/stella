@@ -17,6 +17,7 @@ import {
   compactReaderPath,
   fitReaderPath,
   fitWidth,
+  readerProvisionNumber,
   splitReaderHeading,
 } from "./reader-breadcrumb.logic";
 import type {
@@ -217,6 +218,8 @@ const CRUMB_BUTTON = {
 } as const;
 const SEPARATOR_WIDTH = 16;
 const MENU_WIDTH = 44;
+/** The smallest touch target a control may offer. */
+const TOUCH_TARGET_WIDTH = 44;
 /** Under about a dozen characters a title says nothing worth its width. */
 const MINIMUM_TITLE_WIDTH = 80;
 const MAXIMUM_ANCESTOR_LABEL_WIDTH = 160;
@@ -361,6 +364,11 @@ export const ReaderBreadcrumb = ({
         label: widthOfMeasure("label", anchorId),
         full: widthOfMeasure("full", anchorId),
       }));
+      // A provision number is the current label, which is never cut.
+      const numberWidth =
+        readerProvisionNumber(path.at(-1)?.title ?? "") === null
+          ? 0
+          : (crumbs.at(-1)?.label ?? 0);
       // The AI mark beside an analysis trail keeps its own width.
       const mark = node.querySelector<HTMLElement>("[data-breadcrumb-ai-mark]");
       const fitted = fitReaderPath({
@@ -372,6 +380,7 @@ export const ReaderBreadcrumb = ({
         menuWidth: MENU_WIDTH,
         minimumTitleWidth: MINIMUM_TITLE_WIDTH,
         maximumAncestorLabelWidth: MAXIMUM_ANCESTOR_LABEL_WIDTH,
+        minimumCurrentWidth: Math.max(TOUCH_TARGET_WIDTH, numberWidth),
       });
       setLayout((previous) =>
         previous?.showMenu === fitted.showMenu &&
