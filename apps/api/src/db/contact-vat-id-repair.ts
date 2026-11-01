@@ -1,17 +1,25 @@
 import { panic } from "better-result";
 
 /**
- * Online repair behind migration 20261019010000_invoice_party_tax_vat_ids,
- * which gave contacts a vat_id beside tax_id. A contact written before then
- * may hold an EU VAT number in tax_id; this moves each such value to vat_id
- * and clears tax_id, by the rule invoicing reads through and every writer
- * stores with (`contactTaxIdentifiers`, as SQL `EU_VAT_ID_SQL_PATTERN`).
+ * Online repair behind migration 20261031200838_contact_vat_id_check, which
+ * adds `contacts_vat_id_check` NOT VALID: an EU VAT number lives in vat_id,
+ * and tax_id holds one only beside a vat_id. A contact written before
+ * 20261019010000_invoice_party_tax_vat_ids gave contacts a vat_id may hold an
+ * EU VAT number in tax_id; this moves each such value to vat_id and clears
+ * tax_id, by the rule invoicing reads through and every writer stores with
+ * (`contactTaxIdentifiers`, as SQL `EU_VAT_ID_SQL_PATTERN`), and then
+ * validates the constraint.
+ *
+ * Contacts force row security on their owner, which reaches one
+ * organization's contacts at a time: each step names the organization in its
+ * own statement before it moves that organization's batch, and the cursor
+ * names the organization a pass resumes at.
  *
  * Self-checkpointing: a moved contact leaves the selection, so an interrupted
- * run resumes by running again and a completed run finds nothing. Completion
- * is the absence of a movable contact. Once a pass has recorded its
- * checkpoint, a movable contact found later reports the repair pending, so it
- * never blocks a deploy, and the next repair phase moves it.
+ * run resumes by running again. The NOT VALID constraint already refuses a
+ * new movable value, so a completed pass leaves nothing for validation to
+ * find. Completion is the catalog fact `pg_constraint.convalidated`; a
+ * committed checkpoint admits a pending repair through deploy and startup.
  */
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
@@ -23,14 +31,22 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 
 import { createBackfillRuntime } from "./backfill-runtime";
+import { readConstraintCompletion } from "./online-constraint-completion";
+import { validateOnlineConstraints } from "./online-ddl";
+import type { OnlineConstraintValidation, OnlineTableGate } from "./online-ddl";
 import type {
   MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
-  OnlineRepairCompletion,
+  OnlineMigrationOutcome,
 } from "./online-migration-connection";
 
 const CONTACT_VAT_ID_REPAIR_NAME = "contact-vat-id";
 const TABLE_NAME = "contacts";
+const CONSTRAINT_NAME = "contacts_vat_id_check";
+
+export const CONTACT_VAT_ID_CONSTRAINTS = [
+  { tableName: TABLE_NAME, constraintName: CONSTRAINT_NAME },
+] as const satisfies readonly OnlineConstraintValidation[];
 
 /**
  * Contacts per transaction; the runtime sizes later batches and applies its
@@ -51,11 +67,11 @@ const ORGANIZATION_PAGE = 100;
 
 /**
  * The owner reaches one organization's contacts at a time: `contacts` forces
- * row security on its owner and admits the organization the session names.
- * The setting is its own statement, so it holds before the next statement
- * plans its row policy.
+ * row security on its owner and admits the organization the transaction
+ * names. The setting is its own statement, so it holds before the next
+ * statement plans its row policy.
  */
-const SCOPE_ORGANIZATION = "SELECT set_config('app.organization_id', $1, $2)";
+const SCOPE_ORGANIZATION = "SELECT set_config('app.organization_id', $1, true)";
 
 /**
  * Moves up to `size` contacts of the scoped organization and returns how many
@@ -103,65 +119,6 @@ const organizationIds = async (
       : panic("Organization enumeration returned an invalid identifier"),
   );
 
-/**
- * Whether any organization still holds a movable contact. The probe runs on
- * the migration session outside a transaction, so it names each organization
- * for the session and clears the setting before it returns.
- */
-const hasMovableContact = async (
-  connection: OnlineMigrationConnection,
-): Promise<boolean> => {
-  try {
-    let from: string | null = null;
-    for (;;) {
-      const page = await organizationIds(
-        connection,
-        from,
-        ORGANIZATION_PAGE + 1,
-      );
-      for (const organizationId of page.slice(0, ORGANIZATION_PAGE)) {
-        await connection.query(SCOPE_ORGANIZATION, [organizationId, false]);
-        const movable = await connection.query(
-          `SELECT 1 FROM public."${TABLE_NAME}" WHERE ${MOVABLE} LIMIT 1`,
-          [EU_VAT_ID_SQL_PATTERN],
-        );
-        if (movable.length > 0) {
-          return true;
-        }
-      }
-      const next = page.at(ORGANIZATION_PAGE);
-      if (next === undefined) {
-        return false;
-      }
-      from = next;
-    }
-  } finally {
-    await connection.query(SCOPE_ORGANIZATION, ["", false]);
-  }
-};
-
-const readCompletion = async (
-  connection: OnlineMigrationConnection,
-): Promise<OnlineRepairCompletion> => {
-  if (!(await hasMovableContact(connection))) {
-    return { type: "complete" };
-  }
-  const reason = "contacts still hold an EU VAT number in tax_id";
-  const checkpoint = await connection.query(
-    "SELECT 1 FROM public.database_backfill_states WHERE name = $1",
-    [CONTACT_VAT_ID_REPAIR_NAME],
-  );
-  return checkpoint.length === 0
-    ? { type: "incomplete", reason }
-    : {
-        type: "pending",
-        reason,
-        cursor: null,
-        holdUntil: null,
-        heldSince: null,
-      };
-};
-
 type RepairRuntimeOptions = {
   readVerdict?: () => Promise<Verdict>;
   sleep?: (milliseconds: number) => Promise<void>;
@@ -189,12 +146,11 @@ const moveUntilEmpty = async (
       sleep,
       step: async () =>
         await runtime.step(async ({ tx, size, cursor }) => {
-          // The cursor names the organization the pass resumes at; a step
-          // moves one batch of the first organization from there that still
-          // holds a movable contact, or walks one page of organizations.
+          // A step moves one batch of the first organization from the cursor
+          // that still holds a movable contact, or walks one page of them.
           const page = await organizationIds(tx, cursor, ORGANIZATION_PAGE + 1);
           for (const organizationId of page.slice(0, ORGANIZATION_PAGE)) {
-            await tx.query(SCOPE_ORGANIZATION, [organizationId, true]);
+            await tx.query(SCOPE_ORGANIZATION, [organizationId]);
             const moved = await moveContactVatIdBatch(tx, size);
             if (moved > 0) {
               return { cursor: organizationId, done: false, value: moved };
@@ -211,26 +167,43 @@ const moveUntilEmpty = async (
   }
 };
 
+/**
+ * VALIDATE takes SHARE UPDATE EXCLUSIVE; the gate watches that wait and
+ * defers the phase rather than failing it.
+ */
+const validateConstraint = async (
+  connection: OnlineMigrationConnection,
+  tables: OnlineTableGate,
+): Promise<OnlineMigrationOutcome> =>
+  await validateOnlineConstraints({
+    connection,
+    tables,
+    constraints: CONTACT_VAT_ID_CONSTRAINTS,
+  });
+
 export const createContactVatIdRepair = (
   options: RepairRuntimeOptions = {},
 ): MigrationOwnedOnlineRepair => ({
-  introducedBy: "20261019010000_invoice_party_tax_vat_ids",
+  introducedBy: "20261031200838_contact_vat_id_check",
   name: CONTACT_VAT_ID_REPAIR_NAME,
-  readCompletion,
-  repair: async (connection) => {
-    // Fresh databases and repaired ones have no data work or metric source.
-    if (!(await hasMovableContact(connection))) {
-      return { type: "complete" };
+  readCompletion: async (connection) =>
+    await readConstraintCompletion({
+      connection,
+      constraintName: CONSTRAINT_NAME,
+      repairName: CONTACT_VAT_ID_REPAIR_NAME,
+      backfillName: CONTACT_VAT_ID_REPAIR_NAME,
+      tableName: TABLE_NAME,
+    }),
+  repair: async (connection, tables) => {
+    // A fresh database has no organization, so no contact to move and no
+    // metric source yet.
+    if ((await organizationIds(connection, null, 1)).length > 0) {
+      const pass = await moveUntilEmpty(connection, options);
+      if (pass.isErr()) {
+        throw pass.error;
+      }
     }
-    const pass = await moveUntilEmpty(connection, options);
-    if (pass.isErr()) {
-      throw pass.error;
-    }
-    const completion = await readCompletion(connection);
-    if (completion.type !== "complete") {
-      return panic("Contact VAT ID repair left movable contacts behind");
-    }
-    return completion;
+    return await validateConstraint(connection, tables);
   },
 });
 

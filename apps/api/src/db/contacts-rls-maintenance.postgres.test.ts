@@ -17,6 +17,17 @@ import { createUngatedTableGateForTests } from "./online-ddl";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
+const MIGRATION_PATH = new URL(
+  "../../drizzle/20261031200838_contact_vat_id_check/migration.sql",
+  import.meta.url,
+);
+
+const checkMigrationStatements = async () =>
+  (await Bun.file(MIGRATION_PATH).text())
+    .split("--> statement-breakpoint")
+    .map((statement) => statement.trim())
+    .filter((statement) => statement.length > 0);
+
 describe.skipIf(!enabled)("contacts RLS maintenance (postgres)", () => {
   test("repairs VAT ids in every organization, one organization scope at a time", async () => {
     const databaseUrl =
@@ -66,8 +77,18 @@ describe.skipIf(!enabled)("contacts RLS maintenance (postgres)", () => {
           createdAt: new Date(),
         })),
       );
+      // Contacts as the deploy finds them: written before the check, which
+      // the migration then adds NOT VALID.
+      await client.unsafe(
+        'ALTER TABLE public.contacts DROP CONSTRAINT IF EXISTS "contacts_vat_id_check"',
+      );
       try {
         await insertOwnerContacts(db, fixture);
+        await client.begin(async (tx) => {
+          for (const statement of await checkMigrationStatements()) {
+            await tx.unsafe(statement);
+          }
+        });
         const connection = {
           execute: async (query: string, params: readonly unknown[] = []) => {
             await client.unsafe(query, [...params]);
@@ -80,18 +101,23 @@ describe.skipIf(!enabled)("contacts RLS maintenance (postgres)", () => {
           sleep: async () => {},
           readVerdict: async () => ({ kind: "normal", signals: [] }),
         });
-        expect((await repair.readCompletion(connection)).type).toBe(
-          "incomplete",
+        // Completion reads the catalog, not the contacts: an unvalidated check
+        // is owed work (pending once a pass recorded its checkpoint).
+        expect((await repair.readCompletion(connection)).type).not.toBe(
+          "complete",
         );
-        // The probe leaves the migration session without an organization.
+        expect(
+          await repair.repair(
+            connection,
+            createUngatedTableGateForTests(connection),
+          ),
+        ).toEqual({ type: "complete" });
+        expect((await repair.readCompletion(connection)).type).toBe("complete");
+        // Each step named its organization inside its own transaction, so
+        // the migration session ends without one.
         expect(
           await client`SELECT coalesce(current_setting('app.organization_id', true), '') AS organization_id`,
         ).toEqual([{ organization_id: "" }]);
-        await repair.repair(
-          connection,
-          createUngatedTableGateForTests(connection),
-        );
-        expect((await repair.readCompletion(connection)).type).toBe("complete");
         const repaired = await Promise.all(
           organizations.map(
             async (organizationId) =>
@@ -137,6 +163,18 @@ describe.skipIf(!enabled)("contacts RLS maintenance (postgres)", () => {
         await db
           .delete(organization)
           .where(inArray(organization.id, organizations));
+        // Leave the shared table with its validated check.
+        await client.unsafe(
+          'ALTER TABLE public.contacts DROP CONSTRAINT IF EXISTS "contacts_vat_id_check"',
+        );
+        await client.begin(async (tx) => {
+          for (const statement of await checkMigrationStatements()) {
+            await tx.unsafe(statement);
+          }
+        });
+        await client.unsafe(
+          'ALTER TABLE public.contacts VALIDATE CONSTRAINT "contacts_vat_id_check"',
+        );
       }
     });
   });
