@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "HU_BHGY",
   "key": "hu-bhgy",
-  "parserVersion": 22,
+  "parserVersion": 24,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage."
+    "reason": "Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage. Read a partial or interim judgment's operative introduction and the kind printed below a header table as opening the operative part; a header label needs its colon; paragraph roles and the decision type have no separate feature storage."
   }
 }
