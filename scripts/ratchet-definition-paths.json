@@ -3,6 +3,7 @@
   ".oxlint-plugins/database-access.ts",
   ".oxlint-plugins/module-id.ts",
   "apps/api/src/db/org-scope-registry.ts",
+  "apps/api/src/lib/db/global-system-work.ts",
   "apps/api/src/lib/db/status-tables.gen.ts",
   "apps/api/src/lib/errors/graded-handler-codes.ts",
   "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
