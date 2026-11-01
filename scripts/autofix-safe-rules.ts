@@ -19,10 +19,12 @@ export const SAFE_AUTOFIX_RULES = {
   "eslint/prefer-numeric-literals":
     "Replaces literal parseInt calls with equivalent numeric literals.",
   "typescript/array-type": "Changes only erased array type spelling.",
-  "typescript/dot-notation":
-    "Uses type-checked equivalent constant property access.",
   "typescript/prefer-as-const": "Uses an equivalent literal const assertion.",
 } as const;
+
+// Safe autofix rules must not include these type-aware fixers: preflight runs
+// without a project type graph and must see every diagnostic the fixer can act on.
+export const TYPE_AWARE_AUTOFIX_RULES = ["typescript/dot-notation"] as const;
 
 export const safeAutofixRuleArgs = () => [
   "--allow",
