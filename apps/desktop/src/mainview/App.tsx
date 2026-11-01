@@ -433,9 +433,9 @@ const GeneralPane = ({
       <PanelGroup>
         <ShortcutSetting />
       </PanelGroup>
-      <PanelGroup>
-        <DictationSetting />
-      </PanelGroup>
+      <DictationSetting
+        renderGroup={(content) => <PanelGroup>{content}</PanelGroup>}
+      />
       <AgentSubscriptionsSection
         renderGroup={(content) => (
           <PanelGroup title={tSubscriptions("title")}>{content}</PanelGroup>

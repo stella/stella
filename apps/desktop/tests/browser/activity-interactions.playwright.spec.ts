@@ -234,6 +234,7 @@ const installNativeBoundary = async ({
         get_desktop_telemetry_enabled: () => true,
         permissions_get_snapshot: () => settingsWindow.permissions,
         shortcut_get_snapshot: () => settingsWindow.shortcut,
+        dictation_get_snapshot: () => ({ available: false }),
         chatgpt_auth_get_status: () => null,
         activity_delete_all: (args) => {
           if (

@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { Result } from "better-result";
 import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Switch } from "@stll/ui/switch";
 
+import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { formatShortcut } from "../shared/shortcut-keys";
 import type { ShortcutKeys } from "../shared/shortcut-keys";
 import {
@@ -34,32 +34,52 @@ type DictationSnapshot = {
 const BYTES_PER_MEGABYTE = 1_000_000;
 const PERCENT = 100;
 
-/** Local dictation: the switch, the speech model and what went wrong. */
-export const DictationSetting = () => {
+const isDictationSnapshot = (value: unknown): value is DictationSnapshot =>
+  typeof value === "object" &&
+  value !== null &&
+  "available" in value &&
+  typeof value.available === "boolean";
+
+/** Local dictation: the switch, the speech model and what went wrong. Renders
+ *  nothing, group included, for an account without the feature. */
+export const DictationSetting = ({
+  renderGroup,
+}: {
+  renderGroup: (content: React.JSX.Element) => React.JSX.Element;
+}) => {
   const t = useTranslations("dictation");
   const locale = useLocale();
   const layout = useKeyboardLayout();
   const [snapshot, setSnapshot] = useState<DictationSnapshot | null>(null);
 
   useEffect(() => {
+    let disposed = false;
     const refresh = async () => {
       const result = await Result.tryPromise(async () =>
-        invoke<DictationSnapshot>("dictation_get_snapshot"),
+        invoke<unknown>("dictation_get_snapshot"),
       );
-      if (Result.isOk(result)) {
-        setSnapshot(result.value);
+      if (disposed) {
+        return;
       }
+      setSnapshot(
+        Result.isOk(result) && isDictationSnapshot(result.value)
+          ? result.value
+          : null,
+      );
     };
-    void refresh();
-    const listening = listen("dictation-changed", () => {
-      void refresh();
+    const stopListening = subscribeDesktopEvent({
+      event: "dictation-changed",
+      handler: () => {
+        void refresh();
+      },
+      onError: () => {
+        setSnapshot(null);
+      },
     });
-    const stopListening = async () => {
-      const unlisten = await listening;
-      unlisten();
-    };
+    void refresh();
     return () => {
-      void stopListening();
+      disposed = true;
+      stopListening();
     };
   }, []);
 
@@ -92,7 +112,7 @@ export const DictationSetting = () => {
     }
   };
 
-  return (
+  return renderGroup(
     <div className="flex flex-col gap-3 px-4 py-3">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0 flex-1">
@@ -132,7 +152,7 @@ export const DictationSetting = () => {
           {t(`failure.${snapshot.failure}`)}
         </p>
       )}
-    </div>
+    </div>,
   );
 };
 
