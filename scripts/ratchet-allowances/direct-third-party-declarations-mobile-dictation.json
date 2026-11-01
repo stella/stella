@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 2,
+  "reason": "The mobile composer records a dictation with Expo's audio module, which needs Expo's asset module installed directly as its native peer, both at the versions Expo SDK 58 ships."
+}

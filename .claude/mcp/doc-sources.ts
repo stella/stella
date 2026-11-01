@@ -147,6 +147,8 @@ export const DOC_SOURCES = {
       "@expo/ui",
       "@expo/vector-icons",
       "expo",
+      "expo-asset",
+      "expo-audio",
       "expo-constants",
       "expo-crypto",
       "expo-dev-client",
