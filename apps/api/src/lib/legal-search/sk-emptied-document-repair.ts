@@ -176,6 +176,23 @@ type RequeueBatchOptions = {
   sourceId: SafeId<"caseLawSource">;
 };
 
+/**
+ * Each reset row reaches its write extension in turn: the extension runs in a
+ * savepoint of the batch transaction, so the calls cannot overlap.
+ */
+const extendRequeuedDecisions = async (
+  tx: Transaction,
+  decisionIds: readonly SafeId<"caseLawDecision">[],
+  offset = 0,
+): Promise<void> => {
+  const decisionId = decisionIds.at(offset);
+  if (decisionId === undefined) {
+    return;
+  }
+  await runDecisionWriteExtension(tx, decisionId);
+  await extendRequeuedDecisions(tx, decisionIds, offset + 1);
+};
+
 const requeueEmptiedDocumentBatchTx = async (
   tx: Transaction,
   { decisionIds, since, sourceId }: RequeueBatchOptions,
@@ -215,9 +232,7 @@ const requeueEmptiedDocumentBatchTx = async (
       });
     }
   }
-  for (const id of ids) {
-    await runDecisionWriteExtension(tx, id);
-  }
+  await extendRequeuedDecisions(tx, ids);
   const requeued = new Set(ids);
   return decisionIds.map((decisionId) => ({
     decisionId,
