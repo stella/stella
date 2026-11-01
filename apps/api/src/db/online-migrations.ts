@@ -652,7 +652,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "case_law_decisions",
   },
   {
-    introducedBy: "20261031232318_case_law_provision_membership_index",
+    introducedBy: "20261101185403_case_law_provision_membership_index",
     createSql:
       'CREATE INDEX CONCURRENTLY "case_law_provision_citations_decision_work_subtree_idx" ON public."case_law_provision_citations" USING btree ("decision_id", "jurisdiction", "work_identifier", "anchor" COLLATE "C", "span_start")',
     definitionBody:
