@@ -109,7 +109,7 @@ describe("sanitizeFilename", () => {
           sanitizeFilename(name),
           sanitizeFilenamePreservingExtension(name),
         ]) {
-          expect(`${sanitized}`.replaceAll(/[\u200C\u200D]/gu, "")).not.toMatch(
+          expect(sanitized.replaceAll(/[\u200C\u200D]/gu, "")).not.toMatch(
             /\p{Cf}/u,
           );
         }
