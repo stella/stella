@@ -1,6 +1,12 @@
+import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
+import type { AdapterYieldChunk, AnyTextAdapter } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
+import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   ModelDeadlineExceededError,
   ProviderCallError,
@@ -18,9 +24,11 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import {
   withGenerationDeadline,
+  withProviderChatRunRetry,
   withProviderRetryWait,
   withProviderStreamRetryWait,
 } from "@/api/lib/tanstack-ai-generate";
+import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 
 type FailureOptions = {
   provider?: "anthropic" | "google" | "openai";
@@ -102,6 +110,21 @@ const TRANSIENT = [
   [
     "a network reset",
     Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }),
+  ],
+  [
+    "a refused connection under an SDK's connection failure",
+    Object.assign(new Error("Connection error."), {
+      name: "APIConnectionError",
+      cause: Object.assign(new TypeError("Unable to connect"), {
+        code: "ConnectionRefused",
+      }),
+    }),
+  ],
+  [
+    "a refused connection the runtime raised",
+    Object.assign(new TypeError("Unable to connect"), {
+      code: "ConnectionRefused",
+    }),
   ],
   [
     "a status the provider asked to retry",
@@ -434,6 +457,29 @@ describe("withProviderStreamRetryWait", () => {
     expect(items).toEqual([start, last]);
   });
 
+  test("the last attempt's thrown failure reaches the caller after its preamble", async () => {
+    const last = rateLimited(1);
+    const streams = scriptedStreams([
+      [start, rateLimited(1)],
+      [start, rateLimited(1)],
+      [start, last],
+    ]);
+    const items: Item[] = [];
+    const outcome = await settle(async () => {
+      for await (const item of withProviderStreamRetryWait({
+        abortSignal: undefined,
+        open: streams.open,
+        isPreamble: isStart,
+        failureOf,
+      })) {
+        items.push(item);
+      }
+    });
+    expect(streams.opened()).toBe(PROVIDER_REQUEST_ATTEMPTS);
+    expect(items).toEqual([start]);
+    expect(Result.isError(outcome) && outcome.error).toBe(last);
+  });
+
   test("a run cancelled as its request fails is not opened again", async () => {
     const controller = new AbortController();
     const failure = rateLimited(1);
@@ -457,5 +503,164 @@ describe("withProviderStreamRetryWait", () => {
     );
     expect(opened).toBe(1);
     expect(Result.isError(outcome) && outcome.error).toBe(failure);
+  });
+});
+
+type ScriptedTurn = "rate-limited" | "answer" | "tool-call-then-outage";
+
+/**
+ * A provider adapter that answers each request with the next scripted turn:
+ * a 429 before any output (its body carries a short retry-after), a text
+ * answer, or a tool call followed by an outage on the request after it.
+ */
+const scriptedAdapter = (turns: ScriptedTurn[]) => {
+  const requests: string[] = [];
+  const adapter: AnyTextAdapter = {
+    kind: "text",
+    name: "scripted",
+    model: "scripted",
+    "~types": {
+      providerOptions: {},
+      inputModalities: ["text"],
+      messageMetadataByModality: {},
+      toolCapabilities: [],
+      toolCallMetadata: {},
+      systemPromptMetadata: undefined,
+    },
+    async *chatStream({ runId, threadId }) {
+      const turn = turns.shift() ?? "answer";
+      requests.push(turn);
+      const run = { runId: runId ?? "run-1", threadId: threadId ?? "t-1" };
+      yield { type: EventType.RUN_STARTED, ...run } satisfies AdapterYieldChunk;
+      if (turn === "rate-limited") {
+        yield {
+          type: EventType.RUN_ERROR,
+          message: "Rate limited",
+          code: "429",
+          rawEvent: {
+            status: 429,
+            headers: { "retry-after-ms": "1" },
+            error: { type: "rate_limit_error" },
+          },
+        } satisfies AdapterYieldChunk;
+        return;
+      }
+      if (turn === "tool-call-then-outage") {
+        turns.unshift("rate-limited");
+        yield {
+          type: EventType.TOOL_CALL_START,
+          toolCallId: "call-1",
+          toolCallName: "lookup",
+          parentMessageId: "provider-message-1",
+        } satisfies AdapterYieldChunk;
+        yield {
+          type: EventType.TOOL_CALL_ARGS,
+          toolCallId: "call-1",
+          delta: "{}",
+        } satisfies AdapterYieldChunk;
+        yield {
+          type: EventType.TOOL_CALL_END,
+          toolCallId: "call-1",
+        } satisfies AdapterYieldChunk;
+        yield {
+          type: EventType.RUN_FINISHED,
+          ...run,
+          finishReason: "tool_calls",
+        } satisfies AdapterYieldChunk;
+        return;
+      }
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "provider-message-1",
+        role: "assistant",
+      } satisfies AdapterYieldChunk;
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "provider-message-1",
+        delta: "answer",
+      } satisfies AdapterYieldChunk;
+      yield {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId: "provider-message-1",
+      } satisfies AdapterYieldChunk;
+      yield {
+        type: EventType.RUN_FINISHED,
+        ...run,
+        finishReason: "stop",
+      } satisfies AdapterYieldChunk;
+    },
+    structuredOutput: () => {
+      throw new Error("Structured output is not part of this fixture");
+    },
+  };
+  const model = {
+    adapter,
+    keySource: "byok",
+    modelId: "scripted",
+    modelOptions: {},
+    provider: "anthropic",
+  } satisfies ResolvedTanStackTextModel;
+  return { model, requests };
+};
+
+const chatRunTypes = async (stream: AsyncIterable<PublicStreamChunk>) => {
+  const types: string[] = [];
+  for await (const chunk of stream) {
+    types.push(chunk.type);
+  }
+  return types;
+};
+
+describe("a chat turn's provider stream (withProviderChatRunRetry)", () => {
+  test("a rate limit before any output is sent again, and the turn shows one run", async () => {
+    const { model, requests } = scriptedAdapter(["rate-limited", "answer"]);
+    const types = await chatRunTypes(
+      withProviderChatRunRetry({
+        abortSignal: undefined,
+        model,
+        open: () =>
+          streamChatChunks({
+            adapter: model.adapter,
+            messages: [{ role: "user", content: "Reply." }],
+            threadId: "t-1",
+          }),
+      }),
+    );
+    expect(requests).toEqual(["rate-limited", "answer"]);
+    expect(types.filter((type) => type === EventType.RUN_STARTED)).toHaveLength(
+      1,
+    );
+    expect(types).not.toContain(EventType.RUN_ERROR);
+    expect(types).toContain(EventType.TEXT_MESSAGE_CONTENT);
+  });
+
+  test("a failure after a tool call is not sent again: the tool may have acted", async () => {
+    const { model, requests } = scriptedAdapter(["tool-call-then-outage"]);
+    const calls: string[] = [];
+    const lookup = toolDefinition({
+      name: "lookup",
+      description: "Looks a value up",
+      inputSchema: toTanStackToolSchema(v.object({})),
+    }).server(async () => {
+      calls.push("lookup");
+      return { value: 1 };
+    });
+    const types = await chatRunTypes(
+      withProviderChatRunRetry({
+        abortSignal: undefined,
+        model,
+        open: () =>
+          streamChatChunks({
+            adapter: model.adapter,
+            agentLoopStrategy: maxIterations(3),
+            messages: [{ role: "user", content: "Look it up." }],
+            threadId: "t-1",
+            tools: [lookup],
+          }),
+      }),
+    );
+    expect(requests).toEqual(["tool-call-then-outage", "rate-limited"]);
+    expect(calls).toEqual(["lookup"]);
+    expect(types.at(-1)).toBe(EventType.RUN_ERROR);
   });
 });

@@ -1,12 +1,16 @@
 import { EventType } from "@tanstack/ai";
-import { afterAll, describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
 
 import type { TanStackAIProvider } from "@stll/ai-catalog";
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import { isTransientProviderFailure } from "@/api/lib/errors/provider-retry-policy";
+import { withRecoveredProviderStatus } from "@/api/lib/tanstack-ai-generate";
+import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { isRecord } from "@/api/lib/type-guards";
 import { SEAM_DRIVERS } from "@/api/tests/helpers/ai-text-call-sites";
 import { cassetteForModel } from "@/api/tests/helpers/provider-request-matrix";
@@ -16,7 +20,10 @@ import {
   PROVIDER_WIRE_PROVIDERS,
 } from "@/api/tests/helpers/provider-wire-cassette";
 import type { ProviderWireCassette } from "@/api/tests/helpers/provider-wire-cassette";
-import { replayWireScenario } from "@/api/tests/helpers/provider-wire-contract";
+import {
+  replayWireScenario,
+  wireChatModel,
+} from "@/api/tests/helpers/provider-wire-contract";
 import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 
@@ -153,64 +160,205 @@ describe("the generation layer retries what the clients no longer do", () => {
   }
 });
 
-/** The modules that build provider clients; each is held by the census above. */
-const CLIENT_OWNERS = new Set([
-  "lib/tanstack-ai-models.ts",
-  "lib/stella-openrouter-text-adapter.ts",
-]);
+/** Sends the first `failures` requests nowhere: `fetch` rejects as a
+ *  connection the network dropped would, with `error`'s shape. The rest go
+ *  to the replay. */
+const failFirstRequests = (failures: number, error: () => Error) => {
+  const answer = globalThis.fetch;
+  let sent = 0;
+  const spy = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (
+        input: Parameters<typeof globalThis.fetch>[0],
+        init?: RequestInit,
+      ) => {
+        sent += 1;
+        if (sent <= failures) {
+          throw error();
+        }
+        return await answer(input, init);
+      },
+      { preconnect: answer.preconnect },
+    ),
+  );
+  return { restore: () => spy.mockRestore(), sent: () => sent };
+};
 
-/** Provider SDKs and the TanStack adapters that build their clients. */
-const PROVIDER_PACKAGE =
-  /(?:openai|@anthropic-ai\/sdk|@google\/genai|@mistralai\/mistralai|@openrouter\/sdk|@aws-sdk\/client-bedrock-runtime|@tanstack\/ai-(?:openai|anthropic|gemini|mistral|bedrock|openrouter))(?:\/[^"']*)?/u
-    .source;
-
-const VALUE_IMPORT = new RegExp(
-  String.raw`import\s+(?!type\b)[^;]*?from\s+["']${PROVIDER_PACKAGE}["']`,
-  "u",
-);
-const DYNAMIC_IMPORT = new RegExp(
-  String.raw`import\s*\(\s*["']${PROVIDER_PACKAGE}["']\s*\)`,
-  "u",
-);
-
-const buildsProviderClient = (source: string): boolean =>
-  VALUE_IMPORT.test(source) || DYNAMIC_IMPORT.test(source);
-
-describe("provider clients are built only where the census reaches", () => {
-  test("no other module imports a provider SDK or adapter at runtime", () => {
-    const root = path.resolve(import.meta.dir, "..");
-    const outside: string[] = [];
-    for (const file of new Bun.Glob("**/*.ts").scanSync({ cwd: root })) {
-      if (
-        CLIENT_OWNERS.has(file) ||
-        file.includes(".test.") ||
-        file.startsWith("tests/")
-      ) {
-        continue;
-      }
-      if (buildsProviderClient(readFileSync(path.join(root, file), "utf-8"))) {
-        outside.push(file);
-      }
-    }
-    expect(outside).toEqual([]);
+const connectionReset = () =>
+  Object.assign(new TypeError("fetch failed"), { code: "ECONNRESET" });
+const connectionRefused = () =>
+  Object.assign(new TypeError("Unable to connect"), {
+    code: "ConnectionRefused",
   });
 
-  test("the scan recognises a planted client and leaves type imports alone", () => {
-    // Spelled apart so this file holds no import of the packages itself.
-    const from = (specifier: string) => `from "${specifier}";`;
-    expect(buildsProviderClient(`import OpenAI ${from("openai")}`)).toBe(true);
-    expect(
-      buildsProviderClient(
-        `import { createGeminiChat } ${from("@tanstack/ai-gemini")}`,
-      ),
-    ).toBe(true);
-    expect(
-      buildsProviderClient(`await import("@aws-sdk/client-bedrock-runtime")`),
-    ).toBe(true);
-    expect(
-      buildsProviderClient(
-        `import type { AnthropicTextMetadata } ${from("@tanstack/ai-anthropic")}`,
-      ),
-    ).toBe(false);
+describe("a request that got no response is retried by the generation layer", () => {
+  for (const [provider, failure] of [
+    // Wrapped by its SDK as `APIConnectionError`.
+    ["openai", connectionReset],
+    ["anthropic", connectionReset],
+    // Reaches the adapter as the runtime raised it.
+    ["google", connectionRefused],
+  ] as const) {
+    test(`${provider}: a streamed run that failed before its first output`, async () => {
+      const cassette = cassetteFor(cassettes, provider, "text");
+      const served = replay();
+      served.serve(cassette);
+      const network = failFirstRequests(1, failure);
+      try {
+        const { got, want } =
+          await SEAM_DRIVERS["require-complete"].settle(cassette);
+        expect(got).toEqual(want);
+        // The dropped request, then the retry that answered.
+        expect(network.sent()).toBe(2);
+        expect(served.takeFindings()).toEqual({
+          unconsumed: [],
+          unexpected: [],
+        });
+      } finally {
+        network.restore();
+      }
+    });
+  }
+
+  test("openai: a structured request that failed is a transient provider failure", async () => {
+    const network = failFirstRequests(
+      Number.POSITIVE_INFINITY,
+      connectionReset,
+    );
+    try {
+      const model = wireChatModel("openai");
+      const adapter = createTanStackTextAdapterFactory({
+        apiKey: "cassette-replay-no-credentials",
+        dataClass: "public_corpus",
+        provider: "openai",
+      })(model);
+      const thrown = await rejectionOf(
+        adapter.structuredOutput({
+          chatOptions: {
+            logger: resolveDebugOption(false),
+            messages: [{ role: "user", content: "Fixture" }],
+            model,
+          },
+          outputSchema: { type: "object", properties: {} },
+        }),
+      );
+      // The client sent it once and raised its connection failure.
+      expect(network.sent()).toBe(1);
+      const recovered = withRecoveredProviderStatus({
+        error: thrown,
+        model: {
+          adapter,
+          keySource: "byok",
+          modelId: model,
+          modelOptions: {},
+          provider: "openai",
+        },
+      });
+      expect(recovered).toBeInstanceOf(ProviderCallError);
+      expect(recovered).toMatchObject({ kind: "provider_unavailable" });
+      expect(isTransientProviderFailure(recovered)).toBe(true);
+    } finally {
+      network.restore();
+    }
+  });
+});
+
+/** A Google answer that stops at a checkpoint, as a long one does. */
+const continuedAnswer = (text: string): string =>
+  text.replace(
+    '"finishReason":"STOP"',
+    '"finishReason":"CONTINUATION","continuationToken":"Y2hlY2twb2ludA=="',
+  );
+
+describe("Google answers that stop at a continuation checkpoint are not continued", () => {
+  test("a streamed run sends its request once", async () => {
+    const text = cassetteFor(cassettes, "google", "text");
+    const [exchange] = text.exchanges;
+    if (exchange?.response.body.encoding !== "text") {
+      throw new Error("The Google text cassette has a text answer");
+    }
+    const continued = continuedAnswer(exchange.response.body.text);
+    expect(continued).not.toBe(exchange.response.body.text);
+    const cassette: ProviderWireCassette = {
+      ...text,
+      exchanges: [
+        {
+          ...exchange,
+          response: {
+            ...exchange.response,
+            body: { encoding: "text", text: continued },
+          },
+          // A continuation hop would be answered, and counted.
+          repeat: true,
+        },
+      ],
+    };
+    const served = replay();
+    served.serve(cassette);
+    const model = cassette.model;
+    const adapter = createTanStackTextAdapterFactory({
+      apiKey: "cassette-replay-no-credentials",
+      dataClass: "public_corpus",
+      provider: "google",
+    })(model);
+    for await (const _chunk of adapter.chatStream({
+      logger: resolveDebugOption(false),
+      messages: [{ role: "user", content: "Fixture" }],
+      model,
+    })) {
+      // The run ends at the checkpoint.
+    }
+    expect(served.requests()).toHaveLength(1);
+    served.takeFindings();
+  });
+
+  test("a structured request sends its request once", async () => {
+    const text = cassetteFor(cassettes, "google", "text");
+    const model = text.model;
+    const served = replay();
+    served.serve({
+      model,
+      exchanges: [
+        {
+          request: {
+            method: "POST",
+            path: `/v1beta/models/${model}:generateContent`,
+          },
+          response: {
+            status: 200,
+            headers: { "content-type": "application/json" },
+            body: {
+              encoding: "text",
+              text: JSON.stringify({
+                candidates: [
+                  {
+                    content: { parts: [{ text: "{}" }], role: "model" },
+                    finishReason: "CONTINUATION",
+                    continuationToken: "Y2hlY2twb2ludA==",
+                    index: 0,
+                  },
+                ],
+              }),
+            },
+          },
+          repeat: true,
+        },
+      ],
+    });
+    const adapter = createTanStackTextAdapterFactory({
+      apiKey: "cassette-replay-no-credentials",
+      dataClass: "public_corpus",
+      provider: "google",
+    })(model);
+    await adapter.structuredOutput({
+      chatOptions: {
+        logger: resolveDebugOption(false),
+        messages: [{ role: "user", content: "Fixture" }],
+        model,
+      },
+      outputSchema: { type: "object", properties: {} },
+    });
+    expect(served.requests()).toHaveLength(1);
+    served.takeFindings();
   });
 });

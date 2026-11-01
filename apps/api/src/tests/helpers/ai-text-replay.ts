@@ -269,6 +269,7 @@ const GENERATION_SEAM_EXPORTS = {
   withGenerationDeadline: "none",
   withProviderRetryWait: "none",
   withProviderStreamRetryWait: "none",
+  withProviderChatRunRetry: "none",
   withRecoveredProviderStatus: "none",
   structuredOutputWireJsonSchema: "none",
   outputTokensWithinModelLimit: "none",

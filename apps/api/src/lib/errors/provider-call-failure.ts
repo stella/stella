@@ -1,3 +1,5 @@
+import type { AIErrorKind } from "@stll/api-contract";
+
 import { classifyAIError, providerFailureFacts } from "@/api/lib/ai-error";
 import {
   PROVIDER_CALL_ERROR_MESSAGE,
@@ -8,6 +10,7 @@ import { providerRetryDelayMs } from "@/api/lib/errors/provider-retry-delay";
 import { createProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
+import { NETWORK_ERROR_CODE_REASON } from "@/api/lib/observability/failure";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -44,6 +47,61 @@ export const providerRequestIdFrom = (
   return undefined;
 };
 
+/**
+ * The classes the provider SDKs raise for a request that got no response:
+ * Stainless (OpenAI, Anthropic) and Speakeasy (Mistral, OpenRouter)
+ * connection failures and timeouts. A streamed run keeps the class name in
+ * its `RUN_ERROR` evidence (`patches/@tanstack%2Fai@0.65.1.patch`).
+ */
+const PROVIDER_TRANSPORT_FAILURE_NAMES: ReadonlySet<string> = new Set([
+  "APIConnectionError",
+  "APIConnectionTimeoutError",
+  "ConnectionError",
+  "RequestTimeoutError",
+]);
+
+/** Socket codes of a request that got no response, Bun's refusal included. */
+const PROVIDER_TRANSPORT_CODES: ReadonlySet<string> = new Set([
+  ...Object.keys(NETWORK_ERROR_CODE_REASON),
+  "ConnectionRefused",
+]);
+
+/** How deep a wrapped failure is searched for its transport class. */
+const TRANSPORT_CAUSE_DEPTH = 6;
+
+const isProviderTransportFailure = (evidence: unknown): boolean => {
+  let current: unknown = evidence;
+  for (
+    let depth = 0;
+    depth < TRANSPORT_CAUSE_DEPTH && isRecord(current);
+    depth += 1
+  ) {
+    const { name, code } = current;
+    if (
+      (typeof name === "string" &&
+        PROVIDER_TRANSPORT_FAILURE_NAMES.has(name)) ||
+      (typeof code === "string" && PROVIDER_TRANSPORT_CODES.has(code))
+    ) {
+      return true;
+    }
+    current = current["cause"];
+  }
+  return false;
+};
+
+/**
+ * The kind of a failed provider request. A request that got no response
+ * (refused, reset, timed out) is an unavailable provider here: this boundary
+ * knows its destination is the provider's own endpoint, which a general
+ * network classification cannot assume.
+ */
+export const providerFailureKind = (evidence: unknown): AIErrorKind => {
+  const kind = classifyAIError(evidence);
+  return kind === "unknown" && isProviderTransportFailure(evidence)
+    ? "provider_unavailable"
+    : kind;
+};
+
 type CreateProviderCallErrorOptions = {
   model: Pick<ResolvedTanStackTextModel, "provider" | "keySource">;
   evidence: unknown;
@@ -70,7 +128,7 @@ export const createProviderCallError = ({
     status,
     providerDiagnostic: createProviderDiagnostic({ model, evidence }),
     code: providerCallErrorCode(code) ?? "provider_error",
-    kind: classifyAIError(input),
+    kind: providerFailureKind(input),
     facts: providerFailureFacts(input),
     requestId: providerRequestIdFrom(evidence),
     retryAfterMs: providerRetryDelayMs(evidence),

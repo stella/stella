@@ -95,6 +95,7 @@ import {
 import type { ModelRunFinish } from "@/api/lib/errors/provider-call-error";
 import {
   createProviderCallError,
+  providerFailureKind,
   providerRequestIdFrom,
 } from "@/api/lib/errors/provider-call-failure";
 import { providerRetryDelay } from "@/api/lib/errors/provider-retry-policy";
@@ -597,6 +598,9 @@ export const withProviderStreamRetryWait = async function* <T>({
       }
       retryAfterMs = retryDelayOf(error);
       if (retryAfterMs === undefined) {
+        // The attempt the caller reads ends as it arrived: its preamble,
+        // then the failure.
+        yield* held;
         throw error;
       }
     }
@@ -810,20 +814,42 @@ const admittedAbortController = ({
 };
 
 /**
- * A chat run's chunks, opened again while it fails before its first output
- * (`withProviderStreamRetryWait`). Each attempt checks its admission again.
+ * A chat run's chunks, opened again while the run fails before its first
+ * output (`withProviderStreamRetryWait`): a `RUN_STARTED` is all it may have
+ * shown, and its `RUN_ERROR` decides the retry. A run that offers tools is
+ * retried the same way: a tool runs only after the model's call to it, which
+ * is output, so nothing has acted before a retried failure.
+ *
+ * @yields The chunks of the attempt that answered, or of the last attempt.
  */
-const retriedChatRunChunks = (
-  admitted: AdmittedChatRunOptions,
-): AsyncIterable<PublicStreamChunk> =>
+export const withProviderChatRunRetry = <TChunk extends PublicStreamChunk>({
+  abortSignal,
+  model,
+  open,
+}: {
+  abortSignal: AbortSignal | undefined;
+  model: ResolvedTanStackTextModel;
+  /** Opens the run; called once per attempt. */
+  open: () => AsyncIterable<TChunk>;
+}): AsyncIterable<TChunk> =>
   withProviderStreamRetryWait({
-    abortSignal: admitted.abortController?.signal,
-    open: () => streamChatChunks(admittedChatRunOptions(admitted)),
+    abortSignal,
+    open,
     isPreamble: (chunk) => chunk.type === EventType.RUN_STARTED,
     failureOf: (chunk) =>
       chunk.type === EventType.RUN_ERROR
-        ? tanStackRunError(chunk, admitted.model)
+        ? tanStackRunError(chunk, model)
         : undefined,
+  });
+
+/** Each attempt of a chat run checks its admission again. */
+const retriedChatRunChunks = (
+  admitted: AdmittedChatRunOptions,
+): AsyncIterable<PublicStreamChunk> =>
+  withProviderChatRunRetry({
+    abortSignal: admitted.abortController?.signal,
+    model: admitted.model,
+    open: () => streamChatChunks(admittedChatRunOptions(admitted)),
   });
 
 export const collectTanStackTextRun = async (
@@ -1158,7 +1184,7 @@ export const withRecoveredProviderStatus = ({
     body === undefined
       ? error
       : { cause: body, requestId: providerRequestIdFrom(error) };
-  const kind = classifyAIError(evidence);
+  const kind = providerFailureKind(evidence);
   // An answer that arrived but cannot be used is named from the code the
   // engine or adapter reported, whatever else the chain carries: left to the
   // fallback below it would leave as a bare `ModelRunError` and grade as an

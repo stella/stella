@@ -2,8 +2,8 @@ import { panic } from "better-result";
 
 import type { AIProvider } from "@stll/ai-catalog";
 
-import { classifyAIError } from "@/api/lib/ai-error";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import { providerFailureKind } from "@/api/lib/errors/provider-call-failure";
 import {
   PROVIDER_RETRY_WAIT_CAP_MS,
   providerRetryDelayMs,
@@ -49,35 +49,6 @@ const CONFLICT_RETRYING_PROVIDERS: ReadonlySet<AIProvider> = new Set([
 ]);
 
 /**
- * Transport failures the SDKs report by class: Stainless (OpenAI,
- * Anthropic) and Speakeasy (Mistral, OpenRouter) connection and timeout
- * errors, and a fetch or AWS timeout. A failure that carries a network
- * code is named `provider_unavailable` by `classifyAIError` already.
- */
-const TRANSPORT_FAILURE_NAMES: ReadonlySet<string> = new Set([
-  "APIConnectionError",
-  "APIConnectionTimeoutError",
-  "ConnectionError",
-  "RequestTimeoutError",
-  "TimeoutError",
-]);
-
-/** How deep a wrapped failure is searched for its transport class. */
-const CAUSE_DEPTH = 6;
-
-const isTransportFailure = (error: unknown): boolean => {
-  let current: unknown = error;
-  for (let depth = 0; depth < CAUSE_DEPTH && isRecord(current); depth += 1) {
-    const name = current["name"];
-    if (typeof name === "string" && TRANSPORT_FAILURE_NAMES.has(name)) {
-      return true;
-    }
-    current = current["cause"];
-  }
-  return false;
-};
-
-/**
  * The provider's own word on retrying, where it gave one: the
  * `x-should-retry` header a Stainless client obeys, carried as the
  * failure's `isRetryable` fact.
@@ -102,17 +73,21 @@ const statusOf = (error: unknown): number | undefined =>
 /**
  * Whether a failed request is one the provider SDKs retried: a rate limit,
  * a provider outage, a request timeout, a lock timeout where the SDK
- * retried it, or a transport failure. An application error, a refusal the
- * provider means (billing, credentials, a retired model, a bad request) and
- * a cancellation are not.
+ * retried it, or a request that got no response. An application error, a
+ * refusal the provider means (billing, credentials, a retired model, a bad
+ * request) and a cancellation are not.
  */
 export const isTransientProviderFailure = (error: unknown): boolean => {
   const verdict = providerRetryVerdict(error);
   if (verdict !== undefined) {
     return verdict;
   }
+  // A request that got no response (refused, reset, timed out) is named
+  // `provider_unavailable` by `providerFailureKind`.
   const kind =
-    error instanceof ProviderCallError ? error.kind : classifyAIError(error);
+    error instanceof ProviderCallError
+      ? error.kind
+      : providerFailureKind(error);
   switch (kind) {
     case "quota_exhausted":
     case "provider_unavailable":
@@ -139,7 +114,7 @@ export const isTransientProviderFailure = (error: unknown): boolean => {
           provider !== undefined && CONFLICT_RETRYING_PROVIDERS.has(provider)
         );
       }
-      return status === undefined && isTransportFailure(error);
+      return false;
     }
     default:
       kind satisfies never;
