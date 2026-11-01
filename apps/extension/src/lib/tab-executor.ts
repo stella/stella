@@ -432,14 +432,28 @@ type PageOperation =
   | {
       /**
        * The origin the tab's top document must have; every frame refuses
-       * before reading anything when it is another. Null reads any page.
+       * before reading anything when it is another. Absent reads any page.
        */
-      expectedTopOrigin: string | null;
+      expectedTopOrigin?: string;
       kind: "snapshot";
       limits: typeof BROWSER_CONTROL_LIMITS;
       metadataType: typeof BROWSER_CONTROL_TARGET_METADATA;
       shadowSegment: typeof ELEMENT_REFERENCE_SHADOW_SEGMENT;
     };
+
+/**
+ * A value `chrome.scripting.executeScript` hands to the injected function as
+ * it was sent. Chrome drops an object property whose value is `null`, so the
+ * page would read `undefined` there; no injected argument may hold one.
+ * `undefined` is allowed: it arrives as itself.
+ */
+type InjectableArgument =
+  | boolean
+  | number
+  | string
+  | undefined
+  | readonly InjectableArgument[]
+  | { readonly [key: string]: InjectableArgument };
 
 /**
  * The one script injected into a frame of the controlled tab. Chrome
@@ -450,7 +464,7 @@ type PageOperation =
  */
 const runPageOperation = async (
   injectionTarget: chrome.scripting.InjectionTarget,
-  operation: PageOperation,
+  operation: PageOperation & InjectableArgument,
 ) =>
   await chrome.scripting.executeScript({
     args: [operation],
@@ -460,7 +474,7 @@ const runPageOperation = async (
       }
       if (
         pageOperation.kind === "snapshot" &&
-        pageOperation.expectedTopOrigin !== null
+        typeof pageOperation.expectedTopOrigin === "string"
       ) {
         // A frame learns its top document's origin from its own ancestors;
         // when the browser withholds it, the frame refuses as well.
@@ -1438,7 +1452,9 @@ const readSnapshot = async ({
   const results = await runPageOperation(
     { allFrames: true, tabId },
     {
-      expectedTopOrigin: requiredOrigin?.origin ?? null,
+      ...(requiredOrigin === undefined
+        ? {}
+        : { expectedTopOrigin: requiredOrigin.origin }),
       kind: "snapshot",
       limits: BROWSER_CONTROL_LIMITS,
       metadataType: BROWSER_CONTROL_TARGET_METADATA,

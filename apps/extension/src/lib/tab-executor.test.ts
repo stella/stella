@@ -27,6 +27,10 @@ type InjectionResult = {
   result: unknown;
 }[];
 
+const containsNull = (value: unknown): boolean =>
+  value === null ||
+  (typeof value === "object" && Object.values(value).some(containsNull));
+
 const CONTROLLER_ID = "controller-1";
 const CONTROLLER_TAB_ID = 1;
 const CONTROLLED_TAB_ID = 2;
@@ -138,6 +142,14 @@ const createFakeChrome = () => {
     },
     scripting: {
       executeScript: async (injection: Injection) => {
+        // Chrome drops an object property whose value is null from the
+        // arguments it hands an injected function, so the page would read
+        // undefined there. The fake refuses such an argument outright.
+        if (containsNull(injection.args)) {
+          throw new TypeError(
+            "Chrome would drop a null property from these injected arguments.",
+          );
+        }
         const kind = injection.args?.[0]?.kind ?? "back";
         log.push(`inject:${kind}`);
         const handler = handlers[kind];
@@ -1111,7 +1123,8 @@ describe("chat's tabs", () => {
     expect(await run({ action: "snapshot" })).toMatchObject({
       status: "success",
     });
-    expect(seenOrigins.at(-1)).toBeNull();
+    // No origin is sent at all: Chrome would turn a null into undefined.
+    expect(seenOrigins.at(-1)).toBeUndefined();
   });
 
   test("after the controlled tab closes, chat's other tabs stay reachable", async () => {
