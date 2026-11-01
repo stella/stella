@@ -1,0 +1,113 @@
+name: Merge group hold
+
+on:
+  pull_request:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] executes only immutable trusted base scripts
+    types: [labeled, unlabeled, reopened]
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  # Every label-removal event must finish restoring its active hold.
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  merge-group-hold:
+    name: merge-group-hold
+    if: github.event_name != 'pull_request_target'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out the trusted target-branch resolver
+        if: github.event_name == 'merge_group'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        with:
+          ref: ${{ github.event.merge_group.base_ref }}
+          path: .workflow-tooling
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/merge-target-base.sh
+            /scripts/retry.sh
+      - name: Check out merge-group history for the resolver
+        if: github.event_name == 'merge_group'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        with:
+          ref: ${{ github.event.merge_group.head_sha }}
+          path: .merge-group
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: /.gitignore
+      - name: Resolve comparison base
+        if: github.event_name == 'merge_group'
+        id: target-base
+        timeout-minutes: 2
+        working-directory: .merge-group
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TARGET_REF: ${{ github.event.merge_group.base_ref }}
+        run: bash "$GITHUB_WORKSPACE/.workflow-tooling/scripts/merge-target-base.sh"
+      - name: Check out trusted base scripts
+        if: github.event_name == 'merge_group'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        with:
+          ref: ${{ steps.target-base.outputs.base_sha }}
+          path: .hold-tooling
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/check-merge-group-hold.mjs
+            /scripts/merge-group-entries.mjs
+            /scripts/gh-retry.sh
+      - name: Refuse held pull requests
+        if: github.event_name == 'merge_group'
+        timeout-minutes: 2
+        working-directory: .hold-tooling
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_GROUP_BASE_SHA: ${{ steps.target-base.outputs.base_sha }}
+        run: node scripts/check-merge-group-hold.mjs
+      - name: Pass pull request checks
+        if: github.event_name == 'pull_request'
+        run: "true"
+
+  dequeue-held-pull-request:
+    name: dequeue-held-pull-request
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check out trusted base scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/check-merge-group-hold.mjs
+            /scripts/merge-group-entries.mjs
+            /scripts/gh-retry.sh
+      - name: Restore active hold labels and remove held pull requests from the queue
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HOLD_VALUE: ${{ vars[format('STELLA_PR_HOLD_{0}', github.event.pull_request.number)] }}
+        run: node scripts/check-merge-group-hold.mjs

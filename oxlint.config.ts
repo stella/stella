@@ -85,6 +85,15 @@ const nonAnonymousHandlerFactories = factoriesWhere(
 
 const PUBLIC_SSR_AMBIENT_STATE_MESSAGE =
   "Public SSR modules must use a hydration-safe adapter with a deterministic server snapshot.";
+const IDLE_SCHEDULER_MESSAGE =
+  "Use scheduleIdle from '@/lib/platform/schedule-idle': Safari does not support requestIdleCallback; the shared scheduler provides a cancellable timeout fallback.";
+const idleCallbackGlobals = ["requestIdleCallback", "cancelIdleCallback"].map(
+  (name) => ({ name, message: IDLE_SCHEDULER_MESSAGE }),
+);
+const idleCallbackProperties = idleCallbackGlobals.map(({ name, message }) => ({
+  property: name,
+  message,
+}));
 const publicSsrBrowserGlobals = [
   "devicePixelRatio",
   "document",
@@ -161,12 +170,16 @@ const publicSsrAmbientProperties = [
 const publicSsrAmbientStateRules = {
   "no-restricted-globals": [
     "error",
-    { globals: publicSsrBrowserGlobals, checkGlobalObject: true },
+    {
+      globals: [...publicSsrBrowserGlobals, ...idleCallbackGlobals],
+      checkGlobalObject: true,
+    },
   ],
   "no-restricted-properties": [
     "error",
     publicSsrDateNowRestriction,
     ...publicSsrAmbientProperties,
+    ...idleCallbackProperties,
   ],
 } satisfies NonNullable<OxlintOverride["rules"]>;
 
@@ -409,6 +422,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-valibot-message.fixture.ts", [
     "require-valibot-message/require-valibot-message",
   ]),
+  fixtureRuleOverride("no-live-test-base.fixture.ts", [
+    "no-live-test-base/no-live-test-base",
+  ]),
   fixtureRuleOverride("no-raw-child-exit-status.fixture.ts", [
     "no-raw-child-exit-status/no-raw-child-exit-status",
   ]),
@@ -466,6 +482,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-native-ui.fixture.tsx", NO_NATIVE_UI_RULE_IDS),
   fixtureRuleOverride("no-person-select.fixture.tsx", [
     "no-person-select/no-person-select",
+  ]),
+  fixtureRuleOverride("searchable-long-select.fixture.tsx", [
+    "searchable-long-select/searchable-long-select",
   ]),
   fixtureRuleOverride("no-ad-hoc-chat-link.fixture.tsx", [
     "no-ad-hoc-chat-link/no-ad-hoc-chat-link",
@@ -547,6 +566,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-global-testing-library-screen",
     "bun-test-hygiene/no-unmanaged-database-client",
     "bun-test-hygiene/no-forced-database-drop",
+    "bun-test-hygiene/no-wait-for-under-fake-timers",
     "bun-test-hygiene/require-module-mock-reset",
   ]),
   fixtureRuleOverride("no-same-fixture-member-oracle.fixture.ts", [
@@ -747,6 +767,18 @@ const noRetiredHttpFrameworkImports = [
   name,
   message:
     "Routes use the API's own HTTP core (apps/api/src/http) and valibot schemas; the browser uses @stll/api-client.",
+}));
+
+// Transactional emails render through @stll/transactional's own components
+// and renderer: react-email brought a Tailwind compiler, a syntax
+// highlighter and a formatter into the API bundle that no email used.
+const noReactEmailImports = [
+  "@react-email/components",
+  "@react-email/render",
+].map((name) => ({
+  name,
+  message:
+    "Build emails from packages/transactional/components and render them with '@stll/transactional/render'.",
 }));
 
 // Every module of the retired frameworks, by scope, for files whose
@@ -1304,6 +1336,7 @@ const config = defineConfig({
     // and scripts/check-oxlint-effective-config.ts fails on that.
     "stella-lowercase/stella-lowercase": "error",
     "no-first-observer-entry/no-first-observer-entry": "error",
+    "no-plan-scan-node-literals/no-plan-scan-node-literals": "error",
     "no-raw-colors/no-raw-colors": "error",
     "no-useless-assignment": "error",
     "promise/no-return-in-finally": "error",
@@ -1388,6 +1421,7 @@ const config = defineConfig({
     "max-classes-per-file": "off",
     // Trailing comments document table rows and literal values (962 findings).
     "no-inline-comments": "off",
+    "no-live-test-base/no-live-test-base": "error",
     "no-raw-child-exit-status/no-raw-child-exit-status": "error",
     // The upstream rule treats String#slice like Array#slice and can turn
     // substring checks into single-character Set membership under --fix.
@@ -1496,6 +1530,7 @@ const config = defineConfig({
           noFastXmlParserImport,
           noClassicTypeScriptImport,
           ...noRetiredHttpFrameworkImports,
+          ...noReactEmailImports,
         ],
       },
     ],
@@ -1838,6 +1873,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
     "./.oxlint-plugins/no-first-observer-entry.ts",
+    "./.oxlint-plugins/no-plan-scan-node-literals.ts",
     "./.oxlint-plugins/no-hookless-use-function.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-inline-heavy-host-props.ts",
@@ -1875,6 +1911,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
     "./.oxlint-plugins/no-person-select.ts",
+    "./.oxlint-plugins/searchable-long-select.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
@@ -1908,6 +1945,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-error-toast.ts",
     "./.oxlint-plugins/no-rendered-error-translation.ts",
     "./.oxlint-plugins/require-valibot-message.ts",
+    "./.oxlint-plugins/no-live-test-base.ts",
     "./.oxlint-plugins/no-raw-child-exit-status.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
@@ -1925,6 +1963,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
+    "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
     "./.oxlint-plugins/no-raw-parser-html.ts",
@@ -2039,6 +2078,7 @@ const config = defineConfig({
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/semantic-controls.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
+    "./.oxlint-plugins/no-button-whitespace-normal.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
     "./.oxlint-plugins/no-decorative-heading-accent.ts",
@@ -2289,6 +2329,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
             ],
             patterns: noRetiredHttpFrameworkImportPatterns,
           },
@@ -2354,6 +2395,17 @@ const config = defineConfig({
     ...(core.overrides ?? []),
     ...libraryOverrides,
     {
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      excludeFiles: ["apps/web/src/lib/platform/schedule-idle.ts"],
+      rules: {
+        "no-restricted-globals": [
+          "error",
+          { globals: idleCallbackGlobals, checkGlobalObject: true },
+        ],
+        "no-restricted-properties": ["error", ...idleCallbackProperties],
+      },
+    },
+    {
       // `apps/web` runs each DOM test file in its own process; the packages
       // run them together, where `screen` reads another file's document.
       files: ["packages/**/*.dom.test.{ts,tsx}"],
@@ -2372,6 +2424,7 @@ const config = defineConfig({
         "bun-test-hygiene/no-identical-title": "error",
         "bun-test-hygiene/no-promise-matchers": "error",
         "bun-test-hygiene/no-forced-database-drop": "error",
+        "bun-test-hygiene/no-wait-for-under-fake-timers": "error",
         "bun-test-hygiene/require-module-mock-reset": "error",
         "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
       },
@@ -2929,8 +2982,8 @@ const config = defineConfig({
         "apps/api/src/db/schema.ts",
         "apps/api/src/db/auth-schema.ts",
         "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
-        "apps/api/src/lib/markdown/html-to-markdown.ts",
         "apps/web/src/components/workspaces/create-property.tsx",
+        "packages/chat/src/html-to-markdown.ts",
       ],
       rules: { "require-unicode-regexp": "off" },
     },
@@ -3753,6 +3806,18 @@ const config = defineConfig({
       },
     },
     {
+      // Button's size variants set fixed heights; wrapped labels can overflow
+      // the row and overlap the next one. The wrap layout owns its height.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-button-whitespace-normal.fixture.tsx",
+      ],
+      rules: {
+        "no-button-whitespace-normal/no-button-whitespace-normal": "error",
+      },
+    },
+    {
       // A dialog trigger mounted inside a menu item needs
       // `closeOnClick={false}` to survive the click, which means the menu
       // cannot close under the dialog it opens. Lift the dialog beside the
@@ -3841,6 +3906,16 @@ const config = defineConfig({
       ],
       rules: {
         "no-person-select/no-person-select": "error",
+      },
+    },
+    {
+      // Long option lists need typing-based search through the shared combobox.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/searchable-long-select.fixture.tsx",
+      ],
+      rules: {
+        "searchable-long-select/searchable-long-select": "error",
       },
     },
     {
@@ -4219,6 +4294,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               uiPragmaticDragAdapterImport,
             ],
             patterns: [
@@ -4240,6 +4316,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               uiPragmaticDragAdapterImport,
             ],
             patterns: [
@@ -4264,6 +4341,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
             ],
             patterns: [
               ...uiStandaloneImports,
@@ -4294,6 +4372,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               workspaceUiUseIntlFormattingImport,
             ],
           },
@@ -4449,6 +4528,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4481,6 +4561,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4521,6 +4602,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
               webUseIntlLocaleImport,
@@ -4594,6 +4676,15 @@ const config = defineConfig({
       ],
       rules: {
         "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
+          "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-bare-case-law-source-ingestion-lease.fixture.ts",
+      ],
+      rules: {
+        "no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease":
           "error",
       },
     },
@@ -4734,6 +4825,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4771,6 +4863,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4803,6 +4896,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4843,6 +4937,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4894,6 +4989,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4943,6 +5039,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -5484,6 +5581,14 @@ const config = defineConfig({
       },
     },
     {
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts"],
+      rules: {
+        "no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease":
+          "error",
+      },
+    },
+    {
       // A publisher is not a court: every decision portal these adapters read
       // carries decisions of courts other than its own, and the court name is
       // what authority weighting is read off. The deciding court therefore
@@ -5762,6 +5867,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -5792,6 +5898,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               {
                 name: "@/api/db/root",
                 message:
@@ -5826,6 +5933,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -5847,6 +5955,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -5871,6 +5980,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -6382,6 +6492,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               {
                 name: "@/api/lib/branded-types",
@@ -6438,6 +6549,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               apiValibotJsonSchemaImport,
             ],
           },
@@ -6512,6 +6624,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,

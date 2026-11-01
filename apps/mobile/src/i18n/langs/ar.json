@@ -22,7 +22,8 @@
     "toolUsed": "تم استخدام: {tool}",
     "threadTitle": "محادثة",
     "threadLoadFailed": "تعذّر تحميل هذه المحادثة.",
-    "threadEmptyDescription": "لا تحتوي هذه المحادثة على رسائل بعد.",
+    "greeting": "ما الذي تودّ العمل عليه؟",
+    "greetingSubtitle": "ابدأ بملف قانوني أو مستند أو سؤال مباشر.",
     "sections": {
       "today": "اليوم",
       "yesterday": "أمس",
@@ -39,6 +40,19 @@
     "answerNeedsInput": "تحتاج هذه الإجابة إلى إدخالك. تابعها في stella على الويب.",
     "answerFailed": "تعذّر إكمال الإجابة.",
     "composerMenu": "فتح قائمة المرفقات والأدوات",
+    "attachFile": "إرفاق ملف",
+    "attachment": "مرفق",
+    "fileTooLarge": "يتجاوز الملف الحدّ المسموح به {maxSize}",
+    "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
+    "unsupportedFileType": "نوع ملف غير مدعوم",
+    "uploadFailed": "تعذّرت معالجة الملف",
+    "scanDocument": "مسح مستند ضوئيًا",
+    "removeAttachment": "إزالة {name}",
+    "attachmentReading": "جارٍ التجهيز…",
+    "attachmentUploading": "جارٍ الرفع…",
+    "pickFailed": "تعذّر فتح منتقي الملفات. حاول مرة أخرى.",
+    "sendFileRefused": "تعذّر إرسال أحد الملفات، لذا لم تُرسَل الرسالة. أزِل الملف وحاول مرة أخرى.",
+    "sendFileNotAnonymizable": "هذه المحادثة مُجهَّلة، وتعذّر على stella تجهيل أحد الملفات، لذا لم يُرسَل شيء. أزِل الملف وحاول مرة أخرى.",
     "pickTitle": "اختر محادثة",
     "pickDescription": "اختر سلسلة من القائمة أو ابدأ واحدة جديدة بزر +."
   },
@@ -60,7 +74,8 @@
       "none": "بلا تاريخ",
       "today": "اليوم",
       "tomorrow": "غدًا",
-      "nextWeek": "بعد أسبوع"
+      "nextWeek": "بعد أسبوع",
+      "pick": "اختيار تاريخ"
     },
     "due": {
       "overdue": "متأخرة",
@@ -75,7 +90,14 @@
     "statusFailed": "تعذّر تغيير المهمة. حاول مرة أخرى.",
     "pickTitle": "اختر مهمة",
     "pickDescription": "اختر مهمة من القائمة لرؤيتها هنا.",
-    "openMatter": "فتح القضية"
+    "openMatter": "فتح القضية",
+    "assignedTo": "مُسندة إلى",
+    "nobody": "غير مُسند",
+    "assign": "إسناد",
+    "doneAssigning": "تم",
+    "someone": "شخص ما",
+    "membersFailed": "تعذّر تحميل أعضاء القضية.",
+    "assignFailed": "تعذّر إسناد المهمة. حاول مرة أخرى."
   },
   "matters": {
     "emptyTitle": "لا توجد ملفات قانونية بعد",
@@ -119,7 +141,9 @@
     },
     "add": "إضافة",
     "scanDocument": "مسح مستند ضوئيًا",
-    "newTask": "مهمة جديدة"
+    "newTask": "مهمة جديدة",
+    "uploadDocument": "رفع مستند",
+    "uploadFailed": "تعذّر رفع المستند. حاول مرة أخرى."
   },
   "entity": {
     "type": "النوع",
@@ -183,6 +207,7 @@
     "headnote": "خلاصة الحكم",
     "textUnavailable": "لا يتوفر نص لهذا الحكم",
     "openSource": "فتح المصدر الأصلي",
+    "openFailed": "تعذّر فتح الرابط.",
     "loadFailed": "تعذّر تحميل الاجتهاد القضائي.",
     "share": "مشاركة"
   },

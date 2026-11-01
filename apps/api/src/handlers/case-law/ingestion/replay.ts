@@ -25,18 +25,6 @@ import {
   caseLawReplayBatches,
   caseLawReplayBlocked,
 } from "@/api/db/schema";
-import {
-  STORED_RAW_REPARSE_REJECTION,
-  storedRawResultReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceAdapter,
-  StoredRawReader,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  StoredRawReparseRejection,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { processStoredDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -67,6 +55,18 @@ import {
   sanitizeResult,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  STORED_RAW_REPARSE_REJECTION,
+  storedRawResultReader,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SourceAdapter,
+  StoredRawReader,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  StoredRawReparseRejection,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   PARSER_REPARSE_FEATURES,
   PARSER_VERSION_SCOPES,
@@ -1678,6 +1678,43 @@ export const acquireReplayLease = async <TLease>({
     const retried = await acquire();
     if (retried !== null) {
       return { type: "acquired", lease: retried, waitedMs };
+    }
+  }
+  return { type: "unavailable", waitedMs };
+};
+
+type WithReplayLeaseOptions<T> = Omit<
+  AcquireReplayLeaseOptions<never>,
+  "acquire"
+> & {
+  run: () => Promise<T | null>;
+};
+
+/** Wait for a lease owner to run one complete operation, without exporting its lease. */
+export const runWithReplayLease = async <T>({
+  run,
+  waitBudgetMs,
+  onWaitStart,
+  sleep = Bun.sleep,
+}: WithReplayLeaseOptions<T>): Promise<
+  | { type: "completed"; value: T; waitedMs: number }
+  | { type: "unavailable"; waitedMs: number }
+> => {
+  const first = await run();
+  if (first !== null) {
+    return { type: "completed", value: first, waitedMs: 0 };
+  }
+  if (waitBudgetMs < REPLAY_LEASE_RETRY_PAUSE_MS) {
+    return { type: "unavailable", waitedMs: 0 };
+  }
+  onWaitStart?.();
+  let waitedMs = 0;
+  while (waitedMs + REPLAY_LEASE_RETRY_PAUSE_MS <= waitBudgetMs) {
+    await sleep(REPLAY_LEASE_RETRY_PAUSE_MS);
+    waitedMs += REPLAY_LEASE_RETRY_PAUSE_MS;
+    const value = await run();
+    if (value !== null) {
+      return { type: "completed", value, waitedMs };
     }
   }
   return { type: "unavailable", waitedMs };
