@@ -506,7 +506,10 @@
     "billingDraftsRevoked": "stella AI koostab selgitusi alles pärast seda, kui olete selle ajakande juures lubanud.",
     "billingDraftsWithdraw": "Võta nõusolek tagasi",
     "billingDraftsWithdrawPending": "stella AI on selles arvutis välja lülitatud. Tagasivõtmine saadetakse stellale kohe, kui see on kättesaadav.",
-    "billingDraftsUnavailable": "stella AI kavandite seadeid ei saa praegu laadida."
+    "billingDraftsUnavailable": "stella AI kavandite seadeid ei saa praegu laadida.",
+    "aiDraftCodes": "Ülesanne {task} · Tegevus {activity}",
+    "aiDraftFlags": "Märkused arveldusjuhiste kohta",
+    "aiDraftFlagSource": "{file}, {section}"
   },
   "shortcut": {
     "title": "Lõikelaua otsetee",

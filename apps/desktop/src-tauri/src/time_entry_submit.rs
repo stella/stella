@@ -14,6 +14,52 @@ use crate::{
 const FAILURE: &str = "draft time entry request failed";
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
 
+/// The group of an entry not billed in LEDES.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EntryGroup {
+  Client,
+  Internal,
+}
+
+/// What a guided stella AI draft classified the entry as, as the shared
+/// contract spells it; the server checks it against the matter's billing
+/// format.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(
+  tag = "type",
+  rename_all = "snake_case",
+  rename_all_fields = "camelCase",
+  deny_unknown_fields
+)]
+pub enum Classification {
+  Ledes {
+    task_code: String,
+    activity_code: String,
+  },
+  #[serde(rename = "activity_group")]
+  Group {
+    activity_group: EntryGroup,
+  },
+}
+
+/// The contract's bound on a UTBMS code.
+const CODE_MAX_CHARS: usize = 20;
+
+impl Classification {
+  fn is_valid(&self) -> bool {
+    match self {
+      Self::Ledes {
+        task_code,
+        activity_code,
+      } => [task_code, activity_code]
+        .iter()
+        .all(|code| !code.is_empty() && code.chars().count() <= CODE_MAX_CHARS),
+      Self::Group { .. } => true,
+    }
+  }
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConfirmedTimeEntry {
@@ -23,6 +69,8 @@ pub struct ConfirmedTimeEntry {
   pub duration_minutes: u32,
   pub narrative: String,
   pub billable: bool,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub classification: Option<Classification>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -192,6 +240,10 @@ impl ConfirmedBatch {
           || entry.duration_minutes == 0
           || entry.duration_minutes > 1440
           || entry.narrative.len() > 40000
+          || entry
+            .classification
+            .as_ref()
+            .is_some_and(|classification| !classification.is_valid())
       })
     {
       return Err(FAILURE.to_string());
@@ -547,6 +599,57 @@ mod tests {
         input["matters"]
       );
     }
+  }
+
+  #[test]
+  fn a_classification_crosses_the_boundary_as_the_contract_spells_it() {
+    let entry = |classification: serde_json::Value| {
+      serde_json::json!({"matterId":"w", "dateWorked":"2026-10-07", "timezoneId":"UTC",
+        "durationMinutes":6, "narrative":"Reviewed", "billable":true,
+        "classification": classification})
+    };
+    for classification in [
+      serde_json::json!({"type":"ledes", "taskCode":"L120", "activityCode":"A104"}),
+      serde_json::json!({"type":"activity_group", "activityGroup":"client"}),
+    ] {
+      let parsed: ConfirmedTimeEntry =
+        serde_json::from_value(entry(classification.clone())).unwrap();
+      assert_eq!(
+        serde_json::to_value(&parsed).unwrap()["classification"],
+        classification
+      );
+    }
+    for refused in [
+      serde_json::json!({"type":"ledes", "taskCode":"L120"}),
+      serde_json::json!({"type":"ledes", "taskCode":"L120", "activityCode":"A104", "extra":1}),
+      serde_json::json!({"type":"activity_group", "activityGroup":"billable"}),
+      serde_json::json!({"type":"utbms"}),
+    ] {
+      assert!(serde_json::from_value::<ConfirmedTimeEntry>(entry(refused)).is_err());
+    }
+    let batch = |code: &str| ConfirmedBatch {
+      idempotency_key: "key".into(),
+      entries: vec![
+        serde_json::from_value(entry(
+          serde_json::json!({"type":"ledes", "taskCode": code, "activityCode":"A104"}),
+        ))
+        .unwrap(),
+      ],
+    };
+    assert!(batch("L120").validate().is_ok());
+    assert!(batch("").validate().is_err());
+    assert!(batch(&"L".repeat(CODE_MAX_CHARS + 1)).validate().is_err());
+    // Without a classification the entry serializes exactly as before.
+    let plain: ConfirmedTimeEntry = serde_json::from_value(serde_json::json!({
+      "matterId":"w", "dateWorked":"2026-10-07", "timezoneId":"UTC",
+      "durationMinutes":6, "narrative":"Reviewed", "billable":true}))
+    .unwrap();
+    assert!(
+      serde_json::to_value(&plain)
+        .unwrap()
+        .get("classification")
+        .is_none()
+    );
   }
 
   #[test]

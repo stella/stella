@@ -506,7 +506,10 @@
     "billingDraftsRevoked": "stella AI drafts descriptions only after you allow it on a time entry.",
     "billingDraftsWithdraw": "Withdraw consent",
     "billingDraftsWithdrawPending": "stella AI is off on this computer. Your withdrawal is sent to stella as soon as it can be reached.",
-    "billingDraftsUnavailable": "stella AI draft settings cannot be loaded right now."
+    "billingDraftsUnavailable": "stella AI draft settings cannot be loaded right now.",
+    "aiDraftCodes": "Task {task} · Activity {activity}",
+    "aiDraftFlags": "Billing guideline notes",
+    "aiDraftFlagSource": "{file}, {section}"
   },
   "shortcut": {
     "title": "Clipboard shortcut",

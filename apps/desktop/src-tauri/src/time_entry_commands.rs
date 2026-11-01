@@ -275,6 +275,7 @@ mod tests {
           duration_minutes: 6,
           narrative: "Reviewed agreement".into(),
           billable: false,
+          classification: None,
         })
         .collect(),
     };

@@ -506,7 +506,10 @@
     "billingDraftsRevoked": "stella AI só redige descrições depois que você permite em um lançamento de horas.",
     "billingDraftsWithdraw": "Retirar consentimento",
     "billingDraftsWithdrawPending": "stella AI está desativada neste computador. Sua retirada será enviada à stella assim que ela estiver acessível.",
-    "billingDraftsUnavailable": "Não foi possível carregar as configurações das sugestões de stella AI agora."
+    "billingDraftsUnavailable": "Não foi possível carregar as configurações das sugestões de stella AI agora.",
+    "aiDraftCodes": "Tarefa {task} · Atividade {activity}",
+    "aiDraftFlags": "Notas sobre as regras de faturamento",
+    "aiDraftFlagSource": "{file}, {section}"
   },
   "shortcut": {
     "title": "Atalho da área de transferência",

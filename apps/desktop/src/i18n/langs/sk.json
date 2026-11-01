@@ -506,7 +506,10 @@
     "billingDraftsRevoked": "stella AI navrhuje popisy až potom, ako ju povolíte pri časovom zázname.",
     "billingDraftsWithdraw": "Odvolať súhlas",
     "billingDraftsWithdrawPending": "stella AI je na tomto počítači vypnutá. Odvolanie sa stelle odošle, hneď ako bude dostupná.",
-    "billingDraftsUnavailable": "Nastavenia návrhov stella AI sa teraz nepodarilo načítať."
+    "billingDraftsUnavailable": "Nastavenia návrhov stella AI sa teraz nepodarilo načítať.",
+    "aiDraftCodes": "Úkon {task} · Činnosť {activity}",
+    "aiDraftFlags": "Poznámky k fakturačným pravidlám",
+    "aiDraftFlagSource": "{file}, {section}"
   },
   "shortcut": {
     "title": "Skratka schránky",

@@ -441,6 +441,41 @@ const installNativeBoundary = async ({
               type: "failed",
             });
           }
+          if (draftingFixture.mode === "guided") {
+            return {
+              result: {
+                mode: "guided",
+                drafts: request.entries.map((entry: { entryId: string }) => ({
+                  entryId: entry.entryId,
+                  narrative: generatedNarrative,
+                  classification: {
+                    type: "ledes",
+                    taskCode: "L120",
+                    activityCode: "A104",
+                  },
+                  flags: [
+                    {
+                      text: "List each task separately.",
+                      ruleRef: {
+                        fileId: "guideline-1",
+                        fileName: "Outside counsel guidelines.pdf",
+                        section: "4.2",
+                      },
+                    },
+                  ],
+                  matchedEarlierEntryIds: [earlierEntry.id],
+                  operations: [],
+                })),
+                checkedGuidelines: [
+                  {
+                    fileId: "guideline-1",
+                    fileName: "Outside counsel guidelines.pdf",
+                  },
+                ],
+              },
+              earlierEntries: [earlierEntry],
+            };
+          }
           return {
             result: {
               mode: "plain",
@@ -2636,6 +2671,61 @@ test("text typed while a draft is written is kept over the draft", async ({
   await releaseDraft(page);
   await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
   expect(await draftInvocations(page)).toHaveLength(2);
+});
+
+test("a guided draft shows its codes and guideline notes, and the accepted entry carries its classification", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, mode: "guided", consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(card.getByText("Task L120 · Activity A104")).toBeVisible();
+  const notes = card.getByRole("region", {
+    name: enMessages.activity.aiDraftFlags,
+  });
+  await expect(notes).toContainText("List each task separately.");
+  await expect(notes).toContainText("Outside counsel guidelines.pdf, 4.2");
+  await pressCardShortcut(page, "Enter");
+  await expect(suggestionCard(page, "Second matter")).toBeFocused();
+  expect(batchRequests(await tauriInvocations(page))).toEqual([
+    expect.objectContaining({
+      items: [
+        expect.objectContaining({
+          entry: expect.objectContaining({
+            narrative: GENERATED_NARRATIVE,
+            classification: {
+              type: "ledes",
+              taskCode: "L120",
+              activityCode: "A104",
+            },
+          }),
+        }),
+      ],
+    }),
+  ]);
+});
+
+test("choosing another matter drops a guided draft's codes", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, mode: "guided", consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(card.getByText("Task L120 · Activity A104")).toBeVisible();
+  await card.getByRole("button", { name: "Example matter" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /Second matter/u })
+    .click();
+  await expect(page.getByText("Task L120 · Activity A104")).toHaveCount(0);
 });
 
 test("a failed draft keeps the template and offers to try again", async ({

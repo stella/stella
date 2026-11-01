@@ -1,14 +1,19 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import { TIME_ENTRY_SOURCE } from "@stll/api-contract";
+import {
+  TIME_ENTRY_ACTIVITY_GROUP,
+  TIME_ENTRY_SOURCE,
+} from "@stll/api-contract";
 import {
   type DesktopTimeEntryBatch,
   desktopTimeEntryBatchResponseSchema,
   desktopTimeEntryBatchSchema,
+  type DesktopTimeEntryClassification,
 } from "@stll/api-contract/desktop-time-entries";
 import { sha256Hex } from "@stll/sha256/bun";
 
+import type { Transaction } from "@/api/db/root";
 import {
   abortableTx,
   abortTransaction,
@@ -36,6 +41,7 @@ import {
   lockTimeEntryCapacity,
   prepareTimeEntryInsert,
 } from "@/api/lib/billing/time-entry-insert";
+import type { SafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
@@ -44,7 +50,32 @@ import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
 
+const canonicalClassification = (
+  classification: DesktopTimeEntryClassification,
+) => {
+  switch (classification.type) {
+    case "ledes":
+      return {
+        type: classification.type,
+        taskCode: classification.taskCode,
+        activityCode: classification.activityCode,
+      };
+    case "activity_group":
+      return {
+        type: classification.type,
+        activityGroup: classification.activityGroup,
+      };
+    default:
+      return panic(
+        "Unknown time entry classification",
+        classification satisfies never,
+      );
+  }
+};
+
 // Object construction makes fingerprints independent of JSON property order.
+// An entry without a classification hashes as it did before the field
+// existed, so a stored pending batch keeps its fingerprint.
 export const desktopBatchFingerprint = ({ entries }: DesktopTimeEntryBatch) =>
   sha256Hex(
     JSON.stringify(
@@ -56,6 +87,7 @@ export const desktopBatchFingerprint = ({ entries }: DesktopTimeEntryBatch) =>
           durationMinutes,
           narrative,
           billable,
+          classification,
         }) => ({
           matterId: matterId.toLowerCase(),
           dateWorked,
@@ -63,10 +95,136 @@ export const desktopBatchFingerprint = ({ entries }: DesktopTimeEntryBatch) =>
           durationMinutes,
           narrative,
           billable,
+          ...(classification
+            ? { classification: canonicalClassification(classification) }
+            : {}),
         }),
       ),
     ),
   );
+
+/**
+ * The one classification rule for matter time entries: UTBMS codes only on
+ * matters whose client bills in LEDES, otherwise the client activity group.
+ * Internal entries have no matter, so no matter entry takes that group.
+ */
+export const matterClassificationAllowed = (
+  classification: DesktopTimeEntryClassification,
+  ledes: boolean,
+) => {
+  switch (classification.type) {
+    case "ledes":
+      return ledes;
+    case "activity_group":
+      return (
+        !ledes &&
+        classification.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT
+      );
+    default:
+      return panic(
+        "Unknown time entry classification",
+        classification satisfies never,
+      );
+  }
+};
+
+/** Matter entries bill to the client, so only LEDES codes add fields to the
+ * entry; the activity group is the default for a matter entry. */
+const classificationCodes = (
+  classification: DesktopTimeEntryClassification | undefined,
+) =>
+  classification?.type === "ledes"
+    ? {
+        taskCode: classification.taskCode,
+        activityCode: classification.activityCode,
+      }
+    : {};
+
+/** How a matter's client bills, as one read saw the matter and its client. */
+type MatterBilling =
+  | { type: "ledes" }
+  | { type: "categories" }
+  /** The matter names a client the caller cannot read. */
+  | { type: "unknown" };
+
+const matterBilling = ({
+  clientId,
+  client,
+}: {
+  clientId: string | null;
+  client: { timeBillingFormat: string } | null;
+}): MatterBilling => {
+  if (clientId === null) {
+    return { type: "categories" };
+  }
+  if (client === null) {
+    return { type: "unknown" };
+  }
+  return client.timeBillingFormat === "ledes"
+    ? { type: "ledes" }
+    : { type: "categories" };
+};
+
+/**
+ * The batch's active matters, each with its client's billing format. One
+ * statement reads both, so the format cannot change between the two.
+ */
+const loadBatchMatters = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+  matterIds: readonly string[],
+) =>
+  await tx.query.workspaces.findMany({
+    where: {
+      RAW: (table) =>
+        sql`${table.id} IN (${sql.join(
+          matterIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})`,
+      organizationId: { eq: organizationId },
+      status: { eq: "active" },
+    },
+    columns: { id: true, clientId: true },
+    with: { client: { columns: { timeBillingFormat: true } } },
+    limit: matterIds.length,
+  });
+
+/** Why a new batch's classifications do not fit its matters, or `null`. */
+const classificationRefusal = (
+  entries: DesktopTimeEntryBatch["entries"],
+  matters: readonly {
+    id: string;
+    clientId: string | null;
+    client: { timeBillingFormat: string } | null;
+  }[],
+): HandlerError | null => {
+  const billingByMatter = new Map(
+    matters.map((matter) => [matter.id, matterBilling(matter)]),
+  );
+  for (const { matterId, classification } of entries) {
+    if (classification === undefined) {
+      continue;
+    }
+    const billing =
+      billingByMatter.get(matterId.toLowerCase()) ??
+      panic("Authorized batch matter disappeared");
+    if (billing.type === "unknown") {
+      return new HandlerError({
+        status: 409,
+        message: "The matter's client is not available",
+      });
+    }
+    if (
+      !matterClassificationAllowed(classification, billing.type === "ledes")
+    ) {
+      return new HandlerError({
+        status: 400,
+        message: "Classification does not match the matter's billing format",
+      });
+    }
+  }
+  return null;
+};
 
 const responseSchemas = safePublicHandlerResponseSchemasWithStatusText(
   desktopTimeEntryBatchResponseSchema,
@@ -97,10 +255,13 @@ export const createDesktopTimeEntryBatchEndpoint = (
         );
       }
       const fingerprint = desktopBatchFingerprint(body);
-      const normalizedEntries = body.entries.map(({ matterId, ...entry }) => ({
-        ...entry,
-        matterId: matterId.toLowerCase(),
-      }));
+      const normalizedEntries = body.entries.map(
+        ({ matterId, classification, ...entry }) => ({
+          ...entry,
+          ...classificationCodes(classification),
+          matterId: matterId.toLowerCase(),
+        }),
+      );
       const response = yield* Result.await(
         abortableTx(account.safeDb, async (tx) => {
           // The ledger lock and all writes share one transaction, including audits.
@@ -135,19 +296,11 @@ export const createDesktopTimeEntryBatchEndpoint = (
           const requestedMatterIds = [
             ...new Set(normalizedEntries.map(({ matterId }) => matterId)),
           ];
-          const matters = await tx.query.workspaces.findMany({
-            where: {
-              RAW: (table) =>
-                sql`${table.id} IN (${sql.join(
-                  requestedMatterIds.map((id) => sql`${id}`),
-                  sql`, `,
-                )})`,
-              organizationId: { eq: account.organizationId },
-              status: { eq: "active" },
-            },
-            columns: { id: true },
-            limit: requestedMatterIds.length,
-          });
+          const matters = await loadBatchMatters(
+            tx,
+            account.organizationId,
+            requestedMatterIds,
+          );
           if (matters.length !== requestedMatterIds.length) {
             return abortTransaction(
               new HandlerError({ status: 404, message: "Matter not found" }),
@@ -169,6 +322,12 @@ export const createDesktopTimeEntryBatchEndpoint = (
             return (
               receipt.result ?? panic("Committed batch receipt has no result")
             );
+          }
+          // A replayed batch answers with its receipt; a new one is checked
+          // against the billing format as it stands now.
+          const refusal = classificationRefusal(body.entries, matters);
+          if (refusal !== null) {
+            return abortTransaction(refusal);
           }
           const safeDb = safeDbFromScoped(async (run) => await run(tx));
           const rates = await resolveWorkspaceRatesInTransaction({

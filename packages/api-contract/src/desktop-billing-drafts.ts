@@ -2,7 +2,10 @@ import * as v from "valibot";
 
 import { apiDateSchema } from "./api-date";
 import { TIME_ENTRY_ACTIVITY_GROUPS } from "./billing";
-import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "./desktop-time-entries";
+import {
+  DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH,
+  DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH,
+} from "./desktop-time-entries";
 import { uuidSchema } from "./uuid";
 
 export const DESKTOP_BILLING_DRAFT_LIMITS = {
@@ -19,7 +22,7 @@ export const DESKTOP_BILLING_DRAFT_LIMITS = {
   evidenceItems: 20,
   nameLength: 512,
   guidelines: 20,
-  codeLength: 20,
+  codeLength: DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH,
   matchedEarlierEntries: 20,
 } as const;
 

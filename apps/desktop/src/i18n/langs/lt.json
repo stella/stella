@@ -506,7 +506,10 @@
     "billingDraftsRevoked": "stella AI rengia aprašus tik tada, kai tai leidžiate prie laiko įrašo.",
     "billingDraftsWithdraw": "Atšaukti sutikimą",
     "billingDraftsWithdrawPending": "stella AI šiame kompiuteryje išjungta. Atšaukimas bus išsiųstas stellai, kai tik ji bus pasiekiama.",
-    "billingDraftsUnavailable": "Šiuo metu nepavyksta įkelti stella AI juodraščių nustatymų."
+    "billingDraftsUnavailable": "Šiuo metu nepavyksta įkelti stella AI juodraščių nustatymų.",
+    "aiDraftCodes": "Užduotis {task} · Veikla {activity}",
+    "aiDraftFlags": "Pastabos dėl atsiskaitymo gairių",
+    "aiDraftFlagSource": "{file}, {section}"
   },
   "shortcut": {
     "title": "Iškarpinės spartusis klavišas",

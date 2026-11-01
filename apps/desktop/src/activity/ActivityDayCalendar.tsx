@@ -365,6 +365,9 @@ export const ActivityDayCalendar = ({
               durationMinutes: suggestion.roundedTenths * 6,
               narrative: edit.narrative,
               billable: edit.billable,
+              ...(edit.classification === null
+                ? {}
+                : { classification: edit.classification }),
             },
             ranges: suggestion.ranges,
           },
@@ -417,6 +420,7 @@ export const ActivityDayCalendar = ({
         sourceAppVisuals={snapshot.sourceAppVisuals}
         assist={narratives.view(openSuggestion)}
         earlierEntries={narratives.earlierEntries(openSuggestion)}
+        flags={narratives.flags(openSuggestion)}
         onDraft={() => narratives.draft(openSuggestion)}
         onAllow={() => narratives.allow(openSuggestion)}
         onEdit={(change) => narratives.update(openSuggestion, change)}
@@ -727,7 +731,11 @@ type SuggestionDraftsOptions = {
 type DraftStatus =
   | { type: "template" }
   | { request: string; type: "writing" }
-  | { earlierEntries: CardDraft["earlierEntries"]; type: "drafted" }
+  | {
+      earlierEntries: CardDraft["earlierEntries"];
+      flags: CardDraft["flags"];
+      type: "drafted";
+    }
   | { kind: DraftFailureKind; type: "failed" };
 
 /**
@@ -773,6 +781,7 @@ function useSuggestionDrafts({
       matter: suggestion.matter,
       narrative: template(suggestion),
       written: 0,
+      classification: null,
     };
   const statusFor = (suggestion: ActivitySuggestion): DraftStatus =>
     statuses[suggestion.id] ?? { type: "template" };
@@ -841,18 +850,25 @@ function useSuggestionDrafts({
         }
         settle(id, request, {
           earlierEntries: cardDraft.earlierEntries,
+          flags: cardDraft.flags,
           type: "drafted",
         });
         setEdits((current) => {
           const edit = current[id] ?? editFor(suggestion);
+          // A classification belongs to the matter it was drafted for.
+          const classification =
+            edit.matter?.id === matter.id
+              ? cardDraft.classification
+              : edit.classification;
           // Text the user typed meanwhile wins over the draft.
           if (edit.narrative !== before) {
-            return current;
+            return { ...current, [id]: { ...edit, classification } };
           }
           return {
             ...current,
             [id]: {
               ...edit,
+              classification,
               narrative: cardDraft.narrative.slice(
                 0,
                 DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH,
@@ -898,6 +914,10 @@ function useSuggestionDrafts({
     earlierEntries: (suggestion: ActivitySuggestion) => {
       const status = statusFor(suggestion);
       return status.type === "drafted" ? status.earlierEntries : [];
+    },
+    flags: (suggestion: ActivitySuggestion) => {
+      const status = statusFor(suggestion);
+      return status.type === "drafted" ? status.flags : [];
     },
     view: (suggestion: ActivitySuggestion): DraftAssistView => {
       if (settings.type !== "ready" || settings.mode === "off") {
