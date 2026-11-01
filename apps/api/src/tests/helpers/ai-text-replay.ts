@@ -268,6 +268,7 @@ const GENERATION_SEAM_EXPORTS = {
   resolveTanStackTextModel: "none",
   withGenerationDeadline: "none",
   withProviderRetryWait: "none",
+  withProviderStreamRetryWait: "none",
   withRecoveredProviderStatus: "none",
   structuredOutputWireJsonSchema: "none",
   outputTokensWithinModelLimit: "none",

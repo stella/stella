@@ -37,6 +37,7 @@ import {
   PROVIDER_ERROR_CODE,
   ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
+import { PROVIDER_REQUEST_ATTEMPTS } from "@/api/lib/errors/provider-retry-policy";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
@@ -210,6 +211,13 @@ const cancelledObjectRun = (
 });
 
 const throwingRun = (error: unknown): ProviderRun => ({ type: "throw", error });
+
+/** `run` for every attempt the generation layer makes at a transient failure. */
+const queueEveryAttempt = (run: ProviderRun): void => {
+  for (let attempt = 0; attempt < PROVIDER_REQUEST_ATTEMPTS; attempt += 1) {
+    queueRun(run);
+  }
+};
 
 const PROVIDER_RUN_ID = "run-1";
 const PROVIDER_THREAD_ID = "thread-1";
@@ -1276,7 +1284,7 @@ describe("TanStack AI structured output generation", () => {
   // it, so this one has to as well; otherwise quota, billing, retired model
   // and outage all reach the classifier as one unnamed failure.
   test("classifies a generated object's failure whose only detail is the provider body", async () => {
-    queueRun(
+    queueEveryAttempt(
       throwingRun(
         new Error(
           JSON.stringify({
@@ -1353,10 +1361,16 @@ describe("TanStack AI structured output generation", () => {
     status,
   } of PROVIDER_BODY_SERVICE_TIER_FALLBACK_MATRIX) {
     test(`${retriesOnStandardTier ? "retries" : "does not retry"} a deferred OpenAI object generation whose provider body is ${status}`, async () => {
-      // Queued twice so the retried and non-retried rows differ only in how
-      // many provider calls happened, never in whether the run failed.
-      queueRun(throwingRun(providerBodyError(status)));
-      queueRun(throwingRun(providerBodyError(status)));
+      // Queued for every request a retried row can make (the deferred tier,
+      // then each attempt on the standard tier), so the rows differ only in
+      // how many provider calls happened, never in whether the run failed.
+      for (
+        let request = 0;
+        request <= PROVIDER_REQUEST_ATTEMPTS;
+        request += 1
+      ) {
+        queueRun(throwingRun(providerBodyError(status)));
+      }
 
       const caught = await generateObjectForTestModel({
         caching: noCaching,
@@ -1377,14 +1391,20 @@ describe("TanStack AI structured output generation", () => {
       );
 
       expect(classifyAIError(caught)).toBe(kind);
-      expect(providerRequests).toHaveLength(retriesOnStandardTier ? 2 : 1);
+      // A transient failure moves the request to the standard tier at once,
+      // and the standard request is the one the generation layer retries.
       expect(providerRequests).toMatchObject(
         retriesOnStandardTier
           ? [
               { modelOptions: { service_tier: "flex" } },
-              { modelOptions: { service_tier: "default" } },
+              ...Array.from({ length: PROVIDER_REQUEST_ATTEMPTS }, () => ({
+                modelOptions: { service_tier: "default" },
+              })),
             ]
           : [{ modelOptions: { service_tier: "flex" } }],
+      );
+      expect(providerRequests).toHaveLength(
+        retriesOnStandardTier ? PROVIDER_REQUEST_ATTEMPTS + 1 : 1,
       );
     });
   }
@@ -1942,7 +1962,7 @@ describe("TanStack AI text generation", () => {
   });
 
   test("classifies provider statuses after the run-error boundary", async () => {
-    queueRun(
+    queueEveryAttempt(
       runErrorRun({ code: "429", message: "OpenAI rate limit exceeded." }),
     );
 
@@ -1974,7 +1994,7 @@ describe("TanStack AI text generation", () => {
   // keep it: without it quota, billing, retired model and outage all read as
   // one unnamed transport failure.
   test("classifies a run error whose only detail is the provider body", async () => {
-    queueRun(
+    queueEveryAttempt(
       runErrorRun({
         message: JSON.stringify({
           error: {
@@ -2684,7 +2704,7 @@ describe("a chat run a caller consumes itself", () => {
   };
 
   test("hands out a run error with the fixed message and the classified kind", async () => {
-    queueRun(
+    queueEveryAttempt(
       runErrorRun({
         code: `${SENTINEL}_code`,
         message: JSON.stringify({
