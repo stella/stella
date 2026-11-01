@@ -61,6 +61,9 @@ describe("notification kinds", () => {
     expectTypeOf<BranchFor<"mention">["metadata"]>().toEqualTypeOf<
       NotificationMetadataByKind["mention"]
     >();
+    expectTypeOf<BranchFor<"task_assigned">["metadata"]>().toEqualTypeOf<
+      NotificationMetadataByKind["task_assigned"]
+    >();
     expectTypeOf<BranchFor<"announcement">["metadata"]>().toEqualTypeOf<
       NotificationMetadataByKind["announcement"]
     >();

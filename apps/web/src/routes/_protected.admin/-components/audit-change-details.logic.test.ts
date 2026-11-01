@@ -23,6 +23,21 @@ test("field diffs become before and after rows", () => {
   ]);
 });
 
+test("before and after envelopes read like old and new", () => {
+  expect(
+    auditChangeRows({
+      due_date: { before: "2026-01-01", after: "2026-02-01" },
+    }),
+  ).toEqual([
+    {
+      type: "diff",
+      field: "due_date",
+      before: "2026-01-01",
+      after: "2026-02-01",
+    },
+  ]);
+});
+
 test("a diff that records only one side keeps the other side empty", () => {
   expect(auditChangeRows({ name: { new: "Smlouva o dílo" } })).toEqual([
     { type: "diff", field: "name", before: undefined, after: "Smlouva o dílo" },

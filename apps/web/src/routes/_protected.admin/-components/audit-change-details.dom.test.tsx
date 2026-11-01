@@ -8,7 +8,7 @@ import messages from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
-const { cleanup, render } = await import("@testing-library/react");
+const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { AuditChangeDetails, AuditChangeSummary } =
   await import("./audit-change-details");
@@ -68,7 +68,7 @@ test("the summary reads the first change as before and after, then counts the re
     changesStatus: AUDIT_CHANGES_STATUS.visible,
   });
   expect(view.getByTestId("summary").textContent).toBe(
-    "status: completed → pending+1 more",
+    "Status: completed → pending+1 more",
   );
 });
 
@@ -83,9 +83,51 @@ test("the details list every field with both sides, empty sides labelled", () =>
   const rows = view.getAllByRole("row").map((row) => row.textContent);
   expect(rows).toEqual([
     "FieldBeforeAfter",
-    "statuscompletedpending",
-    `editionId${messages.settings.organization.auditLogsEmptyValue}2026-10`,
+    "Statuscompletedpending",
+    `Edition Id${messages.settings.organization.auditLogsEmptyValue}2026-10`,
   ]);
+});
+
+test("changes for an unrecognized resource show a withheld note", () => {
+  const summary = mountSummary({
+    changes: null,
+    changesStatus: AUDIT_CHANGES_STATUS.unrecognizedResource,
+  });
+  expect(summary.getByTestId("summary").textContent).toBe(
+    messages.common.detailsHiddenUnrecognizedResource,
+  );
+  cleanup();
+  const details = mountDetails({
+    changes: null,
+    changesStatus: AUDIT_CHANGES_STATUS.unrecognizedResource,
+  });
+  expect(details.getByTestId("details").textContent).toBe(
+    messages.common.detailsHiddenUnrecognizedResource,
+  );
+});
+
+test("before and after envelopes read as a diff with a plain field label", () => {
+  const view = mountDetails({
+    changes: { due_date: { before: "2026-01-01", after: "2026-02-01" } },
+    changesStatus: AUDIT_CHANGES_STATUS.visible,
+  });
+  const rows = view.getAllByRole("row").map((row) => row.textContent);
+  expect(rows).toEqual(["FieldBeforeAfter", "Due date2026-01-012026-02-01"]);
+});
+
+test("the details keep the recorded changes behind an explicit disclosure", () => {
+  const changes = { amount: { old: 100, new: 200 } };
+  const view = mountDetails({
+    changes,
+    changesStatus: AUDIT_CHANGES_STATUS.visible,
+  });
+  const trigger = view.getByRole("button", { name: messages.common.details });
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(trigger);
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  expect(view.container.querySelector("pre")?.textContent).toBe(
+    JSON.stringify(changes, null, 2),
+  );
 });
 
 test("unavailable label uses the selected locale", () => {

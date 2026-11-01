@@ -1,19 +1,32 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { logger } from "@/api/lib/observability/logger";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { queryAuditLogPage } from "./query";
 
+afterEach(() => {
+  mock.restore();
+});
+
 describe("queryAuditLogPage", () => {
-  test("records access only after the page query succeeds", async () => {
+  test("resolves distinct accessible matters once and hides deleted or denied names", async () => {
     const auditLogId = toSafeId<"auditLog">(Bun.randomUUIDv7());
+    const secondAuditLogId = toSafeId<"auditLog">(Bun.randomUUIDv7());
+    const deletedAuditLogId = toSafeId<"auditLog">(Bun.randomUUIDv7());
+    const deniedAuditLogId = toSafeId<"auditLog">(Bun.randomUUIDv7());
+    const unknownAuditLogId = toSafeId<"auditLog">(Bun.randomUUIDv7());
+    const unknownAuditLogWithChangesId = toSafeId<"auditLog">(
+      Bun.randomUUIDv7(),
+    );
     const userId = toSafeId<"user">("user_test");
     const createdAt = new Date("2026-07-16T12:00:00.000Z");
     const events: Parameters<AuditRecorder>[1][] = [];
     let selectCount = 0;
+    const warning = spyOn(logger, "warn").mockImplementation(() => undefined);
 
     const { safeDb } = createScopedDbMock({
       select: () => {
@@ -37,6 +50,74 @@ describe("queryAuditLogPage", () => {
                       changes: null,
                       changesStatus: "visible",
                     },
+                    {
+                      id: deletedAuditLogId,
+                      createdAt,
+                      createdAtCursor: createdAt.toISOString(),
+                      userId,
+                      performerType: "user",
+                      performerName: null,
+                      action: "delete",
+                      resourceType: "workspace",
+                      resourceId: "workspace_deleted",
+                      changes: null,
+                      changesStatus: "visible",
+                    },
+                    {
+                      id: deniedAuditLogId,
+                      createdAt,
+                      createdAtCursor: createdAt.toISOString(),
+                      userId,
+                      performerType: "user",
+                      performerName: null,
+                      action: "update",
+                      resourceType: "workspace",
+                      resourceId: "workspace_denied",
+                      changes: null,
+                      changesStatus: "visible",
+                    },
+                    {
+                      id: unknownAuditLogId,
+                      createdAt,
+                      createdAtCursor: createdAt.toISOString(),
+                      userId,
+                      performerType: "user",
+                      performerName: null,
+                      action: "update",
+                      resourceType: "retired_record_kind",
+                      resourceId: "retired_record_test",
+                      changes: null,
+                      hasStoredChanges: false,
+                      changesStatus: "visible",
+                    },
+                    {
+                      id: secondAuditLogId,
+                      createdAt,
+                      createdAtCursor: createdAt.toISOString(),
+                      userId,
+                      performerType: "user",
+                      performerName: null,
+                      action: "update",
+                      resourceType: "workspace",
+                      resourceId: "workspace_second",
+                      changes: { status: { old: "active", new: "archived" } },
+                      changesStatus: "visible",
+                    },
+                    {
+                      id: unknownAuditLogWithChangesId,
+                      createdAt,
+                      createdAtCursor: createdAt.toISOString(),
+                      userId,
+                      performerType: "user",
+                      performerName: null,
+                      action: "update",
+                      resourceType: "retired_record_kind",
+                      resourceId: "retired_record_with_changes_test",
+                      // The read projection hides changes for an unknown kind;
+                      // only the raw presence says some were recorded.
+                      changes: null,
+                      hasStoredChanges: true,
+                    },
                   ],
                 }),
               }),
@@ -44,13 +125,24 @@ describe("queryAuditLogPage", () => {
           };
         }
 
+        if (selectCount === 2) {
+          return {
+            from: () => ({
+              innerJoin: () => ({
+                where: async () => [
+                  { id: userId, name: "Test User", email: "test@example.com" },
+                ],
+              }),
+            }),
+          };
+        }
+
         return {
           from: () => ({
-            innerJoin: () => ({
-              where: async () => [
-                { id: userId, name: "Test User", email: "test@example.com" },
-              ],
-            }),
+            where: async () => [
+              { id: "workspace_test", name: "Northwind acquisition" },
+              { id: "workspace_second", name: "Contoso dispute" },
+            ],
           }),
         };
       },
@@ -69,10 +161,10 @@ describe("queryAuditLogPage", () => {
       }),
     );
 
-    expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) {
       throw result.error;
     }
+    expect(Result.isOk(result)).toBe(true);
     expect(result.value.items).toEqual([
       {
         id: auditLogId,
@@ -83,10 +175,113 @@ describe("queryAuditLogPage", () => {
         action: "update",
         resourceType: "workspace",
         resourceId: "workspace_test",
+        resource: {
+          kind: "workspace",
+          id: "workspace_test",
+          name: "Northwind acquisition",
+          available: true,
+        },
         changes: null,
         changesStatus: "visible",
       },
+      {
+        id: deletedAuditLogId,
+        createdAt,
+        userId,
+        performerType: "user",
+        actor: "Test User",
+        action: "delete",
+        resourceType: "workspace",
+        resourceId: "workspace_deleted",
+        resource: {
+          kind: "workspace",
+          id: "workspace_deleted",
+          name: null,
+          available: false,
+        },
+        changes: null,
+        changesStatus: "visible",
+      },
+      {
+        id: deniedAuditLogId,
+        createdAt,
+        userId,
+        performerType: "user",
+        actor: "Test User",
+        action: "update",
+        resourceType: "workspace",
+        resourceId: "workspace_denied",
+        resource: {
+          kind: "workspace",
+          id: "workspace_denied",
+          name: null,
+          available: false,
+        },
+        changes: null,
+        changesStatus: "visible",
+      },
+      {
+        id: unknownAuditLogId,
+        createdAt,
+        userId,
+        performerType: "user",
+        actor: "Test User",
+        action: "update",
+        resourceType: "retired_record_kind",
+        resourceId: "retired_record_test",
+        resource: {
+          kind: "unknown",
+          rawKind: "retired_record_kind",
+          id: "retired_record_test",
+          name: null,
+          available: false,
+        },
+        changes: null,
+        changesStatus: "visible",
+      },
+      {
+        id: secondAuditLogId,
+        createdAt,
+        userId,
+        performerType: "user",
+        actor: "Test User",
+        action: "update",
+        resourceType: "workspace",
+        resourceId: "workspace_second",
+        resource: {
+          kind: "workspace",
+          id: "workspace_second",
+          name: "Contoso dispute",
+          available: true,
+        },
+        changes: { status: { old: "active", new: "archived" } },
+        changesStatus: "visible",
+      },
+      {
+        id: unknownAuditLogWithChangesId,
+        createdAt,
+        userId,
+        performerType: "user",
+        actor: "Test User",
+        action: "update",
+        resourceType: "retired_record_kind",
+        resourceId: "retired_record_with_changes_test",
+        resource: {
+          kind: "unknown",
+          rawKind: "retired_record_kind",
+          id: "retired_record_with_changes_test",
+          name: null,
+          available: false,
+        },
+        changes: null,
+        changesStatus: "unrecognized_resource",
+      },
     ]);
+    expect(selectCount).toBe(3);
+    expect(warning).toHaveBeenCalledWith(
+      "audit_log.stored_resource_kind_unknown",
+      { kind: "retired_record_kind", count: 2 },
+    );
     expect(events).toEqual([
       {
         action: "access",

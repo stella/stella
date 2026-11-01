@@ -3,6 +3,12 @@ import { useTranslations } from "use-intl";
 
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import {
+  Accordion,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@stll/ui/accordion";
+import {
   Table,
   TableBody,
   TableCell,
@@ -21,6 +27,7 @@ import {
   isStructuredAuditValue,
 } from "./audit-change-details.logic";
 import type { AuditChangeRow } from "./audit-change-details.logic";
+import { fieldLabel } from "./audit-display-projection";
 
 type AuditChangeDetailsProps = Pick<
   Awaited<ReturnType<typeof fetchAuditLogs>>["items"][number],
@@ -34,6 +41,12 @@ export const AuditChangeSummary = ({
 }: AuditChangeDetailsProps) => {
   const t = useTranslations();
   switch (changesStatus) {
+    case AUDIT_CHANGES_STATUS.unrecognizedResource:
+      return (
+        <span className="text-muted-foreground line-clamp-2">
+          {t("common.detailsHiddenUnrecognizedResource")}
+        </span>
+      );
     case AUDIT_CHANGES_STATUS.featureUnavailable:
       return (
         <span className="text-muted-foreground line-clamp-2">
@@ -53,8 +66,8 @@ export const AuditChangeSummary = ({
         <span className="flex min-w-0 items-baseline gap-2">
           <span className="min-w-0 truncate">
             {first.field === "" ? null : (
-              <span className="text-muted-foreground font-mono">
-                <bdi>{first.field}</bdi>:{" "}
+              <span className="text-muted-foreground">
+                <bdi>{fieldLabel(first.field)}</bdi>:{" "}
               </span>
             )}
             {first.type === "diff" ? (
@@ -89,6 +102,12 @@ export const AuditChangeDetails = ({
 }: AuditChangeDetailsProps) => {
   const t = useTranslations();
   switch (changesStatus) {
+    case AUDIT_CHANGES_STATUS.unrecognizedResource:
+      return (
+        <p className="text-muted-foreground">
+          {t("common.detailsHiddenUnrecognizedResource")}
+        </p>
+      );
     case AUDIT_CHANGES_STATUS.featureUnavailable:
       return (
         <p className="text-muted-foreground">
@@ -105,24 +124,40 @@ export const AuditChangeDetails = ({
         );
       }
       return (
-        <Table className="table-fixed" scroll="parent">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-1/4">
-                {t("chat.toolCall.field")}
-              </TableHead>
-              <TableHead>
-                {t("settings.organization.auditLogsBefore")}
-              </TableHead>
-              <TableHead>{t("settings.organization.auditLogsAfter")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row) => (
-              <AuditChangeDetailRow key={row.field} row={row} />
-            ))}
-          </TableBody>
-        </Table>
+        <div className="flex flex-col gap-2">
+          <Table className="table-fixed" scroll="parent">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-1/4">
+                  {t("chat.toolCall.field")}
+                </TableHead>
+                <TableHead>
+                  {t("settings.organization.auditLogsBefore")}
+                </TableHead>
+                <TableHead>
+                  {t("settings.organization.auditLogsAfter")}
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <AuditChangeDetailRow key={row.field} row={row} />
+              ))}
+            </TableBody>
+          </Table>
+          <Accordion>
+            <AccordionItem value="raw-changes">
+              <AccordionTrigger size="compact">
+                {t("common.details")}
+              </AccordionTrigger>
+              <AccordionPanel keepMounted size="compact">
+                <pre className="font-mono text-xs whitespace-pre-wrap">
+                  <bdi>{JSON.stringify(changes, null, 2)}</bdi>
+                </pre>
+              </AccordionPanel>
+            </AccordionItem>
+          </Accordion>
+        </div>
       );
     }
     default:
@@ -136,8 +171,8 @@ const DETAIL_CELL_CLASS = "align-top leading-normal whitespace-normal";
 
 const AuditChangeDetailRow = ({ row }: { row: AuditChangeRow }) => (
   <TableRow>
-    <TableCell className={cn(DETAIL_CELL_CLASS, "font-mono wrap-anywhere")}>
-      <bdi>{row.field}</bdi>
+    <TableCell className={cn(DETAIL_CELL_CLASS, "wrap-anywhere")}>
+      <bdi>{fieldLabel(row.field)}</bdi>
     </TableCell>
     {row.type === "diff" ? (
       <>

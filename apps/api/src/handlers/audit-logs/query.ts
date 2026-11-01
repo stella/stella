@@ -7,7 +7,10 @@ import {
   API_STORABLE_INSTANT_CHECK,
   apiDateTimeSchema,
 } from "@stll/api-contract/api-date";
-import { AUDIT_PERFORMER_FILTER } from "@stll/api-contract/audit-log";
+import {
+  AUDIT_CHANGES_STATUS,
+  AUDIT_PERFORMER_FILTER,
+} from "@stll/api-contract/audit-log";
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -22,6 +25,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
   auditReadChangesSql,
+  auditStoredChangesPresentSql,
   projectAuditReadChanges,
 } from "@/api/lib/audit-log-details";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -37,6 +41,7 @@ import type {
   FeatureAccessSnapshot,
 } from "@/api/lib/feature-access/policy";
 import { LIMITS } from "@/api/lib/limits";
+import { logger } from "@/api/lib/observability/logger";
 import { createCursorPage } from "@/api/lib/pagination";
 import type {
   UnbackedProjectionKeys,
@@ -44,6 +49,8 @@ import type {
 } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
+
+import { resolveAuditResourceNames } from "./resource-resolvers";
 
 const auditLogCursor = createTimestampIdCursorCodec({
   column: auditLogs.createdAt,
@@ -206,6 +213,22 @@ const VALID_ACTIONS = new Set<string>(Object.values(AUDIT_ACTION));
 const VALID_RESOURCE_TYPES = new Set<string>(
   Object.values(AUDIT_RESOURCE_TYPE),
 );
+const AUDIT_RESOURCE_KIND_SCHEMA = v.picklist(
+  Object.values(AUDIT_RESOURCE_TYPE),
+);
+
+type ClassifiedAuditResourceKind =
+  | { type: "known"; kind: v.InferOutput<typeof AUDIT_RESOURCE_KIND_SCHEMA> }
+  | { type: "unknown"; raw: string };
+
+const classifyAuditResourceKind = (
+  value: string,
+): ClassifiedAuditResourceKind => {
+  if (VALID_RESOURCE_TYPES.has(value)) {
+    return { type: "known", kind: v.parse(AUDIT_RESOURCE_KIND_SCHEMA, value) };
+  }
+  return { type: "unknown", raw: value };
+};
 
 /**
  * Compliance-read filter over the org's append-only audit trail. Shared shape
@@ -267,15 +290,46 @@ type AuditLogPageRow = Pick<
   | "resourceId"
   | "changes"
   | "metadata"
-> & { createdAtCursor: string };
+> & { createdAtCursor: string; hasStoredChanges: boolean };
+
+type AuditResourceNames = Awaited<ReturnType<typeof resolveAuditResourceNames>>;
+
+const toAuditResource = ({
+  row,
+  resourceKind,
+  resourceNames,
+}: {
+  row: Pick<AuditLogRow, "resourceId">;
+  resourceKind: ClassifiedAuditResourceKind;
+  resourceNames: AuditResourceNames;
+}) =>
+  resourceKind.type === "known"
+    ? {
+        kind: resourceKind.kind,
+        id: row.resourceId,
+        name: resourceNames.get(resourceKind.kind)?.get(row.resourceId) ?? null,
+        available:
+          resourceNames.get(resourceKind.kind)?.has(row.resourceId) ?? false,
+      }
+    : {
+        kind: "unknown" as const,
+        rawKind: resourceKind.raw,
+        id: row.resourceId,
+        name: null,
+        available: false as const,
+      };
 
 const toAuditLogPageItem = ({
   row,
+  resourceKind,
+  resourceNames,
   members,
   featureAccessSnapshot,
   principal,
 }: {
   row: AuditLogPageRow;
+  resourceKind: ClassifiedAuditResourceKind;
+  resourceNames: AuditResourceNames;
   members: ReadonlyMap<string, string>;
   featureAccessSnapshot: FeatureAccessSnapshot | undefined;
   principal: FeatureAccessPrincipal;
@@ -285,13 +339,21 @@ const toAuditLogPageItem = ({
   action: row.action,
   resourceType: row.resourceType,
   resourceId: row.resourceId,
-  ...projectAuditReadChanges({
-    resourceType: row.resourceType,
-    changes: row.changes,
-    metadata: row.metadata,
-    featureAccessSnapshot,
-    principal,
-  }),
+  resource: toAuditResource({ row, resourceKind, resourceNames }),
+  ...(resourceKind.type === "known"
+    ? projectAuditReadChanges({
+        resourceType: resourceKind.kind,
+        changes: row.changes,
+        metadata: row.metadata,
+        featureAccessSnapshot,
+        principal,
+      })
+    : {
+        changes: null,
+        changesStatus: row.hasStoredChanges
+          ? AUDIT_CHANGES_STATUS.unrecognizedResource
+          : AUDIT_CHANGES_STATUS.visible,
+      }),
   createdAtCursor: row.createdAtCursor,
   userId: row.userId,
   performerType: row.performerType,
@@ -322,10 +384,11 @@ const UNPROJECTED_AUDIT_LOG_COLUMNS = [
   "activityCategory",
 ] as const satisfies readonly (keyof AuditLogRow)[];
 
-// `changesStatus`, `actor` and the page cursor are derived, not columns.
+// `resource`, `changesStatus`, `actor` and the page cursor are derived, not
+// columns.
 type AuditLogPageItem = Omit<
   ReturnType<typeof toAuditLogPageItem>,
-  "changesStatus" | "actor" | "createdAtCursor"
+  "resource" | "changesStatus" | "actor" | "createdAtCursor"
 >;
 
 // Totality guard, bidirectional: every schema column must be projected onto
@@ -387,6 +450,9 @@ export const queryAuditLogPage = async function* ({
             principal: { organizationId, userId },
           }),
           metadata: auditLogs.metadata,
+          // The read projection hides changes it has no policy for, so an
+          // unknown kind needs the raw presence to say whether any were withheld.
+          hasStoredChanges: auditStoredChangesPresentSql(),
           createdAtCursor: auditLogCursor.cursorValue.as("created_at_cursor"),
         })
         .from(auditLogs)
@@ -415,15 +481,45 @@ export const queryAuditLogPage = async function* ({
         ]),
       );
 
+      const classifiedRows = auditRows.map((row) => ({
+        row,
+        resourceKind: classifyAuditResourceKind(row.resourceType),
+      }));
+      const unknownKindCounts = new Map<string, number>();
+      for (const { resourceKind } of classifiedRows) {
+        if (resourceKind.type === "unknown") {
+          unknownKindCounts.set(
+            resourceKind.raw,
+            (unknownKindCounts.get(resourceKind.raw) ?? 0) + 1,
+          );
+        }
+      }
+      for (const [kind, count] of unknownKindCounts) {
+        logger.warn("audit_log.stored_resource_kind_unknown", { kind, count });
+      }
+
+      const resourceNames = await resolveAuditResourceNames({
+        tx,
+        rows: classifiedRows.flatMap(({ row, resourceKind }) =>
+          resourceKind.type === "known"
+            ? [{ resourceType: resourceKind.kind, resourceId: row.resourceId }]
+            : [],
+        ),
+        organizationId,
+        userId,
+      });
+
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.ACCESS,
         resourceType: AUDIT_RESOURCE_TYPE.AUDIT_LOG,
         resourceId: ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
       });
 
-      return auditRows.map((row) =>
+      return classifiedRows.map(({ row, resourceKind }) =>
         toAuditLogPageItem({
           row,
+          resourceKind,
+          resourceNames,
           members: userMap,
           featureAccessSnapshot,
           principal: { organizationId, userId },

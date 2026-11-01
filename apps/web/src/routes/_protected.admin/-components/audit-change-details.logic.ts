@@ -6,17 +6,24 @@ export type AuditChangeRow =
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const FIELD_DIFF_KEYS = new Set(["old", "new", "before", "after"]);
+
 const isFieldDiff = (
   value: unknown,
-): value is { old?: unknown; new?: unknown } =>
+): value is {
+  old?: unknown;
+  new?: unknown;
+  before?: unknown;
+  after?: unknown;
+} =>
   isRecord(value) &&
   Object.keys(value).length > 0 &&
-  Object.keys(value).every((key) => key === "old" || key === "new");
+  Object.keys(value).every((key) => FIELD_DIFF_KEYS.has(key));
 
 /**
- * Audit `changes` as field rows. Most writers record `{ field: { old, new } }`;
- * anything else (a created record's values, a list of ids) is shown as the
- * field's value, so no payload shape is dropped.
+ * Audit `changes` as field rows. Writers record `{ field: { old, new } }` or
+ * `{ field: { before, after } }`; anything else (a created record's values, a
+ * list of ids) is shown as the field's value, so no payload shape is dropped.
  */
 export const auditChangeRows = (changes: unknown): AuditChangeRow[] => {
   if (changes === null || changes === undefined) {
@@ -27,7 +34,12 @@ export const auditChangeRows = (changes: unknown): AuditChangeRow[] => {
   }
   return Object.entries(changes).map(([field, value]) =>
     isFieldDiff(value)
-      ? { type: "diff", field, before: value.old, after: value.new }
+      ? {
+          type: "diff",
+          field,
+          before: value.before ?? value.old,
+          after: value.after ?? value.new,
+        }
       : { type: "value", field, value },
   );
 };

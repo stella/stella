@@ -6,7 +6,10 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { AUDIT_PERFORMER_FILTER } from "@stll/api-contract/audit-log";
-import type { AuditPerformerFilter } from "@stll/api-contract/audit-log";
+import type {
+  AuditPerformerFilter,
+  AuditResource,
+} from "@stll/api-contract/audit-log";
 import { Button } from "@stll/ui/button";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -29,9 +32,11 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { DateRangeFilter } from "@/components/date-range-filter";
+import { MatterRefLink } from "@/components/matter-ref-link";
 import { MEMBER_CHOICE, MemberCombobox } from "@/components/member-combobox";
 import type { MemberOption } from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -53,6 +58,12 @@ import {
   AuditChangeDetails,
   AuditChangeSummary,
 } from "@/routes/_protected.admin/-components/audit-change-details";
+import {
+  AUDIT_ACTION_PROJECTIONS,
+  AUDIT_RESOURCE_PROJECTIONS,
+  isAuditAction,
+  projectAuditResourceLabel,
+} from "@/routes/_protected.admin/-components/audit-display-projection";
 import { auditPersonOptions } from "@/routes/_protected.admin/-components/audit-person-options.logic";
 import { toAuditLogDateRange } from "@/routes/_protected.admin/-queries/audit-log-date-range";
 import {
@@ -662,10 +673,10 @@ function AuditLogRow({
           ) : null}
         </TableCell>
         <TableCell className="text-xs font-medium">
-          <AuditActionLabel action={log.action} />
+          <AuditActionSentence action={log.action} resource={log.resource} />
         </TableCell>
         <TableCell className="text-xs">
-          <bdi>{log.resourceType}</bdi>
+          <AuditResourceLabel action={log.action} resource={log.resource} />
         </TableCell>
         <TableCell className="max-w-0 text-xs">
           <AuditChangeSummary
@@ -705,27 +716,88 @@ function AuditLogRow({
   );
 }
 
-function AuditActionLabel({ action }: { action: string }) {
+export function AuditActionSentence({
+  action,
+  resource,
+}: {
+  action: string;
+  resource: AuditLogResource;
+}) {
   const t = useTranslations();
+  const label = useAuditResourceLabel(action, resource);
+  if (!isAuditAction(action)) {
+    // Keep the recorded action visible so retired or newer actions stay
+    // distinguishable in the log.
+    return (
+      <>
+        {t("settings.organization.auditLogsSentenceActivity", {
+          resource: label,
+        })}{" "}
+        <bdi className="text-muted-foreground font-mono">{action}</bdi>
+      </>
+    );
+  }
+  return t(AUDIT_ACTION_PROJECTIONS[action], { resource: label });
+}
 
-  if (action === "create") {
-    return t("settings.organization.auditLogsActionCreate");
-  }
-  if (action === "update") {
-    return t("settings.organization.auditLogsActionUpdate");
-  }
-  if (action === "delete") {
-    return t("settings.organization.auditLogsActionDelete");
-  }
-  if (action === "download") {
-    return t("settings.organization.auditLogsActionDownload");
-  }
-  if (action === "execute") {
-    return t("settings.organization.auditLogsActionExecute");
-  }
-  if (action === "access") {
-    return t("settings.organization.auditLogsActionAccess");
-  }
+export function AuditResourceLabel({
+  action,
+  resource,
+}: {
+  action: string;
+  resource: AuditLogResource;
+}) {
+  const t = useTranslations();
+  const label = useAuditResourceLabel(action, resource);
+  const content =
+    resource.available && resource.kind === "workspace" ? (
+      <MatterRefLink
+        className="hover:underline focus-visible:underline"
+        workspaceId={resource.id}
+      >
+        <bdi>{label}</bdi>
+      </MatterRefLink>
+    ) : (
+      <bdi>{label}</bdi>
+    );
 
-  return <bdi>{action}</bdi>;
+  return (
+    <div className="min-w-0">
+      <div className="truncate font-medium">{content}</div>
+      <div className="text-muted-foreground font-mono">
+        {resource.kind === "unknown" ? <bdi>{resource.rawKind} · </bdi> : null}
+        <span className="sr-only">
+          {t("settings.organization.auditLogsResourceIdentifier", {
+            id: resource.id,
+          })}
+        </span>
+        {/* CSS truncation keeps the full id selectable for copying. */}
+        <TruncatedText
+          aria-hidden="true"
+          className="inline-block max-w-[120px] align-bottom"
+          render={<bdi />}
+        >
+          {resource.id}
+        </TruncatedText>
+      </div>
+    </div>
+  );
+}
+
+type AuditLogResource = AuditResource;
+
+function useAuditResourceLabel(action: string, resource: AuditLogResource) {
+  const t = useTranslations();
+  if (resource.kind === "unknown") {
+    return t("settings.organization.auditLogsUnknownResource");
+  }
+  return projectAuditResourceLabel({
+    action,
+    resource,
+    deletedLabel: (kind) =>
+      t("settings.organization.auditLogsDeletedResource", { kind }),
+    kind: t(AUDIT_RESOURCE_PROJECTIONS[resource.kind]),
+    unavailableLabel: (kind) =>
+      t("settings.organization.auditLogsUnavailableResource", { kind }),
+  });
 }
