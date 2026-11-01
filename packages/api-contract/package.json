@@ -12,6 +12,7 @@
     "./contact-write": "./src/contact-write.ts",
     "./conversion-refusal": "./src/conversion-refusal.ts",
     "./mcp": "./src/mcp.ts",
+    "./mcp-registry": "./src/mcp-registry.ts",
     "./stella-logo": "./src/stella-logo.ts",
     "./stella-logo-512.png": "./assets/stella-logo-512.png",
     "./mcp-web-handoff": "./src/mcp-web-handoff.ts",

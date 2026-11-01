@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -428,19 +429,21 @@ export const DocumentAiSourceBar = ({
             size="sm"
           />
         )}
-        <button
+        <Button
           aria-expanded={isAnswerExpanded}
-          className="min-w-0 flex-1 truncate text-start"
+          className="min-w-0 flex-1"
           onClick={() => setIsAnswerExpanded((expanded) => !expanded)}
-          type="button"
+          variant="plain"
         >
-          {propertyName && (
-            <span className="text-muted-foreground">{propertyName}: </span>
-          )}
-          <span className="font-medium">
-            {shortAnswer ?? t("workspaces.pdf.evidence")}
+          <span className="block truncate">
+            {propertyName && (
+              <span className="text-muted-foreground">{propertyName}: </span>
+            )}
+            <span className="font-medium">
+              {shortAnswer ?? t("workspaces.pdf.evidence")}
+            </span>
           </span>
-        </button>
+        </Button>
         <Button
           aria-label={t("common.previous")}
           disabled={!prevSlot}
@@ -543,8 +546,10 @@ const useFolioBlockPage = (
   return page;
 };
 
+// The chip's surface is the outline button's; its tiny type and inset sit on
+// the label inside, so the chip stays the height of the line it cites from.
 const SOURCE_CITATION_CHIP_CLASS =
-  "border-border bg-muted/64 text-foreground-strong-muted hover:bg-muted hover:text-foreground hover:border-foreground/24 inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 align-middle text-2xs font-medium tracking-tight";
+  "border-border bg-muted/64 text-foreground-strong-muted hover:bg-muted hover:text-foreground hover:border-foreground/24 inline-flex items-center rounded-md border px-1.5 py-0.5 text-2xs font-medium tracking-tight";
 
 // Unverified: no border, no hover affordance, dashed underline so it
 // reads as plain text the reader must not trust as a source anchor.
@@ -565,13 +570,15 @@ const SourceCitationChip = ({
   const t = useTranslations();
   if (citation.kind === "pdf-bates") {
     return (
-      <button
-        className={SOURCE_CITATION_CHIP_CLASS}
+      <Button
+        className="shrink-0 align-middle"
         onClick={onClick}
-        type="button"
+        variant="plain"
       >
-        p.&nbsp;{citation.pageNumber}
-      </button>
+        <span className={SOURCE_CITATION_CHIP_CLASS}>
+          p.&nbsp;{citation.pageNumber}
+        </span>
+      </Button>
     );
   }
 
@@ -582,12 +589,14 @@ const SourceCitationChip = ({
 
   if (citation.citationStatus === "unverified") {
     return (
-      <span
-        className={UNVERIFIED_CITATION_CHIP_CLASS}
-        title={t("common.unverifiedCitationHint")}
-      >
-        {t("common.unverified")}
-      </span>
+      <Tooltip>
+        <TooltipTrigger
+          render={<span className={UNVERIFIED_CITATION_CHIP_CLASS} />}
+        >
+          {t("common.unverified")}
+        </TooltipTrigger>
+        <TooltipPopup>{t("common.unverifiedCitationHint")}</TooltipPopup>
+      </Tooltip>
     );
   }
 
@@ -622,13 +631,13 @@ const DocxSourceCitationChip = ({
   const label = page !== null ? `p. ${page}` : "p. —";
 
   return (
-    <button
+    <Button
       aria-label={tooltip}
-      className={SOURCE_CITATION_CHIP_CLASS}
+      className="shrink-0 align-middle"
       onClick={onClick}
-      type="button"
+      variant="plain"
     >
-      {label}
-    </button>
+      <span className={SOURCE_CITATION_CHIP_CLASS}>{label}</span>
+    </Button>
   );
 };

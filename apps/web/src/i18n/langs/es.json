@@ -5348,6 +5348,7 @@
         "legal_list_item": "entrada de lista jurídica",
         "legal_list_verification": "verificación de lista jurídica",
         "legal_resolve": "consulta de referencia jurídica",
+        "legislation_matter_link": "vínculo entre legislación y asunto",
         "machine_api_key": "clave API para máquina",
         "mcp_connection": "conexión MCP",
         "mcp_gateway_tool": "herramienta de pasarela MCP",

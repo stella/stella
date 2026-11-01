@@ -5348,6 +5348,7 @@
         "legal_list_item": "teisinio sąrašo įrašas",
         "legal_list_verification": "teisinio sąrašo tikrinimas",
         "legal_resolve": "teisinės nuorodos paieška",
+        "legislation_matter_link": "teisės akto sąsaja su byla",
         "machine_api_key": "mašinos API raktas",
         "mcp_connection": "MCP ryšys",
         "mcp_gateway_tool": "MCP tinklų sietuvo įrankis",

@@ -70,6 +70,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "legal_lists",
   "legal_reader_annotations",
   "legal_reader_answers",
+  "legislation_matter_links",
   "matter_inbound_addresses",
   "mcp_oauth_state",
   "mcp_user_connections",
