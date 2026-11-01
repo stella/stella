@@ -49,7 +49,6 @@ import {
 } from "./case-law-population-fold";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const PROPERTY_ID = "population live backlog window preserves exact snapshots";
 
 class PopulationFoldFixtureRollback extends TaggedError(
   "PopulationFoldFixtureRollback",
@@ -685,76 +684,72 @@ describe.skipIf(!enabled)("population fold scheduler owner (postgres)", () => {
   }, 60_000);
 
   // timeout: shuffled boundaries seed the full window and verify current and folded snapshots against real PostgreSQL.
-  test(
-    PROPERTY_ID,
-    async () => {
-      await assertProperty(
-        PROPERTY_ID,
-        fc.asyncProperty(
-          fc.shuffledSubarray([-1, 0, 1], { minLength: 3, maxLength: 3 }),
-          async (offsets) =>
-            await withFoldFixture(async (db) => {
-              for (const offset of offsets) {
-                const rollback = new PopulationFoldFixtureRollback({
-                  message: "Roll back backlog boundary case",
-                });
-                // db-await-in-loop: each boundary is an isolated real-Postgres savepoint over the same canonical owner.
-                expect(
-                  await rejectionOf(
-                    db.transaction(async (tx) => {
-                      const caseDb = asTestRaw<SchedulerDb>(tx);
-                      const sourceId = createSafeId<"caseLawSource">();
-                      await tx.insert(caseLawSources).values({
-                        id: sourceId,
-                        adapterKey: `cap-${sourceId}`,
-                        name: "Backlog window fixture",
-                      });
-                      const total = 13;
-                      await tx.insert(caseLawPopulationCounts).values({
-                        kind: "court",
-                        country: "CZE",
-                        sourceId,
-                        value: "Fold fixture court",
-                        total,
-                      });
-                      const baseline =
-                        await readCaseLawPopulationBucketCount(caseDb);
-                      const snapshot = await readCaseLawPopulationFreshness(
+  test("population live backlog window preserves exact snapshots", async () => {
+    await assertProperty(
+      "population live backlog window preserves exact snapshots",
+      fc.asyncProperty(
+        fc.shuffledSubarray([-1, 0, 1], { minLength: 3, maxLength: 3 }),
+        async (offsets) =>
+          await withFoldFixture(async (db) => {
+            for (const offset of offsets) {
+              const rollback = new PopulationFoldFixtureRollback({
+                message: "Roll back backlog boundary case",
+              });
+              // db-await-in-loop: each boundary is an isolated real-Postgres savepoint over the same canonical owner.
+              expect(
+                await rejectionOf(
+                  db.transaction(async (tx) => {
+                    const caseDb = asTestRaw<SchedulerDb>(tx);
+                    const sourceId = createSafeId<"caseLawSource">();
+                    await tx.insert(caseLawSources).values({
+                      id: sourceId,
+                      adapterKey: `cap-${sourceId}`,
+                      name: "Backlog window fixture",
+                    });
+                    const total = 13;
+                    await tx.insert(caseLawPopulationCounts).values({
+                      kind: "court",
+                      country: "CZE",
+                      sourceId,
+                      value: "Fold fixture court",
+                      total,
+                    });
+                    const baseline =
+                      await readCaseLawPopulationBucketCount(caseDb);
+                    const snapshot = await readCaseLawPopulationFreshness(
+                      asTestRaw<CaseLawPublicReadTransaction>(tx),
+                    );
+                    const count =
+                      CASE_LAW_POPULATION_DELTA_BACKLOG_LIMIT + offset;
+                    await appendDeltas(caseDb, sourceId, count);
+                    expect(
+                      await readCaseLawPopulationBucketCount(caseDb),
+                    ).toEqual(baseline);
+                    expect(
+                      await readCaseLawPopulationFreshness(
                         asTestRaw<CaseLawPublicReadTransaction>(tx),
-                      );
-                      const count =
-                        CASE_LAW_POPULATION_DELTA_BACKLOG_LIMIT + offset;
-                      await appendDeltas(caseDb, sourceId, count);
-                      expect(
-                        await readCaseLawPopulationBucketCount(caseDb),
-                      ).toEqual(baseline);
-                      expect(
-                        await readCaseLawPopulationFreshness(
-                          asTestRaw<CaseLawPublicReadTransaction>(tx),
+                      ),
+                    ).toEqual({
+                      status: offset > 0 ? "stale" : "current",
+                      fold: snapshot.fold,
+                      foldedAt: snapshot.foldedAt,
+                    });
+                    expect(
+                      await tx
+                        .select({ total: caseLawPopulationCountsLive.total })
+                        .from(caseLawPopulationCountsLive)
+                        .where(
+                          eq(caseLawPopulationCountsLive.sourceId, sourceId),
                         ),
-                      ).toEqual({
-                        status: offset > 0 ? "stale" : "current",
-                        fold: snapshot.fold,
-                        foldedAt: snapshot.foldedAt,
-                      });
-                      expect(
-                        await tx
-                          .select({ total: caseLawPopulationCountsLive.total })
-                          .from(caseLawPopulationCountsLive)
-                          .where(
-                            eq(caseLawPopulationCountsLive.sourceId, sourceId),
-                          ),
-                      ).toEqual([{ total: total + (offset > 0 ? 0 : count) }]);
-                      abortTransaction(rollback);
-                    }),
-                  ),
-                ).toBe(rollback);
-              }
-            }),
-        ),
-        { numRuns: 2 },
-      );
-    },
-    120_000,
-  );
+                    ).toEqual([{ total: total + (offset > 0 ? 0 : count) }]);
+                    abortTransaction(rollback);
+                  }),
+                ),
+              ).toBe(rollback);
+            }
+          }),
+      ),
+      { numRuns: 2 },
+    );
+  }, 120_000);
 });
