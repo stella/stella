@@ -3,15 +3,18 @@ import type { OnlineRepair } from "./online-migration-connection";
 import { GLOBAL_SCOPE_TABLES, ORG_SCOPE_TABLES } from "./org-scope-registry";
 import { scopedOwnerPolicyDefinitions } from "./scoped-owner-policy-definitions";
 
-/** Each catalog change is its own transaction and uses the existing lock retry. */
-const policies = scopedOwnerPolicyDefinitions([
+/** Every scoped table whose owner policies the repair installs. */
+export const SCOPED_OWNER_POLICY_TABLES = [
   ...new Set(
     [
       ...Object.values(ORG_SCOPE_TABLES),
       ...Object.values(GLOBAL_SCOPE_TABLES),
     ].map(({ table }) => table),
   ),
-]);
+];
+
+/** Each catalog change is its own transaction and uses the existing lock retry. */
+const policies = scopedOwnerPolicyDefinitions(SCOPED_OWNER_POLICY_TABLES);
 
 export const SCOPED_OWNER_POLICIES_REPAIR: OnlineRepair = {
   introducedBy: "20261031202038_org_scoped_system_work",

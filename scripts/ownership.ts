@@ -55,6 +55,11 @@ export const SCHEMA_INTROSPECTION = [
     reason: "Enumerates full-schema table names without database operations.",
   },
   {
+    path: "apps/api/src/db/table-policies.ts",
+    reason:
+      "Collects linked table policies from full-schema exports without database operations.",
+  },
+  {
     path: "apps/api/src/lib/account-export/schema-census.ts",
     reason:
       "Enumerates user ownership from full-schema metadata without database operations.",

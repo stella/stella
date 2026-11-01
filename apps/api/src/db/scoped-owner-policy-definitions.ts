@@ -1,12 +1,13 @@
 import { panic } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
-import type { PgTable } from "drizzle-orm/pg-core";
+import type { PgPolicy, PgTable } from "drizzle-orm/pg-core";
 
 import { compareCodeUnit } from "@stll/collation";
 
 import type { PolicyDefinition } from "./online-ddl";
 import { ORG_SCOPE_ROLE_NAMES } from "./org-scope-role-names";
+import { LINKED_POLICIES, tablePolicies } from "./table-policies";
 
 const OWNER_ROLES: ReadonlySet<string> = new Set(
   Object.values(ORG_SCOPE_ROLE_NAMES),
@@ -15,15 +16,16 @@ const OWNER_ROLES: ReadonlySet<string> = new Set(
 /** Every declared owner policy is installed; names never form an exclusion list. */
 export const scopedOwnerPolicyDefinitions = (
   tables: readonly PgTable[],
+  linked: readonly PgPolicy[] = LINKED_POLICIES,
 ): PolicyDefinition[] => {
   const dialect = new PgDialect();
   const render = (expression: SQL) =>
     dialect.sqlToQuery(expression.inlineParams()).sql;
   return tables
-    .map(getTableConfig)
-    .toSorted((a, b) => compareCodeUnit(a.name, b.name))
-    .flatMap((config) =>
-      config.policies
+    .map((table) => ({ config: getTableConfig(table), table }))
+    .toSorted((a, b) => compareCodeUnit(a.config.name, b.config.name))
+    .flatMap(({ config, table }) =>
+      tablePolicies(table, linked)
         .toSorted((a, b) => compareCodeUnit(a.name, b.name))
         .flatMap((policy): PolicyDefinition[] => {
           const targets = Array.isArray(policy.to) ? policy.to : [policy.to];
