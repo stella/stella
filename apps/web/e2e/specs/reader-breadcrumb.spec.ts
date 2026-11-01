@@ -494,6 +494,12 @@ for (const view of views) {
             ),
           )
           .toEqual([]);
+        // Only levels on the bar count: the trail keeps its middle in the menu.
+        for (const title of ["Část druhá", "Díl 1"]) {
+          await expect(
+            breadcrumb.locator("ol button", { hasText: title }),
+          ).toBeVisible();
+        }
       }
       await current.click();
       await expect(

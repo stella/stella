@@ -36,12 +36,13 @@ const heading = (id: string): FlatAnalysisHeading => ({
 });
 
 /** The notes column's control over two headings at the given offsets. */
-const mount = (offsets: { first: number; second: number }) => {
+const mount = (offsets: { first: number; second: number }, scrollTop = 0) => {
   const { container } = render(<div />);
   container.getBoundingClientRect = () =>
     new DOMRect(0, CONTAINER_TOP, 400, 600);
   const scrollTo = mock(() => undefined);
   container.scrollTo = scrollTo;
+  Object.defineProperty(container, "scrollTop", { value: scrollTop });
   for (const [id, offset] of Object.entries(offsets)) {
     const block = container.ownerDocument.createElement("p");
     block.id = id;
@@ -79,12 +80,12 @@ describe("the section held above the notes", () => {
   });
 
   test("clicking the section lands its heading below the controls bar", () => {
-    const { control, scrollTo } = mount({
-      first: -400,
-      second: READER_BREADCRUMB_CLEARANCE,
-    });
+    const { control, scrollTo } = mount(
+      { first: -400, second: READER_BREADCRUMB_CLEARANCE },
+      300,
+    );
     fireEvent.click(control);
-    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: "instant" });
+    expect(scrollTo).toHaveBeenCalledWith({ top: 300, behavior: "instant" });
     expect(control.textContent).toContain("Section second");
   });
 

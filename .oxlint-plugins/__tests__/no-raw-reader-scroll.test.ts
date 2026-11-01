@@ -15,10 +15,12 @@ describe.serial(RULE_NAME, () => {
       `export const _c = (sc: HTMLElement, top: number) => sc.scrollTo({ top });`,
       `export const _d = (sc: HTMLElement | null, top: number) => sc?.scrollTo({ top });`,
       `export const _e = (sc: HTMLElement, top: number) => sc.scrollTo(0, top);`,
+      `export const _f = (sc: HTMLElement, options: ScrollToOptions) => sc.scrollTo(options);`,
+      `export const _g = (sc: HTMLElement, options: ScrollToOptions) => sc.scrollTo({ ...options });`,
       "",
     ].join("\n");
 
-    expect(await lint(source)).toEqual([1, 2, 3, 4, 5]);
+    expect(await lint(source)).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
   test("accepts the owner, the document's start and held positions", async () => {

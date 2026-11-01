@@ -9,6 +9,8 @@
 //   viewport.scrollTo({ top: target.getBoundingClientRect().top });
 //   scroller.scrollTo({ top });
 //   scroller.scrollTo(0, offset);
+//   scroller.scrollTo(options);
+//   scroller.scrollTo({ ...options });
 // Allowed:
 //   scrollReaderToBlock(target, container);
 //   scroller.scrollTo({ top: 0, behavior: "instant" });   // the document's start
@@ -49,19 +51,27 @@ export default eslintCompatPlugin({
               return;
             }
             const [options, top] = node.arguments;
-            if (top !== undefined && !isDocumentStart(top)) {
-              context.report({ node, messageId: "rawScroll" });
+            if (top !== undefined) {
+              if (!isDocumentStart(top)) {
+                context.report({ node, messageId: "rawScroll" });
+              }
               return;
             }
-            if (options?.type !== "ObjectExpression") {
+            if (options === undefined) {
+              return;
+            }
+            // Options the rule cannot read may hold a computed `top`: it fails
+            // closed rather than trust what a variable or a spread carries.
+            if (options.type !== "ObjectExpression") {
+              context.report({ node, messageId: "rawScroll" });
               return;
             }
             for (const property of options.properties) {
               if (
-                property.type === "Property" &&
-                !property.computed &&
-                getPropertyName(property.key) === "top" &&
-                !isDocumentStart(property.value)
+                property.type !== "Property" ||
+                (!property.computed &&
+                  getPropertyName(property.key) === "top" &&
+                  !isDocumentStart(property.value))
               ) {
                 context.report({ node, messageId: "rawScroll" });
                 return;
