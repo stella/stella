@@ -3112,6 +3112,28 @@ export const lockBillingCode = async (
       .for("update")
   ).at(0);
 
+/**
+ * The time entries a batch action locks before it checks and updates them;
+ * the caller holds the matter/timer guards. The action then updates these
+ * rows by id, so it never changes a row it did not lock and check.
+ */
+export const lockBatchTimeEntryCandidates = async (
+  tx: Transaction,
+  condition: SQL | undefined,
+  limit: number,
+) =>
+  await tx
+    .select({
+      id: timeEntries.id,
+      dateWorked: timeEntries.dateWorked,
+      narrative: timeEntries.narrative,
+      timezoneId: timeEntries.timezoneId,
+    })
+    .from(timeEntries)
+    .where(condition)
+    .limit(limit)
+    .for("update");
+
 /** Caller holds the matter/timer guards before changing nonbillable work. */
 export const lockUnbillableRateCandidates = async (
   tx: Transaction,

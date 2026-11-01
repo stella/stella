@@ -1789,21 +1789,9 @@
   },
   {
     "file": "apps/api/src/handlers/time-entries/batch/update.ts",
-    "fingerprint": "9b80457d5c66690ed4eb9f0e54e11f1690f893c35d3e866172891cf10d403086",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/time-entries/batch/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/time-entries/batch/update.ts",
     "fingerprint": "bc51ffce8fe7227ad57efae890ed95d71f13edd7c73013aaa974a25c9787bc6f",
     "count": 1,
     "reason": "Batch approval locks the same rows, now selected as submitted entries or the caller's own drafts instead of every draft, and reads each row's status for its audit."
-  },
-  {
-    "file": "apps/api/src/handlers/time-entries/batch/update.ts",
-    "fingerprint": "eee747a09646ba685ea19e5e7ff863ff56f91bf47f856899e22e4a675a0453ae",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/time-entries/batch/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/handlers/time-entries/split.ts",

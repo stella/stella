@@ -21,7 +21,10 @@ import {
 } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { lockUnbillableRateCandidates } from "@/api/lib/db/aggregate-lock";
+import {
+  lockBatchTimeEntryCandidates,
+  lockUnbillableRateCandidates,
+} from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
@@ -336,19 +339,11 @@ const batchUpdate = createSafeHandler(
             if (runningError) {
               return { type: "policy" as const, error: runningError, rows: [] };
             }
-            const candidates = await tx
-              .select({
-                id: timeEntries.id,
-                dateWorked: timeEntries.dateWorked,
-                narrative: timeEntries.narrative,
-                timezoneId: timeEntries.timezoneId,
-              })
-              .from(timeEntries)
-              .where(
-                and(condition, eq(timeEntries.status, BILLING_STATUS.APPROVED)),
-              )
-              .limit(ids.length)
-              .for("update");
+            const candidates = await lockBatchTimeEntryCandidates(
+              tx,
+              and(condition, eq(timeEntries.status, BILLING_STATUS.APPROVED)),
+              ids.length,
+            );
             const violation = getBatchPolicyViolation({
               candidates,
               policy,
@@ -566,24 +561,16 @@ const batchUpdate = createSafeHandler(
             if (runningError) {
               return { type: "policy" as const, error: runningError, rows: [] };
             }
-            const candidates = await tx
-              .select({
-                id: timeEntries.id,
-                dateWorked: timeEntries.dateWorked,
-                narrative: timeEntries.narrative,
-                timezoneId: timeEntries.timezoneId,
-              })
-              .from(timeEntries)
-              .where(
-                and(
-                  condition,
-                  eq(timeEntries.billable, true),
-                  ne(timeEntries.status, BILLING_STATUS.BILLED),
-                  ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
-                ),
-              )
-              .limit(ids.length)
-              .for("update");
+            const candidates = await lockBatchTimeEntryCandidates(
+              tx,
+              and(
+                condition,
+                eq(timeEntries.billable, true),
+                ne(timeEntries.status, BILLING_STATUS.BILLED),
+                ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
+              ),
+              ids.length,
+            );
             const violation = getBatchPolicyViolation({
               candidates,
               policy,
