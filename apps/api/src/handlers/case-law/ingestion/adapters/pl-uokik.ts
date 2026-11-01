@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
@@ -111,9 +112,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -2090,16 +2091,18 @@ const metadataField = (key: string): SourceFieldDisposition => ({
   target: { type: "metadata", key },
 });
 
+type PlUokikPublisherRecord = Readonly<Record<PlUokikSourceField, unknown>>;
+
 const PL_UOKIK_SOURCE_FIELDS = {
-  "listing.@position": excludedSourceField(
+  "listing.@position": legacyExcludedSourceField(
     "the row's place in a view that shifts with every decision published; the crawl reads it, the row does not keep it",
   ),
   "listing.@unid": { disposition: "stored", target: { type: "identity" } },
   "listing.@noteid": metadataField("noteId"),
-  "listing.@siblings": excludedSourceField(
+  "listing.@siblings": legacyExcludedSourceField(
     "the view's size, the same on every row; the total probe reads it",
   ),
-  "listing.entrydata": excludedSourceField(
+  "listing.entrydata": legacyExcludedSourceField(
     "the column container; each value in it is declared below",
   ),
   "listing.column.Numer decyzji": metadataField("decisionNumberAsListed"),
@@ -2126,7 +2129,10 @@ const PL_UOKIK_SOURCE_FIELDS = {
   "detail.Status sprawy w sądzie": metadataField("courtStatus"),
   "detail.Orzecznictwo": metadataField("appealRulings"),
   "detail.(unlabelled)": metadataField("unlabelledFields"),
-} as const satisfies Record<PlUokikSourceField, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof PlUokikPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /**
  * What the stored envelope states, by name. A label the page starts printing

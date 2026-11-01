@@ -32,6 +32,7 @@ import {
   nssRegistryDocumentUrl,
   nssRegistryUrl,
   parseNssPdf,
+  readNssRegistryMetadata,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
@@ -82,6 +83,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -1266,145 +1268,185 @@ const CZ_NSS_EXCLUSION = {
     "What the portal states about its own record rather than about the decision: when the entry was refreshed, which date its result list sorts on, and the paragraph-search aid printed beside it.",
 } as const;
 
+type CzNssPublisherRecord = Readonly<Record<CzNssSourceField, unknown>>;
+
 const CZ_NSS_SOURCE_FIELD_DISPOSITIONS = {
   datumvydanivsbnss: {
     disposition: "stored",
     target: { type: "metadata", key: "publicationDate" },
   },
   nadpis: { disposition: "stored", target: { type: "metadata", key: "title" } },
-  nssjudikat: excludedSourceField(CZ_NSS_EXCLUSION.REPORTER_PUBLICATION),
-  nssrok: excludedSourceField(CZ_NSS_EXCLUSION.REPORTER_PUBLICATION),
-  nsssesit: excludedSourceField(CZ_NSS_EXCLUSION.REPORTER_PUBLICATION),
-  pravnivetaan: excludedSourceField(
-    "The reporter's ano/ne headnote flag repeats whether the stored legal sentence is present.",
-  ),
+  nssjudikat: {
+    disposition: "stored",
+    target: { type: "metadata", key: "nssReporterNumber" },
+  },
+  nssrok: {
+    disposition: "stored",
+    target: { type: "metadata", key: "nssReporterYear" },
+  },
+  nsssesit: {
+    disposition: "stored",
+    target: { type: "metadata", key: "nssReporterIssue" },
+  },
+  vyhledavanidlehesel: {
+    disposition: "stored",
+    target: { type: "metadata", key: "nssKeywordSearchCode" },
+  },
+  "registry:Spisová značka": {
+    disposition: "stored",
+    target: { type: "metadata", key: "nssRegistryCaseNumber" },
+  },
+  "registry:Předkládací usnesení": {
+    disposition: "stored",
+    target: { type: "metadata", key: "nssRegistryReferral" },
+  },
+  "registry:Datum předložení": {
+    disposition: "stored",
+    target: { type: "metadata", key: "nssRegistryReferralDate" },
+  },
+  "registry:Proti věci": {
+    disposition: "stored",
+    target: { type: "metadata", key: "nssRegistryAgainstCases" },
+  },
+  "registry:Stav": {
+    disposition: "stored",
+    target: { type: "metadata", key: "nssRegistryStatus" },
+  },
+  "registry:Anotace": {
+    disposition: "stored",
+    target: { type: "metadata", key: "nssRegistryAnnotation" },
+  },
+  pravnivetaan: excludedSourceField({
+    reason: "duplicate_of",
+    justification:
+      "The flag repeats whether the stored legal sentence is present.",
+    pointer: "textFields.legalSentence",
+  }),
+  "registry:Datum rozhodnutí RS": excludedSourceField({
+    reason: "duplicate_of",
+    justification:
+      "The matched original repeats the decision date stored from the detail and listing.",
+    pointer: "decisionDate",
+  }),
+  "registry:Rozhodnutí RS": excludedSourceField({
+    reason: "duplicate_of",
+    justification:
+      "The matched original repeats the complete published reference stored from the listing.",
+    pointer: "metadata.publishedCaseNumber",
+  }),
   rozpornaprejudikatura: {
     disposition: "stored",
     target: { type: "metadata", key: "referencedCourtCases" },
   },
-  vyhledavanidlehesel: excludedSourceField(CZ_NSS_EXCLUSION.PORTAL_RECORD),
   vztahkpredpisům: {
     disposition: "stored",
     target: { type: "metadata", key: "statutes" },
   },
-
-  "registry:Spisová značka": excludedSourceField(
-    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  ),
-  "registry:Předkládací usnesení": excludedSourceField(
-    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  ),
-  "registry:Datum předložení": excludedSourceField(
-    CZ_NSS_EXCLUSION.PROCEEDING_DATES,
-  ),
-  "registry:Proti věci": excludedSourceField(CZ_NSS_EXCLUSION.RELATED_CASE_LAW),
-  "registry:Stav": excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
-  "registry:Datum rozhodnutí RS": excludedSourceField(
-    "The decision date is already stored from the portal detail page; the registry repeats it for the extended-chamber proceeding.",
-  ),
-  "registry:Rozhodnutí RS": excludedSourceField(
-    "The complete reference is already stored from the portal listing, including its sheet. The registry link is used to select that exact original.",
-  ),
-  "registry:Anotace": excludedSourceField(
-    "The registry's explanatory proceeding note is distinct from the decision and its legal sentence; the decision row has no proceeding-annotation field.",
-  ),
-  aktualizovano: excludedSourceField(CZ_NSS_EXCLUSION.PORTAL_RECORD),
-  "aplikovanepravnipredpisysb§": excludedSourceField(
+  aktualizovano: legacyExcludedSourceField(CZ_NSS_EXCLUSION.PORTAL_RECORD),
+  "aplikovanepravnipredpisysb§": legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
   ),
-  aplikovanepravnipredpisysbcislo: excludedSourceField(
+  aplikovanepravnipredpisysbcislo: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
   ),
-  aplikovanepravnipredpisysbcl: excludedSourceField(
+  aplikovanepravnipredpisysbcl: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
   ),
-  aplikovanepravnipredpisysbodst: excludedSourceField(
+  aplikovanepravnipredpisysbodst: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
   ),
-  aplikovanepravnipredpisysbpism: excludedSourceField(
+  aplikovanepravnipredpisysbpism: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
   ),
-  aplikovanepravnipredpisysbpredpis: excludedSourceField(
+  aplikovanepravnipredpisysbpredpis: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
   ),
-  aplikovanepravnipredpisysbrok: excludedSourceField(
+  aplikovanepravnipredpisysbrok: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
   ),
-  aplikovanopravoeu: excludedSourceField(CZ_NSS_EXCLUSION.APPLIED_LEGISLATION),
+  aplikovanopravoeu: legacyExcludedSourceField(
+    CZ_NSS_EXCLUSION.APPLIED_LEGISLATION,
+  ),
   citace: {
     disposition: "stored",
     target: { type: "metadata", key: "citation" },
   },
-  cj: excludedSourceField(CZ_NSS_EXCLUSION.LISTING_REFERENCE),
-  datumnapadenehorozhodnuti: excludedSourceField(
+  cj: legacyExcludedSourceField(CZ_NSS_EXCLUSION.LISTING_REFERENCE),
+  datumnapadenehorozhodnuti: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  datumpravnimoci: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_DATES),
-  datumpredkladacihorozhodnutinss: excludedSourceField(
+  datumpravnimoci: legacyExcludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_DATES),
+  datumpredkladacihorozhodnutinss: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  datumrozhodnutikrajskehosoudu: excludedSourceField(
+  datumrozhodnutikrajskehosoudu: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  datumskonceniirizeni: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_DATES),
+  datumskonceniirizeni: legacyExcludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_DATES,
+  ),
   datumvydanirozhodnuti: {
     disposition: "stored",
     target: { type: "result", key: "decisionDate" },
   },
-  datumvyhotovenirozhodnuti: excludedSourceField(
+  datumvyhotovenirozhodnuti: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_DATES,
   ),
-  datumvypravenirozhodnuti: excludedSourceField(
+  datumvypravenirozhodnuti: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_DATES,
   ),
-  datumzahajenirizeni: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_DATES),
-  datumzahajenirizeninka: excludedSourceField(
+  datumzahajenirizeni: legacyExcludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_DATES,
+  ),
+  datumzahajenirizeninka: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  druh: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
+  druh: legacyExcludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
   druhdokumentuavyrokrozhodnuti: {
     disposition: "stored",
     target: { type: "result", key: "decisionType" },
   },
   ecli: { disposition: "stored", target: { type: "result", key: "ecli" } },
-  hvtparagrafy: excludedSourceField(CZ_NSS_EXCLUSION.PORTAL_RECORD),
-  identifikacevesbirkach: excludedSourceField(
+  hvtparagrafy: legacyExcludedSourceField(CZ_NSS_EXCLUSION.PORTAL_RECORD),
+  identifikacevesbirkach: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
   ),
-  identifikacevesbirkachdelenejudikat: excludedSourceField(
+  identifikacevesbirkachdelenejudikat: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
   ),
-  identifikacevesbirkachdelenerok: excludedSourceField(
+  identifikacevesbirkachdelenerok: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
   ),
-  identifikacevesbirkachdelenesesit: excludedSourceField(
+  identifikacevesbirkachdelenesesit: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
   ),
-  kasacnistiznostoznacenivecideleneclistu: excludedSourceField(
+  kasacnistiznostoznacenivecideleneclistu: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  kasacnistiznostoznacenivecideleneporc: excludedSourceField(
+  kasacnistiznostoznacenivecideleneporc: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  kasacnistiznostoznacenivecidelenerejstrik: excludedSourceField(
+  kasacnistiznostoznacenivecidelenerejstrik: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  kasacnistiznostoznacenivecidelenerok: excludedSourceField(
+  kasacnistiznostoznacenivecidelenerok: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  kasacnistiznostoznacenivecidelenesenat: excludedSourceField(
+  kasacnistiznostoznacenivecidelenesenat: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  kasacnistiznostoznacenivecivcelku: excludedSourceField(
+  kasacnistiznostoznacenivecivcelku: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  kasacniustavnistiznost: excludedSourceField(
+  kasacniustavnistiznost: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  krajskysoud: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
-  napadeno: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
-  nazevorganu: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
-  nazevsoudusubjektu: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  krajskysoud: legacyExcludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  napadeno: legacyExcludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  nazevorganu: legacyExcludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
+  nazevsoudusubjektu: legacyExcludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
   nazevspravnihoorganu: {
     disposition: "stored",
     target: { type: "metadata", key: "administrativeAuthority" },
@@ -1413,58 +1455,66 @@ const CZ_NSS_SOURCE_FIELD_DISPOSITIONS = {
     disposition: "stored",
     target: { type: "metadata", key: "legalArea" },
   },
-  oznacenivecidelenecislojednaci: excludedSourceField(
+  oznacenivecidelenecislojednaci: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.LISTING_REFERENCE,
   ),
-  oznacenivecideleneporadovecislo: excludedSourceField(
+  oznacenivecideleneporadovecislo: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.LISTING_REFERENCE,
   ),
-  oznacenivecidelenerejstrikovaznacka: excludedSourceField(
+  oznacenivecidelenerejstrikovaznacka: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.LISTING_REFERENCE,
   ),
-  oznacenivecidelenerok: excludedSourceField(
+  oznacenivecidelenerok: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.LISTING_REFERENCE,
   ),
-  oznacenivecidelenesenat: excludedSourceField(
+  oznacenivecidelenesenat: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.LISTING_REFERENCE,
   ),
-  oznacenivecivcelku: excludedSourceField(CZ_NSS_EXCLUSION.LISTING_REFERENCE),
-  podanakasacnistiznostD: excludedSourceField(
+  oznacenivecivcelku: legacyExcludedSourceField(
+    CZ_NSS_EXCLUSION.LISTING_REFERENCE,
+  ),
+  podanakasacnistiznostD: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  povaha: excludedSourceField(CZ_NSS_EXCLUSION.RELATED_CASE_LAW),
-  pravnivetaanv: excludedSourceField(
+  povaha: legacyExcludedSourceField(CZ_NSS_EXCLUSION.RELATED_CASE_LAW),
+  pravnivetaanv: legacyExcludedSourceField(
     "The ano/ne flag stating whether the court wrote a headnote for this decision. The headnote itself is stored, so the flag only repeats whether that field is there.",
   ),
   pravnivetaupravena: {
     disposition: "stored",
     target: { type: "textField", key: "legalSentence" },
   },
-  prejudikaturaoznacenivecideleneclistu: excludedSourceField(
+  prejudikaturaoznacenivecideleneclistu: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
   ),
-  prejudikaturaoznacenivecideleneporc: excludedSourceField(
+  prejudikaturaoznacenivecideleneporc: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
   ),
-  prejudikaturaoznacenivecidelenerejstrik: excludedSourceField(
+  prejudikaturaoznacenivecidelenerejstrik: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
   ),
-  prejudikaturaoznacenivecidelenerok: excludedSourceField(
+  prejudikaturaoznacenivecidelenerok: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
   ),
-  prejudikaturaoznacenivecidelenesenat: excludedSourceField(
+  prejudikaturaoznacenivecidelenesenat: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
   ),
-  prejudikaturaoznacenivecivcelku: excludedSourceField(
+  prejudikaturaoznacenivecivcelku: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
   ),
-  rozhodnuto: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
-  rozhodnutivevztahukrizeni: excludedSourceField(
+  rozhodnuto: legacyExcludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  rozhodnutivevztahukrizeni: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  rozhodnutonapkasst: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
-  sbnsspublikovano: excludedSourceField(CZ_NSS_EXCLUSION.REPORTER_PUBLICATION),
-  souladnaprejudikatura: excludedSourceField(CZ_NSS_EXCLUSION.RELATED_CASE_LAW),
+  rozhodnutonapkasst: legacyExcludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  sbnsspublikovano: legacyExcludedSourceField(
+    CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
+  ),
+  souladnaprejudikatura: legacyExcludedSourceField(
+    CZ_NSS_EXCLUSION.RELATED_CASE_LAW,
+  ),
   soudcezpravodaj: {
     disposition: "stored",
     target: { type: "metadata", key: "judge" },
@@ -1473,36 +1523,38 @@ const CZ_NSS_SOURCE_FIELD_DISPOSITIONS = {
     disposition: "stored",
     target: { type: "metadata", key: "senate" },
   },
-  spzncjpredkladacihorozhodnutinss: excludedSourceField(
+  spzncjpredkladacihorozhodnutinss: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  spzncjrizenipodani: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
-  spzncjrozhodnutispravnihoorganu: excludedSourceField(
+  spzncjrizenipodani: legacyExcludedSourceField(
+    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
+  ),
+  spzncjrozhodnutispravnihoorganu: legacyExcludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
   stavrizeni: {
     disposition: "stored",
     target: { type: "metadata", key: "caseStatus" },
   },
-  sz: excludedSourceField(CZ_NSS_EXCLUSION.LISTING_REFERENCE),
+  sz: legacyExcludedSourceField(CZ_NSS_EXCLUSION.LISTING_REFERENCE),
   typrizeni: {
     disposition: "stored",
     target: { type: "metadata", key: "caseType" },
   },
-  typucastnika: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
-  typzastupce: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
+  typucastnika: legacyExcludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
+  typzastupce: legacyExcludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
   ucastnicirizeniz: {
     disposition: "stored",
     target: { type: "metadata", key: "parties" },
   },
-  ucastnikrizeni: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
+  ucastnikrizeni: legacyExcludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
   vyrokrozhodnuti: {
     disposition: "stored",
     target: { type: "metadata", key: "outcome" },
   },
-  zastupce: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
-  zobrazovanedatum: excludedSourceField(CZ_NSS_EXCLUSION.PORTAL_RECORD),
-} as const satisfies Record<CzNssSourceField, SourceFieldDisposition>;
+  zastupce: legacyExcludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
+  zobrazovanedatum: legacyExcludedSourceField(CZ_NSS_EXCLUSION.PORTAL_RECORD),
+} as const satisfies Record<keyof CzNssPublisherRecord, SourceFieldDisposition>;
 
 /** How the portal names each field it prints on a detail page. */
 const CZ_NSS_FIELD_ID_RE = /data-field-id="(?<field>[^"]+)"/giu;
@@ -1540,6 +1592,10 @@ const listCzNssSourceFields = (parts: SourceRawParts): readonly string[] => [
  * must bind to the same shape rather than restate its keys.
  */
 type CzNssDetailValues = {
+  nssKeywordSearchCode: string | undefined;
+  nssReporterIssue: string | undefined;
+  nssReporterYear: string | undefined;
+  nssReporterNumber: string | undefined;
   ecli: string | undefined;
   judge: string | undefined;
   senate: string | undefined;
@@ -1569,6 +1625,26 @@ type DetailFieldDefinition = {
   emptyValue: "preserve" | "omit";
 };
 const NSS_DETAIL_FIELDS = {
+  nssKeywordSearchCode: {
+    field: "vyhledavanidlehesel",
+    kind: NSS_DETAIL_FIELD_KIND.SCALAR,
+    emptyValue: "omit",
+  },
+  nssReporterIssue: {
+    field: "nsssesit",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+  nssReporterYear: {
+    field: "nssrok",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
+  nssReporterNumber: {
+    field: "nssjudikat",
+    kind: NSS_DETAIL_FIELD_KIND.MULTIPLE,
+    emptyValue: "omit",
+  },
   ecli: {
     field: "ecli",
     kind: NSS_DETAIL_FIELD_KIND.SCALAR,
@@ -1741,6 +1817,10 @@ export const parseCzNssDetailMetadata = (html: string): CzNssDetailMetadata => {
       evidence,
     });
   const values = {
+    nssKeywordSearchCode: read("nssKeywordSearchCode"),
+    nssReporterIssue: read("nssReporterIssue"),
+    nssReporterYear: read("nssReporterYear"),
+    nssReporterNumber: read("nssReporterNumber"),
     ecli: read("ecli"),
     judge: read("judge"),
     senate: read("senate"),
@@ -1771,6 +1851,10 @@ export const parseCzNssDetailMetadata = (html: string): CzNssDetailMetadata => {
  * case type, and parties.
  */
 const EMPTY_DETAIL: CzNssDetailMetadata = {
+  nssKeywordSearchCode: undefined,
+  nssReporterIssue: undefined,
+  nssReporterYear: undefined,
+  nssReporterNumber: undefined,
   ecli: undefined,
   judge: undefined,
   senate: undefined,
@@ -1919,6 +2003,10 @@ const detailMetadataFields = (
   title: detail.title,
   statutes: detail.statutes === undefined ? undefined : [detail.statutes],
   publicationDate: detail.publicationDate,
+  nssKeywordSearchCode: detail.nssKeywordSearchCode,
+  nssReporterIssue: detail.nssReporterIssue,
+  nssReporterYear: detail.nssReporterYear,
+  nssReporterNumber: detail.nssReporterNumber,
   referencedCourtCases:
     detail.conflictingPrecedents === undefined
       ? undefined
@@ -2040,6 +2128,10 @@ const rowToResult = ({
       publishedCaseNumber,
       court,
       ...detailMetadataFields(detail),
+      ...readNssRegistryMetadata({
+        html: content.recovery?.[CZ_NSS_RAW_PART.REGISTRY],
+        reference: publishedCaseNumber,
+      }),
       // The listing states an outcome for rows whose detail page does not.
       outcome: detail.outcome ?? row.outcome,
     }),
@@ -2340,6 +2432,10 @@ const reparseStoredRaw = async (
         ...(storedDetail === undefined
           ? {}
           : statedDetailMetadataFields(storedDetail)),
+        ...readNssRegistryMetadata({
+          html: parts?.[CZ_NSS_RAW_PART.REGISTRY],
+          reference: publishedCaseNumber,
+        }),
         sheetNumber,
         publishedCaseNumber,
       }),

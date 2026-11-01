@@ -1591,8 +1591,10 @@ const SK_US_COURT_FILE = JSON.stringify({
 });
 
 /** The two rosters the decision's judge fields are drawn from. */
+const SK_US_ACT_VOCABULARY = ["[nezadané]", "Aarhuský dohovor"];
 const SK_US_CODELIST = JSON.stringify({
   codelist: {
+    mkComplainedLegalRegulationAct: SK_US_ACT_VOCABULARY,
     mkJudgeReporter: ["Martin Vernarský", "Peter Straka"],
     mkDifferentViewJudges: ["Martin Vernarský", "Peter Straka"],
   },
@@ -1642,6 +1644,7 @@ export const skUsFixture = (
   documentUrl?: URL,
   identity?: ParserParityIdentity,
 ): EnrolledAdapterFixture => ({
+  rawFieldValues: { mkComplainedLegalRegulationAct: SK_US_ACT_VOCABULARY },
   buildDecision: async () => {
     if (documentUrl !== undefined) {
       const payload = await readGzipJson(documentUrl);

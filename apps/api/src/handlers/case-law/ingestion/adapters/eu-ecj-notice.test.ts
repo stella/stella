@@ -35,6 +35,7 @@ import {
   ecjRawParts,
   euEcjAdapter,
   fetchNotice,
+  readEcjFormexArchive,
   refreshEcjStoredFormex,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import type { EcjSparqlBinding } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
@@ -99,6 +100,10 @@ const formexEn = await gunzipText(
     import.meta.url,
   ),
 );
+
+const formexOriginalZip = await Bun.file(
+  new URL("__fixtures__/eu-ecj-62022CJ0128.en.formex.zip", import.meta.url),
+).arrayBuffer();
 
 const binding = {
   ecli: { type: "literal", value: "ECLI:EU:C:2023:951" },
@@ -858,7 +863,7 @@ describe("stored Formex refresh", () => {
     expect(outcome.decision.fulltext).not.toBe("");
   });
 
-  test("a successful Formex refresh removes an earlier refusal marker", async () => {
+  test("a successful Formex refresh preserves prior refusal provenance without marking the recovered document incomplete", async () => {
     const outcome = await refreshEcjStoredFormex({
       stored: refreshStored({
         ...ecjRawParts({
@@ -877,7 +882,7 @@ describe("stored Formex refresh", () => {
     }
     const parts = decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "");
     expect(parts?.["formex"]).toBe(formexEn);
-    expect(parts?.["formex-state"]).toBeUndefined();
+    expect(parts?.["formex-state"]).toBe("formex:refused:403");
     expect(outcome.decision.observationDetail).toBe("complete");
   });
 
@@ -906,6 +911,9 @@ describe("stored Formex refresh", () => {
     expect(outcome.bytes).toBeGreaterThan(0);
     const after = decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "");
     expect(after?.["formex"]?.startsWith("formex-archive:")).toBe(true);
+    expect(Buffer.from(after?.["formex-original-zip"] ?? "", "base64")).toEqual(
+      Buffer.from(bytes),
+    );
   });
 
   test("rejects a refreshed decision whose source identity differs from the stored row", async () => {
@@ -1019,9 +1027,7 @@ describe("stored Formex refresh", () => {
   });
 
   test("treats a stored archive as current without contacting Cellar", async () => {
-    const currentFormex = `formex-archive:${encodeSourceRawEnvelope({
-      "FORMEX/main.xml": Buffer.from("<current-formex />").toBase64(),
-    })}`;
+    const currentFormex = await readEcjFormexArchive(formexOriginalZip);
 
     const outcome = await refreshEcjStoredFormex({
       stored: refreshStored({
@@ -1030,6 +1036,7 @@ describe("stored Formex refresh", () => {
           html: documentEn,
           notice: undefined,
           formex: currentFormex,
+          formexOriginalZip: Buffer.from(formexOriginalZip).toBase64(),
         }),
       }),
       signal,
@@ -1037,6 +1044,110 @@ describe("stored Formex refresh", () => {
         await Promise.reject(new Error("current row must not fetch")),
     });
     expect(outcome).toEqual({ type: "unchanged-already-current" });
+  });
+});
+
+describe("original Formex ZIP retention", () => {
+  test("retains the publisher archive byte for byte through capture and replay", async () => {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.includes("/resource/celex/")) {
+        return new Response(noticeEn, {
+          headers: { "content-type": "application/xml" },
+        });
+      }
+      return url.endsWith("/DOC_1")
+        ? new Response(formexOriginalZip, {
+            headers: { "content-type": "application/zip" },
+          })
+        : new Response(documentEn, {
+            headers: { "content-type": "application/xhtml+xml" },
+          });
+    });
+    const crawled = await buildDecision(binding, AbortSignal.timeout(5000));
+    expect(crawled).toBeDefined();
+    if (crawled === undefined) {
+      return;
+    }
+    const parts = decodeSourceRawEnvelope(crawled.sourceRaw ?? "");
+    expect(Buffer.from(parts?.["formex-original-zip"] ?? "", "base64")).toEqual(
+      Buffer.from(formexOriginalZip),
+    );
+    const replayed = await reparse(storedFrom(crawled.sourceRaw ?? ""));
+    expect(replayed.type).toBe("parsed");
+    if (replayed.type === "parsed") {
+      expect(replayed.result.sourceRaw).toBe(crawled.sourceRaw);
+      expect(replayed.result.rawHash).toBe(crawled.rawHash);
+    }
+  });
+
+  test("container-only archive changes cannot be deduplicated as unchanged", async () => {
+    // The member projection loses ZIP comments, so it cannot identify the original response.
+    const archive = new JSZip();
+    writeZipEntry(archive, "FORMEX/main.xml", formexEn);
+    const originalZip = await archive.generateAsync({ type: "arraybuffer" });
+    const changedZip = await archive.generateAsync({
+      type: "arraybuffer",
+      comment: "changed container metadata",
+    });
+    const formex = await readEcjFormexArchive(originalZip);
+    expect(await readEcjFormexArchive(changedZip)).toBe(formex);
+    const results = await Promise.all(
+      [undefined, originalZip, changedZip, originalZip].map(
+        async (zip) =>
+          await reparse(
+            storedFrom(
+              encodeSourceRawEnvelope(
+                ecjRawParts({
+                  binding,
+                  html: documentEn,
+                  notice: noticeEn,
+                  formex,
+                  formexOriginalZip:
+                    zip === undefined ? undefined : Buffer.from(zip).toBase64(),
+                }),
+              ),
+            ),
+          ),
+      ),
+    );
+    const hashes = results.map((result) => {
+      expect(result.type).toBe("parsed");
+      if (result.type !== "parsed") {
+        throw new TypeError(`Expected parsed, got ${result.type}`);
+      }
+      return result.result.rawHash;
+    });
+    expect(new Set(hashes).size).toBe(3);
+    expect(hashes.at(1)).toBe(hashes.at(3));
+  });
+
+  test("refreshes a normalized-only archive to retain the publisher ZIP", async () => {
+    const formex = await readEcjFormexArchive(formexOriginalZip);
+    const old = storedFrom(
+      encodeSourceRawEnvelope(
+        ecjRawParts({ binding, html: documentEn, notice: noticeEn, formex }),
+      ),
+    );
+    const before = await reparse(old);
+    const refreshed = await refreshEcjStoredFormex({
+      stored: old,
+      signal: AbortSignal.timeout(5000),
+      fetchFormex: async () =>
+        new Response(formexOriginalZip, {
+          headers: { "content-type": "application/zip" },
+        }),
+    });
+    expect(refreshed.type).toBe("refreshed");
+    if (refreshed.type !== "refreshed" || before.type !== "parsed") {
+      return;
+    }
+    const parts = decodeSourceRawEnvelope(refreshed.decision.sourceRaw ?? "");
+    expect(parts?.["formex"]).toBe(formex);
+    expect(Buffer.from(parts?.["formex-original-zip"] ?? "", "base64")).toEqual(
+      Buffer.from(formexOriginalZip),
+    );
+    expect(refreshed.decision.rawHash).not.toBe(before.result.rawHash);
   });
 });
 

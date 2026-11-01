@@ -88,6 +88,17 @@ const UNSELECTED_SUMMARY_COLUMNS = [
   "textS3Key",
   "normalizedS3Key",
   "astS3Key",
+  // These materialized publisher fields are already represented in metadata.
+  "nssReporterNumber",
+  "nssReporterYear",
+  "nssReporterIssue",
+  "nssKeywordSearchCode",
+  "nssRegistryCaseNumber",
+  "nssRegistryReferral",
+  "nssRegistryReferralDate",
+  "nssRegistryAgainstCases",
+  "nssRegistryStatus",
+  "nssRegistryAnnotation",
   // Ingestion, publication and indexing lifecycle stays on the server.
   "textlessDetailRecheckedAt",
   "documentFetchRequestedAt",

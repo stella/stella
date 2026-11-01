@@ -1965,6 +1965,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
+    "./.oxlint-plugins/no-source-raw-projection.ts",
     "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
@@ -5588,6 +5589,15 @@ const config = defineConfig({
         "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
           "error",
       },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/**/*.ts",
+        "apps/api/src/lib/legal-search/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-source-raw-projection.fixture.ts",
+      ],
+      excludeFiles: ["**/*.test.ts"],
+      rules: { "no-source-raw-projection/no-source-raw-projection": "error" },
     },
     {
       files: ["apps/api/src/**/*.ts"],

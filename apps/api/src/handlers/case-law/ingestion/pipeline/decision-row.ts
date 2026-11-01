@@ -32,6 +32,7 @@ import {
   lostRowWriteStatus,
   readDocumentlessPayloadStateTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-update";
+import { nssPublisherColumns } from "@/api/handlers/case-law/ingestion/pipeline/nss-publisher-columns";
 import { DECISION_ROW_WRITE_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { DecisionRowWriteStatus } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import {
@@ -84,6 +85,7 @@ const insertedRowValues = (
   ...payloadColumns,
   sourceUrl: result.sourceUrl,
   documentUrl: result.documentUrl,
+  ...nssPublisherColumns(preparedMetadata),
   metadata: storesUnpublishedWithoutDocument
     ? markListingOnly(preparedMetadata)
     : preparedMetadata,

@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "CZ_NSS",
   "key": "cz-nss",
-  "parserVersion": 26,
+  "parserVersion": 27,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage."
+    "reason": "Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Rebuild inline emphasis from retained PDF originals with the shared style mapper. Discovering an uncaptured original requires a normal re-crawl. Re-read reporter and matched registry fields from captured publisher responses; missing historical captures require a re-crawl."
   }
 }

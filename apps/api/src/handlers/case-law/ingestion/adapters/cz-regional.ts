@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: cursor counters are validated before fetching; decision parsing is unchanged.
@@ -78,9 +79,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -1856,6 +1857,16 @@ const SOURCE_FIELDS = [
  * its own ECLI and dates, and a listing row reached without its document is
  * the only statement of the judge, the keywords and the statutes in words.
  */
+type CzRegionalPublisherRecord = Readonly<
+  Record<
+    | (typeof SOURCE_FIELDS)[number]
+    | `listing.${keyof CzRegionalApiItem}`
+    | `document.${keyof CzRegionalFinaldoc}`
+    | `document.metadata.${keyof NonNullable<CzRegionalFinaldoc["metadata"]>}`,
+    unknown
+  >
+>;
+
 const CZ_REGIONAL_SOURCE_FIELDS = {
   "listing.jednaciCislo": {
     disposition: "stored",
@@ -1919,7 +1930,7 @@ const CZ_REGIONAL_SOURCE_FIELDS = {
     target: { type: "document" },
   },
   "document.styles": { disposition: "stored", target: { type: "document" } },
-  "document.metadata": excludedSourceField(
+  "document.metadata": legacyExcludedSourceField(
     "the object holding the thirteen metadata keys below, each of which carries its own disposition",
   ),
   "document.texts[].text": {
@@ -1936,20 +1947,20 @@ const CZ_REGIONAL_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "document" },
   },
-  "document.tableCellInfo": excludedSourceField(
+  "document.tableCellInfo": legacyExcludedSourceField(
     "a paragraph's placement inside a table; every payload sampled states it as null, so the shape a non-null value would take is unstated and nothing can be read from it",
   ),
   "document.styles[].localId": {
     disposition: "stored",
     target: { type: "document" },
   },
-  "document.styles[].alignment": excludedSourceField(
+  "document.styles[].alignment": legacyExcludedSourceField(
     "how the paragraph was aligned on the printed page; the document model carries the text and its emphasis, not its layout",
   ),
-  "document.styles[].hasSpaceBefore": excludedSourceField(
+  "document.styles[].hasSpaceBefore": legacyExcludedSourceField(
     "vertical spacing above the paragraph on the printed page, which the document model does not represent",
   ),
-  "document.styles[].hasSpaceAfter": excludedSourceField(
+  "document.styles[].hasSpaceAfter": legacyExcludedSourceField(
     "vertical spacing below the paragraph on the printed page, which the document model does not represent",
   ),
   "document.styles[].bold": {
@@ -2042,7 +2053,7 @@ const CZ_REGIONAL_SOURCE_FIELDS = {
     target: { type: "metadata", key: "affectingDocs" },
   },
 } as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
+  keyof CzRegionalPublisherRecord,
   SourceFieldDisposition
 >;
 

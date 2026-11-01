@@ -32,6 +32,7 @@ import {
   recordParsedGenerationTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import type { DecisionRowWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
+import { nssPublisherColumns } from "@/api/handlers/case-law/ingestion/pipeline/nss-publisher-columns";
 import {
   observationStillOwns,
   storedObservationPrecedes,
@@ -327,6 +328,7 @@ export const describeRowUpdateTx = async (
     ? {}
     : {
         ...statedDocketColumns,
+        ...nssPublisherColumns(preparedMetadata),
         sourceDocumentId: persistedSourceDocumentId,
         ecli: result.ecli,
         court: result.court,
