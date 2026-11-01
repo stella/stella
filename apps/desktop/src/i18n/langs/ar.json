@@ -58,7 +58,9 @@
     "sessionClosedSaved": "{fileName} — تبقى النسخة المحلية محفوظة في نسخ العمل المؤقتة",
     "takenOverBody": "{fileName} — أعد الفتح من stella هنا لاستعادة التحرير",
     "takenOverTitle": "انتقل التحرير إلى جهاز آخر",
-    "takenOverLocalError": "انتقل التحرير على سطح المكتب إلى جهاز آخر. هذه النسخة المحلية محفوظة."
+    "takenOverLocalError": "انتقل التحرير على سطح المكتب إلى جهاز آخر. هذه النسخة المحلية محفوظة.",
+    "editsSetAsideTitle": "تم وضع التعديلات جانبًا",
+    "editsSetAsideBody": "تم وضع التعديلات غير المحفوظة جانبًا. أعد الاتصال بالحساب نفسه لفتح مجلد الاسترداد من الإعدادات."
   },
   "dialog": {
     "accountWindowTitle": "ربط الحساب",
@@ -232,7 +234,16 @@
     "permissionDenied": "متوقف في إعدادات النظام.",
     "permissionManaged": "تديره مؤسستك",
     "errorUpdateAutostart": "تعذّر على stella desktop تحديث البدء عند تسجيل الدخول.",
-    "errorPermissions": "تعذّر على stella desktop قراءة هذا الإذن أو تغييره."
+    "errorPermissions": "تعذّر على stella desktop قراءة هذا الإذن أو تغييره.",
+    "recoveryTitle": "التعديلات الموضوعة جانبًا",
+    "recoveryBody": "تُحفَظ التعديلات غير المحفوظة هنا لحسابك. افتح المجلد لاستعادتها.",
+    "recoverySignIn": "وُضعت التعديلات جانبًا لحسابهم. أعد الاتصال بذلك الحساب لفتح مجلده.",
+    "recoveryUnassigned": "لا يوجد حساب مسجل لبعض التعديلات. افتح مجلدها لاستعادتها يدويًا.",
+    "recoveryPending": "لا تزال بعض التعديلات قيد الوضع جانبًا. أعد المحاولة لإكمال العملية.",
+    "recoveryOpenFolder": "فتح مجلد الاسترداد",
+    "recoveryOpenUnassigned": "فتح التعديلات غير المرتبطة بحساب",
+    "recoveryFilePending": "بانتظار وضعها جانبًا",
+    "recoveryError": "تعذر فتح مجلد الاسترداد. أعد المحاولة."
   },
   "clipboard": {
     "registryUnavailable": "لا توجد سجلات مفعّلة لجهات اختصاص ممارستك.",

@@ -134,8 +134,13 @@ fn record_check(now: u64) {
     tracing::warn!("updater timestamp has no data directory");
     return;
   };
-  let result = std::fs::create_dir_all(path.parent().expect("updater data directory"))
-    .and_then(|()| std::fs::write(path, now.to_string()));
+  let result = crate::local_store::create_private_dir(
+    path.parent().expect("updater data directory"),
+  )
+  .map_err(|error| error.to_string())
+  .and_then(|()| {
+    crate::local_store::write_private_atomic(&path, now.to_string().as_bytes())
+  });
   if let Err(error) = result {
     tracing::warn!(%error, "updater timestamp could not be saved");
   }
@@ -214,12 +219,11 @@ pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckO
     }
   };
 
-  if let Err(err) = update.install(&package) {
+  if let Err(err) = crate::local_store::install_update(&update, &package) {
     #[cfg(windows)]
     crate::desktop_crash::resume_after_failed_update(handle);
-    let msg = err.to_string();
-    notify(handle, "Stella update failed", &msg);
-    return CheckOutcome::Failed(msg);
+    notify(handle, "Stella update failed", &err);
+    return CheckOutcome::Failed(err);
   }
 
   // On Windows the plugin has already handed off to the installer and
@@ -263,17 +267,28 @@ fn signed_version(trusted_comment: &str) -> Option<&str> {
     .find_map(|field| field.strip_prefix("version:"))
 }
 
+/// An update package whose signature this module checked; only
+/// `verify_update_package` constructs one, so nothing unverified installs.
+pub struct VerifiedUpdatePackage(Vec<u8>);
+
+impl VerifiedUpdatePackage {
+  pub fn as_bytes(&self) -> &[u8] {
+    &self.0
+  }
+}
+
 fn verify_update_package(
-  package: &[u8],
+  package: Vec<u8>,
   signature: &str,
   announced_version: &str,
-) -> Result<(), String> {
+) -> Result<VerifiedUpdatePackage, String> {
   verify_signed_package(
     &updater_public_key()?,
-    package,
+    &package,
     signature,
     announced_version,
-  )
+  )?;
+  Ok(VerifiedUpdatePackage(package))
 }
 
 /// Verifies `package` against `public_key` and requires the signature's
@@ -315,7 +330,7 @@ fn checked_update_size(current: usize, chunk: usize) -> Result<usize, String> {
 
 async fn download_update_package(
   update: &tauri_plugin_updater::Update,
-) -> Result<Vec<u8>, String> {
+) -> Result<VerifiedUpdatePackage, String> {
   let mut headers = update.headers.clone();
   if !headers.contains_key(ACCEPT) {
     headers.insert(ACCEPT, HeaderValue::from_static("application/octet-stream"));
@@ -352,8 +367,7 @@ async fn download_update_package(
     checked_update_size(package.len(), chunk.len())?;
     package.extend_from_slice(&chunk);
   }
-  verify_update_package(&package, &update.signature, &update.version)?;
-  Ok(package)
+  verify_update_package(package, &update.signature, &update.version)
 }
 
 fn notify(handle: &AppHandle, title: &str, body: &str) {

@@ -35,7 +35,9 @@ async fn spawn_test_bridge() -> TestBridge {
   let address = listener.local_addr().unwrap();
   let router = build_router(BridgeState {
     account: Arc::new(Mutex::new(crate::account::AccountStore::Memory(None))),
-    manager: Arc::new(Mutex::new(SessionManager::new())),
+    manager: Arc::new(Mutex::new(
+      SessionManager::new().expect("test data directory"),
+    )),
     static_allowed_origins: HashSet::from([ALLOWED_ORIGIN.to_string()]),
     bridge_port: address.port(),
   });

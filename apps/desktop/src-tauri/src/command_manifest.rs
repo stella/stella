@@ -5,6 +5,7 @@ macro_rules! with_stella_commands {
       account::account_record_use => "account_record_use",
       account::account_disconnect => "account_disconnect",
       commands::get_state => "get_state",
+      commands::open_recovery_folder => "open_recovery_folder",
       registry::registry_copy => "registry_copy",
       registry::registry_get_state => "registry_get_state",
       registry::registry_search => "registry_search",

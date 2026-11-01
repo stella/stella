@@ -132,6 +132,12 @@ const SETTINGS_SNAPSHOT = {
     revisionCreated: true,
     syncIssues: true,
   },
+  documentRecovery: {
+    edits: [],
+    unassigned: false,
+    pending: false,
+    access: "available",
+  },
   runningSince: "2026-09-08T05:00:00.000Z",
   sessions: [],
   trustedSelfHostConnections: [],

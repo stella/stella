@@ -22,6 +22,28 @@ pub async fn lock_requests() -> tokio::sync::MutexGuard<'static, ()> {
   REQUESTS.get_or_init(|| Mutex::new(())).lock().await
 }
 
+/// Keeps account selection and the document owner inside the same request
+/// lease. Callers retain the lease through snapshot or recovery delivery.
+pub(crate) struct SessionAccountRead<'a> {
+  pub manager: tokio::sync::MutexGuard<'a, crate::session_manager::SessionManager>,
+  pub current: Result<Option<LinkedAccount>, String>,
+  pub lease: tokio::sync::MutexGuard<'static, ()>,
+}
+
+pub(crate) async fn read_session_account<'a>(
+  account: &AccountState,
+  sessions: &'a crate::commands::AppState,
+) -> SessionAccountRead<'a> {
+  let lease = lock_requests().await;
+  let manager = sessions.lock().await;
+  let current = current(account).await;
+  SessionAccountRead {
+    manager,
+    current,
+    lease,
+  }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PendingRotation {
@@ -857,26 +879,95 @@ async fn prepare_replacement(
 
 pub async fn link(
   state: &AccountState,
+  sessions: &crate::commands::AppState,
   request: LinkAccountRequest,
   web_origin: &str,
   expected_identity: &DesktopAccountIdentity,
 ) -> Result<LinkOutcome, String> {
   let mut pending = LinkedAccount::from_request(request, web_origin)?;
   let _lease = lock_requests().await;
-  // Do not publish a profile for a credential the API has not accepted.
-  let mut store = state.lock().await;
   pending.device_key = crate::device_proof::required().await?;
-  persist_link(&mut store, pending, expected_identity).await
+  let (prepared, owner) = {
+    let mut store = state.lock().await;
+    let prepared = match prepare_link(&mut store, pending, expected_identity).await {
+      Ok(prepared) => prepared,
+      Err(error) => {
+        let current = store.load_usable().await;
+        drop(store);
+        match current {
+          Ok(current) => {
+            sessions
+              .lock()
+              .await
+              .set_account_owner(
+                current
+                  .as_ref()
+                  .map(crate::document_sessions::AccountOwner::for_account),
+              )
+              .await?;
+            crate::session_manager::SessionManager::attach_pending_listeners(sessions)
+              .await;
+          }
+          Err(lookup_error) => {
+            tracing::warn!(error = %lookup_error, "document account lookup remains unavailable")
+          }
+        }
+        return Err(error);
+      }
+    };
+    let current = match &prepared {
+      Some(account) => Some(account.clone()),
+      None => store.load_usable().await?,
+    };
+    drop(store);
+    let owner = current
+      .as_ref()
+      .map(crate::document_sessions::AccountOwner::for_account);
+    (prepared, owner)
+  };
+  let mut manager = sessions.lock().await;
+  let changed = !manager.is_account_owner(owner.as_ref());
+  if changed {
+    manager.set_account_owner(None).await?;
+  }
+  let outcome = match prepared {
+    Some(account) => {
+      let mut store = state.lock().await;
+      store.stage(None).await?;
+      store.save(account).await?;
+      drop(store);
+      LinkOutcome::Linked
+    }
+    None => LinkOutcome::Unchanged,
+  };
+  manager.set_account_owner(owner).await?;
+  drop(manager);
+  crate::session_manager::SessionManager::attach_pending_listeners(sessions).await;
+  Ok(outcome)
 }
 
+#[cfg(test)]
 async fn persist_link(
   store: &mut AccountStore,
   pending: PendingLinkedAccount,
   expected_identity: &DesktopAccountIdentity,
 ) -> Result<LinkOutcome, String> {
+  let Some(account) = prepare_link(store, pending, expected_identity).await? else {
+    return Ok(LinkOutcome::Unchanged);
+  };
+  store.stage(None).await?;
+  store.save(account).await?;
+  Ok(LinkOutcome::Linked)
+}
+
+async fn prepare_link(
+  store: &mut AccountStore,
+  pending: PendingLinkedAccount,
+  expected_identity: &DesktopAccountIdentity,
+) -> Result<Option<LinkedAccount>, String> {
   let outcome = prepare_replacement(store, &pending).await?;
   if outcome == LinkOutcome::Unchanged {
-    return Ok(outcome);
+    return Ok(None);
   }
   let config = crate::registry::request(
     crate::registry::RegistryRequestAuth {
@@ -893,9 +984,7 @@ async fn persist_link(
   {
     return Err("Desktop account connection does not match".into());
   }
-  store.stage(None).await?;
-  store.save(account).await?;
-  Ok(LinkOutcome::Linked)
+  Ok(Some(account))
 }
 
 /// Ends the link after the API rejected `account`'s credential. The account
@@ -943,6 +1032,33 @@ pub(crate) fn set_reconnect_needed(app: &tauri::AppHandle, needed: bool) {
 }
 
 pub fn notify(app: &tauri::AppHandle) {
+  use tauri::Manager;
+  if let (Some(sessions), Some(account)) = (
+    app.try_state::<crate::commands::AppState>(),
+    app.try_state::<AccountState>(),
+  ) {
+    let sessions = Arc::clone(&sessions);
+    let account = Arc::clone(&account);
+    tauri::async_runtime::spawn(async move {
+      let _lease = lock_requests().await;
+      let owner = match current(&account).await {
+        Ok(account) => account
+          .as_ref()
+          .map(crate::document_sessions::AccountOwner::for_account),
+        Err(error) => {
+          tracing::warn!(error = %error, "document account lookup failed");
+          return;
+        }
+      };
+      let mut manager = sessions.lock().await;
+      if let Err(error) = manager.set_account_owner(owner).await {
+        tracing::warn!(error = %error, "document account transition remains pending");
+        return;
+      }
+      drop(manager);
+      crate::session_manager::SessionManager::attach_pending_listeners(&sessions).await;
+    });
+  }
   crate::feature_access::account_changed(app, crate::activity::unload_account);
   if let Err(error) = app.emit(CHANGED_EVENT, ()) {
     tracing::warn!(error = %error, "desktop account change was not delivered");
@@ -966,8 +1082,24 @@ pub async fn account_get_state(
   require_account_window(&window)?;
   // Name the server a new connection would really open, never a default the
   // selected self-hosted server overrides.
-  let server = crate::commands::browser_connect_server(&*sessions.lock().await);
-  let current = current(&state).await;
+  let SessionAccountRead {
+    mut manager,
+    current,
+    lease: _lease,
+  } = read_session_account(&state, &sessions).await;
+  let server = crate::commands::browser_connect_server(&manager);
+  if let Ok(current) = &current {
+    manager
+      .set_account_owner(
+        current
+          .as_ref()
+          .map(crate::document_sessions::AccountOwner::for_account),
+      )
+      .await?;
+  }
+  drop(manager);
+  crate::session_manager::SessionManager::attach_pending_listeners(sessions.inner())
+    .await;
   set_reconnect_needed(
     &app,
     matches!(&current, Err(error) if error == crate::device_proof::RECONNECT),
@@ -991,6 +1123,7 @@ pub async fn account_disconnect(
   app: tauri::AppHandle,
   window: WebviewWindow,
   state: State<'_, AccountState>,
+  sessions: State<'_, crate::commands::AppState>,
 ) -> Result<(), String> {
   require_account_window(&window)?;
   let _lease = lock_requests().await;
@@ -1022,9 +1155,12 @@ pub async fn account_disconnect(
     })
     .await?;
   }
+  let mut manager = sessions.lock().await;
+  manager.set_account_owner(None).await?;
   let mut store = state.lock().await;
   store.clear_ended_link().await?;
   drop(store);
+  drop(manager);
   *BROWSER_CONNECTION
     .lock()
     .map_err(with_cause_logged("Desktop connection is unavailable"))? = None;
@@ -1674,7 +1810,15 @@ async fn redeem_browser_connection(
   };
   let credential_key = request.credential.key.clone();
   drop(saved);
-  if let Err(error) = link(&state, request, &web_origin, &expected_identity).await {
+  if let Err(error) = link(
+    &state,
+    &app.state::<crate::commands::AppState>(),
+    request,
+    &web_origin,
+    &expected_identity,
+  )
+  .await
+  {
     crate::registry::request(
       crate::registry::RegistryRequestAuth {
         api_base_url: &api_base_url,

@@ -1824,6 +1824,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_INSTANCE",
   "STELLA_DOCKER_KEEPER_LABEL",
   "STELLA_INFRA_OFFSET",
+  // Prevents recursive spawning of native file-mode test subprocesses.
+  "STELLA_LOCAL_FILE_CHILD",
   "STELLA_PORT_OFFSET",
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   // Development render census: verify React Refresh with isolated temporary modules.

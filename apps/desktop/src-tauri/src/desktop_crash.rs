@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
-  fs::{self, OpenOptions},
-  io::{self, Read, Write},
+  fs,
+  io::{self, Read},
   path::{Path, PathBuf},
   sync::{Arc, Mutex},
   time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -452,15 +452,11 @@ fn lock_run(path: &Path) -> io::Result<Option<RunLock>> {
   let parent = path.parent().ok_or_else(|| {
     io::Error::new(io::ErrorKind::InvalidInput, "missing marker directory")
   })?;
-  fs::create_dir_all(parent)?;
-  let mut options = OpenOptions::new();
-  options.read(true).write(true).create(true).truncate(false);
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::OpenOptionsExt;
-    options.mode(0o600);
-  }
-  let file = options.open(path.with_extension("lock"))?;
+  crate::local_store::create_private_dir(parent)?;
+  let file = crate::local_store::open_private(
+    crate::local_store::OpenMode::Lock,
+    &path.with_extension("lock"),
+  )?;
   match file.try_lock() {
     Ok(()) => Ok(Some(RunLock {
       path: path.to_path_buf(),
@@ -519,26 +515,8 @@ fn read_previous_run(path: &Path) -> io::Result<Option<RunMarker>> {
 }
 
 fn write_marker(path: &Path, marker: &RunMarker) -> io::Result<()> {
-  let temporary = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
-  // Atomic replacement preserves the startup record if a panic write fails.
-  let mut options = OpenOptions::new();
-  options.write(true).create_new(true);
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::OpenOptionsExt;
-    options.mode(0o600);
-  }
-  let mut file = options.open(&temporary)?;
-  let result = (|| {
-    serde_json::to_writer(&mut file, marker)?;
-    file.flush()?;
-    file.sync_all()?;
-    fs::rename(&temporary, path)
-  })();
-  if result.is_err() {
-    let _ = fs::remove_file(temporary);
-  }
-  result
+  let bytes = serde_json::to_vec(marker)?;
+  crate::local_store::write_private_atomic(path, &bytes).map_err(io::Error::other)
 }
 
 fn begin_run(lock: &RunLock, now: u64, pid: u32) -> io::Result<Option<RunMarker>> {
@@ -562,6 +540,10 @@ fn discard_disabled_marker(lock: &RunLock) -> io::Result<()> {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
 
@@ -798,7 +780,7 @@ mod tests {
   fn stale_marker_with_an_unrelated_live_pid_is_consumed_when_lock_is_available() {
     let _children = crate::test_child_processes::shared();
     let path = path();
-    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    crate::local_store::create_private_dir(path.parent().unwrap()).unwrap();
     // The test process is alive, but never owned this stale app run.
     let unrelated_live_pid = std::process::id();
     write_marker(&path, &new_marker(100, unrelated_live_pid)).unwrap();
@@ -880,7 +862,7 @@ mod tests {
   #[test]
   fn rejects_oversized_and_nonregular_markers() {
     let path = path();
-    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    crate::local_store::create_private_dir(path.parent().unwrap()).unwrap();
     fs::write(
       &path,
       vec![b'x'; usize::try_from(MAX_MARKER_BYTES + 1).unwrap()],

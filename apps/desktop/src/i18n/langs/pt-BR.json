@@ -58,7 +58,9 @@
     "sessionClosedSaved": "{fileName} — A cópia local permanece preservada em Cópias de trabalho temporárias",
     "takenOverBody": "{fileName} — Reabra pela stella aqui para retomar a edição",
     "takenOverTitle": "A edição foi movida para outro dispositivo",
-    "takenOverLocalError": "A edição no desktop foi movida para outro dispositivo. Esta cópia local está preservada."
+    "takenOverLocalError": "A edição no desktop foi movida para outro dispositivo. Esta cópia local está preservada.",
+    "editsSetAsideTitle": "Edições deixadas de lado",
+    "editsSetAsideBody": "As edições não salvas foram deixadas de lado. Conecte-se novamente à mesma conta para abrir a pasta de recuperação em Configurações."
   },
   "dialog": {
     "accountWindowTitle": "Conectar conta",
@@ -232,7 +234,16 @@
     "permissionDenied": "Desativado nas configurações do sistema.",
     "permissionManaged": "Gerenciado pela sua organização",
     "errorUpdateAutostart": "O stella desktop não conseguiu atualizar o início ao fazer login.",
-    "errorPermissions": "O stella desktop não conseguiu ler nem alterar esta permissão."
+    "errorPermissions": "O stella desktop não conseguiu ler nem alterar esta permissão.",
+    "recoveryTitle": "Edições deixadas de lado",
+    "recoveryBody": "As edições não salvas ficam armazenadas aqui para sua conta. Abra a pasta para recuperá-las.",
+    "recoverySignIn": "As edições foram deixadas de lado para essa conta. Conecte-se novamente a essa conta para abrir a pasta dela.",
+    "recoveryUnassigned": "Algumas edições não têm uma conta registrada. Abra a pasta delas para recuperá-las manualmente.",
+    "recoveryPending": "Algumas edições ainda estão sendo deixadas de lado. Tente novamente para concluir.",
+    "recoveryOpenFolder": "Abrir pasta de recuperação",
+    "recoveryOpenUnassigned": "Abrir edições sem conta atribuída",
+    "recoveryFilePending": "Aguardando para serem deixadas de lado",
+    "recoveryError": "Não foi possível abrir a pasta de recuperação. Tente novamente."
   },
   "clipboard": {
     "registryUnavailable": "Nenhum registro está habilitado para as jurisdições em que você atua.",

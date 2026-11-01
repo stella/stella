@@ -58,7 +58,9 @@
     "sessionClosedUnsaved": "{fileName} — Jums ir nesaglabāti lokālie labojumi. Savu kopiju atradīsiet Pagaidu darba kopijās.",
     "takenOverBody": "{fileName} — Atkārtoti atveriet no stella, lai pārņemtu rediģēšanu atpakaļ",
     "takenOverLocalError": "Darbvirsmas rediģēšana pārvietota uz citu ierīci. Šī lokālā kopija ir saglabāta.",
-    "takenOverTitle": "Rediģēšana pārvietota uz citu ierīci"
+    "takenOverTitle": "Rediģēšana pārvietota uz citu ierīci",
+    "editsSetAsideTitle": "Izmaiņas atliktas",
+    "editsSetAsideBody": "Nesaglabātās izmaiņas tika atliktas. Atkārtoti pieslēdzieties tam pašam kontam, lai iestatījumos atvērtu atkopšanas mapi."
   },
   "dialog": {
     "accountWindowTitle": "Savienot kontu",
@@ -232,7 +234,16 @@
     "permissionDenied": "Izslēgts sistēmas iestatījumos.",
     "permissionManaged": "Pārvalda jūsu organizācija",
     "errorUpdateAutostart": "stella desktop neizdevās atjaunināt palaišanu piesakoties.",
-    "errorPermissions": "stella desktop nevarēja nolasīt vai mainīt šo atļauju."
+    "errorPermissions": "stella desktop nevarēja nolasīt vai mainīt šo atļauju.",
+    "recoveryTitle": "Malā atliktās izmaiņas",
+    "recoveryBody": "Nesaglabātās izmaiņas tiek glabātas šeit jūsu kontam. Atveriet mapi, lai tās atjaunotu.",
+    "recoverySignIn": "Izmaiņas tika atliktas šim kontam. Atkārtoti pieslēdzieties šim kontam, lai atvērtu tā mapi.",
+    "recoveryUnassigned": "Dažām izmaiņām nav reģistrēta konta. Atveriet to mapi, lai tās atjaunotu manuāli.",
+    "recoveryPending": "Dažas izmaiņas vēl tiek atliktas. Mēģiniet vēlreiz, lai pabeigtu.",
+    "recoveryOpenFolder": "Atvērt atkopšanas mapi",
+    "recoveryOpenUnassigned": "Atvērt nepiešķirtās izmaiņas",
+    "recoveryFilePending": "Gaida atlikšanu",
+    "recoveryError": "Neizdevās atvērt atkopšanas mapi. Mēģiniet vēlreiz."
   },
   "clipboard": {
     "registryUnavailable": "Jūsu prakses jurisdikcijām nav iespējotu reģistru.",

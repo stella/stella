@@ -283,7 +283,7 @@ pub struct TrustedSelfHostConnection {
 /// Monotonic bridge contract revision. Increment whenever the bridge
 /// surface changes so the web app can require a minimum revision without
 /// coupling to the desktop's literal app version.
-pub const BRIDGE_VERSION: u32 = 25;
+pub const BRIDGE_VERSION: u32 = 26;
 
 /// Versioned contracts advertised to the web app. A client requires the
 /// capability it uses; breaking semantics receive a new capability id.
@@ -293,7 +293,52 @@ pub const BRIDGE_CAPABILITIES: &[&str] =
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
+pub enum RecoveryStatus {
+  Pending,
+  Available,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveryEdit {
+  pub id: String,
+  pub file_name: String,
+  pub status: RecoveryStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub enum RecoveryAccess {
+  #[default]
+  Available,
+  SignInRequired,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentRecoverySnapshot {
+  pub edits: Vec<RecoveryEdit>,
+  pub unassigned: bool,
+  pub pending: bool,
+  pub access: RecoveryAccess,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub enum RecoveryTarget {
+  Account,
+  Unassigned,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
 pub struct AppSnapshot {
+  pub document_recovery: DocumentRecoverySnapshot,
   pub bridge_port: u16,
   /// See [`BRIDGE_VERSION`].
   pub bridge_version: u32,
@@ -386,6 +431,10 @@ pub struct ErrorResponse {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
 
@@ -520,6 +569,7 @@ mod tests {
   #[test]
   fn test_app_snapshot_roundtrip() {
     let snapshot = AppSnapshot {
+      document_recovery: crate::types::DocumentRecoverySnapshot::default(),
       bridge_port: 45_901,
       bridge_version: BRIDGE_VERSION,
       capabilities: BRIDGE_CAPABILITIES
@@ -669,10 +719,8 @@ mod rpc_codegen_tests {
   use super::*;
   use std::any::TypeId;
   use std::collections::HashSet;
-  use std::path::Path;
   use ts_rs::{Config, TS, TypeVisitor};
 
-  const GENERATED_PATH: &str = "../../../packages/api-contract/src/desktop-rpc.gen.ts";
   const COMMITTED_BINDINGS: &str =
     include_str!("../../../../packages/api-contract/src/desktop-rpc.gen.ts");
   const GENERATED_HEADER: &str = "// Generated from apps/desktop/src-tauri/src/types.rs.\n// Regenerate from the repository root with `bun --filter @stll/desktop rpc:generate`.\n// Do not edit by hand.\n\n";
@@ -683,6 +731,7 @@ mod rpc_codegen_tests {
     LinkAccountRequest,
     OpenFileRequest,
     OpenFileResponse,
+    RecoveryTarget,
   );
 
   struct DeclarationVisitor<'a> {
@@ -787,7 +836,7 @@ mod rpc_codegen_tests {
   #[test]
   #[ignore = "writes the committed TypeScript bindings"]
   fn generate_desktop_rpc_bindings() {
-    std::fs::write(Path::new(GENERATED_PATH), render_desktop_rpc_bindings())
+    crate::local_store::write_generated_rpc_bindings(&render_desktop_rpc_bindings())
       .expect("generated desktop RPC bindings are writable");
   }
 }
@@ -850,6 +899,8 @@ mod fixture_tests {
   #[test]
   fn app_snapshot_fixture_roundtrips() {
     assert_roundtrip::<AppSnapshot>(APP_SNAPSHOT);
+    let snapshot: AppSnapshot = serde_json::from_str(APP_SNAPSHOT).unwrap();
+    assert_eq!(snapshot.bridge_version, BRIDGE_VERSION);
   }
 
   #[test]

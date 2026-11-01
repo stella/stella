@@ -5011,6 +5011,7 @@ dependencies = [
  "plist",
  "reqwest",
  "ring",
+ "rustix",
  "serde",
  "serde_json",
  "sha2 0.11.1",
