@@ -1,6 +1,4 @@
 ---
-import { BRAND_COLORS, BRAND_PALETTE, type BrandColorName } from "@stll/brand";
-
 import Base from "../layouts/Base.astro";
 import LandingFooter from "../components/LandingFooter.astro";
 
@@ -63,26 +61,14 @@ type Swatch = {
   hex: string;
 };
 
-// The press kit shows each brand colour as six uppercase hex digits.
-const pressHex = (hex: string) =>
-  (hex.length === 4
-    ? `#${hex.slice(1, 2).repeat(2)}${hex.slice(2, 3).repeat(2)}${hex.slice(3, 4).repeat(2)}`
-    : hex
-  ).toUpperCase();
-
-const swatchDescriptions: readonly [BrandColorName, string][] = [
-  ["softBlue", "Hero washes, headers, supporting accent."],
-  ["paleBlue", "Backgrounds, surfaces, light callouts."],
-  ["blueAccent", "Primary accent — buttons, links, focus."],
-  ["black", "Wordmark, primary text, highest contrast."],
+// The swatches published to press, kept as released rather than read from
+// @stll/brand: a press kit's values change only with a deliberate brand release.
+const swatches: Swatch[] = [
+  { name: "Soft Blue", hex: "#CFE1F9", description: "Hero washes, headers, supporting accent." },
+  { name: "Pale Blue", hex: "#E6F6FC", description: "Backgrounds, surfaces, light callouts." },
+  { name: "Blue Accent", hex: "#6B9FD0", description: "Primary accent — buttons, links, focus." },
+  { name: "Black", hex: "#000000", description: "Wordmark, primary text, highest contrast." },
 ];
-
-// Names and values come from @stll/brand, the palette DESIGN.md documents.
-const swatches: Swatch[] = swatchDescriptions.map(([color, description]) => ({
-  name: BRAND_PALETTE[color].label,
-  hex: pressHex(BRAND_COLORS[color]),
-  description,
-}));
 
 const gradients = [
   "/brand/stella-gradient-1.webp",

@@ -24,6 +24,8 @@ export const shadow = "0 1px 2px rgb(0 0 0 / 0.2)";
 export const arbitrary = "bg-[oklch(0.94_0.045_240)]";
 // oxlint-disable-next-line no-raw-color-literals/no-raw-color-literals -- fixture: a static template
 export const template = `fill: #fafafa;`;
+// oxlint-disable-next-line no-raw-color-literals/no-raw-color-literals -- fixture: a letters-only hex in a CSS value
+export const letters = "color: #fff";
 
 // --- Accepted: tokens, references and computed colour ---
 
@@ -37,6 +39,10 @@ export const reference = `Fixed in #1139 (see #4072), entity &#124;`;
 export const computed = `rgb(${red} ${green} ${blue})`;
 // expect-clean: no-raw-color-literals/no-raw-color-literals
 export const anchor = `#main #${issue}`;
+// expect-clean: no-raw-color-literals/no-raw-color-literals
+export const markdownReference = "[#4072](https://github.com/stella/stella/issues/4072)";
+// expect-clean: no-raw-color-literals/no-raw-color-literals
+export const letterAnchor = '<a href="#bad">#add #feed</a>';
 
 // --- Flagged: a PDF colour named inline ---
 

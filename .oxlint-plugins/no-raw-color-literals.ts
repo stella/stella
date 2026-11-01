@@ -9,12 +9,15 @@
 //             "rgb(0 0 0 / 0.2)"  "rgba(255, 255, 255, 0.5)"  "hsl(210 50% 40%)"
 //             "oklch(0.7 0.1 240)"  "color(display-p3 1 0 0)"
 //   Accepted: "var(--primary)"  "rgb(from var(--info) r g b / 0.12)"
-//             "issue #1139"  "(#4072)"  "&#124;"  "#main"  `rgb(${r} ${g} ${b})`
+//             "issue #1139"  "(#4072)"  "[#4072](url)"  "&#124;"  "#main"
+//             "tagged #feed"  'href="#bad"'  `rgb(${r} ${g} ${b})`
 //
-// A hex of digits only ("#123") is ambiguous with an issue reference, so it
-// counts as a colour only where CSS puts one: the whole string, after a
-// colour-bearing property or an attribute, after a length or a border style,
-// or inside a function that takes colours (a gradient, `color-mix`, ...).
+// A hex of only digits ("#123") or only letters ("#add") is ambiguous with an
+// issue reference, an anchor or a tag, so it counts as a colour only where CSS
+// puts one: the whole string, after a colour-bearing property or a non-link
+// attribute, inside a Tailwind arbitrary value (`bg-[#123]`), after a length or
+// a border style, or inside a function that takes colours (a gradient,
+// `color-mix`, ...). A hex mixing digits and letters is always a colour.
 //
 // `no-raw-pdf-color-operators` reports colour written straight into a PDF
 // content stream, `"0.35 0.35 0.35 RG"` or `"0 g"`, a PDF library colour
@@ -69,6 +72,17 @@ const BORDER_STYLES: ReadonlySet<string> = new Set([
   "ridge",
   "solid",
 ]);
+// Attributes whose value is a link or a name, so `href="#add"` is an anchor.
+const LINK_ATTRIBUTES: ReadonlySet<string> = new Set([
+  "action",
+  "for",
+  "formaction",
+  "href",
+  "id",
+  "name",
+  "src",
+  "to",
+]);
 const LENGTH_UNITS = ["px", "rem", "em", "pt", "%"] as const;
 const WORD_CHARACTERS = "abcdefghijklmnopqrstuvwxyz0123456789_-";
 const DIGITS = "0123456789";
@@ -106,14 +120,22 @@ const isLength = (token: string): boolean =>
 const isCssValueBefore = (before: string): boolean => {
   const trimmed = before.trimEnd();
   const last = trimmed.slice(-1);
-  if (before.endsWith("[")) {
+  // A Tailwind arbitrary value, `bg-[#123]`; a bare `[#123]` is a Markdown
+  // issue reference.
+  if (before.endsWith("-[")) {
     return true;
   }
   if (last === ":") {
     return isColorProperty(trailingWord(trimmed.slice(0, -1).trimEnd()));
   }
   if (before.endsWith('"') || before.endsWith("'")) {
-    return before.slice(0, -1).trimEnd().endsWith("=");
+    const attribute = before.slice(0, -1).trimEnd();
+    return (
+      attribute.endsWith("=") &&
+      !LINK_ATTRIBUTES.has(
+        trailingWord(attribute.slice(0, -1).trimEnd()).toLowerCase(),
+      )
+    );
   }
   if (trimmed.length === before.length) {
     return false;
@@ -155,7 +177,7 @@ const COLOR_SPACE_FUNCTION =
 export const findRawColor = (value: string): string | null => {
   for (const match of value.matchAll(HEX_CANDIDATE)) {
     const digits = match.groups?.digits ?? "";
-    if (/[a-f]/iu.test(digits)) {
+    if (/[a-f]/iu.test(digits) && /\d/u.test(digits)) {
       return match[0];
     }
     if (isCssValuePosition(value, match[0], match.index)) {

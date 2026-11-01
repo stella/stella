@@ -87,16 +87,29 @@ test("carries the option palette under its web names", () => {
 });
 
 test("carries the sign-in backdrop in both schemes without adding web utility colours", () => {
-  const css = UI.replace(
-    "--background: var(--color-white);",
-    "--background: var(--color-white);\n  --auth-gradient-end: #cbe1fc;",
-  ).replace(
-    "--background: var(--color-neutral-800);",
-    "--background: var(--color-neutral-800);\n  --auth-gradient-end: #1a3a5c;",
-  );
+  // theme.css declares the backdrop in its own trailing :root and .dark
+  // blocks, after the main ones and before a utility with a dark variant.
+  const css = `${UI}
+/* Screen accents, the same in every palette. */
+:root {
+  --auth-gradient-end: #cbe1fc;
+}
+
+.dark {
+  --auth-gradient-end: #1a3a5c;
+}
+
+@utility category-tile {
+  background-color: oklch(0.94 0.045 var(--cat-hue));
+
+  @variant dark {
+    background-color: oklch(0.32 0.05 var(--cat-hue));
+  }
+}
+`;
   expect(mobileUiTheme(css, PALETTE)).toMatchObject({
-    light: { "auth-gradient-end": "#cbe1fc" },
-    dark: { "auth-gradient-end": "#1a3a5c" },
+    light: { background: "#fff", "auth-gradient-end": "#cbe1fc" },
+    dark: { background: "#262626", "auth-gradient-end": "#1a3a5c" },
   });
   expect(semanticColorsOf(css).has("auth-gradient-end")).toBe(false);
 });
