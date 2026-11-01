@@ -139,13 +139,17 @@ const context = (
     stepOutputs: {
       "marketing-release": {
         required: plan["marketing_screenshots_required"] ?? "false",
+        advisory: plan["marketing_screenshots_advisory"] ?? "false",
       },
     },
   });
   value.steps = {
     "changed-files": { outputs: plan },
     "marketing-release": {
-      outputs: { required: plan["marketing_screenshots_required"] ?? "false" },
+      outputs: {
+        required: plan["marketing_screenshots_required"] ?? "false",
+        advisory: plan["marketing_screenshots_advisory"] ?? "false",
+      },
     },
     suites: {
       outputs: {

@@ -69,6 +69,7 @@ jobs:
             scripts/retry.sh
             scripts/check-release-main-health.sh
             scripts/release-heavy-verdict.jq
+            scripts/marketing-screenshots-comparison.jq
             scripts/check-release-open-incidents.sh
             scripts/check-release-receipt-coverage.sh
             scripts/check-release-queue-history.ts

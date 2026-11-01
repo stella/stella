@@ -78,6 +78,7 @@ export const finalize = (fixture: ProofFixture = {}) => {
       "check-release-main-health.sh",
       "check-release-open-incidents.sh",
       "release-heavy-verdict.jq",
+      "marketing-screenshots-comparison.jq",
     ]) {
       cpSync(new URL(source, import.meta.url), path.join(root, source));
     }

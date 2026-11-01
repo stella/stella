@@ -245,6 +245,7 @@ jobs:
       dependency_changes_required: ${{ steps.changed-files.outputs.dependency_changes_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
       marketing_screenshots_required: ${{ steps.marketing-release.outputs.required }}
+      marketing_screenshots_advisory: ${{ steps.marketing-release.outputs.advisory }}
       database_migrations_required: ${{ steps.changed-files.outputs.database_migrations_required }}
       migration_rehearsal_required: ${{ steps.changed-files.outputs.migration_rehearsal_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
@@ -962,6 +963,7 @@ jobs:
               required=true
             fi
             echo "required=$required" >> "$GITHUB_OUTPUT"
+            echo "advisory=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           required=false
@@ -983,7 +985,15 @@ jobs:
               exit 1
             fi
           fi
+          # Marketing screenshots never gate a release: in the release pull
+          # request's merge group, ci-result accepts a failure that is only
+          # the screenshot comparison. Everywhere else the job stays required.
+          advisory=false
+          if [[ "$EVENT_NAME" == merge_group && "$required" == true ]]; then
+            advisory=true
+          fi
           echo "required=$required" >> "$GITHUB_OUTPUT"
+          echo "advisory=$advisory" >> "$GITHUB_OUTPUT"
 
       - name: Check changed file scope
         if: >-
@@ -5905,6 +5915,9 @@ jobs:
   # main with `-f branch=<this branch>`), which is also why the comparison
   # tolerance can stay tight:
   # baselines and comparison render on the same image.
+  # Marketing screenshots never gate a release: in the release pull request's
+  # merge group, ci-result accepts a failure that is only the comparison
+  # (marketing-screenshots-comparison.jq) and warns with the run's link.
 
   marketing-screenshots:
     # A bounded poll can expire while web-build is still waiting for a runner;
@@ -5940,9 +5953,16 @@ jobs:
 
   # Reusable workflow callers cannot have steps. Cancel immediately after
   # this call fails, without a runner waiting or polling for its result.
+  # A release pull request's merge group leaves the decision to ci-result:
+  # it accepts a failure that is only the screenshot comparison there, and a
+  # cancelled group could never pass.
   marketing-screenshots-cancel:
-    needs: marketing-screenshots
-    if: failure() && github.event_name == 'merge_group'
+    needs: [ci-plan, marketing-screenshots]
+    if: >-
+      !cancelled()
+      && github.event_name == 'merge_group'
+      && needs.marketing-screenshots.result == 'failure'
+      && needs.ci-plan.outputs.marketing_screenshots_advisory != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 1
     permissions:
@@ -7245,6 +7265,7 @@ jobs:
             scripts/retry.sh
             scripts/ci-failure-digest.ts
             scripts/fetch-failed-job-logs.sh
+            scripts/marketing-screenshots-comparison.jq
             /package.json
           sparse-checkout-cone-mode: false
 
@@ -7252,6 +7273,9 @@ jobs:
         run: |
           cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/jq-modules"
+          cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/marketing-screenshots-comparison.jq" "$RUNNER_TEMP/jq-modules/"
+          echo "JQ_MODULES=$RUNNER_TEMP/jq-modules" >> "$GITHUB_ENV"
 
       # Job results and plan outputs reach the outcome step as files. One
       # environment value above Linux's 128 KiB limit stops a step before it
@@ -7731,6 +7755,23 @@ jobs:
               echo "::error::$job_name: the runner was lost before any step failed. A first-attempt pull request run whose only failure is a lost runner re-runs its failed jobs once automatically; otherwise re-run the failed jobs."
             done <<< "$names"
           }
+          # Marketing screenshots never gate a release. In the release pull
+          # request's merge group (the plan says which group that is), a
+          # verdict whose only unmet check is the screenshots job passes when
+          # that job failed only in its comparison, as this attempt's job list
+          # shows; marketing-screenshots-comparison.jq decides, as it does for
+          # main/heavy. Anything unreadable keeps the failure.
+          release_screenshot_comparison_is_advisory() {
+            [[ "$EVENT" == merge_group && -n "$cancelled_jobs" && -n "${JQ_MODULES:-}" ]] || return 1
+            jq -e '.marketing_screenshots_advisory == "true"' "$PLAN_FILE" > /dev/null || return 1
+            jq -e -L "$JQ_MODULES" --arg violations "$violations" '
+              include "marketing-screenshots-comparison";
+              [.[].jobs[] | select(.name == screenshot_check_job)] as $checks
+              | $violations == screenshot_required_violation
+              and ($checks | length) == 1
+              and ($checks[0] | screenshot_comparison_only_failure)
+              ' <<< "$cancelled_jobs" > /dev/null
+          }
           if [[ "${HEAVY_ONLY:-false}" == true ]]; then
             # No main run may turn a cancellation into successful supersession.
             # Keep only the derived heavy set; thin jobs intentionally skipped,
@@ -7908,7 +7949,11 @@ jobs:
                 | join(", ")' <<< "$NEEDS")
               violations="${violations}${violations:+${folded_violations:+, }}${folded_violations}"
               violations_evaluated=true
-              if [[ -n "$violations" ]]; then
+              if [[ -n "$violations" ]] && release_screenshot_comparison_is_advisory; then
+                advisory_notice="Marketing screenshots never gate a release: run ${GITHUB_SERVER_URL:-https://github.com}/$REPO/actions/runs/$GITHUB_RUN_ID failed only in the screenshot comparison, so the release pull request's merge group proceeds. Regenerate the baselines in a follow-up pull request."
+                echo "::warning::$advisory_notice"
+                printf '%s\n' "$advisory_notice" >> "$GITHUB_STEP_SUMMARY"
+              elif [[ -n "$violations" ]]; then
                 echo "::error::CI checks did not succeed: $violations"
                 exit 1
               fi

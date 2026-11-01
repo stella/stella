@@ -593,7 +593,7 @@ test("every eligible CI job cancels a failed merge group in its final step with 
 test("all failure tails and screenshot cancellation use the canonical same-run API step", async () => {
   const helper = v.parse(
     v.looseObject({
-      needs: v.string(),
+      needs: v.array(v.string()),
       if: v.string(),
       "timeout-minutes": v.number(),
       permissions: v.record(v.string(), v.string()),
@@ -601,65 +601,74 @@ test("all failure tails and screenshot cancellation use the canonical same-run A
     }),
     ciJobs[CANCEL_REUSABLE_JOB],
   );
-  expect(helper.needs).toBe("marketing-screenshots");
-  expect(helper.if).toBe("failure() && github.event_name == 'merge_group'");
+  expect(helper.needs).toEqual(["ci-plan", "marketing-screenshots"]);
   expect(helper["timeout-minutes"]).toBe(1);
   expect(helper.permissions).toEqual({ actions: "write" });
   expect(helper.steps).toEqual([CANONICAL_CANCEL_STEP]);
   const cancel = CANONICAL_CANCEL_STEP;
-  for (const event of [
+  // A release pull request's merge group leaves a screenshots failure to
+  // ci-result, which may accept it; the helper cancels every other failed
+  // merge group, and an unreadable plan output still cancels.
+  const cases = [
     "pull_request",
     "push",
     "workflow_dispatch",
     "merge_group",
-  ]) {
-    for (const failed of [false, true]) {
-      const calls: unknown[] = [];
-      const enabled: unknown = new Script(
-        `Boolean(${helper.if})`,
+  ].flatMap((event) =>
+    [false, true].flatMap((failed) =>
+      ["true", "false", ""].map((advisory) => ({ event, failed, advisory })),
+    ),
+  );
+  for (const { event, failed, advisory } of cases) {
+    const label = `${event}/${String(failed)}/${advisory || "(empty)"}`;
+    const calls: unknown[] = [];
+    const enabled = evaluateExpression(helper.if, {
+      values: {
+        "github.event_name": event,
+        "needs.marketing-screenshots.result": failed ? "failure" : "success",
+        "needs.ci-plan.outputs.marketing_screenshots_advisory": advisory,
+      },
+      status: { cancelled: false, failure: failed, always: true },
+    });
+    expect(typeof enabled, label).toBe("boolean");
+    if (enabled === true) {
+      await new Script(
+        `(async () => { ${cancel.with.script} })()`,
       ).runInNewContext({
-        failure: () => failed,
-        github: { event_name: event },
-      });
-      if (enabled) {
-        await new Script(
-          `(async () => { ${cancel.with.script} })()`,
-        ).runInNewContext({
-          context: {
-            repo: { owner: "fixture-owner", repo: "fixture-repository" },
-            runId: 424_242,
-          },
-          process: { env: { GITHUB_RUN_ATTEMPT: "1" } },
-          setTimeout,
-          clearTimeout,
-          core: {
-            error: () => {},
-            summary: { addRaw: () => {}, write: async () => {} },
-          },
-          github: {
-            paginate: async () => [],
-            rest: {
-              actions: {
-                cancelWorkflowRun: async (arguments_: unknown) => {
-                  calls.push(arguments_);
-                },
+        context: {
+          repo: { owner: "fixture-owner", repo: "fixture-repository" },
+          runId: 424_242,
+        },
+        process: { env: { GITHUB_RUN_ATTEMPT: "1" } },
+        setTimeout,
+        clearTimeout,
+        core: {
+          error: () => {},
+          summary: { addRaw: () => {}, write: async () => {} },
+        },
+        github: {
+          paginate: async () => [],
+          rest: {
+            actions: {
+              cancelWorkflowRun: async (arguments_: unknown) => {
+                calls.push(arguments_);
               },
             },
           },
-        });
-      }
-      expect(calls, `${event}/${failed}`).toEqual(
-        event === "merge_group" && failed
-          ? [
-              {
-                owner: "fixture-owner",
-                repo: "fixture-repository",
-                run_id: 424_242,
-              },
-            ]
-          : [],
-      );
+        },
+      });
     }
+    expect(calls, label).toEqual(
+      event === "merge_group" && failed && advisory !== "true"
+        ? [
+            {
+              owner: "fixture-owner",
+              repo: "fixture-repository",
+              run_id: 424_242,
+            },
+          ]
+        : [],
+    );
   }
 });
 
@@ -3915,6 +3924,7 @@ test("marketing screenshots are planned only for ready same-repository releases 
     [
       "#!/usr/bin/env bash",
       "set -euo pipefail",
+      "! printenv FAKE_GH_FAILURE > /dev/null || exit 1",
       '[[ "$*" == "pr list --repo stella/stella --state open --base main --limit 500 --json number,title,isDraft,isCrossRepository" ]] || exit 3',
       'cat "$(dirname "$0")/listing.json"',
     ].join("\n"),
@@ -4003,10 +4013,32 @@ test("marketing screenshots are planned only for ready same-repository releases 
         stderr: "pipe",
       });
       expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0);
+      // Only the release pull request's merge group may treat a screenshot
+      // comparison failure as advisory.
       expect(readFileSync(output, "utf-8"), `${event} ${ref}`).toBe(
-        `required=${String(required)}\n`,
+        `required=${String(required)}\nadvisory=${String(event === "merge_group" && required)}\n`,
       );
     }
+    // An unreadable release classification fails the plan and names no
+    // advisory, so the merge group keeps the screenshots required.
+    writeFileSync(output, "");
+    const unreadable = Bun.spawnSync(["bash", "-eu", "-c", command], {
+      cwd: nodePath.resolve(import.meta.dir, ".."),
+      env: {
+        PATH: `${directory}:${Bun.env["PATH"] ?? ""}`,
+        EVENT_NAME: "merge_group",
+        PR_NUMBER: "",
+        GITHUB_REF: "refs/heads/gh-readonly-queue/main/pr-7-abcdef",
+        MERGE_GROUP_HEAD_REF: "refs/heads/gh-readonly-queue/main/pr-7-abcdef",
+        REPOSITORY: "stella/stella",
+        GITHUB_OUTPUT: output,
+        FAKE_GH_FAILURE: "1",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(unreadable.exitCode).not.toBe(0);
+    expect(readFileSync(output, "utf-8")).toBe("");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

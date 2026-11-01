@@ -23,21 +23,25 @@
 #      cannot excuse it;
 #   2. the screenshots job failed only in the comparison step, after every
 #      earlier step succeeded (marketing-screenshots.yml records that with a
-#      marker step); a failure in install, seed, migrate or API boot blocks;
+#      marker step; marketing-screenshots-comparison.jq decides); a failure
+#      in install, seed, migrate or API boot blocks;
 #   3. every other unsuccessful job is an aggregate that fails by
 #      construction, and the job list is complete.
 # Anything unreadable, missing or unclassified blocks.
 #
 # The names below are the ones the workflows report;
 # release-heavy-verdict.test.ts derives them from the workflows and fails
-# when they drift.
+# when they drift. Condition 2 is marketing-screenshots-comparison.jq's,
+# which ci-result applies to a release pull request's merge group as well.
+include "marketing-screenshots-comparison" {search: "./"};
+
 . as {jobs: $jobs, total: $total, record: $record, violations: $violations}
-| def advisory_job: "suites / marketing-screenshots / check";
+| def advisory_job: "suites / \(screenshot_check_job)";
 # The job id in ci.yml's `needs`, hence the `job` of the record's entry.
-def advisory_required_job: "marketing-screenshots";
-def advisory_violation: "marketing-screenshots (planned, failure)";
-def advisory_step: "Capture marketing screenshots";
-def comparison_marker_step: "Screenshot comparison failed";
+def advisory_required_job: screenshot_required_job;
+def advisory_violation: screenshot_required_violation;
+def advisory_step: screenshot_capture_step;
+def comparison_marker_step: screenshot_comparison_marker_step;
 # The ci-result rollup and main-heavy's status job exit non-zero whenever any
 # job failed; the record decides whether anything but screenshots did.
 def aggregate_jobs: ["suites / ci-result", "status"];
@@ -46,10 +50,6 @@ def isin($list): . as $name | ($list | index($name)) != null;
 def passing: . as $c | ["success", "skipped", "neutral"] | index($c) != null;
 def describe: "\(.name // "(a job GitHub returned without a name)") (\(.conclusion // .status // "unknown"))";
 def unpassed: select((.conclusion // "") | passing | not);
-def comparison_only_failure:
-  (.steps | type) == "array"
-  and ([.steps[] | if type == "object" then . else {name: null, conclusion: "invalid"} end | unpassed | .name] == [advisory_step])
-  and ([.steps[] | select(type == "object" and .name == comparison_marker_step and .conclusion == "success")] | length) == 1;
 
 def record_blocking:
   if ($record | type) != "object" then ["required-jobs record unreadable"]
@@ -76,7 +76,7 @@ def record_blocking:
 def job_verdict:
   ($jobs | map(if type == "object" then . else {conclusion: "invalid"} end)) as $entries
   | ($entries | map(unpassed)) as $failed
-  | ($failed | map(select(.conclusion == "failure" and .name == advisory_job and comparison_only_failure))) as $advisory
+  | ($failed | map(select(.name == advisory_job and screenshot_comparison_only_failure))) as $advisory
   | ($failed | map(select(.conclusion == "failure" and (.name | isin(aggregate_jobs))))) as $aggregate
   | ($failed - $advisory - (if ($advisory | length) > 0 then $aggregate else [] end) | map(describe)) as $blocking
   | {

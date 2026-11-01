@@ -172,6 +172,7 @@ const PLAN_BOOLEAN_OUTPUTS = [
   "ci_browser_required",
   "ci_tests_required",
   "heavy_web_build_required",
+  "marketing_screenshots_advisory",
   "marketing_screenshots_required",
   "postgres_service_suites_required",
   "pr_heavy_gate_required",
@@ -250,7 +251,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
     valkey: "",
   },
   "legal-atlas-scope": { api_source_required: "false" },
-  "marketing-release": { required: "false" },
+  "marketing-release": { required: "false", advisory: "false" },
   outcome: { required_summary: "", required_violations: "" },
   "patch-id": {
     patch_id: "",
