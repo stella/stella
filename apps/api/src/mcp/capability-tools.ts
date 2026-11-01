@@ -17,10 +17,7 @@ import { HttpStatusResponse } from "@/api/http/status";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { WorkspaceStatusAccess } from "@/api/lib/auth";
-import {
-  hasAccountExportAuthority,
-  isAccountExportScope,
-} from "@/api/lib/auth/account-export-policy";
+import { hasAccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
@@ -158,6 +155,7 @@ type CatalogEntry = {
   confirmation?: "required";
   idempotency?: { type: "replay" };
   scope: string;
+  accountScope?: string;
   additionalScopes?: readonly string[];
   /**
    * When true, this capability's REST route admits archived matters
@@ -282,6 +280,15 @@ const isCapabilityTransport = (
 const isReplayPolicy = (value: unknown): value is { type: "replay" } =>
   isRecord(value) && value["type"] === "replay";
 
+/** Optional invocation policy fields a catalog entry may declare. */
+const hasValidInvocationPolicy = (value: Record<string, unknown>) =>
+  (value["confirmation"] === undefined ||
+    value["confirmation"] === "required") &&
+  (value["idempotency"] === undefined ||
+    isReplayPolicy(value["idempotency"])) &&
+  (value["accountScope"] === undefined ||
+    typeof value["accountScope"] === "string");
+
 const isCatalogEntry = (value: unknown): value is CatalogEntry =>
   isRecord(value) &&
   typeof value["id"] === "string" &&
@@ -296,10 +303,7 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
         value["readClass"] === "public" ||
         value["readClass"] === "both"))) &&
   typeof value["destructive"] === "boolean" &&
-  (value["confirmation"] === undefined ||
-    value["confirmation"] === "required") &&
-  (value["idempotency"] === undefined ||
-    isReplayPolicy(value["idempotency"])) &&
+  hasValidInvocationPolicy(value) &&
   typeof value["scope"] === "string" &&
   (value["additionalScopes"] === undefined ||
     (Array.isArray(value["additionalScopes"]) &&
@@ -975,11 +979,8 @@ const capabilityFeatureAdmitted = (
   entry: CatalogEntry,
   context: McpRequestContext,
 ) =>
-  (!(
-    capabilityDomain(entry.id) === "account-exports" ||
-    requiredScopesOf(entry).some(isAccountExportScope)
-  ) ||
-    hasAccountExportAuthority(context, entry.access)) &&
+  (entry.accountScope === undefined ||
+    hasAccountCapabilityAuthority(context, entry.accountScope)) &&
   (entry.featureAccess === "conditional" ||
     isMcpDescriptorFeatureAdmitted({
       context,

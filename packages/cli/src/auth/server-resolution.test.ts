@@ -17,7 +17,6 @@ const NO_ENV = envWith(undefined);
 
 const configWith = (defaultServerUrl: string) => ({
   defaultServerUrl,
-  oauthClients: {},
   version: 1 as const,
 });
 

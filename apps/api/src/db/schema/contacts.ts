@@ -797,6 +797,9 @@ export const accountAuditLogs = p.pgTable.withRLS(
       )})`,
     ),
     p
+      .index("account_audit_logs_user_event_idx")
+      .on(table.userId, table.eventType),
+    p
       .index("account_audit_logs_user_created_id_idx")
       .on(table.userId, table.createdAt, table.id),
     p.pgPolicy("account_audit_logs_select", {
