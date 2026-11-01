@@ -10,14 +10,16 @@ import {
 } from "./popup-view";
 
 const activeTabs = [
-  { kind: "stella", tabId: 1 },
-  { kind: "stella", tabId: 2 },
+  { kind: "stella", origin: "https://app.stll.app", tabId: 1 },
+  // A second tab on the connected origin shares its connection.
+  { kind: "stella", origin: "https://app.stll.app", tabId: 2 },
+  { kind: "stella", origin: "https://my.stll.app", tabId: 3 },
   { kind: "controllable" },
   { kind: "unsupported" },
 ] as const satisfies readonly PopupActiveTab[];
 const controllers = [
   null,
-  { origin: "https://app.stll.app", tabId: 1 },
+  { origin: "https://app.stll.app" },
 ] as const satisfies readonly (PopupController | null)[];
 const grants = [false, true] as const;
 
@@ -55,10 +57,13 @@ describe("popupView", () => {
           }
           if (
             activeTab.kind === "stella" &&
-            activeTab.tabId !== controller.tabId
+            activeTab.origin !== controller.origin
           ) {
             expect(view).toEqual({
-              primary: { action: "connect", messageKey: "connectTabInstead" },
+              primary: {
+                action: "connect",
+                messageKey: "connectStellaInstead",
+              },
               secondary: [
                 {
                   action: "disconnect",
