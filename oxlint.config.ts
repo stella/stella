@@ -951,11 +951,33 @@ const apiPortableSafeIdBrandingImport = {
 
 // The model factory builds every provider text adapter and holds its stream
 // to the provider stream contract (one terminal event, last; a cut-off stream
-// is a run error). An adapter built anywhere else skips that contract, so the
-// runtime entry points of the adapter packages, and of the adapter subclass
-// the factory builds, belong to the factory; type-only imports stay allowed.
+// is a run error). It also builds every provider client with the client's own
+// retries off, so a request is retried only by the generation layer
+// (`provider-retry-policy.ts`, held by `tanstack-ai-models.retries.test.ts`).
+// An adapter or client built anywhere else skips both, so the runtime entry
+// points of the adapter packages, of the provider SDKs (with the families the
+// API does not use yet), and of the adapter subclass the factory builds,
+// belong to the factory; type-only imports stay allowed.
 export const API_PROVIDER_ADAPTER_MODULES = [
   "@/api/lib/stella-openrouter-text-adapter",
+  "openai",
+  "@anthropic-ai/sdk",
+  "@anthropic-ai/bedrock-sdk",
+  "@anthropic-ai/vertex-sdk",
+  "@google/genai",
+  "@google/generative-ai",
+  "@mistralai/mistralai",
+  "@openrouter/sdk",
+  "@aws-sdk/client-bedrock-runtime",
+  "@azure/openai",
+  "@huggingface/inference",
+  "@ai-sdk/amazon-bedrock",
+  "@ai-sdk/anthropic",
+  "@ai-sdk/azure",
+  "@ai-sdk/google",
+  "@ai-sdk/mistral",
+  "@ai-sdk/openai",
+  "@ai-sdk/openai-compatible",
   "@tanstack/ai-anthropic",
   "@tanstack/ai-anthropic/byok",
   "@tanstack/ai-anthropic/vertex",
@@ -5825,6 +5847,9 @@ const config = defineConfig({
     {
       files: ["apps/api/src/**"],
       rules: {
+        // `require()` would reach a restricted module past
+        // `no-restricted-imports`, which reads only import declarations.
+        "typescript/no-require-imports": "error",
         "no-restricted-imports": [
           "error",
           {
