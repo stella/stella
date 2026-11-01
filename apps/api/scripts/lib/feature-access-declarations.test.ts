@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { FEATURE_REGISTRY } from "../../src/lib/feature-access/registry";
 import {
   assertFeatureAccessDeclarations,
+  METADATA_ONLY_MODULES,
   parseDeclarationSource,
   validateFeatureAccessDeclarations,
 } from "./feature-access-declarations";
@@ -914,6 +915,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
         { file: featureFile, config: {} },
       ],
       sources,
+      metadataOnlyModules: METADATA_ONLY_MODULES,
     });
     for (const ordinary of ordinaryHandlers) {
       expect(
@@ -1285,5 +1287,110 @@ describe("parsed declaration sources", () => {
     expect(check(direct, required)).toEqual([]);
     expect(check("export const go = () => true;")).toEqual([]);
     expect(check(direct)).toEqual(first);
+  });
+
+  test("a metadata-only module is ignored only while it is proven pure", () => {
+    const module = "apps/api/src/db/scope-registry.ts";
+    const endpoint = "apps/api/src/routes/ordinary.ts";
+    const declarations = [{ module, reason: "fixture scope metadata" }];
+    const metadata =
+      'import { featureRows, ordinaryRows } from "@/api/db/schema"; export const SCOPES = { featureRows: { table: featureRows }, ordinaryRows: { table: ordinaryRows } };';
+    const validate = (
+      registrySource: string,
+      metadataOnlyModules: typeof declarations = declarations,
+    ) =>
+      validateFeatureAccessDeclarations({
+        registry,
+        endpoints: [{ file: endpoint, config: {} }],
+        sources: new Map([
+          ...baseSources,
+          [module, registrySource],
+          [
+            endpoint,
+            'import { SCOPES } from "../db/scope-registry"; export const run = () => SCOPES.ordinaryRows;',
+          ],
+          [
+            "apps/api/src/lib/load.ts",
+            'import { db } from "./client"; export const load = (table: unknown) => db.select().from(table);',
+          ],
+          ["apps/api/src/lib/client.ts", "export const db = {};"],
+        ]),
+        metadataOnlyModules,
+      });
+    const reachesFeature = {
+      file: endpoint,
+      message: "source ownership requires featureAccess fixture",
+    };
+
+    expect(validate(metadata, [])).toEqual([reachesFeature]);
+    expect(validate(metadata)).toEqual([]);
+
+    // A declared module that runs a query is a violation and stays scanned.
+    const querying = validate(
+      `${metadata} export const rows = (tx: { execute: (query: string) => unknown }) => tx.execute("select * from fixture_rows");`,
+    );
+    expect(querying).toContainEqual({
+      file: module,
+      message: "metadata-only module uses query member execute",
+    });
+    expect(querying).toContainEqual(reachesFeature);
+
+    // Purity covers the declared module's whole import closure.
+    const delegating = validate(
+      `import { load } from "../lib/load"; ${metadata} export const rows = () => load(SCOPES.featureRows.table);`,
+    );
+    expect(delegating).toContainEqual({
+      file: module,
+      message:
+        "metadata-only module imports ../lib/load, which uses query member select",
+    });
+    expect(delegating).toContainEqual(reachesFeature);
+
+    expect(
+      validate(metadata, [{ module: "apps/api/src/db/absent.ts", reason: "" }]),
+    ).toContainEqual({
+      file: "apps/api/src/db/absent.ts",
+      message: "metadata-only module is missing",
+    });
+  });
+
+  test("a schema declaration carries only its own table's SQL", () => {
+    const endpoint = "apps/api/src/routes/ordinary.ts";
+    const mixed = (prelude: string, notes: string) =>
+      `${prelude} export const ordinaryJobs = p.pgTable("ordinary_jobs", {}, () => [p.pgPolicy("jobs", { using: sql\`EXISTS (SELECT 1 FROM fixture_rows)\` })]); export const ordinaryNotes = p.pgTable("ordinary_notes", {}${notes});`;
+    const validate = (schema: string, symbol: string) =>
+      validateFeatureAccessDeclarations({
+        registry,
+        endpoints: [{ file: endpoint, config: {} }],
+        sources: new Map([
+          ...baseSources,
+          ["apps/api/src/db/schema/mixed.ts", schema],
+          [
+            endpoint,
+            `import { ${symbol} } from "../db/schema/mixed"; export const run = () => ${symbol};`,
+          ],
+        ]),
+      });
+    const reachesFeature = {
+      file: endpoint,
+      message: "source ownership requires featureAccess fixture",
+    };
+
+    expect(validate(mixed("", ""), "ordinaryNotes")).toEqual([]);
+    expect(validate(mixed("", ""), "ordinaryJobs")).toEqual([reachesFeature]);
+    // An exported declaration the selected table references is still read.
+    expect(
+      validate(
+        mixed(
+          "export const notesCheck = sql`EXISTS (SELECT 1 FROM fixture_rows)`;",
+          ", () => [p.check('notes', notesCheck)]",
+        ),
+        "ordinaryNotes",
+      ),
+    ).toEqual([reachesFeature]);
+    // So is every module-local statement.
+    expect(
+      validate(mixed('const local = "fixture_rows";', ""), "ordinaryNotes"),
+    ).toEqual([reachesFeature]);
   });
 });

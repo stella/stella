@@ -56,6 +56,8 @@ type DeclarationOptions = {
   registry: FeatureRegistry;
   endpoints: readonly { file: string; config: Record<string, unknown> }[];
   sources: ReadonlyMap<string, string>;
+  /** Without a declaration every reached module is scanned. */
+  metadataOnlyModules?: readonly MetadataOnlyModule[];
 };
 export type FeatureAccessDeclarationViolation = {
   file: string;
@@ -114,6 +116,27 @@ const moduleBase = (from: string, specifier: string) => {
 const localSourceImport = (specifier: string) =>
   (specifier.startsWith(".") || specifier.startsWith("@/api/")) &&
   (!path.posix.extname(specifier) || /\.(?:ts|tsx|js)$/u.test(specifier));
+
+const SCHEMA_DECLARATION_MODULES: ReadonlySet<string> = new Set([
+  "apps/api/src/db/schema.ts",
+  "apps/api/src/db/auth-schema.ts",
+  "apps/api/src/db/agent-auth-schema.ts",
+]);
+const isSchemaDeclarationModule = (module: string) =>
+  SCHEMA_DECLARATION_MODULES.has(module) ||
+  module.startsWith("apps/api/src/db/schema/");
+/**
+ * A schema module declares independent tables, so a named import reaches one
+ * declaration (`file#symbol`), not the policies of its sibling tables.
+ */
+const schemaDeclarationKey = (file: string, symbol: string) =>
+  `${file}#${symbol}`;
+const moduleKeyParts = (module: string) => {
+  const separator = module.indexOf("#");
+  return separator === -1
+    ? { file: module, symbol: undefined }
+    : { file: module.slice(0, separator), symbol: module.slice(separator + 1) };
+};
 
 const unwrapExpression = (node: Node): Node =>
   node.type === "TSAsExpression" ||
@@ -724,8 +747,14 @@ class DeclarationSourceGraph {
             return symbols === undefined ? [] : [symbols];
           },
         );
-        return selections.length === 0 ||
-          selections.some((symbols) => symbols.includes(name))
+        if (selections.length === 0) {
+          return [
+            isSchemaDeclarationModule(file)
+              ? schemaDeclarationKey(file, name)
+              : file,
+          ];
+        }
+        return selections.some((symbols) => symbols.includes(name))
           ? [file]
           : [];
       }
@@ -1092,18 +1121,26 @@ const operationalFeatureReachability = ({
   );
   const visited = new Set<string>();
   // A wrapper cannot conceal feature reads behind an ordinary-looking import.
-  const reachesFeature = (file: string): boolean => {
-    if (visited.has(file)) {
+  const reachesFeature = (module: string): boolean => {
+    if (visited.has(module)) {
       return false;
     }
-    visited.add(file);
+    visited.add(module);
+    const { file, symbol } = moduleKeyParts(module);
     if (moduleRequirements(registry, file).size !== 0) {
       return true;
     }
     const source = graph.sourceFile(file);
     if (
       source === undefined ||
-      collectModuleUses(source, registry, tables, aggregateTables).length !== 0
+      collectModuleUses({
+        ast: source,
+        registry,
+        tables,
+        aggregateTables,
+        scope:
+          symbol === undefined ? undefined : declarationScope(source, symbol),
+      }).length !== 0
     ) {
       return true;
     }
@@ -1241,7 +1278,7 @@ const isValidOperationalBoundary = ({
   if (
     owners === undefined ||
     ast === undefined ||
-    collectModuleUses(ast, registry, tables, aggregateTables).length !== 0
+    collectModuleUses({ ast, registry, tables, aggregateTables }).length !== 0
   ) {
     return false;
   }
@@ -2025,19 +2062,80 @@ const isModuleSpecifier = (node: Node, parent: Node | undefined) =>
   (parent?.type === "ImportExpression" && parent.source === node);
 
 /**
+ * The top-level statements one schema declaration needs: every statement that
+ * declares no export, the declaration itself and, transitively, each exported
+ * declaration those statements reference.
+ */
+const declarationScope = (
+  ast: DeclarationSource,
+  symbol: string,
+): ReadonlySet<Node> => {
+  const statements = statementsOf(ast);
+  const exported = statements.filter(
+    (statement) => exportedDeclaration(statement) !== undefined,
+  );
+  const scope = new Set<Node>(
+    statements.filter((statement) => !exported.includes(statement)),
+  );
+  const pending = [symbol];
+  for (const statement of scope) {
+    walk(statement, (node) => {
+      const name = identifierName(node);
+      if (name !== undefined) {
+        pending.push(name);
+      }
+      return undefined;
+    });
+  }
+  const seen = new Set<string>();
+  for (let name = pending.pop(); name !== undefined; name = pending.pop()) {
+    if (seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    for (const statement of exported) {
+      if (scope.has(statement) || !declaresSymbol(statement, name)) {
+        continue;
+      }
+      scope.add(statement);
+      walk(statement, (node) => {
+        const reference = identifierName(node);
+        if (reference !== undefined) {
+          pending.push(reference);
+        }
+        return undefined;
+      });
+    }
+  }
+  return scope;
+};
+
+/**
  * Feature uses visible in a module's own source: conditional query symbols
  * and owned table names. Pure per module, so one validation run computes
- * each module once instead of once per endpoint that reaches it.
+ * each module once instead of once per endpoint that reaches it. A `scope`
+ * limits the scan to those top-level statements.
  */
-const collectModuleUses = (
-  ast: DeclarationSource,
-  registry: FeatureRegistry,
-  tables: TableOwnership,
-  aggregateTables: AggregateTableSelections,
-): ModuleUse[] => {
+type CollectModuleUsesOptions = {
+  ast: DeclarationSource;
+  registry: FeatureRegistry;
+  tables: TableOwnership;
+  aggregateTables: AggregateTableSelections;
+  scope?: ReadonlySet<Node> | undefined;
+};
+const collectModuleUses = ({
+  ast,
+  registry,
+  tables,
+  aggregateTables,
+  scope,
+}: CollectModuleUsesOptions): ModuleUse[] => {
   const uses: ModuleUse[] = [];
   walk(ast.parsed.program, (node, ancestors) => {
-    if (isTypeSyntax(node)) {
+    if (
+      isTypeSyntax(node) ||
+      (scope !== undefined && ancestors.length === 1 && !scope.has(node))
+    ) {
       return "skip-children";
     }
     if (
@@ -2128,22 +2226,185 @@ const moduleFacts = (
       if (cached !== undefined) {
         return cached;
       }
-      const moduleUses = collectModuleUses(
+      const { symbol } = moduleKeyParts(module);
+      const moduleUses = collectModuleUses({
         ast,
         registry,
         tables,
         aggregateTables,
-      );
+        scope: symbol === undefined ? undefined : declarationScope(ast, symbol),
+      });
       uses.set(module, moduleUses);
       return moduleUses;
     },
   };
 };
+
+export type MetadataOnlyModule = {
+  readonly module: string;
+  readonly reason: string;
+};
+/**
+ * Modules that only declare per-table metadata (table identity, scope SQL
+ * fragments) and never run a query. Reaching one is not feature data access:
+ * the scan neither scans its text nor follows its imports. Each entry must
+ * stay pure (see `metadataOnlyImpurities`); an impure entry is a violation and
+ * is scanned like any other module.
+ */
+export const METADATA_ONLY_MODULES = [
+  {
+    module: "apps/api/src/db/org-scope-registry.ts",
+    reason:
+      "Declares each table's organization scope as SQL fragments; the scope owners that execute them select the table by key.",
+  },
+  {
+    module: "apps/api/src/db/database-relations.ts",
+    reason:
+      "Assembles the relational query configuration a database handle registers; each relational read is scanned where it queries.",
+  },
+  {
+    module: "apps/api/src/lib/scheduler/task-authority.ts",
+    reason:
+      "Declares each scheduler task's authority by task name; task names are not table reads.",
+  },
+  {
+    module: "apps/api/src/lib/db/read-budget-entries/registry.gen.ts",
+    reason:
+      "Indexes measured read budgets by surface name; surface names are not table reads.",
+  },
+] as const satisfies readonly MetadataOnlyModule[];
+
+const METADATA_PACKAGES: ReadonlySet<string> = new Set([
+  "drizzle-orm",
+  "drizzle-orm/pg-core",
+]);
+// Database handle members that run or build a query.
+const QUERY_MEMBERS: ReadonlySet<string> = new Set([
+  "$count",
+  "batch",
+  "delete",
+  "execute",
+  "insert",
+  "query",
+  "select",
+  "selectDistinct",
+  "selectDistinctOn",
+  "transaction",
+  "update",
+]);
+const staticMemberName = (node: Node) => {
+  if (node.type !== "MemberExpression") {
+    return undefined;
+  }
+  if (
+    node.computed &&
+    node.property.type === "Literal" &&
+    typeof node.property.value === "string"
+  ) {
+    return node.property.value;
+  }
+  return memberName(node);
+};
+
+/** Why a declared metadata-only module could reach rows; empty when pure. */
+const metadataOnlyImpurities = (
+  ast: DeclarationSource,
+  graph: DeclarationSourceGraph,
+  visited = new Set<string>(),
+): string[] => {
+  const impurities: string[] = [];
+  visited.add(ast.fileName);
+  for (const statement of statementsOf(ast)) {
+    const exported = runtimeExportSource(statement);
+    if (exported !== undefined) {
+      impurities.push(`re-exports ${exported.value}`);
+    }
+    if (!runtimeImport(statement)) {
+      continue;
+    }
+    const specifier = statement.source.value;
+    if (METADATA_PACKAGES.has(specifier)) {
+      continue;
+    }
+    const target = graph.resolve(ast.fileName, specifier);
+    const imported =
+      target === undefined ? undefined : graph.sourceFile(target);
+    if (imported === undefined) {
+      impurities.push(`imports ${specifier}`);
+      continue;
+    }
+    // Table declarations are metadata; any other import must be pure too.
+    if (
+      !isSchemaDeclarationModule(imported.fileName) &&
+      !visited.has(imported.fileName)
+    ) {
+      impurities.push(
+        ...metadataOnlyImpurities(imported, graph, visited).map(
+          (impurity) => `imports ${specifier}, which ${impurity}`,
+        ),
+      );
+    }
+  }
+  walk(ast.parsed.program, (node) => {
+    if (isTypeSyntax(node)) {
+      return "skip-children";
+    }
+    if (node.type === "ImportExpression") {
+      impurities.push("imports a module at run time");
+    }
+    const member = staticMemberName(node);
+    if (member !== undefined && QUERY_MEMBERS.has(member)) {
+      impurities.push(`uses query member ${member}`);
+    }
+    if (
+      node.type === "CallExpression" &&
+      node.callee.type === "MemberExpression" &&
+      staticMemberName(node.callee) === undefined
+    ) {
+      impurities.push("calls a computed member");
+    }
+    return undefined;
+  });
+  return impurities;
+};
+
+/** The declared modules proven metadata-only; impure ones are violations. */
+const validateMetadataOnlyModules = (
+  declarations: readonly MetadataOnlyModule[],
+  graph: DeclarationSourceGraph,
+) => {
+  const violations: FeatureAccessDeclarationViolation[] = [];
+  const proven = new Set<string>();
+  for (const { module } of declarations) {
+    const ast = graph.sourceFile(module);
+    if (ast === undefined) {
+      violations.push({
+        file: module,
+        message: "metadata-only module is missing",
+      });
+      continue;
+    }
+    const impurities = metadataOnlyImpurities(ast, graph);
+    if (impurities.length !== 0) {
+      violations.push(
+        ...[...new Set(impurities)].map((impurity) => ({
+          file: module,
+          message: `metadata-only module ${impurity}`,
+        })),
+      );
+      continue;
+    }
+    proven.add(module);
+  }
+  return { violations, proven };
+};
+
 type EndpointOptions = {
   endpoint: DeclarationOptions["endpoints"][number];
   registry: FeatureRegistry;
   graph: DeclarationSourceGraph;
   dispatchModules: ReturnType<typeof validateOwnership>["dispatchModules"];
+  metadataOnlyModules: ReadonlySet<string>;
   modules: ModuleFacts;
 };
 const inspectEndpoint = ({
@@ -2151,6 +2412,7 @@ const inspectEndpoint = ({
   registry,
   graph,
   dispatchModules,
+  metadataOnlyModules,
   modules,
 }: EndpointOptions) => {
   const file = endpoint.file.split("#").at(0) ?? endpoint.file;
@@ -2185,16 +2447,17 @@ const inspectEndpoint = ({
     if (dispatchModules.has(module)) {
       return;
     }
-    const ast = graph.sourceFile(module);
+    const source = moduleKeyParts(module).file;
+    const ast = graph.sourceFile(source);
     if (ast === undefined) {
       violations.push({ file, message: `missing source module ${module}` });
       return;
     }
-    const boundary = modules.boundary(module);
+    const boundary = modules.boundary(source);
     for (const [id, type] of boundary) {
       add(id, type);
     }
-    if (boundary.size !== 0) {
+    if (boundary.size !== 0 || metadataOnlyModules.has(module)) {
       return;
     }
     const dependencies = graph.dependencies(ast);
@@ -2347,6 +2610,7 @@ export const validateFeatureAccessDeclarations = ({
   registry,
   endpoints,
   sources,
+  metadataOnlyModules = [],
 }: DeclarationOptions): FeatureAccessDeclarationViolation[] => {
   const dispatch = dispatchEntryEndpoints(sources);
   const graph = new DeclarationSourceGraph(dispatch.sources, registry);
@@ -2391,7 +2655,8 @@ export const validateFeatureAccessDeclarations = ({
     }
   }
   const ownership = validateOwnership(registry, graph);
-  const violations = ownership.violations;
+  const metadataOnly = validateMetadataOnlyModules(metadataOnlyModules, graph);
+  const violations = [...ownership.violations, ...metadataOnly.violations];
   const modules = moduleFacts(registry, ownership.tables, graph);
   for (const endpoint of [
     ...endpoints,
@@ -2404,6 +2669,7 @@ export const validateFeatureAccessDeclarations = ({
         registry,
         graph,
         dispatchModules: ownership.dispatchModules,
+        metadataOnlyModules: metadataOnly.proven,
         modules,
       }),
     );
@@ -2415,10 +2681,14 @@ export const validateFeatureAccessDeclarations = ({
     ),
   );
 };
+/** The build check: the canonical metadata-only declaration applies. */
 export const assertFeatureAccessDeclarations = (
-  options: DeclarationOptions,
+  options: Omit<DeclarationOptions, "metadataOnlyModules">,
 ): void => {
-  const violations = validateFeatureAccessDeclarations(options);
+  const violations = validateFeatureAccessDeclarations({
+    ...options,
+    metadataOnlyModules: METADATA_ONLY_MODULES,
+  });
   if (violations.length !== 0) {
     panic(
       `Feature access declarations failed:\n${violations.map(({ file, message }) => `${file}: ${message}`).join("\n")}`,
