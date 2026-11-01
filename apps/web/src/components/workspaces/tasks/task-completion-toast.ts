@@ -6,7 +6,7 @@ import { getTranslator } from "@/i18n/translator";
 
 type TaskStatusChange = {
   /** The status as last read; `undefined` when the task is not loaded here. */
-  currentStatus: () => string | undefined;
+  currentStatus: () => unknown;
   next: TaskStatus;
   /** `null` when another save was still pending, so it cannot be known. */
   previous: TaskStatus | null;
