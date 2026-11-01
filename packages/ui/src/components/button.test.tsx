@@ -20,8 +20,10 @@ const isNativelyDisabled = (markup: string) => / disabled=""/u.test(markup);
 const isAccessiblyDisabled = (markup: string) =>
   markup.includes('aria-disabled="true"');
 // Base UI marks the element a mounted tooltip is attached to.
+// The button's own element, not a cut label inside it: a label's hint opens
+// only when its text does not fit, and never on the button's focus.
 const hasTooltip = (markup: string) =>
-  markup.includes("data-base-ui-tooltip-trigger");
+  /^<[^>]*\bdata-base-ui-tooltip-trigger\b/u.test(markup);
 
 const SIZES = Object.keys(BUTTON_SIZE_CONTENT).filter(
   (size): size is keyof typeof BUTTON_SIZE_CONTENT =>

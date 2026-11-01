@@ -1,6 +1,6 @@
 "use client";
 
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { type ButtonHTMLAttributes, Fragment, type ReactNode } from "react";
 
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
@@ -25,6 +25,7 @@ import {
 } from "./button.shared";
 import { Loader } from "./loader";
 import { renderTooltipTrigger } from "./tooltip-trigger-helper";
+import { TruncatedText } from "./truncated-text";
 
 /**
  * Disabled styling for a button that is only `aria-disabled`.
@@ -127,7 +128,7 @@ const BUTTON_LAYOUT_CLASS_NAMES = {
 } as const;
 
 const buttonVariants = cva(
-  "focus-visible:ring-ring focus-visible:ring-offset-background relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border text-base font-medium whitespace-nowrap outline-none select-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] focus-visible:ring-2 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-64 sm:text-sm pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
+  "focus-visible:ring-ring focus-visible:ring-offset-background relative inline-flex max-w-full shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border text-base font-medium whitespace-nowrap outline-none select-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] focus-visible:ring-2 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-64 sm:text-sm pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
   {
     // An inline button is a word in a sentence: a hover fill behind it would
     // read as a box the line does not have. The quiet variants keep their
@@ -179,7 +180,7 @@ const buttonVariants = cva(
  * surface cannot cover it the way it would cover an inset shadow.
  */
 const BUTTON_PLAIN_CLASS =
-  "focus-visible:ring-ring focus-visible:ring-offset-background data-pressed:outline-primary/48 relative inline-block cursor-pointer text-start outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-default data-pressed:outline-2 data-pressed:-outline-offset-2 data-pressed:outline-solid";
+  "focus-visible:ring-ring focus-visible:ring-offset-background data-pressed:outline-primary/48 relative inline-block max-w-full cursor-pointer text-start outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-default data-pressed:outline-2 data-pressed:-outline-offset-2 data-pressed:outline-solid";
 
 /**
  * The outline a plain button's focus ring follows, matching its content:
@@ -240,6 +241,64 @@ const BUTTON_SIZE_CONTENT = {
   [Size in ButtonSize]: Size extends `icon${string}`
     ? typeof BUTTON_CONTENT.icon
     : typeof BUTTON_CONTENT.text;
+};
+
+/**
+ * A button never grows past its container (`max-w-full` on every variant).
+ * A one-line text label is cut to fit with an ellipsis and shows its whole
+ * text on hover, focus or tap; `layout="wrap"` lets it take several lines
+ * instead. An inline button is a word in a sentence and a plain button lays
+ * out its own content, so neither has a one-line label to cut.
+ */
+const cutsLabel = ({
+  layout,
+  size,
+  variant,
+}: {
+  layout: keyof typeof BUTTON_LAYOUT_CLASS_NAMES | undefined;
+  size: ButtonSize | null | undefined;
+  variant: ButtonVariant | null | undefined;
+}): boolean =>
+  layout === undefined &&
+  variant !== BUTTON_PLAIN_VARIANT &&
+  variant !== "link" &&
+  size !== "inline" &&
+  BUTTON_SIZE_CONTENT[size ?? BUTTON_DEFAULT_SIZE] === BUTTON_CONTENT.text;
+
+/**
+ * Each run of adjacent text among the children, cut to the button's width.
+ * Adjacent text (`Save {count} files`) stays one run, as it is one flex item
+ * in the button's box. Every other child keeps its place, each in a keyed
+ * fragment of its own, as positional children carry no keys.
+ */
+const containedLabel = (children: ReactNode): ReactNode => {
+  const items: readonly ReactNode[] = Array.isArray(children)
+    ? children
+    : [children];
+  const parts: ReactNode[] = [];
+  let run: (string | number)[] = [];
+  const closeRun = () => {
+    if (run.length > 0) {
+      parts.push(
+        <TruncatedText key={`label:${String(parts.length)}`}>
+          {run}
+        </TruncatedText>,
+      );
+      run = [];
+    }
+  };
+  for (const child of items) {
+    if (typeof child === "string" || typeof child === "number") {
+      run.push(child);
+      continue;
+    }
+    closeRun();
+    parts.push(
+      <Fragment key={`part:${String(parts.length)}`}>{child}</Fragment>,
+    );
+  }
+  closeRun();
+  return parts;
 };
 
 const implicitTooltip = (
@@ -323,7 +382,9 @@ function Button({
         ) : (
           icon
         )}
-        {children}
+        {cutsLabel({ layout, size, variant })
+          ? containedLabel(children)
+          : children}
       </>
     ),
     className: cn(
