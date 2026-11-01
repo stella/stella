@@ -82,6 +82,7 @@ test("an imported document keeps its original dates and author", async () => {
       ),
       workspaceId,
       entityId,
+      userId: mintAuthProviderId<"user">(),
       before: undefined,
       filePropertyId: undefined,
     }),
