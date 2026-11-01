@@ -339,7 +339,7 @@ const runReplayBatch = async ({
     failure = classifyReplayFailure(attempt.error);
   } else if (
     failure === null &&
-    (rowErrors > 0 || replayed?.haltReason !== null)
+    (rowErrors > 0 || (replayed !== null && replayed.haltReason !== null))
   ) {
     failure = replayFailure("writer-retryable");
   }
@@ -678,8 +678,8 @@ export const runBackgroundReplayTick = async ({
 
   const held = await dependencies.loadGateState(source);
   if (
-    held?.holdUntil !== null &&
-    held?.holdUntil !== undefined &&
+    held !== null &&
+    held.holdUntil !== null &&
     dependencies.now() < held.holdUntil
   ) {
     report.heldTooLong = isHeldTooLong(held, dependencies.now(), healthConfig);
