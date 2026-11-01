@@ -390,9 +390,9 @@ export const bindApprovedMcpAuditContext = <TContext extends McpRequestContext>(
       type: "user",
     },
     trigger: currentExecution?.trigger ?? { type: "direct" },
-    ...(currentExecution?.runId === undefined
-      ? {}
-      : { runId: currentExecution.runId }),
+    ...(currentExecution?.runId !== undefined
+      ? { runId: currentExecution.runId }
+      : {}),
     approval: {
       status: "approved",
       userId: context.userId,
