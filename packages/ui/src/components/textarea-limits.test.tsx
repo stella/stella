@@ -73,6 +73,17 @@ describe("Textarea limits", () => {
     expect(countText(markup)).toBe("3/10");
   });
 
+  test("an unstyled field still positions its count against itself", () => {
+    const markup = renderToStaticMarkup(
+      <Textarea aria-label="Summary" maxLength={280} showCount unstyled />,
+    );
+    const control = /<span[^>]*data-slot="textarea-control"[^>]*>/u.exec(
+      markup,
+    )?.[0];
+
+    expect(control).toMatch(/class="(?:[^"]* )?relative(?: [^"]*)?"/u);
+  });
+
   test("no counter without a maxLength", () => {
     const markup = renderToStaticMarkup(
       <Textarea aria-label="Summary" showCount />,
