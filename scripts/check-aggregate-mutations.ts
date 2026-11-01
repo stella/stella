@@ -932,6 +932,18 @@ const JOINING_RUNNERS = {
       argument: 1,
       suppliesTransaction: true,
     },
+    {
+      module: `${API}db/root.ts`,
+      exported: "withConfirmationCodeOwnerTransaction",
+      argument: 0,
+      suppliesTransaction: true,
+    },
+    {
+      module: `${API}db/root.ts`,
+      exported: "withAccountExportOwnerTransaction",
+      argument: 1,
+      suppliesTransaction: true,
+    },
   ],
   /**
    * Followed callees only: `<receiver>.transaction(cb)` where the receiver

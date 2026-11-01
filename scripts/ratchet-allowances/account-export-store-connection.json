@@ -2,5 +2,5 @@
   "metric": "direct-root-connection-imports",
   "file": "apps/api/src/lib/account-export/store.ts",
   "delta": 1,
-  "reason": "The declared account export lifecycle door lazily resolves its database handle only for authenticated account reads and requests, under the account's row-level scope. Worker operations receive their database explicitly; no database handle is exported."
+  "reason": "The declared account export lifecycle door lazily loads the root module's account export transaction only for an account's own requests, reads and downloads (scripts/ownership/root-connection-account-export.ts). That transaction may hold the account fence on the owner role, then switches to the application role scoped to the account before any export statement runs. Worker operations receive their database explicitly; no database handle is exported."
 }

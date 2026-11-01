@@ -454,12 +454,41 @@ export type OwnerTransactionDatabase<Tx extends object> = {
   transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
 };
 
-// Transactions opened by withOwnerAggregateTransaction. The registry never
-// touches the transaction object; it only lets the type follow it.
+// Transactions opened by withOwnerAggregateTransaction, and their savepoints.
+// The registry never touches the transaction object; it lets the type follow
+// it and lets owner-held locks refuse anything else at run time too.
 const ownerTransactions = new WeakSet<object>();
 const isOwnerTransaction = <Tx extends object>(
   tx: Tx,
 ): tx is OwnerTransaction<Tx> => ownerTransactions.has(tx);
+
+/**
+ * A test double standing in for an owner transaction. Only test helpers may
+ * import it (scripts/ownership/owner-database.ts); production transactions
+ * come from withOwnerAggregateTransaction.
+ */
+export const ownerTransactionDouble = <Tx extends object>(
+  tx: Tx,
+): OwnerTransaction<Tx> => {
+  ownerTransactions.add(tx);
+  return isOwnerTransaction(tx)
+    ? tx
+    : panic("An owner transaction double must be registered");
+};
+
+const isOwnerHeld = (aggregate: AggregateName): boolean => {
+  const definition = AGGREGATE_LOCKS[aggregate];
+  return definition.kind === "row" && definition.holder === "owner";
+};
+
+/** Owner-held rows refuse an unregistered transaction before any statement. */
+const assertOwnerHolder = (aggregate: AggregateName, tx: object): void => {
+  if (isOwnerHeld(aggregate) && !ownerTransactions.has(tx)) {
+    panic(
+      `The ${aggregate} aggregate is owner-held; lock it on an owner transaction`,
+    );
+  }
+};
 
 /**
  * {@link withAggregateTransaction} on a registered owner connection, the only
@@ -663,6 +692,9 @@ export const withAggregateSavepoint = async <Tx extends object, T>(
   try {
     const committed = await tx.transaction(async (savepoint) => {
       histories.set(savepoint, history);
+      if (ownerTransactions.has(tx)) {
+        ownerTransactions.add(savepoint);
+      }
       try {
         const value = await run(savepoint);
         if (transactionHasAggregateLocks(history)) {
@@ -1079,6 +1111,9 @@ export const withAggregateParentBatch = async ({
   workspaceIds = [],
   mode,
 }: AggregateParentBatchOptions) => {
+  if (organizationIds.length > 0) {
+    assertOwnerHolder("organization", tx);
+  }
   const history = lockHistory(tx);
   assertAggregateLevelAvailable(history);
   for (const id of [...organizationIds, ...workspaceIds]) {
@@ -1529,6 +1564,7 @@ export const withAggregateLock = async (
   options: AggregateLockOptions,
 ): Promise<AggregateLockResult> => {
   const { tx, aggregate } = options;
+  assertOwnerHolder(aggregate, tx);
   const wait = options.wait ?? "block";
   const history = lockHistory(tx);
   assertAggregateLevelAvailable(history);
@@ -2226,6 +2262,7 @@ export function withAggregateRowQuery<Row>(
 export async function withAggregateRowQuery<Row>(
   options: AggregateRowQueryOptions<Row>,
 ): Promise<AggregateRowsResult<Row>> {
+  assertOwnerHolder(options.aggregate, options.tx);
   const history = lockHistory(options.tx);
   assertAggregateLevelAvailable(history);
   const wait = options.wait ?? "block";

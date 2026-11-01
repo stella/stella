@@ -6,7 +6,7 @@ import { randomInt } from "node:crypto";
 import { Temporal } from "@stll/time";
 
 import { verification } from "@/api/db/auth-schema";
-import { rootDb, withRootOwnerTransaction } from "@/api/db/root";
+import { rootDb, withConfirmationCodeOwnerTransaction } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { lockAccountRowByEmail } from "@/api/lib/db/account-row";
 import type { OwnerTransaction } from "@/api/lib/db/aggregate-lock";
@@ -65,7 +65,7 @@ export const createConfirmationOtp = async ({
       const identifier = confirmationOtpIdentifier(purpose, email);
       const otp = generateSixDigitOtp();
 
-      await withRootOwnerTransaction(async (tx) => {
+      await withConfirmationCodeOwnerTransaction(async (tx) => {
         // Lock the user row by email first to serialize OTP requests for this email
         await lockAccountRowByEmail(tx, email);
 
@@ -247,7 +247,7 @@ export const runConfirmedTransaction = async <T>({
   if (Result.isError(access)) {
     return Result.err(access.error);
   }
-  return await withRootOwnerTransaction(async (tx) => {
+  return await withConfirmationCodeOwnerTransaction(async (tx) => {
     await beforeConsume(tx);
     const consumed = await consumeConfirmationOtp(tx, confirmation);
     if (Result.isError(consumed)) {

@@ -13,6 +13,7 @@ import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
 import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
+import { scopeTransactionToAccount } from "@/api/lib/account-export/account-scope";
 import type { getAuth } from "@/api/lib/auth";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -171,22 +172,47 @@ export const rlsDb = markRlsDatabase({
 });
 
 /**
- * An aggregate transaction on the root connection for owner-held row locks
- * (the account, the organization): the confirmation-code flows take the
- * account row before any session or organization scope exists.
+ * The confirmation-code owner transaction, for lib/confirmation-otp.ts only
+ * (scripts/ownership/root-connection-confirmation-code.ts): a code request
+ * and a confirmed operation take the account row before any session or
+ * organization scope exists.
  */
-export const withRootOwnerTransaction = async <T>(
+export const withConfirmationCodeOwnerTransaction = async <T>(
   run: (tx: OwnerTransaction<Transaction>) => Promise<T>,
 ): Promise<T> => await withOwnerAggregateTransaction(rootDb, run);
 
-/**
- * The scoped-transaction pool registered as an owner connection. Its
- * transactions start on the owner role, before any role switch; account
- * export takes the owner-held account fence there and then scopes itself.
- */
-export const rlsOwnerPhaseDb = createOwnerDatabase(() => ({
+// Each transaction of the scoped pool starts on the owner role, before its
+// role switch. Registered for the account export operation below; never
+// exported.
+const accountExportConnection = createOwnerDatabase(() => ({
   transaction: rlsDb.transaction,
 }));
+
+type AccountExportScope = {
+  userId: SafeId<"user">;
+  /** Hold the account's erasure fence on the owner role first. */
+  fenceAccount: boolean;
+};
+
+/**
+ * An account export transaction, for lib/account-export/store.ts only
+ * (scripts/ownership/root-connection-account-export.ts). It optionally holds
+ * the account fence on the owner role, then switches to the application role
+ * scoped to `userId` before `run` sees the transaction.
+ */
+export const withAccountExportOwnerTransaction = async <T>(
+  { userId, fenceAccount }: AccountExportScope,
+  run: (tx: Transaction) => Promise<T>,
+): Promise<T> =>
+  await withOwnerAggregateTransaction(accountExportConnection, async (tx) => {
+    if (fenceAccount) {
+      // account-row reads this module; load it at call time.
+      const { lockActiveAccountRow } = await import("@/api/lib/db/account-row");
+      await lockActiveAccountRow(tx, userId);
+    }
+    await scopeTransactionToAccount(tx, userId);
+    return await run(tx);
+  });
 
 /**
  * The scoped-transaction connection with `before` run first in each

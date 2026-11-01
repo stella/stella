@@ -7,6 +7,14 @@ import {
 import { sha256Hex } from "../packages/sha256/src/node.ts";
 
 export const AGGREGATE_LOCK_OWNER = "apps/api/src/lib/db/aggregate-lock.ts";
+// Owner-transaction runners that open their transaction on the aggregate
+// runner: the owner's own, and the root module's operations confined by
+// scripts/ownership/root-connection-*.ts.
+const OWNER_AGGREGATE_RUNNERS: ReadonlySet<string> = new Set([
+  "withOwnerAggregateTransaction",
+  "withConfirmationCodeOwnerTransaction",
+  "withAccountExportOwnerTransaction",
+]);
 export const aggregateLockSourceIncluded = (file: string) =>
   /\.(?:[cm]?ts|tsx|[cm]?js|jsx|sql)$/u.test(file) &&
   file !== AGGREGATE_LOCK_OWNER &&
@@ -242,12 +250,13 @@ export const aggregateLockSites = (
           offset: node.start,
         });
       }
-      // Owner transactions open only through the owner's aggregate runner;
-      // any other owner-transaction helper is a raw boundary like `.transaction`.
+      // Owner transactions open only through the owner's aggregate runner
+      // and the root module's confined operations built on it; any other
+      // owner-transaction helper is a raw boundary like `.transaction`.
       if (
         callee.type === "Identifier" &&
-        /^withOwner\w*Transaction$/u.test(callee.name) &&
-        callee.name !== "withOwnerAggregateTransaction" &&
+        /^with\w*Owner\w*Transaction$/u.test(callee.name) &&
+        !OWNER_AGGREGATE_RUNNERS.has(callee.name) &&
         file.startsWith("apps/api/")
       ) {
         add({

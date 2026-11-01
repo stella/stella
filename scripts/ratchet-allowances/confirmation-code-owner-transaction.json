@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/confirmation-otp.ts",
+  "delta": 1,
+  "reason": "Confirmation-code requests and confirmed operations take the owner-held account row before any session or organization scope exists, so they open the root module's confirmation-code owner transaction (scripts/ownership/root-connection-confirmation-code.ts), which runs on the aggregate runner and is confined to this file. The module exports no handle."
+}
