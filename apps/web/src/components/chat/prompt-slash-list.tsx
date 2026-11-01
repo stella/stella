@@ -190,9 +190,10 @@ export const PromptSlashList = ({
                 const active = index === safeIndex;
                 return (
                   <Button
-                    className="items-start whitespace-normal"
+                    className="items-start"
                     data-index={index}
                     key={getItemKey(item)}
+                    layout="wrap"
                     onClick={() => select(index)}
                     onMouseDown={(event) => {
                       // Keep the editor focused so `command` can run

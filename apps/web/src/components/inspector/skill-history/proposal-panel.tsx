@@ -72,7 +72,8 @@ export const ProposalMenu = ({
                     aria-current={
                       proposal.id === openProposalId ? "true" : undefined
                     }
-                    className="h-auto flex-col items-start whitespace-normal"
+                    className="h-auto flex-col items-start"
+                    layout="wrap"
                     onClick={() => {
                       onOpenProposal(proposal.id);
                     }}
