@@ -341,6 +341,7 @@ describe("confirmed file rename state", () => {
       ).toEqual(
         new Set([
           JSON.stringify(entitiesKeys.all("matter")),
+          JSON.stringify(entitiesKeys.detail("matter", "A")),
           JSON.stringify(myWorkKeys.all),
           JSON.stringify(tasksQueryRoot("matter")),
           JSON.stringify(workspacesKeys.overview("matter")),

@@ -44,6 +44,7 @@ import {
   resourceMutation,
   resourceQueryOptions,
 } from "@/lib/workspace-realtime";
+import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 import {
   entityViewKeys,
@@ -63,6 +64,7 @@ import {
 const WORKSPACE_ID = "workspace-rename";
 const OTHER_WORKSPACE_ID = "workspace-other";
 const FIELD_ID = "field-file";
+const ENTITY_ID = "00000000-0000-4000-8000-0000000000e1";
 const ORGANIZATION_ID = "organization-rename";
 const USER_ID = "user-rename";
 const coverageLayout = {
@@ -306,11 +308,16 @@ test("each migrated mutation still invalidates every prior cache target", async 
       const rename = resourceMutation({
         mutation,
         queryClient,
-        mutationFn: async ({ workspaceId }: { workspaceId: string }) => ({
+        mutationFn: async ({
+          workspaceId,
+        }: {
+          workspaceId: string;
+          entityId: string;
+        }) => ({
           workspaceId,
         }),
       });
-      await rename({ workspaceId: WORKSPACE_ID });
+      await rename({ workspaceId: WORKSPACE_ID, entityId: ENTITY_ID });
       for (const { readers } of targets) {
         for (const { queryKey } of readers) {
           expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
@@ -397,7 +404,9 @@ test("cache invalidation failures preserve every registered mutation's committed
       mutationFn: async () => committed,
     });
     try {
-      expect(await write({ workspaceId: WORKSPACE_ID })).toBe(committed);
+      expect(
+        await write({ workspaceId: WORKSPACE_ID, entityId: ENTITY_ID }),
+      ).toBe(committed);
       expect(invalidate).toHaveBeenCalled();
       expect(capture).toHaveBeenCalledWith(
         expect.objectContaining({ cause: failure }),
@@ -483,11 +492,21 @@ test("entity-view and inbox readers register rename dependencies and preserve wo
     const rename = resourceMutation({
       mutation: "renameEntity",
       queryClient,
-      mutationFn: async ({ name }: { workspaceId: string; name: string }) => ({
+      mutationFn: async ({
+        name,
+      }: {
+        workspaceId: string;
+        entityId: string;
+        name: string;
+      }) => ({
         name,
       }),
     });
-    await rename({ workspaceId: WORKSPACE_ID, name: "Renamed" });
+    await rename({
+      workspaceId: WORKSPACE_ID,
+      entityId: ENTITY_ID,
+      name: "Renamed",
+    });
     // The existing work-family prefix refreshes all its matter and organization projections.
     for (const { queryKey } of readers) {
       expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
@@ -1245,13 +1264,23 @@ test("a committed entity rename marks actual file, text and metadata readers sta
     const rename = resourceMutation({
       mutation: "renameEntity",
       queryClient,
-      mutationFn: async ({ name }: { workspaceId: string; name: string }) => {
+      mutationFn: async ({
+        name,
+      }: {
+        workspaceId: string;
+        entityId: string;
+        name: string;
+      }) => {
         fixture.rename(name);
         return { name };
       },
     });
     expect(
-      await rename({ workspaceId: WORKSPACE_ID, name: "Renamed.pdf" }),
+      await rename({
+        workspaceId: WORKSPACE_ID,
+        entityId: ENTITY_ID,
+        name: "Renamed.pdf",
+      }),
     ).toEqual({ name: "Renamed.pdf" });
     for (const { queryKey } of readers) {
       expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
@@ -1281,7 +1310,9 @@ test("a rejected rename leaves every actual file reader fresh", async () => {
         throw new TypeError("Rename was refused");
       },
     });
-    const rejected = await rejectionOf(rename({ workspaceId: WORKSPACE_ID }));
+    const rejected = await rejectionOf(
+      rename({ workspaceId: WORKSPACE_ID, entityId: ENTITY_ID }),
+    );
     expect(rejected).toBeInstanceOf(TypeError);
     expect(rejected).toHaveProperty("message", "Rename was refused");
     for (const { queryKey } of [...readers, ...otherReaders]) {
@@ -1289,6 +1320,67 @@ test("a rejected rename leaves every actual file reader fresh", async () => {
     }
     for (const { queryKey } of readers) {
       expect(queryClient.getQueryData(queryKey)?.fileName).toBe("Original.pdf");
+    }
+  } finally {
+    queryClient.clear();
+  }
+});
+
+test("a committed entity rename marks its entity and every entity collection stale, never another entity", async () => {
+  const queryClient = new QueryClient();
+  const otherEntityId = "00000000-0000-4000-8000-0000000000e2";
+  const renamedKeys = [
+    entitiesKeys.detail(WORKSPACE_ID, ENTITY_ID),
+    entitiesKeys.versions(WORKSPACE_ID, ENTITY_ID),
+  ];
+  // Keys spanning many entities, including aggregates no collection list names.
+  const collectionKeys = [
+    entitiesKeys.all(WORKSPACE_ID),
+    entitiesKeys.window({ workspaceId: WORKSPACE_ID, filters: [], sorts: [] }),
+    entitiesKeys.folders(WORKSPACE_ID),
+    entitiesKeys.files(WORKSPACE_ID),
+    entitiesKeys.summariesCount(WORKSPACE_ID),
+    workspacesKeys.activityAll(WORKSPACE_ID),
+  ];
+  const untouchedKeys = [
+    entitiesKeys.detail(WORKSPACE_ID, otherEntityId),
+    entitiesKeys.versions(WORKSPACE_ID, otherEntityId),
+    entitiesKeys.detail(OTHER_WORKSPACE_ID, ENTITY_ID),
+    entitiesKeys.files(OTHER_WORKSPACE_ID),
+  ];
+  for (const queryKey of [
+    ...renamedKeys,
+    ...collectionKeys,
+    ...untouchedKeys,
+  ]) {
+    queryClient.setQueryData(queryKey, { seeded: true });
+  }
+  try {
+    const rename = resourceMutation({
+      mutation: "renameEntity",
+      queryClient,
+      mutationFn: async ({
+        name,
+      }: {
+        workspaceId: string;
+        entityId: string;
+        name: string;
+      }) => ({ name }),
+    });
+    await rename({
+      workspaceId: WORKSPACE_ID,
+      entityId: ENTITY_ID,
+      name: "Renamed",
+    });
+    const stale = (queryKey: QueryKey) => ({
+      queryKey,
+      invalidated: queryClient.getQueryState(queryKey)?.isInvalidated,
+    });
+    for (const queryKey of [...renamedKeys, ...collectionKeys]) {
+      expect(stale(queryKey)).toEqual({ queryKey, invalidated: true });
+    }
+    for (const queryKey of untouchedKeys) {
+      expect(stale(queryKey)).toEqual({ queryKey, invalidated: false });
     }
   } finally {
     queryClient.clear();

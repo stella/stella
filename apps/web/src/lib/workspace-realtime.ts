@@ -46,7 +46,10 @@ import {
   workspaceMembersQueryRoot,
 } from "@/lib/resource-query-roots.logic";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+import {
+  entitiesKeys,
+  isEntityCollectionQueryKey,
+} from "@/lib/workspaces/queries/entities.logic";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 import { viewsRootKey } from "@/lib/workspaces/queries/views.logic";
 import {
@@ -137,6 +140,9 @@ export const RESOURCE_MUTATION_CONTRACTS = {
       },
     ],
     resources: [RESOURCE_TYPE.ENTITY],
+    // One entity changes, named by this variable: its own queries and every
+    // entity collection refresh, never the other cached entity details.
+    changedEntity: "entityId",
   },
   installCatalogueEntry: {
     writes: [
@@ -230,63 +236,132 @@ export const RESOURCE_MUTATION_CONTRACTS = {
   },
 } as const;
 
-type ResourceMutationOptions<TVariables, TData> = {
-  mutation: keyof typeof RESOURCE_MUTATION_CONTRACTS;
+type ResourceMutationName = keyof typeof RESOURCE_MUTATION_CONTRACTS;
+
+/** The variable naming the one entity a contract changes, if it names one. */
+type ChangedEntityVariable<TMutation extends ResourceMutationName> =
+  (typeof RESOURCE_MUTATION_CONTRACTS)[TMutation] extends {
+    changedEntity: infer TName extends string;
+  }
+    ? TName
+    : never;
+
+type OrganizationResourceMutationName = {
+  [TMutation in ResourceMutationName]: [
+    ChangedEntityVariable<TMutation>,
+  ] extends [never]
+    ? TMutation
+    : never;
+}[ResourceMutationName];
+
+type ResourceMutationOptions<
+  TMutation extends ResourceMutationName,
+  TVariables,
+  TData,
+> = {
+  mutation: TMutation;
   queryClient: QueryClient;
   mutationFn: (variables: TVariables) => Promise<TData>;
 };
+
+type ResourceMutationScope =
+  | { type: "organization" }
+  | { type: "workspace"; workspaceId: string; changedEntityId?: string };
 
 const invalidateAfterResourceMutation = async ({
   mutation,
   queryClient,
   scope,
 }: {
-  mutation: keyof typeof RESOURCE_MUTATION_CONTRACTS;
+  mutation: ResourceMutationName;
   queryClient: QueryClient;
-  scope: ResourceQueryScopeIdentity;
+  scope: ResourceMutationScope;
 }) => {
   const resources = RESOURCE_MUTATION_CONTRACTS[mutation].resources;
-  const actions = registeredResourceQueryActions({
-    queryClient,
-    resources,
-    scope,
-  });
+  const invalidations: ResourceQueryInvalidation[] =
+    registeredResourceQueryActions({ queryClient, resources, scope }).map(
+      ({ queryKey }): ResourceQueryInvalidation => ({
+        queryKey,
+        match: "prefix",
+      }),
+    );
   if (scope.type === "workspace") {
     for (const resource of resources) {
-      actions.push(
-        ...getResourceTypeInvalidationActions(resource, scope.workspaceId),
-      );
+      for (const policyScope of RESOURCE_REALTIME_QUERY_POLICY[resource]) {
+        invalidations.push(
+          ...(policyScope === RESOURCE_QUERY_SCOPE.ENTITIES &&
+          scope.changedEntityId !== undefined
+            ? getChangedEntityInvalidations(
+                scope.workspaceId,
+                scope.changedEntityId,
+              )
+            : getResourceQueryScopeKeys(policyScope, scope.workspaceId).map(
+                (queryKey): ResourceQueryInvalidation => ({
+                  queryKey,
+                  match: "prefix",
+                }),
+              )),
+        );
+      }
     }
   }
-  await applyResourceQueryActions(
+  await invalidateResourceQueries(
     queryClient,
-    deduplicateQueryActions(actions),
+    deduplicateInvalidations(invalidations),
   );
 };
 
-const workspaceIdOf = (variables: unknown): string =>
-  typeof variables === "object" &&
-  variables !== null &&
-  "workspaceId" in variables &&
-  typeof variables.workspaceId === "string"
-    ? variables.workspaceId
-    : panic("A workspace-scoped resource mutation needs a workspaceId");
+const stringVariable = (variables: unknown, name: string): string => {
+  const value: unknown =
+    typeof variables === "object" && variables !== null
+      ? Reflect.get(variables, name)
+      : undefined;
+  return typeof value === "string"
+    ? value
+    : panic(`A workspace-scoped resource mutation needs a ${name}`);
+};
+
+const workspaceMutationScope = (
+  mutation: ResourceMutationName,
+  variables: unknown,
+): ResourceMutationScope => {
+  const contract: { changedEntity?: string } =
+    RESOURCE_MUTATION_CONTRACTS[mutation];
+  const workspaceId = stringVariable(variables, "workspaceId");
+  return contract.changedEntity === undefined
+    ? { type: "workspace", workspaceId }
+    : {
+        type: "workspace",
+        workspaceId,
+        changedEntityId: stringVariable(variables, contract.changedEntity),
+      };
+};
 
 /**
  * A committed write marks every registered reader stale before it settles.
  * Workspace writes carry their workspace in the variables; organization
- * writes declare `scope: { type: "organization" }` and need none.
+ * writes declare `scope: { type: "organization" }` and need none. A contract
+ * naming a `changedEntity` variable refreshes only that entity's queries and
+ * the entity collections, never every cached entity detail.
  */
 export function resourceMutation<
-  TVariables extends { workspaceId: string },
+  TMutation extends ResourceMutationName,
+  TVariables extends { workspaceId: string } & Record<
+    ChangedEntityVariable<TMutation>,
+    string
+  >,
   TData,
 >(
-  options: ResourceMutationOptions<TVariables, TData> & {
+  options: ResourceMutationOptions<TMutation, TVariables, TData> & {
     scope?: { type: "workspace" };
   },
 ): (variables: TVariables) => Promise<TData>;
-export function resourceMutation<TVariables, TData>(
-  options: ResourceMutationOptions<TVariables, TData> & {
+export function resourceMutation<
+  TMutation extends OrganizationResourceMutationName,
+  TVariables,
+  TData,
+>(
+  options: ResourceMutationOptions<TMutation, TVariables, TData> & {
     scope: { type: "organization" };
   },
 ): (variables: TVariables) => Promise<TData>;
@@ -295,7 +370,7 @@ export function resourceMutation<TVariables, TData>({
   queryClient,
   mutationFn,
   scope,
-}: ResourceMutationOptions<TVariables, TData> & {
+}: ResourceMutationOptions<ResourceMutationName, TVariables, TData> & {
   scope?: { type: "workspace" } | { type: "organization" };
 }): (variables: TVariables) => Promise<TData> {
   return async (variables: TVariables) => {
@@ -306,7 +381,7 @@ export function resourceMutation<TVariables, TData>({
       scope:
         scope?.type === "organization"
           ? scope
-          : { type: "workspace", workspaceId: workspaceIdOf(variables) },
+          : workspaceMutationScope(mutation, variables),
     });
     return data;
   };
@@ -541,6 +616,28 @@ const getResourceQueryScopeKeys = (
   }
 };
 
+/**
+ * A local write's cache invalidation. `prefix` marks every query under the
+ * key; `entity-collections` marks only the queries under the entity root that
+ * span many entities, never one entity's own queries.
+ */
+type ResourceQueryInvalidation = {
+  queryKey: QueryKey;
+  match: "prefix" | "entity-collections";
+};
+
+/**
+ * One known entity changed: its own queries and every entity collection
+ * refresh, never the other entities' details under the shared entity root.
+ */
+const getChangedEntityInvalidations = (
+  workspaceId: string,
+  entityId: string,
+): ResourceQueryInvalidation[] => [
+  { queryKey: entitiesKeys.all(workspaceId), match: "entity-collections" },
+  { queryKey: entitiesKeys.detail(workspaceId, entityId), match: "prefix" },
+];
+
 const getResourceTypeInvalidationActions = (
   resourceType: ResourceType,
   workspaceId: string,
@@ -664,25 +761,73 @@ const registeredResourceQueryActions = ({
       queryKey,
     }));
 
-/** One cache executor for local writes, remote events, and reconnect recovery. */
+const deduplicateInvalidations = (
+  invalidations: readonly ResourceQueryInvalidation[],
+): ResourceQueryInvalidation[] => {
+  const seen = new Set<string>();
+  const unique: ResourceQueryInvalidation[] = [];
+  for (const invalidation of invalidations) {
+    const key = `${invalidation.match}:${hashKey(invalidation.queryKey)}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(invalidation);
+  }
+  return unique;
+};
+
+/** Whether a query under an invalidation's key is one it marks stale. */
+const invalidationReaches = (
+  match: ResourceQueryInvalidation["match"],
+  queryKey: QueryKey,
+): boolean => {
+  switch (match) {
+    case "prefix":
+      return true;
+    case "entity-collections":
+      return isEntityCollectionQueryKey(queryKey);
+    default:
+      match satisfies never;
+      return panic(`Unhandled invalidation match: ${String(match)}`);
+  }
+};
+
+/** Applies remote-event and reconnect actions through the write executor. */
 export const applyResourceQueryActions = async (
   queryClient: QueryClient,
   actions: readonly WorkspaceRealtimeQueryAction[],
 ) => {
-  const invalidations = actions.filter(
-    (action) => action.type === WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
-  );
   for (const action of actions) {
     if (action.type === WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX) {
       queryClient.removeQueries({ queryKey: action.queryKey, exact: false });
     }
   }
+  await invalidateResourceQueries(
+    queryClient,
+    actions
+      .filter(
+        (action) => action.type === WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+      )
+      .map(({ queryKey }): ResourceQueryInvalidation => ({
+        queryKey,
+        match: "prefix",
+      })),
+  );
+};
+
+/** One cache executor for local writes, remote events, and reconnect recovery. */
+const invalidateResourceQueries = async (
+  queryClient: QueryClient,
+  invalidations: readonly ResourceQueryInvalidation[],
+) => {
   const invalidated = await Result.tryPromise(
     async () =>
       await Promise.all(
-        invalidations.map(async ({ queryKey }) => {
+        invalidations.map(async ({ queryKey, match }) => {
           await queryClient.invalidateQueries({
             queryKey,
+            predicate: (query) => invalidationReaches(match, query.queryKey),
             refetchType: "none",
           });
         }),
@@ -703,7 +848,11 @@ export const applyResourceQueryActions = async (
     queryClient.refetchQueries({
       type: "active",
       predicate: (query) =>
-        invalidations.some(({ queryKey }) => matchQuery({ queryKey }, query)),
+        invalidations.some(
+          ({ queryKey, match }) =>
+            matchQuery({ queryKey }, query) &&
+            invalidationReaches(match, query.queryKey),
+        ),
     }),
     "resource-query.refresh",
   );

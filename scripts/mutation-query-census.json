@@ -4574,17 +4574,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -4593,7 +4582,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "invalidateQueries",
@@ -4693,17 +4682,6 @@
       ],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -4712,7 +4690,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "invalidateQueries",
@@ -4891,17 +4869,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -4910,7 +4877,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "setQueriesData",
@@ -6031,17 +5998,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -6050,7 +6006,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "setQueriesData",
@@ -7386,17 +7342,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -7405,7 +7350,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "setQueriesData",
@@ -7773,17 +7718,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -7792,7 +7726,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "setQueriesData",
@@ -8566,17 +8500,6 @@
       ],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -8585,7 +8508,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         }
       ],
       "readerIds": [
@@ -9771,17 +9694,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -9790,7 +9702,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "setQueriesData",
@@ -18959,17 +18871,6 @@
       ],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -18978,7 +18879,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "invalidateQueries",
@@ -22188,17 +22089,6 @@
       ],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -22207,7 +22097,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "setQueriesData",
@@ -24224,17 +24114,6 @@
       ],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -24243,7 +24122,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         }
       ],
       "readerIds": [
@@ -24314,17 +24193,6 @@
       ],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -24333,7 +24201,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         }
       ],
       "readerIds": [],
@@ -31895,17 +31763,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -31914,7 +31771,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "setQueriesData",
@@ -32212,17 +32069,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -32231,7 +32077,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "setQueriesData",
@@ -33677,17 +33523,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -33696,7 +33531,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "setQueriesData",
@@ -33826,17 +33661,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -33845,7 +33669,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "setQueriesData",
@@ -34185,17 +34009,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -34204,7 +34017,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "setQueriesData",
@@ -36766,17 +36579,6 @@
       ],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -36785,7 +36587,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "invalidateQueries",
@@ -37977,17 +37779,6 @@
       ],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -37996,7 +37787,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "invalidateQueries",
@@ -38077,17 +37868,6 @@
       ],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -38096,7 +37876,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "invalidateQueries",
@@ -38177,17 +37957,6 @@
       ],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -38196,7 +37965,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "invalidateQueries",
@@ -38278,17 +38047,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -38297,7 +38055,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "invalidateQueries",
@@ -38395,17 +38153,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -38414,7 +38161,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "invalidateQueries",
@@ -38536,17 +38283,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -38555,7 +38291,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "invalidateQueries",
@@ -38653,17 +38389,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -38672,7 +38397,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "invalidateQueries",
@@ -38770,17 +38495,6 @@
       "ownUnresolved": [],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -38789,7 +38503,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "invalidateQueries",
@@ -38934,17 +38648,6 @@
       ],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -38953,7 +38656,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "invalidateQueries",
@@ -39074,17 +38777,6 @@
       ],
       "cacheEffects": [
         {
-          "operation": "removeQueries",
-          "file": "apps/web/src/lib/workspace-realtime.ts",
-          "key": {
-            "expression": "action.queryKey",
-            "factory": null,
-            "staticPrefix": [],
-            "unresolved": true
-          },
-          "expression": "queryClient.removeQueries({ queryKey: action.queryKey, exact: false })"
-        },
-        {
           "operation": "invalidateQueries",
           "file": "apps/web/src/lib/workspace-realtime.ts",
           "key": {
@@ -39093,7 +38785,7 @@
             "staticPrefix": [],
             "unresolved": true
           },
-          "expression": "queryClient.invalidateQueries({ queryKey, refetchType: \"none\", })"
+          "expression": "queryClient.invalidateQueries({ queryKey, predicate: (query) => invalidationReaches(match, query.queryKey), refetchType: \"none\", })"
         },
         {
           "operation": "invalidateQueries",
