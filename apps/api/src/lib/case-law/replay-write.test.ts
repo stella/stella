@@ -44,7 +44,7 @@ describe("replay write plans", () => {
     const listed = replayRawWrite({
       table: caseLawSources,
       values: { name: "Replay fixture" },
-      predicate: sql`${caseLawSources.adapterKey} = ANY(${["a", "b"]})`,
+      predicate: sql`${caseLawSources.adapterKey} = ANY(${sql.param(["a", "b"])})`,
       operation: { kind: "update" },
     });
     expect(await rejectionOf(listed.execute(session))).toMatchObject({
