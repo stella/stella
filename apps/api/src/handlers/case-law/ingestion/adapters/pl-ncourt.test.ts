@@ -15,8 +15,6 @@ import {
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import {
   buildPlDecision,
@@ -51,6 +49,11 @@ import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/p
 import { projectPlNcourtSourceRaw } from "@/api/handlers/case-law/ingestion/retention/sources/pl-ncourt";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
+import {
+  decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   AST_BOUNDARY_WHITESPACE,
   AST_CONTENT_LOST,
@@ -235,7 +238,7 @@ describe("identity", () => {
 
   test("a stored row replays to the same identity and the same decision", async () => {
     const decision = await pairDecision();
-    const replayed = plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
       contentType: decision.sourceRawContentType ?? null,
       caseNumber: decision.caseNumber,
@@ -379,7 +382,7 @@ describe("building a judgment", () => {
     expect(reconciled.type).toBe("built-supplement");
 
     // A replay of its stored payload is the supplement again.
-    const replayed = plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
       raw: new TextEncoder().encode(supplement.document.sourceRaw ?? ""),
       contentType: supplement.document.sourceRawContentType ?? null,
       caseNumber: supplement.document.caseNumber,
@@ -606,7 +609,7 @@ describe("building a judgment", () => {
     expect(decision.metadata["documentStatus"] === "publisher-404").toBe(true);
 
     // The status is kept in the envelope, so a replay states it too.
-    const replayed = plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
       contentType: decision.sourceRawContentType ?? null,
       caseNumber: decision.caseNumber,
@@ -774,7 +777,7 @@ describe("decision types", () => {
         ),
       ).toBe(true);
       for (const metadata of [{}, { documentRole: role }]) {
-        const replayed = plNcourtAdapter.reparseStoredRaw?.({
+        const replayed = await plNcourtAdapter.reparseStoredRaw?.({
           raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
           contentType: decision.sourceRawContentType ?? null,
           caseNumber: decision.caseNumber,
@@ -1816,6 +1819,36 @@ describe("the walk", () => {
     );
   });
 
+  test.each([2, 3, PL_NCOURT_WINDOW])(
+    "a narrowing 404 records the publisher answer for window %i",
+    async (window) => {
+      const requests: string[] = [];
+      installWalkStub({
+        rows: await rowsAroundPoison(),
+        poisoned: new Set([POISONED_OFFSET]),
+        total: 166_002,
+        requests,
+      });
+      const cursor = encodePlNcourtCursor({
+        lane: "walk",
+        since: SINCE,
+        offset: POISONED_OFFSET,
+        window,
+        anchor: "",
+      });
+      const page = await fetchPage(cursor);
+      const next = parsePlNcourtCursor(page.nextCursor);
+
+      expect(page.publisherRequest).toBe(PUBLISHER_REQUEST.ANSWERED);
+      expect(page.decisions).toEqual([]);
+      expect(next.offset).toBe(POISONED_OFFSET);
+      expect(next.window).toBeGreaterThanOrEqual(1);
+      expect(next.window).toBeLessThan(window);
+      expect(page.nextCursor).not.toBe(cursor);
+      expect(requests).toHaveLength(1);
+    },
+  );
+
   test("an unservable row is isolated by halving, then kept as a quarantined audit row", async () => {
     const rows = await rowsAroundPoison();
     installWalkStub({
@@ -1867,7 +1900,7 @@ describe("the walk", () => {
     );
 
     // The audit row replays to itself.
-    const replayed = plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
       raw: new TextEncoder().encode(quarantine.sourceRaw ?? ""),
       contentType: quarantine.sourceRawContentType ?? null,
       caseNumber: quarantine.caseNumber,

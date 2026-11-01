@@ -80,6 +80,21 @@ jobs:
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Tells the release health gate where the job failed: this step runs
+      # only when the comparison started and did not finish, so a failure in
+      # install, seed or stack boot never carries it.
+      - name: Read screenshot comparison phase
+        id: comparison
+        if: always()
+        run: |
+          if [[ -f "$RUNNER_TEMP/marketing-comparison-started" ]]; then
+            echo "started=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Screenshot comparison failed
+        if: failure() && steps.comparison.outputs.started == 'true'
+        run: echo "::warning::The marketing screenshot comparison failed; diagnostics are uploaded."
+
       - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

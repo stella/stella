@@ -166,6 +166,7 @@ const PUBLIC_CASE_LAW_ROUTES = [
   "GET /case/decisions/:decisionId/summary",
   "GET /case/decisions/by-slug/:slug",
   "GET /case/decisions/facets",
+  "GET /case/decisions/filter-validation",
   "GET /case/decisions/latest",
   "GET /case/decisions/status",
   "GET /case/judges/:judgeId/portrait",
@@ -482,6 +483,9 @@ describe("public case-law route boundary", () => {
     expect(sharedReadGuards).toContain(
       "set_config('idle_in_transaction_session_timeout',",
     );
+    // Inside a request latency scope the transaction ends at its deadline.
+    expect(sharedReadGuards).toContain("set_config('transaction_timeout',");
+    expect(readConfiguration).toContain("transactionTimeoutMs:");
     expect(validation).toContain("configureReadTransaction(");
     expect(validation).toContain(
       "const observedTransaction = observePublicLawReadTransaction(tx)",

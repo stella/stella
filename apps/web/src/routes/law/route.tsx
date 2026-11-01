@@ -2,7 +2,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { isPublicLawRouteEnabled } from "@/lib/public-law-launch";
+import { isPublicLawEnabled } from "@/lib/public-law-launch";
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/statutes/provision-inspector-registration";
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/law")({
     providerScopes: MEMBER_PROVIDER_SCOPES,
   },
   beforeLoad: () => {
-    if (!isPublicLawRouteEnabled()) {
+    if (!isPublicLawEnabled()) {
       throw notFound();
     }
   },

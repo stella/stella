@@ -36,6 +36,7 @@ import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-
 import { REFRESH_CASE_LAW_BROWSE_FACETS_TASK } from "@/api/lib/scheduler/tasks/case-law-browse-facet-refresh";
 import { RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
 import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
+import { RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK } from "@/api/lib/scheduler/tasks/case-law-decision-identifier-reconciliation";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import {
@@ -307,7 +308,10 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS,
     },
     task: REFRESH_CASE_LAW_COVERAGE_TASK,
-    reads: "load-governed",
+    reads: {
+      budget: "scheduled.caseLaw.refreshCoverage",
+      governance: "load-governed",
+    },
   },
   {
     description: "Report scheduler pauses older than 24 hours",
@@ -505,6 +509,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
+    description: "Reconcile typed identifiers for case-law decisions",
+    id: SCHEDULER_BACKFILL_IDS.decisionIdentifiers,
+    mode: "recurring",
+    payloadUpdate: "preserve",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK,
+    reads: "load-governed",
+  },
+  {
     description: "Find raw objects no live decision owns",
     id: "caseLaw.censusRawObjects.fiveMinute",
     mode: "recurring",
@@ -541,7 +554,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
-    reads: "load-governed",
+    reads: {
+      budget: "scheduled.caseLaw.backfillProvisionState",
+      governance: "load-governed",
+    },
   },
   {
     description:
@@ -551,7 +567,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
-    reads: "load-governed",
+    reads: {
+      budget: "scheduled.legislation.backfillExpressionIds",
+      governance: "load-governed",
+    },
   },
   {
     description: "Emit persisted backfill health gauges",
