@@ -15,13 +15,11 @@ updates:
       stella-shared:
         # Reusable workflows are named stella/.github/.github/workflows/<file>,
         # so they need their own pattern to land in this one grouped update.
+        # These are pinned by commit SHA, so an update has no semver type and
+        # an update-types filter would leave every one of them ungrouped.
         patterns:
           - "stella/.github/*"
           - "stella/.github/.github/workflows/*"
-        update-types:
-          - "major"
-          - "minor"
-          - "patch"
       minor-and-patch:
         patterns:
           - "*"
@@ -333,12 +331,6 @@ updates:
         patterns:
           - "drizzle-orm"
           - "drizzle-kit"
-        update-types:
-          - "major"
-      react-email:
-        patterns:
-          - "react-email"
-          - "@react-email/*"
         update-types:
           - "major"
       rivetkit:
