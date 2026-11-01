@@ -13,7 +13,7 @@ import {
  * the other types are matter, contact and public-law content `stella:read`
  * already opens.
  */
-export const GLOBAL_SEARCH_RESULT_TYPE_SCOPE = {
+const GLOBAL_SEARCH_RESULT_TYPE_SCOPE = {
   matter: "stella:read",
   contact: "stella:read",
   "case-law": "stella:read",
