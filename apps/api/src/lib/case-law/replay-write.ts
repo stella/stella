@@ -32,6 +32,10 @@ export const replayWrite = <T extends PgTable>(
     set.set(key, expression);
     comparisons.push(sql`${column} IS DISTINCT FROM ${expression}`);
   }
+  // Checked before derived columns join: they only follow a written value.
+  if (comparisons.length === 0) {
+    panic("Replay update has no written columns");
+  }
   if (modifiedAt !== undefined) {
     const entry = Object.entries(columns).find(
       ([, column]) => column === modifiedAt.column,
@@ -39,10 +43,7 @@ export const replayWrite = <T extends PgTable>(
     if (entry === undefined || set.has(entry[0])) {
       panic("Replay modification timestamp must be an unwritten table column");
     }
-    const changed =
-      comparisons.length === 0
-        ? sql`false`
-        : sql`(${sql.join(comparisons, sql` OR `)})`;
+    const changed = sql`(${sql.join(comparisons, sql` OR `)})`;
     const value = isSQLWrapper(modifiedAt.value)
       ? modifiedAt.value.getSQL()
       : sql`${sql.param(modifiedAt.value, modifiedAt.column)}`;
@@ -52,10 +53,7 @@ export const replayWrite = <T extends PgTable>(
   }
   for (const [key, column] of Object.entries(columns)) {
     if (column.onUpdateFn !== undefined && !set.has(key)) {
-      const changed =
-        comparisons.length === 0
-          ? sql`false`
-          : sql`(${sql.join(comparisons, sql` OR `)})`;
+      const changed = sql`(${sql.join(comparisons, sql` OR `)})`;
       const value = column.onUpdateFn();
       const bound = isSQLWrapper(value)
         ? value.getSQL()
@@ -64,9 +62,6 @@ export const replayWrite = <T extends PgTable>(
       set.set(key, expression);
       comparisons.push(sql`${column} IS DISTINCT FROM ${expression}`);
     }
-  }
-  if (comparisons.length === 0) {
-    panic("Replay update has no written columns");
   }
   return Object.freeze({
     set: Object.freeze(Object.fromEntries(set)),
