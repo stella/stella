@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { expect, mock, test } from "bun:test";
+import { afterEach, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -22,6 +22,12 @@ const runId = (index: number) =>
 const runsOf = (count: number) =>
   Array.from({ length: count }, (_, index) => ({ id: runId(index) }));
 
+const reportFailure = mock(() => undefined);
+
+afterEach(() => {
+  reportFailure.mockClear();
+});
+
 test("processes one run at a time, in order", async () => {
   let active = 0;
   let peak = 0;
@@ -39,6 +45,7 @@ test("processes one run at a time, in order", async () => {
   const result = await runInlineExtractions({
     db,
     process,
+    reportFailure,
     runs: runsOf(3),
     signal: new AbortController().signal,
   });
@@ -49,11 +56,12 @@ test("processes one run at a time, in order", async () => {
 });
 
 test("a failed run does not stop the files behind it", async () => {
+  const failure = new Error("unreadable");
   const process = mock(
     async (_db: SchedulerDb, id: SafeId<"documentProcessingRun">) => {
       await Promise.resolve();
       if (id === runId(0)) {
-        throw new Error("unreadable");
+        throw failure;
       }
     },
   );
@@ -61,12 +69,18 @@ test("a failed run does not stop the files behind it", async () => {
   const result = await runInlineExtractions({
     db,
     process,
+    reportFailure,
     runs: runsOf(3),
     signal: new AbortController().signal,
   });
 
   expect(result).toEqual({ attempted: 3, failed: 1 });
   expect(process).toHaveBeenCalledTimes(3);
+  expect(reportFailure).toHaveBeenCalledTimes(1);
+  expect(reportFailure).toHaveBeenCalledWith({
+    error: failure,
+    job: { data: { runId: runId(0) } },
+  });
 });
 
 test("starts nothing after scheduler cancellation", async () => {
@@ -79,6 +93,7 @@ test("starts nothing after scheduler cancellation", async () => {
       await runInlineExtractions({
         db,
         process,
+        reportFailure,
         runs: runsOf(1),
         signal: controller.signal,
       }),
@@ -102,7 +117,7 @@ const runTask = async (queued: number) => {
     },
     signal: new AbortController().signal,
   };
-  await createExtractNativeInlineTask({ process, readRuns })(
+  await createExtractNativeInlineTask({ process, readRuns, reportFailure })(
     asTestRaw<SchedulerTaskContext>(context),
   );
   return { continuations, process, readRuns };

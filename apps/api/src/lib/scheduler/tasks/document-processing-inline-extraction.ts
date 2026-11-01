@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  handleDocumentProcessingFailure,
   processDocumentProcessingRun,
   readInlineNativeExtractionRuns,
 } from "@/api/lib/document-processing-queue";
@@ -20,6 +21,7 @@ const FULL_BATCH_CONTINUATION_DELAY_MS = 10_000;
 type RunExtractionOptions = {
   db: SchedulerDb;
   process: typeof processDocumentProcessingRun;
+  reportFailure: typeof handleDocumentProcessingFailure;
   runs: readonly { id: SafeId<"documentProcessingRun"> }[];
   signal: AbortSignal;
 };
@@ -27,11 +29,13 @@ type RunExtractionOptions = {
 /**
  * One run at a time: parsing happens in a subprocess, so this leaves the event
  * loop free, but each one still holds its file in memory here. A failed run is
- * settled by its own owner and must not stop the files behind it.
+ * settled by its own owner, reported the way the worker reports it, and must
+ * not stop the files behind it.
  */
 export const runInlineExtractions = async ({
   db,
   process,
+  reportFailure,
   runs,
   signal,
 }: RunExtractionOptions): Promise<{ attempted: number; failed: number }> => {
@@ -48,6 +52,10 @@ export const runInlineExtractions = async ({
     );
     if (Result.isError(outcome)) {
       failed++;
+      reportFailure({
+        error: outcome.error.cause,
+        job: { data: { runId: run.id } },
+      });
     }
   }
   return { attempted, failed };
@@ -55,6 +63,7 @@ export const runInlineExtractions = async ({
 
 type InlineExtractionDependencies = {
   process?: typeof processDocumentProcessingRun;
+  reportFailure?: typeof handleDocumentProcessingFailure;
   readRuns?: typeof readInlineNativeExtractionRuns;
 };
 
@@ -66,6 +75,7 @@ type InlineExtractionDependencies = {
 export const createExtractNativeInlineTask =
   ({
     process = processDocumentProcessingRun,
+    reportFailure = handleDocumentProcessingFailure,
     readRuns = readInlineNativeExtractionRuns,
   }: InlineExtractionDependencies = {}): SchedulerTask =>
   async ({
@@ -80,6 +90,7 @@ export const createExtractNativeInlineTask =
     const { attempted, failed } = await runInlineExtractions({
       db,
       process,
+      reportFailure,
       runs,
       signal,
     });

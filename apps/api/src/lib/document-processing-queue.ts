@@ -2908,7 +2908,7 @@ const recoverStaleDocumentProcessingRuns = async (
   };
 };
 
-const handleDocumentProcessingFailure = ({
+export const handleDocumentProcessingFailure = ({
   error,
   job,
 }: {
