@@ -22,14 +22,12 @@ import {
   type QueryPerfMetrics,
   sumMetrics,
 } from "./measurement";
-import {
-  type CapturedStatement,
-  capturedStatementQuery,
-} from "./scheduled-run";
+import type { CapturedStatement } from "./scheduled-run";
 import {
   applyPlannerSettings,
   QUERY_PERF_CONNECTION_SETTINGS,
 } from "./settings";
+import { capturedStatementQuery } from "./statement-measurement";
 
 type RollbackMeasurementOptions = {
   database: GatedTestDb;

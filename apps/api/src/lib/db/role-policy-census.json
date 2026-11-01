@@ -8991,6 +8991,16 @@
   },
   {
     "schema": "public",
+    "table": "organization_creation_requests",
+    "policy": "organization_creation_requests_owner",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('organization_creation_requests'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('organization_creation_requests'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "organization_file_objects",
     "policy": "organization_file_objects_no_delete",
     "command": "DELETE",
@@ -9427,6 +9437,56 @@
     "roles": ["stella"],
     "permissive": "PERMISSIVE",
     "using": "\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "push_devices",
+    "policy": "push_devices_owner",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('push_devices'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('push_devices'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "push_devices",
+    "policy": "user_delete",
+    "command": "DELETE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "push_devices",
+    "policy": "user_insert",
+    "command": "INSERT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "(user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting))"
+  },
+  {
+    "schema": "public",
+    "table": "push_devices",
+    "policy": "user_select",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "push_devices",
+    "policy": "user_update",
+    "command": "UPDATE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting))",
     "withCheck": null
   },
   {
