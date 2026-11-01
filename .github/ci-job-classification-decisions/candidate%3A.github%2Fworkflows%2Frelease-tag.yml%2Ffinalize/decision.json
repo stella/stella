@@ -1,4 +1,4 @@
 {
   "kind": "priority",
-  "qualifier": "Tags the final release on the exact release-candidate commit once its proof is green; creates the stable tag."
+  "qualifier": "Tags the final release on the exact release-candidate commit once its proof is green and a person set the production gate status; creates the stable tag."
 }

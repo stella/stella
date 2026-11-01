@@ -38,6 +38,8 @@ type ProofFixture = {
     /** The ci-required-violations record; no artifact when undefined. */
     violations?: (sha: string) => unknown;
   };
+  /** The newest release/prod-gate status; a person's success by default. */
+  gate?: { state: string; creator: "User" | "Bot" } | "missing";
   runSha?: string;
   incidents?: boolean;
   noRc?: boolean;
@@ -94,7 +96,12 @@ export const finalize = (fixture: ProofFixture = {}) => {
       ["main/heavy", "main-heavy.yml", "Main heavy suites "],
       ["main/pr-depth", "main-pr-depth.yml", "Main PR-depth checks "],
     ] as const;
-    const statuses = contexts
+    const statuses: {
+      context: string;
+      state: string;
+      creator: { login: string; type: string };
+      target_url: string;
+    }[] = contexts
       .map(([context], index) => ({
         context,
         state: fixture.states?.[context] ?? "success",
@@ -102,6 +109,15 @@ export const finalize = (fixture: ProofFixture = {}) => {
         target_url: `https://github.com/stella/stella/actions/runs/${index + 1}`,
       }))
       .filter(({ state }) => state !== "missing");
+    const gate = fixture.gate ?? { state: "success", creator: "User" };
+    if (gate !== "missing") {
+      statuses.unshift({
+        context: "release/prod-gate",
+        state: gate.state,
+        creator: { login: "release-operator", type: gate.creator },
+        target_url: "",
+      });
+    }
     writeFileSync(path.join(root, "statuses.json"), JSON.stringify([statuses]));
     for (const [index, [, workflow, title]] of contexts.entries()) {
       writeFileSync(

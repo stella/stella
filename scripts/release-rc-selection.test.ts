@@ -212,7 +212,16 @@ esac
         target_url: htmlUrl,
       };
     });
-    writeFileSync(path.join(root, "statuses.json"), JSON.stringify([statuses]));
+    const gate = {
+      context: "release/prod-gate",
+      state: "success",
+      creator: { login: "release-operator", type: "User" },
+      target_url: "",
+    };
+    writeFileSync(
+      path.join(root, "statuses.json"),
+      JSON.stringify([[gate, ...statuses]]),
+    );
   };
   return {
     sha,
