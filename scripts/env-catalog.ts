@@ -62,6 +62,8 @@ type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
   ...Object.keys(rateLimitBudgetEnvSchema),
+  "APNS_KEY_ID",
+  "APNS_TEAM_ID",
   "EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL",
   "EMAIL_EVENTS_QUEUE_URL",
   "EMAIL_EVENTS_TOPIC_ARN",
@@ -647,6 +649,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Bearer credential used by the collaboration service for snapshot load and store requests.",
   OPERATOR_API_TOKEN:
     "Deployment-owned bearer credential for operator HTTP access. Unset disables access; use at least 32 characters.",
+  APNS_KEY_ID:
+    "Key ID of the APNs .p8 signing key for mobile push. Set with APNS_TEAM_ID and APNS_PRIVATE_KEY; unset turns mobile push off.",
+  APNS_TEAM_ID:
+    "Apple Developer team ID that owns the APNs signing key and the mobile app.",
+  APNS_PRIVATE_KEY:
+    "The APNs .p8 signing key as PEM (newlines may be escaped as \\n). Alerts carry no content, but the key can send them to any device of the team's apps.",
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_CLIENT_ADDRESS_HEADER:
@@ -1041,6 +1049,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_COLLAB_REDIS_URL: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
   OPERATOR_API_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  APNS_KEY_ID: ENV_CREDENTIAL_KIND.notCredential,
+  APNS_TEAM_ID: ENV_CREDENTIAL_KIND.notCredential,
+  APNS_PRIVATE_KEY: ENV_CREDENTIAL_KIND.credential,
   STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
@@ -1457,6 +1468,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Dated guard-rollout healing requests full scope before removing the temporary scope.
+  "STELLA_GUARD_SCOPE",
   // Release-only secret: the short-lived federated Chrome Web Store access token.
   "CHROME_WEB_STORE_ACCESS_TOKEN",
   // The mobile app's Expo config reads its variant and signing from the build.
@@ -1482,9 +1495,6 @@ export const TOOLING_ENV_KEYS = new Set([
   "BUN_INSTALL_GLOBAL_STORE",
   "CACHE_HIT",
   "CACHE_WRITE",
-  // Native cache action state is restored only for its own post hook.
-  "STATE_key",
-  "STATE_store",
   "STORE_KEY",
   "START_MS",
   "INSTALL_LOG",
@@ -1501,7 +1511,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_VERIFY",
   "QUERY_PERF_CHANGED_PATHS",
   "QUERY_PERF_SCOPE_UNKNOWN",
+  // CI playground planning passes the selected and complete spec sets to the
+  // shard planner, together with the desktop scope decision.
   "UI_PLAYGROUND_CHANGED_PATHS",
+  "UI_PLAYGROUND_SELECTED_SPECS",
+  "UI_PLAYGROUND_ALL_SPECS",
+  "DESKTOP_REQUIRED",
   // CI image resolution and smoke tooling; product defaults remain upstream.
   "CI_IMAGE_MIRROR_ENABLED",
   "CI_PLAYWRIGHT_IMAGE",
@@ -1538,6 +1553,8 @@ export const TOOLING_ENV_KEYS = new Set([
   // The release resolve job exports the network retry helper's path, staged
   // from the workflow's own revision, for its git fetches.
   "NETWORK_RETRY_SCRIPT",
+  // The release rehearsal workflow provides its deployment-repository target.
+  "STAGING_DEPLOY_REPOSITORY",
   // A release-candidate staging deploy starts staging (scripts/staging-wake.sh):
   // the commit it deploys, the infrastructure repository and its App token,
   // the readiness endpoint and edge header, and the bounds tests shorten.
@@ -1651,6 +1668,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "FLAKY_TEST_QUARANTINE_REGISTRY",
   "FLAKY_TEST_QUARANTINE_REPORT_DIR",
   "GH_READ_TOKEN",
+  // Served API journeys: the listening port and captured server log.
+  "SERVED_MCP_API_LOG",
+  "SERVED_MCP_API_PORT",
   "HEAD_SHA",
   "HEAVY_ONLY",
   // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
@@ -1683,6 +1703,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "MCP_CANARY_FRONTEND_URL",
   "MCP_CANARY_MODE",
   "MCP_CANARY_REQUIRE_CREDENTIALS",
+  "MCP_CANARY_THIRD_PARTY_FETCHES",
   "MCP_CANARY_TOKEN",
   "MERGE_GROUP_HEAD_REF",
   "MODE",
@@ -1708,6 +1729,8 @@ export const TOOLING_ENV_KEYS = new Set([
   // Historical package builds use current tooling against a separate source root.
   "PACK_SOURCE_ROOT",
   "PGLITE_TEST_SNAPSHOT",
+  // pr-lint passes the pull request description to the log-line guard.
+  "PR_BODY",
   "PR_HEAD_SHA",
   "PR_TITLE",
   // ci-plan: the pull request is armed (auto-merge or the merge-armed label).
@@ -1887,6 +1910,11 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_ADVISORIES_REMAIN",
   "TEST_STALE",
   "TEST_PIN_REWRITE",
+  "TEST_RESOLVER_ERROR",
+  // Test-only: dependency remediation fixture states.
+  "TEST_QUARANTINED",
+  "TEST_RESOLVER_ERROR",
+  "TEST_UPSTREAM_BLOCKED",
   "WXT_STELLA_ORIGINS",
 ]);
 

@@ -25,6 +25,7 @@ import {
   serializeRegistry,
   splitTestId,
 } from "./flaky-test-quarantine";
+import { guardRolloutSource } from "./guard-rollout-policy.ts";
 import {
   collectLintDirectives,
   resolveDirectiveAnchors,
@@ -35,6 +36,7 @@ import { parseLedger } from "./suppression-waivers";
 export type RemovalChange = { source: string; before: string; after: string };
 
 export const AUTOMATIC_REMOVAL_ALLOWED = {
+  "guard-rollout": true,
   "no-llms-txt": true,
   "release-age-exclusion": true,
   "release-age-exception": true,
@@ -346,6 +348,29 @@ const leadingComments = (ast: ParsedSource, node: Node) =>
       ),
   );
 
+const removeGuardRollout = (source: string, entry: DatedWaiver): string => {
+  if (entry.source !== guardRolloutSource(entry.id)) {
+    panic(
+      `Guard rollout heals only in its own file: ${entry.source} (${entry.id})`,
+    );
+  }
+  const rollout: unknown = JSON.parse(source);
+  if (
+    typeof rollout !== "object" ||
+    rollout === null ||
+    !("id" in rollout) ||
+    rollout.id !== entry.id ||
+    !("type" in rollout) ||
+    rollout.type !== "changed-lines" ||
+    !("expiresAt" in rollout) ||
+    rollout.expiresAt !== entry.expiresAt
+  ) {
+    panic(`Guard rollout scope or expiry changed: ${entry.id}`);
+  }
+  const { expiresAt, ...fields } = rollout;
+  return `${JSON.stringify({ ...fields, type: "full" }, null, 2)}\n`;
+};
+
 export const removeWaiver = (
   entry: DatedWaiver,
   read: (file: string) => string,
@@ -356,6 +381,9 @@ export const removeWaiver = (
   const before = read(entry.source);
   let after: string;
   switch (entry.kind) {
+    case "guard-rollout":
+      after = removeGuardRollout(before, entry);
+      break;
     case "no-llms-txt":
       after = removeDocumentation(before, entry);
       break;
@@ -619,6 +647,7 @@ const receiptSelector = (
         panic(`Invalid flaky-test quarantine id: ${entry.id}`);
       return (name) => name === expected;
     }
+    case "guard-rollout":
     case "no-llms-txt":
     case "release-age-exclusion":
     case "release-age-exception":

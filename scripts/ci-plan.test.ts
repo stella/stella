@@ -50,6 +50,7 @@ import {
 } from "./ci-plan-scope";
 import { prHeavyJobs } from "./ci-pr-jobs";
 import { pilotFastJobs } from "./ci-pr-pilot-plan";
+import { REQUIRED_RECORD_KEYS } from "./ci-required-record";
 import {
   embedsExpression,
   GITHUB_EXPRESSION_LIMIT,
@@ -1797,6 +1798,13 @@ const requiredRecordSchema = v.strictObject({
   not_required: v.array(v.string()),
   verdict: v.picklist(["success", "failure"]),
 });
+
+test("the required-jobs record parser reads exactly the record's key set", () => {
+  // A key added to the record, or to this parser alone, fails here.
+  expect(Object.keys(requiredRecordSchema.entries)).toEqual([
+    ...REQUIRED_RECORD_KEYS,
+  ]);
+});
 type RequiredRecordCase = {
   label: string;
   options: EvaluateResultOptions;
@@ -2476,7 +2484,7 @@ test("desktop Rust tests select classified merge-group changes at every queue de
           expect(selected).toEqual(lintPlatforms);
           expect(selected.at(0)).toEqual({
             os: "macos",
-            runner: "macos-14",
+            runner: "macos-15",
             target: "aarch64-apple-darwin",
           });
           expect(selected.at(1)).toEqual({
@@ -5084,6 +5092,9 @@ test("the UI playground plan consumes the changed-files output and exposes its s
   expect(plan.outputs["ui_playground_specs"]).toBe(
     ["$", "{{ steps.ui-playground-plan.outputs.specs || '[]' }}"].join(""),
   );
+  expect(plan.outputs["ui_playground_matrix"]).toBe(
+    ["$", "{{ steps.ui-playground-plan.outputs.matrix || '[]' }}"].join(""),
+  );
   const step = jobSteps(ciJobs["ci-plan"]).find(
     ({ name }) => name === "Plan UI playground geometry specs",
   );
@@ -5091,6 +5102,7 @@ test("the UI playground plan consumes the changed-files output and exposes its s
     ["$", "{{ runner.temp }}/api-test-changed-paths"].join(""),
   );
   expect(step?.run).toContain("bun scripts/ui-playground-selection.ts");
+  expect(step?.run).toContain("bun scripts/ui-playground-shards.ts");
 });
 
 test("Bun cache saves are main-only and trusted Turbo results remain readable", () => {
@@ -5258,7 +5270,7 @@ test("every browser suite runs on its required matrix legs, the playground on ev
     v.object({
       strategy: v.object({
         "fail-fast": v.literal(false),
-        matrix: v.object({ suite: v.string() }),
+        matrix: v.object({ include: v.string() }),
       }),
       steps: v.array(
         v.object({
@@ -5270,37 +5282,11 @@ test("every browser suite runs on its required matrix legs, the playground on ev
     }),
     ciJobs["ci-browser"],
   );
-  const matrixSuites = v.parse(
-    v.array(v.string()),
-    evaluate(browser.strategy.matrix.suite, {
-      values: { "github.event_name": "merge_group" },
-    }),
+  expect(browser.strategy.matrix.include).toBe(
+    ["$", "{{ fromJSON(needs.ci-plan.outputs.ui_playground_matrix) }}"].join(
+      "",
+    ),
   );
-  const playgroundLegs = matrixSuites.filter((leg) =>
-    leg.startsWith("playground-"),
-  );
-  expect(new Set(matrixSuites)).toEqual(
-    new Set(["desktop", "ui", ...playgroundLegs]),
-  );
-  expect(matrixSuites).toHaveLength(2 + playgroundLegs.length);
-  expect(playgroundLegs.length).toBeGreaterThan(1);
-  // A pull request runs only its selected geometry specs, unsharded.
-  for (const [desktop, specs, expected] of [
-    ["true", '["spec"]', ["desktop", "playground"]],
-    ["false", '["spec"]', ["playground"]],
-    ["true", "[]", ["desktop"]],
-    ["false", "[]", ["desktop"]],
-  ] as const) {
-    expect(
-      evaluate(browser.strategy.matrix.suite, {
-        values: {
-          "github.event_name": "pull_request",
-          "needs.ci-plan.outputs.desktop_browser_required": desktop,
-          "needs.ci-plan.outputs.ui_playground_specs": specs,
-        },
-      }),
-    ).toEqual([...expected]);
-  }
   const suites = browser.steps.filter(
     ({ run }) => run?.includes("test:browser") || run?.includes("test:e2e"),
   );
@@ -5313,23 +5299,16 @@ test("every browser suite runs on its required matrix legs, the playground on ev
     ].toSorted(compareCodeUnit),
   );
   for (const suite of suites) {
-    const legs = matrixSuites.filter((leg) =>
-      suite.if?.includes(`matrix.suite == '${leg}'`),
-    );
-    // The playground suite is the only sharded one: it runs on every
-    // playground leg, each taking one Playwright shard of as many as there
-    // are legs, so a leg can neither be dropped nor duplicate another's tests.
     if (suite.name === "Test UI playground visuals") {
-      expect(legs, suite.name).toEqual(playgroundLegs);
-      expect(suite.if, suite.name).toContain("matrix.suite == 'playground'");
+      expect(suite.if, suite.name).toContain(
+        "startsWith(matrix.suite, 'playground-')",
+      );
       expect(suite.run, suite.name).toContain(
         `bun run test:e2e:ui-playground "\${specs[@]}"`,
       );
-      expect(suite.run, suite.name).toContain(
-        `--shard="\${SUITE#playground-}/${String(playgroundLegs.length)}"`,
-      );
+      expect(suite.run, suite.name).not.toContain("--shard");
     } else {
-      expect(legs, suite.name).toHaveLength(1);
+      expect(suite.if, suite.name).toContain("matrix.suite ==");
     }
     expect(suite.if, suite.name).toContain("outputs.required == 'true'");
   }

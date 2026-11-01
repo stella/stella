@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import {
   useSuspenseInfiniteQuery,
@@ -10,14 +10,19 @@ import { useTranslations } from "use-intl";
 import type { TimeSubmitRefusal } from "@stll/api-contract/time-entries";
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPanel, DialogPopup, DialogTitle } from "@stll/ui/dialog";
+import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
 
 import {
   ManualTimeEntryForm,
   type ManualTimeEntryValues,
 } from "@/components/billing/manual-time-entry-form";
-import { shiftWeeks, weekOf } from "@/components/billing/work-week.logic";
-import type { MatterOption } from "@/components/workspaces/matter-combobox";
+import { isTimeEntryRateRequired } from "@/components/billing/time-entry-rate-error.logic";
+import { weekOf } from "@/components/billing/work-week.logic";
+import {
+  MatterCombobox,
+  type MatterOption,
+} from "@/components/workspaces/matter-combobox";
 import { MoveEntryField } from "@/features/my-week/move-entry-field";
 import { type MyTimeEntry, MyWeekDay } from "@/features/my-week/my-week-day";
 import { MyWeekHeader } from "@/features/my-week/my-week-header";
@@ -54,6 +59,7 @@ type MyWeekProps = {
 
 type WeekDialog =
   | { type: "closed" }
+  | { type: "create"; date: string; matter: MatterOption | null }
   | {
       type: "edit";
       entry: MyTimeEntry;
@@ -83,6 +89,14 @@ export const myWeekQueries = ({
 
 const dialogDefaults = (dialog: WeekDialog): ManualTimeEntryValues => {
   switch (dialog.type) {
+    case "create":
+      return {
+        dateWorked: dialog.date,
+        durationMinutes: 0,
+        narrative: "",
+        narrativeLanguage: null,
+        billable: false,
+      };
     case "accept":
       return {
         dateWorked: dialog.target.date,
@@ -120,6 +134,8 @@ const movableMatterOf = (entry: MyTimeEntry): MatterOption | null =>
 
 const dialogMatterId = (dialog: WeekDialog) => {
   switch (dialog.type) {
+    case "create":
+      return dialog.matter?.id ?? null;
     case "accept":
       return dialog.target.matter.id;
     case "edit":
@@ -140,6 +156,7 @@ export const MyWeek = ({
   onSelectDate,
   onToday,
 }: MyWeekProps) => {
+  const matterFieldId = useId();
   const t = useTranslations();
   const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
@@ -183,31 +200,62 @@ export const MyWeek = ({
     [...refusals].map(([id, reason]) => [id, t(SUBMIT_REFUSAL_KEYS[reason])]),
   );
 
-  const submitDialog = async (values: ManualTimeEntryValues) => {
+  const submitDialog = async (values: ManualTimeEntryValues) =>
     await submitGuard.run(async () => {
       const saved = await Result.tryPromise({
         try: async () => {
-          if (dialog.type === "accept") {
-            await actions.accept(dialog.target, values);
-          } else if (dialog.type === "edit") {
-            await actions.editEntry(dialog.entry, values, dialog.matter?.id);
+          switch (dialog.type) {
+            case "create":
+              if (dialog.matter === null) {
+                return panic("Creating time requires a matter");
+              }
+              await actions.createEntry(dialog.matter.id, values);
+              break;
+            case "accept":
+              await actions.accept(dialog.target, values);
+              break;
+            case "edit":
+              await actions.editEntry(dialog.entry, values, dialog.matter?.id);
+              break;
+            case "closed":
+              return panic("A closed week dialog cannot submit");
+            default:
+              dialog satisfies never;
+              return panic("Unhandled week dialog state");
           }
+          return undefined;
         },
         catch: (cause: unknown): unknown => cause,
       });
       if (Result.isError(saved)) {
-        actions.reportFailure(saved.error);
-        return;
+        if (isTimeEntryRateRequired(saved.error)) {
+          return Result.err(saved.error);
+        }
+        // The create mutation reports its own failures.
+        if (dialog.type !== "create") {
+          actions.reportFailure(saved.error);
+        }
+        return Result.ok(undefined);
       }
       setDialog({ type: "closed" });
+      return Result.ok(undefined);
     });
-  };
 
   return (
     <div className="flex h-full flex-col">
       <MyWeekHeader
         actions={
           <>
+            {canDecide && (
+              <Button
+                onClick={() =>
+                  setDialog({ type: "create", date, matter: null })
+                }
+                size="sm"
+              >
+                {tCommon("logTime")}
+              </Button>
+            )}
             {/* Members approve what is assigned to them, so the link follows
                 the queue, not the role; it shows nothing while none waits. */}
             <PendingApprovalsLink
@@ -224,11 +272,10 @@ export const MyWeek = ({
             />
           </>
         }
-        onNextWeek={() => onSelectDate(shiftWeeks(date, 1))}
-        onPreviousWeek={() => onSelectDate(shiftWeeks(date, -1))}
+        date={date}
+        onSelectDate={onSelectDate}
         onToday={onToday}
         totals={totals}
-        week={week}
       />
       <WeekStrip
         onSelectDate={onSelectDate}
@@ -276,6 +323,7 @@ export const MyWeek = ({
               narrative,
             })
           }
+          onCreate={() => setDialog({ type: "create", date, matter: null })}
           onEditEntry={(entry) =>
             setDialog({ type: "edit", entry, matter: movableMatterOf(entry) })
           }
@@ -317,10 +365,46 @@ export const MyWeek = ({
         <DialogPopup className="max-w-lg">
           <DialogPanel className="flex flex-col gap-4">
             <DialogTitle>
-              {dialog.type === "edit"
-                ? tBilling("editEntry")
-                : tBilling("suggestions.title")}
+              {(() => {
+                switch (dialog.type) {
+                  case "create":
+                  case "closed":
+                    return tCommon("logTime");
+                  case "edit":
+                    return tBilling("editEntry");
+                  case "accept":
+                    return tBilling("suggestions.title");
+                  default:
+                    dialog satisfies never;
+                    return panic("Unhandled week dialog state");
+                }
+              })()}
             </DialogTitle>
+            {dialog.type === "create" && (
+              <fieldset
+                disabled={actions.pending || submitGuard.pending}
+                className="flex min-w-0 flex-col gap-1.5"
+              >
+                <Label htmlFor={matterFieldId}>{tCommon("matter")}</Label>
+                <MatterCombobox
+                  activeOrganizationId={organizationId}
+                  userId={userId}
+                  id={matterFieldId}
+                  value={dialog.matter}
+                  onChange={(matter) =>
+                    setDialog({ type: "create", date: dialog.date, matter })
+                  }
+                />
+                {dialog.matter === null && (
+                  <Button
+                    onClick={() => setDialog({ type: "closed" })}
+                    variant="ghost"
+                  >
+                    {tCommon("cancel")}
+                  </Button>
+                )}
+              </fieldset>
+            )}
             {matterId !== null && (
               <ManualTimeEntryForm
                 dateLocked={dialog.type === "accept"}
@@ -329,7 +413,9 @@ export const MyWeek = ({
                   dialog.type === "edit" && dialog.matter !== null ? (
                     <MoveEntryField
                       currentMatterId={matterId}
-                      onChange={(matter) => setDialog({ ...dialog, matter })}
+                      onChange={(matter) =>
+                        setDialog({ type: "edit", entry: dialog.entry, matter })
+                      }
                       organizationId={organizationId}
                       userId={userId}
                       value={dialog.matter}
@@ -339,7 +425,15 @@ export const MyWeek = ({
                 onCancel={() => setDialog({ type: "closed" })}
                 onSubmit={submitDialog}
                 pending={actions.pending || submitGuard.pending}
-                workspaceId={matterId}
+                activityCode={
+                  dialog.type === "edit" ? dialog.entry.activityCode : null
+                }
+                userId={userId}
+                workspaceId={
+                  dialog.type === "edit"
+                    ? (dialog.matter?.id ?? matterId)
+                    : matterId
+                }
               />
             )}
           </DialogPanel>

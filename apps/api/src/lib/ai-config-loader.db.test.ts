@@ -18,6 +18,8 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
 import { member, organization } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -72,7 +74,6 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,

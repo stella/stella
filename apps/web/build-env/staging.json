@@ -14,6 +14,7 @@
     "VITE_PUBLIC_APP_URL": "https://staging.stll.app",
     "VITE_PUBLIC_KNOWLEDGE_ENABLED": "true",
     "VITE_PUBLIC_KNOWLEDGE_INDEXING_ENABLED": "false",
+    "VITE_PUBLIC_LAW_ENABLED": "true",
     "VITE_SEO_INDEXABLE": "false"
   }
 }

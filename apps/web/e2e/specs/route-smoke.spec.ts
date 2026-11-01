@@ -519,9 +519,10 @@ const measureRouteTarget = async ({
   });
   const detachPage = browserErrors.trackPage(page);
   const network = createNetworkCollector();
-  const detachNetwork = network.trackPage(page);
+  let detachNetwork: (() => Promise<void>) | undefined;
 
   try {
+    detachNetwork = await network.trackPage(page);
     await network.measureRounds(page);
     await renderSmokeRoute({ page, route });
     await network.waitForQuiet({
@@ -547,9 +548,12 @@ const measureRouteTarget = async ({
     await csp.assertClean();
     return summarizeCapture(capture);
   } finally {
-    detachNetwork();
-    detachPage();
-    await context.close();
+    try {
+      await detachNetwork?.();
+    } finally {
+      detachPage();
+      await context.close();
+    }
   }
 };
 

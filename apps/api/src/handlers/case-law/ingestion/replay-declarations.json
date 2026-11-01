@@ -1,0 +1,32 @@
+[
+  {
+    "source": "sk-courts",
+    "parserVersion": 21,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "sk-us",
+    "parserVersion": 18,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "cz-uohs",
+    "parserVersion": 7,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "pl-kis",
+    "parserVersion": 13,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  },
+  {
+    "source": "pl-uokik",
+    "parserVersion": 14,
+    "type": "pending-enrolment-wave",
+    "wave": "stored-document-objects-dry-run"
+  }
+]
