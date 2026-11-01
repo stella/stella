@@ -484,7 +484,7 @@
     "evidenceTitles": "Názvy",
     "evidenceApps": "Aplikácie",
     "rangeEmpty": "V tomto úseku sa nič nezaznamenalo.",
-    "calendarHint": "Otvorením prerušovaného návrhu ho skontrolujete; ťahaním v stĺpci Aktivita vytvoríte záznam pre ľubovoľný úsek.",
+    "calendarHint": "Otvorením prerušovaného návrhu ho skontrolujete; ťahaním v stĺpci Časové záznamy vytvoríte záznam pre ľubovoľný úsek.",
     "narrativeAiPrompt": "Napísať popis pomocou stella AI? Odošlú sa len názvy okien tohto návrhu a nikde sa neukladajú.",
     "narrativeAiNo": "Nie",
     "narrativeAiApprove": "Schváliť",

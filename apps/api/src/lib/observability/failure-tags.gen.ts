@@ -79,7 +79,7 @@ export const FAILURE_TAGS = [
   "CitationProbeS3ReadError",
   "CitationScopesRejectedError",
   "CitationStorageFieldError",
-  "ClientRegistrationError",
+  "ClientDocumentUnsupportedError",
   "ComparisonAppError",
   "CompatibilityCheckError",
   "CompletionApprovalError",

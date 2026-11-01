@@ -25,6 +25,7 @@ import {
   SEARCH_HISTORY_TITLE_MAX_LENGTH,
   SEARCH_QUERY_MAX_LENGTH,
   TIME_ENTRIES_APPROVAL_BATCH_MAX,
+  UPLOAD_DOCUMENT_MAX_BYTES,
 } from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
@@ -550,6 +551,7 @@ export const LIMITS = {
   clauseImportBatchLimit: 200,
   templateFillsRetentionDays: 365,
   caseLawMatterLinksPerWorkspace: 1000,
+  legislationMatterLinksPerWorkspace: 1000,
   /** An empty coverage country reads as unset: all jurisdictions. */
   caseLawCoverageCountryMinLength: 1,
   /**
@@ -906,7 +908,7 @@ export const LIMITS = {
 
 export const FILE_SIZE_LIMIT_BYTES = {
   /** General document uploads (entities, templates). */
-  document: 50 * 1024 * 1024,
+  document: UPLOAD_DOCUMENT_MAX_BYTES,
   /** Structured data imports (clause JSON, contact sheets). */
   dataImport: 10 * 1024 * 1024,
   /** Agent skill packs (`SKILL.md` or a ZIP folder). */

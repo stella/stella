@@ -484,7 +484,7 @@
     "evidenceTitles": "Tytuły",
     "evidenceApps": "Aplikacje",
     "rangeEmpty": "W tym przedziale nic nie zapisano.",
-    "calendarHint": "Otwórz propozycję z przerywaną ramką, aby ją sprawdzić, albo przeciągnij w kolumnie Aktywność, aby przygotować wpis dla dowolnego przedziału.",
+    "calendarHint": "Otwórz propozycję z przerywaną ramką, aby ją sprawdzić, albo przeciągnij w kolumnie Wpisy czasu, aby przygotować wpis dla dowolnego przedziału.",
     "narrativeAiPrompt": "Napisać opis za pomocą stella AI? Wysyłane są tylko tytuły okien tej propozycji; nie są przechowywane.",
     "narrativeAiNo": "Nie",
     "narrativeAiApprove": "Zatwierdź",

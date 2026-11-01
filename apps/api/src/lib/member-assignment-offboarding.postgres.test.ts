@@ -687,7 +687,9 @@ if (!databaseUrl || !runPostgresTests) {
                   addAssigneeHandler({
                     safeDb,
                     workspaceId,
+                    actorUserId,
                     recordAuditEvent,
+                    fileNotifications: () => {},
                     body: { taskId, userId: leaverUserId },
                   }),
                 );
@@ -697,7 +699,9 @@ if (!databaseUrl || !runPostgresTests) {
                   moveAssigneeHandler({
                     safeDb,
                     workspaceId,
+                    actorUserId,
                     recordAuditEvent,
+                    fileNotifications: () => {},
                     body: {
                       taskId,
                       fromUserId: actorUserId,

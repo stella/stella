@@ -38,6 +38,10 @@ on:
       sha:
         type: string
         default: ""
+      green_base:
+        description: The last main commit known green; main's code check compares with it.
+        type: string
+        default: ""
       task_cache_producer:
         description: Validated main ancestry from the scheduled caller.
         type: string
@@ -241,7 +245,7 @@ jobs:
       dependency_changes_required: ${{ steps.changed-files.outputs.dependency_changes_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
       marketing_screenshots_required: ${{ steps.marketing-release.outputs.required }}
-      database_migrations_required: ${{ steps.changed-files.outputs.database_migrations_required }}
+      database_migrations_required: ${{ steps.migration-scope.outputs.database_migrations_required }}
       migration_rehearsal_required: ${{ steps.changed-files.outputs.migration_rehearsal_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
@@ -1073,6 +1077,64 @@ jobs:
           log-file: "${{ runner.temp }}/bun-install/planner.log"
         env:
           NPM_TOKEN: ""
+
+      # Enum values and constraint vocabularies live outside the migration
+      # paths, so a change the schema imports also selects the migration jobs.
+      - name: Select schema import changes
+        id: schema-imports
+        if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+          && steps.changed-files.outputs.database_migrations_required != 'true'
+          && steps.planner-deps.outcome == 'success'
+        timeout-minutes: 3
+        env:
+          CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
+        # Every failure answers "changed": an unanswered question must not skip
+        # the migration jobs, nor fail the plan for every pull request.
+        run: |
+          if answer=$(timeout --kill-after=10s 120s bun scripts/schema-import-changes.ts); then
+            echo "$answer" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Select schema import changes without the import graph
+        id: schema-imports-fallback
+        if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+          && steps.changed-files.outputs.database_migrations_required != 'true'
+          && steps.planner-deps.outcome != 'success'
+        timeout-minutes: 3
+        env:
+          CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
+        # Any API or package source may reach the schema. grep exits 1 only for
+        # "no match"; a missing list counts as changed.
+        run: |
+          status=0
+          grep -zEq '^(apps/api|packages)/.*\.tsx?$' "$CHANGED_PATHS" || status=$?
+          if [[ "$status" == 1 ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Combine migration job selection
+        id: migration-scope
+        if: steps.completed-depth.outputs.run_required != 'false'
+        env:
+          MIGRATION_PATHS: ${{ steps.changed-files.outputs.database_migrations_required }}
+          SCHEMA_IMPORTS: ${{ steps.schema-imports.outputs.changed }}
+          SCHEMA_IMPORTS_FALLBACK: ${{ steps.schema-imports-fallback.outputs.changed }}
+        run: |
+          required=false
+          for answer in "$MIGRATION_PATHS" "$SCHEMA_IMPORTS" "$SCHEMA_IMPORTS_FALLBACK"; do
+            if [[ "$answer" == true ]]; then
+              required=true
+            fi
+          done
+          echo "database_migrations_required=$required" >> "$GITHUB_OUTPUT"
 
       - name: Require planner dependencies for job derivation
         if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')) && steps.planner-deps.outcome != 'success'
@@ -3631,9 +3693,16 @@ jobs:
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
+          GREEN_BASE: ${{ inputs.green_base || '' }}
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             bun run code-check -- --leg api
+            exit 0
+          fi
+          # Main compared with itself checks nothing: check the change since the
+          # last commit known green, or every file when none is known.
+          if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "merge_group" ]]; then
+            bun run code-check:affected -- --leg api --green-base "$GREEN_BASE"
             exit 0
           fi
           bun run code-check:affected -- --leg api --base "$CHECK_BASE_REF"
@@ -6281,6 +6350,7 @@ jobs:
       - *merge_group_cancel
 
   desktop-windows-dry-run:
+    name: desktop-windows-dry-run (${{ matrix.target }})
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
@@ -6292,6 +6362,12 @@ jobs:
       )
       )
       )
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-pc-windows-msvc
+          - aarch64-pc-windows-msvc
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
@@ -6312,9 +6388,9 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
-          cache-write: save
+          cache-write: ${{ matrix.target == 'x86_64-pc-windows-msvc' && 'save' || 'restore' }}
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts...","--filter","@stll/desktop...","--filter","!stella"]'
-          log-file: "${{ runner.temp }}/bun-install/desktop-windows-dry-run.log"
+          log-file: "${{ runner.temp }}/bun-install/desktop-windows-dry-run-${{ matrix.target }}.log"
         env:
           BUN_INSTALL_GLOBAL_STORE: "0"
           NPM_TOKEN: ""
@@ -6323,7 +6399,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: bun-install-${{ github.job }}
+          name: bun-install-${{ github.job }}-${{ matrix.target }}
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
           if-no-files-found: ignore
@@ -6332,7 +6408,7 @@ jobs:
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           toolchain: 1.99.0
-          targets: x86_64-pc-windows-msvc
+          targets: ${{ matrix.target }}
 
       - name: Resolve Windows build toolchain
         id: tools
@@ -6369,7 +6445,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           WINDOWS_WORKFLOW_SHA: ${{ github.workflow_sha }}
-          WINDOWS_BUILD_PROFILE: dry-run;prod;0.0.0;x86_64-pc-windows-msvc;release;nsis
+          WINDOWS_BUILD_PROFILE: dry-run;prod;0.0.0;${{ matrix.target }};release;nsis
         run: bun scripts/ci-windows-dry-run-result.ts
 
       - name: Stamp dry-run metadata
@@ -6380,18 +6456,18 @@ jobs:
         run: bun scripts/desktop-release-step.ts stamp
 
       # The build action compiles offline; the locked crates download here,
-      # retried as a unit.
+      # retried as a unit. Both targets: an ARM64 build's scripts run on x64.
       - name: Fetch Rust dependencies
         if: github.event_name == 'merge_group' || github.event_name == 'pull_request' || steps.receipt.outputs.reused != 'true'
         timeout-minutes: 10
-        run: bash scripts/retry.sh cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --target x86_64-pc-windows-msvc
+        run: bash scripts/retry.sh cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --target x86_64-pc-windows-msvc --target aarch64-pc-windows-msvc
 
       - name: Exercise Windows desktop release build
         if: github.event_name == 'merge_group' || github.event_name == 'pull_request' || steps.receipt.outputs.reused != 'true'
         uses: ./.github/actions/desktop-windows-build
         with:
           dry-run: "true"
-          target: x86_64-pc-windows-msvc
+          target: ${{ matrix.target }}
           # The embedded SHA labels telemetry only. Dry runs prove compilation
           # and bundling with fixed metadata so identical queue/main content has
           # identical build inputs; signed releases embed their release SHA.
@@ -6567,8 +6643,8 @@ jobs:
   # so platform-gated macOS and Windows code is covered.
   #
   # The matrix mirrors the release matrix (macos-15 + windows-latest)
-  # rather than Linux: the desktop app ships only those two targets,
-  # and clippy analyzes the active `cfg` for its host — so these two
+  # rather than Linux: the desktop app ships only on those two systems
+  # (the Windows dry run also compiles the ARM64 build), and clippy analyzes the active `cfg` for its host — so these two
   # runners cover the `#[cfg(target_os = "macos")]` / `"windows"`
   # code that ships, with no need for the Linux webkit2gtk system
   # libraries a Linux clippy run would require. Windows builds the

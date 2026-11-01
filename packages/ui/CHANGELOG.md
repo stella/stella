@@ -1,5 +1,29 @@
 # @stll/ui
 
+## 0.61.0
+
+### Minor Changes
+
+- [#7433](https://github.com/stella/stella/pull/7433) [`a2ff7a7`](https://github.com/stella/stella/commit/a2ff7a75f1f1f0d1cc9e64517449fe2462a2e636) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Button gains `variant="plain"` (a box-less click target whose look is its content, keeping the disabled disposition, tooltip and focus ring, with `shape` for the ring's outline), `variant="muted-destructive"`, `size="inline"` (a short action inside a line of text; an underlined link when no variant is given), `ButtonTextRun` (a long reference that wraps with the prose around it), `size="icon-2xs"`, a `selected` prop with a selected treatment distinct from hover in every variant, and `focusRing="inside"` for targets inside clipping containers. Hover no longer paints a selected button. Accordion gains `size="sm"` and `AccordionTrigger variant="muted"`, Label gains `variant="choice"` and `"choice-card"`, and DetailsGrid gains `variant="list"` and `orientation`. Label also gains `variant="muted"`; Form takes `layout` (`stack` | `inline`) and `density` (`default` | `snug` | `compact`); Input and Textarea take `inline` (one shared borderless-field class), Textarea takes `fieldSizing="fixed"`; NumberInput takes `suffix` and reads as a spin button with its bounds. DESIGN.md lists one name per concept.
+
+## 0.60.0
+
+### Minor Changes
+
+- [#7202](https://github.com/stella/stella/pull/7202) [`ac06603`](https://github.com/stella/stella/commit/ac06603f5b187b45bc1ca741cf9d2496959eab5a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Restore the public sortable Kanban interaction layer used by external consumers. Preserve keyboard navigation through virtual rows and empty matrix cells, identity-bound touch dragging, drag previews, settled drop targets, and collapsed-band peeking alongside the current board primitives.
+
+- [#7605](https://github.com/stella/stella/pull/7605) [`92038d5`](https://github.com/stella/stella/commit/92038d59d484f5f59e36fa35e297cc19bf3e6e2c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a field variant to ComboboxTrigger that uses the shared form-control appearance and accommodates wrapping selected labels.
+
+- [#7573](https://github.com/stella/stella/pull/7573) [`8f35c0f`](https://github.com/stella/stella/commit/8f35c0f990c12833a18adf4cdb86a69b3681acdc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DayCalendar` blocks shorter than one label line (`DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX`) draw their surface only; their accessible label and tooltip still carry them.
+
+- [#7573](https://github.com/stella/stella/pull/7573) [`8f35c0f`](https://github.com/stella/stella/commit/8f35c0f990c12833a18adf4cdb86a69b3681acdc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DayCalendar` entries take a `suggestion` state: a lighter, dashed block rendered as a button that calls the block's `onActivate` without starting a range selection. Any block can carry a `tooltip`.
+
+### Patch Changes
+
+- [#7354](https://github.com/stella/stella/pull/7354) [`a8532a0`](https://github.com/stella/stella/commit/a8532a054628dc979e3bc7e48d807cb44e2d66b2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a wrapping Button layout that grows with multi-line labels at every breakpoint.
+
+- [#7702](https://github.com/stella/stella/pull/7702) [`496eff7`](https://github.com/stella/stella/commit/496eff74a703471be2b2075d24c2e78159e2bc57) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DatePickerPopover` takes a `triggerLabel` that replaces the formatted date in its trigger.
+
 ## 0.59.1
 
 ### Patch Changes

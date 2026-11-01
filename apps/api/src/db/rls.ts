@@ -106,7 +106,8 @@ END`;
 export const workspaceCheck = workspaceAccessCheck(sql`workspace_id`);
 
 /** Check the row's `id` against the transaction workspace authorization.
- * Used by `workspaces`, which scopes on `id` rather than `workspace_id`. */
+ * Only for `workspaces`, whose `id` is the workspace id: on any other table
+ * `id` never matches and every row reads as hidden; use `workspaceCheck`. */
 export const workspaceIdCheck = workspaceAccessCheck(sql`id`);
 
 // Embedded chat data must remain visible only while every contributing

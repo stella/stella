@@ -1,12 +1,11 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
-  caseLawBrowseFacetCounts,
   caseLawDecisions,
+  caseLawPopulationCountsLive,
   caseLawSources,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
@@ -30,12 +29,7 @@ import {
   partialObservationFromMetadata,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
-import {
-  pgFtsBrowseFacetPublishedQuery,
-  refreshPgFtsBrowseFacets,
-} from "@/api/lib/legal-search/pg-fts-browse-facet-refresh";
 import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
-import { isRecord } from "@/api/lib/type-guards";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
@@ -105,8 +99,6 @@ const shapeRows = markerShapes.map((shape) => ({
 
 let client: PGlite;
 let db: ReturnType<typeof drizzle>;
-type RefreshDb = Parameters<typeof refreshPgFtsBrowseFacets>[0];
-let refreshDb: RefreshDb;
 let caseLawDb: CaseLawPublicReadDb;
 
 type SeedOptions = {
@@ -143,9 +135,6 @@ const seedDecision = ({
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
-  // SAFETY: the refresh uses only the select and transaction operations the embedded database provides.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded database stands in for the root pool
-  refreshDb = db as unknown as RefreshDb;
   const readDb = async <T>(
     read: (tx: CaseLawPublicReadTransaction) => Promise<T>,
   ) =>
@@ -341,7 +330,6 @@ test(
     );
     expect(freshInstallFacets.court).toEqual([{ count: 2, value: COURT }]);
 
-    await refreshPgFtsBrowseFacets(refreshDb);
     const facets = await caseLawDb(
       async (tx) =>
         await readPgFtsBrowseFacets(tx, {
@@ -371,11 +359,16 @@ test(
           limit: 10,
         }),
     );
-    expect(revokedFacets).toEqual({ country: [], court: [], year: [] });
+    expect(revokedFacets).toMatchObject({
+      country: [],
+      court: [],
+      year: [],
+      countsFreshness: { status: "current" },
+    });
     const restrictedRows = await withPublicLawReaderRole(
       db,
       async (readerDb) =>
-        await readerDb.select().from(caseLawBrowseFacetCounts),
+        await readerDb.select().from(caseLawPopulationCountsLive),
     );
     expect(restrictedRows).toEqual([]);
     await db
@@ -447,33 +440,15 @@ test(
 );
 
 test(
-  "the browse refresh uses the existing covering index and removes stale buckets",
+  "decision deletion removes maintained browse buckets",
   async () => {
-    await client.query("VACUUM ANALYZE case_law_decisions");
-    const query = pgFtsBrowseFacetPublishedQuery(refreshDb).toSQL();
-    const plan = await client.transaction(async (tx) => {
-      await tx.query("SET LOCAL enable_seqscan = off");
-      await tx.query("SET LOCAL enable_bitmapscan = off");
-      await tx.query("SET LOCAL seq_page_cost = 1000");
-      await tx.query("SET LOCAL random_page_cost = 1000");
-      const explained = await tx.query(`EXPLAIN (COSTS OFF) ${query.sql}`, [
-        ...query.params,
-      ]);
-      return explained.rows.map((row) => {
-        const text = isRecord(row) ? row["QUERY PLAN"] : undefined;
-        return typeof text === "string"
-          ? text
-          : panic("EXPLAIN row has no plan text");
-      });
-    });
-    expect(plan.join("\n")).toMatch(
-      /Index Only Scan using case_law_decisions_search_candidate_published_idx on case_law_decisions/u,
-    );
-
     await db
       .delete(caseLawDecisions)
       .where(eq(caseLawDecisions.sourceId, sourceId));
-    expect(await refreshPgFtsBrowseFacets(refreshDb)).toEqual({ buckets: 0 });
+    const [population] = await db
+      .select({ buckets: sql<number>`count(*)::integer` })
+      .from(caseLawPopulationCountsLive);
+    expect(population).toEqual({ buckets: 0 });
     const facets = await caseLawDb(
       async (tx) =>
         await readPgFtsBrowseFacets(tx, {
@@ -482,7 +457,12 @@ test(
           limit: 10,
         }),
     );
-    expect(facets).toEqual({ country: [], court: [], year: [] });
+    expect(facets).toMatchObject({
+      country: [],
+      court: [],
+      year: [],
+      countsFreshness: { status: "current" },
+    });
   },
   DB_TEST_TIMEOUT_MS,
 );

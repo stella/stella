@@ -484,7 +484,7 @@
     "evidenceTitles": "Pealkirjad",
     "evidenceApps": "Rakendused",
     "rangeEmpty": "Selles vahemikus ei salvestatud midagi.",
-    "calendarHint": "Avage katkendjoonega soovitus, et see üle vaadata, või lohistage veerus Tegevus, et koostada kanne mis tahes vahemiku kohta.",
+    "calendarHint": "Avage katkendjoonega soovitus, et see üle vaadata, või lohistage veerus Ajakanded, et koostada kanne mis tahes vahemiku kohta.",
     "narrativeAiPrompt": "Kas lasta stella AI-l selgitus kirjutada? Saadetakse ainult selle soovituse akende pealkirjad ja neid ei salvestata.",
     "narrativeAiNo": "Ei",
     "narrativeAiApprove": "Kinnita",

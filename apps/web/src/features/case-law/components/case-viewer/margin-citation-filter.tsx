@@ -90,7 +90,7 @@ export const useMarginCitationFilter = <TCard extends DecisionProvisionCard>({
   const [selection, setSelection] = useState<SelectionCitationFilter | null>(
     null,
   );
-  const filter = resolveMarginCitationFilter({ paragraph, selection });
+  const filter = resolveMarginCitationFilter({ cards, paragraph, selection });
   const blockAnchorIds = new Set(blocks.map((block) => block.anchorId));
 
   /** A plain click in a paragraph focuses it; a drag selects instead. */
