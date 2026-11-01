@@ -509,7 +509,22 @@
     "billingDraftsUnavailable": "Nastavenia návrhov stella AI sa teraz nepodarilo načítať.",
     "aiDraftCodes": "Úkon {task} · Činnosť {activity}",
     "aiDraftFlags": "Poznámky k fakturačným pravidlám",
-    "aiDraftFlagSource": "{file}, {section}"
+    "aiDraftFlagSource": "{file}, {section}",
+    "aiRefine": "Upraviť",
+    "aiRefinePlaceholder": "Napíšte stelle, ako návrh upraviť…",
+    "aiRefining": "stella AI upravuje popis…",
+    "aiProposal": "stella AI navrhuje",
+    "aiAccept": "Prijať",
+    "aiDismiss": "Zahodiť",
+    "aiUndo": "Vrátiť späť",
+    "aiUseOriginal": "Použiť pôvodný",
+    "aiSteerShorter": "Kratšie",
+    "aiSteerMoreDetail": "Podrobnejšie",
+    "aiSteerClientFriendly": "Zrozumiteľne pre klienta",
+    "aiSteerWriteIn": "Písať v jazyku {language}",
+    "aiSteerRemember": "Zapamätať na budúce",
+    "billingDraftsPreference": "Vaša preferencia pre návrhy",
+    "billingDraftsForgetPreference": "Zabudnúť preferenciu"
   },
   "shortcut": {
     "title": "Skratka schránky",

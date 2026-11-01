@@ -509,7 +509,22 @@
     "billingDraftsUnavailable": "يتعذّر تحميل إعدادات مسودات stella AI حاليًا.",
     "aiDraftCodes": "المهمة {task} · النشاط {activity}",
     "aiDraftFlags": "ملاحظات على إرشادات الفوترة",
-    "aiDraftFlagSource": "{file}، {section}"
+    "aiDraftFlagSource": "{file}، {section}",
+    "aiRefine": "تحسين",
+    "aiRefinePlaceholder": "أخبر stella بكيفية تعديل هذه المسودة…",
+    "aiRefining": "يعدّل stella AI الوصف…",
+    "aiProposal": "يقترح stella AI",
+    "aiAccept": "قبول",
+    "aiDismiss": "تجاهل",
+    "aiUndo": "تراجع",
+    "aiUseOriginal": "استخدام الأصل",
+    "aiSteerShorter": "أقصر",
+    "aiSteerMoreDetail": "تفاصيل أكثر",
+    "aiSteerClientFriendly": "صياغة مفهومة للعميل",
+    "aiSteerWriteIn": "الكتابة بلغة {language}",
+    "aiSteerRemember": "التذكّر للمرة القادمة",
+    "billingDraftsPreference": "تفضيلك للمسودات",
+    "billingDraftsForgetPreference": "نسيان التفضيل"
   },
   "shortcut": {
     "title": "اختصار الحافظة",

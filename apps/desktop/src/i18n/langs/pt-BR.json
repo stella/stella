@@ -509,7 +509,22 @@
     "billingDraftsUnavailable": "Não foi possível carregar as configurações das sugestões de stella AI agora.",
     "aiDraftCodes": "Tarefa {task} · Atividade {activity}",
     "aiDraftFlags": "Notas sobre as regras de faturamento",
-    "aiDraftFlagSource": "{file}, {section}"
+    "aiDraftFlagSource": "{file}, {section}",
+    "aiRefine": "Ajustar",
+    "aiRefinePlaceholder": "Diga à stella como ajustar esta sugestão…",
+    "aiRefining": "stella AI está ajustando a descrição…",
+    "aiProposal": "stella AI sugere",
+    "aiAccept": "Aceitar",
+    "aiDismiss": "Descartar",
+    "aiUndo": "Desfazer",
+    "aiUseOriginal": "Usar o original",
+    "aiSteerShorter": "Mais curto",
+    "aiSteerMoreDetail": "Mais detalhes",
+    "aiSteerClientFriendly": "Linguagem clara para o cliente",
+    "aiSteerWriteIn": "Escrever em {language}",
+    "aiSteerRemember": "Lembrar da próxima vez",
+    "billingDraftsPreference": "Sua preferência de redação",
+    "billingDraftsForgetPreference": "Esquecer preferência"
   },
   "shortcut": {
     "title": "Atalho da área de transferência",

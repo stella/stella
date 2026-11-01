@@ -509,7 +509,22 @@
     "billingDraftsUnavailable": "Nie można teraz wczytać ustawień propozycji stella AI.",
     "aiDraftCodes": "Zadanie {task} · Czynność {activity}",
     "aiDraftFlags": "Uwagi do zasad rozliczeń",
-    "aiDraftFlagSource": "{file}, {section}"
+    "aiDraftFlagSource": "{file}, {section}",
+    "aiRefine": "Popraw",
+    "aiRefinePlaceholder": "Napisz stelli, jak zmienić tę propozycję…",
+    "aiRefining": "stella AI poprawia opis…",
+    "aiProposal": "stella AI proponuje",
+    "aiAccept": "Akceptuj",
+    "aiDismiss": "Odrzuć",
+    "aiUndo": "Cofnij",
+    "aiUseOriginal": "Użyj oryginału",
+    "aiSteerShorter": "Krócej",
+    "aiSteerMoreDetail": "Więcej szczegółów",
+    "aiSteerClientFriendly": "Zrozumiale dla klienta",
+    "aiSteerWriteIn": "Pisz w języku: {language}",
+    "aiSteerRemember": "Zapamiętaj na przyszłość",
+    "billingDraftsPreference": "Twoja preferencja dla propozycji",
+    "billingDraftsForgetPreference": "Zapomnij preferencję"
   },
   "shortcut": {
     "title": "Skrót schowka",

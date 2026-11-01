@@ -81,6 +81,7 @@ macro_rules! with_stella_commands {
       billing_draft_settings::billing_draft_get_settings => "billing_draft_get_settings",
       billing_draft_settings::billing_draft_grant_consent => "billing_draft_grant_consent",
       billing_draft_settings::billing_draft_withdraw_consent => "billing_draft_withdraw_consent",
+      billing_draft_settings::billing_draft_set_preference => "billing_draft_set_preference",
       billing_draft_commands::billing_draft_create_confirmed => "billing_draft_create_confirmed",
       activity_commands::activity_assign_ranges => "activity_assign_ranges",
       activity_commands::activity_get_day => "activity_get_day",
