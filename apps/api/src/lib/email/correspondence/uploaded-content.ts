@@ -91,9 +91,18 @@ type DerivedContent = Omit<
   | "assigneeId"
   | "createdAt"
   | "updatedAt"
+  // Import provenance belongs to the correspondence import contract; content
+  // derived from a delivered or uploaded message never sets or clears it.
+  | "externalSource"
+  | "externalId"
+  | "externalChangeKey"
+  | "importedAt"
 >;
 
-/** Explicitly excludes workflow state, filing history and record identity. */
+/**
+ * Explicitly excludes workflow state, filing history, record identity and
+ * import provenance.
+ */
 export const prepareCorrespondenceContent = (parsed: ParsedCorrespondence) =>
   ({
     direction: parsed.direction,
