@@ -18,6 +18,10 @@ import type { TransactionOf } from "@/api/db/scoped";
 import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import {
+  CASE_LAW_POPULATION_FOLD_BATCH_LIMIT,
+  CASE_LAW_POPULATION_MAINTENANCE_HIGH_WATER,
+} from "@/api/lib/case-law/population-count-limits";
+import {
   tryLockCaseLawSitemapMonth,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
@@ -28,6 +32,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import { isRecord } from "@/api/lib/type-guards";
 import type {
   GatedTestClientScope,
   GatedTestDb,
@@ -349,6 +354,25 @@ const seedLegislationChunk = async (
   );
 };
 
+/**
+ * An unfolded change log the size of a population burst, below the
+ * maintenance high water so decision backfills stay admitted. The size is
+ * fixed, so both backfill sizes read the same backlog, and the rows cancel in
+ * pairs on one key, so a later fold moves no count.
+ */
+const POPULATION_BACKLOG_ROWS = CASE_LAW_POPULATION_MAINTENANCE_HIGH_WATER / 2;
+
+const seedPopulationBacklog = async (database: GatedTestDb) => {
+  await database.execute(sql`INSERT INTO case_law_population_deltas
+      (kind, country, source_id, value, delta)
+    SELECT 'court', 'CZE', ${PROVISION_SOURCE_ID}::uuid, 'Fixture court',
+      CASE WHEN n % 2 = 1 THEN 1 ELSE -1 END
+    FROM generate_series(1, 2 * greatest(0, (${POPULATION_BACKLOG_ROWS}::integer
+      - (SELECT count(*)::integer FROM case_law_population_deltas) + 1) / 2)) AS n
+    ORDER BY n`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_deltas`);
+};
+
 /** Grow the source rows read by the bounded provision-state run. */
 export const seedProvisionBackfillRows = async (
   database: GatedTestDb,
@@ -420,6 +444,7 @@ export const seedProvisionBackfillRows = async (
   );
   await database.execute(sql`INSERT INTO case_law_provision_repair_cursors
     (name, completed_at) VALUES ('scope-bootstrap', now())`);
+  await seedPopulationBacklog(database);
   await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
 };
 
@@ -784,6 +809,30 @@ const replaceCoverageRefreshState = async (
 
 const COVERAGE_DECISION_ID_PREFIX = "01990000-00c3-7000-8000-";
 
+/** Read measurements start after fixture writes have reached the persisted owner. */
+const foldFixturePopulation = async (database: GatedTestDb) => {
+  let done = false;
+  while (!done) {
+    // db-await-in-loop: fixture preparation folds bounded batches before the measured read-only refresh.
+    const row = executedRows(
+      await database.execute(sql`
+      SELECT folded, done FROM public.fold_case_law_population_counts(${CASE_LAW_POPULATION_FOLD_BATCH_LIMIT})
+    `),
+    ).find(isRecord);
+    if (
+      !row ||
+      typeof row["folded"] !== "number" ||
+      typeof row["done"] !== "boolean"
+    ) {
+      panic("Invalid fixture population fold result");
+    }
+    if (row["folded"] === 0 && !row["done"]) {
+      panic("Fixture population fold owner is busy");
+    }
+    done = row["done"];
+  }
+};
+
 /**
  * The served sources' published decisions at the scenario's size, spread over
  * their facet courts and years, with the online coverage indexes production
@@ -844,6 +893,10 @@ const seedCoverageDecisions = async ({
   }
   await database.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
   await database.execute(sql`VACUUM (ANALYZE) case_law_search_documents`);
+  await foldFixturePopulation(database);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_counts`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_deltas`);
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_projections`);
 };
 
 /**

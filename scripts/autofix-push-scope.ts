@@ -61,6 +61,8 @@ const FIXER_INPUTS = [
   "scripts/autofix-*.ts",
   "scripts/ci-generated-sources.ts",
   "scripts/typecheck-coverage.ts",
+  // The type-aware pre-check parses changed files with it.
+  "packages/scripts/src/syntax-tree.ts",
 ] as const;
 
 /** Whether a change among `files` can alter what format or lint produce. */
