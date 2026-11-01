@@ -67,7 +67,7 @@ export const createObservationBuffer = <T>({
     }
     scheduled = setTimeout(() => {
       scheduled = undefined;
-      detached(() => flush(), "action-cost.flush");
+      detached(flush(), "action-cost.flush");
     }, FLUSH_DELAY_MS);
   };
   return { enqueue, flush };

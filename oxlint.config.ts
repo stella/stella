@@ -213,6 +213,18 @@ const fixtureRuleOverrides = [
       "typescript/unbound-method": "off",
     },
   } as const satisfies OxlintOverride,
+  {
+    // The fixture's subject is un-awaited promise chains and the helper's
+    // promise-returning work functions, which the type-aware promise rules
+    // would report as well.
+    files: [
+      ".oxlint-plugins/__fixtures__/no-floating-promise-chain.fixture.ts",
+    ],
+    rules: {
+      "typescript/no-floating-promises": "off",
+      "typescript/promise-function-async": "off",
+    },
+  } as const satisfies OxlintOverride,
   fixtureRuleOverride("require-json-import-attribute.fixture.ts", [
     "require-json-import-attribute/require-json-import-attribute",
   ]),
