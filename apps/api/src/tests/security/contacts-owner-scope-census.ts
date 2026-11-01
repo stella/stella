@@ -201,10 +201,10 @@ const chainRoot = (node: Node): string | undefined => {
     case "CallExpression":
       return chainRoot(node.callee);
     case "AwaitExpression":
+      return chainRoot(node.argument);
     case "ParenthesizedExpression":
     case "TSAsExpression":
     case "TSNonNullExpression":
-      return chainRoot(node.expression);
     case "ChainExpression":
       return chainRoot(node.expression);
     default:
