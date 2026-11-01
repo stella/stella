@@ -41,7 +41,7 @@ import { caseLawSources } from "@/api/db/schema";
  *     --after <decisionId> --apply
  *
  *   # only the decisions one parser version wrote
- *   bun run src/scripts/replay-case-law-source.ts --adapter sk-us \
+ *   bun run src/scripts/replay-case-law-source.ts --adapter sk-courts \
  *     --parser-version <n> --all --results-out <private path>
  *
  *   # every row's outcome to a file, not only the summary's sample
