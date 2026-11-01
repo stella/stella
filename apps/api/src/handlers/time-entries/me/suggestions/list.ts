@@ -1,8 +1,6 @@
-import { panic, Result } from "better-result";
-import { inArray } from "drizzle-orm";
+import { Result } from "better-result";
 import * as v from "valibot";
 
-import { workspaces } from "@/api/db/schema";
 import {
   resolveSuggestionBillingDefaults,
   suggestionBillingLookupKey,
@@ -11,6 +9,7 @@ import {
   type LoadedSuggestionScope,
   loadTimeSuggestionRange,
   serializeSuggestion,
+  type SuggestionMatter,
 } from "@/api/handlers/time-entries/suggestions/load";
 import {
   timeSuggestionDateSchema,
@@ -19,7 +18,6 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { readTimePolicy } from "@/api/lib/billing-time";
-import type { SafeId } from "@/api/lib/branded-types";
 
 const config = {
   contract: "patch",
@@ -48,14 +46,12 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-type MatterLabel = { id: SafeId<"workspace">; name: string; reference: string };
-
 type SerializedSuggestion = ReturnType<typeof serializeSuggestion>;
 
 type SuggestionDay = {
   date: string;
   matters: {
-    matter: MatterLabel;
+    matter: SuggestionMatter;
     activeMinutes: number;
     items: SerializedSuggestion[];
   }[];
@@ -63,7 +59,6 @@ type SuggestionDay = {
 
 const groupByDay = (
   scopes: readonly LoadedSuggestionScope[],
-  matterFor: (workspaceId: SafeId<"workspace">) => MatterLabel,
   serialize: (scope: LoadedSuggestionScope) => SerializedSuggestion[],
 ) => {
   const days: SuggestionDay[] = [];
@@ -75,7 +70,7 @@ const groupByDay = (
       days.push(day);
     }
     day.matters.push({
-      matter: matterFor(scope.workspaceId),
+      matter: scope.matter,
       activeMinutes: items.reduce((sum, item) => sum + item.durationMinutes, 0),
       items,
     });
@@ -94,7 +89,9 @@ const listMySuggestionRange = createSafeRootHandler(
     getActiveWorkspaceIds,
   }) {
     // Matter access is decided here, once, by the same authorization every
-    // cross-matter read uses; the loader filters every source to this list.
+    // cross-matter read uses; the loader filters every source to this list
+    // and labels each scope from its own transaction, so a matter deleted
+    // since this check drops out instead of missing its label.
     const workspaceIds = yield* Result.await(
       Result.tryPromise(async () => await getActiveWorkspaceIds()),
     );
@@ -109,24 +106,6 @@ const listMySuggestionRange = createSafeRootHandler(
       timezoneId: query.timezoneId,
     });
     const pending = loaded.filter((scope) => scope.pending.length > 0);
-    const matterIds = [...new Set(pending.map((scope) => scope.workspaceId))];
-    const matters =
-      matterIds.length === 0
-        ? []
-        : yield* Result.await(
-            safeDb((tx) =>
-              tx
-                .select({
-                  id: workspaces.id,
-                  name: workspaces.name,
-                  reference: workspaces.reference,
-                })
-                .from(workspaces)
-                .where(inArray(workspaces.id, matterIds))
-                .limit(matterIds.length),
-            ),
-          );
-    const matterById = new Map(matters.map((matter) => [matter.id, matter]));
     const policy = yield* Result.await(
       readTimePolicy({ safeDb, organizationId: session.activeOrganizationId }),
     );
@@ -142,28 +121,18 @@ const listMySuggestionRange = createSafeRootHandler(
     return Result.ok({
       startDate: query.startDate,
       endDate: query.endDate,
-      days: groupByDay(
-        pending,
-        (workspaceId: SafeId<"workspace">) =>
-          matterById.get(workspaceId) ??
-          panic("Suggested matter is missing from the authorized matters"),
-        (scope) => {
-          const billable =
-            billingDefaults.get(
-              suggestionBillingLookupKey({
-                workspaceId: scope.workspaceId,
-                dateWorked: scope.date,
-              }),
-            )?.billable ?? false;
-          return scope.pending.map((cluster) =>
-            serializeSuggestion(
-              cluster,
-              policy.timeMinimumUnitMinutes,
-              billable,
-            ),
-          );
-        },
-      ),
+      days: groupByDay(pending, (scope) => {
+        const billable =
+          billingDefaults.get(
+            suggestionBillingLookupKey({
+              workspaceId: scope.workspaceId,
+              dateWorked: scope.date,
+            }),
+          )?.billable ?? false;
+        return scope.pending.map((cluster) =>
+          serializeSuggestion(cluster, policy.timeMinimumUnitMinutes, billable),
+        );
+      }),
     });
   },
 );

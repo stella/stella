@@ -171,6 +171,11 @@ type ListOptions = {
   startDate: string;
   endDate: string;
   matters?: SafeId<"workspace">[];
+  /**
+   * Matters the scoped transaction can still see, when that has changed since
+   * the request authorized `matters`. Defaults to `matters`.
+   */
+  visibleMatters?: SafeId<"workspace">[];
   database?: TestDatabase;
 };
 
@@ -178,6 +183,7 @@ const listFor = async ({
   startDate,
   endDate,
   matters = [ids.wsA1, ids.wsA2],
+  visibleMatters = matters,
   database = testDb,
 }: ListOptions) =>
   await listMySuggestionRange.handler(
@@ -190,7 +196,7 @@ const listFor = async ({
         route: "/time-entries/me/suggestions",
         // The scoped transaction and the request's matter authorization agree,
         // as they do in production: the timekeeper belongs to these matters.
-        safeDb: createSafeDb(database, matters, ids.orgA, ids.userA1),
+        safeDb: createSafeDb(database, visibleMatters, ids.orgA, ids.userA1),
         getActiveWorkspaceIds: async () => matters,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -297,6 +303,114 @@ describe("my suggestion range", () => {
     expect(listed.length).toBeGreaterThan(0);
     expect(new Set(listed)).toEqual(new Set([ids.wsA1, ids.wsA2]));
     expect(JSON.stringify(response)).not.toContain(hiddenMatterId);
+  });
+
+  describe("when a matter changes after the request authorized it", () => {
+    const changedMatterIds: SafeId<"workspace">[] = [];
+
+    // A matter the timekeeper worked on on Monday, authorized for the request
+    // before the change under test.
+    const seedWorkedMatter = async (name: string) => {
+      const id = createSafeId<"workspace">();
+      changedMatterIds.push(id);
+      await testDb.insert(workspaces).values({
+        id,
+        organizationId: ids.orgA,
+        clientId: ids.contactA,
+        name,
+        reference: `TEST-${id}`,
+      });
+      await seedAuditRow({
+        workspaceId: id,
+        createdAt: at(MONDAY, "13:00:00"),
+      });
+      return id;
+    };
+
+    afterAll(async () => {
+      await testDb
+        .delete(workspaces)
+        .where(inArray(workspaces.id, changedMatterIds));
+    });
+
+    const unchangedWeek = () => [
+      { date: MONDAY, matters: [ids.wsA1] },
+      { date: TUESDAY, matters: [ids.wsA2] },
+    ];
+
+    test("drops a deleted matter's suggestions and still lists the rest", async () => {
+      const deleted = await seedWorkedMatter("Deleted matter");
+      // Audit rows outlive their matter, so the deleted matter's activity is
+      // still read for it.
+      await testDb.delete(workspaces).where(eq(workspaces.id, deleted));
+
+      const response = await expectRange({
+        startDate: MONDAY,
+        endDate: TUESDAY,
+        matters: [ids.wsA1, ids.wsA2, deleted],
+      });
+
+      expect(matterIdsByDay(response)).toEqual(unchangedWeek());
+      expect(JSON.stringify(response)).not.toContain(deleted);
+    });
+
+    test("drops a matter marked for deletion, as the request's matter authorization does", async () => {
+      const deleting = await seedWorkedMatter("Deleting matter");
+      await testDb
+        .update(workspaces)
+        .set({ status: "deleting" })
+        .where(eq(workspaces.id, deleting));
+
+      const response = await expectRange({
+        startDate: MONDAY,
+        endDate: TUESDAY,
+        matters: [ids.wsA1, ids.wsA2, deleting],
+      });
+
+      expect(matterIdsByDay(response)).toEqual(unchangedWeek());
+      expect(JSON.stringify(response)).not.toContain(deleting);
+    });
+
+    test("drops a matter the scoped transaction can no longer see", async () => {
+      const response = await expectRange({
+        startDate: MONDAY,
+        endDate: TUESDAY,
+        matters: [ids.wsA1, ids.wsA2],
+        visibleMatters: [ids.wsA2],
+      });
+
+      expect(matterIdsByDay(response)).toEqual([
+        { date: TUESDAY, matters: [ids.wsA2] },
+      ]);
+    });
+
+    test("keeps an archived matter, labelled from the same read as its suggestions", async () => {
+      const archived = await seedWorkedMatter("Archived matter");
+      await testDb
+        .update(workspaces)
+        .set({ status: "archived" })
+        .where(eq(workspaces.id, archived));
+
+      const response = await expectRange({
+        startDate: MONDAY,
+        endDate: TUESDAY,
+        matters: [ids.wsA1, ids.wsA2, archived],
+      });
+
+      const [monday] = response.days;
+      expect(monday?.date).toBe(MONDAY);
+      expect(
+        monday?.matters.find(({ matter }) => matter.id === archived)?.matter,
+      ).toEqual({
+        id: archived,
+        name: "Archived matter",
+        reference: `TEST-${archived}`,
+      });
+      expect(matterIdsByDay(response).at(1)).toEqual({
+        date: TUESDAY,
+        matters: [ids.wsA2],
+      });
+    });
   });
 
   test("covers at most seven days", async () => {
