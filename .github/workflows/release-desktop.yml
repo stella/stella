@@ -245,11 +245,12 @@ jobs:
             rust_targets: x86_64-pc-windows-msvc
             install_timeout_minutes: 30
           # Cross-compiled on the x64 runner: the frontend build and signing
-          # tools stay x64 and only the Rust binary targets ARM64.
+          # tools stay x64 and only the Rust binary targets ARM64. Build
+          # scripts run on x64, so its crates are fetched too.
           - os: windows
             runner: windows-latest
             target: aarch64-pc-windows-msvc
-            rust_targets: aarch64-pc-windows-msvc
+            rust_targets: aarch64-pc-windows-msvc,x86_64-pc-windows-msvc
             install_timeout_minutes: 30
           - os: macos
             runner: macos-15

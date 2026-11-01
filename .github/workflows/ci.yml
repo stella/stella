@@ -6398,11 +6398,11 @@ jobs:
         run: bun scripts/desktop-release-step.ts stamp
 
       # The build action compiles offline; the locked crates download here,
-      # retried as a unit.
+      # retried as a unit. Both targets: an ARM64 build's scripts run on x64.
       - name: Fetch Rust dependencies
         if: github.event_name == 'merge_group' || github.event_name == 'pull_request' || steps.receipt.outputs.reused != 'true'
         timeout-minutes: 10
-        run: bash scripts/retry.sh cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --target ${{ matrix.target }}
+        run: bash scripts/retry.sh cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --target x86_64-pc-windows-msvc --target aarch64-pc-windows-msvc
 
       - name: Exercise Windows desktop release build
         if: github.event_name == 'merge_group' || github.event_name == 'pull_request' || steps.receipt.outputs.reused != 'true'
