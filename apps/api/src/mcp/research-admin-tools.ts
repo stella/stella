@@ -211,12 +211,12 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: false,
   },
   description:
-    "Read the organization's audit trail (compliance view). Returns audit " +
-    "entries newest first, each with its action, resource type and id, actor " +
-    "user id, matter, timestamp, and change detail (null unless " +
-    'changesStatus is "visible"). Filters: matter_id, action, ' +
-    "resource_type, resource_id, user_id, performer, from/to; paginate " +
-    "with limit and cursor. Requires organization audit-log access.",
+    "Read the organization's audit trail. Returns entries newest first: " +
+    "action, resource type and id, actor user id, matter, timestamp, and " +
+    'change detail (null unless changesStatus is "visible"). Filters: ' +
+    "matter_id, action, resource_type, resource_id, user_id, performer, " +
+    "from/to; paginate with limit and cursor. Requires organization " +
+    "audit-log access.",
   inputSchema: listAuditLogArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "partial_check"],
