@@ -74,7 +74,8 @@
       "none": "Bez terminu",
       "today": "Dziś",
       "tomorrow": "Jutro",
-      "nextWeek": "Za tydzień"
+      "nextWeek": "Za tydzień",
+      "pick": "Wybierz datę"
     },
     "due": {
       "overdue": "Po terminie",
