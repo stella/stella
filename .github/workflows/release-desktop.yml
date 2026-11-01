@@ -483,6 +483,24 @@ jobs:
           APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api.p8
         run: |
           printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
+          # Stapling and validation fetch the ticket from Apple's servers.
+          # Both are idempotent: a dropped connection (NSURLErrorDomain) is
+          # retried up to three attempts; any other failure fails at once.
+          stapler() {
+            local dmg="$1" action="$2" attempt output
+            for attempt in 1 2 3; do
+              if output=$(xcrun stapler "$action" "$dmg" 2>&1); then
+                printf '%s\n' "$output"
+                return 0
+              fi
+              printf '%s\n' "$output" >&2
+              if ((attempt == 3)) || ! grep -q 'NSURLErrorDomain' <<< "$output"; then
+                return 1
+              fi
+              echo "stapler $action: network error on attempt $attempt/3; retrying in $((attempt * 20))s" >&2
+              sleep $((attempt * 20))
+            done
+          }
           bundle_dir="src-tauri/target/${{ matrix.target }}/release/bundle"
           for dmg in "$bundle_dir"/dmg/*.dmg; do
             [[ -f "$dmg" ]] || continue
@@ -495,8 +513,8 @@ jobs:
               --key-id   "$APPLE_API_KEY_ID" \
               --issuer   "$APPLE_API_ISSUER" \
               --wait --timeout 30m
-            xcrun stapler staple "$dmg"
-            xcrun stapler validate "$dmg"
+            stapler "$dmg" staple
+            stapler "$dmg" validate
           done
 
       - name: Rename artifacts to stable, version-less filenames
