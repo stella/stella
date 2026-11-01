@@ -16,6 +16,11 @@ import {
 import { rewriteInlineWhitespace } from "@stll/legal-ast/inline-line";
 
 import {
+  type AtCourtTextSection,
+  isAtBenchRecital,
+  readAtDecisionRegions,
+} from "@/api/handlers/case-law/ingestion/parsers/at-decision-regions";
+import {
   readRisContent,
   type RisItem,
   risTextFidelity,
@@ -107,6 +112,43 @@ const paragraphRole = (
     }
   }
 };
+
+/**
+ * The court's own text, by where the publisher filed it. Its role comes from
+ * what the court printed (`readAtDecisionRegions`); the label only says
+ * where the text starts.
+ */
+const courtTextSection = (
+  contentType: string | undefined,
+): AtCourtTextSection | undefined => {
+  switch (contentType) {
+    case "spruch": {
+      return "operative";
+    }
+    case "begruendung":
+    case "rechtlichebeurteilung": {
+      return "reasons";
+    }
+    case "text": {
+      return "text";
+    }
+    default: {
+      return undefined;
+    }
+  }
+};
+
+/**
+ * The role of a publisher field. The VwGH files its bench recital under
+ * `betreff`; elsewhere that label holds the publisher's subject line.
+ */
+const publisherFieldRole = (
+  contentType: string | undefined,
+  text: string,
+): ParagraphRole | undefined =>
+  contentType === "betreff" && isAtBenchRecital(text)
+    ? "intro"
+    : paragraphRole(contentType);
 
 /**
  * Every content type this document labels a section with.
@@ -310,6 +352,14 @@ export const parseRisDecisionXml = (
 
   const blocks: Block[] = [];
   const sections = new Map<string, string[]>();
+  const regions = readAtDecisionRegions([
+    input.caseNumber,
+    ...items.flatMap((item) =>
+      item.type === "paragraph" && item.contentType === "gz"
+        ? [plainTextOf(item.inlines)]
+        : [],
+    ),
+  ]);
   let blockIndex = 0;
   let bodyStarted = false;
   const units = joinWrappedLines(items);
@@ -341,6 +391,7 @@ export const parseRisDecisionXml = (
       } satisfies HeadingBlock;
       blocks.push(heading);
       bodyStarted ||= startsDecisionBody(heading);
+      regions.heading(text);
       continue;
     }
     if (item.contentType !== undefined) {
@@ -351,7 +402,11 @@ export const parseRisDecisionXml = (
         printed.push(text);
       }
     }
-    const role = paragraphRole(item.contentType);
+    const section = courtTextSection(item.contentType);
+    const role =
+      section === undefined
+        ? publisherFieldRole(item.contentType, text)
+        : regions.paragraph(text, section);
     const block = {
       id: `b${blockIndex}`,
       anchorId: `p-${blockIndex}`,

@@ -11,6 +11,7 @@ import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-x
 // parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
+import { readAtDecisionRegions } from "./at-decision-regions";
 import { compareTextFidelity, normalizeInlineLayout } from "./at-ris-markup";
 import {
   inlinesToPlainText,
@@ -195,6 +196,8 @@ export const parseFindokDecisionXml = (
   const blocks: Block[] = [];
   let blockIndex = 0;
   let printed = "";
+  // Findok labels no part of the decision: its role is what the court printed.
+  const regions = readAtDecisionRegions([input.caseNumber]);
   const inlinesOf = (document: cheerio.CheerioAPI, node: AnyNode): Inline[] => {
     const inlines = normalizeInlineLayout(
       walkInlines(document, document(node), {
@@ -209,12 +212,15 @@ export const parseFindokDecisionXml = (
       return;
     }
     blockIndex += 1;
+    const plainText = inlinesToPlainText(inlines);
+    const role = regions.paragraph(plainText, "text");
     blocks.push({
       id: `b${blockIndex}`,
       anchorId: `p-${blockIndex}`,
       type: "paragraph",
+      ...(role === undefined ? {} : { role }),
       inlines,
-      plainText: inlinesToPlainText(inlines),
+      plainText,
     });
   };
 
@@ -237,6 +243,8 @@ export const parseFindokDecisionXml = (
         return;
       }
       blockIndex += 1;
+      const plainText = inlinesToPlainText(inlines);
+      regions.heading(plainText);
       blocks.push({
         id: `b${blockIndex}`,
         anchorId: `h-${blockIndex}`,
@@ -244,7 +252,7 @@ export const parseFindokDecisionXml = (
         level: headingLevel(node),
         role: blockIndex === 1 ? "decision-title" : "section-heading",
         inlines,
-        plainText: inlinesToPlainText(inlines),
+        plainText,
       });
       return;
     }
