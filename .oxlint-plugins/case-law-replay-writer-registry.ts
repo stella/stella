@@ -8,6 +8,11 @@ export type ReplayWriterOwner = {
 
 export const REPLAY_WRITER_REGISTRY = [
   {
+    file: "apps/api/src/db/root.ts",
+    line: 682,
+    kind: "pending",
+  },
+  {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
     line: 1034,
     kind: "pending",
@@ -258,17 +263,17 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/lib/corpus-ingestion-checkpoint.ts",
-    line: 97,
+    line: 112,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/corpus-ingestion-checkpoint.ts",
-    line: 137,
+    line: 154,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/corpus-ingestion-checkpoint.ts",
-    line: 170,
+    line: 187,
     kind: "pending",
   },
   {
