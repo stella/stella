@@ -107,6 +107,9 @@ test("a hold variable refuses its member without the label", () => {
     "held since 2027-01-15T07:00Z",
     `cleared @${"d".repeat(40)} after review`, // a clearance for an earlier head
     `cleared @${headOf(18).toUpperCase()}`, // the grammar is exact lower-case hex
+    ` cleared @${headOf(18)}`, // no leading text
+    `cleared @${headOf(18)}extra`, // the sha must end the token
+    "   ", // whitespace is not empty
   ]) {
     const run = fixture([17, 18, 19]);
     run.variables["STELLA_PR_HOLD_18"] = value;
@@ -159,9 +162,17 @@ test("missing or malformed variable context fails closed before any read", () =>
     );
     expect(run.calls).toEqual([]);
   }
-  const run = fixture([17]);
-  run.variables["STELLA_PR_HOLD_17"] = 1;
-  expect(() => run.run()).toThrow("HOLD_INVALID_VARIABLE");
+  for (const value of [1, null, false, {}]) {
+    const run = fixture([17]);
+    run.variables["STELLA_PR_HOLD_17"] = value;
+    expect(() => run.run()).toThrow("HOLD_INVALID_VARIABLE");
+  }
+});
+
+test("a hold variable of a pull request outside the group is ignored", () => {
+  const run = fixture([17, 18]);
+  run.variables["STELLA_PR_HOLD_99"] = "pending";
+  run.run();
 });
 
 test("a member without a readable head fails closed", () => {

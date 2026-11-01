@@ -117,7 +117,10 @@ export const checkMergeGroupHold = ({
       labelled.push(number);
     // The variable holds on its own: a missing label (never added, removed
     // while a restore failed) or a clearance for an earlier head never passes.
-    const value = holdVariables[`STELLA_PR_HOLD_${number}`] ?? "";
+    // Only an absent variable means "no hold"; any non-string (null included)
+    // is malformed and fails closed.
+    const key = `STELLA_PR_HOLD_${number}`;
+    const value = Object.hasOwn(holdVariables, key) ? holdVariables[key] : "";
     if (typeof value !== "string") return fail("HOLD_INVALID_VARIABLE");
     if (!holdClears(value, head)) variables.push(number);
   }
