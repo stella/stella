@@ -9,9 +9,11 @@ import {
 
 type GeneratedInventoryOptions = { generatedRoot?: string };
 
-// The dispatch aggregator names its complete module set. Restores read it from
-// the artifact before any output exists in the destination checkout. CI runs
-// this before the dependency install, so it imports only built-ins.
+// The dispatch aggregator names its complete module set, one module per
+// catalog entry, so it also names every capability shard CLI runtime
+// preparation writes. Restores read it from the artifact before any output
+// exists in the destination checkout. CI runs this before the dependency
+// install, so it imports only built-ins.
 export const ciGeneratedFiles = (
   root: string,
   { generatedRoot = root }: GeneratedInventoryOptions = {},
@@ -30,7 +32,10 @@ export const ciGeneratedFiles = (
         // The pattern's only group always participates in a match.
         id === undefined
           ? []
-          : [`apps/api/src/mcp/generated/capability-dispatch/${id}.ts`],
+          : [
+              `apps/api/src/mcp/generated/capability-dispatch/${id}.ts`,
+              `packages/cli/capabilities/${id}.json`,
+            ],
       )
     : [];
   const bundles = existsSync(apps)

@@ -34,15 +34,13 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 
 import { parseCapabilityCatalog } from "../../../../../../packages/cli/src/capability-catalog-load";
 import { deriveCapabilityLeaf } from "../../../../../../packages/cli/src/generate-capability-tree";
 import { runCapabilityCommand } from "../../../../../../packages/cli/src/run-capability-command";
 import { respondToMcpLifecycle } from "../../../../../../packages/cli/tests/mcp-test-lifecycle";
-import { buildCapabilityCatalog } from "../../../../scripts/export-capability-catalog";
 import get from "./get";
-
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const CANARY = "verification content sentinel Žluťoučký";

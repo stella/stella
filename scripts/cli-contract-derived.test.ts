@@ -46,6 +46,10 @@ export default createSafeRootHandler({
 const run = (command: readonly string[], cwd: string) => {
   const env = { ...process.env };
   delete env["CI_GENERATED_SOURCES_MANIFEST"];
+  // The clone derives both revisions; CI's produced catalogs describe the
+  // real checkout.
+  delete env["CLI_CONTRACT_HEAD_CATALOG"];
+  delete env["CLI_CONTRACT_BASE_CATALOG"];
   const result = Bun.spawnSync([...command], {
     cwd,
     env: { ...env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" },

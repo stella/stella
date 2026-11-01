@@ -1,14 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import ledger from "../capability-description-ledger.json" with { type: "json" };
+import { repositoryCapabilityCatalog } from "../src/tests/helpers/repository-capability-catalog";
 import {
   computeLedgerDiff,
   findUndescribedIds,
 } from "./capability-description-guard";
-import { buildCapabilityCatalog } from "./export-capability-catalog";
 import { isRecord } from "./lib/enumerate-safe-handlers";
-
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 const readEntries = (
   catalog: unknown,

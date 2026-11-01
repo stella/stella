@@ -4,11 +4,9 @@ import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { API_OAUTH_ROUTES } from "@/api/lib/auth/api-access-token";
 import { isRecord } from "@/api/lib/type-guards";
 import { apiApp } from "@/api/server";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 
-import { buildCapabilityCatalog } from "../../../scripts/export-capability-catalog";
 import { deriveCapabilityId } from "../../../scripts/lib/capability-catalog";
-
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 const REPO_ROOT = new URL("../../../../../", import.meta.url);
 

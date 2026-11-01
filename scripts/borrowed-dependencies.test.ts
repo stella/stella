@@ -20,10 +20,18 @@ test("a borrowing copy resolves workspace packages to its own sources and shares
   const target = path.join(directory, "target");
   try {
     for (const root of [source, target]) {
-      mkdirSync(path.join(root, "packages/reader/src"), { recursive: true });
+      for (const workspace of ["reader", "renderer"]) {
+        mkdirSync(path.join(root, "packages", workspace, "src"), {
+          recursive: true,
+        });
+        writeFileSync(
+          path.join(root, "packages", workspace, "src/index.ts"),
+          `export const owner = ${JSON.stringify(path.basename(root))};\n`,
+        );
+      }
       writeFileSync(
-        path.join(root, "packages/reader/src/index.ts"),
-        `export const owner = ${JSON.stringify(path.basename(root))};\n`,
+        path.join(root, "package.json"),
+        '{"workspaces":["packages/*"]}\n',
       );
     }
     mkdirSync(path.join(source, "node_modules/@stll"), { recursive: true });
@@ -33,19 +41,32 @@ test("a borrowing copy resolves workspace packages to its own sources and shares
       "../../packages/reader",
       path.join(source, "node_modules/@stll/reader"),
     );
-    mkdirSync(path.join(source, "packages/reader/node_modules"));
+    // A workspace's own install links sibling workspaces relative to itself.
+    mkdirSync(path.join(source, "packages/reader/node_modules/@stll"), {
+      recursive: true,
+    });
+    mkdirSync(path.join(source, "packages/reader/node_modules/pinned"));
+    symlinkSync(
+      "../../../renderer",
+      path.join(source, "packages/reader/node_modules/@stll/renderer"),
+    );
 
     borrowDependencies(source, target);
 
-    expect(
-      realpathSync(path.join(target, "node_modules/@stll/reader/src/index.ts")),
-    ).toBe(path.join(target, "packages/reader/src/index.ts"));
-    expect(realpathSync(path.join(target, "node_modules/left-pad"))).toBe(
-      path.join(source, "node_modules/left-pad"),
+    const resolved = (relative: string) =>
+      realpathSync(path.join(target, relative));
+    expect(resolved("node_modules/@stll/reader/src/index.ts")).toBe(
+      path.join(target, "packages/reader/src/index.ts"),
     );
     expect(
-      realpathSync(path.join(target, "packages/reader/node_modules")),
-    ).toBe(path.join(source, "packages/reader/node_modules"));
+      resolved("packages/reader/node_modules/@stll/renderer/src/index.ts"),
+    ).toBe(path.join(target, "packages/renderer/src/index.ts"));
+    expect(resolved("node_modules/left-pad")).toBe(
+      path.join(source, "node_modules/left-pad"),
+    );
+    expect(resolved("packages/reader/node_modules/pinned")).toBe(
+      path.join(source, "packages/reader/node_modules/pinned"),
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

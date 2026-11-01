@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
+import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
 import ledger from "../capability-file-transport-ledger.json" with { type: "json" };
-import {
-  findSuppressedIds,
-  readRepositoryCatalog,
-} from "./capability-file-transport-guard";
+import { repositoryCapabilityCatalog } from "../src/tests/helpers/repository-capability-catalog";
+import { findSuppressedIds } from "./capability-file-transport-guard";
 
-const entries = await readRepositoryCatalog();
+// The entries the runtime generator derived from the handler graph; the CI
+// guard derives the same catalog in memory.
+const entries = parseCapabilityCatalog(repositoryCapabilityCatalog) ?? [];
 
 describe("capability file-transport ledger", () => {
   test("measures the catalog derived from handlers, never an absent artifact", () => {

@@ -23,6 +23,8 @@
     "Tauri counterpart autofix tests": ["@stll/desktop", "scripts/**"],
     "Lockfile release-age guard": ["**"],
     "Restore generated sources": ["**"],
+    "Identify merge base generated sources": ["**"],
+    "Restore merge base generated sources": ["**"],
     "Download generated sources": ["**"],
     "API test timeout guard": [
       "apps/api/**/*.test.ts",

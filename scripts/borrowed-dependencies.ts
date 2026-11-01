@@ -3,10 +3,25 @@ import {
   lstatSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   readlinkSync,
   symlinkSync,
 } from "node:fs";
 import path from "node:path";
+
+// Uses only built-ins: guards that borrow dependencies run before any install.
+class BorrowedDependenciesError extends Error {
+  readonly _tag = "BorrowedDependenciesError";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "BorrowedDependenciesError";
+  }
+}
+
+const panic = (message: string): never => {
+  throw new BorrowedDependenciesError(message);
+};
 
 // A workspace package is a relative link (`@stll/x -> ../../packages/x`), so
 // it keeps resolving inside the copy; every other entry is shared by its
@@ -22,39 +37,81 @@ const lend = (lent: string, borrowed: string): void => {
   symlinkSync(lent, borrowed);
 };
 
-/**
- * Lends `source`'s installed dependencies to a disposable copy of the
- * repository at `target`. Workspace packages resolve to the copy's own
- * sources: one symlink to `source/node_modules` would resolve them, and every
- * generator or bundler reading them, to the lending checkout instead.
- */
-export const borrowDependencies = (source: string, target: string): void => {
-  const modules = path.join(source, "node_modules");
-  const borrowed = path.join(target, "node_modules");
-  mkdirSync(borrowed, { recursive: true });
-  for (const entry of readdirSync(modules)) {
-    const lent = path.join(modules, entry);
+// Directory scans read only untracked install trees, never repository
+// Markdown.
+export const CI_MARKDOWN_READER_INPUTS = ["**/node_modules/**"];
+
+const lendModules = (lentModules: string, borrowedModules: string): void => {
+  mkdirSync(borrowedModules, { recursive: true });
+  for (const entry of readdirSync(lentModules)) {
+    const lent = path.join(lentModules, entry);
     const isScope =
       entry.startsWith("@") &&
       !lstatSync(lent).isSymbolicLink() &&
       lstatSync(lent).isDirectory();
     if (!isScope) {
-      lend(lent, path.join(borrowed, entry));
+      lend(lent, path.join(borrowedModules, entry));
       continue;
     }
-    mkdirSync(path.join(borrowed, entry));
+    mkdirSync(path.join(borrowedModules, entry));
     for (const scoped of readdirSync(lent)) {
-      lend(path.join(lent, scoped), path.join(borrowed, entry, scoped));
+      lend(path.join(lent, scoped), path.join(borrowedModules, entry, scoped));
     }
   }
-  // Workspaces whose dependency versions differ from the root's install them
-  // beside their own sources.
-  for (const workspace of new Bun.Glob(
-    "{apps,packages}/*/node_modules",
-  ).scanSync({ cwd: source, onlyFiles: false })) {
-    const destination = path.join(target, workspace);
-    if (existsSync(path.dirname(destination)) && !existsSync(destination)) {
-      symlinkSync(path.join(source, workspace), destination);
+};
+
+/** Workspace directories named by the root manifest's `<directory>/*` globs. */
+const workspaceDirectories = (source: string): string[] => {
+  const manifest: unknown = JSON.parse(
+    readFileSync(path.join(source, "package.json"), "utf-8"),
+  );
+  const patterns =
+    typeof manifest === "object" &&
+    manifest !== null &&
+    "workspaces" in manifest
+      ? manifest.workspaces
+      : undefined;
+  if (
+    !Array.isArray(patterns) ||
+    !patterns.every((pattern): pattern is string => typeof pattern === "string")
+  ) {
+    return panic("package.json must list its workspaces as strings");
+  }
+  return patterns.flatMap((pattern) => {
+    const parent = /^([\w.-]+(?:\/[\w.-]+)*)\/\*$/u.exec(pattern)?.[1];
+    if (parent === undefined) {
+      return panic(`Unsupported workspace pattern: ${pattern}`);
+    }
+    const directory = path.join(source, parent);
+    return existsSync(directory)
+      ? readdirSync(directory, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory())
+          .map((entry) => path.join(parent, entry.name))
+      : [];
+  });
+};
+
+/**
+ * Lends `source`'s installed dependencies to a disposable copy of the
+ * repository at `target`. Workspace packages resolve to the copy's own
+ * sources, from the root install and from every workspace's own install
+ * alike: a symlink to a lending node_modules directory would resolve them,
+ * and every generator or bundler reading them, to the lending checkout.
+ */
+export const borrowDependencies = (source: string, target: string): void => {
+  lendModules(
+    path.join(source, "node_modules"),
+    path.join(target, "node_modules"),
+  );
+  for (const workspace of workspaceDirectories(source)) {
+    const lent = path.join(source, workspace, "node_modules");
+    const borrowed = path.join(target, workspace, "node_modules");
+    if (
+      existsSync(lent) &&
+      existsSync(path.join(target, workspace)) &&
+      !existsSync(borrowed)
+    ) {
+      lendModules(lent, borrowed);
     }
   }
 };

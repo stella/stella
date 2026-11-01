@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { expandSchemaDefs } from "../../../../packages/cli/src/expand-schema-defs";
-import { buildCapabilityCatalog } from "../export-capability-catalog";
+import { repositoryCapabilityCatalog } from "../../src/tests/helpers/repository-capability-catalog";
 import {
   inputSchemaByteSize,
   MAX_CAPABILITY_SCHEMA_BYTES,
@@ -11,8 +11,6 @@ import {
   serializeCapabilityShard,
 } from "./capability-shards";
 import { compactSchemaDefs, recompactSchemaDefs } from "./compact-schema-defs";
-
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 // THE correctness gate for `$defs` compaction. A compacted schema that admits
 // even slightly more than its source is a schema the CLI accepts and the

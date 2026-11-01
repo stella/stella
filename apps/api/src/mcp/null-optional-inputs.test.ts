@@ -5,11 +5,9 @@ import * as v from "valibot";
 
 import { withNullOptionalsOmitted } from "@/api/mcp/input-normalization";
 import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 
 import { parseCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-load";
-import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
-
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 /**
  * A strict tool-schema client must send every property a tool declares, so it

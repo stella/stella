@@ -5,12 +5,15 @@
 // this narrower guard is the contract-specific backstop.
 //
 // The capability catalog is generated, never committed. When a change touches
-// what the catalog is derived from, the guard derives the merge base's and
-// the head's catalogs from their own sources and compares them, so a handler
-// input-schema or capability change needs release metadata like any other
-// contract change.
+// what the catalog is derived from, the guard compares the merge base's and
+// the head's catalogs, so a handler input-schema or capability change needs
+// release metadata like any other contract change. CI hands it catalogs it
+// already produced: the head's from the restored generated sources, the merge
+// base's from the generated-source cache of that commit. A catalog CI could
+// not hand over is derived from that revision's sources in a private export,
+// and the miss is logged; a derivation that fails fails the guard.
 
-import { rmSync } from "node:fs";
+import { existsSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -313,14 +316,59 @@ const deriveCatalogText = (
 const deriveFromSources: CatalogDeriver = (root, revision) =>
   deriveRevisionCatalog({ repoRoot: root, revision });
 
+/** Shard directories CI already produced for the head and the merge base. */
+export type ProducedCatalogs = {
+  readonly head?: string;
+  readonly base?: string;
+};
+
+const producedCatalogsFromEnvironment = (): ProducedCatalogs => {
+  const head = process.env["CLI_CONTRACT_HEAD_CATALOG"];
+  const base = process.env["CLI_CONTRACT_BASE_CATALOG"];
+  return {
+    ...(head === undefined || head === "" ? {} : { head }),
+    ...(base === undefined || base === "" ? {} : { base }),
+  };
+};
+
+type CatalogTextOptions = {
+  readonly produced: string | undefined;
+  readonly derive: CatalogDeriver;
+  readonly root: string;
+  readonly revision: string;
+};
+
+const catalogText = ({
+  produced,
+  derive,
+  root,
+  revision,
+}: CatalogTextOptions): string => {
+  if (
+    produced !== undefined &&
+    existsSync(produced) &&
+    readdirSync(produced).some((file) => file.endsWith(".json"))
+  ) {
+    return readCapabilityShards(produced);
+  }
+  if (produced !== undefined) {
+    process.stderr.write(
+      `::warning::cli-contract-changeset: no produced capability catalog at ${produced}; deriving ${revision} from its sources.\n`,
+    );
+  }
+  return deriveCatalogText(derive, root, revision);
+};
+
 type ContractGuardOptions = GuardOptions & {
   readonly deriveCatalog?: CatalogDeriver;
+  readonly producedCatalogs?: ProducedCatalogs;
 };
 
 export const runCliContractGuard = ({
   root,
   base,
   deriveCatalog = deriveFromSources,
+  producedCatalogs = producedCatalogsFromEnvironment(),
 }: ContractGuardOptions): number => {
   const mergeBaseResult = git(["merge-base", base, "HEAD"], root);
   if (!mergeBaseResult.ok || mergeBaseResult.stdout.trim() === "") {
@@ -348,8 +396,18 @@ export const runCliContractGuard = ({
   );
   const catalogChanged =
     touchesCatalogSources(changedFiles) &&
-    deriveCatalogText(deriveCatalog, root, mergeBase) !==
-      deriveCatalogText(deriveCatalog, root, "HEAD");
+    catalogText({
+      produced: producedCatalogs.base,
+      derive: deriveCatalog,
+      root,
+      revision: mergeBase,
+    }) !==
+      catalogText({
+        produced: producedCatalogs.head,
+        derive: deriveCatalog,
+        root,
+        revision: "HEAD",
+      });
   return report(
     decideCliContractChange({
       changedFiles: [

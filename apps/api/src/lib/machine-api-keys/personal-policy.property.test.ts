@@ -30,10 +30,7 @@ import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
-
-import { buildCapabilityCatalog } from "../../../scripts/export-capability-catalog";
-
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 
 const roleNames = Object.keys(roles).filter(isMemberRole);
 const roleArbitrary = fc.constantFrom(...roleNames);

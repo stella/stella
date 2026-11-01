@@ -7,13 +7,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
-
-import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
-
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 beforeEach(() => {
   loadOrgSettingsMock.mockClear();

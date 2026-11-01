@@ -46,6 +46,7 @@ import {
   selectableOperations,
 } from "@/api/mcp/write-tool-authority";
 import { callMcpToolOverHttp } from "@/api/tests/helpers/mcp-http-tool-call";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { parseCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-load";
@@ -63,9 +64,6 @@ import type {
   RouteNode,
   ToolAnnotation,
 } from "../../../../packages/cli/src/route-types";
-import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
-
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 // The role matrix for write tools. A write tool's expected outcome for a role
 // is not written down here: it is read from the REST endpoints that perform

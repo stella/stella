@@ -17,10 +17,7 @@ import {
   type McpToolAccessBranch,
   resolveMcpReadClass,
 } from "@/api/mcp/tool-types";
-
-import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
-
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 
 const catalog = parseCatalog(repositoryCapabilityCatalog);
 

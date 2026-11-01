@@ -3,11 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
 
 import { MCP_DOCUMENTS_RESOURCE_SCOPES } from "@/api/mcp/constants";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 
 import { parseCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-load";
-import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
-
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 const capabilityCatalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (capabilityCatalog === null) {

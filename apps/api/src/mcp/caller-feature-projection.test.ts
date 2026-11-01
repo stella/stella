@@ -30,13 +30,10 @@ import { parseCatalog } from "@/api/mcp/capability-tools";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
-
-import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
-
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 const matterId = "a1111111-1111-4111-8111-111111111111";
 const listId = "a2222222-2222-4222-8222-222222222222";

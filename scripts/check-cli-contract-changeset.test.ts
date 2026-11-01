@@ -14,10 +14,19 @@ import {
   decideCliContractChange,
   generatedContractPaths,
   parseCliContractArgs,
+  type ProducedCatalogs,
   runCliContractGuard as runGuardInProcess,
   touchesCatalogSources,
 } from "./check-cli-contract-changeset";
 import { CLI_CONTRACT_SURFACE_PATHS } from "./check-cli-release-coupling";
+
+// Fixture repositories own their catalogs; CI's handoff names the real one.
+const fixtureEnvironment = (() => {
+  const env = { ...process.env };
+  delete env["CLI_CONTRACT_HEAD_CATALOG"];
+  delete env["CLI_CONTRACT_BASE_CATALOG"];
+  return env;
+})();
 
 const runCliContractGuard = ({ root, base }: { root: string; base: string }) =>
   Bun.spawnSync(
@@ -29,7 +38,7 @@ const runCliContractGuard = ({ root, base }: { root: string; base: string }) =>
       "--base",
       base,
     ],
-    { stdout: "pipe", stderr: "pipe" },
+    { stdout: "pipe", stderr: "pipe", env: fixtureEnvironment },
   );
 
 const CATALOG_SHARD = "capabilities/matters.list.json";
@@ -467,8 +476,23 @@ describe("CLI contract changeset guard over derived catalogs", () => {
     runGit(root, ["commit", "-m", `change ${file}`]);
   };
 
-  const guard = (root: string) =>
-    runGuardInProcess({ root, base: "main", deriveCatalog: deriveFromHandler });
+  const guard = (root: string, producedCatalogs: ProducedCatalogs = {}) =>
+    runGuardInProcess({
+      root,
+      base: "main",
+      deriveCatalog: deriveFromHandler,
+      producedCatalogs,
+    });
+
+  // What CI hands over: the shards the restored generated sources hold.
+  const producedCatalog = (root: string, revision: string) => {
+    const derived = deriveFromHandler(root, revision);
+    if (derived.status !== "derived") {
+      throw new TypeError("fixture derivation failed");
+    }
+    derivations.length = 0;
+    return derived.directory;
+  };
 
   test("a handler input-schema change without a changeset fails", () => {
     withSourceFixture((root) => {
@@ -487,6 +511,53 @@ describe("CLI contract changeset guard over derived catalogs", () => {
         '---\n"@stll/cli": patch\n---\n\nAccept a limit.\n',
       );
       expect(guard(root)).toBe(0);
+    });
+  });
+
+  test("catalogs CI produced are compared without deriving either revision", () => {
+    withSourceFixture((root) => {
+      commit(
+        root,
+        HANDLER,
+        handlerSource(
+          '{"type":"object","properties":{"limit":{"type":"number"}}}',
+        ),
+      );
+      const base = producedCatalog(root, "main");
+      const head = producedCatalog(root, "HEAD");
+      try {
+        expect(guard(root, { base, head })).toBe(1);
+        expect(derivations).toEqual([]);
+      } finally {
+        rmSync(base, { recursive: true, force: true });
+        rmSync(head, { recursive: true, force: true });
+      }
+    });
+  });
+
+  test("a base catalog cache miss derives only the merge base from its sources", () => {
+    withSourceFixture((root) => {
+      commit(
+        root,
+        HANDLER,
+        handlerSource(
+          '{"type":"object","properties":{"limit":{"type":"number"}}}',
+        ),
+      );
+      const mergeBase = Bun.spawnSync(["git", "merge-base", "main", "HEAD"], {
+        cwd: root,
+        stdout: "pipe",
+      })
+        .stdout.toString()
+        .trim();
+      const head = producedCatalog(root, "HEAD");
+      const missing = path.join(root, "missing-base-catalog");
+      try {
+        expect(guard(root, { base: missing, head })).toBe(1);
+        expect(derivations).toEqual([mergeBase]);
+      } finally {
+        rmSync(head, { recursive: true, force: true });
+      }
     });
   });
 

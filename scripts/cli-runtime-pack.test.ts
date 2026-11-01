@@ -55,8 +55,9 @@ const CATALOG_DIRECTORY = "capabilities";
 // borrowed from the real checkout; workspace packages resolve to the export.
 const EXPORTED_PATHS = ["."];
 const COMPILER_WRAPPER = "packages/scripts/src/tsc-native.ts";
-// The exported tree is the whole revision, so scans read any repository file.
-export const CI_MARKDOWN_READER_INPUTS = ["**"];
+// Scans list the exported revision's paths; the only Markdown the pack
+// consumes is the CLI package's own.
+export const CI_MARKDOWN_READER_INPUTS = ["packages/cli/**"];
 
 const RUNTIME_GENERATOR =
   GENERATORS.find(({ id }) => id === "cli-runtime") ??
@@ -327,22 +328,21 @@ const exportedFiles = ({ root }: Tree): string[] =>
     .filter((file) => !file.split("/").includes("node_modules"))
     .toSorted();
 
+// A submodule is a commit entry, not a file: `git archive` exports no bytes
+// for it, so only blobs belong to the exported inventory.
 const revisionFiles = ({ revision }: Tree): string[] =>
   run(
-    [
-      "git",
-      "ls-tree",
-      "-r",
-      "-z",
-      "--name-only",
-      revision,
-      "--",
-      ...EXPORTED_PATHS,
-    ],
+    ["git", "ls-tree", "-r", "-z", revision, "--", ...EXPORTED_PATHS],
     REPO_ROOT,
   )
     .split("\0")
-    .filter(Boolean)
+    .flatMap((entry) => {
+      const separator = entry.indexOf("\t");
+      const [, type] = entry.slice(0, separator).split(" ");
+      return separator === -1 || type !== "blob"
+        ? []
+        : [entry.slice(separator + 1)];
+    })
     .toSorted();
 
 describe("generated imports", () => {

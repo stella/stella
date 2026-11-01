@@ -62,9 +62,11 @@ const fixture = () => {
       "add",
       "input.ts",
       "packages/mcp-apps/src/fixture/app.html",
+      // Per-capability outputs are ignored, untracked files in a checkout.
       ...ciGeneratedFiles(root).filter(
         (file) =>
-          !file.startsWith("apps/api/src/mcp/generated/capability-dispatch/"),
+          !file.startsWith("apps/api/src/mcp/generated/capability-dispatch/") &&
+          !file.startsWith("packages/cli/capabilities/"),
       ),
     ],
     [
@@ -295,17 +297,16 @@ test("restore validates the whole artifact before any writes and restores every 
   }
 });
 
-test("a clean checkout restores every dispatch module without npm capability shards", () => {
+test("a clean checkout restores every dispatch module with its capability shard", () => {
   const { root, manifest, write } = fixture();
   const source = path.join(root, "artifact");
   const outputs = ciGeneratedFiles(root);
   const module =
     "apps/api/src/mcp/generated/capability-dispatch/fixture.read.ts";
+  const shard = "packages/cli/capabilities/fixture.read.json";
   try {
     expect(outputs).toContain(module);
-    expect(() =>
-      readFileSync(path.join(root, "packages/cli/capabilities")),
-    ).toThrow("ENOENT");
+    expect(outputs).toContain(shard);
     write("artifact/manifest.json", JSON.stringify(manifest));
     for (const file of outputs) {
       write(
@@ -335,6 +336,9 @@ test("a clean checkout restores every dispatch module without npm capability sha
     expect(verifyPreparedGeneratedFiles(root, manifest)).toEqual(manifest);
     expect(readFileSync(path.join(root, module), "utf-8")).toBe(
       `prepared:${module}\n`,
+    );
+    expect(readFileSync(path.join(root, shard), "utf-8")).toBe(
+      `prepared:${shard}\n`,
     );
   } finally {
     rmSync(root, { recursive: true, force: true });

@@ -3,10 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { isRecord } from "@/api/lib/type-guards";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
-
-import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
-
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 
 const capabilityCatalog = repositoryCapabilityCatalog.map((entry) => {
   if (!isRecord(entry)) {

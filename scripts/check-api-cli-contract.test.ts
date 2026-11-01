@@ -130,7 +130,10 @@ describe("API and CLI release contract", () => {
     expect(cliPackage.scripts["codegen:version"]).toBe(
       "bun run src/codegen-version.ts",
     );
-    expect(cliPackage.scripts.codegen).toContain(
+    // Full codegen derives the catalog, then regenerates the registry
+    // projections and the baked version.
+    expect(cliPackage.scripts.codegen).toContain("bun run codegen:registry");
+    expect(cliPackage.scripts["codegen:registry"]).toContain(
       "bun run src/codegen-version.ts",
     );
 

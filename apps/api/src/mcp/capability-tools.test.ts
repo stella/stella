@@ -60,16 +60,13 @@ import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
   createSelectQueryMock,
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
-
-import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
-
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 beforeEach(() => {
   consumeRateLimitMock.mockReset();

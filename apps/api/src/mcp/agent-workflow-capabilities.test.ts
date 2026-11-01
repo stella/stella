@@ -17,13 +17,11 @@ import {
 } from "@/api/lib/feature-access/registry";
 import type { McpRequestResources } from "@/api/mcp/context";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { expandSchemaDefs } from "../../../../packages/cli/src/expand-schema-defs.ts";
-import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
-
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 /**
  * The redline, memory and notification handlers agents reach through the

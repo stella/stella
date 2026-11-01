@@ -2,10 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { parseCatalog } from "@/api/mcp/capability-tools";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
-
-import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
-
-const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 
 // Every write capability states what it announces to open tabs (`realtime` on
 // its handler config): a resource set, or `noResourceSetUpdates(reason)`. The

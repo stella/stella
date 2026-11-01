@@ -6,7 +6,7 @@ import path from "node:path";
 import { ciGeneratedFiles } from "./generated-file-inventory";
 import { CI_GENERATED_FILES } from "./generated-files";
 
-test("inventories MCP source outputs and dispatch aggregator imports without npm shards", () => {
+test("inventories MCP source outputs and each dispatch aggregator import with its capability shard", () => {
   const root = mkdtempSync(path.join(tmpdir(), "generated-inventory-"));
   const write = (file: string, source = "") => {
     const destination = path.join(root, file);
@@ -25,6 +25,7 @@ test("inventories MCP source outputs and dispatch aggregator imports without npm
     const expected = [
       ...CI_GENERATED_FILES,
       "apps/api/src/mcp/generated/capability-dispatch/example.read.ts",
+      "packages/cli/capabilities/example.read.json",
       "packages/mcp-apps/src/reader/generated/app.html.txt",
       "packages/mcp-apps/src/reader/generated/app.js.txt",
       "packages/mcp-apps/src/reader/generated/app.css.txt",
@@ -50,6 +51,7 @@ test("inventories MCP source outputs and dispatch aggregator imports without npm
         (file) =>
           file !==
             "apps/api/src/mcp/generated/capability-dispatch/example.read.ts" &&
+          file !== "packages/cli/capabilities/example.read.json" &&
           !file.startsWith("packages/mcp-apps/src/reader/generated/"),
       ),
     );

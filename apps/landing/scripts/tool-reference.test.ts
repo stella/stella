@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+// timeout: Turbo resolves the whole workspace task graph for its dry run; the
+// test awaits that process, no sleeps.
 test("landing compiler tasks consume committed documentation without API generators", () => {
   const run = Bun.spawnSync(
     [
@@ -62,4 +64,4 @@ test("landing compiler tasks consume committed documentation without API generat
     "@stll/landing#transit",
     "@stll/landing#typecheck",
   ]);
-});
+}, 30_000);
