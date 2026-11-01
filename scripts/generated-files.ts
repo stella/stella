@@ -385,6 +385,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/analytics-config/src/index.ts",
     "packages/api-contract/src/*",
     "packages/auth-model/src/contract.ts",
+    "packages/auth-model/src/invitation-sections.ts",
     "packages/boe/src/*",
     "packages/business-registries/src/default-formats.ts",
     "packages/business-registries/src/format-clauses.ts",
