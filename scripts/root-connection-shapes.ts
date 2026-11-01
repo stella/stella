@@ -1517,6 +1517,109 @@ export const countRootConnectionTypeImports = (
 ): number => countRootConnectionReferences(content, file).type;
 
 const graphPath = nodePath.posix;
+
+/** The measured source a local specifier names, or its missing identity. */
+const resolveGraphModule = ({
+  sources,
+  from,
+  specifier,
+}: {
+  sources: ReadonlyMap<string, string>;
+  from: string;
+  specifier: string;
+}): string | undefined => {
+  if (specifier.endsWith(".json")) {
+    return undefined;
+  }
+  let base: string;
+  if (specifier.startsWith("@/api/")) {
+    base = `apps/api/src/${specifier.slice(6)}`;
+  } else if (specifier.startsWith(".")) {
+    base = graphPath.join(graphPath.dirname(from), specifier);
+  } else {
+    return undefined;
+  }
+  for (const candidate of [
+    base,
+    `${base}.ts`,
+    `${base}.tsx`,
+    `${base}.mts`,
+    `${base}.cts`,
+    `${base}/index.ts`,
+  ]) {
+    if (sources.has(candidate)) {
+      return candidate;
+    }
+  }
+  const withoutJs = base.replace(/\.[cm]?jsx?$/u, "");
+  for (const extension of [".ts", ".tsx", ".mts", ".cts"]) {
+    if (sources.has(`${withoutJs}${extension}`)) {
+      return `${withoutJs}${extension}`;
+    }
+  }
+  // Keep the missing local identity: resolving a called export must reject it.
+  return base.endsWith(".ts") ? base : `${base}.ts`;
+};
+
+/**
+ * Every measured source a runtime entry root reaches through local static,
+ * re-exported or literal dynamic imports. A historical tree may predate a
+ * root, so absent roots contribute nothing; the runtime entry census keeps
+ * the current list complete and present.
+ */
+export const reachableGraphSources = ({
+  sources,
+  roots,
+}: {
+  sources: ReadonlyMap<string, string>;
+  roots: readonly string[];
+}): ReadonlySet<string> => {
+  const reached = new Set<string>();
+  const pending = roots.filter((root) => sources.has(root));
+  for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
+    if (reached.has(file)) {
+      continue;
+    }
+    reached.add(file);
+    const follow = (specifier: string | undefined) => {
+      const target =
+        specifier === undefined
+          ? undefined
+          : resolveGraphModule({ sources, from: file, specifier });
+      if (target !== undefined && sources.has(target)) {
+        pending.push(target);
+      }
+    };
+    const { program } = parseSource(file, sources.get(file) ?? "");
+    for (const statement of program.body) {
+      if (statement.type === "ImportDeclaration") {
+        if (statement.importKind !== "type") {
+          follow(statement.source.value);
+        }
+      } else if (
+        (statement.type === "ExportNamedDeclaration" ||
+          statement.type === "ExportAllDeclaration") &&
+        statement.source !== null &&
+        statement.exportKind !== "type"
+      ) {
+        follow(statement.source.value);
+      }
+    }
+    walk(program, (node) => {
+      if (node.type === "ImportExpression") {
+        follow(
+          node.source.type === "Literal" &&
+            typeof node.source.value === "string"
+            ? node.source.value
+            : undefined,
+        );
+      }
+      return undefined;
+    });
+  }
+  return reached;
+};
+
 const DATA_IMPORT_TYPES = new Set(["text", "json", "file"]);
 const isDataImport = ({
   attributes,
@@ -2201,39 +2304,8 @@ class OrgWriteGraphEngine {
   }: {
     from: string;
     specifier: string;
-  }): string | undefined => {
-    if (specifier.endsWith(".json")) {
-      return undefined;
-    }
-    let base: string;
-    if (specifier.startsWith("@/api/")) {
-      base = `apps/api/src/${specifier.slice(6)}`;
-    } else if (specifier.startsWith(".")) {
-      base = graphPath.join(graphPath.dirname(from), specifier);
-    } else {
-      return undefined;
-    }
-    for (const candidate of [
-      base,
-      `${base}.ts`,
-      `${base}.tsx`,
-      `${base}.mts`,
-      `${base}.cts`,
-      `${base}/index.ts`,
-    ]) {
-      if (this.#options.sources.has(candidate)) {
-        return candidate;
-      }
-    }
-    const withoutJs = base.replace(/\.[cm]?jsx?$/u, "");
-    for (const extension of [".ts", ".tsx", ".mts", ".cts"]) {
-      if (this.#options.sources.has(`${withoutJs}${extension}`)) {
-        return `${withoutJs}${extension}`;
-      }
-    }
-    // Keep the missing local identity: resolving a called export must reject it.
-    return base.endsWith(".ts") ? base : `${base}.ts`;
-  };
+  }): string | undefined =>
+    resolveGraphModule({ sources: this.#options.sources, from, specifier });
 
   readonly #alternatives = (value: OrgGraphValue): readonly OrgGraphValue[] => {
     if (value.kind === "union") {

@@ -53,6 +53,7 @@ import {
   walk,
 } from "../packages/scripts/src/syntax-tree";
 import { treeBaseRevision } from "../packages/scripts/src/tree-base-revision";
+import { API_RUNTIME_ENTRIES } from "./api-runtime-entries";
 import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
   collectLintDirectives,
@@ -92,6 +93,7 @@ import {
   countRootConnectionShapes,
   countRootConnectionTypeImports,
   findUnscopedOrgWrites,
+  reachableGraphSources,
   scanOrgWriteGraph,
 } from "./root-connection-shapes";
 import { schemaIntrospectionPaths } from "./schema-introspection";
@@ -3625,11 +3627,29 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       for (const [file, content] of sources) {
         graphSources.set(file, content);
       }
+      // Only modules a runtime process reaches can write in production; a
+      // declared door or owner outside that closure is not an entry, but it
+      // must still exist.
+      const reachable = reachableGraphSources({
+        sources,
+        roots: API_RUNTIME_ENTRIES.map(({ file }) => file),
+      });
+      for (const file of rootDoorFiles) {
+        if (!graphSources.has(file)) {
+          panic(
+            `Unresolved organization write graph: missing root-door owner ${file}`,
+          );
+        }
+      }
       const graph = scanOrgWriteGraph({
         sources: graphSources,
-        entryFiles: new Set(sourceFiles),
-        rootDoorFiles,
-        policyEntryFiles,
+        entryFiles: reachable,
+        rootDoorFiles: new Set(
+          [...rootDoorFiles].filter((file) => reachable.has(file)),
+        ),
+        policyEntryFiles: new Set(
+          [...policyEntryFiles].filter((file) => reachable.has(file)),
+        ),
         ...analysisInputs,
       });
       const entryFiles = graph.entries

@@ -17,6 +17,7 @@
   "packages/scripts/src/syntax-tree.ts",
   "packages/scripts/src/tree-base-revision.ts",
   "packages/scripts/src/typescript-program.ts",
+  "scripts/api-runtime-entries.ts",
   "scripts/db-await-in-loop.ts",
   "scripts/generated-artifacts.ts",
   "scripts/global-system-work-census.ts",

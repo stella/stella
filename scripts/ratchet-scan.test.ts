@@ -53,8 +53,17 @@ const seedOrgWriteGraphFixture = (
     Object.keys(registryTables)
       .map((name) => `${name}: { table: ${name} }`)
       .join(", ");
+  // The runtime root that starts every entry module, as the server does.
+  const server = entryFiles
+    .filter((file) => file.startsWith("apps/api/src/"))
+    .map(
+      (file) =>
+        `import "@/api/${file.slice("apps/api/src/".length, -".ts".length)}";`,
+    )
+    .join("\n");
   const fixtureSources = {
     "apps/api/src/db/root.ts": "export const rootDb = {};",
+    "apps/api/src/server.ts": server,
     "apps/api/src/db/org-scope.ts": "export const withOrgScope = () => {};",
     "apps/api/src/db/schema.ts": [
       'import { pgTable, text } from "drizzle-orm/pg-core";',
