@@ -33,7 +33,9 @@ const { IntlProvider } = await import("use-intl");
 const { ToastProvider, stellaToast } = await import("@stll/ui/toast");
 const { sessionOptions } = await import("@/lib/auth-query-options");
 const { useCreateContact } = await import("@/lib/contacts/mutations");
-const { installSessionExpiredNotice, resetSessionExpiredNoticeForTests } =
+const { installSessionExpiredNotice } =
+  await import("@/lib/errors/session-expired-install");
+const { resetSessionExpiredNoticeForTests } =
   await import("@/lib/errors/session-expired");
 const { createAppQueryClient } = await import("@/lib/react-query");
 
