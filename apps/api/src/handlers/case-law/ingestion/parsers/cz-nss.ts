@@ -31,11 +31,15 @@ import { isComment, isTag, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
+import { labelledHeading } from "@stll/legal-ast/case-law-heading";
 import { closedQuotationParagraphStarts } from "@stll/legal-ast/closed-quotation-paragraphs";
 import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+  CZ_TAKTO,
+  CZ_TAKTO_TAIL_RE,
+  isCzechTaktoLine,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: The output is typed as a decision document AST; the emitted AST is unchanged.
@@ -48,9 +52,15 @@ import type {
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import { inlineStyleDeclaresProperty } from "@/api/lib/legal-search/document-builders/inline-style";
+import {
+  inlineStyleDeclaresProperty,
+  inlineStyleValue,
+} from "@/api/lib/legal-search/document-builders/inline-style";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
-import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
+import {
+  collapseLetterSpacing,
+  withAttestedLetterSpacing,
+} from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   continuesAcrossPageBreak,
   CZ_RUNNING_HEADER_SOURCE,
@@ -95,11 +105,14 @@ export const parseNssDecisionHtml = (
 ): ParseNssDecisionOutput => {
   const $ = cheerio.load(input.html);
   const chunks = extractChunks($);
-  const blocks = courtParagraphNumbers(classifyChunks(chunks), {
-    parser: "cz-nss",
-    caseNumber: input.caseNumber,
-    url: input.sourceUrl,
-  });
+  const blocks = courtParagraphNumbers(
+    withAttestedLetterSpacing(classifyChunks(chunks)),
+    {
+      parser: "cz-nss",
+      caseNumber: input.caseNumber,
+      url: input.sourceUrl,
+    },
+  );
 
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
@@ -418,28 +431,136 @@ const toRoman = (n: number): string => {
   return result;
 };
 
-const paragraphLayoutOf = (style: string): PChunk["paragraphLayout"] => {
-  const indentDeclaration = style
-    .split(";")
-    .find((declaration) => declaration.trimStart().startsWith("text-indent:"));
-  const indentValue = indentDeclaration
-    ?.slice(indentDeclaration.indexOf(":") + 1)
-    .trim();
-  const indent = parseDecimalToken(
-    indentValue?.endsWith("pt") ? indentValue.slice(0, -2) : indentValue,
-  );
-  const startsIndented = Result.isOk(indent) && indent.value > 0;
-  const unindented =
-    indentDeclaration === undefined ||
-    (Result.isOk(indent) && indent.value === 0);
-  if (startsIndented) {
+const TEXT_ALIGN_VALUES: ReadonlySet<string> = new Set([
+  "left",
+  "right",
+  "center",
+  "justify",
+  "start",
+  "end",
+]);
+
+/** The alignment an element's own style gives it, read as the cascade reads it. */
+const textAlignOf = (node: AnyNode | undefined): string | undefined =>
+  node !== undefined && isTag(node)
+    ? inlineStyleValue(node, (property, value) =>
+        property === "text-align" && TEXT_ALIGN_VALUES.has(value)
+          ? { value }
+          : undefined,
+      )?.value
+    : undefined;
+
+const styleCentres = (node: AnyNode | undefined): boolean =>
+  textAlignOf(node) === "center";
+
+/**
+ * How a paragraph's first line sits: indented, or flush and justified as a
+ * paragraph continued from the previous page. An indent this reader cannot
+ * measure (`1em`) leaves the layout unknown.
+ */
+const paragraphLayoutOf = (
+  node: AnyNode | undefined,
+): PChunk["paragraphLayout"] => {
+  const indent =
+    node !== undefined && isTag(node)
+      ? inlineStyleValue(node, (property, value) => {
+          if (property !== "text-indent") {
+            return undefined;
+          }
+          const points = parseDecimalToken(
+            value.endsWith("pt") ? value.slice(0, -2) : value,
+          );
+          return { value: Result.isOk(points) ? points.value : null };
+        })
+      : undefined;
+  if (indent !== undefined && indent.value !== null && indent.value > 0) {
     return "first-line";
   }
-  if (unindented && style.includes("text-align:justify")) {
-    return "continuation";
-  }
-  return "unknown";
+  const unindented = indent === undefined || indent.value === 0;
+  return unindented && textAlignOf(node) === "justify"
+    ? "continuation"
+    : "unknown";
 };
+
+const FONT_WEIGHT_KEYWORD_RE = /^(?:normal|bold|bolder|lighter)$/u;
+const NUMERIC_FONT_WEIGHT_RE = /^\d{1,4}$/u;
+const BOLD_WEIGHT = 600;
+/** CSS rejects a numeric weight outside 1–1000; the earlier one stays. */
+const MAX_FONT_WEIGHT = 1000;
+
+const fontWeightBoldness = (value: string): boolean | undefined => {
+  if (FONT_WEIGHT_KEYWORD_RE.test(value)) {
+    return value === "bold" || value === "bolder";
+  }
+  if (!NUMERIC_FONT_WEIGHT_RE.test(value)) {
+    return undefined;
+  }
+  const weight = parseDecimalToken(value).unwrapOr(0);
+  return weight >= 1 && weight <= MAX_FONT_WEIGHT
+    ? weight >= BOLD_WEIGHT
+    : undefined;
+};
+
+/**
+ * Whether an element's own style sets it bold (`true`) or not (`false`), read
+ * as the cascade reads it; `undefined` when it declares no weight.
+ */
+const ownBoldness = (node: AnyNode | undefined): boolean | undefined =>
+  node !== undefined && isTag(node)
+    ? inlineStyleValue(node, (property, value) => {
+        if (property !== "font-weight") {
+          return undefined;
+        }
+        const bold = fontWeightBoldness(value);
+        return bold === undefined ? undefined : { value: bold };
+      })?.value
+    : undefined;
+
+/** Elements a browser sets bold by default. */
+const BOLD_TAGS: ReadonlySet<string> = new Set(["b", "strong"]);
+
+const SOFT_HYPHEN_OR_SPACE = /[\s\u00ad]/gu;
+
+/** A block reads as bold when nearly all of its text is set bold. */
+const BOLD_SHARE = 0.7;
+
+const NON_SPACE = /\S/gu;
+
+/**
+ * How many visible non-space characters of a block are set bold: each text
+ * takes the weight of its nearest element that declares one, as CSS inherits
+ * it, so normal text inside a bold span is not counted.
+ */
+const boldCharacterCount = (root: AnyNode | undefined): number => {
+  let count = 0;
+  const visit = (node: AnyNode, bold: boolean): void => {
+    if (isText(node)) {
+      // `plainText` drops soft hyphens, so the count does too.
+      count += bold ? node.data.replaceAll(SOFT_HYPHEN_OR_SPACE, "").length : 0;
+      return;
+    }
+    if (!isTag(node) || isExcludedHtmlTag(node.name)) {
+      return;
+    }
+    const weight = ownBoldness(node) ?? (BOLD_TAGS.has(node.name) || bold);
+    for (const child of node.children) {
+      visit(child, weight);
+    }
+  };
+  if (root !== undefined) {
+    visit(root, false);
+  }
+  return count;
+};
+
+/**
+ * Whether nearly all of a block's visible text is set bold. `plainText` is
+ * trimmed and non-empty, so it holds a non-space character and a bold block
+ * holds at least one bold character.
+ */
+const mostlyBold = (node: AnyNode | undefined, plainText: string): boolean =>
+  boldCharacterCount(node) >=
+  (plainText.match(NON_SPACE)?.length ?? 0) * BOLD_SHARE;
 
 /**
  * One leaf paragraph or <div> as a chunk, its heading cues read from the
@@ -457,14 +578,11 @@ const styledBlockChunk = (
     return null;
   }
 
-  const boldText = visibleHtmlText(
-    $el.find("span[style*='font-weight:bold']"),
-  ).trim();
   return {
     inlines,
     plainText,
-    centered: style.includes("text-align:center"),
-    bold: boldText.length > 0 && boldText.length >= plainText.length * 0.7,
+    centered: styleCentres($el.get(0)),
+    bold: mostlyBold($el.get(0), plainText),
     letterSpacing: $el
       .find("span")
       .addBack()
@@ -473,7 +591,7 @@ const styledBlockChunk = (
         (el) => isTag(el) && inlineStyleDeclaresProperty(el, "letter-spacing"),
       ),
     fontSize: parseFontSize(style),
-    paragraphLayout: paragraphLayoutOf(style),
+    paragraphLayout: paragraphLayoutOf($el.get(0)),
     kind: "paragraph",
     listItemIndex: null,
     decimalList: false,
@@ -655,11 +773,12 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           return;
         }
 
+        // A centred bold item is the court's numbered section heading.
         chunks.push({
           inlines,
           plainText,
-          centered: false,
-          bold: false,
+          centered: styleCentres(liEl),
+          bold: mostlyBold(liEl, plainText),
           letterSpacing: false,
           fontSize: 12,
           paragraphLayout: "unknown",
@@ -757,10 +876,13 @@ const stripPageFurniture = (chunk: PChunk): ChunkContent | null => {
  * letters. Comparing the compact form keeps that presentation noise out of
  * the AST while preserving one canonical title for readers and search.
  */
+/** The formula beside the title, in the one spelling the AST carries. */
+const OPENING_FORMULA = "JMÉNEM REPUBLIKY";
+
 const DECISION_TITLE_BY_COMPACT_TEXT = {
   ROZSUDEK: "ROZSUDEK",
   USNESENÍ: "USNESENÍ",
-  JMÉNEMREPUBLIKY: "JMÉNEM REPUBLIKY",
+  JMÉNEMREPUBLIKY: OPENING_FORMULA,
 } as const;
 
 type CanonicalDecisionTitle =
@@ -782,10 +904,6 @@ const canonicalDecisionTitle = (
     ? DECISION_TITLE_BY_COMPACT_TEXT[compact]
     : null;
 };
-
-/** "takto:" alone, or at the end of introductory prose. */
-const TAKTO_STANDALONE_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
-const TAKTO_SUFFIX_RE = /(?:^|\s)t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
 
 /** "Odůvodnění:" separator. */
 const ODUVODNENI_RE =
@@ -973,6 +1091,72 @@ const finishesCutParagraph = ({
   return true;
 };
 
+/** An Arabic numeral and a title; Roman section titles have their own reader. */
+const ARABIC_LABEL_RE = /^\d/u;
+
+/**
+ * A centred bold numbered line after Odůvodnění is the court's numbered
+ * section heading (`1. Vymezení věci`), not a numbered paragraph. Word sets
+ * it as a list item or, for a section it renumbered by hand, as a paragraph
+ * that prints its own numeral.
+ */
+const numberedSectionHeading = (
+  chunk: PChunk,
+  content: ChunkContent,
+  phase: DocumentPhase,
+) => {
+  if (!chunk.centered || !chunk.bold || !REASONING_PHASES.has(phase)) {
+    return null;
+  }
+  if (chunk.listItemIndex !== null) {
+    return chunk.decimalList
+      ? labelledHeading(withListMarker(chunk, content).plainText)
+      : null;
+  }
+  return ARABIC_LABEL_RE.test(content.plainText)
+    ? labelledHeading(content.plainText)
+    : null;
+};
+
+/** How the preamble hands over to the operative part, if this line does. */
+const taktoLead = (
+  phase: DocumentPhase,
+  plainText: string,
+): "line" | "tail" | null => {
+  if (phase !== DOCUMENT_PHASE.PREAMBLE) {
+    return null;
+  }
+  if (isCzechTaktoLine(plainText)) {
+    return "line";
+  }
+  return CZ_TAKTO_TAIL_RE.test(plainText) ? "tail" : null;
+};
+
+/** The title is a heading; the formula is the court's wording under it. */
+const decisionTitleBlock = (
+  title: CanonicalDecisionTitle,
+  id: string,
+  index: number,
+): Block =>
+  title === OPENING_FORMULA
+    ? {
+        id,
+        anchorId: makeAnchorId("p", index),
+        type: "paragraph",
+        role: "intro",
+        inlines: [{ type: "text", text: title }],
+        plainText: title,
+      }
+    : {
+        id,
+        anchorId: makeAnchorId("h", index),
+        type: "heading",
+        level: 1,
+        role: "decision-title",
+        inlines: [{ type: "text", text: title }],
+        plainText: title,
+      };
+
 const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
   let blockCounter = 0;
   const makeBlockId = (): string => {
@@ -1073,37 +1257,25 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       continue;
     }
 
-    // Decision title: ROZSUDEK, USNESENÍ, JMÉNEM REPUBLIKY
+    // Decision title (ROZSUDEK, USNESENÍ) or the formula beneath it
     if (decisionTitle !== null) {
       sawTitle = true;
       blockIndex += 1;
-      blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("h", blockIndex),
-        type: "heading",
-        level: 1,
-        role: "decision-title",
-        inlines: [{ type: "text", text: decisionTitle }],
-        plainText: decisionTitle,
-      });
+      blocks.push(decisionTitleBlock(decisionTitle, makeBlockId(), blockIndex));
       continue;
     }
 
     // "takto:" separator (centered, bold, letter-spaced)
-    if (
-      phase === DOCUMENT_PHASE.PREAMBLE &&
-      TAKTO_STANDALONE_RE.test(plainText)
-    ) {
+    if (taktoLead(phase, plainText) === "line") {
       phase = DOCUMENT_PHASE.HOLDING;
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
-        anchorId: makeAnchorId("h", blockIndex),
-        type: "heading",
-        level: 2,
-        role: "section-heading",
-        inlines: [{ type: "text", text: "takto:" }],
-        plainText: "takto:",
+        anchorId: makeAnchorId("p", blockIndex),
+        type: "paragraph",
+        role: "intro",
+        inlines: [{ type: "text", text: CZ_TAKTO }],
+        plainText: CZ_TAKTO,
       });
       continue;
     }
@@ -1111,7 +1283,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // Some exports keep the introductory sentence and separator in one
     // paragraph. Preserve that prose as prose, then open the same structural
     // zone for the ordered or unnumbered holdings that follow it.
-    if (phase === DOCUMENT_PHASE.PREAMBLE && TAKTO_SUFFIX_RE.test(plainText)) {
+    if (taktoLead(phase, plainText) === "tail") {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -1273,6 +1445,20 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
         });
         continue;
       }
+    }
+
+    const sectionHeading = numberedSectionHeading(chunk, content, phase);
+    if (sectionHeading !== null) {
+      blockIndex += 1;
+      blocks.push({
+        id: makeBlockId(),
+        anchorId: makeAnchorId("h", blockIndex),
+        type: "heading",
+        level: 3,
+        inlines: [{ type: "text", text: sectionHeading.text }],
+        plainText: sectionHeading.text,
+      });
+      continue;
     }
 
     // <ol> list items: holding paragraphs before Odůvodnění,

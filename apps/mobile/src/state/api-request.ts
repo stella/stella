@@ -1,7 +1,8 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import type { SignedOutError, TokenError } from "@/connection/errors";
+import { SignedOutError } from "@/connection/errors";
+import type { TokenError } from "@/connection/errors";
 import { fetchWithTimeout } from "@/connection/http";
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
@@ -165,7 +166,14 @@ export const requestApi = async <TSchema extends v.GenericSchema>({
   readonly fetch: Fetch;
   readonly source: AccessTokenSource;
 }): Promise<Result<v.InferOutput<TSchema>, ApiError>> => {
-  const url = `${source.session().serverUrl}${path}`;
+  const session = source.session();
+  if (session === undefined) {
+    return Result.err(
+      new SignedOutError({ message: "The session is no longer current" }),
+    );
+  }
+  const { serverUrl } = session;
+  const url = `${serverUrl}${path}`;
   return await withAccessToken(
     source,
     async (token) => await requestJson(fetch, url, token, request),

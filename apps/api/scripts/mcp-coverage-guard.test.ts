@@ -6,11 +6,82 @@ import {
   computeBaselineDiff,
   enumerateModuleEndpoints,
   findHiddenEndpointMismatches,
+  findRealtimeMismatches,
   findStaleAllowlistEntries,
   isEndpointModule,
   parseExposure,
   toEndpointIdentifier,
 } from "./mcp-coverage-guard";
+
+describe("findRealtimeMismatches", () => {
+  const entitySet = { scope: "workspace", resourceTypes: "entity" };
+  const route = (
+    id: string,
+    by: string,
+    config: Record<string, unknown>,
+  ): Parameters<typeof findRealtimeMismatches>[0]["endpoints"][number] => ({
+    id,
+    exposure: { type: "covered", by },
+    config,
+  });
+
+  test("accepts a tool that announces what its routes declare", () => {
+    expect(
+      findRealtimeMismatches({
+        endpoints: [route("rename", "save_document", { realtime: entitySet })],
+        toolRealtime: { save_document: [entitySet] },
+      }),
+    ).toEqual([]);
+  });
+
+  test("flags a write route whose tool announces nothing", () => {
+    expect(
+      findRealtimeMismatches({
+        endpoints: [route("rename", "save_document", { realtime: entitySet })],
+        toolRealtime: { save_document: [] },
+      }),
+    ).toEqual(["rename: save_document does not announce workspace:entity"]);
+  });
+
+  test("flags a tool announcing what no route declares", () => {
+    expect(
+      findRealtimeMismatches({
+        endpoints: [],
+        toolRealtime: { save_document: [entitySet] },
+      }),
+    ).toEqual(["save_document: no route declares workspace:entity"]);
+  });
+
+  test("reads a route's every resource type, and skips read routes", () => {
+    const multi = {
+      scope: "workspace",
+      resourceTypes: ["entity", "field"],
+    };
+    expect(
+      findRealtimeMismatches({
+        endpoints: [
+          route("placement", "save_task", { realtime: multi }),
+          route("list", "save_task", {
+            access: "read",
+            realtime: { scope: "workspace", resourceTypes: "contact" },
+          }),
+        ],
+        toolRealtime: { save_task: [entitySet] },
+      }),
+    ).toEqual(["placement: save_task does not announce workspace:field"]);
+  });
+
+  test("treats an explicit no-announcement as nothing to announce", () => {
+    expect(
+      findRealtimeMismatches({
+        endpoints: [
+          route("a", "t", { realtime: { scope: "none", reason: "x" } }),
+        ],
+        toolRealtime: { t: [{ scope: "none" }] },
+      }),
+    ).toEqual([]);
+  });
+});
 
 describe("toEndpointIdentifier", () => {
   test("is the repo-relative path, stable regardless of root trailing slash", () => {

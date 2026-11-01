@@ -78,6 +78,7 @@ import {
   useSuggestPrompt,
   useUpdateProperty,
 } from "@/lib/workspaces/mutations/properties";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 type CreatePropertyProps = {
@@ -396,6 +397,7 @@ const PropertyComposerBody = ({
 }: DialogBodyProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  const displayName = usePropertyDisplayName();
   const suggestPrompt = useSuggestPrompt();
   const startWorkflow = useStartWorkflow(workspaceId);
   const submitOnce = useSingleFlight();
@@ -827,13 +829,10 @@ const PropertyComposerBody = ({
             autoPromptPending={suggestPrompt.isPending}
             contentType={contentType}
             editorReady={setEditor}
-            fileChips={effectiveSelectedFileIds.map(
-              (id) =>
-                fileProperties.find((p) => p.id === id) ?? {
-                  id,
-                  name: id,
-                },
-            )}
+            fileChips={effectiveSelectedFileIds.map((id) => {
+              const file = fileProperties.find((p) => p.id === id);
+              return { id, name: file === undefined ? id : displayName(file) };
+            })}
             onAutoPrompt={handleAutoPrompt}
             onContentTypeChange={setContentType}
             onMentionsChange={setTextareaMentions}
@@ -848,7 +847,10 @@ const PropertyComposerBody = ({
               ? {
                   addFile: (id: string) =>
                     setSelectedFileIds((prev) => [...prev, id]),
-                  availableFiles: availableFileToAdd,
+                  availableFiles: availableFileToAdd.map((file) => ({
+                    id: file.id,
+                    name: displayName(file),
+                  })),
                 }
               : {})}
             {...(propertyId !== undefined ? { propertyId } : {})}

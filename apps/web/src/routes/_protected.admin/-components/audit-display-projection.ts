@@ -3,6 +3,7 @@ import {
   AUDIT_RESOURCE_TYPE,
   type AuditAction,
   type AuditResourceType,
+  isAuditNamedResourceKind,
 } from "@stll/api-contract/audit-log";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -50,6 +51,8 @@ export const AUDIT_RESOURCE_PROJECTIONS = {
     "settings.organization.auditResourceKinds.billing_code",
   [AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK]:
     "settings.organization.auditResourceKinds.case_law_matter_link",
+  [AUDIT_RESOURCE_TYPE.LEGISLATION_MATTER_LINK]:
+    "settings.organization.auditResourceKinds.legislation_matter_link",
   [AUDIT_RESOURCE_TYPE.CASE_LAW_DECISION_ANNOTATION]:
     "settings.organization.auditResourceKinds.case_law_decision_annotation",
   [AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER]:
@@ -219,9 +222,12 @@ export const projectAuditResourceLabel = ({
   if (resource.name !== null) {
     return resource.name;
   }
-  return action === AUDIT_ACTION.DELETE
-    ? deletedLabel(kind)
-    : unavailableLabel(kind);
+  if (action === AUDIT_ACTION.DELETE) {
+    return deletedLabel(kind);
+  }
+  return isAuditNamedResourceKind(resource.kind)
+    ? unavailableLabel(kind)
+    : kind.replace(/^./u, (letter) => letter.toLocaleUpperCase());
 };
 
 export const isUnknownRecord = (
