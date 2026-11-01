@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -617,9 +617,11 @@ const renderExpression = (expression: Expression): string => {
       return `${expression.name}(${expression.args.map(renderExpression).join(", ")})`;
     case "not":
       return `!(${renderExpression(expression.operand)})`;
-    default:
-      // Every other kind is handled above, so this is the binary operator.
+    case "binary":
       return `(${renderExpression(expression.left)} ${expression.operator} ${renderExpression(expression.right)})`;
+    default:
+      expression satisfies never;
+      return panic("Unhandled expression kind");
   }
 };
 
