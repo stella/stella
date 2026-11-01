@@ -153,23 +153,6 @@
           "excerpt": "1"
         }
       ],
-      "cz-us-page.json.gz[7]": [
-        {
-          "rule": "holding-after-signature",
-          "anchorId": "p-12",
-          "excerpt": "Poučení: Proti tomuto usnesení není odvolání přípustné."
-        },
-        {
-          "rule": "holding-after-signature",
-          "anchorId": "p-13",
-          "excerpt": "V Brně dne. 26. listopadu 1993"
-        },
-        {
-          "rule": "holding-after-signature",
-          "anchorId": "p-14",
-          "excerpt": "JUDr. Vojen Güttler"
-        }
-      ],
       "cz-us-page.json.gz[10]": [
         {
           "rule": "page-number-block",
@@ -196,18 +179,6 @@
           "rule": "page-number-block",
           "anchorId": "p-11",
           "excerpt": "2 -"
-        }
-      ],
-      "cz-us-page.json.gz[17]": [
-        {
-          "rule": "holding-after-signature",
-          "anchorId": "p-11",
-          "excerpt": "Pro úplnost se uvádí, že Ústavní soud není oprávněn ustanovovat stěžovateli z úřední povinnosti advokáta. Z ustanovení §"
-        },
-        {
-          "rule": "holding-after-signature",
-          "anchorId": "p-12",
-          "excerpt": "Poučení: proti tomuto usnesení není odvolání přípustné."
         }
       ],
       "cz-us-page.json.gz[19]": [
@@ -296,25 +267,6 @@
           "rule": "sentence-cut",
           "anchorId": "p-10",
           "excerpt": "ínky ustanovení § 43 odst. 1 písm. c) zák. o Ústavním soudu, ⏎ proto mimo ústní jednání usnesením návrh odmítl."
-        }
-      ],
-      "cz-us-page.json.gz[32]": [
-        {
-          "rule": "holding-after-signature",
-          "anchorId": "p-13",
-          "excerpt": "Poučení: proti tomuto usnesení není odvolání přípustné."
-        },
-        {
-          "rule": "holding-after-signature",
-          "anchorId": "p-15",
-          "excerpt": "JUDr. Vojen Güttler"
-        }
-      ],
-      "cz-us-page.json.gz[38]": [
-        {
-          "rule": "holding-after-signature",
-          "anchorId": "p-12",
-          "excerpt": "Poučení: proti tomuto usnesení není odvolání přípustné."
         }
       ],
       "cz-us-page.json.gz[39]": [
