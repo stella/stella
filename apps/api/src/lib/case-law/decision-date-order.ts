@@ -249,12 +249,3 @@ export const decisionDateRankAfterSql = ({
       return panic(`Unhandled decision date order: ${String(order)}`);
   }
 };
-
-/** One sorted pass's ORDER BY: the rank, then id, in the order's direction. */
-export const decisionDateRankOrderBySql = (
-  order: DecisionDateOrder,
-  { rank, id }: { rank: SQLWrapper; id: SQLWrapper },
-): SQL[] => {
-  const direction = DECISION_DATE_DIRECTIONS[order];
-  return [direction(rank), direction(id)];
-};

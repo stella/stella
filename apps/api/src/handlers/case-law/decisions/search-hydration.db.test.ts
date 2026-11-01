@@ -2401,7 +2401,7 @@ test("the unresolved row statements leave provision membership to their query fo
     ]) {
       const outcomes = new Map(
         (await statement).map(({ id, row }) => [
-          String(id),
+          id,
           row?.provisionOutcome?.type,
         ]),
       );
