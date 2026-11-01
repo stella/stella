@@ -193,6 +193,33 @@ describe("Chromium extension support", () => {
       support: "unsupported-browser",
     },
     {
+      name: "iPad Safari asking for the desktop site",
+      browser: {
+        maxTouchPoints: 5,
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/18.0 Safari/605.1.15",
+      },
+      support: "unsupported-device",
+    },
+    {
+      name: "Mac Safari",
+      browser: {
+        maxTouchPoints: 0,
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/18.0 Safari/605.1.15",
+      },
+      support: "unsupported-browser",
+    },
+    {
+      name: "Mac Chrome",
+      browser: {
+        maxTouchPoints: 0,
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/140.0.0.0 Safari/537.36",
+      },
+      support: "supported",
+    },
+    {
       name: "iOS Chrome",
       browser: { userAgent: "Mozilla/5.0 (iPhone) CriOS/140.0 Safari/604.1" },
       support: "unsupported-device",

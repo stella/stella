@@ -280,9 +280,18 @@ export const isBrowserExtensionBridgeMounted = (): boolean =>
   bridgeRuntime !== null && bridgeRuntime.mountCount > 0;
 
 type BrowserExtensionNavigator = {
+  maxTouchPoints?: number;
   userAgent: string;
   userAgentData?: { brands: readonly { brand: string }[]; mobile?: boolean };
 };
+
+/**
+ * An iPad browser asks for desktop sites by default and then names itself a
+ * Mac; only its touch screen gives it away, since a Mac reports no touch
+ * points.
+ */
+const isIpadAsMac = (browser: BrowserExtensionNavigator): boolean =>
+  /Macintosh/u.test(browser.userAgent) && (browser.maxTouchPoints ?? 0) > 1;
 
 type BrowserExtensionSupport =
   | "supported"
@@ -300,6 +309,7 @@ export const browserExtensionSupport = (
   if (
     !browser ||
     /Android|FxiOS|CriOS|iPhone|iPad|iPod/u.test(browser.userAgent) ||
+    isIpadAsMac(browser) ||
     browser.userAgentData?.mobile === true
   ) {
     return BROWSER_EXTENSION_STATUS.unsupportedDevice;
