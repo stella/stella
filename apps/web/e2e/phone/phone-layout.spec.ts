@@ -11,7 +11,7 @@ import {
   registerDeferredE2eCleanup,
 } from "../helpers/deferred-cleanup";
 import { createUploadedDocumentRoute } from "../helpers/document";
-import { createNetworkCollector } from "../helpers/network";
+import { watchApiActivity } from "../helpers/network";
 import { findPhoneLayoutProblems } from "../helpers/phone-layout";
 import {
   SMOKE_ROUTE_DEFS,
@@ -90,8 +90,9 @@ test.describe.serial("pages fit a phone", () => {
       if (world === null) {
         throw new Error("phone-layout world was not initialized in beforeAll");
       }
-      const network = createNetworkCollector();
-      const detachNetwork = await network.trackPage(page);
+      // WebKit has no Chromium protocol session, so the byte-measuring
+      // collector cannot attach here; settling only needs page events.
+      const network = watchApiActivity(page);
       try {
         await page.goto(def.path(world), { waitUntil: "domcontentloaded" });
         await expect(page).not.toHaveURL(/\/auth(?:\/|$)/u);
@@ -111,7 +112,7 @@ test.describe.serial("pages fit a phone", () => {
           `${def.template} breaks the phone layout rules`,
         ).toEqual([]);
       } finally {
-        await detachNetwork();
+        network.detach();
       }
     });
   };

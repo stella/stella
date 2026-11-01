@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-import { findPhoneLayoutProblems } from "../helpers/phone-layout";
+import {
+  findPhoneLayoutProblems,
+  setPhoneContent,
+} from "../helpers/phone-layout";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -13,7 +16,9 @@ for (const { distance, crowded } of [
     page,
   }) => {
     // safe-html: static test controls with a numeric fixture offset.
-    await page.setContent(`
+    await setPhoneContent(
+      page,
+      `
       <style>
         button { position: absolute; top: 50px; width: 10px; height: 10px; padding: 0; border: 0; }
         #first { left: 50px; }
@@ -21,7 +26,8 @@ for (const { distance, crowded } of [
       </style>
       <button id="first" aria-label="First"></button>
       <button id="second" aria-label="Second"></button>
-    `);
+    `,
+    );
     const problems = await findPhoneLayoutProblems(page);
     expect(problems.some((problem) => problem === "small touch targets:")).toBe(
       crowded,
@@ -36,7 +42,9 @@ for (const pseudo of ["before", "after"]) {
       page,
     }) => {
       // safe-html: static controls with enumerated CSS fixture values.
-      await page.setContent(`
+      await setPhoneContent(
+        page,
+        `
         <style>
           button { position: absolute; top: 50px; width: 10px; height: 10px; padding: 0; border: 0; }
           button::${pseudo} { content: ""; position: absolute; width: 30px; height: 30px; inset: -10px; pointer-events: ${pointerEvents}; }
@@ -45,7 +53,8 @@ for (const pseudo of ["before", "after"]) {
         </style>
         <button id="first" aria-label="First"></button>
         <button id="second" aria-label="Second"></button>
-      `);
+      `,
+      );
       expect(await findPhoneLayoutProblems(page)).toHaveLength(
         pointerEvents === "auto" ? 0 : 3,
       );
@@ -59,13 +68,16 @@ for (const axis of ["x", "y"]) {
       page,
     }) => {
       // safe-html: static controls with enumerated geometry fixture values.
-      await page.setContent(`
+      await setPhoneContent(
+        page,
+        `
         <style>
           #box { position: absolute; left: 50px; top: 50px; width: 100px; height: 100px; overflow: hidden; }
           button { position: absolute; left: ${axis === "x" ? offset : 20}px; top: ${axis === "y" ? offset : 20}px; width: 30px; height: 30px; }
         </style>
         <div id="box"><button aria-label="Clipped"></button></div>
-      `);
+      `,
+      );
       expect(await findPhoneLayoutProblems(page)).toEqual([
         "cut-off controls:",
         `  button "Clipped" is cut off at the ${axis === "x" ? "side" : "top or bottom"} of div`,
@@ -84,13 +96,16 @@ for (const hidden of [
     page,
   }) => {
     // safe-html: static controls with enumerated hiding fixture attributes.
-    await page.setContent(`
+    await setPhoneContent(
+      page,
+      `
       <style>
         #box { position: absolute; left: 50px; top: 50px; width: 100px; height: 100px; overflow: hidden; }
         button { position: absolute; left: 110px; top: 110px; width: 30px; height: 30px; }
       </style>
       <div id="box" ${hidden}><button aria-label="Hidden"></button></div>
-    `);
+    `,
+    );
     expect(await findPhoneLayoutProblems(page)).toEqual([]);
   });
 }
@@ -113,14 +128,17 @@ for (const { axis, direction, reachableOffset, unreachableOffset } of [
         const offset =
           placement === "reachable" ? reachableOffset : unreachableOffset;
         // safe-html: static controls with enumerated geometry fixture values.
-        await page.setContent(`
+        await setPhoneContent(
+          page,
+          `
           <style>
             #box { position: absolute; left: 50px; top: 50px; width: 100px; height: 100px; overflow: auto; direction: ${direction}; }
             #extent { position: absolute; left: ${direction === "rtl" ? -200 : 0}px; top: 0; width: ${axis === "x" ? 300 : 1}px; height: ${axis === "y" ? 300 : 1}px; }
             button { position: absolute; left: ${axis === "x" ? offset : 20}px; top: ${axis === "y" ? offset : 20}px; width: 30px; height: 30px; }
           </style>
           <div id="box"><div id="extent"></div><button aria-label="Target"></button></div>
-        `);
+        `,
+        );
         const metrics = await page.locator("#box").evaluate(
           (box, fixture) => {
             if (fixture.scrolled) {
@@ -209,7 +227,9 @@ for (const { tag, field } of [
       page,
     }) => {
       // safe-html: static native field and enumerated proxy fixture markup.
-      await page.setContent(`
+      await setPhoneContent(
+        page,
+        `
         <style>
           #field, #proxy { position: absolute; left: 50px; top: 50px; width: 100px; height: 40px; }
           #field { opacity: 0; z-index: 1; }
@@ -218,7 +238,8 @@ for (const { tag, field } of [
         </style>
         ${field}
         ${markup}
-      `);
+      `,
+      );
       expect(await findPhoneLayoutProblems(page)).toEqual(
         visible
           ? []
@@ -236,13 +257,16 @@ for (const visibility of ["visible", "hidden"]) {
     page,
   }) => {
     // safe-html: static control with enumerated visibility fixture value.
-    await page.setContent(`
+    await setPhoneContent(
+      page,
+      `
       <style>
         button { position: absolute; left: 50px; top: 50px; width: 40px; height: 40px; visibility: ${visibility}; }
         button:hover { visibility: visible; }
       </style>
       <button aria-label="Action"></button>
-    `);
+    `,
+    );
     expect(await findPhoneLayoutProblems(page)).toEqual(
       visibility === "visible"
         ? []
@@ -260,14 +284,17 @@ for (const root of ["html", "body"]) {
       page,
     }) => {
       // safe-html: static control with enumerated root overflow fixture values.
-      await page.setContent(`
+      await setPhoneContent(
+        page,
+        `
         <style>
           html, body { margin: 0; height: 100%; }
           ${root} { overflow-y: ${overflow}; }
           button { position: absolute; left: 50px; top: 120vh; width: 40px; height: 40px; }
         </style>
         <button aria-label="Below screen"></button>
-      `);
+      `,
+      );
       expect(await findPhoneLayoutProblems(page)).toEqual(
         overflow === "auto"
           ? []
@@ -279,6 +306,78 @@ for (const root of ["html", "body"]) {
     });
   }
 }
+
+// The root element's overflow decides the viewport unless it is visible; only
+// then does the body's propagate. Otherwise the body clips as its own box.
+for (const { html, body, cutOffBy } of [
+  { html: "visible", body: "auto", cutOffBy: null },
+  { html: "visible", body: "hidden", cutOffBy: "page" },
+  { html: "hidden", body: "auto", cutOffBy: null },
+  { html: "hidden", body: "hidden", cutOffBy: "body" },
+  { html: "auto", body: "hidden", cutOffBy: "body" },
+] as const) {
+  test(`html overflow ${html} with body overflow ${body} decides who scrolls a below-screen control`, async ({
+    page,
+  }) => {
+    // safe-html: static in-flow control with enumerated root overflow fixture values.
+    await setPhoneContent(
+      page,
+      `
+      <style>
+        html, body { margin: 0; height: 100%; }
+        html { overflow: ${html}; }
+        body { overflow: ${body}; }
+        #spacer { height: 120vh; }
+        button { display: block; width: 40px; height: 40px; }
+      </style>
+      <div id="spacer"></div>
+      <button aria-label="Below screen"></button>
+    `,
+    );
+    expect(
+      await page
+        .getByRole("button", { name: "Below screen" })
+        .evaluate(
+          (button) => button.getBoundingClientRect().top > window.innerHeight,
+        ),
+    ).toBe(true);
+    const problems = await findPhoneLayoutProblems(page);
+    switch (cutOffBy) {
+      case null:
+        expect(problems).toEqual([]);
+        break;
+      case "page":
+        expect(problems).toEqual([
+          "cut-off controls:",
+          '  button "Below screen" sits past the top or bottom of a non-scrollable page',
+        ]);
+        break;
+      case "body":
+        expect(problems).toEqual([
+          "cut-off controls:",
+          expect.stringMatching(
+            /^ {2}button "Below screen" is cut off at the top or bottom of body\b/u,
+          ),
+        ]);
+        break;
+      default:
+        cutOffBy satisfies never;
+    }
+  });
+}
+
+test("a page without a device-width viewport is reported as zoomed out", async ({
+  page,
+}) => {
+  // safe-html: static control in a document without a viewport declaration.
+  await page.setContent(`<!doctype html><button>Action</button>`);
+  expect(await findPhoneLayoutProblems(page)).toEqual([
+    "zoomed-out layout:",
+    expect.stringMatching(
+      /^ {2}page is laid out \d+px wide and shown at \d+% to fit the screen; declare a width=device-width viewport$/u,
+    ),
+  ]);
+});
 
 const nestedScrollAxes = [
   { axis: "x", direction: "ltr", targetOffset: 200 },
@@ -298,7 +397,9 @@ for (const { axis, direction, targetOffset } of nestedScrollAxes) {
         page,
       }) => {
         // safe-html: static nested controls with enumerated geometry fixture values.
-        await page.setContent(`
+        await setPhoneContent(
+          page,
+          `
           <style>
             #outer { position: absolute; left: 50px; top: 50px; width: 100px; height: 100px; overflow: hidden; }
             #inner { position: absolute; left: ${axis === "x" ? offset : 0}px; top: ${axis === "y" ? offset : 0}px; width: 100px; height: 100px; overflow: auto; direction: ${direction}; }
@@ -306,7 +407,8 @@ for (const { axis, direction, targetOffset } of nestedScrollAxes) {
             button { position: absolute; left: ${axis === "x" ? targetOffset : 20}px; top: ${axis === "y" ? targetOffset : 20}px; width: 30px; height: 30px; }
           </style>
           <div id="outer"><div id="inner"><div id="extent"></div><button aria-label="Nested"></button></div></div>
-        `);
+        `,
+        );
         const inner = await page.locator("#inner").evaluate(
           (box, fixture) => {
             if (fixture.scrolled) {
@@ -369,7 +471,9 @@ for (const { axis, direction, targetOffset, root } of [
         page,
       }) => {
         // safe-html: static scroll control with enumerated root and geometry fixture values.
-        await page.setContent(`
+        await setPhoneContent(
+          page,
+          `
           <style>
             html, body { margin: 0; height: 100%; }
             ${root} { overflow: hidden; }
@@ -378,7 +482,8 @@ for (const { axis, direction, targetOffset, root } of [
             button { position: absolute; left: ${axis === "x" ? targetOffset : 20}px; top: ${axis === "y" ? targetOffset : 20}px; width: 30px; height: 30px; }
           </style>
           <div id="inner"><div id="extent"></div><button aria-label="Viewport nested"></button></div>
-        `);
+        `,
+        );
         const metrics = await page.locator("#inner").evaluate(
           (box, fixture) => {
             if (fixture.scrolled) {
@@ -425,7 +530,9 @@ for (const { axis, direction, targetOffset } of nestedScrollAxes) {
     }) => {
       const innerOffset = direction === "rtl" ? -180 : 180;
       // safe-html: static nested controls with enumerated geometry fixture values.
-      await page.setContent(`
+      await setPhoneContent(
+        page,
+        `
         <style>
           #outer { position: absolute; left: 50px; top: 50px; width: 100px; height: 100px; overflow: auto; direction: ${direction}; }
           #outer-extent, #inner-extent { position: absolute; left: ${direction === "rtl" ? -200 : 0}px; top: 0; width: ${axis === "x" ? 300 : 1}px; height: ${axis === "y" ? 300 : 1}px; }
@@ -433,7 +540,8 @@ for (const { axis, direction, targetOffset } of nestedScrollAxes) {
           button { position: absolute; left: ${axis === "x" ? targetOffset : 20}px; top: ${axis === "y" ? targetOffset : 20}px; width: 30px; height: 30px; }
         </style>
         <div id="outer"><div id="outer-extent"></div><div id="inner"><div id="inner-extent"></div><button aria-label="Reachable nested"></button></div></div>
-      `);
+      `,
+      );
       for (const selector of ["#inner", "#outer"]) {
         const metrics = await page.locator(selector).evaluate(
           (box, fixture) => {
@@ -467,7 +575,9 @@ for (const scrolled of [false, true]) {
     page,
   }) => {
     // safe-html: static below-screen control in a normal scrolling document.
-    await page.setContent(`
+    await setPhoneContent(
+      page,
+      `
       <style>
         html, body { margin: 0; }
         #inner { position: absolute; left: 50px; top: 120vh; width: 100px; height: 100px; overflow: auto; }
@@ -475,7 +585,8 @@ for (const scrolled of [false, true]) {
         button { position: absolute; left: 20px; top: 200px; width: 30px; height: 30px; }
       </style>
       <div id="inner"><div id="extent"></div><button aria-label="Below page"></button></div>
-    `);
+    `,
+    );
     const metrics = await page
       .locator("#inner")
       .evaluate((box, fixtureScrolled) => {
@@ -523,13 +634,16 @@ for (const { name, css, containingBlock } of [
     page,
   }) => {
     // safe-html: static fixed control with enumerated containing-block fixture CSS.
-    await page.setContent(`
+    await setPhoneContent(
+      page,
+      `
       <style>
         #wrapper { position: absolute; left: 50px; top: 50px; width: 100px; height: 100px; overflow: hidden; ${css}; }
         button { position: fixed; left: 200px; top: 80px; width: 30px; height: 30px; }
       </style>
       <div id="wrapper"><button aria-label="Fixed"></button></div>
-    `);
+    `,
+    );
     const metrics = await page
       .getByRole("button", { name: "Fixed" })
       .evaluate((button) => {
@@ -556,7 +670,9 @@ for (const fixedOwner of ["control", "ancestor"]) {
       page,
     }) => {
       // safe-html: static fixed control with enumerated positioning fixture CSS.
-      await page.setContent(`
+      await setPhoneContent(
+        page,
+        `
         <style>
           #container { position: absolute; left: 50px; top: 50px; width: 200px; height: 200px; ${containingBlock ? "transform:translateZ(0);overflow:hidden" : ""}; }
           #wrapper { position: absolute; left: 0; top: 0; width: 30px; height: 30px; overflow: hidden; }
@@ -564,7 +680,8 @@ for (const fixedOwner of ["control", "ancestor"]) {
           button { position: ${fixedOwner === "control" ? "fixed" : "absolute"}; left: ${fixedOwner === "control" ? 100 : 0}px; top: ${fixedOwner === "control" ? 60 : 0}px; width: 30px; height: 30px; }
         </style>
         <div id="container"><div id="wrapper"><div id="anchor"><button aria-label="Escaped"></button></div></div></div>
-      `);
+      `,
+      );
       const metrics = await page
         .getByRole("button", { name: "Escaped" })
         .evaluate((button) => {
@@ -589,14 +706,17 @@ test("a fixed containing block remains constrained by its outer clipping ancesto
   page,
 }) => {
   // safe-html: static fixed control in a clipped containing block.
-  await page.setContent(`
+  await setPhoneContent(
+    page,
+    `
     <style>
       #outer { position: absolute; left: 50px; top: 50px; width: 100px; height: 100px; overflow: hidden; }
       #container { position: absolute; left: 120px; top: 0; width: 100px; height: 100px; transform:translateZ(0); }
       button { position: fixed; left: 20px; top: 20px; width: 30px; height: 30px; }
     </style>
     <div id="outer"><div id="container"><button aria-label="Outer clipped fixed"></button></div></div>
-  `);
+  `,
+  );
   const metrics = await page
     .getByRole("button", { name: "Outer clipped fixed" })
     .evaluate((button) => {
@@ -620,14 +740,17 @@ for (const scrolled of [false, true]) {
     page,
   }) => {
     // safe-html: static fixed control in a below-screen containing block.
-    await page.setContent(`
+    await setPhoneContent(
+      page,
+      `
       <style>
         html, body { margin: 0; min-height: 200vh; }
         #container { position: absolute; left: 50px; top: 120vh; width: 100px; height: 100px; transform:translateZ(0); overflow:hidden; }
         button { position: fixed; left: 20px; top: 20px; width: 30px; height: 30px; }
       </style>
       <div id="container"><button aria-label="Moving fixed"></button></div>
-    `);
+    `,
+    );
     const initial = await page
       .getByRole("button", { name: "Moving fixed" })
       .evaluate((button) => ({
@@ -664,7 +787,9 @@ for (const placement of ["document", "nested scroller"]) {
       page,
     }) => {
       // safe-html: static transparent control with enumerated scrolling fixture CSS.
-      await page.setContent(`
+      await setPhoneContent(
+        page,
+        `
         <style>
           html, body { margin: 0; min-height: 200vh; }
           #region { position: absolute; left: 50px; top: 120vh; width: 100px; height: 100px; ${placement === "nested scroller" ? "overflow:auto" : ""}; }
@@ -672,7 +797,8 @@ for (const placement of ["document", "nested scroller"]) {
           button { position: absolute; left: 20px; top: ${placement === "nested scroller" ? 200 : 0}px; width: 40px; height: 40px; opacity:0; }
         </style>
         <div id="region"><div id="extent"></div><button aria-label="Hidden below fold"></button></div>
-      `);
+      `,
+      );
       if (scrolled) {
         await page.evaluate(() => window.scrollTo(0, 50));
         await page.locator("#region").evaluate((box) => {
@@ -713,14 +839,17 @@ for (const hidden of ['aria-hidden="true"', "inert"]) {
     page,
   }) => {
     // safe-html: static transparent control with enumerated hiding fixture attributes.
-    await page.setContent(`
+    await setPhoneContent(
+      page,
+      `
       <style>
         body { min-height: 200vh; }
         #region { position: absolute; left: 50px; top: 120vh; width: 100px; height: 100px; }
         button { width: 40px; height: 40px; opacity:0; }
       </style>
       <div id="region" ${hidden}><button aria-label="Intentionally hidden"></button></div>
-    `);
+    `,
+    );
     const metrics = await page.locator("button").evaluate((button) => ({
       top: button.getBoundingClientRect().top,
       viewportHeight: window.innerHeight,
@@ -738,7 +867,9 @@ for (const proxy of ["none", "label", "painted sibling"]) {
       page,
     }) => {
       // safe-html: static native field with enumerated below-screen proxy markup.
-      await page.setContent(`
+      await setPhoneContent(
+        page,
+        `
         <style>
           html, body { margin: 0; min-height: 200vh; }
           #region { position: absolute; left: 50px; top: 120vh; width: 100px; height: 100px; }
@@ -752,7 +883,8 @@ for (const proxy of ["none", "label", "painted sibling"]) {
           ${proxy === "label" ? '<label for="field">Proxy</label>' : ""}
           ${proxy === "painted sibling" ? '<span id="proxy">Proxy</span>' : ""}
         </div>
-      `);
+      `,
+      );
       if (scrolled) {
         await page.evaluate(() => window.scrollTo(0, 50));
       }

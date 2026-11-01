@@ -1,10 +1,34 @@
 // The e2e tsconfig is node-only; the collector runs in the browser.
 /// <reference lib="dom" />
 import type { Page } from "@playwright/test";
+import { panic } from "better-result";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+const APP_DOCUMENT = path.resolve(import.meta.dirname, "../../index.html");
+
+// The app's own viewport declaration. Without it a phone browser lays the
+// page out at desktop width and zooms it out to fit the screen.
+const APP_VIEWPORT =
+  /<meta\s+name="viewport"\s+content="([^"]+)"/u.exec(
+    readFileSync(APP_DOCUMENT, "utf-8"),
+  )?.[1] ?? panic(`${APP_DOCUMENT} declares no viewport meta tag`);
+
+/**
+ * Loads fixture markup as a document shaped like the app's: standards mode
+ * and the app's viewport, so the phone lays it out at screen width.
+ */
+export const setPhoneContent = async (page: Page, body: string) => {
+  // safe-html: test fixture markup, wrapped in a static document shell.
+  await page.setContent(
+    `<!doctype html><html><head><meta name="viewport" content="${APP_VIEWPORT}"></head><body>${body}</body></html>`,
+  );
+};
 
 /**
  * Layout rules every page must keep on a phone, as readable problem lines.
  *
+ * - The page is laid out at screen width, not zoomed out to fit it.
  * - The page never scrolls sideways.
  * - No control is cut off: when a control runs past the edge of a box that
  *   clips it (or past the screen), that box must scroll so it can be reached.
@@ -122,6 +146,19 @@ const collectPhoneLayoutProblems = (): string[] => {
         .some((value) => containingBlockWillChange.has(value.trim()))
     );
   };
+  // The viewport takes the root element's overflow, or the body's when the
+  // root's is visible in both axes; only then does the body stop clipping as
+  // a box of its own. A visible viewport scrolls; clip there acts as hidden.
+  const rootStyle = getComputedStyle(document.documentElement);
+  const bodyStyle = getComputedStyle(document.body);
+  const rootPropagates =
+    rootStyle.overflowX === "visible" && rootStyle.overflowY === "visible";
+  const viewportStyle = rootPropagates ? bodyStyle : rootStyle;
+  const viewportScrollsY =
+    viewportStyle.overflowY !== "hidden" && viewportStyle.overflowY !== "clip";
+  const clipsAsBox = (box: Element) =>
+    box !== document.documentElement &&
+    !(box === document.body && rootPropagates);
   const clippingAncestors = (element: Element) => {
     const ancestors: Element[] = [];
     for (let current = element; ;) {
@@ -139,7 +176,7 @@ const collectPhoneLayoutProblems = (): string[] => {
       if (parent === null) {
         return { ancestors, root: "document" } as const;
       }
-      if (parent !== document.body && parent !== document.documentElement) {
+      if (clipsAsBox(parent)) {
         ancestors.push(parent);
       }
       current = parent;
@@ -205,6 +242,16 @@ const collectPhoneLayoutProblems = (): string[] => {
     },
   );
 
+  // Every other rule measures in the page's own layout, which only matches the
+  // screen at scale 1; zoomed out, scroll offsets also round to device pixels.
+  const zoomed: string[] = [];
+  const scale = window.visualViewport?.scale ?? 1;
+  if (Math.abs(scale - 1) > 0.01) {
+    zoomed.push(
+      `page is laid out ${window.innerWidth}px wide and shown at ${Math.round(scale * 100)}% to fit the screen; declare a width=device-width viewport`,
+    );
+  }
+
   const sideways: string[] = [];
   const pageWidth = document.documentElement.scrollWidth;
   if (pageWidth > window.innerWidth + tolerance) {
@@ -213,10 +260,6 @@ const collectPhoneLayoutProblems = (): string[] => {
     );
   }
 
-  const rootClipsY = [document.documentElement, document.body].some((root) => {
-    const overflow = getComputedStyle(root).overflowY;
-    return overflow === "hidden" || overflow === "clip";
-  });
   const clippingProblem = (element: Element, rect: DOMRect) => {
     let positionsX = { min: rect.left, max: rect.left };
     let positionsY = { min: rect.top, max: rect.top };
@@ -281,15 +324,15 @@ const collectPhoneLayoutProblems = (): string[] => {
       min: 0,
       max: window.innerHeight - rect.height,
       scroll:
-        root === "viewport" || rootClipsY
+        root === "viewport" || !viewportScrollsY
           ? stationaryScroll
           : {
               offset: window.scrollY,
               min: 0,
               max:
                 Math.max(
-                  document.documentElement.scrollHeight,
-                  document.body.scrollHeight,
+                  (document.scrollingElement ?? document.documentElement)
+                    .scrollHeight,
                   window.innerHeight,
                 ) - window.innerHeight,
             },
@@ -458,6 +501,7 @@ const collectPhoneLayoutProblems = (): string[] => {
     ];
   };
   return [
+    ...summarize("zoomed-out layout", zoomed),
     ...summarize("sideways scroll", sideways),
     ...summarize("cut-off controls", cutOff),
     ...summarize("small touch targets", small),

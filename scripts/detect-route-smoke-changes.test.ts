@@ -87,6 +87,9 @@ describe("route traffic changes require the route smoke", () => {
     expect(closure.has("apps/web/e2e/execution-profile.ts")).toBe(true);
     expect(closure.has("apps/web/e2e/global-teardown.ts")).toBe(true);
     expect(closure.has("apps/web/e2e/phone/phone-layout.spec.ts")).toBe(true);
+    expect(closure.has("apps/web/e2e/phone/phone-layout-rules.spec.ts")).toBe(
+      true,
+    );
     expect(closure.has("apps/web/e2e/playwright.phone.config.ts")).toBe(true);
     expect(closure.has("apps/web/e2e/helpers/phone-layout.ts")).toBe(true);
     for (const file of closure) {
