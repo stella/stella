@@ -15,8 +15,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { sha256Base64Url } from "@stll/sha256/bun";
-
-import { createTestState } from "@/api/tests/helpers/test-state";
+import { createTestState } from "@stll/test-state";
 
 import type { LoopbackCallback } from "../../../../packages/cli/src/auth/loopback-listener.ts";
 
@@ -50,8 +49,10 @@ const { rootDb } = await import("@/api/db/root");
 const { workspaceMembers, workspaces } = await import("@/api/db/schema");
 const { createSafeId, toSafeId } = await import("@/api/lib/branded-types");
 const { readSignedQuery } = await import("@/api/tests/helpers/oauth-grant");
+const { installScriptedProvider } =
+  await import("@/api/tests/helpers/chat-scripted-provider");
 const { login } = await import("../../../../packages/cli/src/auth/login.ts");
-const { CLI_DEFAULT_RESOURCE_SCOPES, CLI_KNOWN_SCOPES, CLI_REQUIRED_SCOPES } =
+const { CLI_DEFAULT_RESOURCE_SCOPES, CLI_REQUIRED_SCOPES } =
   await import("../../../../packages/cli/src/auth/constants.ts");
 const { CLI_CLIENT_METADATA_PATH, buildCliClientMetadataDocument } =
   await import("@stll/cli/client-metadata-document");
@@ -78,9 +79,6 @@ const SERVER_URL = PUBLIC_URL;
 /** Where the test server actually answers. */
 const LOCAL_URL = env.BETTER_AUTH_URL;
 
-/** Whether discovery hides client metadata document support, as an older server would. */
-let hideDocumentSupport = false;
-
 /** Every request the CLI or the simulated browser makes, served in process. */
 const serveInProcess = async (
   input: string | URL | Request,
@@ -97,21 +95,9 @@ const serveInProcess = async (
       ...(body ? { body } : {}),
     },
   );
-  const response = url.pathname.startsWith("/api/auth/")
+  return url.pathname.startsWith("/api/auth/")
     ? await getAuth().handler(local)
     : await api.fetch(local);
-  if (
-    !hideDocumentSupport ||
-    !url.pathname.endsWith("/.well-known/oauth-authorization-server")
-  ) {
-    return response;
-  }
-  const metadata = v.parse(
-    v.record(v.string(), v.unknown()),
-    await response.json(),
-  );
-  const { client_id_metadata_document_supported: _hidden, ...rest } = metadata;
-  return Response.json(rest, { status: response.status });
 };
 
 const redirectSchema = v.looseObject({ url: v.string() });
@@ -171,7 +157,6 @@ const cliLogin = async (browser: Browser) => {
     {
       configDir,
       orgHint: undefined,
-      registrationScopes: CLI_KNOWN_SCOPES,
       requiredScopes: CLI_REQUIRED_SCOPES,
       resourceScopes: CLI_DEFAULT_RESOURCE_SCOPES,
       serverFlag: SERVER_URL,
@@ -225,8 +210,14 @@ const requestTokens = async (
 const base64Url = (bytes: Uint8Array) =>
   Buffer.from(bytes).toString("base64url");
 
-/** Sign the mobile app in as it does on a phone, with `browser` approving. */
-const mobileSignIn = async (browser: Browser) => {
+/**
+ * Sign the mobile app in as it does on a phone, with `browser` approving.
+ * `scopes` narrows the grant, as a person declining part of it would.
+ */
+const mobileSignIn = async (
+  browser: Browser,
+  scopes: readonly string[] = MOBILE_SCOPES,
+) => {
   const discovered = await serveInProcess(
     new URL("/api/auth/.well-known/oauth-authorization-server", SERVER_URL),
   );
@@ -244,7 +235,7 @@ const mobileSignIn = async (browser: Browser) => {
     code_challenge_method: "S256",
     state,
     resource,
-    scope: MOBILE_SCOPES.join(" "),
+    scope: scopes.join(" "),
     prompt: "consent",
   })) {
     authorize.searchParams.set(name, value);
@@ -323,7 +314,6 @@ describe("stella CLI client document", () => {
   });
 
   test("signs the CLI in with every scope it asks for", async () => {
-    hideDocumentSupport = false;
     const browser = await signInWithOrganization("cli-document@example.test");
     const signedIn = await cliLogin(browser);
     expect(signedIn.grantedScopes.split(" ")).toEqual(
@@ -344,19 +334,58 @@ describe("stella CLI client document", () => {
     });
   });
 
-  test("a registered client with the same redirects gets the open subset", async () => {
-    hideDocumentSupport = true;
-    try {
-      const browser = await signInWithOrganization(
-        "cli-registered@example.test",
-      );
-      const signedIn = await cliLogin(browser);
-      const granted = signedIn.grantedScopes.split(" ");
-      expect(granted).toContain("stella:read");
-      expect(granted).not.toContain("stella:admin_read");
-    } finally {
-      hideDocumentSupport = false;
+  test("a client registering as the CLI, with its redirect, is an unverified app", async () => {
+    const browser = await signInWithOrganization("cli-lookalike@example.test");
+    const registration = await serveInProcess(
+      new URL("/api/auth/oauth2/register", SERVER_URL),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...buildCliClientMetadataDocument(CLI_CLIENT_ID),
+          client_id: undefined,
+        }),
+      },
+    );
+    expect(registration.status).toBe(201);
+    const { client_id: clientId } = v.parse(
+      v.looseObject({ client_id: v.string() }),
+      await registration.json(),
+    );
+    expect(clientId).not.toBe(CLI_CLIENT_ID);
+
+    const details = await serveInProcess(
+      new URL(
+        `/api/auth/oauth2/consent-info?client_id=${encodeURIComponent(clientId)}`,
+        SERVER_URL,
+      ),
+      { headers: { cookie: browser.cookieHeader() } },
+    );
+    expect(details.status).toBe(200);
+    expect(await details.json()).toMatchObject({
+      client: { type: "unverified", name: "stella-cli" },
+    });
+  });
+
+  test("the CLI's client id is refused a redirect outside its shape", async () => {
+    const browser = await signInWithOrganization("cli-redirect@example.test");
+    const authorize = new URL("/api/auth/oauth2/authorize", SERVER_URL);
+    for (const [name, value] of Object.entries({
+      response_type: "code",
+      client_id: CLI_CLIENT_ID,
+      redirect_uri: "https://connector.example/callback",
+      code_challenge: sha256Base64Url("verifier".repeat(6)),
+      code_challenge_method: "S256",
+      state: "state",
+      scope: "openid stella:read",
+    })) {
+      authorize.searchParams.set(name, value);
     }
+    const refused = await serveInProcess(authorize, {
+      headers: { accept: "application/json", cookie: browser.cookieHeader() },
+    });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({ error: "invalid_redirect" });
   });
 });
 
@@ -371,7 +400,6 @@ describe("stella mobile client document", () => {
   });
 
   test("signs the app in for the REST API, which then lists the person's matters", async () => {
-    hideDocumentSupport = false;
     const browser = await signInWithOrganization(
       "mobile-document@example.test",
     );
@@ -413,7 +441,7 @@ describe("stella mobile client document", () => {
     );
     expect(await details.json()).toMatchObject({
       clientIdHost: "stella-api.example.com",
-      client: { type: "verified", brand: "stella" },
+      client: { type: "verified", brand: "stella_ios" },
     });
   });
 
@@ -445,6 +473,91 @@ describe("stella mobile client document", () => {
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
     });
     expect(mcp.status).toBe(401);
+  });
+
+  test("the app's token sends a file with a message only with the chat scope", async () => {
+    const browser = await signInWithOrganization(
+      "mobile-chat-file@example.test",
+    );
+    const threadId = createSafeId<"chatThread">();
+    const messageId = createSafeId<"chatMessage">();
+    const runId = Bun.randomUUIDv7();
+    // The envelope the app sends; the file is of a kind chat never takes.
+    const forwarded = {
+      threadId,
+      runId,
+      sendMode: "rawOverride",
+      message: {
+        id: messageId,
+        role: "user",
+        parts: [
+          { type: "text", content: "What does this say?" },
+          {
+            type: "document",
+            source: {
+              type: "url",
+              value: `data:application/x-msdownload;base64,${btoa("MZ")}`,
+              mimeType: "application/x-msdownload",
+            },
+            metadata: { filename: "setup.exe" },
+          },
+        ],
+      },
+    };
+    const send = async (token: string) =>
+      await serveInProcess(new URL("/v1/chat", SERVER_URL), {
+        method: "POST",
+        headers: {
+          ...bearer(token),
+          accept: "text/event-stream",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          threadId,
+          runId,
+          state: {},
+          messages: [{ id: messageId, role: "user", content: "" }],
+          tools: [],
+          context: [],
+          forwardedProps: forwarded,
+          data: forwarded,
+        }),
+      });
+
+    const withoutChat = await mobileSignIn(
+      browser,
+      MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+    );
+    const refused = await send(withoutChat.access.token);
+    expect(refused.status).toBe(403);
+    expect(refused.headers.get("www-authenticate")).toBe(
+      'Bearer error="insufficient_scope"',
+    );
+
+    // With the scope the chat handler takes the request and refuses the
+    // file as it refuses a browser session's: before the thread exists or a
+    // model runs. The scripted model makes the deployment's AI available, so
+    // the refusal is the attachment check's; the thread is scripted with no
+    // run, so a model call on it would be recorded.
+    const { access } = await mobileSignIn(browser);
+    const provider = installScriptedProvider();
+    try {
+      provider.script(threadId);
+      const refusedFile = await send(access.token);
+      expect(refusedFile.status).toBe(400);
+      expect(refusedFile.headers.get("www-authenticate")).toBeNull();
+      expect(await refusedFile.json()).toEqual({
+        message: "Unsupported chat attachment type",
+      });
+      expect(provider.takeRequests(threadId)).toEqual([]);
+      expect(provider.takeFindings(threadId)).toEqual({
+        changedToolResults: [],
+        unconsumedScripts: [],
+        unscriptedCalls: [],
+      });
+    } finally {
+      provider.restore();
+    }
   });
 
   test("no client but the app is granted the REST API", async () => {

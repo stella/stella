@@ -198,7 +198,7 @@ describe("text version", () => {
 });
 
 describe("compact metadata", () => {
-  test("drops values stated elsewhere, duplicates and empties", () => {
+  test("drops values stated elsewhere, native-label duplicates and empties", () => {
     expect(
       compactDecisionMetadata({
         metadata: {
@@ -230,6 +230,7 @@ describe("compact metadata", () => {
       }),
     ).toEqual({
       category: "D",
+      keywords: ["výpověď"],
       heslo: ["výpověď"],
       judge: "JUDr. A",
       // Flags and counts are distinct facts even when equal.
@@ -238,6 +239,21 @@ describe("compact metadata", () => {
       pages: 3,
       volume: 3,
     });
+  });
+
+  // Seen on Polish administrative-court decisions: one judge presides and
+  // reports. The roles are two facts, so neither may hide the other.
+  test("keeps every role whose holder also holds another role", () => {
+    const metadata = {
+      presiding: "Jan Kowalski",
+      rapporteur: "Jan Kowalski",
+      judges: ["Anna Nowak", "Jan Kowalski"],
+      kategorieRozhodnuti: "B",
+      category: "C",
+    };
+    expect(
+      compactDecisionMetadata({ metadata, restated: ["II FSK 1/20"] }),
+    ).toEqual(metadata);
   });
 });
 

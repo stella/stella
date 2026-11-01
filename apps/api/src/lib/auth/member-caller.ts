@@ -6,6 +6,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SseStreamBinding } from "@/api/lib/sse";
+import type { McpSession } from "@/api/mcp/auth";
 
 /** Builds a recorder whose events default to another matter (or none). */
 export type AuditRecorderFactory = (opts?: {
@@ -24,6 +25,7 @@ export type MemberCaller = Readonly<OrgSettingsForAuth> & {
   readonly session: {
     /** The browser session, or `null` for a credential that has none (MCP). */
     readonly id: string | null;
+    readonly credentialType?: NonNullable<McpSession["credential"]>["type"];
     readonly activeOrganizationId: SafeId<"organization">;
     /**
      * What keeps an event stream this caller opens authorized when no
