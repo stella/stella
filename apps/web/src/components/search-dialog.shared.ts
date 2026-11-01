@@ -93,10 +93,8 @@ export const formatMimeTypeLabel = (mimeType: string): string => {
     return known;
   }
   const subtype = mimeType.split("/").at(-1) ?? mimeType;
-  return subtype
-    .replace(/^(?:vnd\.|x-)/u, "")
-    .replace(/\+.*$/u, "")
-    .toUpperCase();
+  const [format = subtype] = subtype.split("+");
+  return format.replace(/^(?:vnd\.|x-)/u, "").toUpperCase();
 };
 
 export const isoToDateInputValue = (iso: string): string => iso.slice(0, 10);
