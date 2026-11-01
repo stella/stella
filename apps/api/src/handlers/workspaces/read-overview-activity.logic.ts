@@ -426,14 +426,13 @@ export const resolveActivityDetail = ({
   if (resourceType !== AUDIT_RESOURCE_TYPE.ENTITY) {
     return { type: "none" };
   }
-  switch (linkChange) {
-    case TASK_LINK_AUDIT_CHANGE.ADDED:
-      return { change: "added", linkedName, type: "taskLink" };
-    case TASK_LINK_AUDIT_CHANGE.REMOVED:
-      return { change: "removed", linkedName, type: "taskLink" };
-    default:
-      return { type: "none" };
+  if (linkChange === TASK_LINK_AUDIT_CHANGE.ADDED) {
+    return { change: "added", linkedName, type: "taskLink" };
   }
+  if (linkChange === TASK_LINK_AUDIT_CHANGE.REMOVED) {
+    return { change: "removed", linkedName, type: "taskLink" };
+  }
+  return { type: "none" };
 };
 
 /** The item on the far end of a task link row; the row's own target is the task. */
