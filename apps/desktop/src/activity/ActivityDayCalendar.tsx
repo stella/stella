@@ -429,6 +429,7 @@ export const ActivityDayCalendar = ({
           range: formatRange(openSuggestion.startMs, openSuggestion.endMs),
           hours: hours(openSuggestion.roundedTenths),
         })}
+        sourceAppVisuals={snapshot.sourceAppVisuals}
         assist={narratives.view(openSuggestion)}
         onAssist={(choice) => narratives.choose(openSuggestion, choice)}
         onEdit={(change) => narratives.update(openSuggestion, change)}
@@ -503,7 +504,7 @@ export const ActivityDayCalendar = ({
         locale={locale}
         nowMs={nowMs}
         onSelectRange={(columnId, range) => {
-          if (columnId === ACTIVITY_COLUMN_ID) {
+          if (columnId === ENTRIES_COLUMN_ID) {
             open(
               { range, type: "range" },
               manualSuggestion(day.segments, range),
@@ -514,7 +515,7 @@ export const ActivityDayCalendar = ({
           openSuggestion === null
             ? null
             : {
-                columnId: ACTIVITY_COLUMN_ID,
+                columnId: ENTRIES_COLUMN_ID,
                 panel: { columnId: ENTRIES_COLUMN_ID, content: card },
                 range: {
                   endMs: openSuggestion.endMs,
@@ -704,16 +705,17 @@ function useCalendarColumns({
       blocks: activity,
       id: ACTIVITY_COLUMN_ID,
       label: t("title"),
-      rangeSelection: rangeSelection
-        ? { label: t("selectRange"), type: "enabled" }
-        : { type: "disabled" },
+      // Activity is the record; entries are drawn where they are kept.
+      rangeSelection: { type: "disabled" },
       type: "blocks",
     },
     {
       blocks: entries,
       id: ENTRIES_COLUMN_ID,
       label: t("timeEntries"),
-      rangeSelection: { type: "disabled" },
+      rangeSelection: rangeSelection
+        ? { label: t("selectRange"), type: "enabled" }
+        : { type: "disabled" },
       type: "blocks",
     },
   ];

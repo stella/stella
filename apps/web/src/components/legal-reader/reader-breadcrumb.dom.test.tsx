@@ -951,7 +951,7 @@ test("reader breadcrumb uses translated Arabic chrome and isolates source titles
 
 /**
  * Stands in for layout, which happy-dom does not do: the trail's width and
- * each crumb's measured text, handed to the trail as its resize observer
+ * each crumb's measured width, handed to the trail as its resize observer
  * would. Install before mounting; `restore` puts the real observer back.
  */
 const fakeTrailLayout = (
@@ -1003,13 +1003,14 @@ const currentCrumb = () =>
 
 test("reader breadcrumb gives outer levels to the menu before the current title, and keeps every level reachable", async () => {
   const current = path.at(-1) ?? panic("The fixture needs a current heading");
-  // Outer levels are labels alone (84px); the current heading is "§ 5"
-  // (28px) and, with its title, 160px. Each crumb adds 16px of padding.
+  // Outer levels are labels alone (100px); the current heading is "§ 5"
+  // (44px) and, with its title, 176px. The measurer is the crumb's own button,
+  // so these widths hold its padding.
   const { resizeTo, restore } = fakeTrailLayout((part, anchorId) => {
     if (anchorId !== current.anchorId) {
-      return 84;
+      return 100;
     }
-    return part === "label" ? 28 : 160;
+    return part === "label" ? 44 : 176;
   });
   try {
     mount(() => {});
@@ -1075,12 +1076,12 @@ test("reader breadcrumb gives outer levels to the menu before the current title,
 
 test("once the menu leaves the bar, the contents control stays a full touch target and reaches every level", async () => {
   const current = path.at(-1) ?? panic("The fixture needs a current heading");
-  // "§ 5" alone (20px plus 16px of padding) is narrower than a touch target.
+  // "§ 5" alone (36px, padding included) is narrower than a touch target.
   const { resizeTo, restore } = fakeTrailLayout((part, anchorId) => {
     if (anchorId !== current.anchorId) {
-      return 84;
+      return 100;
     }
-    return part === "label" ? 20 : 160;
+    return part === "label" ? 36 : 176;
   });
   try {
     mount(() => {});

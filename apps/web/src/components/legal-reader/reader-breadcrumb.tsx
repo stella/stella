@@ -206,8 +206,16 @@ const ReaderContentsList = ({
   );
 };
 
-/** A crumb's button padding and border, which its measured text leaves out. */
-const CRUMB_PADDING_WIDTH = 16;
+/**
+ * A crumb's button. The hidden measurer renders the same one, as a span so no
+ * control hides on the page, and so a measured width is the width the crumb
+ * needs, whatever its type or padding become.
+ */
+const CRUMB_BUTTON = {
+  className: "h-11 min-w-0 justify-start sm:h-11",
+  size: "xs",
+  variant: "ghost",
+} as const;
 const SEPARATOR_WIDTH = 16;
 const MENU_WIDTH = 44;
 /** The smallest touch target a control may offer. */
@@ -347,11 +355,11 @@ export const ReaderBreadcrumb = ({
         return;
       }
       const widthOfMeasure = (part: "label" | "full", anchorId: string) =>
-        (node
+        node
           .querySelector<HTMLElement>(
             `[data-breadcrumb-${part}="${CSS.escape(anchorId)}"]`,
           )
-          ?.getBoundingClientRect().width ?? 0) + CRUMB_PADDING_WIDTH;
+          ?.getBoundingClientRect().width ?? 0;
       const crumbs = compactReaderPath(path).visible.map(({ anchorId }) => ({
         label: widthOfMeasure("label", anchorId),
         full: widthOfMeasure("full", anchorId),
@@ -425,14 +433,7 @@ export const ReaderBreadcrumb = ({
             ? t("statutes.outline")
             : `${t("statutes.outline")}: ${nameOf(title)}`
         }
-        render={
-          <Button
-            className="h-11 min-w-0 justify-start sm:h-11"
-            size="xs"
-            style={{ width }}
-            variant="ghost"
-          />
-        }
+        render={<Button {...CRUMB_BUTTON} style={{ width }} />}
         title={title}
       >
         {label}
@@ -495,18 +496,26 @@ export const ReaderBreadcrumb = ({
       </span>
       <div
         aria-hidden="true"
-        className="pointer-events-none invisible absolute flex w-max text-sm font-medium whitespace-nowrap sm:text-xs"
+        className="pointer-events-none invisible absolute flex w-max"
       >
         {visible.map(({ anchorId, title }) => {
           const parts = splitReaderHeading(title);
           return (
             <Fragment key={anchorId}>
-              <span data-breadcrumb-label={anchorId}>
+              <Button
+                {...CRUMB_BUTTON}
+                data-breadcrumb-label={anchorId}
+                render={<span />}
+              >
                 <CrumbText parts={parts} withTitle={false} />
-              </span>
-              <span data-breadcrumb-full={anchorId}>
+              </Button>
+              <Button
+                {...CRUMB_BUTTON}
+                data-breadcrumb-full={anchorId}
+                render={<span />}
+              >
                 <CrumbText parts={parts} withTitle />
-              </span>
+              </Button>
             </Fragment>
           );
         })}
@@ -522,13 +531,11 @@ export const ReaderBreadcrumb = ({
               <TrailMenu entries={offBar} nameOf={nameOf} onJump={onJump} />
             ) : (
               <Button
+                {...CRUMB_BUTTON}
                 aria-label={nameOf(item.segment.title)}
-                className="h-11 min-w-0 justify-start sm:h-11"
-                size="xs"
                 onClick={() => onJump(item.segment.anchorId)}
                 style={{ width: widthOf(item.index) }}
                 title={item.segment.title}
-                variant="ghost"
               >
                 <CrumbText
                   parts={splitReaderHeading(item.segment.title)}
