@@ -41,6 +41,7 @@ import {
   DESIGN_SYSTEM_CONSUMER_FILES,
   PRODUCT_FRONTEND_FILES,
 } from "./scripts/product-frontend-files.ts";
+import { PROVIDER_CLIENT_MODULES } from "./scripts/provider-client-modules.ts";
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -957,46 +958,10 @@ const apiPortableSafeIdBrandingImport = {
 // An adapter or client built anywhere else skips both, so the runtime entry
 // points of the adapter packages, of the provider SDKs (with the families the
 // API does not use yet), and of the adapter subclass the factory builds,
-// belong to the factory; type-only imports stay allowed.
-export const API_PROVIDER_ADAPTER_MODULES = [
-  "@/api/lib/stella-openrouter-text-adapter",
-  "openai",
-  "@anthropic-ai/sdk",
-  "@anthropic-ai/bedrock-sdk",
-  "@anthropic-ai/vertex-sdk",
-  "@google/genai",
-  "@google/generative-ai",
-  "@mistralai/mistralai",
-  "@openrouter/sdk",
-  "@aws-sdk/client-bedrock-runtime",
-  "@azure/openai",
-  "@huggingface/inference",
-  "@ai-sdk/amazon-bedrock",
-  "@ai-sdk/anthropic",
-  "@ai-sdk/azure",
-  "@ai-sdk/google",
-  "@ai-sdk/mistral",
-  "@ai-sdk/openai",
-  "@ai-sdk/openai-compatible",
-  "@tanstack/ai-anthropic",
-  "@tanstack/ai-anthropic/byok",
-  "@tanstack/ai-anthropic/vertex",
-  "@tanstack/ai-bedrock",
-  "@tanstack/ai-bedrock/byok",
-  "@tanstack/ai-gemini",
-  "@tanstack/ai-gemini/byok",
-  "@tanstack/ai-gemini/experimental",
-  "@tanstack/ai-mistral",
-  "@tanstack/ai-mistral/adapters/text",
-  "@tanstack/ai-mistral/byok",
-  "@tanstack/ai-mistral/vertex",
-  "@tanstack/ai-openai",
-  "@tanstack/ai-openai/byok",
-  "@tanstack/ai-openai/compatible",
-  "@tanstack/ai-openrouter",
-  "@tanstack/ai-openrouter/byok",
-  "@tanstack/openai-base",
-] as const;
+// belong to the factory; type-only imports stay allowed. This rule reads
+// import declarations only; `provider-client-construction` in
+// `scripts/ownership/` holds the dynamic imports.
+export const API_PROVIDER_ADAPTER_MODULES = PROVIDER_CLIENT_MODULES;
 
 const apiProviderAdapterImports = API_PROVIDER_ADAPTER_MODULES.map((name) => ({
   name,
