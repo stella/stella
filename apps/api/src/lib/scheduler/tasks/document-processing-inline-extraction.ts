@@ -7,16 +7,7 @@ import {
   readInlineNativeExtractionRuns,
 } from "@/api/lib/document-processing-queue";
 import { LIMITS } from "@/api/lib/limits";
-import type {
-  SchedulerDb,
-  SchedulerTask,
-  SchedulerTaskContext,
-} from "@/api/lib/scheduler/types";
-
-export const EXTRACT_NATIVE_INLINE_TASK =
-  "documentProcessing.extractNativeInline" as const;
-
-const FULL_BATCH_CONTINUATION_DELAY_MS = 10_000;
+import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
 type RunExtractionOptions = {
   db: SchedulerDb;
@@ -61,10 +52,12 @@ export const runInlineExtractions = async ({
   return { attempted, failed };
 };
 
-type InlineExtractionDependencies = {
+type ExtractSmallRunsOptions = {
+  db: SchedulerDb;
   process?: typeof processDocumentProcessingRun;
-  reportFailure?: typeof handleDocumentProcessingFailure;
   readRuns?: typeof readInlineNativeExtractionRuns;
+  reportFailure?: typeof handleDocumentProcessingFailure;
+  signal: AbortSignal;
 };
 
 /**
@@ -72,42 +65,21 @@ type InlineExtractionDependencies = {
  * within minutes. The scheduled batch worker keeps larger files and OCR; both
  * claim through the run's own lease, so a run cannot be processed twice.
  */
-export const createExtractNativeInlineTask =
-  ({
-    process = processDocumentProcessingRun,
-    reportFailure = handleDocumentProcessingFailure,
-    readRuns = readInlineNativeExtractionRuns,
-  }: InlineExtractionDependencies = {}): SchedulerTask =>
-  async ({
+export const extractSmallRunsInline = async ({
+  db,
+  process = processDocumentProcessingRun,
+  readRuns = readInlineNativeExtractionRuns,
+  reportFailure = handleDocumentProcessingFailure,
+  signal,
+}: ExtractSmallRunsOptions) => {
+  const limit = LIMITS.documentProcessingInlineBatchSize;
+  const runs = await readRuns({ database: db, limit });
+  const { attempted, failed } = await runInlineExtractions({
     db,
-    dueAt,
-    logger,
-    scheduleContinuation,
+    process,
+    reportFailure,
+    runs,
     signal,
-  }: SchedulerTaskContext) => {
-    const limit = LIMITS.documentProcessingInlineBatchSize;
-    const runs = await readRuns({ database: db, limit });
-    const { attempted, failed } = await runInlineExtractions({
-      db,
-      process,
-      reportFailure,
-      runs,
-      signal,
-    });
-
-    logger.info("scheduler.document_native_extraction_inline", {
-      "documentProcessing.failed": failed,
-      "documentProcessing.runs": attempted,
-    });
-
-    if (signal.aborted) {
-      panic("SchedulerAborted");
-    }
-    if (runs.length === limit) {
-      scheduleContinuation(
-        new Date(dueAt.toDate().getTime() + FULL_BATCH_CONTINUATION_DELAY_MS),
-      );
-    }
-  };
-
-export const extractNativeInline = createExtractNativeInlineTask();
+  });
+  return { attempted, failed, moreQueued: runs.length === limit };
+};

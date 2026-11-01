@@ -5,13 +5,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
-  createExtractNativeInlineTask,
+  extractSmallRunsInline,
   runInlineExtractions,
 } from "@/api/lib/scheduler/tasks/document-processing-inline-extraction";
-import type {
-  SchedulerDb,
-  SchedulerTaskContext,
-} from "@/api/lib/scheduler/types";
+import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const db = asTestRaw<SchedulerDb>({});
@@ -103,33 +100,25 @@ test("starts nothing after scheduler cancellation", async () => {
   expect(process).not.toHaveBeenCalled();
 });
 
-const runTask = async (queued: number) => {
-  const continuations: Date[] = [];
+const extract = async (queued: number) => {
   const process = mock(async () => undefined);
-  const readRuns = mock(async () => runsOf(queued));
-  const dueAt = new Date("2026-11-01T10:00:00.000Z");
-  const context = {
+  const result = await extractSmallRunsInline({
     db,
-    dueAt: { toDate: () => dueAt },
-    logger: { info: () => undefined },
-    scheduleContinuation: (nextRunAt: Date) => {
-      continuations.push(nextRunAt);
-    },
+    process,
+    readRuns: async () => await Promise.resolve(runsOf(queued)),
+    reportFailure,
     signal: new AbortController().signal,
-  };
-  await createExtractNativeInlineTask({ process, readRuns, reportFailure })(
-    asTestRaw<SchedulerTaskContext>(context),
-  );
-  return { continuations, process, readRuns };
+  });
+  return { process, result };
 };
 
-test("a full batch comes back soon, a partial one waits for its schedule", async () => {
-  const full = await runTask(LIMITS.documentProcessingInlineBatchSize);
-  expect(full.continuations).toHaveLength(1);
+test("a full batch says more may be queued, a partial one does not", async () => {
+  const full = await extract(LIMITS.documentProcessingInlineBatchSize);
+  expect(full.result.moreQueued).toBe(true);
   expect(full.process).toHaveBeenCalledTimes(
     LIMITS.documentProcessingInlineBatchSize,
   );
 
-  const partial = await runTask(1);
-  expect(partial.continuations).toEqual([]);
+  const partial = await extract(1);
+  expect(partial.result.moreQueued).toBe(false);
 });

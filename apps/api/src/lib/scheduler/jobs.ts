@@ -55,7 +55,6 @@ import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks
 import { CHECK_DATA_INVARIANTS_TASK } from "@/api/lib/scheduler/tasks/data-invariants";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
-import { EXTRACT_NATIVE_INLINE_TASK } from "@/api/lib/scheduler/tasks/document-processing-inline-extraction";
 import { DISPATCH_NATIVE_EXTRACTION_TASK } from "@/api/lib/scheduler/tasks/document-processing-native-extraction";
 import { DISPATCH_DOCUMENT_OCR_TASK } from "@/api/lib/scheduler/tasks/document-processing-ocr";
 import { RECONCILE_DOCUMENT_REVIEW_RUNS_TASK } from "@/api/lib/scheduler/tasks/document-review-run-reconcile";
@@ -334,19 +333,12 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
-    description: "Release queued native extraction runs to their worker",
+    description:
+      "Release queued native extraction runs and extract small uploads here",
     id: "documentProcessing.dispatchNativeExtraction.twoMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 2 * 60 * 1000 },
     task: DISPATCH_NATIVE_EXTRACTION_TASK,
-    reads: "unmeasured",
-  },
-  {
-    description: "Extract small uploads in this process",
-    id: "documentProcessing.extractNativeInline.minutely",
-    mode: "recurring",
-    schedule: { type: "interval", everyMs: 60 * 1000 },
-    task: EXTRACT_NATIVE_INLINE_TASK,
     reads: "unmeasured",
   },
   {

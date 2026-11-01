@@ -169,11 +169,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
   ),
   "documentProcessing.dispatchNativeExtraction": platform(
     "document-processing-native-extraction.ts",
-    "Hands queued native extraction runs to their queue.",
-  ),
-  "documentProcessing.extractNativeInline": platform(
-    "document-processing-inline-extraction.ts",
-    "Extracts small uploads through the run's own lease, as the worker does.",
+    "Hands queued native extraction runs to their queue and extracts small ones through the run's own lease, as the worker does.",
   ),
   "documentProcessing.recoverDeadlineScouts": platform(
     "document-deadline-scout-recovery.ts",
