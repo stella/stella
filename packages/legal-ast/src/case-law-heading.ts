@@ -17,5 +17,5 @@ export const caseLawSectionHeading = (
   if (match === null) {
     return null;
   }
-  return { level: match.groups?.["subsection"] === undefined ? 3 : 4 };
+  return { level: match.groups?.["subsection"] !== undefined ? 4 : 3 };
 };
