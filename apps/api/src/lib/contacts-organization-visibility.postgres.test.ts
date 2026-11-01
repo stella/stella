@@ -350,6 +350,7 @@ describe.skipIf(!runPostgresTests)(
         requestNativeExtractionRun: async () => null,
       };
       const dependencies: ReviewResetDependencies = {
+        flushWorkspaceSearchRepairs: async () => ({ failed: 0, repaired: 0 }),
         seed: { documents: documentDependencies },
         workspaceDeletion: { enqueueCleanup: async () => {} },
         beforeSweep: async () => {
