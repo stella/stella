@@ -165,7 +165,16 @@
     "preview": "Otevřít náhled",
     "previewDescription": "Tento soubor se otevře v systémovém náhledu.",
     "unrendered": "Tento dokument zde nelze zobrazit, systémový náhled ho ale možná otevře.",
-    "details": "Podrobnosti"
+    "details": "Podrobnosti",
+    "zoomOut": "Oddálit",
+    "zoomIn": "Přiblížit",
+    "zoomFit": "Přizpůsobit šířce",
+    "fit": "Šířka",
+    "appearance": {
+      "system": "Vzhled: automaticky",
+      "light": "Vzhled: světlý",
+      "dark": "Vzhled: tmavý"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -193,7 +202,8 @@
     "server": "Server",
     "signOut": "Odhlásit se",
     "deleteAccount": "Smazat účet",
-    "deleteAccountHint": "Otevře váš účet na webu, kde ho můžete smazat i se vším, co je vaše."
+    "deleteAccountHint": "Otevře váš účet na webu, kde ho můžete smazat i se vším, co je vaše.",
+    "signOutFailed": "Odhlášení se nepodařilo dokončit. Zkuste to znovu."
   },
   "header": {
     "search": "Hledat"
@@ -293,6 +303,29 @@
   "palette": {
     "placeholder": "Hledejte spisy a konverzace, nebo spusťte příkaz",
     "noResults": "Nic neodpovídá „{query}“"
+  },
+  "search": {
+    "placeholder": "Hledat ve stella",
+    "clear": "Vymazat hledání",
+    "cancel": "Zrušit",
+    "recent": "Nedávná hledání",
+    "clearRecent": "Vymazat",
+    "hint": "Hledejte ve spisech, dokumentech, úkolech, konverzacích a judikatuře.",
+    "filters": "Filtry",
+    "noResultsTitle": "Žádné výsledky",
+    "noResults": "Nic neodpovídá „{query}“. Zkuste jiná slova nebo odeberte filtr.",
+    "loadFailed": "Hledání se nepodařilo provést.",
+    "retry": "Zkusit znovu",
+    "type": {
+      "document": "Dokumenty",
+      "matter": "Spisy",
+      "task": "Úkoly",
+      "caseLaw": "Judikatura",
+      "chat": "Konverzace",
+      "folder": "Složky",
+      "message": "E-maily",
+      "link": "Odkazy"
+    }
   },
   "pane": {
     "showList": "Zobrazit seznam",

@@ -5,23 +5,33 @@
 # knowing the current version.
 #
 # Stable names produced:
-#   Stella-windows-x64-setup.exe          (NSIS installer, primary)
-#   Stella-windows-x64.msi                (MSI installer, IT-managed)
-#   Stella-windows-x64-setup.nsis.zip     (updater archive + .sig)
-#   Stella-windows-x64.msi.zip            (updater archive + .sig)
+#   Stella-windows-<arch>-setup.exe       (NSIS installer + .sig)
+#   Stella-windows-<arch>-setup.nsis.zip  (updater archive + .sig)
 #   Stella-macos-universal.dmg            (drag-to-Applications)
 #   Stella-macos-universal.app.tar.gz     (updater archive + .sig)
 #
-# `.sig` files are renamed alongside their main artifact so the
-# updater manifest builder can pair them.
+# <arch> is x64 or arm64, taken from the Rust target. `.sig` files are
+# renamed alongside their main artifact so the updater manifest builder
+# can pair them.
 set -euo pipefail
 
-bundle_dir="${1:?usage: $0 <bundle dir>}"
+bundle_dir="${1:?usage: $0 <bundle dir> <rust target>}"
+target="${2:?usage: $0 <bundle dir> <rust target>}"
 
 if [[ ! -d "$bundle_dir" ]]; then
   echo "::error::bundle dir not found: $bundle_dir" >&2
   exit 1
 fi
+
+case "$target" in
+  x86_64-pc-windows-msvc) windows_name="Stella-windows-x64" ;;
+  aarch64-pc-windows-msvc) windows_name="Stella-windows-arm64" ;;
+  universal-apple-darwin) windows_name="" ;;
+  *)
+    echo "::error::no stable artifact names for target: $target" >&2
+    exit 1
+    ;;
+esac
 
 rename_pair() {
   local src="$1" dst="$2"
@@ -41,18 +51,10 @@ shopt -s nullglob
 
 # NSIS .exe + updater zip
 for src in "$bundle_dir"/nsis/*-setup.exe; do
-  rename_pair "$src" "$bundle_dir/nsis/Stella-windows-x64-setup.exe"
+  rename_pair "$src" "$bundle_dir/nsis/${windows_name}-setup.exe"
 done
 for src in "$bundle_dir"/nsis/*-setup.nsis.zip; do
-  rename_pair "$src" "$bundle_dir/nsis/Stella-windows-x64-setup.nsis.zip"
-done
-
-# MSI + updater zip
-for src in "$bundle_dir"/msi/*.msi; do
-  rename_pair "$src" "$bundle_dir/msi/Stella-windows-x64.msi"
-done
-for src in "$bundle_dir"/msi/*.msi.zip; do
-  rename_pair "$src" "$bundle_dir/msi/Stella-windows-x64.msi.zip"
+  rename_pair "$src" "$bundle_dir/nsis/${windows_name}-setup.nsis.zip"
 done
 
 # macOS DMG

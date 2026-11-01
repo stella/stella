@@ -386,6 +386,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/analytics-config/src/index.ts",
     "packages/api-contract/src/*",
     "packages/auth-model/src/contract.ts",
+    "packages/auth-model/src/invitation-sections.ts",
     "packages/boe/src/*",
     "packages/business-registries/src/default-formats.ts",
     "packages/business-registries/src/format-clauses.ts",
@@ -1779,6 +1780,26 @@ const GENERATOR_DECLARATIONS = [
     checkedWith: ["bun", "scripts/check-ci-job-classification.ts"],
     // Its outputs live under .github/, which the autofix action may not
     // modify, so pull requests refresh them by hand.
+    autofix: false,
+    after: [],
+  },
+  {
+    id: "merge-group-parser",
+    outputKind: "committed",
+    outputs: [".github/workflows/cla.yml"],
+    blocks: [
+      {
+        path: ".github/workflows/cla.yml",
+        begin: "// BEGIN GENERATED merge-group parser",
+        end: "// END GENERATED merge-group parser",
+      },
+    ],
+    inputs: [
+      "scripts/merge-group-entries.mjs",
+      "scripts/sync-merge-group-parser.mjs",
+    ],
+    write: ["node", "scripts/sync-merge-group-parser.mjs"],
+    check: ["node", "scripts/sync-merge-group-parser.mjs", "--check"],
     autofix: false,
     after: [],
   },

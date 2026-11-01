@@ -605,7 +605,11 @@
       ".changeset/**",
       ".github/workflows/autofix.yml"
     ],
-    "Test type-aware autofix": [".github/workflows/autofix.yml", "scripts/**"],
+    "Test type-aware autofix": [
+      ".github/workflows/autofix.yml",
+      "packages/scripts/src/syntax-tree.ts",
+      "scripts/**"
+    ],
     "Test local workflow verification": [".github/workflows/**", "scripts/**"],
     "Typecheck cache contract": [
       ".github/workflows/ci.yml",
