@@ -15,6 +15,9 @@ GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { useState } = await import("react");
 const { IntlProvider } = await import("use-intl");
+const { createTranslator } = await import("use-intl/core");
+
+const t = createTranslator({ locale: "en", messages, timeZone: "UTC" });
 const { PublicLawTable } = await import("./public-law-table");
 
 afterEach(cleanup);
@@ -83,14 +86,8 @@ const Fixture = () => {
           actions: null,
           clearLabel: messages.common.clearSelection,
           getRowLabel: (row) =>
-            messages.common.selectRow.replace(
-              "{label}",
-              () => row.statute.title,
-            ),
-          label: messages.common.selectedCount.replace(
-            "{count, plural, one {# selected} other {# selected}}",
-            () => `${selectedIds.length} selected`,
-          ),
+            t("common.selectRow", { label: row.statute.title }),
+          label: t("common.selectedCount", { count: selectedIds.length }),
           onSelectedIdsChange: setSelectedIds,
           selectedIds,
           selectAllLabel: messages.common.selectAllRows,

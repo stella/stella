@@ -552,6 +552,10 @@ describe("policy coverage", () => {
     // on the owner connection and deny the request role entirely
     // (asserted in rls-table-grants.test.ts).
     "organization_professional_use_acceptances",
+    // Account-owned creation receipts exist before membership; organization_id
+    // is a cascade pointer. Owner-only RLS and revoked request-role grants are
+    // asserted in rls-table-grants.test.ts instead of tenant CRUD policies.
+    "organization_creation_requests",
     // A notification is addressed to a person, not to a matter: recipient and
     // organization are what admit the row, and its nullable workspace_id is a
     // link pointer the client resolves through the ordinary authorized routes,
