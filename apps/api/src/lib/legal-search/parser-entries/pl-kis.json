@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "PL_KIS",
+  "key": "pl-kis",
+  "parserVersion": 14,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Re-read word-processor HTML so single printed line breaks stay inside their sentence and blank lines alone end paragraphs."
+  }
+}

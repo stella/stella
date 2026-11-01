@@ -33,6 +33,8 @@ export type PreCutGate = {
   readonly check: CutGateCheck;
   /** Whether `--allow-unproven-main` lets the cut go on despite a failure. */
   readonly overriddenByAllowUnprovenMain: boolean;
+  /** A non-check effect makes the gate ineligible for a dry run. */
+  readonly writeSide?: string;
 };
 
 export type PostCutGate = {
@@ -46,6 +48,16 @@ export type PostCutGate = {
 export type CutGate = PreCutGate | PostCutGate;
 
 export const MAINTENANCE_CUT_GATES: readonly CutGate[] = [
+  {
+    name: "deploy-env-contract",
+    source: "cut",
+    stage: "pre-cut",
+    check: {
+      kind: "command",
+      command: ["bun", "scripts/check-deploy-env-contract.ts"],
+    },
+    overriddenByAllowUnprovenMain: false,
+  },
   {
     name: "main-health",
     source: "cut",

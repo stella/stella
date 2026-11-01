@@ -7,6 +7,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  type BrowserExtensionCapability,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   RESOURCE_TYPE,
@@ -87,7 +88,7 @@ import {
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
-  resolveBrowserClientCapability,
+  resolveBrowserExtensionCapability,
   validateMessage,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
@@ -127,6 +128,11 @@ import {
 } from "@/api/handlers/chat/data-scope";
 import { createTurnDecisionPassageStamper } from "@/api/handlers/chat/decision-passage-numbers";
 import type { DecisionPassageNumbers } from "@/api/handlers/chat/decision-passage-numbers";
+import {
+  authorizeRequestedUserMessageEdit,
+  refuseChatUserMessageEditTarget,
+  refuseChatUserMessageEditTurn,
+} from "@/api/handlers/chat/edit-user-message";
 import { ChatError } from "@/api/handlers/chat/errors";
 import { generateThreadTitle } from "@/api/handlers/chat/generate-thread-title";
 import {
@@ -1333,6 +1339,10 @@ const acceptIncomingTurn = async ({
     });
     const isExplicitRegeneration =
       body.turnIntent === CHAT_TURN_INTENT.regenerate;
+    // An edit rewrites a user message this thread already stores; it was
+    // authorized before the turn was read (`authorizeRequestedUserMessageEdit`)
+    // and every later refusal carries the edit's typed codes.
+    const isEdit = body.turnIntent === CHAT_TURN_INTENT.edit;
     if (
       isExplicitRegeneration &&
       (parsedMessage.message.role !== "user" ||
@@ -1373,10 +1383,12 @@ const acceptIncomingTurn = async ({
       );
       if (truncationTarget === null) {
         return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Truncation target was not found in the chat thread",
-          }),
+          isEdit
+            ? refuseChatUserMessageEditTarget()
+            : new HandlerError({
+                status: 400,
+                message: "Truncation target was not found in the chat thread",
+              }),
         );
       }
       messagesForPersistence = truncationTarget.messagesForPersistence;
@@ -1407,27 +1419,42 @@ const acceptIncomingTurn = async ({
       incomingMessageExists,
     });
     if (
-      isExplicitRegeneration &&
+      (isExplicitRegeneration || isEdit) &&
       baseLatestMessagePlan.persistencePlan.type !== "none"
     ) {
       return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "Regeneration target is not a persisted user message",
-        }),
+        isEdit
+          ? refuseChatUserMessageEditTarget()
+          : new HandlerError({
+              status: 409,
+              message: "Regeneration target is not a persisted user message",
+            }),
       );
     }
-    const latestMessagePlan = isExplicitRegeneration
-      ? {
-          existingIds: baseLatestMessagePlan.existingIds,
-          messages: baseLatestMessagePlan.messages,
-          persistencePlan: {
-            message: parsedMessage.message,
-            messageId: parsedMessage.message.id,
-            type: "update",
-          } satisfies MessagePersistencePlan,
-        }
-      : baseLatestMessagePlan;
+    const rewritePlan = {
+      message: parsedMessage.message,
+      messageId: parsedMessage.message.id,
+      type: "update",
+    } satisfies MessagePersistencePlan;
+    let latestMessagePlan = baseLatestMessagePlan;
+    if (isExplicitRegeneration) {
+      latestMessagePlan = {
+        existingIds: baseLatestMessagePlan.existingIds,
+        messages: baseLatestMessagePlan.messages,
+        persistencePlan: rewritePlan,
+      };
+    } else if (isEdit) {
+      // The run answers the edited message, never the stored copy it replaces.
+      latestMessagePlan = {
+        existingIds: baseLatestMessagePlan.existingIds,
+        messages: baseLatestMessagePlan.messages.map((message) =>
+          message.id === parsedMessage.message.id
+            ? parsedMessage.message
+            : message,
+        ),
+        persistencePlan: rewritePlan,
+      };
+    }
     if (
       replayTargetMessageId !== undefined &&
       latestMessagePlan.persistencePlan.type !== "update"
@@ -1590,6 +1617,7 @@ const acceptIncomingTurn = async ({
       const persistenceResult = await persistAcceptedMessageWithClaim({
         ...persistenceProps,
         plannedOnHistory,
+        ...(isEdit ? { refuseTurn: refuseChatUserMessageEditTurn } : {}),
         turnAcceptance,
       });
       if (Result.isError(persistenceResult)) {
@@ -1691,6 +1719,7 @@ type ChatToolsInput = Parameters<typeof getChatTools>[0];
 
 type PrepareValidatedIncomingMessageOptions = {
   dependencies: {
+    caseLawDb?: SendMessageDependencies["caseLawDb"];
     loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
     uploadMessageFiles: typeof uploadMessageFilesWithRollback;
   };
@@ -1743,7 +1772,7 @@ type PrepareValidatedIncomingMessageOptions = {
 
 /** Validates the provider-facing message and adopts thread/file rollback ownership. */
 const prepareValidatedIncomingMessage = async ({
-  dependencies: { loadWebSearchProviders, uploadMessageFiles },
+  dependencies: { caseLawDb, loadWebSearchProviders, uploadMessageFiles },
   authorization: {
     accessibleWorkspaceIds,
     memberRole,
@@ -1865,8 +1894,9 @@ const prepareValidatedIncomingMessage = async ({
       // Validation admits persisted browser calls from any client; the
       // streaming set below registers the tool only when this request's
       // client reports a live extension.
-      browserClient: {
+      browserExtension: {
         protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        status: "connected",
       },
       editApplyMode,
       docxEditRepresentation,
@@ -1914,6 +1944,7 @@ const prepareValidatedIncomingMessage = async ({
 
     const thread = yield* Result.await(
       loadThread({
+        caseLawDb,
         initialDataWorkspaceIds:
           activeDraftContext === null
             ? []
@@ -2278,7 +2309,7 @@ export const createSendMessage = (
       user,
     }) {
       if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-        return Result.err(storedAIConfigUnreadableError(undefined));
+        return Result.err(storedAIConfigUnreadableError());
       }
 
       const body = transportBody.forwardedProps;
@@ -2378,6 +2409,17 @@ export const createSendMessage = (
 
       const workspaceId =
         scope.scope === "workspace" ? scope.workspaceId : null;
+      // An edit replaces one of the requester's own user messages and drops
+      // every later turn: authorize it before anything else reads or writes
+      // the thread.
+      yield* Result.await(
+        authorizeRequestedUserMessageEdit({
+          body,
+          organizationId: session.activeOrganizationId,
+          safeDb,
+          userId: user.id,
+        }),
+      );
       const registryDispatchResult = Result.tryPromise({
         try: async () =>
           await getOrganizationRegistryDispatch({
@@ -2503,6 +2545,7 @@ export const createSendMessage = (
             };
       const validationThreadState = yield* Result.await(
         readThreadValidationState({
+          caseLawDb: dependencies.caseLawDb,
           initialActiveSkill: body.activeSkill,
           messageId: body.message.id,
           organizationId: session.activeOrganizationId,
@@ -2595,6 +2638,7 @@ export const createSendMessage = (
         const preparedIncomingMessage = yield* Result.await(
           prepareValidatedIncomingMessage({
             dependencies: {
+              caseLawDb: dependencies.caseLawDb,
               loadWebSearchProviders: dependencies.loadWebSearchProviders,
               uploadMessageFiles: dependencies.uploadMessageFiles,
             },
@@ -2798,6 +2842,7 @@ export const createSendMessage = (
           ),
         );
         const messagesForContextInput = await selectMessagesForContextInput({
+          caseLawDb: dependencies.caseLawDb,
           messages: authorizedHistory,
           safeDb,
           skipCheckpoint: replayTargetMessageId !== undefined,
@@ -2942,7 +2987,9 @@ export const createSendMessage = (
           hasActiveDocxEditClient,
           hasActiveDocxFileClient,
           docxSuggestionSurface,
-          browserClient: resolveBrowserClientCapability(body.browserClient),
+          browserExtension: resolveBrowserExtensionCapability(
+            body.browserExtension,
+          ),
           editApplyMode,
           docxEditRepresentation,
           webSearchEnabled: thread.data.webSearchEnabled,
@@ -3026,6 +3073,9 @@ export const createSendMessage = (
               toolScope: body.toolScope,
             }),
           },
+          browserExtension: resolveBrowserExtensionCapability(
+            body.browserExtension,
+          ),
           userContext: body.userContext,
           userId: user.id,
           workspaceId,
@@ -3634,6 +3684,7 @@ type PrepareChatContextProps = {
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
   toolAvailability: ChatToolAvailability;
+  browserExtension: BrowserExtensionCapability;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -3691,6 +3742,7 @@ const prepareChatContext = async ({
   sendMode,
   threadId,
   toolAvailability,
+  browserExtension,
   userContext,
   userId,
   workspaceId,
@@ -3731,6 +3783,7 @@ const prepareChatContext = async ({
         skillBindingScope,
         threadId,
         toolAvailability,
+        browserExtension,
         userContext,
         userId,
         workspaceId,

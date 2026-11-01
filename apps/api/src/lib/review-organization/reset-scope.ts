@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { eq, inArray, sql } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -38,6 +38,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   feature_enrolments:
     "The account's own feature preferences; the seed sets the ones it needs.",
   usage_allocations: "Usage ledger: budgets must survive the nightly reset.",
+  push_devices:
+    "The review account's own phone registrations for alerts; no reviewer content.",
   usage_entitlements: "Usage ledger: entitlements are operator-managed.",
   usage_events: "Usage ledger: metered history for budgets and billing.",
   usage_lane_counters: "Usage ledger: rate-limit counters.",
@@ -45,6 +47,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   action_cost_calls: "Usage ledger: action cost history.",
   action_cost_records: "Usage ledger: action cost history.",
   hosted_checkout_claims: "Billing state, never reviewer content.",
+  organization_creation_requests:
+    "Account-owned creation replay receipts; retaining them prevents duplicate organizations after a content reset.",
   organization_professional_use_acceptances:
     "The organization's professional-use acceptance; written once, never reviewer content.",
   legal_list_verification_budgets: "Usage ledger: verification budget.",
@@ -151,6 +155,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "playbook_definition_versions",
   "playbook_definitions",
   "rate_tables",
+  "request_idempotency_receipts",
   "sanctions_contact_marks",
   "sanctions_contact_matches",
   "sanctions_contact_screenings",
@@ -306,11 +311,6 @@ export const sweepReviewOrganization = async (
   userId: SafeId<"user">,
 ): Promise<Map<string, number>> => {
   // audit: skip - the reset sweep; the run's totals go to the system audit
-  const workspaceRows = await tx
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(eq(workspaces.organizationId, organizationId));
-  const workspaceIds = workspaceRows.map(({ id }) => id);
   const removed = new Map<string, number>();
   // Chat attachments name no organization; their rows hold their threads
   // (`user_files.thread_id` restricts), and the storage census already
@@ -331,23 +331,40 @@ export const sweepReviewOrganization = async (
   await tx.execute(
     sql`SELECT set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, ${organizationId}, true)`,
   );
-  const applicationTables = new Set(
-    (
-      await tx
-        .select({
-          name: sql<string>`c.relname`,
-        })
-        .from(
-          sql`pg_catalog.pg_class c INNER JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace`,
-        ).where(sql`n.nspname = current_schema() AND c.relforcerowsecurity
-      AND has_table_privilege(${stella.name}, c.oid, 'DELETE')
-      AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_policy policy
-        WHERE policy.polrelid = c.oid AND policy.polcmd IN ('*', 'd')
-          AND policy.polpermissive AND 0 = ANY(policy.polroles)
-          AND strpos(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), 'CURRENT_USER') > 0
-          AND strpos(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), 'pg_get_userbyid') > 0)`)
-    ).map(({ name }) => name),
-  );
+  // One statement shares the catalog and workspace snapshot while saving a
+  // round trip in the reset's fixed statement budget.
+  const [census] = await tx
+    .select({
+      workspaceIds: sql<SafeId<"workspace">[]>`ARRAY(
+        SELECT ${workspaces.id}
+        FROM ${workspaces}
+        WHERE ${workspaces.organizationId} = ${organizationId}
+      )`,
+      applicationTableNames: sql<string[]>`ARRAY(
+        SELECT c.relname::text
+        FROM pg_catalog.pg_class c
+        INNER JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = current_schema()
+          AND c.relforcerowsecurity
+          AND has_table_privilege(${stella.name}, c.oid, 'DELETE')
+          AND NOT EXISTS (
+            SELECT 1
+            FROM pg_catalog.pg_policy policy
+            WHERE policy.polrelid = c.oid
+              AND policy.polcmd IN ('*', 'd')
+              AND policy.polpermissive
+              AND 0 = ANY(policy.polroles)
+              AND strpos(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), 'CURRENT_USER') > 0
+              AND strpos(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), 'pg_get_userbyid') > 0
+          )
+      )`,
+    })
+    .from(sql`(SELECT 1) AS census`);
+  if (census === undefined) {
+    return panic("Reset table census returned no result");
+  }
+  const { applicationTableNames, workspaceIds } = census;
+  const applicationTables = new Set(applicationTableNames);
   const swept = await inOrder(REVIEW_RESET_CLEARED_TABLES, async (name) => {
     const clear = async (deleteTx: Transaction) => {
       const rows = await removeOrganizationRows(deleteTx, organizationId, [

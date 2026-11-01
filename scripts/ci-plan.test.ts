@@ -22,8 +22,10 @@ import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import {
+  POSTGRES_MAX_SHARDS,
+  POSTGRES_MIN_SHARDS,
   POSTGRES_SHARD_TEST_BUDGET_SECONDS,
-  POSTGRES_TEST_SHARD_IDS,
+  postgresShardMatrix,
 } from "../apps/api/scripts/postgres-test-shards";
 import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json" with { type: "json" };
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json" with { type: "json" };
@@ -48,6 +50,7 @@ import {
 } from "./ci-plan-scope";
 import { prHeavyJobs } from "./ci-pr-jobs";
 import { pilotFastJobs } from "./ci-pr-pilot-plan";
+import { REQUIRED_RECORD_KEYS } from "./ci-required-record";
 import {
   embedsExpression,
   GITHUB_EXPRESSION_LIMIT,
@@ -57,6 +60,7 @@ import {
 } from "./ci-result-inputs";
 import { selectRootChecks } from "./ci-root-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
+import depthScriptTests from "./depth-script-tests.json" with { type: "json" };
 import { E2E_SHARD_COUNT } from "./e2e-spec-shards-core";
 import { GENERATORS } from "./generated-files";
 import {
@@ -1435,7 +1439,6 @@ test("CI result rejects a failed check leg after independent guards finish", () 
   }
 });
 
-// timeout: Runs the bounded Bash and jq evidence matrix in real subprocesses.
 test.each(resultJob.needs)(
   "failed %s cannot pass with cancelled siblings or supersession evidence",
   (failedJob) => {
@@ -1462,7 +1465,6 @@ test.each(resultJob.needs)(
     }
     expectResultGates(gates);
   },
-  30_000,
 );
 
 test("a self-cancelled merge group fails even when GitHub marks the failing job cancelled", () => {
@@ -1795,6 +1797,13 @@ const requiredRecordSchema = v.strictObject({
   ),
   not_required: v.array(v.string()),
   verdict: v.picklist(["success", "failure"]),
+});
+
+test("the required-jobs record parser reads exactly the record's key set", () => {
+  // A key added to the record, or to this parser alone, fails here.
+  expect(Object.keys(requiredRecordSchema.entries)).toEqual([
+    ...REQUIRED_RECORD_KEYS,
+  ]);
 });
 type RequiredRecordCase = {
   label: string;
@@ -2475,7 +2484,7 @@ test("desktop Rust tests select classified merge-group changes at every queue de
           expect(selected).toEqual(lintPlatforms);
           expect(selected.at(0)).toEqual({
             os: "macos",
-            runner: "macos-14",
+            runner: "macos-15",
             target: "aarch64-apple-darwin",
           });
           expect(selected.at(1)).toEqual({
@@ -2630,7 +2639,6 @@ test("every bounded-install implementation and fixture selects Windows", () => {
   }
 });
 
-// timeout: Executes the complete selected-job matrix in real Bash processes.
 test("a fast-depth run requires every selected fast-required job to run", () => {
   expect(fastRequired.length).toBeGreaterThan(0);
   const gates: ExpectedResultGate[] = [];
@@ -2681,7 +2689,7 @@ test("a fast-depth run requires every selected fast-required job to run", () => 
     });
   }
   expectResultGates(gates);
-}, 30_000);
+});
 
 const MatrixJob = v.object({
   strategy: v.object({
@@ -3091,6 +3099,34 @@ test("jobs that need ci-plan never hand its outputs over in the environment", ()
     ]
       .filter(({ value }) => typeof value === "string" && unbounded.test(value))
       .map(({ where, key }) => `${where}: ${key}`);
+  });
+  expect(offenders).toEqual([]);
+});
+
+test("ci-plan environment values never embed unbounded step outputs", () => {
+  // Step outputs cross the process boundary through the runner environment.
+  // Whole output objects and file lists can exceed the OS argument limit before
+  // the shell starts, so consumers must receive a file path instead.
+  const unbounded =
+    /toJSON\(\s*steps\.[^)]+\.outputs\s*\)|steps\.[^.]+\.outputs\.(?:changed_files|docs_changed_files|api_test_files|specs)/u;
+  const plan = v.parse(
+    v.object({ steps: v.array(v.unknown()) }),
+    ciJobs["ci-plan"],
+  );
+  const offenders = flattenWorkflowSteps(plan.steps).flatMap((step) => {
+    const parsed = v.parse(
+      v.looseObject({
+        name: v.optional(v.string()),
+        env: v.optional(v.record(v.string(), v.unknown())),
+      }),
+      step,
+    );
+    return Object.entries(parsed.env ?? {})
+      .filter(
+        (entry): entry is [string, string] =>
+          typeof entry[1] === "string" && unbounded.test(entry[1]),
+      )
+      .map(([key]) => `${parsed.name ?? "unnamed step"}: ${key}`);
   });
   expect(offenders).toEqual([]);
 });
@@ -4777,32 +4813,152 @@ test("every parallel quality and guard leg fails closed at full depth", () => {
   }
 });
 
-test("Postgres service shards bind every matrix leg to a distinct runner partition", () => {
+test("Postgres service shards take their matrix and n from the plan", () => {
   const job = v.parse(
     v.object({
       "timeout-minutes": v.number(),
       strategy: v.object({
         "fail-fast": v.boolean(),
-        matrix: v.object({ shard: v.array(v.number()) }),
+        matrix: v.strictObject({ shard: v.string() }),
       }),
     }),
     ciJobs["postgres-service-suites"],
   );
-  const shards = job.strategy.matrix.shard;
-  expect(shards.length).toBeGreaterThanOrEqual(2);
-  expect(shards.length).toBeLessThanOrEqual(3);
-  expect(shards).toEqual([...POSTGRES_TEST_SHARD_IDS]);
+  expect(job.strategy.matrix.shard).toBe(
+    `\${{ fromJSON(needs.ci-plan.outputs.postgres_shards) }}`,
+  );
   expect(POSTGRES_SHARD_TEST_BUDGET_SECONDS).toBeLessThanOrEqual(
     job["timeout-minutes"] * 60 * 0.7,
   );
   expect(job.strategy["fail-fast"]).toBe(false);
   expect(job["timeout-minutes"]).toBe(15);
-  const runner = jobSteps(ciJobs["postgres-service-suites"]).find(
+  const steps = jobSteps(ciJobs["postgres-service-suites"]);
+  const runner = steps.find(
     (step) => step.name === "Run Postgres-gated API suites",
   );
-  expect(runner?.env?.["CI_POSTGRES_TEST_SHARD"]).toBe(
-    `\${{ matrix.shard }}/${shards.length}`,
+  // Each leg's `i/n` is the selector itself: no constant count to drift.
+  expect(runner?.env?.["CI_POSTGRES_TEST_SHARD"]).toBe(`\${{ matrix.shard }}`);
+  // Artifact names cannot hold the `/` of a matrix value.
+  const jobText = JSON.stringify(ciJobs["postgres-service-suites"]);
+  expect(jobText).toContain(`postgres-test-timings-\${{ strategy.job-index }}`);
+  expect(jobText).not.toMatch(/-\$\{\{ matrix\.shard \}\}/u);
+
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
   );
+  const maxShardMatrix = JSON.stringify(
+    postgresShardMatrix(POSTGRES_MAX_SHARDS),
+  );
+  const maxShardMatrixOutput = `\${{ steps.postgres-shards.outputs.postgres_shards || '${maxShardMatrix}' }}`;
+  const maxShardCountOutput = `\${{ steps.postgres-shards.outputs.postgres_shard_count || '${POSTGRES_MAX_SHARDS}' }}`;
+  expect(plan.outputs["postgres_shards"]).toBe(maxShardMatrixOutput);
+  expect(plan.outputs["postgres_shard_count"]).toBe(maxShardCountOutput);
+  const planSteps = jobSteps(ciJobs["ci-plan"]);
+  const planner = planSteps.find(
+    (step) => step.name === "Plan Postgres test shards",
+  );
+  const stepIndex = (name: string) =>
+    planSteps.findIndex((step) => step.name === name);
+  // The planner reads the durations the shards verify by hash.
+  expect(stepIndex("Plan Postgres test shards")).toBeGreaterThan(
+    stepIndex("Resolve Postgres test durations"),
+  );
+  expect(planner?.run).toContain("bun scripts/ci-postgres-shard-plan.ts");
+  expect(planner?.run).toContain(
+    "if ! timeout --kill-after=10s 120s bun scripts/ci-postgres-shard-plan.ts",
+  );
+  expect(planner?.env?.["PLANNER_DEPS"]).toBeUndefined();
+  // Without the planner the maximum stands in: time never fails a run.
+  expect(planner?.run).toContain(
+    `echo 'postgres_shards=${JSON.stringify(postgresShardMatrix(POSTGRES_MAX_SHARDS))}'`,
+  );
+  expect(planner?.run).toContain(
+    `echo 'postgres_shard_count=${POSTGRES_MAX_SHARDS}'`,
+  );
+  expect(planner?.run).not.toMatch(/exit 1/u);
+});
+
+test("every run of the Postgres service shards follows its planner step", () => {
+  const { outputs } = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  const axes = {
+    "github.event_name": [
+      EVENT.pullRequest,
+      EVENT.mergeGroup,
+      EVENT.workflowDispatch,
+      "push",
+      "schedule",
+    ],
+    "inputs.pr_depth_only": [false, true],
+    "vars.CI_POSTGRES_PR_SELECTION": ["on", ""],
+    "steps.check.outputs.trusted": ["true", "false"],
+    "steps.completed-depth.outputs.run_required": ["true", "false"],
+    "steps.depth.outputs.suite_depth": [SUITE_DEPTH.fast, SUITE_DEPTH.full],
+    "steps.changed-files.outputs.postgres_suites_required": ["true", "false"],
+    "steps.changed-files.outputs.service_suites_pr_required": ["true", "false"],
+  } as const;
+  let combinations: Record<string, string | boolean>[] = [{}];
+  for (const [axis, values] of Object.entries(axes)) {
+    combinations = combinations.flatMap((row) =>
+      values.map((value) => ({ ...row, [axis]: value })),
+    );
+  }
+  let runs = 0;
+  for (const row of combinations) {
+    const context = contextWithPlanOutputs({
+      outputs,
+      context: {
+        values: {
+          ...row,
+          "steps.changed-files.outputs.package_checks_required": "true",
+          "steps.changed-files.outputs.collab_redis_required": "false",
+          "inputs.heavy_only": false,
+          "needs.ci-plan.result": "success",
+          "needs.pr-heavy-gate.result": "success",
+        },
+        status: { cancelled: false },
+        fallback: (path) => (path.startsWith("steps.") ? "" : undefined),
+      },
+    });
+    const job = evaluateExpression(
+      jobIf(ciJobs["postgres-service-suites"]),
+      context,
+    );
+    expect(job === UNKNOWN, JSON.stringify(row)).toBe(false);
+    if (job !== true) {
+      continue;
+    }
+    runs++;
+    const matrixOutput = evaluateExpression(
+      outputs["postgres_shards"] ?? panic("Missing postgres_shards output"),
+      context,
+    );
+    if (typeof matrixOutput !== "string") {
+      panic("Postgres service shards received no matrix output");
+    }
+    const matrix = v.parse(v.array(v.string()), JSON.parse(matrixOutput));
+    expect(matrix.length, JSON.stringify(row)).toBeGreaterThanOrEqual(
+      POSTGRES_MIN_SHARDS,
+    );
+    expect(matrix.length, JSON.stringify(row)).toBeLessThanOrEqual(
+      POSTGRES_MAX_SHARDS,
+    );
+    expect(matrix, JSON.stringify(row)).toEqual(
+      postgresShardMatrix(matrix.length),
+    );
+    expect(
+      evaluateExpression(
+        outputs["postgres_shard_count"] ??
+          panic("Missing postgres_shard_count output"),
+        context,
+      ),
+      JSON.stringify(row),
+    ).toBe(String(matrix.length));
+  }
+  expect(runs).toBeGreaterThan(0);
 });
 
 test("split service suites preserve their scopes and independent verdicts", () => {
@@ -4926,6 +5082,27 @@ test("split service suites preserve their scopes and independent verdicts", () =
       ).toBe(0);
     }
   }
+});
+
+test("the UI playground plan consumes the changed-files output and exposes its selection", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  expect(plan.outputs["ui_playground_specs"]).toBe(
+    ["$", "{{ steps.ui-playground-plan.outputs.specs || '[]' }}"].join(""),
+  );
+  expect(plan.outputs["ui_playground_matrix"]).toBe(
+    ["$", "{{ steps.ui-playground-plan.outputs.matrix || '[]' }}"].join(""),
+  );
+  const step = jobSteps(ciJobs["ci-plan"]).find(
+    ({ name }) => name === "Plan UI playground geometry specs",
+  );
+  expect(step?.env?.["UI_PLAYGROUND_CHANGED_PATHS"]).toBe(
+    ["$", "{{ runner.temp }}/api-test-changed-paths"].join(""),
+  );
+  expect(step?.run).toContain("bun scripts/ui-playground-selection.ts");
+  expect(step?.run).toContain("bun scripts/ui-playground-shards.ts");
 });
 
 test("Bun cache saves are main-only and trusted Turbo results remain readable", () => {
@@ -5093,7 +5270,7 @@ test("every browser suite runs on its required matrix legs, the playground on ev
     v.object({
       strategy: v.object({
         "fail-fast": v.literal(false),
-        matrix: v.object({ suite: v.string() }),
+        matrix: v.object({ include: v.string() }),
       }),
       steps: v.array(
         v.object({
@@ -5105,25 +5282,11 @@ test("every browser suite runs on its required matrix legs, the playground on ev
     }),
     ciJobs["ci-browser"],
   );
-  const matrixSuites = v.parse(
-    v.array(v.string()),
-    evaluate(browser.strategy.matrix.suite, {
-      values: { "github.event_name": "merge_group" },
-    }),
+  expect(browser.strategy.matrix.include).toBe(
+    ["$", "{{ fromJSON(needs.ci-plan.outputs.ui_playground_matrix) }}"].join(
+      "",
+    ),
   );
-  const playgroundLegs = matrixSuites.filter((leg) =>
-    leg.startsWith("playground-"),
-  );
-  expect(new Set(matrixSuites)).toEqual(
-    new Set(["desktop", "ui", ...playgroundLegs]),
-  );
-  expect(matrixSuites).toHaveLength(2 + playgroundLegs.length);
-  expect(playgroundLegs.length).toBeGreaterThan(1);
-  expect(
-    evaluate(browser.strategy.matrix.suite, {
-      values: { "github.event_name": "pull_request" },
-    }),
-  ).toEqual(["desktop"]);
   const suites = browser.steps.filter(
     ({ run }) => run?.includes("test:browser") || run?.includes("test:e2e"),
   );
@@ -5136,19 +5299,16 @@ test("every browser suite runs on its required matrix legs, the playground on ev
     ].toSorted(compareCodeUnit),
   );
   for (const suite of suites) {
-    const legs = matrixSuites.filter((leg) =>
-      suite.if?.includes(`matrix.suite == '${leg}'`),
-    );
-    // The playground suite is the only sharded one: it runs on every
-    // playground leg, each taking one Playwright shard of as many as there
-    // are legs, so a leg can neither be dropped nor duplicate another's tests.
     if (suite.name === "Test UI playground visuals") {
-      expect(legs, suite.name).toEqual(playgroundLegs);
-      expect(suite.run, suite.name).toContain(
-        `--shard="\${SUITE#playground-}/${String(playgroundLegs.length)}"`,
+      expect(suite.if, suite.name).toContain(
+        "startsWith(matrix.suite, 'playground-')",
       );
+      expect(suite.run, suite.name).toContain(
+        `bun run test:e2e:ui-playground "\${specs[@]}"`,
+      );
+      expect(suite.run, suite.name).not.toContain("--shard");
     } else {
-      expect(legs, suite.name).toHaveLength(1);
+      expect(suite.if, suite.name).toContain("matrix.suite ==");
     }
     expect(suite.if, suite.name).toContain("outputs.required == 'true'");
   }
@@ -5163,7 +5323,7 @@ test("every browser suite runs on its required matrix legs, the playground on ev
   }
 });
 
-test("route-relevant changes plan the required merge-group smoke", () => {
+test("route-relevant changes plan the required route smoke", () => {
   const scope = "route_smoke_required";
   const selectedBy = jobIf(ciJobs["route-smoke"]);
   expect(selectedBy).toContain(`needs.ci-plan.outputs.${scope} == 'true'`);
@@ -5178,6 +5338,8 @@ test("route-relevant changes plan the required merge-group smoke", () => {
     "apps/web/src/lib/react-query.ts",
     "apps/web/src/components/new-query-component.tsx",
     "apps/api/src/handlers/tasks/get.ts",
+    "packages/fetch/src/index.ts",
+    "packages/api-client/src/index.ts",
     "packages/ui/src/button.tsx",
     "apps/web/e2e/network-baseline.json",
     "scripts/network-baseline-scope.ts",
@@ -6092,11 +6254,12 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
 
 test("workflow and planner changes run every planner test as a merge-group gate", () => {
   const root = nodePath.resolve(import.meta.dirname, "..");
+  const depthTests = new Set(Object.keys(depthScriptTests));
   const plannerTests = [
     ...new Bun.Glob(
       "scripts/{ci-*plan*,ci-checks-partition,ci-completed-depth,ci-pr-pilot,ci-pr-depth-workflow,main-heavy*,thin-queue,github-expression}.test.ts",
     ).scanSync({ cwd: root }),
-  ];
+  ].filter((file) => !depthTests.has(file));
   expect(plannerTests).toContain("scripts/ci-checks-partition.test.ts");
   expect(plannerTests).toContain("scripts/ci-plan.test.ts");
   const unlisted = new Set(unlistedTests(plannerTests, workflow));
@@ -6113,7 +6276,8 @@ test("workflow and planner changes run every planner test as a merge-group gate"
         if (
           step.run?.includes(file) ||
           (unlisted.has(file) &&
-            step.run?.includes("bun scripts/run-unlisted-script-tests.ts"))
+            step.run?.includes("bun scripts/run-unlisted-script-tests.ts") &&
+            step.run.includes("--depth") === depthTests.has(file))
         ) {
           const existing = owners.get(file) ?? [];
           existing.push({ job, step });
@@ -6722,8 +6886,8 @@ test("a crashed API planner widens the real workflow outputs", () => {
   );
   const directory = mkdtempSync(nodePath.join(tmpdir(), "api-plan-fallback-"));
   const output = nodePath.join(directory, "output");
-  try {
-    const result = Bun.spawnSync(
+  const runStep = (runnerTemp: Record<string, string>) =>
+    Bun.spawnSync(
       [
         "bash",
         "-e",
@@ -6738,12 +6902,26 @@ test("a crashed API planner widens the real workflow outputs", () => {
           PACKAGE_CHECKS_REQUIRED: "true",
           API_SCOPE_UNKNOWN: "false",
           PLANNER_CALLED: nodePath.join(directory, "called"),
+          ...runnerTemp,
         },
         stdout: "pipe",
         stderr: "pipe",
       },
     );
+  try {
+    // Without the runner's temporary directory the handoff file would land
+    // at the filesystem root, so the step refuses before planning.
+    const unset = runStep({});
+    expect(unset.exitCode).not.toBe(0);
+    expect(unset.stderr.toString()).toContain(
+      "RUNNER_TEMP must name the runner temporary directory",
+    );
+    expect(existsSync(nodePath.join(directory, "called"))).toBe(false);
+    const result = runStep({ RUNNER_TEMP: directory });
     expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(
+      readFileSync(nodePath.join(directory, "api-test-files"), "utf-8"),
+    ).toBe("");
     expect(readFileSync(nodePath.join(directory, "called"), "utf-8")).toBe(
       "invoked\n",
     );
@@ -6802,6 +6980,16 @@ test.each([
     const selected = matrix === '{"shard":[1]}';
     const specs = selected ? '["apps/web/e2e/specs/guides.spec.ts"]' : "[]";
     try {
+      const selectedPlan = nodePath.join(directory, "selection.json");
+      if (matrix) {
+        writeFileSync(
+          selectedPlan,
+          JSON.stringify({
+            matrix: JSON.parse(matrix),
+            specs: JSON.parse(specs),
+          }),
+        );
+      }
       const result = Bun.spawnSync(
         [
           "bash",
@@ -6820,9 +7008,8 @@ test.each([
             ROUTE_SMOKE_REQUIRED: "false",
             EVENT_NAME: event,
             GITHUB_OUTPUT: output,
-            SELECTED_MATRIX: matrix,
             SELECTED_MODE: "selected",
-            SELECTED_SPECS: specs,
+            SELECTED_PLAN_PATH: selectedPlan,
             SELECTOR_OUTCOME: outcome,
           },
           stdout: "pipe",
@@ -6927,9 +7114,8 @@ test.each([
             ROUTE_SMOKE_REQUIRED: routeSmokeRequired,
             EVENT_NAME: event,
             GITHUB_OUTPUT: output,
-            SELECTED_MATRIX: "",
             SELECTED_MODE: "",
-            SELECTED_SPECS: "",
+            SELECTED_PLAN_PATH: nodePath.join(directory, "missing.json"),
             SELECTOR_OUTCOME: "skipped",
           },
           stdout: "pipe",
@@ -7048,6 +7234,11 @@ test("API planning only loads dependencies after installation and emits install-
       ],
     ]) {
       writeFileSync(output, "");
+      const selectedFiles = nodePath.join(directory, "api-test-files");
+      writeFileSync(
+        selectedFiles,
+        selected ? "src/a.test.ts\nsrc/b.test.ts" : "",
+      );
       const result = Bun.spawnSync(
         ["bash", "-e", "-c", plan?.run ?? panic("Missing output planner")],
         {
@@ -7060,7 +7251,7 @@ test("API planning only loads dependencies after installation and emits install-
             SELECTED_REQUIRED: selectedRequired,
             SELECTED_MATRIX: selected,
             SELECTED_SHARDS: shards,
-            SELECTED_FILES: selected ? "src/a.test.ts\nsrc/b.test.ts" : "",
+            SELECTED_FILES_PATH: selectedFiles,
           },
           stdout: "pipe",
           stderr: "pipe",
@@ -7332,6 +7523,7 @@ type BrowserPlanOptions = {
   queueDepth?: string;
   packageChecksRequired?: string;
   browserScopeRequired?: string;
+  uiPlaygroundSpecs?: string;
 };
 type HeavyGatePlanOptions = {
   event: Event;
@@ -7377,6 +7569,7 @@ const browserPlanOutput = ({
   queueDepth = "full",
   packageChecksRequired = "true",
   browserScopeRequired = "true",
+  uiPlaygroundSpecs = "[]",
 }: BrowserPlanOptions) => {
   const { outputs } = v.parse(
     v.object({ outputs: v.record(v.string(), v.string()) }),
@@ -7397,10 +7590,32 @@ const browserPlanOutput = ({
           packageChecksRequired,
         "steps.depth.outputs.suite_depth": depth,
         "steps.depth.outputs.queue_depth": queueDepth,
+        "steps.ui-playground-plan.outputs.specs": uiPlaygroundSpecs,
       },
     }),
   );
 };
+
+test("a PR that selects UI playground specs requires the browser job", () => {
+  // ci-result requires every job whose scope output is true, so a planned
+  // UI leg that is skipped or cancelled fails the run; an unplanned one does
+  // not make the job required.
+  const plan = (desktopRequired: "true" | "false", uiPlaygroundSpecs: string) =>
+    browserPlanOutput({
+      event: "pull_request",
+      depth: "fast",
+      desktopRequired,
+      uiPlaygroundSpecs,
+    });
+  expect(
+    plan(
+      "false",
+      '["apps/web/e2e/ui-playground/reader-selection.geometry.spec.ts"]',
+    ),
+  ).toBe("true");
+  expect(plan("false", "[]")).toBe("false");
+  expect(plan("true", "[]")).toBe("true");
+});
 
 test("Playwright image-only changes admit browser suites in merge groups", () => {
   for (const file of [
@@ -7601,7 +7816,6 @@ test("Legal Atlas API source scope vetoes otherwise eligible execution", () => {
   }
 });
 
-// timeout: Executes the bounded event/depth/browser matrix in real Bash processes.
 test("browser planning, scheduling and result gates agree across events and depths", () => {
   const cases = (
     [
@@ -7688,7 +7902,7 @@ test("browser planning, scheduling and result gates agree across events and dept
       ),
     ),
   );
-}, 30_000);
+});
 
 test("untrusted PRs skip browser CI while the result gate preserves its trust failure", () => {
   const cases = [SUITE_DEPTH.fast, SUITE_DEPTH.full].flatMap((depth) =>
@@ -7963,6 +8177,11 @@ test("armed reuse covers every selected queue-only suite of the group", () => {
     const directory = mkdtempSync(nodePath.join(tmpdir(), "armed-coverage-"));
     try {
       const output = nodePath.join(directory, "output");
+      const changedScope = nodePath.join(directory, "changed-scope.json");
+      writeFileSync(
+        changedScope,
+        JSON.stringify({ mobile_build_required: planned }),
+      );
       const child = Bun.spawnSync(["bash", "-euc", script], {
         env: {
           PATH: Bun.env["PATH"] ?? "",
@@ -7975,7 +8194,7 @@ test("armed reuse covers every selected queue-only suite of the group", () => {
           HEAVY_PROOF_JOBS: JSON.stringify(required),
           ARMED_PROOF_JOBS: JSON.stringify(proven),
           ARMED_JOB_SCOPES: JSON.stringify(scopes),
-          CHANGED_SCOPE: JSON.stringify({ mobile_build_required: planned }),
+          CHANGED_SCOPE_PATH: changedScope,
           MERGE_GROUP_HEAVY_KEEP: "[]",
         },
       });
@@ -7986,6 +8205,60 @@ test("armed reuse covers every selected queue-only suite of the group", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  }
+});
+
+test("a 5000-file change reaches the suites step through a file, not the environment", () => {
+  const plan = v.parse(
+    v.object({ steps: v.array(v.unknown()) }),
+    ciJobs["ci-plan"],
+  );
+  const script = v.parse(
+    v.object({ run: v.string() }),
+    flattenWorkflowSteps(plan.steps).find((step) => step["id"] === "suites"),
+  ).run;
+  // Linux refuses any single environment string over 128 KiB (E2BIG) before
+  // the shell starts, so a list this long must never travel as a variable.
+  const singleStringLimit = 128 * 1024;
+  const changedFiles = Array.from(
+    { length: 5000 },
+    (_, index) =>
+      `.github/ci-job-classification-decisions/candidate%3A.github%2Fworkflows%2Fexample-${index}.yml%2Fjob/${index.toString(16).padStart(64, "0")}.json`,
+  );
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "large-change-"));
+  try {
+    const output = nodePath.join(directory, "output");
+    const changedScope = nodePath.join(directory, "changed-scope.json");
+    const scope = JSON.stringify({
+      mobile_build_required: "true",
+      changed_files: JSON.stringify(changedFiles),
+    });
+    expect(Buffer.byteLength(scope)).toBeGreaterThan(singleStringLimit);
+    writeFileSync(changedScope, scope);
+    const env = {
+      PATH: Bun.env["PATH"] ?? "",
+      GITHUB_OUTPUT: output,
+      RUN_REQUIRED: "true",
+      NORMAL_REUSED: "false",
+      SUITE_DEPTH: "full",
+      EVENT_NAME: "merge_group",
+      ARMED_PROOF: "complete",
+      HEAVY_PROOF_JOBS: JSON.stringify(["mobile-build"]),
+      ARMED_PROOF_JOBS: JSON.stringify(["mobile-build"]),
+      ARMED_JOB_SCOPES: JSON.stringify({
+        "mobile-build": "mobile_build_required",
+      }),
+      CHANGED_SCOPE_PATH: changedScope,
+      MERGE_GROUP_HEAVY_KEEP: "[]",
+    };
+    for (const value of Object.values(env)) {
+      expect(Buffer.byteLength(value)).toBeLessThan(singleStringLimit);
+    }
+    const child = Bun.spawnSync(["bash", "-euc", script], { env });
+    expect(child.exitCode, child.stderr.toString()).toBe(0);
+    expect(readFileSync(output, "utf-8")).toContain("heavy_proof=false");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 

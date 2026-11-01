@@ -4,6 +4,10 @@ import { eq } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
+import {
+  type SourceRetention,
+  sourceRetentionForAdapter,
+} from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   ADAPTER_MANIFESTS,
@@ -23,6 +27,7 @@ export type SourceContract = {
   metadataUrlSchema: unknown;
   sourceFingerprintVersion: number;
   statedEcliIdentity: StatedEcliIdentity;
+  retention: SourceRetention;
 };
 
 const isImportSourceKey = (key: string): key is ImportSourceKey =>
@@ -59,6 +64,7 @@ export const sourceContractForAdapter = (
     metadataUrlSchema: metadataUrlSchemaForAdapter(adapterKey),
     sourceFingerprintVersion,
     statedEcliIdentity: statedEcliIdentityForAdapter(adapterKey),
+    retention: sourceRetentionForAdapter(adapterKey),
   };
 };
 

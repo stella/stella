@@ -67,16 +67,19 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
-import { COMMON_TIMEZONES } from "@/lib/timezones";
-import type { CommonTimezone } from "@/lib/timezones";
+import { TimeZonePicker } from "@/lib/time-zone-picker";
+import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { routePresentation } from "@/routes/-route-presentation";
 import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";
 import { DeletionTaskReassignments } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
 import type { DeletionTaskGroup } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
+import { PersonalDataExportCard } from "@/routes/_protected.settings/-components/account/personal-data-export-card";
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
+import { SignInMethods } from "@/routes/_protected.settings/-components/account/sign-in-methods";
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
 
 import {
@@ -208,11 +211,6 @@ function ProfilePagePending() {
   );
 }
 
-function isCommonTimezone(tz: string): tz is CommonTimezone {
-  const timezones: readonly string[] = COMMON_TIMEZONES;
-  return timezones.includes(tz);
-}
-
 function ProfilePage() {
   const { data: session } = useSuspenseQuery(sessionOptions);
   const user = session?.user;
@@ -238,7 +236,15 @@ function ProfilePageBody() {
     t("settings.account.deleteAccountConfirmationPhrase"),
   );
   const storedTz = session?.user.timezoneId ?? "UTC";
-  const currentTz = isCommonTimezone(storedTz) ? storedTz : "UTC";
+  // Jurisdiction suggestions are optional: the profile renders without them.
+  const organizationSettings = queryView(
+    useQuery(
+      organizationSettingsOptions({
+        organizationId: authenticatedUser.activeOrganizationId,
+        userId: authenticatedUser.id,
+      }),
+    ),
+  );
   const [displayName, setDisplayName] = useState(
     () => session?.user.name ?? "",
   );
@@ -516,28 +522,24 @@ function ProfilePageBody() {
             <Label className="sr-only" htmlFor="timezone-select">
               {t("settings.account.timezone")}
             </Label>
-            <Select
+            <TimeZonePicker
+              id="timezone-select"
+              label={t("settings.account.timezone")}
               disabled={updateTimezone.isPending}
+              jurisdictionCountries={
+                organizationSettings.type === "items"
+                  ? organizationSettings.items.practiceJurisdictions.map(
+                      ({ countryCode }) => countryCode,
+                    )
+                  : []
+              }
               onValueChange={(tz) => {
-                if (!tz || tz === storedTz) {
-                  return;
+                if (tz !== storedTz) {
+                  updateTimezone.mutate(tz);
                 }
-
-                updateTimezone.mutate(tz);
               }}
-              value={currentTz}
-            >
-              <SelectTrigger className="w-72" id="timezone-select">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup>
-                {COMMON_TIMEZONES.map((tz) => (
-                  <SelectItem key={tz} value={tz}>
-                    {tz.replace(/_/gu, " ")}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
+              value={storedTz}
+            />
           </div>
           <form
             action={async () => {
@@ -596,9 +598,12 @@ function ProfilePageBody() {
 
       <ChatNotificationsCard />
 
+      <SignInMethods />
       <TwoFactorCard />
 
       <SessionsCard />
+
+      <PersonalDataExportCard />
 
       <Frame className="border-destructive/32">
         <FrameHeader>

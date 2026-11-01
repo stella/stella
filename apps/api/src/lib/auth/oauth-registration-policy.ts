@@ -11,7 +11,11 @@ import type { HookEndpointContext } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { panic } from "better-result";
 
-import { mayMetadataDocumentClientHoldElevatedScopes } from "@/api/lib/auth/oauth-consent-info";
+import {
+  findFirstPartyOAuthClient,
+  isFirstPartyRedirectAllowed,
+  mayMetadataDocumentClientHoldElevatedScopes,
+} from "@/api/lib/auth/oauth-consent-info";
 import { createAuthRequestBudgetHook } from "@/api/lib/auth/request-budget-hooks";
 import {
   OAUTH_REGISTRATION_SCOPE_POLICY,
@@ -167,6 +171,7 @@ export const OAUTH_ENDPOINT_POLICY = {
   [OAUTH_CLIENT_REGISTRATION_PATH]: "scope-policy",
   "/oauth2/create-client": "disabled",
   "/oauth2/update-client": "disabled",
+  "/oauth2/client/rotate-keys": "disabled",
   "/oauth2/client/rotate-secret": "disabled",
   "/oauth2/delete-client": "disabled",
   "/oauth2/update-consent": "disabled",
@@ -245,6 +250,31 @@ export const grantableScopes = (
     );
   return candidates.filter(
     (scope) => mayHoldElevated || !ELEVATED_REGISTRATION_SCOPES.has(scope),
+  );
+};
+
+type FirstPartyRedirectRequest = {
+  readonly clientId: string;
+  readonly redirectUri: unknown;
+  readonly verifiedOrigins: readonly string[];
+};
+
+/**
+ * Whether an authorization names a first-party client with a redirect that
+ * client may not use. The provider also matches the redirect against the
+ * client's document; this holds the first-party table's line on its own.
+ * A request without a redirect is left to the provider, which refuses it.
+ */
+export const refusesFirstPartyRedirect = ({
+  clientId,
+  redirectUri,
+  verifiedOrigins,
+}: FirstPartyRedirectRequest): boolean => {
+  const firstParty = findFirstPartyOAuthClient(clientId, verifiedOrigins);
+  return (
+    firstParty !== undefined &&
+    typeof redirectUri === "string" &&
+    !isFirstPartyRedirectAllowed(firstParty, redirectUri)
   );
 };
 
@@ -424,6 +454,38 @@ const createOAuthPolicyMiddleware = ({
       : { context: { query: authorizationPolicy } };
   });
 
+/**
+ * Answers an authorization naming a first-party client with a redirect that
+ * client may not use, as the provider answers an unregistered redirect, before
+ * the provider or the scope policy reads the request.
+ */
+const createFirstPartyRedirectMiddleware = (
+  verifiedOrigins: readonly string[],
+) =>
+  createAuthMiddleware(async (ctx) => {
+    const parameters: unknown = readsAuthorizationBody(ctx)
+      ? ctx.body
+      : ctx.query;
+    const refused =
+      isRecord(parameters) &&
+      typeof parameters["client_id"] === "string" &&
+      refusesFirstPartyRedirect({
+        clientId: parameters["client_id"],
+        redirectUri: parameters["redirect_uri"],
+        verifiedOrigins,
+      });
+    await Promise.resolve();
+    return refused
+      ? Response.json(
+          {
+            error: "invalid_redirect",
+            error_description: "invalid redirect uri",
+          },
+          { status: 400 },
+        )
+      : UNCHANGED;
+  });
+
 const withScopePolicy = (
   discovery: ClientDiscovery,
   policy: OAuthScopePolicyContext,
@@ -562,6 +624,11 @@ export const createStellaOAuthProvider = (
             isAuthRequestBudgetPath(ctx.path ?? "") &&
             (ctx.path?.startsWith("/oauth2/") ?? false),
           handler: createAuthMiddleware(enforceRequestBudget),
+        },
+        {
+          matcher: (ctx: HookEndpointContext) =>
+            ctx.path === OAUTH_AUTHORIZATION_PATH,
+          handler: createFirstPartyRedirectMiddleware(verifiedOrigins),
         },
         ...provider.hooks.before,
         {

@@ -73,6 +73,7 @@ import {
 import type { BetterAuthExpectedOAuthResource } from "../scripts/better-auth-migration-audit.logic";
 import { onlineMigrationParams } from "./online-migration-connection";
 import type {
+  CodeOwnedOnlineStep,
   OnlineMigrationConnection,
   OnlineRepair,
   OnlineRepairCompletion,
@@ -426,10 +427,14 @@ const readCompletion = async (
 // Row work in one transaction under its own LOCAL budgets: no table lock to
 // gate, so it never defers.
 export const BETTER_AUTH_OAUTH_RESOURCE_REPAIR = {
+  introducedBy: {
+    type: "code",
+    owner: "src/db/better-auth-oauth-resource-repair.ts",
+  },
   name: REPAIR_NAME,
   readCompletion,
   repair: async (connection: OnlineMigrationConnection) => {
     await repair(connection);
     return { type: "complete" } as const;
   },
-} satisfies OnlineRepair;
+} satisfies OnlineRepair & { introducedBy: CodeOwnedOnlineStep };

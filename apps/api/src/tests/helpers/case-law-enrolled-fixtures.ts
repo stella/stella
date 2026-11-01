@@ -18,16 +18,10 @@
  * an `afterEach`.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   CZ_UOHS_SYNTHETIC_LISTING,
   czUohsSyntheticPdf,
@@ -134,10 +128,17 @@ import {
   skUsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { fetchUkFclDecision } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl";
+import type { ParserParityIdentity } from "@/api/handlers/case-law/ingestion/parsers/parity-manifest";
 import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
-import { withSourceRawObjects } from "@/api/lib/legal-search/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  withSourceRawObjects,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   RAW_SOURCE_FAMILY,
   sourceBinaryRef,
@@ -418,7 +419,9 @@ const CZ_NSS_DETAIL_PAGE = `<html><body>${CZ_NSS_FIXTURE_FIELD_IDS.map(
       fieldId,
       CZ_NSS_FIXTURE_VALUES[fieldId] ?? CZ_NSS_PLACEHOLDER_VALUE,
     ),
-).join("")}</body></html>`;
+).join(
+  "",
+)}<table><tbody><tr><td class="det-textval" data-field-id="ecli">ECLI:CZ:NSS:2016:5.As.140.2014.53</td><td class="det-textval" data-field-id="datumvydanirozhodnuti">26.05.2016</td></tr></tbody></table></body></html>`;
 
 const CZ_NSS_DOCUMENT_PAGE = `<html><body>
   <p>ČESKÁ REPUBLIKA</p>
@@ -429,12 +432,14 @@ const CZ_NSS_DOCUMENT_PAGE = `<html><body>
   zamítá.</p>
 </body></html>`;
 
-export const czNssFixture = (): EnrolledAdapterFixture => ({
+export const czNssFixture = (
+  detailHtml = CZ_NSS_DETAIL_PAGE,
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
     globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
       const url = input instanceof Request ? input.url : String(input);
       const body = url.includes("/DokumentDetail/Index/")
-        ? CZ_NSS_DETAIL_PAGE
+        ? detailHtml
         : CZ_NSS_DOCUMENT_PAGE;
       return await Promise.resolve(
         new Response(body, {
@@ -942,19 +947,37 @@ const plSnDetailRecord = (): Record<string, unknown> => {
  * Built from the payloads directly rather than through the adapter's fetch
  * path. What these guards certify is the mapping from a stated field to the
  * row, and driving a stubbed transport to reach it only added this publisher's
- * one-second request gate to every run. No document is supplied: no declared
- * field is stored through it, so the fixture states exactly what the inventory
- * reads.
+ * one-second request gate to every run. The field inventory needs no PDF;
+ * the raw-capture guard supplies one to exercise document retention as well.
  */
-export const plSnFixture = (): EnrolledAdapterFixture => ({
+export const plSnFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
   buildDecision: async () => {
+    const documentBytes =
+      documentUrl === undefined
+        ? undefined
+        : new Uint8Array(await Bun.file(documentUrl).arrayBuffer());
     const built = await assemblePlSnDecision({
       item: { ...PL_SN_LISTING_ROW },
       detail: normalizePlSnDetail(plSnDetailRecord()),
-      documentBytes: undefined,
+      documentBytes,
       rawParts: {
         listing: JSON.stringify(PL_SN_LISTING_ROW),
         detail: PL_SN_DETAIL_PAYLOAD,
+        ...(documentBytes === undefined
+          ? {}
+          : {
+              document: JSON.stringify({
+                success: true,
+                data: [
+                  {
+                    success: true,
+                    data: {
+                      raw: Buffer.from(documentBytes).toBase64(),
+                    },
+                  },
+                ],
+              }),
+            }),
       },
     });
     return built.type === "unkeyable"
@@ -1295,6 +1318,7 @@ const EU_ECJ_BINDING = {
     type: "uri",
     value: `${CELLAR_RESOURCE}${EU_ECJ_EXPRESSION}.05`,
   },
+  manifestationType: { type: "literal", value: "xhtml" },
 } as const satisfies EcjSparqlBinding;
 
 const EU_ECJ_ADAPTER_FIXTURES = new URL(
@@ -1614,7 +1638,10 @@ const SK_US_DECISION_ID = "sk-us-inventory-fixture-decision";
  * closes it, through the same derivation, so the guards read the envelope a
  * stored row holds rather than one this helper invented.
  */
-export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
+export const skUsFixture = (
+  documentUrl?: URL,
+  identity?: ParserParityIdentity,
+): EnrolledAdapterFixture => ({
   buildDecision: async () => {
     if (documentUrl !== undefined) {
       const payload = await readGzipJson(documentUrl);
@@ -1624,37 +1651,63 @@ export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
       }
       const listing = {
         ...SK_US_LISTING_ROW,
-        documentId: "695d557a-08eb-41d2-8cea-2b895f9860e7",
-        mkRSAPNumberOfFile: "III. ÚS 265/2026",
-        mkDateOfDecision: "04/23/2026 00:00:00",
-        mkECLI: null,
+        documentId:
+          identity?.documentId ?? "695d557a-08eb-41d2-8cea-2b895f9860e7",
+        mkRSAPNumberOfFile: identity?.caseNumber ?? "III. ÚS 265/2026",
+        mkDateOfDecision:
+          identity === undefined
+            ? "04/23/2026 00:00:00"
+            : identity.decisionDate.replace(
+                /^(\d{4})-(\d{2})-(\d{2})$/u,
+                "$2/$3/$1 00:00:00",
+              ),
+        mkECLI: identity?.ecli ?? null,
         mkFormOfDecision: "Uznesenie",
       };
       const reparse = skUsAdapter.reparseStoredRaw;
       if (reparse === undefined) {
         return panic("the sk-us parity capture requires stored-raw replay");
       }
+      const ref = sourceBinaryRef({
+        family: RAW_SOURCE_FAMILY.CASE_LAW,
+        sourceId: SK_US_SOURCE_ID,
+        documentId: SK_US_DECISION_ID,
+        bytes: SK_US_DOCUMENT_FILE,
+        contentType: "application/pdf",
+      });
+      const objects = { "document-file": ref };
       const result = await reparse({
         raw: new TextEncoder().encode(
-          encodeSourceRawEnvelope({
-            listing: JSON.stringify(listing),
-            document: Buffer.from(content, "base64").toString("utf-8"),
-          }),
+          encodeSourceRawEnvelope(
+            {
+              listing: JSON.stringify(listing),
+              document: Buffer.from(content, "base64").toString("utf-8"),
+            },
+            objects,
+          ),
         ),
+        readObject: async (key) =>
+          Result.ok(key === ref.location ? SK_US_DOCUMENT_FILE : null),
         contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
         caseNumber: listing.mkRSAPNumberOfFile,
         sourceDocumentId: listing.documentId,
         language: "sk",
         court: "Ústavný súd SR",
-        ecli: null,
-        decisionDate: "2026-04-23",
+        ecli: listing.mkECLI,
+        decisionDate: identity?.decisionDate ?? "2026-04-23",
         decisionType: listing.mkFormOfDecision,
         sourceUrl: `https://www.ustavnysud.sk/docDownload/${listing.documentId}`,
         documentUrl: `https://www.ustavnysud.sk/docDownload/${listing.documentId}`,
         metadata: {},
       });
       return result.type === "parsed"
-        ? result.result
+        ? {
+            ...result.result,
+            sourceRaw: withSourceRawObjects(
+              result.result.sourceRaw ?? "",
+              objects,
+            ),
+          }
         : panic(`the sk-us capture did not parse: ${result.type}`);
     }
     const documentContent = JSON.stringify({

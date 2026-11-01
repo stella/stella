@@ -1,6 +1,7 @@
 import { apiKey } from "@better-auth/api-key";
 import { createCimdClientDiscovery } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
 import type {
   AuthContext,
@@ -25,7 +26,7 @@ import {
   twoFactor,
 } from "better-auth/plugins";
 import { panic, Result } from "better-result";
-import { and, count, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 
 import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
 import {
@@ -34,6 +35,7 @@ import {
 } from "@stll/api-contract/professional-use";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { errorOutputLogger } from "@stll/errors";
+import { isUiLocale } from "@stll/locales";
 import { ac, assignableRoles, roles } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { isUuid } from "@stll/uuid-codec";
@@ -44,8 +46,8 @@ import {
   user as authUser,
 } from "@/api/db/auth-schema";
 import {
-  authorizeOwnerSyntheticSession,
   bindOwnerSyntheticSessionAuthorityReader,
+  bindOwnerSyntheticSessionAuthorizer,
   isPartnerOAuthClient,
   rlsDb,
   rootDb,
@@ -61,6 +63,7 @@ import {
 } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import type { AppleSignIn } from "@/api/env-apple-sign-in";
 import { appendSetCookieHeaders } from "@/api/http/context";
 import type { RequestContext, ResponseHeaders } from "@/api/http/context";
 import { status } from "@/api/http/status";
@@ -90,6 +93,12 @@ import {
   authenticateApiAccessToken,
   readAccessTokenBearer,
 } from "@/api/lib/auth/api-access-token";
+import { withAppleFormPostOrigin } from "@/api/lib/auth/apple-callback";
+import {
+  createAppleClientSecretSource,
+  createAppleProviderOptions,
+} from "@/api/lib/auth/apple-sign-in";
+import { configuredAppleSignIn } from "@/api/lib/auth/apple-sign-in-env";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
   AUTH_API_PATH,
@@ -108,6 +117,7 @@ import {
   recordClientMetadataValidated,
   withStaleIfError,
 } from "@/api/lib/auth/cimd-stale-if-error";
+import { sendManageOtp } from "@/api/lib/auth/confirmation-email";
 import {
   checkConfiguredDemoAccountAccess,
   checkDemoAccountOperation,
@@ -147,6 +157,7 @@ import type {
   SessionMemberCaller,
   WorkspaceCaller,
 } from "@/api/lib/auth/member-caller";
+import { createMemberInvitationSectionsPlugin } from "@/api/lib/auth/member-invitation-sections";
 import { sendNewDeviceNotice } from "@/api/lib/auth/new-device-notice";
 import {
   createOAuthConsentInfoPlugin,
@@ -157,6 +168,12 @@ import {
   createStellaOAuthProvider,
   OAUTH_DISABLED_PATHS,
 } from "@/api/lib/auth/oauth-registration-policy";
+import { currentOrganizationCreationTransaction } from "@/api/lib/auth/organization-creation-transaction";
+import { withBatchedOrganizationMemberships } from "@/api/lib/auth/organization-membership-adapter";
+import {
+  beforeOrganizationSlugCreation,
+  beforeOrganizationSlugUpdate,
+} from "@/api/lib/auth/organization-slug-hooks";
 import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-options";
 import {
   professionalUseColumns,
@@ -191,7 +208,6 @@ import {
 } from "@/api/lib/auth/review-account-plugin";
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
 import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
-import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import {
   carriesSessionCredential,
   skippableSessionCookieOf,
@@ -203,6 +219,10 @@ import {
   SESSION_LIFETIME_FIELDS,
 } from "@/api/lib/auth/session-lifetime";
 import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
+import {
+  liveSessionAdapterWhere,
+  liveSessionPredicate,
+} from "@/api/lib/auth/session-liveness";
 import {
   isSecondFactorAuthSessionPath,
   isSessionCreatingAuthPath,
@@ -223,11 +243,13 @@ import {
 import { createSocialLinkHintPlugin } from "@/api/lib/auth/social-link-hint";
 import {
   classifySocialCallback,
+  completesSocialCallback,
   socialCallbackErrorUrl,
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
 import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-reader";
 import { withoutTrustedDeviceBypass } from "@/api/lib/auth/two-factor-trusted-device";
+import { unlinkAccountWithConfirmation } from "@/api/lib/auth/unlink-account-runtime";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -350,12 +372,16 @@ import {
   checkSyntheticPrincipalAccess,
   syntheticPrincipalAuthConfig,
 } from "@/api/lib/synthetic-principal/policy";
-import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/session-authority";
+import {
+  authorizeSyntheticSession,
+  readSyntheticSessionAuthority,
+} from "@/api/lib/synthetic-principal/session-authority";
 import { includes, isRecord } from "@/api/lib/type-guards";
 import {
   checkMemberAdmission,
   MEMBER_CAPACITY_REACHED_ERROR_CODE,
 } from "@/api/lib/usage/member-capacity";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { recordNewOrganizationAccessStateOnOwner } from "@/api/lib/usage/organization-access-state-owner";
 import {
   hasRenewingHostedSubscription,
@@ -383,10 +409,11 @@ const { getAuthoritativeSessionFromCtx } = isLocalDevOpen()
   ? instrumentQueryOrigins(authoritativeSessionReader)
   : authoritativeSessionReader;
 
-/** Access token lifetime in seconds (15 minutes). */
-const syntheticSessionAuthorityReader =
+/** Authenticated handlers receive a bounded session reader. */
+export const ownerSyntheticSessionAuthorityReader =
   bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
 
+/** Access token lifetime in seconds (15 minutes). */
 const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 
 /** Refresh token lifetime in seconds (30 days). */
@@ -412,6 +439,7 @@ type SocialProviderSettings = {
   microsoftClientId: string | undefined;
   microsoftClientSecret: string | undefined;
   microsoftTenantId: string | undefined;
+  apple: AppleSignIn;
 };
 
 export const createSocialProviders = (settings: SocialProviderSettings) => ({
@@ -435,6 +463,16 @@ export const createSocialProviders = (settings: SocialProviderSettings) => ({
             settings.microsoftTenantId,
           ),
         }),
+      }
+    : {}),
+  // Not through `createSocialProvider`: its spread would freeze the client
+  // secret the options' getter mints and renews.
+  ...(settings.apple.type === "enabled"
+    ? {
+        apple: createAppleProviderOptions(
+          settings.apple,
+          createAppleClientSecretSource(settings.apple),
+        ),
       }
     : {}),
 });
@@ -667,6 +705,7 @@ export const OAUTH_PROVIDER_SESSION_PATHS = {
     "no-browser-session",
   "/admin/oauth2/update-client": "no-browser-session",
   "/oauth2/authorize": "browser-session",
+  "/oauth2/client/rotate-keys": "browser-session",
   "/oauth2/client/rotate-secret": "browser-session",
   "/oauth2/consent": "browser-session",
   "/oauth2/continue": "browser-session",
@@ -976,6 +1015,10 @@ const revokeUnprovenCredentials = async (
     });
   }
 };
+const SIGN_IN_METHOD_CONFIRMATION_FAILED = failureSink({
+  event: "auth.sign_in_method_confirmation_failed",
+  expected: [],
+});
 
 /** Session lifetime in seconds (7 days). */
 const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
@@ -1077,6 +1120,20 @@ const normalizeUserPreferences = <TUser extends Record<string, unknown>>(
   user: TUser,
 ) =>
   Result.gen(function* () {
+    const readerAnswerLanguage = user["readerAnswerLanguage"];
+    if (
+      readerAnswerLanguage !== undefined &&
+      readerAnswerLanguage !== null &&
+      readerAnswerLanguage !== "document" &&
+      (typeof readerAnswerLanguage !== "string" ||
+        !isUiLocale(readerAnswerLanguage))
+    ) {
+      return Result.err(
+        new APIError("BAD_REQUEST", {
+          message: "Invalid reader answer language",
+        }),
+      );
+    }
     const preferredName = yield* normalizeOptionalPreference(
       user["preferredName"],
       {
@@ -1301,8 +1358,7 @@ const socialSignInOutcomePlugin = {
   hooks: {
     after: [
       {
-        matcher: (ctx: HookEndpointContext) =>
-          isSocialSignInCallbackPath(ctx.path),
+        matcher: (ctx: HookEndpointContext) => completesSocialCallback(ctx),
         handler: createAuthMiddleware(async (ctx) => {
           logger.info("auth.social_sign_in", {
             outcome: classifySocialCallback(
@@ -1392,8 +1448,6 @@ export const createAuth = (
     store: createDatabaseSessionLifetimeStore(rootDb, {
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
-      rotationEnabled: env.SESSION_TOKEN_ROTATION_ENABLED,
-      capEnabled: env.SESSION_LIFETIME_CAP_ENABLED,
     }),
   });
   const syntheticAuthHooks = createSyntheticPrincipalAuthHooks();
@@ -1467,10 +1521,12 @@ export const createAuth = (
     organizationId: SafeId<"organization">,
     kind: "invitation" | "membership",
   ): Promise<void> => {
-    const admission = await checkMemberAdmission(rootDb, {
-      organizationId,
-      kind,
-    });
+    const current = currentOrganizationCreationTransaction();
+    const options = { organizationId, kind };
+    const admission =
+      current === undefined
+        ? await checkMemberAdmission(rootDb, options)
+        : await checkMemberAdmission(current, options);
     // Better Auth rejects a request from an organization hook by the
     // APIError it throws.
     if (Result.isError(admission)) {
@@ -1585,7 +1641,7 @@ export const createAuth = (
 
   const membershipAuthAdapter: typeof rawAuthAdapter = (options) => {
     const adapter = withAuthRetention({
-      adapter: rawAuthAdapter(options),
+      adapter: withBatchedOrganizationMemberships(rawAuthAdapter(options)),
       ownClientResources: getOwnNativeClientResources,
       admitClient: async () =>
         await admitOpenClient({
@@ -1678,7 +1734,17 @@ export const createAuth = (
   const organizationLifecycleHooks = createOrganizationLifecycleHooks({
     analytics: getServerAnalytics(),
     // Insert-once on the owner connection, like the seeds below.
-    recordAccessState: recordNewOrganizationAccessStateOnOwner,
+    recordAccessState: async (organizationId: SafeId<"organization">) => {
+      const tx = currentOrganizationCreationTransaction();
+      if (tx !== undefined) {
+        await recordNewOrganizationAccessState(tx, {
+          organizationId,
+          now: new Date(),
+        });
+        return;
+      }
+      await recordNewOrganizationAccessStateOnOwner(organizationId);
+    },
     // Insert-once on the owner connection, audited in the same transaction.
     // A creator who has not accepted yet records nothing here; the
     // organization is recorded when an owner accepts.
@@ -1686,6 +1752,15 @@ export const createAuth = (
       organizationId,
       userId,
     }: NewMembership) => {
+      const current = currentOrganizationCreationTransaction();
+      if (current !== undefined) {
+        await recordOrganizationProfessionalUse({
+          tx: current,
+          organizationId,
+          userId,
+        });
+        return;
+      }
       await withAggregateTransaction(
         rootDb,
         async (tx) =>
@@ -1699,14 +1774,28 @@ export const createAuth = (
     // Idempotent via the (organization_id, key) unique. Runs on the owner
     // connection (`rootDb`), which bypasses RLS the same way the org row's
     // own creation did.
-    seedDefaultDocumentTypes: async (organizationId: SafeId<"organization">) =>
-      await ensureDefaultDocumentTypes(organizationId, rootDb),
+    seedDefaultDocumentTypes: async (
+      organizationId: SafeId<"organization">,
+    ) => {
+      const current = currentOrganizationCreationTransaction();
+      if (current !== undefined) {
+        await ensureDefaultDocumentTypes(organizationId, current);
+        return;
+      }
+      await ensureDefaultDocumentTypes(organizationId, rootDb);
+    },
     // Once per membership, on the owner connection that wrote the membership
     // row; the defaults are then the member's own private skills to delete.
-    seedMemberDefaults: async (membership: NewMembership) =>
+    seedMemberDefaults: async (membership: NewMembership) => {
+      const current = currentOrganizationCreationTransaction();
+      if (current !== undefined) {
+        await seedDefaultSkills({ ...membership, tx: current });
+        return;
+      }
       await rootDb.transaction(
         async (tx) => await seedDefaultSkills({ ...membership, tx }),
-      ),
+      );
+    },
   });
 
   const organizationPlugin = organization({
@@ -1715,7 +1804,9 @@ export const createAuth = (
     roles,
     organizationHooks: {
       ...organizationLifecycleHooks,
-      async beforeCreateOrganization({ user }) {
+      beforeUpdateOrganization: beforeOrganizationSlugUpdate,
+      async beforeCreateOrganization({ user, organization: org }) {
+        await beforeOrganizationSlugCreation({ slug: org.slug });
         requireDemoAccountAccess(
           checkConfiguredDemoAccountAccess({
             email: user.email,
@@ -1871,7 +1962,10 @@ export const createAuth = (
       },
       async beforeAddMember({ organization: org, user, member: addedMember }) {
         const endpoint = tryGetCurrentAuthEndpointContext();
-        if (endpoint?.path === "/organization/create") {
+        if (
+          endpoint?.path === "/organization/create" ||
+          currentOrganizationCreationTransaction() !== undefined
+        ) {
           // Better Auth supplies the creator role, before a membership or
           // browser session exists on the system provisioning path.
           if (
@@ -1886,9 +1980,17 @@ export const createAuth = (
           // afterCreateOrganization hook. Initialize the fail-closed access
           // row before capacity admission; the lifecycle hook repeats this
           // insert after creation and the owner is idempotent.
-          await recordNewOrganizationAccessStateOnOwner(
-            brandPersistedOrganizationId(org.id),
-          );
+          const tx = currentOrganizationCreationTransaction();
+          if (tx !== undefined) {
+            await recordNewOrganizationAccessState(tx, {
+              organizationId: brandPersistedOrganizationId(org.id),
+              now: new Date(),
+            });
+          } else {
+            await recordNewOrganizationAccessStateOnOwner(
+              brandPersistedOrganizationId(org.id),
+            );
+          }
         } else {
           await requireAssignableMemberRole(
             brandPersistedOrganizationId(org.id),
@@ -2048,15 +2150,16 @@ export const createAuth = (
     // The route table mounts the handler at this path; one constant for both.
     basePath: AUTH_API_PATH,
     logger: errorOutputLogger,
-    trustedOrigins: [
-      ...frontendOrigins({
-        frontendUrl: env.FRONTEND_URL,
-        runtimeMode: runtimeMode(),
-      }),
-      ...(isLocalDevOpen() ? ["chrome-extension://*"] : []),
-      ...(isLocalDevOpen() ? DEV_INSPECTOR_ORIGINS : []),
-      ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
-    ],
+    trustedOrigins: (request) =>
+      withAppleFormPostOrigin(request, [
+        ...frontendOrigins({
+          frontendUrl: env.FRONTEND_URL,
+          runtimeMode: runtimeMode(),
+        }),
+        ...(isLocalDevOpen() ? ["chrome-extension://*"] : []),
+        ...(isLocalDevOpen() ? DEV_INSPECTOR_ORIGINS : []),
+        ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
+      ]),
     disabledPaths: [
       "/token",
       // The API key plugin ships its own HTTP CRUD, and it authorizes on
@@ -2074,14 +2177,9 @@ export const createAuth = (
       "/api-key/delete",
       "/api-key/get",
       "/api-key/list",
-      // Account unlinking is not a Stella feature: there is no UI and no
-      // server-side `auth.api.unlinkAccount` caller. Better Auth still mounts
-      // `/unlink-account` and protects it with `freshSessionMiddleware`, so
-      // once `session.freshAge` is 0 (below) that freshness no longer applies.
-      // Rather than let an unused, state-changing endpoint stay reachable with
-      // weaker protection, disable the path outright — removing the surface is
-      // strictly stronger than the freshness it used to carry.
-      "/unlink-account",
+      // Account creation must pass the shared consent, rate-limit and receipt boundary.
+      // Internal auth.api.createOrganization remains available to that boundary.
+      "/organization/create",
       "/organization/leave",
       // OAuth client management Stella has no use for; see
       // `OAUTH_ENDPOINT_POLICY`.
@@ -2119,10 +2217,10 @@ export const createAuth = (
       // sessions) that the account page loads eagerly, so the gate turned it
       // into a 403 for any day-old login and crashed the page; and revoking a
       // session — the actual sensitive action — is not freshness-gated anyway,
-      // so gating only the read made no sense. `unlink-account` is unused and is
-      // disabled in `disabledPaths` above, so nothing reachable relies on this
-      // knob. Genuinely sensitive flows use Stella's own controls (OTP-verified
-      // account deletion, TOTP two-factor). `0` removes the footgun without
+      // so gating only the read made no sense. Unlinking uses a live session,
+      // fresh email code and serialized keep-one check in the before hook.
+      // Sensitive flows use Stella's own controls (OTP-verified account
+      // deletion, TOTP two-factor). `0` removes the footgun without
       // weakening anything real. Guarded by the freshAge invariant in
       // `auth.test.ts`.
       freshAge: 0,
@@ -2300,8 +2398,44 @@ export const createAuth = (
       microsoftClientId: env.MICROSOFT_AUTH_CLIENT_ID,
       microsoftClientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
       microsoftTenantId: env.MICROSOFT_AUTH_TENANT_ID,
+      apple: configuredAppleSignIn(),
     }),
     plugins: [
+      {
+        id: "sign-in-method-confirmation",
+        endpoints: {
+          sendSignInMethodConfirmation: createAuthEndpoint(
+            "/sign-in-methods/send-otp",
+            { method: "POST" },
+            async (ctx) => {
+              const session = await getAuthoritativeSessionFromCtx(ctx);
+              if (!session) {
+                throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
+              }
+              const sent = await sendManageOtp({
+                purpose: "unlink-account",
+                email: session.user.email,
+                request: ctx.request,
+              });
+              if (Result.isError(sent)) {
+                observeFailure(sent.error, {
+                  sink: SIGN_IN_METHOD_CONFIRMATION_FAILED,
+                });
+                throw new APIError(
+                  sent.error.status >= 500
+                    ? "INTERNAL_SERVER_ERROR"
+                    : "BAD_REQUEST",
+                  {
+                    message: "Could not send confirmation code",
+                    cause: sent.error,
+                  },
+                );
+              }
+              return ctx.json(sent.value);
+            },
+          ),
+        },
+      },
       REGISTRATION_RETENTION_SCHEMA_PLUGIN,
       CLIENT_METADATA_VALIDATION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
@@ -2313,9 +2447,10 @@ export const createAuth = (
         config: syntheticPrincipalAuthConfig,
         localPasswordEnabled: true,
         checkAccess: checkSyntheticPrincipalAccess,
-        authorizeSession: authorizeOwnerSyntheticSession,
+        authorizeSession: bindOwnerSyntheticSessionAuthorizer(
+          authorizeSyntheticSession,
+        ),
       }),
-      createSessionBearer(),
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({
         enabled: rateLimitEnabled,
@@ -2431,6 +2566,10 @@ export const createAuth = (
       // actually receives.
       socialSignInOutcomePlugin,
       organizationPlugin,
+      createMemberInvitationSectionsPlugin(
+        createAuthMiddleware,
+        () => new Date(),
+      ),
       createOAuthConsentInfoPlugin([env.FRONTEND_URL, getAuthIssuerUrl()]),
       createStellaOAuthProvider(
         {
@@ -2684,6 +2823,17 @@ export const createAuth = (
           }
         }
         await assertSelfhostEmailOtpAllowed(ctx.path);
+        if (ctx.path === "/unlink-account") {
+          const result = await unlinkAccountWithConfirmation({
+            session: await getAuthoritativeSessionFromCtx(ctx),
+            body: ctx.body,
+            request: ctx.request,
+          });
+          if (Result.isError(result)) {
+            throw result.error;
+          }
+          return ctx.json({ status: true });
+        }
         const resetConfirmation = await requireEmailOtpResetConfirmation({
           path: ctx.path,
           body: ctx.body,
@@ -2779,7 +2929,10 @@ export const createAuth = (
       }),
     },
   });
-  return isLocalDevOpen() ? instrumentQueryOrigins(auth) : auth;
+  return Object.assign(isLocalDevOpen() ? instrumentQueryOrigins(auth) : auth, {
+    organizationCreateEndpoint: organizationPlugin.endpoints.createOrganization,
+    organizationUpdateEndpoint: organizationPlugin.endpoints.updateOrganization,
+  });
 };
 
 let _auth: ReturnType<typeof createAuth> | undefined;
@@ -2990,7 +3143,7 @@ export const authenticateSession = async (
       where: [
         { field: "id", value: session.id },
         { field: "userId", value: user.id },
-        { field: "expiresAt", operator: "gt", value: new Date() },
+        ...liveSessionAdapterWhere(new Date()),
       ],
       select: ["id"],
     });
@@ -3242,7 +3395,7 @@ export const resolveUserRealtimeAuthorization = async (
       and(
         eq(authSession.userId, member.userId),
         inArray(authSession.id, uniqueSessionIds),
-        gt(authSession.expiresAt, new Date()),
+        liveSessionPredicate(new Date(), authSession),
       ),
     )
     .where(
@@ -3282,7 +3435,7 @@ export const resolveWorkspaceRealtimeAudience = async (
       and(
         eq(authSession.userId, member.userId),
         inArray(authSession.id, uniqueSessionIds),
-        gt(authSession.expiresAt, new Date()),
+        liveSessionPredicate(new Date(), authSession),
       ),
     )
     .innerJoin(
@@ -3472,7 +3625,7 @@ const hasSyntheticSessionAuthority = async (current: {
   const userId = brandPersistedUserId(current.user.id);
   return (
     !isSyntheticSessionPrincipal({ sessionId, principalId: userId }) ||
-    (await syntheticSessionAuthorityReader({ sessionId, userId })) !== null
+    (await ownerSyntheticSessionAuthorityReader({ sessionId, userId })) !== null
   );
 };
 

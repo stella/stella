@@ -1,5 +1,6 @@
 // One assessment per advisory, including every vulnerable lockfile resolution.
 import { panic, Result, TaggedError } from "better-result";
+import nodePath from "node:path";
 
 import { readInstallPolicy } from "./check-stll-quarantine-excludes";
 import type { Advisory, BaselineEntry } from "./dependency-audit";
@@ -16,7 +17,17 @@ const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 export type AuditDisposition =
-  | { status: "fix_available"; patchedVersions: string[] }
+  | {
+      status: "fix_available";
+      installableVersions: string[];
+      quarantinedVersions: InstallableRelease[];
+    }
+  | {
+      status: "fix_in_quarantine";
+      package: string;
+      installableVersions: [];
+      quarantinedVersions: InstallableRelease[];
+    }
   | {
       status: "pinned_resolution_blocked";
       pins: string[];
@@ -35,6 +46,14 @@ export type AdvisoryAssessment = {
   advisory: Advisory;
   disposition: AuditDisposition;
   acceptance: BaselineEntry | undefined;
+  affectedPaths: string[];
+  copies: { path: string; version: string }[];
+  resolutionPaths: {
+    copyPath: string;
+    resolution: string;
+    requirement: string;
+    repositoryResolution?: true;
+  }[];
   action: string;
 };
 
@@ -44,6 +63,92 @@ type AssessAdvisoriesOptions = {
   lockfile: string;
   manifest: unknown;
   versions: ReadonlyMap<string, readonly string[]>;
+  quarantinedReleases?: ReadonlyMap<string, readonly InstallableRelease[]>;
+};
+
+const validateAcceptance = (
+  advisory: Advisory,
+  acceptance: BaselineEntry | undefined,
+  vulnerablePaths: readonly string[],
+): void => {
+  if (acceptance === undefined) {
+    return;
+  }
+  if (acceptance.expiresOn === undefined) {
+    invalidAssessment(`Acceptance ${advisory.id} requires an expiry`);
+  }
+  const uncovered = vulnerablePaths.filter(
+    (key) => !acceptance.affectedPaths?.includes(key),
+  );
+  if (uncovered.length > 0) {
+    invalidAssessment(
+      `Acceptance ${advisory.id} does not cover lockfile paths: ${uncovered.join(", ")}; review scripts/dependency-audit-baseline.json`,
+    );
+  }
+};
+
+type SelectDispositionOptions = {
+  advisory: Advisory;
+  acceptance: BaselineEntry | undefined;
+  blockers: string[];
+  patchedVersions: string[];
+  selectableVersions: string[];
+  pins: ReadonlySet<string>;
+  quarantinedByVersion: ReadonlyMap<string, InstallableRelease>;
+};
+const selectDisposition = ({
+  advisory,
+  acceptance,
+  blockers,
+  patchedVersions,
+  selectableVersions,
+  pins,
+  quarantinedByVersion,
+}: SelectDispositionOptions): AuditDisposition => {
+  const quarantinedPatches = selectableVersions
+    .flatMap((version) => {
+      const release = quarantinedByVersion.get(version);
+      return release === undefined ? [] : [release];
+    })
+    .toSorted((left, right) => Bun.semver.order(left.version, right.version));
+  const installablePatches = selectableVersions.filter(
+    (version) => !quarantinedByVersion.has(version),
+  );
+  const onlyMovableResolutionPins =
+    pins.size > 0 &&
+    [...pins].every((pin) => /package\.json resolutions\./u.test(pin));
+  const quarantinedPatch = quarantinedPatches.at(0);
+  if (
+    quarantinedPatch !== undefined &&
+    installablePatches.length === 0 &&
+    blockers.length === 0 &&
+    (pins.size === 0 || onlyMovableResolutionPins)
+  ) {
+    return {
+      status: "fix_in_quarantine",
+      package: advisory.package,
+      installableVersions: [],
+      quarantinedVersions: quarantinedPatches,
+    };
+  }
+  if (pins.size > 0 && patchedVersions.length > 0) {
+    return {
+      status: "pinned_resolution_blocked",
+      pins: [...pins],
+      blockers,
+      patchedVersions,
+    };
+  }
+  if (blockers.length > 0 || patchedVersions.length === 0) {
+    return { status: "upstream_blocked", blockers, patchedVersions };
+  }
+  return acceptance === undefined
+    ? {
+        status: "fix_available",
+        installableVersions: installablePatches,
+        quarantinedVersions: quarantinedPatches,
+      }
+    : { status: "accepted", acceptance };
 };
 
 const splitResolution = (resolution: string) => {
@@ -176,6 +281,145 @@ type RequirementOwner = {
 // Resolutions and overrides apply to every copy: one that admits no patched
 // release is a pin.
 const MANIFEST_REQUIREMENT_FIELDS = ["resolutions", "overrides"] as const;
+const requirementOwners = (
+  packages: ReturnType<typeof lockPackages>,
+  sources: readonly ManifestSource[],
+): RequirementOwner[] => [
+  ...packages.map(({ key, details }) => ({
+    key,
+    label: key,
+    details,
+    fields: PACKAGE_REQUIREMENT_FIELDS,
+    manifest: false,
+  })),
+  ...sources.map(({ owner, label, manifest: details }) => ({
+    key: owner,
+    label,
+    details,
+    fields: OWNER_REQUIREMENT_FIELDS,
+    manifest: true,
+  })),
+];
+
+type ResolutionPathsOptions = {
+  packageName: string;
+  packages: ReturnType<typeof lockPackages>;
+  owners: readonly RequirementOwner[];
+  keys: ReadonlySet<string>;
+  repositoryResolutions: ReadonlyMap<string, string>;
+};
+const repositoryResolutions = (
+  manifest: unknown,
+): ReadonlyMap<string, string> => {
+  if (!record(manifest) || !record(manifest["resolutions"])) {
+    return new Map();
+  }
+  return new Map(
+    Object.entries(manifest["resolutions"]).flatMap(([key, value]) =>
+      typeof value === "string"
+        ? [[keyLocations(key).join("/"), key] as const]
+        : [],
+    ),
+  );
+};
+
+type GoverningResolutionOptions = {
+  resolutions: ReadonlyMap<string, string>;
+  copyPath: string;
+  packageName: string;
+  parentNames: readonly string[];
+};
+
+// A hoisted copy keeps its lockfile key (`joi`) even when a `parent/joi`
+// resolution governs it, so the owning parents' paths are checked too; a copy
+// shared by several parents can be governed by each of their resolutions.
+const governingRepositoryResolutions = ({
+  resolutions,
+  copyPath,
+  packageName,
+  parentNames,
+}: GoverningResolutionOptions): string[] => [
+  ...new Set(
+    [
+      copyPath,
+      ...parentNames.map((parent) => `${parent}/${packageName}`),
+      packageName,
+    ].flatMap((location) => {
+      const resolution = resolutions.get(location);
+      return resolution === undefined ? [] : [resolution];
+    }),
+  ),
+];
+
+const dependencyResolutionPaths = ({
+  packageName,
+  packages,
+  owners,
+  keys,
+  repositoryResolutions: resolutionsByPath,
+}: ResolutionPathsOptions): AdvisoryAssessment["resolutionPaths"] =>
+  packages
+    .filter(({ name }) => name === packageName)
+    .flatMap((node) => {
+      const parentNames = owners.flatMap((parent) =>
+        parent.fields.some((field) => {
+          const dependencies = parent.details[field];
+          return (
+            record(dependencies) &&
+            typeof dependencies[packageName] === "string" &&
+            resolvedKey({
+              parent: parent.key,
+              dependency: packageName,
+              keys,
+            }) === node.key
+          );
+        })
+          ? [packages.find(({ key }) => key === parent.key)?.name ?? parent.key]
+          : [],
+      );
+      const governing = governingRepositoryResolutions({
+        resolutions: resolutionsByPath,
+        copyPath: node.key,
+        packageName,
+        parentNames,
+      });
+      return governing.length === 0
+        ? owners.flatMap((parent) => {
+            for (const field of parent.fields) {
+              const dependencies = parent.details[field];
+              const requirement = record(dependencies)
+                ? dependencies[packageName]
+                : undefined;
+              if (
+                typeof requirement === "string" &&
+                resolvedKey({
+                  parent: parent.key,
+                  dependency: packageName,
+                  keys,
+                }) === node.key
+              ) {
+                const parentPackage = packages.find(
+                  ({ key }) => key === parent.key,
+                )?.name;
+                return [
+                  {
+                    copyPath: node.key,
+                    resolution: `${parentPackage ?? parent.key}/${packageName}`,
+                    requirement,
+                  },
+                ];
+              }
+            }
+            return [];
+          })
+        : governing.map((resolution) => ({
+            copyPath: node.key,
+            resolution,
+            requirement: "*",
+            repositoryResolution: true,
+          }));
+    });
+
 type ManifestPinsOptions = {
   sources: readonly ManifestSource[];
   packageName: string;
@@ -194,6 +438,9 @@ const manifestPins = ({
   }
   for (const { label, manifest } of sources) {
     for (const field of MANIFEST_REQUIREMENT_FIELDS) {
+      if (label === "package.json" && field === "resolutions") {
+        continue;
+      }
       const entries = manifest[field];
       const requirement = record(entries) ? entries[packageName] : undefined;
       if (typeof requirement !== "string") {
@@ -211,41 +458,69 @@ const manifestPins = ({
   return pins;
 };
 
+// Recommend forward upgrades only: a safe older release is a downgrade, not a patch.
+const patchCandidates = (
+  advisory: Advisory,
+  published: readonly string[],
+  vulnerable: ReturnType<typeof lockPackages>,
+) => {
+  const safeVersions = published.filter(
+    (version) =>
+      Bun.semver.satisfies(version, "*") &&
+      !Bun.semver.satisfies(version, advisory.vulnerableVersions),
+  );
+  const upgradesFrom = (locked: string): string[] =>
+    safeVersions.filter((version) => Bun.semver.order(version, locked) > 0);
+  const oldestLocked =
+    vulnerable
+      .map(({ version }) => version)
+      .toSorted(Bun.semver.order)
+      .at(0) ??
+    invalidAssessment(`Cannot find an affected version for ${advisory.id}`);
+  return { upgradesFrom, patchedVersions: upgradesFrom(oldestLocked) };
+};
+
+const hasPackageWideResolution = (
+  sources: readonly ManifestSource[],
+  packageName: string,
+): boolean =>
+  sources.some(({ manifest }) =>
+    MANIFEST_REQUIREMENT_FIELDS.some((field) => {
+      const entries = manifest[field];
+      return record(entries) && typeof entries[packageName] === "string";
+    }),
+  );
+
 export const assessAdvisories = ({
   advisories,
   accepted,
   lockfile,
   manifest,
   versions,
+  quarantinedReleases = new Map(),
 }: AssessAdvisoriesOptions): AdvisoryAssessment[] => {
   const packages = lockPackages(lockfile);
   const keys = new Set(packages.map(({ key }) => key));
   const sources = manifestSources(manifest, lockfile);
-  const owners: RequirementOwner[] = [
-    ...packages.map(({ key, details }) => ({
-      key,
-      label: key,
-      details,
-      fields: PACKAGE_REQUIREMENT_FIELDS,
-      manifest: false,
-    })),
-    ...sources.map(({ owner, label, manifest: details }) => ({
-      key: owner,
-      label,
-      details,
-      fields: OWNER_REQUIREMENT_FIELDS,
-      manifest: true,
-    })),
-  ];
+  const resolutions = repositoryResolutions(manifest);
+  const owners = requirementOwners(packages, sources);
   return advisories.map((advisory) => {
     if (advisory.vulnerableVersions === "") {
       return invalidAssessment(
         `Cannot assess ${advisory.id}: advisory has no vulnerable range`,
       );
     }
-    const published =
+    const installable =
       versions.get(advisory.package) ??
       invalidAssessment(`Missing registry versions for ${advisory.package}`);
+    const quarantined = quarantinedReleases.get(advisory.package) ?? [];
+    const published = [
+      ...installable,
+      ...quarantined.map(({ version }) => version),
+    ];
+    const quarantinedByVersion = new Map(
+      quarantined.map((release) => [release.version, release]),
+    );
     const vulnerable = packages.filter(
       ({ name, version }) =>
         name === advisory.package &&
@@ -256,23 +531,11 @@ export const assessAdvisories = ({
         `Cannot assess ${advisory.id}: no vulnerable ${advisory.package} resolution in bun.lock`,
       );
     }
-    // Recommend forward upgrades only: a safe older release is a downgrade,
-    // not a patch. Each locked copy is judged against releases newer than it,
-    // so an advisory spanning several release lines keeps each line's patch.
-    const safeVersions = published.filter(
-      (version) =>
-        Bun.semver.satisfies(version, "*") &&
-        !Bun.semver.satisfies(version, advisory.vulnerableVersions),
+    const { upgradesFrom, patchedVersions } = patchCandidates(
+      advisory,
+      published,
+      vulnerable,
     );
-    const upgradesFrom = (locked: string): string[] =>
-      safeVersions.filter((version) => Bun.semver.order(version, locked) > 0);
-    const oldestLocked =
-      vulnerable
-        .map(({ version }) => version)
-        .toSorted(Bun.semver.order)
-        .at(0) ??
-      invalidAssessment(`Cannot find an affected version for ${advisory.id}`);
-    const patchedVersions = upgradesFrom(oldestLocked);
     const acceptances = accepted.filter(
       ({ id, package: name }) =>
         id === advisory.id && name === advisory.package,
@@ -283,31 +546,30 @@ export const assessAdvisories = ({
       );
     }
     const acceptance = acceptances.at(0);
-    if (acceptance !== undefined) {
-      if (acceptance.expiresOn === undefined) {
-        return invalidAssessment(
-          `Acceptance ${advisory.id} requires an expiry`,
-        );
-      }
-      const uncovered = vulnerable.filter(
-        ({ key }) => !acceptance.affectedPaths?.includes(key),
-      );
-      if (uncovered.length > 0) {
-        return invalidAssessment(
-          `Acceptance ${advisory.id} does not cover lockfile paths: ${uncovered.map(({ key }) => key).join(", ")}; review scripts/dependency-audit-baseline.json`,
-        );
-      }
-    }
+    validateAcceptance(
+      advisory,
+      acceptance,
+      vulnerable.map(({ key }) => key),
+    );
     const pins = new Set<string>();
     const blockers: string[] = [];
-    const overridden = sources.some(({ manifest: source }) =>
-      MANIFEST_REQUIREMENT_FIELDS.some((field) => {
-        const entries = source[field];
-        return record(entries) && typeof entries[advisory.package] === "string";
-      }),
-    );
+    const resolutionPaths = dependencyResolutionPaths({
+      packageName: advisory.package,
+      packages,
+      owners,
+      keys,
+      repositoryResolutions: resolutions,
+    });
+    let selectableVersions = patchedVersions;
+    const overridden = hasPackageWideResolution(sources, advisory.package);
     for (const node of vulnerable) {
       const nodePatches = upgradesFrom(node.version);
+      let selectableForNode = nodePatches;
+      const nodeResolution = resolutionPaths.find(
+        (resolutionPath) =>
+          resolutionPath.copyPath === node.key &&
+          resolutionPath.repositoryResolution === true,
+      )?.resolution;
       for (const pin of manifestPins({
         sources,
         packageName: advisory.package,
@@ -323,9 +585,15 @@ export const assessAdvisories = ({
             `${node.key}@${node.version}: no forward patched release`,
           );
         }
+        selectableVersions = selectableVersions.filter((version) =>
+          selectableForNode.includes(version),
+        );
         continue;
       }
       const parents: string[] = [];
+      if (nodeResolution !== undefined) {
+        parents.push(`package.json resolution ${nodeResolution}`);
+      }
       for (const parent of owners) {
         for (const field of parent.fields) {
           const dependencies = parent.details[field];
@@ -342,8 +610,14 @@ export const assessAdvisories = ({
           ) {
             continue;
           }
+          if (nodeResolution !== undefined) {
+            continue;
+          }
           parents.push(
             `${parent.label} requires ${advisory.package} ${requirement}`,
+          );
+          selectableForNode = selectableForNode.filter((version) =>
+            Bun.semver.satisfies(version, requirement),
           );
           if (
             nodePatches.some((version) =>
@@ -375,31 +649,60 @@ export const assessAdvisories = ({
           `${node.key}@${node.version}: no patched release in resolved major`,
         );
       }
+      if (parents.length === 0) {
+        selectableForNode = selectableForNode.filter(
+          (version) =>
+            version.split(".").at(0) === node.version.split(".").at(0),
+        );
+      }
+      selectableVersions = selectableVersions.filter((version) =>
+        selectableForNode.includes(version),
+      );
     }
-    let disposition: AuditDisposition;
-    if (pins.size > 0 && patchedVersions.length > 0) {
-      disposition = {
-        status: "pinned_resolution_blocked",
-        pins: [...pins],
-        blockers,
-        patchedVersions,
-      };
-    } else if (blockers.length > 0 || patchedVersions.length === 0) {
-      disposition = { status: "upstream_blocked", blockers, patchedVersions };
-    } else if (acceptance !== undefined) {
-      disposition = { status: "accepted", acceptance };
-    } else {
-      disposition = { status: "fix_available", patchedVersions };
+    if (
+      selectableVersions.length === 0 &&
+      patchedVersions.length > 0 &&
+      pins.size === 0 &&
+      blockers.length === 0
+    ) {
+      blockers.push(
+        "no single patched release satisfies every affected resolution path",
+      );
     }
+    const disposition = selectDisposition({
+      advisory,
+      acceptance,
+      blockers,
+      patchedVersions,
+      selectableVersions,
+      pins,
+      quarantinedByVersion,
+    });
     const action = dispositionAction(disposition);
-    return { advisory, disposition, acceptance, action };
+    return {
+      advisory,
+      disposition,
+      acceptance,
+      affectedPaths: vulnerable.map(({ key }) => key),
+      copies: packages
+        .filter(({ name }) => name === advisory.package)
+        .map(({ key: path, version }) => ({ path, version })),
+      resolutionPaths,
+      action,
+    };
   });
 };
 
 const dispositionAction = (disposition: AuditDisposition): string => {
   switch (disposition.status) {
     case "fix_available":
-      return `Update the lockfile to a patched release: ${disposition.patchedVersions.slice(-3).join(", ")}`;
+      return `Update the lockfile to a patched release: ${disposition.installableVersions.slice(-3).join(", ")}`;
+    case "fix_in_quarantine": {
+      const lowestFix =
+        disposition.quarantinedVersions.at(0) ??
+        panic("Missing quarantined patch");
+      return `Temporarily add ${disposition.package} to minimumReleaseAgeExcludes with # quarantine-expires: ${lowestFix.installableSince}, then pin ${lowestFix.version}`;
+    }
     case "pinned_resolution_blocked":
       return `Lift ${disposition.pins.join("; ")}; patched releases: ${disposition.patchedVersions.slice(-3).join(", ")}${disposition.blockers.length > 0 ? `; then upgrade the blocking parent: ${disposition.blockers.join("; ")}` : ""}`;
     case "upstream_blocked":
@@ -448,35 +751,72 @@ type InstallableVersionsOptions = {
   policy: ReleaseAgePolicy;
   now: Date;
 };
+export type InstallableRelease = {
+  version: string;
+  installableSince: string;
+};
+
+const installableSince = (
+  name: string,
+  published: string,
+  policy: ReleaseAgePolicy,
+): string =>
+  new Date(
+    Date.parse(published) +
+      (policy.excludes.has(name) ? 0 : policy.minimumReleaseAgeSeconds * 1000),
+  ).toISOString();
+
 // A patch still in quarantine is not yet a fix: Bun would refuse to install it.
-export const installableVersions = ({
+export const installableReleases = ({
   name,
   versions,
   publishedAt,
   policy,
   now,
-}: InstallableVersionsOptions): string[] =>
-  versions.filter((version) => {
-    if (policy.excludes.has(name)) {
-      return true;
-    }
+}: InstallableVersionsOptions): InstallableRelease[] =>
+  releaseAgeReleases({ name, versions, publishedAt, policy }).filter(
+    ({ installableSince: since }) => Date.parse(since) <= now.getTime(),
+  );
+
+type ReleaseAgeReleasesOptions = Omit<InstallableVersionsOptions, "now">;
+export const releaseAgeReleases = ({
+  name,
+  versions,
+  publishedAt,
+  policy,
+}: ReleaseAgeReleasesOptions): InstallableRelease[] =>
+  versions.flatMap((version) => {
     const published = publishedAt[version];
-    return (
-      typeof published === "string" &&
-      Date.parse(published) + policy.minimumReleaseAgeSeconds * 1000 <=
-        now.getTime()
-    );
+    if (typeof published !== "string") {
+      return [];
+    }
+    const since = installableSince(name, published, policy);
+    return [{ version, installableSince: since }];
   });
+
+export const installableVersions = (
+  options: InstallableVersionsOptions,
+): string[] => installableReleases(options).map(({ version }) => version);
 
 // Use Bun's registry configuration, as audit does, with no manifest cache so
 // a newly published compatible patch changes the assessment immediately.
 const readBunInfo = async (
   name: string,
-  field: "versions" | "time",
+  field?: "versions" | "time",
 ): Promise<unknown> => {
   const result = await Result.tryPromise(async () => {
     const proc = Bun.spawn(
-      ["bun", "--no-env-file", "info", name, field, "--json", "--no-cache"],
+      [
+        "bash",
+        nodePath.resolve(import.meta.dir, "retry.sh"),
+        "bun",
+        "--no-env-file",
+        "info",
+        name,
+        ...(field === undefined ? [] : [field]),
+        "--json",
+        "--no-cache",
+      ],
       {
         stdout: "pipe",
         stderr: "pipe",
@@ -502,12 +842,26 @@ const readBunInfo = async (
   return result.value;
 };
 
+// `spec` is `<name>` or `<name>@<version>`; the latter returns that version's
+// manifest.
+export const readRegistryDocument = async (spec: string): Promise<unknown> =>
+  readBunInfo(spec);
+
 // Published versions Bun would install now, honouring the quarantine.
 export const readInstallableVersions = async (
   name: string,
   policy: ReleaseAgePolicy,
   now: Date,
-): Promise<string[]> => {
+): Promise<string[]> =>
+  (await readInstallableReleases(name, policy, now)).map(
+    ({ version }) => version,
+  );
+
+export const readInstallableReleases = async (
+  name: string,
+  policy: ReleaseAgePolicy,
+  now: Date,
+): Promise<InstallableRelease[]> => {
   const [versions, publishedAt] = await Promise.all([
     readBunInfo(name, "versions"),
     readBunInfo(name, "time"),
@@ -523,5 +877,27 @@ export const readInstallableVersions = async (
       `Registry lookup for ${name} has no publish times`,
     );
   }
-  return installableVersions({ name, versions, publishedAt, policy, now });
+  return installableReleases({ name, versions, publishedAt, policy, now });
+};
+
+export const readReleaseAgeReleases = async (
+  name: string,
+  policy: ReleaseAgePolicy,
+): Promise<InstallableRelease[]> => {
+  const [versions, publishedAt] = await Promise.all([
+    readBunInfo(name, "versions"),
+    readBunInfo(name, "time"),
+  ]);
+  if (
+    !Array.isArray(versions) ||
+    !versions.every((version): version is string => typeof version === "string")
+  ) {
+    return invalidAssessment(`Registry lookup for ${name} has no version list`);
+  }
+  if (!record(publishedAt)) {
+    return invalidAssessment(
+      `Registry lookup for ${name} has no publish times`,
+    );
+  }
+  return releaseAgeReleases({ name, versions, publishedAt, policy });
 };

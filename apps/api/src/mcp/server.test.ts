@@ -16,6 +16,7 @@ import type {
   Tool as McpTool,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
+import { RedisClient } from "bun";
 import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import {
@@ -33,6 +34,10 @@ import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-an
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  requestBoundedTimeoutMs,
+  runBoundedRequestStep,
+} from "@/api/lib/load/request-latency-budget";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import {
   resetMetricLineSinkForTesting,
@@ -70,6 +75,7 @@ import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { MCP_INSTRUCTIONS } from "@/api/mcp/instructions";
 import { LEGAL_RESOLVE_TOOL_SET } from "@/api/mcp/legal-resolve-tools";
 import { getMcpWwwAuthenticateHeader } from "@/api/mcp/metadata";
+import { mcpRequestStartedAt } from "@/api/mcp/request-metrics";
 import {
   createMcpHttpRequestHandler,
   mcpOmittedToolNamesByReason,
@@ -79,6 +85,7 @@ import {
   LAW_MCP_TOOL_DEFINITIONS,
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
+import { mcpToolLatencyBudgetMs } from "@/api/mcp/tool-latency-budgets";
 import type { ToolScope } from "@/api/mcp/tool-types";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
@@ -344,6 +351,57 @@ describe("handleMcpHttpRequest", () => {
     ).toMatchObject({ method: "tools/list", path: "modern" });
   });
 
+  test("a tool's budget counts from the request start, preparation included", async () => {
+    const preparationMs = 400;
+    const budgetMs = mcpToolLatencyBudgetMs("list_matters");
+    const staticDefinition = listStaticMcpToolDefinitions("default").find(
+      ({ name }) => name === "list_matters",
+    );
+    if (staticDefinition === undefined) {
+      panic("Canonical list_matters tool definition is missing");
+    }
+    authenticateMcpRequestMock.mockImplementation(async () => {
+      // real-time: preparation time is what the deadline must charge.
+      await Bun.sleep(preparationMs);
+      return Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      });
+    });
+    resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+    getMcpToolDefinitionMock.mockResolvedValue(staticDefinition);
+    let dependencyTimeoutMs = Number.POSITIVE_INFINITY;
+    let endedAfterRequestStartMs = Number.POSITIVE_INFINITY;
+    handleMcpToolCallMock.mockImplementation(async () => {
+      const requestStartedAt = mcpRequestStartedAt() ?? Number.NaN;
+      // A dependency that would wait a minute takes whatever is left.
+      dependencyTimeoutMs = requestBoundedTimeoutMs(60_000);
+      const step = await runBoundedRequestStep(
+        async () => await Promise.withResolvers<never>().promise,
+        { label: "slow-dependency", budgetMs: 60_000 },
+      );
+      endedAfterRequestStartMs = performance.now() - requestStartedAt;
+      return { content: [{ type: "text", text: step.status }] };
+    });
+
+    const response = await handleMcpHttpRequest(
+      createModernMcpRequest({
+        id: 1,
+        method: "tools/call",
+        params: { arguments: {}, name: "list_matters" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(dependencyTimeoutMs).toBeLessThanOrEqual(budgetMs - preparationMs);
+    // The dependency gives way at the request's deadline, counted from the
+    // request's start as the metric and the canary count it, not at
+    // preparation plus a fresh budget.
+    expect(endedAfterRequestStartMs).toBeGreaterThanOrEqual(budgetMs - 50);
+    expect(endedAfterRequestStartMs).toBeLessThan(budgetMs + 150);
+  });
+
   test.each([
     ["list_matters", "list_matters"],
     ["mcp__tenant_connector__lookup", "external_mcp"],
@@ -392,6 +450,10 @@ describe("handleMcpHttpRequest", () => {
       expect(phaseRecord).toMatchObject({
         method: "tools/call",
         toolName: metricToolName,
+        // The slow-tool alarm counts `overBudget`, judged by the same table
+        // the canary reads.
+        budget: mcpToolLatencyBudgetMs(metricToolName),
+        overBudget: false,
       });
       if (toolName !== metricToolName) {
         expect(JSON.stringify(phaseRecord)).not.toContain(toolName);
@@ -427,7 +489,7 @@ describe("handleMcpHttpRequest", () => {
     expect(clone).not.toHaveBeenCalled();
   });
 
-  test("native admission refusals keep their code and capture only infrastructure failure", async () => {
+  test("native admission refusals keep their canonical recovery contract", async () => {
     const previousEnabled = env.FEATURE_ACTION_ADMISSION;
     const previousContact = env.ACTION_LIMIT_CONTACT_URL;
     env.FEATURE_ACTION_ADMISSION = true;
@@ -437,7 +499,10 @@ describe("handleMcpHttpRequest", () => {
         "busy",
         "period_exhausted",
         "not_enabled",
-        "unavailable",
+        "store_unavailable",
+        "configuration_incomplete",
+        "organization_state_unreadable",
+        "lease_lost",
       ] as const) {
         captureErrorMock.mockClear();
         const refusalError =
@@ -506,14 +571,79 @@ describe("handleMcpHttpRequest", () => {
             : refusal.hint,
           requestId: "req_admission",
         });
-        expect(captureErrorMock.mock.calls.length).toBe(
-          reason === "unavailable" ? 1 : 0,
-        );
+        expect(captureErrorMock).not.toHaveBeenCalled();
         expect(handleMcpToolCallMock).not.toHaveBeenCalled();
       }
     } finally {
       env.FEATURE_ACTION_ADMISSION = previousEnabled;
       env.ACTION_LIMIT_CONTACT_URL = previousContact;
+    }
+  });
+
+  test("an unreachable admission store returns a retryable MCP refusal", async () => {
+    const redis = new RedisClient("redis://127.0.0.1:1", {
+      connectionTimeout: 50,
+      enableOfflineQueue: false,
+      maxRetries: 0,
+    });
+    try {
+      authenticateMcpRequestMock.mockResolvedValue(
+        Result.ok({
+          organizationId: "org_1",
+          scopes: ["stella:read"],
+          userId: "user_1",
+        }),
+      );
+      resolveMcpSessionContextMock.mockResolvedValue({
+        organizationId: "org_1",
+        userId: "user_1",
+      });
+      getMcpToolDefinitionMock.mockResolvedValue({
+        name: "search_case_law",
+        scope: "stella:read",
+        access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
+        description: "Search case law",
+        inputSchema: { type: "object", properties: {} },
+      });
+      const handler = createMcpHttpRequestHandler({
+        ...mcpHandlerDependencies,
+        admitAction: async (options) =>
+          await withActionAdmission({
+            ...options,
+            enabled: true,
+            serviceBudgetsEnabled: false,
+            policy: {
+              organizationConcurrency: 2,
+              userConcurrency: 1,
+              leaseMs: 1000,
+            },
+            redis: {
+              send: async (command, args) => await redis.send(command, args),
+            },
+          }),
+      });
+      const response = await handler(
+        createMcpRequest({
+          id: 1,
+          jsonrpc: "2.0",
+          method: "tools/call",
+          params: { name: "search_case_law", arguments: {} },
+        }),
+      );
+      const body =
+        await readTestJson<McpJsonResponse<CallToolResult>>(response);
+      const item = body.result.content.at(0);
+      const payload = item?.type === "text" ? JSON.parse(item.text) : undefined;
+      expect(body.result.isError).toBe(true);
+      expect(payload?.error).toMatchObject({
+        code: "limiter_store_unavailable",
+        message: ACTION_ADMISSION_REFUSALS.limiter_store_unavailable.message,
+        retryable: true,
+      });
+      expect(handleMcpToolCallMock).not.toHaveBeenCalled();
+    } finally {
+      redis.close();
     }
   });
 
