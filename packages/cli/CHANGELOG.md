@@ -1,5 +1,20 @@
 # @stll/cli
 
+## 6.5.0
+
+### Minor Changes
+
+- [#7607](https://github.com/stella/stella/pull/7607) [`34a741f`](https://github.com/stella/stella/commit/34a741fa7878e68f1cf01093d1208719e783df75) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `stella organization create` and request organization creation consent during CLI login.
+
+- [#7641](https://github.com/stella/stella/pull/7641) [`4370f68`](https://github.com/stella/stella/commit/4370f6896e6db5adf073e9d773d795e2e722b002) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add statute provision links to matters for Czech and Slovak law through the API capabilities, MCP, and CLI.
+
+- [#7680](https://github.com/stella/stella/pull/7680) [`cfb3814`](https://github.com/stella/stella/commit/cfb381485ca6560ad4e510c2c15d347b03dc2914) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a team time report read capability with grouped recorded time and period summaries.
+
+### Patch Changes
+
+- Updated dependencies [[`34a741f`](https://github.com/stella/stella/commit/34a741fa7878e68f1cf01093d1208719e783df75)]:
+  - @stll/agent-input@0.3.0
+
 ## 6.4.0
 
 ### Minor Changes

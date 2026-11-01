@@ -430,8 +430,6 @@
     "apps/api/src/handlers/properties/prompt/suggest.ts": 1,
     "apps/api/src/handlers/reports/builtins/clone.ts": 1,
     "apps/api/src/handlers/search/ai.ts": 1,
-    "apps/api/src/handlers/search/facets.ts": 1,
-    "apps/api/src/handlers/search/search.ts": 1,
     "apps/api/src/handlers/sharepoint/oauth-callback.ts": 3,
     "apps/api/src/handlers/skills/import.ts": 3,
     "apps/api/src/handlers/tasks/calendar/list.ts": 2,
