@@ -1,8 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { HarmBlockThreshold, HarmCategory } from "@google/genai";
 import { FetchHttpHandler } from "@smithy/fetch-http-handler";
-import { createModel, extendAdapter } from "@tanstack/ai";
-import type { AnyTextAdapter, ContentPart, ModelMessage } from "@tanstack/ai";
+import { createModel, EventType, extendAdapter } from "@tanstack/ai";
+import type {
+  AdapterYieldChunk,
+  AnyTextAdapter,
+  ContentPart,
+  ModelMessage,
+} from "@tanstack/ai";
 import { createAnthropicChatWithClient } from "@tanstack/ai-anthropic";
 import type {
   AnthropicTextProviderOptions,
@@ -92,6 +97,10 @@ import {
 import { withProviderImageInput } from "@/api/lib/chat/provider-image-input";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { validateDataUrl } from "@/api/lib/data-url";
+import {
+  markProviderAdapterError,
+  providerAdapterEvidence,
+} from "@/api/lib/errors/provider-call-failure";
 import { withRetryHintEvidence } from "@/api/lib/errors/provider-retry-evidence";
 import { registerProviderDiagnosticCredentials } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -100,6 +109,7 @@ import {
   createManagedOpenRouterText,
   createStellaOpenRouterText,
 } from "@/api/lib/stella-openrouter-text-adapter";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   MANAGED_MODEL_TIER,
   type ManagedModelTier,
@@ -738,6 +748,64 @@ const createExtendedGeminiAdapter = (
 };
 
 /**
+ * Marks every failure the provider adapter itself raises or reports, so the
+ * generation layer tells a provider request that got no response from the
+ * same socket failure anywhere else in a run (an MCP connection, a
+ * middleware's database or cache call), which it does not retry
+ * (`providerFailureKind`).
+ */
+const withProviderFailureOrigin = (adapter: AnyTextAdapter): AnyTextAdapter => {
+  const marked = async function* (
+    stream: AsyncIterable<AdapterYieldChunk>,
+  ): AsyncIterable<AdapterYieldChunk> {
+    try {
+      for await (const chunk of stream) {
+        yield chunk.type === EventType.RUN_ERROR && isRecord(chunk.rawEvent)
+          ? { ...chunk, rawEvent: providerAdapterEvidence(chunk.rawEvent) }
+          : chunk;
+      }
+    } catch (error) {
+      throw markProviderAdapterError(error);
+    }
+  };
+  const chatStream: AnyTextAdapter["chatStream"] = (options) =>
+    marked(adapter.chatStream(options));
+  const structuredOutput: AnyTextAdapter["structuredOutput"] = async (
+    options,
+  ) => {
+    try {
+      return await adapter.structuredOutput(options);
+    } catch (error) {
+      throw markProviderAdapterError(error);
+    }
+  };
+  const originalStream = adapter.structuredOutputStream;
+  const structuredOutputStream: AnyTextAdapter["structuredOutputStream"] =
+    originalStream === undefined
+      ? undefined
+      : (options) => marked(originalStream.call(adapter, options));
+  return new Proxy(adapter, {
+    get: (target, key) => {
+      if (key === "chatStream") {
+        return chatStream;
+      }
+      if (key === "structuredOutput") {
+        return structuredOutput;
+      }
+      if (key === "structuredOutputStream") {
+        return structuredOutputStream;
+      }
+      const value: unknown = Reflect.get(target, key, target);
+      if (typeof value !== "function") {
+        return value;
+      }
+      const bound: unknown = value.bind(target);
+      return bound;
+    },
+  });
+};
+
+/**
  * A provider SDK client sends each request once. The generation layer
  * (`withProviderRetryWait`) owns every retry, so each send passes the checks
  * it makes before a dispatch; an SDK retry would send the same request again
@@ -1129,7 +1197,10 @@ export const createTanStackTextAdapterFactory = (
   const factory = createProviderTextAdapterFactory({ ...options, provider });
   return (modelId) =>
     withProviderStreamContract(
-      withProviderImageInput(factory(modelId), provider),
+      withProviderImageInput(
+        withProviderFailureOrigin(factory(modelId)),
+        provider,
+      ),
       stopReasons,
     );
 };
