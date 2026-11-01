@@ -66,6 +66,12 @@
       "p95Seconds": 1,
       "p99Seconds": 1
     },
+    "CI job names": {
+      "minutes": 5,
+      "samples": 0,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
     "CI network step retries and timeouts": {
       "minutes": 5,
       "samples": 19,
