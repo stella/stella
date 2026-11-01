@@ -6,9 +6,10 @@ import {
   buildSkUsDecision,
   type SkUsPageContext,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
-import { skUsRetention } from "@/api/handlers/case-law/ingestion/retention/sources/sk-us";
+import { sourceRetentionForAdapter } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
 import { readAbsent } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   encodeSourceRawEnvelope,
   type IngestionResult,
@@ -94,6 +95,11 @@ const crawledDecision = async (
 };
 
 describe("sk-us retention projection", () => {
+  const { policy } = sourceRetentionForAdapter(ADAPTER_KEYS.SK_US);
+  if (policy.type !== "checked") {
+    expect.unreachable("The registered source checks retained text");
+  }
+
   const originalFetch = globalThis.fetch;
   afterEach(() => {
     globalThis.fetch = originalFetch;
@@ -107,7 +113,9 @@ describe("sk-us retention projection", () => {
       if (!hasUsableAst(ast)) {
         throw new Error("the recording built no document");
       }
-      const projection = await skUsRetention.project(decision.sourceRaw ?? "");
+      const projection = await policy.project(decision.sourceRaw ?? "", {
+        sourceRawObjects: decision.sourceRawObjects ?? {},
+      });
       if (projection.type !== "source") {
         throw new Error(`expected a source projection, got ${projection.type}`);
       }
@@ -132,14 +140,18 @@ describe("sk-us retention projection", () => {
   test("a listing the service served no rendering for has no publisher text", async () => {
     const raw = encodeSourceRawEnvelope({ listing: "{}" });
 
-    expect(await skUsRetention.project(raw)).toEqual({
+    expect(await policy.project(raw, { sourceRawObjects: {} })).toEqual({
       type: "no-text",
       reason: "not-published",
     });
   });
 
   test("a payload that is not the envelope is unreadable", async () => {
-    expect(await skUsRetention.project('{"documentId":"x"}')).toEqual({
+    expect(
+      await policy.project('{"documentId":"x"}', {
+        sourceRawObjects: {},
+      }),
+    ).toEqual({
       type: "unreadable",
       reason: "unreadable-envelope",
     });

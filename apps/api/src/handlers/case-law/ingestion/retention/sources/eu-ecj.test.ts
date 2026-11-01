@@ -6,7 +6,8 @@ import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { SHELL_STEM } from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
-import { euEcjRetention } from "@/api/handlers/case-law/ingestion/retention/sources/eu-ecj";
+import { sourceRetentionForAdapter } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -111,6 +112,11 @@ const builtDecision = async (fixture: (typeof RECORDED)[number]) => {
 };
 
 describe("eu-ecj retention projection", () => {
+  const { policy } = sourceRetentionForAdapter(ADAPTER_KEYS.EU_ECJ);
+  if (policy.type !== "checked") {
+    expect.unreachable("The registered source checks retained text");
+  }
+
   test("covers manifestations in several languages and a portal page", () => {
     const names = RECORDED.map(({ name }) => name);
     expect(names).toContain("62022CJ0128.en.page.html.gz");
@@ -127,7 +133,9 @@ describe("eu-ecj retention projection", () => {
       if (!hasUsableAst(ast)) {
         throw new Error("the adapter stored the stripped-text fallback");
       }
-      const projection = await euEcjRetention.project(decision.sourceRaw ?? "");
+      const projection = await policy.project(decision.sourceRaw ?? "", {
+        sourceRawObjects: decision.sourceRawObjects ?? {},
+      });
       if (projection.type !== "source") {
         throw new Error(`expected a source projection, got ${projection.type}`);
       }
@@ -153,8 +161,9 @@ describe("eu-ecj retention projection", () => {
     const page = await readText(
       new URL("62022CJ0128.en.page.html.gz", PARSER_FIXTURES),
     );
-    const projection = await euEcjRetention.project(
+    const projection = await policy.project(
       encodeSourceRawEnvelope({ document: page ?? "" }),
+      { sourceRawObjects: {} },
     );
 
     if (projection.type !== "source" || typeof projection.source === "string") {
@@ -177,7 +186,9 @@ describe("eu-ecj retention projection", () => {
 
   test("an envelope without the manifestation is not one this source wrote", async () => {
     expect(
-      await euEcjRetention.project(encodeSourceRawEnvelope({ listing: "{}" })),
+      await policy.project(encodeSourceRawEnvelope({ listing: "{}" }), {
+        sourceRawObjects: {},
+      }),
     ).toEqual({ type: "unreadable", reason: "missing-text-part" });
   });
 });
