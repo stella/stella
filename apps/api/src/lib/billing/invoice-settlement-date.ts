@@ -1,22 +1,29 @@
-import { INVOICE_STATUS } from "@stll/api-contract";
 import { Temporal, todayFor } from "@stll/time";
 import type { TimeZoneId } from "@stll/time";
 
+import type { InvoiceSettlement } from "@/api/lib/billing/invoice-payments";
+
 type InvoiceSettledOnOptions = {
-  status: string;
+  settlement: InvoiceSettlement;
   latestPaidOn: string | null;
   paidAt: Date | null;
   timeZone: TimeZoneId;
 };
 
-/** The settlement day printed by every invoice export; legacy/zero settlements may have only a timestamp. */
+/**
+ * The settlement day printed by every invoice export: the day of the latest
+ * payment still counted. Only payments settle a document, so a credited one
+ * has none. A document settled without a payment row (a zero document, or one
+ * marked paid before payments were recorded) carries only the moment it was
+ * marked.
+ */
 export const invoiceSettledOn = ({
-  status,
+  settlement,
   latestPaidOn,
   paidAt,
   timeZone,
 }: InvoiceSettledOnOptions): string | null => {
-  if (status !== INVOICE_STATUS.PAID) {
+  if (settlement.kind !== "paid" && settlement.kind !== "overpaid") {
     return null;
   }
   if (latestPaidOn !== null) {

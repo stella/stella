@@ -28,7 +28,8 @@ for (const { paidAmount, creditedAmount, due } of balances) {
       totalAmount: invoice.totals.grossAmountMinor,
       paidAmount,
       creditedAmount,
-    };
+      status: "sent",
+    } as const;
     const amountDue = invoiceAmountDue(balance);
     // The read projection and the client-facing amount are one computation.
     expect<number>(amountDue).toBe(

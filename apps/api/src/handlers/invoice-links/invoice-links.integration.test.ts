@@ -9,7 +9,13 @@ import {
   INVOICE_SEND_LIMITS,
 } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
-import { buildCzechQrPaymentPayload, variableSymbolOf } from "@stll/invoicing";
+import {
+  buildCzechQrPaymentPayload,
+  buildInvoiceSummaryTable,
+  buildMoneyS3Xml,
+  variableSymbolOf,
+} from "@stll/invoicing";
+import type { InvoiceExportRecord } from "@stll/invoicing";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { sha256Hex } from "@stll/sha256/bun";
@@ -2421,7 +2427,7 @@ describe("opening an invoice link", () => {
       language: "cs",
       seller: "Example Law Office",
       buyer: "Example Client",
-      paid: false,
+      settlement: { kind: "open" },
       files: {
         pdf: { fileName: expect.stringContaining("LINK-") },
         eInvoice: { format: "isdoc" },
@@ -3351,8 +3357,12 @@ describe("the amount a client page and email state as due", () => {
     expect(response.status).toBe(200);
     return v.parse(
       v.object({
-        paid: v.boolean(),
-        credited: v.boolean(),
+        settlement: v.variant("kind", [
+          v.object({ kind: v.literal("open") }),
+          v.object({ kind: v.literal("paid") }),
+          v.object({ kind: v.literal("credited") }),
+          v.object({ kind: v.literal("overpaid"), refund: v.string() }),
+        ]),
         outstandingAmount: v.number(),
         payment: v.nullable(
           v.object({
@@ -3376,6 +3386,18 @@ describe("the amount a client page and email state as due", () => {
     );
     return v.parse(v.object({ outstandingAmount: v.number() }), read)
       .outstandingAmount;
+  };
+  const memberSettlement = async (invoiceId: SafeId<"invoice">) => {
+    const read = await readInvoiceById.handler(
+      asTestRaw<Parameters<typeof readInvoiceById.handler>[0]>(
+        memberContext({
+          tenant: "A",
+          invoiceId,
+          route: "/v1/invoices/:workspaceId/:invoiceId",
+        }),
+      ),
+    );
+    return v.parse(v.object({ settlement: v.unknown() }), read).settlement;
   };
   const qrFor = (invoiceId: SafeId<"invoice">, amount: number) => {
     const variableSymbol = variableSymbolOf({
@@ -3413,12 +3435,12 @@ describe("the amount a client page and email state as due", () => {
       status: INVOICE_STATUS.FINALIZED,
     });
     expect(await pageOf(token)).toMatchObject({
-      paid: false,
-      credited: true,
+      settlement: { kind: "credited" },
       outstandingAmount: 0,
       payment: null,
     });
     expect(await memberBalance(invoiceId)).toBe(0);
+    expect(await memberSettlement(invoiceId)).toEqual({ kind: "credited" });
     const resent = await sendTo(invoiceId, "credited-full-again@example.test");
     expect(resent.amountDue).toBeNull();
   });
@@ -3436,8 +3458,7 @@ describe("the amount a client page and email state as due", () => {
     expect(amountDue).toBe(money(70_000));
     const page = await pageOf(token);
     expect(page).toMatchObject({
-      paid: false,
-      credited: false,
+      settlement: { kind: "open" },
       outstandingAmount: 70_000,
     });
     expect(page.payment?.qrSvg).toBe(qrFor(invoiceId, 70_000));
@@ -3458,7 +3479,7 @@ describe("the amount a client page and email state as due", () => {
     });
     const partly = await pageOf(token);
     expect(partly).toMatchObject({
-      credited: false,
+      settlement: { kind: "open" },
       outstandingAmount: 15_000,
     });
     expect(partly.payment?.qrSvg).toBe(qrFor(invoiceId, 15_000));
@@ -3466,13 +3487,14 @@ describe("the amount a client page and email state as due", () => {
       amount: 15_000,
       status: INVOICE_STATUS.FINALIZED,
     });
-    // Payment and credit together cover it; the credit alone does not.
+    // Payment and credit together cover it: paid, by the payment.
     expect(await pageOf(token)).toMatchObject({
-      credited: false,
+      settlement: { kind: "paid" },
       outstandingAmount: 0,
       payment: null,
     });
     expect(await memberBalance(invoiceId)).toBe(0);
+    expect(await memberSettlement(invoiceId)).toEqual({ kind: "paid" });
   });
 
   test("draft and voided credit notes take nothing off the amount due", async () => {
@@ -3487,7 +3509,7 @@ describe("the amount a client page and email state as due", () => {
     });
     const { token } = await sendTo(invoiceId, "credited-void@example.test");
     expect(await pageOf(token)).toMatchObject({
-      credited: true,
+      settlement: { kind: "credited" },
       outstandingAmount: 0,
     });
     await testDb
@@ -3496,11 +3518,127 @@ describe("the amount a client page and email state as due", () => {
       .where(eq(invoices.id, creditNoteId));
     const reopened = await pageOf(token);
     expect(reopened).toMatchObject({
-      credited: false,
+      settlement: { kind: "open" },
       outstandingAmount: 100_000,
     });
     expect(reopened.payment?.qrSvg).toBe(qrFor(invoiceId, 100_000));
     expect(await memberBalance(invoiceId)).toBe(100_000);
+  });
+
+  test("a full credit after a partial payment states the refund the client is owed", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
+    await addPayment(invoiceId, { amount: 60_000, paidOn: "2026-10-02" });
+    const { token } = await sendTo(invoiceId, "credited-over@example.test");
+    await seedCreditNote(invoiceId, {
+      amount: 100_000,
+      status: INVOICE_STATUS.FINALIZED,
+    });
+    expect(await pageOf(token)).toMatchObject({
+      settlement: { kind: "overpaid", refund: money(60_000) },
+      outstandingAmount: 0,
+      payment: null,
+    });
+    expect(await memberSettlement(invoiceId)).toEqual({
+      kind: "overpaid",
+      refundAmount: 60_000,
+    });
+  });
+});
+
+describe("invoice exports state a payment only for money received", () => {
+  const exportRecords = async (invoiceId: SafeId<"invoice">) => {
+    const { token } = await createStandaloneLink(invoiceId);
+    const { organizationId, workspaceId, userId } = tenantOf("A");
+    const database = tokenDb();
+    const scope =
+      (await resolveInvoiceLink(database, token)) ??
+      panic("Expected a resolvable invoice link");
+    const publicScope = database.scoped({
+      organizationId,
+      userId: null,
+      workspaceIds: [],
+    });
+    const linked =
+      (await publicScope(
+        async (tx) =>
+          await loadLinkedInvoiceData(tx, { ...scope, scopedDb: publicScope }),
+      )) ?? panic("Expected a linked invoice");
+    const authenticated = await database.scoped({
+      organizationId,
+      userId,
+      workspaceIds: [workspaceId],
+    })(
+      async (tx) =>
+        await loadInvoiceExport(tx, {
+          organizationId,
+          workspaceId,
+          invoiceIds: [invoiceId],
+        }),
+    );
+    const records = (loaded: Parameters<typeof toExportRecords>[0]) =>
+      toExportRecords(loaded, [invoiceId]).unwrap(
+        "Credited export fixture must build its records",
+      );
+    return {
+      public: records(linked.exportData),
+      authenticated: records(authenticated),
+    };
+  };
+  const paidOnColumn = (table: ReturnType<typeof buildInvoiceSummaryTable>) => {
+    const column = table.headers.indexOf("Paid on");
+    return table.rows.map((row) => {
+      const cell = row.at(column);
+      return cell?.type === "text" ? cell.value : null;
+    });
+  };
+  // Money S3 states the settlement day as Uhrazeno; the summary table has a
+  // paid-on column; KSeF FA(3) states Zaplacono only from the same paidDate.
+  // ISDOC, UBL and Peppol state the payable amount of the issued document,
+  // never a payment, so a credit note leaves them unchanged.
+  const paidMarkers = (records: InvoiceExportRecord[]) => ({
+    paidDate: records.map(({ paidDate }) => paidDate),
+    moneyS3: [
+      // Money S3 numbers hold at most 10 characters.
+      ...buildMoneyS3Xml(
+        records.map((record) => ({ ...record, number: "2026-0001" })),
+      )
+        .unwrap("Credited export fixture must build Money S3 XML")
+        .matchAll(/<Uhrazeno>([^<]*)<\/Uhrazeno>/gu),
+    ].map(([, day]) => day),
+    summaryPaidOn: paidOnColumn(buildInvoiceSummaryTable(records, "en")),
+  });
+
+  test("a fully credited invoice is exported without a payment", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
+    await seedCreditNote(invoiceId, {
+      amount: 100_000,
+      status: INVOICE_STATUS.FINALIZED,
+    });
+    const records = await exportRecords(invoiceId);
+    for (const exported of [records.public, records.authenticated]) {
+      expect(paidMarkers(exported)).toEqual({
+        paidDate: [null],
+        moneyS3: [],
+        summaryPaidOn: [""],
+      });
+    }
+  });
+
+  test("a partial credit with a payment covering the rest is exported paid on the payment day", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
+    await seedCreditNote(invoiceId, {
+      amount: 40_000,
+      status: INVOICE_STATUS.FINALIZED,
+    });
+    await addPayment(invoiceId, { amount: 60_000, paidOn: "2026-10-02" });
+    const records = await exportRecords(invoiceId);
+    for (const exported of [records.public, records.authenticated]) {
+      expect(paidMarkers(exported)).toEqual({
+        paidDate: ["2026-10-02"],
+        moneyS3: ["2026-10-02"],
+        summaryPaidOn: ["2026-10-02"],
+      });
+    }
   });
 });
 
@@ -3629,8 +3767,10 @@ describe("public invoice settlement projection", () => {
     await addPayment(partial, { amount: 25_000, paidOn: "2026-10-02" });
     const partialLink = await createStandaloneLink(partial);
     expect(await expectPaidDateParity(partial, partialLink.token)).toBeNull();
+    // The function reports the payment; the settlement finds it does not
+    // cover the invoice, so no settlement date is projected.
     expect(await readSettlementFunction("A", partialLink.tokenHash)).toEqual([
-      { latest_paid_on: null, paid_amount: 25_000 },
+      { latest_paid_on: "2026-10-02", paid_amount: 25_000 },
     ]);
   });
 

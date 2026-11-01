@@ -586,18 +586,31 @@ describe("invoice document types", () => {
       return creditId;
     };
 
-    // Credited in full: the credit note settles the original.
+    const settlementOf = async (invoiceId: SafeId<"invoice">) =>
+      await getInvoice.handler(
+        contextFor(getInvoice.handler, {
+          params: { workspaceId: ids.wsA1, invoiceId },
+          body: {},
+        }),
+      );
+
+    // Credited in full: nothing is due, but no money was received, so the
+    // original keeps its issued status and gets no payment time.
     const credited = await seedOriginal();
     const fullCredit = await issuedCredit(credited, 1000);
-    expect(await statusOf(credited)).toMatchObject({
-      status: INVOICE_STATUS.PAID,
-      paidAt: expect.any(Date),
-    });
-    // Taking the credit back reopens it at the status it was issued with.
-    expect(await changeStatus(fullCredit, "void")).toEqual({ id: fullCredit });
     expect(await statusOf(credited)).toEqual({
       status: INVOICE_STATUS.FINALIZED,
       paidAt: null,
+    });
+    expect(await settlementOf(credited)).toMatchObject({
+      outstandingAmount: 0,
+      settlement: { kind: "credited" },
+    });
+    // Taking the credit back reopens it.
+    expect(await changeStatus(fullCredit, "void")).toEqual({ id: fullCredit });
+    expect(await settlementOf(credited)).toMatchObject({
+      outstandingAmount: 1210,
+      settlement: { kind: "open" },
     });
 
     // A partial credit leaves the original open until a payment covers the rest.
@@ -614,8 +627,11 @@ describe("invoice document types", () => {
     });
     expect((await statusOf(partlyPaid)).status).toBe(INVOICE_STATUS.FINALIZED);
     const partCredit = await issuedCredit(partlyPaid, 500);
-    // The payment and the credit note together cover 1210.
+    // The payment and the credit note together cover 1210: paid by payment.
     expect((await statusOf(partlyPaid)).status).toBe(INVOICE_STATUS.PAID);
+    expect(await settlementOf(partlyPaid)).toMatchObject({
+      settlement: { kind: "paid" },
+    });
     expect(await changeStatus(partCredit, "revert_to_draft")).toEqual({
       id: partCredit,
     });

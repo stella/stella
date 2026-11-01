@@ -252,14 +252,16 @@ WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_
 
 --> statement-breakpoint
 -- The credited amount is what issued (finalized, sent or paid) credit notes
--- take off the invoice; drafts and void credit notes take nothing.
+-- take off the invoice; drafts and void credit notes take nothing. The latest
+-- payment day is reported whatever the stored status: the application's
+-- settlement decides whether payments settled the invoice.
 -- stella-migration-safety: reviewed security-definer - fixed search path and app-only execute; only a live token in its organization can read scalar paid and credited totals and the settlement date, never payment rows, credit note rows or actor data
 CREATE FUNCTION "invoice_link_settlement"(p_token_hash text)
 RETURNS TABLE ("latest_paid_on" date, "paid_amount" bigint, "credited_amount" bigint)
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $$
-  SELECT CASE WHEN i.status = 'paid' THEN max(p.paid_on) ELSE NULL END, COALESCE(sum(p.amount), 0)::bigint,
+  SELECT max(p.paid_on), COALESCE(sum(p.amount), 0)::bigint,
          (SELECT COALESCE(sum(abs(c.total_amount)), 0)
             FROM public.invoices c
            WHERE c.original_invoice_id = i.id

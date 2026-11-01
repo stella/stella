@@ -13,12 +13,18 @@ import type { TimeZoneId } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
+import type { InvoiceStatus } from "@/api/db/schema";
 import {
   INVOICE_DETAIL_RELATIONS,
   INVOICE_DOCUMENT_COLUMNS,
   INVOICE_SELLER_COLUMNS,
 } from "@/api/lib/billing/invoice-detail";
 import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
+import {
+  INVOICE_CREDITED_AMOUNT_EXTRA,
+  invoiceSettlement,
+  paidAmountOf,
+} from "@/api/lib/billing/invoice-payments";
 import {
   invoiceInMatter,
   invoiceTouchesMatter,
@@ -30,15 +36,22 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 
 /**
- * The day an invoice was settled: the date of the latest payment still
- * counted, which is the one that reached its total. An invoice marked paid
+ * The day an invoice was settled by payment: the date of the latest payment
+ * still counted, which is the one that covered what its credit notes leave.
+ * A document its credit notes cover alone has none. An invoice marked paid
  * before payments were recorded carries only the moment it was marked.
  */
 export const exportPaidDate = (
   invoice: {
-    status: string;
+    status: InvoiceStatus;
     paidAt: Date | null;
-    payments: readonly { paidOn: string; voidedAt: Date | null }[];
+    totalAmount: number;
+    creditedAmount: number;
+    payments: readonly {
+      amount: number;
+      paidOn: string;
+      voidedAt: Date | null;
+    }[];
   },
   timeZone: TimeZoneId,
 ): string | null => {
@@ -52,7 +65,12 @@ export const exportPaidDate = (
     }
   }
   return invoiceSettledOn({
-    status: invoice.status,
+    settlement: invoiceSettlement({
+      totalAmount: invoice.totalAmount,
+      paidAmount: paidAmountOf(invoice.payments),
+      creditedAmount: invoice.creditedAmount,
+      status: invoice.status,
+    }),
     paidAt: invoice.paidAt,
     latestPaidOn,
     timeZone,
@@ -161,6 +179,7 @@ export const loadInvoiceExport = async (
     // One more than the cap, so an oversized matter is refused, not cut off.
     limit: MAX_EXPORT_INVOICES + 1,
     columns: INVOICE_DOCUMENT_COLUMNS,
+    extras: INVOICE_CREDITED_AMOUNT_EXTRA,
     with: EXPORT_RELATIONS,
   });
   const matterIds = [
@@ -229,9 +248,12 @@ export const loadInvoiceExport = async (
   return {
     matter,
     matters: new Map(matterRows.map((row) => [row.id, row])),
-    invoices: invoices.map(({ payments, ...invoice }) => ({
+    invoices: invoices.map(({ payments, creditedAmount, ...invoice }) => ({
       ...invoice,
-      paidDate: exportPaidDate({ ...invoice, payments }, timeZone),
+      paidDate: exportPaidDate(
+        { ...invoice, creditedAmount, payments },
+        timeZone,
+      ),
     })),
     sellers: new Map(sellers.map((seller) => [seller.id, seller])),
     originals: new Map(

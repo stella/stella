@@ -96,10 +96,57 @@ export const invoiceAmountDue = (balance: InvoiceBalanceInput): AmountDue => {
 /** The plain minor-unit amount of an amount due, for API responses. */
 export const amountDueCents = (amount: AmountDue): CentsAmount => amount;
 
-/** The paid and outstanding amounts an invoice read exposes. */
-export const invoicePaymentAmounts = (balance: InvoiceBalanceInput) => ({
+/**
+ * How an issued document stands, from its payments and the credit notes
+ * issued against it. Only payments make it `paid`: a document its credit
+ * notes cover alone is `credited`, with no payment and no payment date, so a
+ * credit can never be counted, exported or shown as money received.
+ * `overpaid` is a document whose payments exceed what the credit notes leave
+ * of it; the client is owed `refundAmount`.
+ */
+export type InvoiceSettlement =
+  | { kind: "open" }
+  | { kind: "paid" }
+  | { kind: "credited" }
+  | { kind: "overpaid"; refundAmount: CentsAmount };
+
+type InvoiceSettlementInput = InvoiceBalanceInput & { status: InvoiceStatus };
+
+/** The settlement of one document; see `InvoiceSettlement`. */
+export const invoiceSettlement = ({
+  totalAmount,
+  paidAmount,
+  creditedAmount,
+  status,
+}: InvoiceSettlementInput): InvoiceSettlement => {
+  const payable = payableAmount(totalAmount);
+  const remaining = Math.max(0, payable - creditedAmount);
+  if (paidAmount > remaining) {
+    return { kind: "overpaid", refundAmount: cents(paidAmount - remaining) };
+  }
+  if (
+    status === INVOICE_STATUS.PAID &&
+    paidAmount === 0 &&
+    creditedAmount === 0
+  ) {
+    // Settled without a payment row: a zero document once sent, or one
+    // marked paid before payments were recorded (until its backfill).
+    return { kind: "paid" };
+  }
+  if (payable === 0) {
+    return { kind: "open" };
+  }
+  if (remaining === 0) {
+    return { kind: "credited" };
+  }
+  return paidAmount === remaining ? { kind: "paid" } : { kind: "open" };
+};
+
+/** The paid and outstanding amounts and the settlement an invoice read exposes. */
+export const invoicePaymentAmounts = (balance: InvoiceSettlementInput) => ({
   paidAmount: cents(balance.paidAmount),
   outstandingAmount: outstandingOf(balance),
+  settlement: invoiceSettlement(balance),
 });
 
 /** Credit note statuses that count against their original: issued, not draft or void. */
@@ -358,26 +405,26 @@ type LockedInvoice = {
 
 /**
  * The status an invoice's settlement decides, from the status it holds: paid
- * once recorded payments and issued credit notes together cover it, and back
- * to the issued status it had (sent if it was ever marked sent, else
- * finalized) once no longer covered. Paid is the settled state: an invoice
- * credited in full is settled by its credit notes, so it is paid as well and
- * never stays issued with nothing due.
+ * once its payments cover what issued credit notes leave of it (or exceed
+ * it), and back to the issued status it had (sent if it was ever marked
+ * sent, else finalized) once no longer covered. A document its credit notes
+ * cover alone keeps its issued status: the stored status and `paidAt` record
+ * money received, and its settlement (`credited`) says nothing is due.
  */
 const settledStatus = (
   invoice: LockedInvoice,
   { paidAmount, creditedAmount }: SettlementAmounts,
 ): InvoiceStatus => {
-  const { outstandingAmount } = invoicePaymentAmounts({
-    totalAmount: invoice.totalAmount,
-    paidAmount,
-    creditedAmount,
-  });
+  // What the credit notes leave of it; only payments cover that remainder.
+  const remaining = Math.max(
+    0,
+    payableAmount(invoice.totalAmount) - creditedAmount,
+  );
   const settled =
-    outstandingAmount === 0 &&
-    (invoice.totalAmount !== 0 ||
-      invoice.status === INVOICE_STATUS.SENT ||
-      invoice.status === INVOICE_STATUS.PAID);
+    invoice.totalAmount === 0
+      ? invoice.status === INVOICE_STATUS.SENT ||
+        invoice.status === INVOICE_STATUS.PAID
+      : paidAmount > 0 && paidAmount >= remaining;
   const issued =
     invoice.status === INVOICE_STATUS.FINALIZED ||
     invoice.status === INVOICE_STATUS.SENT;
@@ -630,7 +677,7 @@ export const recordInvoicePayment = async (
   }
   const { paidAmount: paidBefore, creditedAmount } =
     await readSettlementAmounts(tx, scope);
-  const { outstandingAmount } = invoicePaymentAmounts({
+  const outstandingAmount = invoiceAmountDue({
     totalAmount: invoice.totalAmount,
     paidAmount: paidBefore,
     creditedAmount,

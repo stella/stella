@@ -3,7 +3,6 @@ import * as v from "valibot";
 
 import { classifyFailure } from "@stll/errors";
 
-import { INVOICE_STATUS } from "@/api/db/schema";
 import { deliverInvoiceLink } from "@/api/handlers/invoice-links/delivery";
 import { loadLinkedInvoiceData } from "@/api/handlers/invoice-links/document";
 import { buildLinkedEInvoice } from "@/api/handlers/invoice-links/e-invoice";
@@ -21,7 +20,10 @@ import {
   invoiceDocumentRenderOptions,
   invoicePdfFileName,
 } from "@/api/lib/billing/invoice-pdf/document";
-import { requestsPayment } from "@/api/lib/billing/invoice-pdf/render-helpers";
+import {
+  createInvoiceFormatters,
+  requestsPayment,
+} from "@/api/lib/billing/invoice-pdf/render-helpers";
 import { buildInvoiceTemplateData } from "@/api/lib/billing/invoice-pdf/typst/data";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -127,11 +129,9 @@ const openLinkedInvoice = async (
   }
   const eInvoice = await buildEInvoice(linked);
   const { invoice } = document;
-  const settled = invoice.status === INVOICE_STATUS.PAID;
-  // A settled invoice was either paid or credited in full; the page says which.
-  const paid = settled && !linked.fullyCredited;
+  const { settlement } = linked;
   const payable =
-    settled ||
+    settlement.kind !== "open" ||
     !requestsPayment({
       documentType: invoice.documentType,
       amountMinor: linked.amountDue,
@@ -148,9 +148,18 @@ const openLinkedInvoice = async (
       dir: data.value.dir,
       documentType: invoice.documentType,
       title: data.value.title,
-      paid,
-      // Credited in full rather than paid: the page states there is nothing due.
-      credited: linked.fullyCredited,
+      // Paid, credited in full, or paid beyond what credit notes left: the
+      // page says which; an overpayment states the refund the client is owed.
+      settlement:
+        settlement.kind === "overpaid"
+          ? {
+              kind: settlement.kind,
+              refund: createInvoiceFormatters({
+                currency: invoice.currency,
+                locale: invoice.language,
+              }).money(settlement.refundAmount),
+            }
+          : { kind: settlement.kind },
       outstandingAmount: amountDueCents(linked.amountDue),
       seller: data.value.seller?.name ?? null,
       buyer: data.value.buyer.name,

@@ -1471,6 +1471,7 @@ const invoiceDetailView = (
       totalAmount: invoiceRow.totalAmount,
       paidAmount: paidAmountOf(invoiceRow.payments),
       creditedAmount: invoiceRow.creditedAmount,
+      status: invoiceRow.status,
     }),
     notes: invoiceRow.notes,
     sellerProfileId: invoiceRow.sellerProfileId,
@@ -1671,6 +1672,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
         totalAmount: invoice.totalAmount,
         paidAmount,
         creditedAmount,
+        status: invoice.status,
       }),
     }),
   );

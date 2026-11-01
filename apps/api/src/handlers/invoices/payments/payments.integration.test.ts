@@ -35,6 +35,7 @@ import {
   INVOICE_SENT_AT_BACKFILL,
   LEGACY_PAYMENT_NOTE,
 } from "@/api/lib/billing/invoice-payment-backfill";
+import { INVOICE_CREDITED_AMOUNT_EXTRA } from "@/api/lib/billing/invoice-payments";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { effectiveOrganizationTimeZone } from "@/api/lib/organization-time-zone";
@@ -766,8 +767,13 @@ describe("invoice payments", () => {
           const invoice =
             (await tx.query.invoices.findFirst({
               where: { id: { eq: invoiceId } },
-              columns: { status: true, paidAt: true },
-              with: { payments: { columns: { paidOn: true, voidedAt: true } } },
+              columns: { status: true, paidAt: true, totalAmount: true },
+              extras: INVOICE_CREDITED_AMOUNT_EXTRA,
+              with: {
+                payments: {
+                  columns: { amount: true, paidOn: true, voidedAt: true },
+                },
+              },
             })) ?? panic("Expected legacy invoice");
           const storedSettings =
             (await tx.query.organizationSettings.findFirst({

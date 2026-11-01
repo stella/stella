@@ -10,6 +10,7 @@ import {
   timeEntries,
   workspaces,
 } from "@/api/db/schema";
+import type { InvoiceStatus } from "@/api/db/schema";
 import {
   parseInvoiceLinkExpensesRow,
   parseInvoiceLinkInvoiceRow,
@@ -27,7 +28,10 @@ import {
 } from "@/api/lib/billing/invoice-detail";
 import type { INVOICE_LINE_COLUMNS } from "@/api/lib/billing/invoice-lines";
 import { readInvoiceLinkScope } from "@/api/lib/billing/invoice-links";
-import { invoiceAmountDue } from "@/api/lib/billing/invoice-payments";
+import {
+  invoiceAmountDue,
+  invoiceSettlement,
+} from "@/api/lib/billing/invoice-payments";
 import { invoiceSettledOn } from "@/api/lib/billing/invoice-settlement-date";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { LIMITS } from "@/api/lib/limits";
@@ -43,20 +47,24 @@ export const INVOICE_LINK_DOCUMENT_PROJECTION = Object.fromEntries(
   ),
 );
 
-/**
- * What the link holder may still pay, and whether issued credit notes cover
- * the whole document: then nothing is due because it was credited, not paid.
- */
+/** What the link holder may still pay, and how the document stands. */
 const linkedBalance = (
-  totalAmount: number,
+  invoice: { totalAmount: number; status: InvoiceStatus },
   {
     paidAmount,
     creditedAmount,
   }: { paidAmount: number; creditedAmount: number },
-) => ({
-  amountDue: invoiceAmountDue({ totalAmount, paidAmount, creditedAmount }),
-  fullyCredited: creditedAmount > 0 && creditedAmount >= Math.abs(totalAmount),
-});
+) => {
+  const balance = {
+    totalAmount: invoice.totalAmount,
+    paidAmount,
+    creditedAmount,
+  };
+  return {
+    amountDue: invoiceAmountDue(balance),
+    settlement: invoiceSettlement({ ...balance, status: invoice.status }),
+  };
+};
 
 /** Each projection function rechecks the live hash and reads only its invoice's document fields. */
 export const loadLinkedInvoiceData = async (
@@ -221,8 +229,9 @@ export const loadLinkedInvoiceData = async (
     })),
   };
   const timeZone = await readOrganizationTimeZone(tx, caller.organizationId);
+  const balance = linkedBalance(invoice, settlement);
   return {
-    ...linkedBalance(invoice.totalAmount, settlement),
+    ...balance,
     send,
     document: {
       invoice: linkedInvoice,
@@ -238,7 +247,7 @@ export const loadLinkedInvoiceData = async (
         {
           ...linkedInvoice,
           paidDate: invoiceSettledOn({
-            status: invoice.status,
+            settlement: balance.settlement,
             paidAt: invoice.paidAt,
             latestPaidOn: settlement.latestPaidOn,
             timeZone,

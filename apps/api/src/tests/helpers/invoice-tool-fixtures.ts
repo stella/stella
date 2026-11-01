@@ -80,7 +80,7 @@ export const invoiceDetailRowFixture = (options: InvoiceDetailFixtureOptions) =>
 // cursor.
 type InvoiceListRow = Omit<
   v.InferInput<typeof LIST_INVOICES_LIST_PROJECTION>["invoices"][number],
-  "outstandingAmount"
+  "outstandingAmount" | "settlement"
 > & { createdAtCursor: Date; creditedAmount: number };
 
 type InvoiceListFixtureOptions = Partial<InvoiceListRow> &
