@@ -28,7 +28,7 @@
 // and sections that are not rule lists, each with a reason, and records the
 // `[review]` count. An entry that excludes nothing fails as stale, and the
 // count must match the tree; the `review-only-instruction-rules` ratchet
-// metric holds it shrink-only.
+// metric gates it, so the count grows only with a reasoned allowance.
 //
 // Usage:
 //   bun scripts/check-instruction-enforcement.ts --check
@@ -78,12 +78,14 @@ export type Tag =
 export type RuleItem = {
   readonly line: number;
   readonly heading: string;
+  /** 1-based line of the heading the item sits under; 0 before any heading. */
+  readonly headingLine: number;
   readonly text: string;
 };
 
 const TAG_TOKEN = /\[(?:(lint|check|test):([^\]]*)|review)\]/gu;
 const ITEM_START = /^(?:[-*]|\d+\.)\s+\S/u;
-const FENCE = /^\s*(?:```|~~~)/u;
+const FENCE = /^\s*(`{3,}|~{3,})/u;
 
 const headingText = (line: string): string | undefined => {
   const markerEnd = line.search(/[^#]/u);
@@ -108,8 +110,13 @@ export const parseRuleItems = (source: string): RuleItem[] => {
 
   const items: RuleItem[] = [];
   let heading = "";
-  let inFence = false;
-  let current: { line: number; heading: string; text: string[] } | undefined;
+  let headingLine = 0;
+  // The opening run of an open fence; only the same character, at least as
+  // long, closes it (CommonMark), so a longer fence may show a shorter one.
+  let openFence: string | undefined;
+  let current:
+    | { line: number; heading: string; headingLine: number; text: string[] }
+    | undefined;
   let pendingBlank = false;
 
   const close = (): void => {
@@ -117,6 +124,7 @@ export const parseRuleItems = (source: string): RuleItem[] => {
       items.push({
         line: current.line,
         heading: current.heading,
+        headingLine: current.headingLine,
         text: current.text.join("\n").trim(),
       });
       current = undefined;
@@ -126,26 +134,34 @@ export const parseRuleItems = (source: string): RuleItem[] => {
 
   for (let index = start; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
-    if (FENCE.test(line)) {
-      inFence = !inFence;
+    const fence = FENCE.exec(line)?.[1];
+    const togglesFence =
+      fence !== undefined &&
+      (openFence === undefined ||
+        (fence[0] === openFence[0] &&
+          fence.length >= openFence.length &&
+          line.trim() === fence));
+    if (togglesFence) {
+      openFence = openFence === undefined ? fence : undefined;
       if (current !== undefined && /^\s/u.test(line)) {
         continue;
       }
       close();
       continue;
     }
-    if (inFence) {
+    if (openFence !== undefined) {
       continue;
     }
     const parsedHeading = headingText(line);
     if (parsedHeading !== undefined) {
       close();
       heading = parsedHeading;
+      headingLine = index + 1;
       continue;
     }
     if (ITEM_START.test(line)) {
       close();
-      current = { line: index + 1, heading, text: [line] };
+      current = { line: index + 1, heading, headingLine, text: [line] };
       continue;
     }
     if (line.trim() === "") {
@@ -460,6 +476,9 @@ export const checkSources = (
     ledger.excludedSources.map((entry) => entry.file),
   );
   const usedSections = new Set<number>();
+  // Heading lines each excluded section matched, so a repeated heading cannot
+  // hide a second section's rules behind the first one's exclusion.
+  const sectionHeadingLines = new Map<number, Set<number>>();
   let checkedSources = 0;
 
   for (const entry of ledger.excludedSources) {
@@ -483,6 +502,9 @@ export const checkSources = (
       );
       if (sectionIndex !== -1) {
         usedSections.add(sectionIndex);
+        const lines = sectionHeadingLines.get(sectionIndex) ?? new Set();
+        lines.add(item.headingLine);
+        sectionHeadingLines.set(sectionIndex, lines);
         continue;
       }
       const reading = readTag(item.text);
@@ -534,6 +556,14 @@ export const checkSources = (
         file: LEDGER_PATH,
         line: 0,
         message: `stale excluded section "${entry.heading}" in ${entry.file} (no list item sits under it)`,
+      });
+    }
+    const headingLines = sectionHeadingLines.get(index)?.size ?? 0;
+    if (headingLines > 1) {
+      problems.push({
+        file: LEDGER_PATH,
+        line: 0,
+        message: `excluded section "${entry.heading}" in ${entry.file} matches ${String(headingLines)} sections; give each section a distinct heading`,
       });
     }
   }

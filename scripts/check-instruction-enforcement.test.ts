@@ -89,6 +89,14 @@ describe("parseRuleItems", () => {
     );
   });
 
+  test("a fence closes only on its own character at its length", () => {
+    expect(
+      parseRuleItems(
+        "````md\n```\n- still an example\n~~~~\n````\n- a rule [review]\n",
+      ).map(({ line }) => line),
+    ).toEqual([6]);
+  });
+
   test("bold paragraphs are not list items", () => {
     expect(
       parseRuleItems("**Bounded reads.** Never scan everything.\n"),
@@ -190,6 +198,23 @@ describe("checkSources", () => {
     };
     expect(messagesFor("## Pointers\n\n- `docs/a.md`\n", ledger)).toEqual([
       '0 stale excluded section "Gone" in RULES.md (no list item sits under it)',
+    ]);
+  });
+
+  test("an excluded heading that names two sections fails", () => {
+    const ledger: Ledger = {
+      ...EMPTY_LEDGER,
+      excludedSections: [
+        { file: "RULES.md", heading: "Pointers", reason: "links" },
+      ],
+    };
+    expect(
+      messagesFor(
+        "## Pointers\n\n- `docs/a.md`\n\n## Pointers\n\n- an untagged rule\n",
+        ledger,
+      ),
+    ).toEqual([
+      '0 excluded section "Pointers" in RULES.md matches 2 sections; give each section a distinct heading',
     ]);
   });
 

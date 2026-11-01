@@ -18,11 +18,13 @@ contract so callers do not depend on its limitations.
 ## Required Shape
 
 - **Tenant isolation.** Stella already uses PostgreSQL RLS plus query-level
-  authorization. Workspace reads and writes go through authorized `scopedDb`
-  and include the tenant boundary in the query. `SafeId` and handler permission
-  checks complement RLS; none replaces the others. Root DB access is reserved
-  for demonstrated system-level operations with an explicit deny-by-default
-  policy. [test: apps/api/src/tests/security/rls-coverage.test.ts]
+  authorization. Every tenant table carries an RLS policy.
+  [test: apps/api/src/tests/security/rls-coverage.test.ts]
+- **Query-level tenant boundary.** Workspace reads and writes go through
+  authorized `scopedDb` and include the tenant boundary in the query. `SafeId`
+  and handler permission checks complement RLS; none replaces the others. Root
+  DB access is reserved for demonstrated system-level operations with an
+  explicit deny-by-default policy. [review]
 - **Stateless services.** API processes must work behind a load balancer with N
   replicas. Do not depend on process-local mutable state for ownership, queues,
   locks, required caches, or progress. Use durable queues, database leases,

@@ -1,5 +1,5 @@
 {
-  "reviewOnlyRules": 169,
+  "reviewOnlyRules": 170,
   "excludedSources": [
     {
       "file": ".ai/local-skills/dev/SKILL.md",
