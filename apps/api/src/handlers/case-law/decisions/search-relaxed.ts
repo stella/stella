@@ -11,6 +11,7 @@ import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-clie
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import type { RankedHit } from "@/api/lib/legal-search/rerank";
+import { corpusIndexReadRefusal } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -137,12 +138,16 @@ export const readTermCoverage = async ({
       });
       if (Result.isError(answer)) {
         return Result.err(
-          new HandlerError({
-            code: "upstream_unavailable",
-            status: 503,
-            message: "Search term coverage is temporarily unavailable",
-            cause: answer.error,
-          }),
+          corpusIndexReadRefusal(
+            answer.error,
+            (answered) =>
+              new HandlerError({
+                code: "upstream_unavailable",
+                status: 503,
+                message: "Search term coverage is temporarily unavailable",
+                cause: answered,
+              }),
+          ),
         );
       }
       const buckets = answer.value["term_coverage"];

@@ -1,4 +1,4 @@
-import { UnhandledException } from "better-result";
+import { panic, UnhandledException } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { envBase } from "@/api/env-base";
@@ -16,11 +16,19 @@ import {
 import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import {
+  PUBLIC_READ_TIMEOUT_CODE,
+  publicReadTimeoutError,
+} from "@/api/lib/legal-search/public-read-timeout";
+import {
   isSearchIndexUnavailable,
   SEARCH_INDEX_UNAVAILABLE_CODE,
   SEARCH_INDEX_UNAVAILABLE_HINT,
   SEARCH_INDEX_UNAVAILABLE_MESSAGE,
 } from "@/api/lib/legal-search/search-index-unavailable";
+import {
+  findRequestBudgetExpiry,
+  runWithinRequestLatencyBudget,
+} from "@/api/lib/load/request-latency-budget";
 import {
   testAppliedProjectionsFor,
   testRevisionsFor,
@@ -29,11 +37,13 @@ import {
 /**
  * Where "the search index is unavailable" is decided: at the client, from
  * what the request got back. A request no engine answered (refused or reset
- * connection, failed lookup, expired budget, a body cut off mid-stream) or a
- * gateway answered for (502, 503, 504) is unreachable; an engine answering
- * that it holds no such index (404) is a missing index. Both are unavailable.
- * An engine that answered with anything else, including bytes this client
- * cannot read, is a failure no retry fixes and stays a generic one.
+ * connection, failed lookup, its own timeout expiring, a body cut off
+ * mid-stream) or a gateway answered for (502, 503, 504) is unreachable; an
+ * engine answering that it holds no such index (404) is a missing index. Both
+ * are unavailable. A request the latency budget of the request being served
+ * ended is that request's timeout, never unavailable. An engine that answered
+ * with anything else, including bytes this client cannot read, is a failure
+ * no retry fixes and stays a generic one.
  */
 
 const originalFetch = globalThis.fetch;
@@ -85,7 +95,7 @@ const UNREACHABLE: readonly FailureShape[] = [
       ),
   },
   {
-    name: "expired budget",
+    name: "its own timeout expiring",
     answer: async () =>
       await Promise.reject(
         new DOMException("The operation timed out.", "TimeoutError"),
@@ -263,6 +273,143 @@ const SCAN_TRANSPORTS: readonly CorpusIndexScanTransport[] = [
   { type: "scored" },
 ];
 
+/**
+ * An engine that is up but has not answered by the deadline: a cold search,
+ * not an outage. Like a real transport it gives up when the request's signal
+ * aborts, so only a deadline ends the wait.
+ */
+const stubSlowEngine = () => {
+  globalThis.fetch = Object.assign(
+    async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const signal = init?.signal ?? panic("Search requires a timeout signal");
+      const answer = Promise.withResolvers<Response>();
+      signal.addEventListener(
+        "abort",
+        () => {
+          answer.reject(signal.reason);
+        },
+        { once: true },
+      );
+      return await answer.promise;
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+};
+
+describe("the request's latency budget is not the index's availability", () => {
+  test("a search the budget ends is the budget's expiry, not an outage", async () => {
+    stubSlowEngine();
+
+    const result = await runWithinRequestLatencyBudget(
+      { label: "search_legislation", budgetMs: 30 },
+      searchOnce,
+    );
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.reach).toBe("budget_expired");
+      expect(isCorpusIndexUnavailable(result.error)).toBe(false);
+      expect(findRequestBudgetExpiry(result.error)).toMatchObject({
+        label: "search_legislation",
+      });
+    }
+  });
+
+  test("the search's own timeout with budget left is still unavailable", async () => {
+    stubSlowEngine();
+
+    const result = await runWithinRequestLatencyBudget(
+      { label: "search_legislation", budgetMs: 8000 },
+      async () =>
+        await getCorpusIndexClient("q09").search({
+          observer: "unobserved",
+          indexId: "legal_corpus_v1_cze",
+          query: "text:smlouva",
+          maxHits: 10,
+          timeoutMs: 20, // timeout under test: the search's own, not the budget
+        }),
+    );
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.reach).toBe("unreachable");
+      expect(isCorpusIndexUnavailable(result.error)).toBe(true);
+      expect(findRequestBudgetExpiry(result.error)).toBeUndefined();
+    }
+  });
+
+  test("a refused connection inside the budget is still unavailable", async () => {
+    stubFetch(
+      async () =>
+        await Promise.reject(
+          failureWithCode("connect refused", "ECONNREFUSED"),
+        ),
+    );
+
+    const result = await runWithinRequestLatencyBudget(
+      { label: "search_legislation", budgetMs: 8000 },
+      searchOnce,
+    );
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(isCorpusIndexUnavailable(result.error)).toBe(true);
+    }
+  });
+
+  test("a caller's abort at the deadline stays the caller's", async () => {
+    stubSlowEngine();
+    const controller = new AbortController();
+
+    const result = await runWithinRequestLatencyBudget(
+      { label: "search_legislation", budgetMs: 8000 },
+      async () => {
+        const search = getCorpusIndexClient("q09").search({
+          observer: "unobserved",
+          signal: controller.signal,
+          indexId: "legal_corpus_v1_cze",
+          query: "text:smlouva",
+          maxHits: 10,
+        });
+        controller.abort(
+          new DOMException("The caller gave up.", "TimeoutError"),
+        );
+        return await search;
+      },
+    );
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.reach).not.toBe("budget_expired");
+      expect(findRequestBudgetExpiry(result.error)).toBeUndefined();
+    }
+  });
+
+  test.each(SCAN_TRANSPORTS)(
+    "a scan the budget ends throws the public read timeout over the %p transport",
+    async (transport) => {
+      stubSlowEngine();
+
+      const error = await runWithinRequestLatencyBudget(
+        { label: "search_legislation", budgetMs: 30 },
+        async () => await scanFailure(transport),
+      );
+
+      expect(isSearchIndexUnavailable(error)).toBe(false);
+      expect(error).toMatchObject({
+        status: 503,
+        code: PUBLIC_READ_TIMEOUT_CODE,
+      });
+      expect(publicReadTimeoutError(error)).toMatchObject({
+        code: PUBLIC_READ_TIMEOUT_CODE,
+      });
+    },
+  );
+});
+
 describe("a scan answers an unavailable index with the typed refusal", () => {
   for (const shape of UNAVAILABLE) {
     test.each(SCAN_TRANSPORTS)(
@@ -315,6 +462,23 @@ describe("a scan answers an unavailable index with the typed refusal", () => {
       code: SEARCH_INDEX_UNAVAILABLE_CODE,
       retryable: true,
     });
+  });
+
+  test("a request the tool's budget ended reaches a REST route as a timeout", async () => {
+    stubSlowEngine();
+
+    const error = await runWithinRequestLatencyBudget(
+      { label: "search_legislation", budgetMs: 30 },
+      async () => await scanFailure(),
+    );
+    const wrapped = new UnhandledException({ cause: error });
+
+    // The route reads the public read timeout first, then the handler error.
+    expect(
+      publicReadTimeoutError(wrapped) ?? resolveHandlerError(wrapped),
+    ).toMatchObject({ status: 503, code: PUBLIC_READ_TIMEOUT_CODE });
+    expect(resolveHandlerError(wrapped)?.code).toBe(PUBLIC_READ_TIMEOUT_CODE);
+    expect(isSearchIndexUnavailable(wrapped)).toBe(false);
   });
 
   test("a bug that is not the index stays generic", () => {

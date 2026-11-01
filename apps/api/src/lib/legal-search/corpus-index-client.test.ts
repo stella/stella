@@ -40,7 +40,10 @@ import {
   RELEVANCE_ORDER,
 } from "@/api/lib/legal-search/corpus-search-order";
 import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
-import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
+import {
+  findRequestBudgetExpiry,
+  runWithinRequestLatencyBudget,
+} from "@/api/lib/load/request-latency-budget";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   ACTION_COST_CALL_KIND,
@@ -2118,9 +2121,14 @@ test("a search inside a tool call gives up at the tool's budget, not its own", a
   );
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
-    expect(result.error.reach).toBe("unreachable");
-    // The failure names the budget that ended it: the tool's, not the 30 s.
-    const named = /within its (\d+)ms budget/u.exec(result.error.message);
+    // The tool's budget ended it, so it is the budget's expiry, not an
+    // unreachable engine, and it names the tool's deadline, not the 30 s.
+    expect(result.error.reach).toBe("budget_expired");
+    expect(findRequestBudgetExpiry(result.error)).toMatchObject({
+      label: "search_legislation",
+      timeoutMs: 40, // timeout under test
+    });
+    const named = /after (\d+)ms/u.exec(result.error.message);
     expect(Number(named?.[1])).toBeLessThanOrEqual(40);
   }
 });

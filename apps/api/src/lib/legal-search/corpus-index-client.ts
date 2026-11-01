@@ -14,7 +14,10 @@ import {
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
 import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
-import { requestBoundedTimeoutMs } from "@/api/lib/load/request-latency-budget";
+import {
+  requestBoundedTimeout,
+  requestBudgetExpiry,
+} from "@/api/lib/load/request-latency-budget";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -28,17 +31,29 @@ type CorpusIndexErrorRejection = "definite" | "unknown" | "transient";
 
 /**
  * Whether the engine was there to answer. `unreachable` is a request that
- * never got an answer (refused or reset connection, failed DNS lookup, an
- * expired budget) or one a gateway in front of the engine answered for it
- * (502, 503, 504): the index is down or scaled away, and the same request can
- * succeed once it is back. `index_missing` is the engine answering that the
- * index the request named does not exist on the cluster: every path this
+ * never got an answer (refused or reset connection, failed DNS lookup, its
+ * own timeout expiring) or one a gateway in front of the engine answered for
+ * it (502, 503, 504): the index is down or scaled away, and the same request
+ * can succeed once it is back. `index_missing` is the engine answering that
+ * the index the request named does not exist on the cluster: every path this
  * client sends to is a Stella-built route naming the index, so a 404 from the
  * engine means the index, not the route, and the same request succeeds once
- * the index is created. `answered` is everything else, including a response
- * this client could not read, which no retry fixes.
+ * the index is created. `budget_expired` is the latency budget of the request
+ * being served (an MCP tool call) running out before the engine answered: the
+ * engine may be up and merely slower than the caller can wait, so it is the
+ * caller's timeout, never an outage; its cause is the budget's own
+ * `TimeoutError` (`requestBudgetExpiry`). `answered` is everything else,
+ * including a response this client could not read, which no retry fixes.
  */
-type CorpusIndexErrorReach = "answered" | "unreachable" | "index_missing";
+type CorpusIndexErrorReach =
+  "answered" | "unreachable" | "index_missing" | "budget_expired";
+
+/**
+ * What a failed exchange says of the engine itself. `budget_expired` is named
+ * only by `corpusIndexBudgetExpiry`, which carries the budget's own expiry,
+ * so no failure reads as the budget's without the budget's evidence.
+ */
+type EngineReach = Exclude<CorpusIndexErrorReach, "budget_expired">;
 
 export class CorpusIndexError extends TaggedError("CorpusIndexError")<{
   message: string;
@@ -88,6 +103,7 @@ export const isCorpusIndexUnavailable = (error: CorpusIndexError): boolean => {
     case "index_missing":
       return true;
     case "answered":
+    case "budget_expired":
       return false;
     default:
       error.reach satisfies never;
@@ -683,6 +699,14 @@ type CorpusIndexRequest = {
   signal?: AbortSignal | undefined;
 };
 
+/**
+ * A request whose timeout the request's latency budget has bounded, with
+ * whether that timeout is the request's deadline rather than its own.
+ */
+type BoundedCorpusIndexRequest = CorpusIndexRequest & {
+  endsAtRequestDeadline: boolean;
+};
+
 const requestLabel = ({ init, path }: CorpusIndexRequest): string =>
   `${init.method ?? "GET"} ${path}`;
 
@@ -696,15 +720,53 @@ const isAborted = (error: unknown): boolean =>
   (error.name === "TimeoutError" || error.name === "AbortError");
 
 type RequestFailureOptions = {
-  request: CorpusIndexRequest;
+  request: BoundedCorpusIndexRequest;
   error: unknown;
   /** How to describe a failure the budget did not cause. */
   unaborted: string;
 };
 
 /**
+ * The failure of a request the latency budget of the request being served
+ * ended, as a `budget_expired` error carrying the budget's `TimeoutError`, or
+ * undefined outside a request scope.
+ */
+export const corpusIndexBudgetExpiry = ({
+  label,
+  cause,
+}: {
+  label: string;
+  cause: unknown;
+}): CorpusIndexError | undefined => {
+  const expiry = requestBudgetExpiry(cause, { clampedTimeout: true });
+  return expiry === undefined
+    ? undefined
+    : new CorpusIndexError({
+        message: `corpus index ${label} ran out of the request's latency budget: ${expiry.message}`,
+        cause: expiry,
+        rejection: "unknown",
+        reach: "budget_expired",
+      });
+};
+
+/**
+ * Whether the request's own timer, set to the request's deadline, is what
+ * ended it. A caller's abort, and a timeout of the request's own that fired
+ * while the budget still had time, are not the budget's.
+ */
+const endedByRequestDeadline = (
+  request: BoundedCorpusIndexRequest,
+  error: unknown,
+): boolean =>
+  request.endsAtRequestDeadline &&
+  request.signal?.aborted !== true &&
+  error instanceof Error &&
+  error.name === "TimeoutError";
+
+/**
  * Names the request that failed, and the budget when the budget is what
- * ended it.
+ * ended it: the request's latency budget (`budget_expired`) when its deadline
+ * was the request's, else the request's own (the `reach` given).
  *
  * `fetchWithTimeout` rejects with the abort reason alone, so an expired
  * budget reaches the caller as "The operation timed out." and says
@@ -718,8 +780,14 @@ const requestFailure = ({
   unaborted,
   reach,
 }: RequestFailureOptions & {
-  reach: CorpusIndexErrorReach;
+  reach: EngineReach;
 }): CorpusIndexError =>
+  (endedByRequestDeadline(request, error)
+    ? corpusIndexBudgetExpiry({
+        label: `${requestLabel(request)} after ${request.timeoutMs}ms`,
+        cause: error,
+      })
+    : undefined) ??
   new CorpusIndexError({
     message: isAborted(error)
       ? `corpus index ${requestLabel(request)} failed within its ${request.timeoutMs}ms budget: ${String(error)}`
@@ -734,28 +802,41 @@ const requestFailure = ({
  * mid-stream) is the engine going away; a body that arrived and does not
  * parse is a response, and a retry reads the same bytes.
  */
-const bodyReadReach = (error: unknown): CorpusIndexErrorReach =>
+const bodyReadReach = (error: unknown): EngineReach =>
   error instanceof SyntaxError ? "answered" : "unreachable";
 
 /**
  * Inside a request latency scope (an MCP tool call) every corpus request gives
  * up when the request's budget does, whatever its own timeout: a search, an
  * aggregation or a page of highlights never outwaits the caller. The bounded
- * timeout is the one a failure names.
+ * timeout is the one a failure names, and when it is the request's deadline
+ * its expiry is the budget's (`budget_expired`), not the engine's.
  */
 const boundToRequestBudget = (
   request: CorpusIndexRequest,
-): CorpusIndexRequest => ({
-  ...request,
-  timeoutMs: requestBoundedTimeoutMs(request.timeoutMs),
-});
+): BoundedCorpusIndexRequest => {
+  const { timeoutMs, endsAtRequestDeadline } = requestBoundedTimeout(
+    request.timeoutMs,
+  );
+  return { ...request, timeoutMs, endsAtRequestDeadline };
+};
+
+type ConsumeResponse<T> = (
+  response: Response,
+  request: BoundedCorpusIndexRequest,
+) => T | Promise<T>;
 
 const sendRequest = async <T>(
   unbounded: CorpusIndexRequest,
-  consume: (response: Response) => T | Promise<T>,
-): Promise<T> => {
-  const request = boundToRequestBudget(unbounded);
-  return await fetchCorpusIndex({
+  consume: ConsumeResponse<T>,
+): Promise<T> =>
+  await sendBoundedRequest(boundToRequestBudget(unbounded), consume);
+
+const sendBoundedRequest = async <T>(
+  request: BoundedCorpusIndexRequest,
+  consume: ConsumeResponse<T>,
+): Promise<T> =>
+  await fetchCorpusIndex({
     baseUrl: request.baseUrl,
     path: request.path,
     init: {
@@ -764,7 +845,7 @@ const sendRequest = async <T>(
       signal: request.signal,
     },
     observer: request.observer,
-    consume,
+    consume: async (response) => await consume(response, request),
   }).catch((error: unknown) => {
     if (error instanceof CorpusIndexError) {
       throw error;
@@ -776,11 +857,9 @@ const sendRequest = async <T>(
       reach: "unreachable",
     });
   });
-};
 
-const requestJson = async (unbounded: CorpusIndexRequest): Promise<unknown> => {
-  const request = boundToRequestBudget(unbounded);
-  return await sendRequest(request, async (response) => {
+const requestJson = async (unbounded: CorpusIndexRequest): Promise<unknown> =>
+  await sendRequest(unbounded, async (response, request) => {
     if (!response.ok) {
       const body = await response.text().catch(() => "");
       throw new CorpusIndexError({
@@ -799,7 +878,6 @@ const requestJson = async (unbounded: CorpusIndexRequest): Promise<unknown> => {
       });
     });
   });
-};
 
 type SettlementSplit = {
   evidence: CorpusIndexSettlementSplit;
@@ -1363,7 +1441,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           init: { method: "GET" },
           timeoutMs: ADMIN_TIMEOUT_MS,
         } satisfies CorpusIndexRequest;
-        return await sendRequest(request, async (response) => {
+        return await sendRequest(request, async (response, bounded) => {
           if (response.status === 404) {
             return { status: "missing" } as const;
           }
@@ -1375,7 +1453,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           }
           const metadata = await response.json().catch((error: unknown) => {
             throw requestFailure({
-              request,
+              request: bounded,
               error,
               unaborted: "returned an unreadable body",
               reach: bodyReadReach(error),

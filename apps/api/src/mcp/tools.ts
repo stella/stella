@@ -704,7 +704,8 @@ const MCP_OUTPUT_CONTRACT_SINK = failureSink({
  * failure owner instead, which grades it a defect and logs it at ERROR: the
  * caller sees an ordinary tool error, so nothing else would surface it. A
  * search index that could not be reached is not a defect of the call, so it
- * keeps its own retryable `search_index_unavailable` envelope.
+ * keeps its own retryable `search_index_unavailable` envelope, and a public
+ * read the request's latency budget ended keeps `public_read_timeout`.
  */
 const internalErrorResult = ({
   mode,
@@ -729,17 +730,19 @@ const internalErrorResult = ({
       ),
     );
   }
+  // A read the request's budget ended is a timeout, not the index being
+  // unavailable, whatever the read was waiting on.
+  if (publicReadTimeoutError(error) !== null) {
+    return serializeToolResult(
+      internalFailureResult(error, "mcp.internalErrorResult"),
+    );
+  }
   if (isSearchIndexUnavailable(error)) {
     return serializeToolResult(
       scopeToolResultToSurface(searchIndexUnavailableResult(error), {
         mode,
         context,
       }),
-    );
-  }
-  if (publicReadTimeoutError(error) !== null) {
-    return serializeToolResult(
-      internalFailureResult(error, "mcp.internalErrorResult"),
     );
   }
   if (contractViolation !== undefined) {
