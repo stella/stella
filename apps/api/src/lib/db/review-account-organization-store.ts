@@ -146,7 +146,7 @@ export const createReviewAccountOrganizationStore = (db: OwnerDatabase) => ({
         },
       });
       if (created.isErr()) {
-        return abortTransaction(created.error);
+        abortTransaction(created.error);
       }
       await recordNewOrganizationAccessState(tx, { organizationId, now });
       await ensureDefaultDocumentTypes(organizationId, tx);

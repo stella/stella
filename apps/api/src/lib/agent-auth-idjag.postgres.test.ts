@@ -87,7 +87,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         `agent-provision-${Bun.randomUUIDv7()}@example.test`,
       );
       if (Result.isError(provisioned)) {
-        return panic("Agent provisioning failed", provisioned.error);
+        panic("Agent provisioning failed", provisioned.error);
       }
       const { userId, organizationId } = provisioned.value;
       expect(await ownedOrganizationNames(userId)).toHaveLength(1);
@@ -106,7 +106,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
       // transaction timestamp: one transaction wrote all of them.
       const [state] = await accessStates(organizationId);
       if (state === undefined) {
-        return panic("The provisioned organization has no access state");
+        panic("The provisioned organization has no access state");
       }
       expect(state.state).toBe(ORGANIZATION_ACCESS_STATE.evaluationPeriod);
       expect(audit.map(({ createdAt }) => createdAt)).toEqual([
@@ -154,7 +154,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         name: "Fourth",
       });
       if (!Result.isError(refused)) {
-        return panic("The fourth evaluation organization was admitted");
+        panic("The fourth evaluation organization was admitted");
       }
       expect(HandlerError.is(refused.error)).toBe(true);
       expect(refused.error).toMatchObject({

@@ -129,7 +129,7 @@ const ensureSmokePrincipal = async (
         organization: { ...org, id: organizationId, createdAt: now },
       });
       if (created.isErr()) {
-        return abortTransaction(created.error);
+        abortTransaction(created.error);
       }
       await recordNewOrganizationAccessState(tx, { organizationId, now });
     });

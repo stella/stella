@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   createOpaqueOrganizationSlug,
+  OPAQUE_ORGANIZATION_SLUG_PATTERN,
   ORGANIZATION_OPAQUE_SLUG_BYTES,
   ORGANIZATION_SLUG_RULES,
 } from "./contract";
@@ -69,6 +70,7 @@ describe("opaque organization slugs", () => {
     );
     expect(slugs.size).toBe(64);
     for (const slug of slugs) {
+      expect(slug).toMatch(OPAQUE_ORGANIZATION_SLUG_PATTERN);
       expect(slug).toMatch(ORGANIZATION_SLUG_RULES.pattern);
       expect(slug.length).toBeLessThanOrEqual(
         ORGANIZATION_SLUG_RULES.maxLength,

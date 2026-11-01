@@ -13,6 +13,7 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import type { CryptoKey, JWK } from "jose";
 import * as v from "valibot";
 
+import { OPAQUE_ORGANIZATION_SLUG_PATTERN } from "@stll/auth-model";
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -456,9 +457,7 @@ describe("agent-auth ID-JAG new identity (auto-provision)", () => {
         .where(eq(organization.id, delegation.organizationId))
         .limit(1)
     ).at(0);
-    expect(createdOrganization?.slug).toMatch(
-      /^agent-[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
-    );
+    expect(createdOrganization?.slug).toMatch(OPAQUE_ORGANIZATION_SLUG_PATTERN);
   });
 });
 
