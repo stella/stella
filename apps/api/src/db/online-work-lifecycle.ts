@@ -212,6 +212,7 @@ export const ONLINE_WORK_LIFECYCLE = {
   invoices_external_ref_check: PENDING,
   correspondence_external_ref_check: PENDING,
   usage_events_action_type_domain: PENDING,
+  account_audit_logs_user_event_idx: PENDING,
 } as const satisfies Record<string, OnlineWorkLifecycle>;
 
 /** A registered unit's name; only names the lifecycle holds compile. */
