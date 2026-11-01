@@ -778,6 +778,9 @@ const StickyUserTurn = ({
               )}
               <div
                 className={cn(
+                  // Anchors the idle edit action, which sits in this text box
+                  // as it does in the flat layout's `EditableUserMessage`.
+                  "relative",
                   "group-data-[stuck=true]/sticky:max-h-11 group-data-[stuck=true]/sticky:overflow-hidden",
                   // Fade the clipped overflow so a long pinned message dissolves
                   // instead of ending in a hard mid-glyph cut. The absolute-length
@@ -797,9 +800,10 @@ const StickyUserTurn = ({
                     />
                   ) : null,
                 )}
+                {!messageEdit.editing && messageEdit.editor}
               </div>
             </MessageContent>
-            {messageEdit.editor}
+            {messageEdit.editing && messageEdit.editor}
           </Message>
         </div>
       </div>

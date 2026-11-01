@@ -615,4 +615,6 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   // Sends a report out of the workspace after a human approves it. The in-app
   // chat has its own feedback UI, so the tool stays off that surface.
   submit_feedback: { chatProjectable: false },
+  // Organization creation authority is independent of the current chat matter.
+  create_organization: { chatProjectable: false },
 } as const satisfies Record<RegistryWriteToolName, RegistryRefFieldMapEntry>;
