@@ -6,7 +6,7 @@ import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { documentProcessingRuns, workspaces } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -21,6 +21,7 @@ import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-del
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   completeWorkspaceDeletion,
   WorkspaceBillingHistoryError,
@@ -296,7 +297,17 @@ export const executeAuthorizedWorkspaceDeletion = async (
     enqueueCleanup: dependencies.enqueueCleanup ?? enqueueEntityDeletionCleanup,
     requestIds: transactionResult.value.cleanupRequestIds,
   });
-  await dependencies.flushWorkspaceSearchRepairs([workspaceId]);
+  // The delete has committed; a failed flush leaves its repair marks queued
+  // for the scheduled drain and must not turn the outcome into a failure.
+  await dependencies
+    .flushWorkspaceSearchRepairs([workspaceId])
+    .catch(
+      createErrorCapture(
+        handlerErrorContext(
+          "executeAuthorizedWorkspaceDeletion.flushWorkspaceSearchRepairs",
+        ),
+      ),
+    );
   return Result.ok({ status: "deleted" });
 };
 
