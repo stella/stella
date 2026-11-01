@@ -894,10 +894,19 @@ describe("detect-e2e-changes", () => {
       expect(env["CHECK_BASE_REF"]).toBe(
         githubExpression("format('origin/{0}', github.base_ref || 'main')"),
       );
+      expect(env["GREEN_BASE"]).toBe(
+        githubExpression("inputs.green_base || ''"),
+      );
       expect(requiredExpression(step["run"])).toBe(
         [
           'if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then',
           `  bun run code-check -- --leg ${leg}`,
+          "  exit 0",
+          "fi",
+          "# Main compared with itself checks nothing: check the change since the",
+          "# last commit known green, or every file when none is known.",
+          'if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "merge_group" ]]; then',
+          `  bun run code-check:affected -- --leg ${leg} --green-base "$GREEN_BASE"`,
           "  exit 0",
           "fi",
           `bun run code-check:affected -- --leg ${leg} --base "$CHECK_BASE_REF"`,

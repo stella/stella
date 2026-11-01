@@ -251,7 +251,8 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   },
   "legal-atlas-scope": { api_source_required: "false" },
   "marketing-release": { required: "false" },
-  outcome: { required_summary: "" },
+  "migration-scope": { database_migrations_required: "false" },
+  outcome: { required_summary: "", required_violations: "" },
   "patch-id": {
     patch_id: "",
     workflow_version: "",
@@ -273,6 +274,8 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   "pr-jobs-plan": { pr_depth_jobs: "[]", pr_heavy_jobs: "[]" },
   "query-perf-scope": { query_perf_required: "false" },
   "root-checks": { root_checks: "[]" },
+  "schema-imports": { changed: "false" },
+  "schema-imports-fallback": { changed: "false" },
   suites: { armed_delta: "false", run_required: "true", heavy_proof: "true" },
   "target-base": { base_sha: "" },
   "ui-playground-plan": { matrix: "[]", specs: "[]" },

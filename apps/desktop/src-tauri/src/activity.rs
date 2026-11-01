@@ -9,8 +9,10 @@
 //! is the call's instead: whatever is in front, and however long the user
 //! only listens. A call segment ends at its last sample.
 //! Segments are written to encrypted per-day files at most once a minute and
-//! whenever recording stops. Nothing here reaches the network: the data is
-//! read only by the activity window, through `ActivityCaller`.
+//! whenever recording stops. Nothing here reaches the network: the timeline
+//! is read only by the activity window, through `ActivityCaller`; settings
+//! and the names of one day's apps also reach the Settings window, through
+//! `ActivitySettingsCaller`.
 
 use chrono::{DateTime, Days, FixedOffset, Local, NaiveDate, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
@@ -31,7 +33,9 @@ use crate::{
   foreground_app::{self, AppExclusion},
   keychain::{self, LocalDataKey, LocalDataKeyLookup},
   local_store::{self, StoreKey},
-  local_window::ActivityCaller,
+  local_window::{
+    ActivityAccountFeature, ActivityCaller, ActivitySettingsCaller, LocalCaller,
+  },
   logging::with_cause_logged,
 };
 
@@ -94,13 +98,16 @@ pub enum ActivityRecordingStatus {
   Paused,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivitySettings {
   pub recording_status: ActivityRecordingStatus,
   pub retention: ActivityRetention,
   #[serde(default)]
   pub excluded_apps: Vec<AppExclusion>,
+  /// A new timeline records window titles and documents until the user turns
+  /// them off. Settings saved before details existed carry no consent, so a
+  /// missing field reads as off.
   #[serde(default)]
   pub capture_details: bool,
   #[serde(default)]
@@ -110,8 +117,26 @@ pub struct ActivitySettings {
   /// Calls are detected unless the user turned it off.
   #[serde(default)]
   pub ignore_calls: bool,
+  #[serde(default)]
+  pub narrative_assist: ActivityNarrativeAssist,
   #[serde(flatten)]
   pub extra: BTreeMap<String, serde_json::Value>,
+}
+
+impl Default for ActivitySettings {
+  fn default() -> Self {
+    Self {
+      recording_status: ActivityRecordingStatus::default(),
+      retention: ActivityRetention::default(),
+      excluded_apps: Vec::new(),
+      capture_details: true,
+      app_name_only_apps: Vec::new(),
+      browser_title_apps: Vec::new(),
+      ignore_calls: false,
+      narrative_assist: ActivityNarrativeAssist::default(),
+      extra: BTreeMap::new(),
+    }
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -210,6 +235,30 @@ define_activity_details_access! {
     allow(dead_code, reason = "only platforms without window details report it")
   )]
   Unavailable,
+}
+
+macro_rules! define_activity_narrative_assist {
+  ($(#[$default:meta])? $first:ident, $($variant:ident),+ $(,)?) => {
+    /// Whether a suggestion's window titles go to stella AI for a description
+    /// only after the user approves each one, or without asking again.
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum ActivityNarrativeAssist {
+      $(#[$default])? $first,
+      $($variant),+
+    }
+
+    impl ActivityNarrativeAssist {
+      #[cfg(test)]
+      const ALL: &'static [Self] = &[Self::$first, $(Self::$variant),+];
+    }
+  };
+}
+
+define_activity_narrative_assist! {
+  #[default]
+  Ask,
+  Always,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -415,6 +464,7 @@ pub struct ActivityDaySnapshot {
   details_access: ActivityDetailsAccess,
   browser_title_apps: Vec<AppExclusion>,
   browser_apps: Vec<AppExclusion>,
+  narrative_assist: ActivityNarrativeAssist,
   segments: Vec<ActivitySegment>,
   source_app_visuals: Vec<crate::foreground_app_visual::ClipboardSourceAppVisual>,
   /// A day whose file exists but cannot be read.
@@ -422,7 +472,6 @@ pub struct ActivityDaySnapshot {
   drafted_entries: Vec<ActivityDraftedEntry>,
   manual_assignments: Vec<ActivityManualAssignment>,
   pending_batch: Option<ActivityPendingBatch>,
-  pub(crate) time_billing_enabled: bool,
 }
 
 #[derive(Deserialize)]
@@ -453,6 +502,49 @@ impl ActivityDaySnapshot {
         )
         .chain(self.browser_apps.iter().map(|app| app.identifier.as_str()))
         .chain(PREVIEW_APPS.iter().map(|app| app.app_identifier.as_str())),
+    );
+  }
+}
+
+/// What the activity settings show: their values, deletion state, and the
+/// names of the apps recorded on one day. It carries no segment, time,
+/// window title or document.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivitySettingsSnapshot {
+  date: String,
+  today: String,
+  earliest_date: String,
+  latest_date: String,
+  deletion_status: ActivityDeletionStatus,
+  persistence: ActivityPersistenceStatus,
+  retention: ActivityRetention,
+  excluded_apps: Vec<AppExclusion>,
+  other_account_history_days: usize,
+  capture_details: bool,
+  detect_calls: bool,
+  app_name_only_apps: Vec<AppExclusion>,
+  details_access: ActivityDetailsAccess,
+  browser_title_apps: Vec<AppExclusion>,
+  browser_apps: Vec<AppExclusion>,
+  narrative_assist: ActivityNarrativeAssist,
+  /// The apps recorded on `date`, longest first.
+  apps: Vec<AppExclusion>,
+  source_app_visuals: Vec<crate::foreground_app_visual::ClipboardSourceAppVisual>,
+}
+
+impl ActivitySettingsSnapshot {
+  pub(crate) fn resolve_app_visuals(&mut self) {
+    self.source_app_visuals = crate::foreground_app_visual::cached_app_visuals(
+      [
+        &self.apps,
+        &self.excluded_apps,
+        &self.app_name_only_apps,
+        &self.browser_apps,
+      ]
+      .into_iter()
+      .flatten()
+      .map(|app| app.identifier.as_str()),
     );
   }
 }
@@ -822,7 +914,10 @@ impl ActivityManager {
     result
   }
 
-  pub(crate) fn require_caller(&self, caller: &ActivityCaller) -> Result<(), String> {
+  pub(crate) fn require_caller<F: ActivityAccountFeature>(
+    &self,
+    caller: &LocalCaller<F>,
+  ) -> Result<(), String> {
     if caller
       .account_binding()
       .is_some_and(|(generation, namespace)| {
@@ -894,6 +989,21 @@ impl ActivityManager {
 
   pub fn capture_details(&self) -> bool {
     self.settings.capture_details
+  }
+
+  pub fn recording_status(&self) -> ActivityRecordingStatus {
+    self.settings.recording_status
+  }
+
+  pub fn set_narrative_assist(
+    &mut self,
+    assist: ActivityNarrativeAssist,
+  ) -> Result<(), String> {
+    self.require_writable()?;
+    if self.settings.narrative_assist == assist {
+      return Ok(());
+    }
+    self.update_settings(|settings| settings.narrative_assist = assist)
   }
 
   pub fn set_detect_calls(
@@ -2114,6 +2224,9 @@ impl ActivityManager {
         .document
         .as_deref()
         .and_then(|path| path.rsplit(['/', '\\']).next())
+        // Terminals report their working directory as the document; a
+        // folder name says less than the app.
+        .filter(|name| std::path::Path::new(name).extension().is_some())
         .and_then(|name| foreground_app::bounded_metadata(name, MAX_DETAIL_BYTES))
         .unwrap_or_else(|| open.segment.app_name.clone())
     });
@@ -2179,8 +2292,91 @@ impl ActivityManager {
         segment.window_title = None;
       }
     }
+    let browser_apps = self.browser_apps(&segments);
+    let (drafted_entries, draft_unreadable) = match self.drafted_for_day(date) {
+      Ok(entries) => (entries, false),
+      Err(_) => (Vec::new(), true),
+    };
+    let (pending_batch, pending_unreadable, current_day_failure) =
+      self.day_pending(date);
+    let (manual_assignments, assignments_unreadable) =
+      match self.assignments_for_day(date) {
+        Ok(entries) => (entries, false),
+        Err(_) => (Vec::new(), true),
+      };
+    let bounds = self.history_bounds(date, today);
+    let deletion_status = current_day_failure.unwrap_or(bounds.deletion_status);
+    ActivityDaySnapshot {
+      date: format_date(date),
+      today: format_date(today),
+      earliest_date: format_date(bounds.earliest),
+      latest_date: format_date(bounds.latest),
+      deletion_status,
+      persistence: self.persistence_status(),
+      recording_status: self.settings.recording_status,
+      retention: self.settings.retention,
+      excluded_apps: self.settings.excluded_apps.clone(),
+      other_account_history_days,
+      capture_details: self.settings.capture_details,
+      detect_calls: !self.settings.ignore_calls,
+      app_name_only_apps: self.settings.app_name_only_apps.clone(),
+      details_access,
+      browser_title_apps: self.settings.browser_title_apps.clone(),
+      browser_apps,
+      narrative_assist: self.settings.narrative_assist,
+      source_app_visuals: Vec::new(),
+      segments,
+      unreadable: unreadable
+        || draft_unreadable
+        || assignments_unreadable
+        || pending_unreadable,
+      manual_assignments,
+      pending_batch,
+      drafted_entries,
+    }
+  }
+
+  /// Settings, deletion state and the names of the apps recorded on `date`,
+  /// for the exclusion controls. No segment, time, title or document.
+  pub fn settings_snapshot(
+    &self,
+    date: NaiveDate,
+    now: DateTime<Utc>,
+    _caller: &ActivitySettingsCaller,
+    other_account_history_days: usize,
+    details_access: ActivityDetailsAccess,
+  ) -> ActivitySettingsSnapshot {
+    let today = local_date(now);
+    let (segments, _unreadable) = self.day_segments(date);
+    let (_pending_batch, _pending_unreadable, current_day_failure) =
+      self.day_pending(date);
+    let bounds = self.history_bounds(date, today);
+    ActivitySettingsSnapshot {
+      date: format_date(date),
+      today: format_date(today),
+      earliest_date: format_date(bounds.earliest),
+      latest_date: format_date(bounds.latest),
+      deletion_status: current_day_failure.unwrap_or(bounds.deletion_status),
+      persistence: self.persistence_status(),
+      retention: self.settings.retention,
+      excluded_apps: self.settings.excluded_apps.clone(),
+      other_account_history_days,
+      capture_details: self.settings.capture_details,
+      detect_calls: !self.settings.ignore_calls,
+      app_name_only_apps: self.settings.app_name_only_apps.clone(),
+      details_access,
+      browser_title_apps: self.settings.browser_title_apps.clone(),
+      browser_apps: self.browser_apps(&segments),
+      narrative_assist: self.settings.narrative_assist,
+      apps: day_apps(&segments),
+      source_app_visuals: Vec::new(),
+    }
+  }
+
+  /// The chosen browsers, then the browsers among the day's apps.
+  fn browser_apps(&self, segments: &[ActivitySegment]) -> Vec<AppExclusion> {
     let mut browser_apps = self.settings.browser_title_apps.clone();
-    for segment in &segments {
+    for segment in segments {
       if crate::activity_details::is_browser(&segment.app_identifier, &segment.app_name)
         && let Some(app) = AppExclusion::new(&segment.app_identifier, &segment.app_name)
       {
@@ -2188,13 +2384,20 @@ impl ActivityManager {
       }
     }
     foreground_app::normalize_exclusions(&mut browser_apps, MAX_EXCLUSIONS);
-    let (drafted_entries, draft_unreadable) = match self.drafted_for_day(date) {
-      Ok(entries) => (entries, false),
-      Err(_) => (Vec::new(), true),
-    };
-    let (pending_batch, pending_unreadable, current_day_failure) = match &self
-      .persistence
-    {
+    browser_apps
+  }
+
+  /// The day's pending batch, whether it was unreadable, and the deletion
+  /// status a failed read imposes on the whole view.
+  fn day_pending(
+    &self,
+    date: NaiveDate,
+  ) -> (
+    Option<ActivityPendingBatch>,
+    bool,
+    Option<ActivityDeletionStatus>,
+  ) {
+    match &self.persistence {
       ActivityPersistence::Encrypted(store) => match store.load_pending_checked(date) {
         Ok(pending) => (pending, false, None),
         Err(crate::local_store::EncryptedReadError::Unreadable(_)) => {
@@ -2211,14 +2414,13 @@ impl ActivityManager {
         Ok(pending) => (pending, false, None),
         Err(_) => (None, true, Some(ActivityDeletionStatus::Unavailable)),
       },
-    };
-    let (manual_assignments, assignments_unreadable) =
-      match self.assignments_for_day(date) {
-        Ok(entries) => (entries, false),
-        Err(_) => (Vec::new(), true),
-      };
+    }
+  }
+
+  /// The days a view can reach and what deletion may do across them.
+  fn history_bounds(&self, date: NaiveDate, today: NaiveDate) -> HistoryBounds {
     let retention_earliest = self.earliest_date(today);
-    let (earliest_date, latest_date, deletion_status) = match self.pending_dates() {
+    let (earliest, latest, deletion_status) = match self.pending_dates() {
       Ok(pending_dates) => (
         pending_dates
           .first()
@@ -2261,36 +2463,38 @@ impl ActivityManager {
         },
       ),
     };
-    let deletion_status = current_day_failure.unwrap_or(deletion_status);
-    ActivityDaySnapshot {
-      date: format_date(date),
-      today: format_date(today),
-      earliest_date: format_date(earliest_date),
-      latest_date: format_date(latest_date),
+    HistoryBounds {
+      earliest,
+      latest,
       deletion_status,
-      persistence: self.persistence_status(),
-      recording_status: self.settings.recording_status,
-      retention: self.settings.retention,
-      excluded_apps: self.settings.excluded_apps.clone(),
-      other_account_history_days,
-      capture_details: self.settings.capture_details,
-      detect_calls: !self.settings.ignore_calls,
-      app_name_only_apps: self.settings.app_name_only_apps.clone(),
-      details_access,
-      browser_title_apps: self.settings.browser_title_apps.clone(),
-      browser_apps,
-      source_app_visuals: Vec::new(),
-      segments,
-      unreadable: unreadable
-        || draft_unreadable
-        || assignments_unreadable
-        || pending_unreadable,
-      manual_assignments,
-      pending_batch,
-      drafted_entries,
-      time_billing_enabled: false,
     }
   }
+}
+
+struct HistoryBounds {
+  earliest: NaiveDate,
+  latest: NaiveDate,
+  deletion_status: ActivityDeletionStatus,
+}
+
+/// The apps of a day's segments, longest first, without their times.
+fn day_apps(segments: &[ActivitySegment]) -> Vec<AppExclusion> {
+  let mut totals: BTreeMap<&str, (&str, chrono::Duration)> = BTreeMap::new();
+  for segment in segments {
+    let duration = segment.end - segment.start;
+    totals
+      .entry(&segment.app_identifier)
+      .and_modify(|(_, total)| *total += duration)
+      .or_insert((&segment.app_name, duration));
+  }
+  let mut totals = totals.into_iter().collect::<Vec<_>>();
+  totals.sort_by(|(_, (left_name, left)), (_, (right_name, right))| {
+    right.cmp(left).then_with(|| left_name.cmp(right_name))
+  });
+  totals
+    .into_iter()
+    .filter_map(|(identifier, (name, _))| AppExclusion::new(identifier, name))
+    .collect()
 }
 
 /// Blocking keychain and file work; runs off the main thread.
@@ -3172,6 +3376,68 @@ mod tests {
   }
 
   #[test]
+  fn settings_snapshot_names_the_days_apps_without_their_activity() {
+    let mut manager = recording_manager();
+    assert!(manager.capture_details());
+    manager.observe(at(0), active_details("mail"));
+    manager.observe(at(5), active_details("mail"));
+    manager.observe(at(10), active_details("word"));
+    manager.observe(at(25), active_details("word"));
+    manager.stop(at(25)).unwrap();
+    let snapshot = manager.settings_snapshot(
+      local_date(at(0)),
+      at(25),
+      &ActivitySettingsCaller::for_account_test(1, "fixture"),
+      2,
+      ActivityDetailsAccess::Ready,
+    );
+    let value = serde_json::to_value(&snapshot).unwrap();
+    assert_eq!(
+      value["apps"],
+      serde_json::json!([
+        { "identifier": "word", "name": "WORD" },
+        { "identifier": "mail", "name": "MAIL" },
+      ])
+    );
+    assert_eq!(value["otherAccountHistoryDays"], 2);
+    assert_eq!(value["deletionStatus"], "available");
+    let mut keys = value
+      .as_object()
+      .unwrap()
+      .keys()
+      .map(String::as_str)
+      .collect::<Vec<_>>();
+    keys.sort_unstable();
+    assert_eq!(
+      keys,
+      [
+        "appNameOnlyApps",
+        "apps",
+        "browserApps",
+        "browserTitleApps",
+        "captureDetails",
+        "date",
+        "deletionStatus",
+        "detailsAccess",
+        "detectCalls",
+        "earliestDate",
+        "excludedApps",
+        "latestDate",
+        "narrativeAssist",
+        "otherAccountHistoryDays",
+        "persistence",
+        "retention",
+        "sourceAppVisuals",
+        "today",
+      ]
+    );
+    let serialized = value.to_string();
+    for recorded in ["Draft title", "draft.docx", "start", "segments"] {
+      assert!(!serialized.contains(recorded), "{recorded}");
+    }
+  }
+
+  #[test]
   fn reservation_requires_writable_activity_without_creating_pending_state() {
     let mut manager = ActivityManager::new();
     let date = local_date(at(0));
@@ -3565,7 +3831,7 @@ mod tests {
   fn detail_preferences_close_segments_invalidate_pending_captures_and_keep_past_details()
    {
     let mut manager = recording_manager();
-    assert!(manager.set_capture_details(true, at(0)).unwrap());
+    assert!(manager.capture_details());
     assert!(!manager.set_capture_details(true, at(0)).unwrap());
     manager.observe(at(0), active_details("word"));
     manager.observe(at(5), active_details("word"));
@@ -3765,9 +4031,10 @@ mod tests {
     assert_eq!(tray.now.as_deref(), Some("WORD"));
     assert_eq!(tray.total_ms, 5000);
     manager.set_capture_details(true, at(5)).unwrap();
-    for path in [
-      "/private/folder/draft.docx",
-      "C:\\private\\folder\\draft.docx",
+    for (path, now) in [
+      ("/private/folder/draft.docx", "draft.docx"),
+      ("C:\\private\\folder\\draft.docx", "draft.docx"),
+      ("/Users/someone", "Word"),
     ] {
       let mut path_manager = recording_manager();
       path_manager.set_capture_details(true, at(0)).unwrap();
@@ -3784,7 +4051,7 @@ mod tests {
         );
       }
       let tray = path_manager.tray_snapshot(at(5)).unwrap();
-      assert_eq!(tray.now.as_deref(), Some("draft.docx"));
+      assert_eq!(tray.now.as_deref(), Some(now));
     }
     manager
       .set_app_detail_capture(
@@ -5746,6 +6013,71 @@ mod tests {
       serde_json::Value::Array(statuses)
     );
     assert_eq!(contract["changedEvent"], CHANGED_EVENT);
+    let assists = ActivityNarrativeAssist::ALL
+      .iter()
+      .map(|assist| serde_json::to_value(assist).unwrap())
+      .collect::<Vec<_>>();
+    assert_eq!(
+      contract["narrativeAssists"],
+      serde_json::Value::Array(assists)
+    );
+  }
+
+  #[test]
+  fn narrative_assist_asks_unless_settings_say_always() {
+    let saved: ActivitySettings = serde_json::from_value(serde_json::json!({
+      "recordingStatus": "recording",
+      "retention": "month",
+    }))
+    .unwrap();
+    assert_eq!(saved.narrative_assist, ActivityNarrativeAssist::Ask);
+    assert_eq!(
+      ActivitySettings::default().narrative_assist,
+      ActivityNarrativeAssist::Ask
+    );
+    let always: ActivitySettings = serde_json::from_value(serde_json::json!({
+      "recordingStatus": "recording",
+      "retention": "month",
+      "narrativeAssist": "always",
+    }))
+    .unwrap();
+    assert_eq!(always.narrative_assist, ActivityNarrativeAssist::Always);
+    assert!(always.extra.is_empty());
+    assert_eq!(
+      serde_json::to_value(&always).unwrap()["narrativeAssist"],
+      "always"
+    );
+    assert!(
+      serde_json::from_value::<ActivitySettings>(serde_json::json!({
+        "recordingStatus": "recording",
+        "retention": "month",
+        "narrativeAssist": true,
+      }))
+      .is_err()
+    );
+  }
+
+  #[test]
+  fn narrative_assist_persists_and_reaches_the_settings_snapshot() {
+    let mut manager = recording_manager();
+    manager
+      .set_narrative_assist(ActivityNarrativeAssist::Always)
+      .unwrap();
+    assert_eq!(
+      manager.settings.narrative_assist,
+      ActivityNarrativeAssist::Always
+    );
+    let settings = manager.settings_snapshot(
+      local_date(at(0)),
+      at(0),
+      &ActivitySettingsCaller::for_account_test(1, "fixture"),
+      0,
+      ActivityDetailsAccess::Ready,
+    );
+    assert_eq!(
+      serde_json::to_value(&settings).unwrap()["narrativeAssist"],
+      "always"
+    );
   }
 
   fn call(identifier: &str, window_title: Option<&str>) -> Observation {

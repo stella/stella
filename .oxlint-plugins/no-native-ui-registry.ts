@@ -88,9 +88,11 @@ const AVATAR_RULE = "no-raw-user-avatar-primitive/no-raw-user-avatar-primitive";
 
 export const NO_NATIVE_UI_REGISTRY = {
   ".": notComponent("the package barrel; each module has its own row"),
-  accordion: native("Accordion from @stll/ui/accordion", {
-    elements: ["details", "summary"],
-  }),
+  accordion: native(
+    "Collapsible from @stll/ui/collapsible for one disclosure, or Accordion " +
+      "from @stll/ui/accordion for a set of sections",
+    { elements: ["details", "summary"] },
+  ),
   "ai-label": noNative("a badge marking AI-generated content"),
   "alert-dialog": native("AlertDialog from @stll/ui/alert-dialog", {
     roles: ["alertdialog"],
@@ -117,9 +119,16 @@ export const NO_NATIVE_UI_REGISTRY = {
     roles: ["button"],
     inputTypes: ["button", "image", "reset", "submit"],
   }),
-  calendar: owned(
+  "calendar-primitives": owned(
     DATE_INPUT_RULE,
     "the native date pickers are reported there",
+  ),
+  "resource-calendar": owned(
+    DATE_INPUT_RULE,
+    "the native date pickers are reported there",
+  ),
+  "resource-calendar.logic": notComponent(
+    "resource calendar placement helpers",
   ),
   checkbox: native("Checkbox from @stll/ui/checkbox", {
     roles: ["checkbox"],
@@ -128,6 +137,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   "color-picker": native("ColorPicker from @stll/ui/color-picker", {
     inputTypes: ["color"],
   }),
+  collapsible: owned(
+    nativeRuleId("accordion"),
+    "one disclosure; native details and summary are the accordion rule's",
+  ),
   combobox: native("Combobox from @stll/ui/combobox", {
     elements: ["datalist"],
     roles: ["combobox"],
@@ -158,6 +171,13 @@ export const NO_NATIVE_UI_REGISTRY = {
   "date-range-filter": owned(
     "no-hand-built-date-range-filter/no-hand-built-date-range-filter",
     "hand-built range filters are reported there",
+  ),
+  "day-calendar": owned(
+    DATE_INPUT_RULE,
+    "the native date pickers are reported there",
+  ),
+  "day-calendar.logic": notComponent(
+    "day calendar layout and snapping helpers",
   ),
   "destructive-action-confirmation": owned(
     "eslint/no-alert",
@@ -199,6 +219,9 @@ export const NO_NATIVE_UI_REGISTRY = {
   icons: owned(
     "no-direct-lucide-import/no-direct-lucide-import",
     "glyphs come from @stll/ui/icons, never the icon library directly",
+  ),
+  "identity-text": noNative(
+    "a clipped name that discloses its full text in a tooltip",
   ),
   "inline-drop-indicator": noNative("a drag-and-drop insertion marker"),
   "inline-rename": owned(
@@ -290,8 +313,8 @@ export const NO_NATIVE_UI_REGISTRY = {
     inputTypes: ["password"],
   }),
   "segmented-icon-toggle": noNative(
-    "a row of pressed-state Buttons; native radio groups have no @stll/ui " +
-      "counterpart yet, so radios stay allowed",
+    "an icon ToggleGroup; native radio groups have no @stll/ui counterpart " +
+      "yet, so radios stay allowed",
   ),
   select: native("Select from @stll/ui/select", {
     elements: ["select", "option", "optgroup"],
@@ -357,6 +380,15 @@ export const NO_NATIVE_UI_REGISTRY = {
   toast: owned(
     "stella-toast/stella-toast",
     "toasts go through stellaToast; the browser's alert() is no-alert's",
+  ),
+  toggle: owned(
+    nativeRuleId("button"),
+    "a pressed-state Button; a native button with aria-pressed is the " +
+      "button rule's",
+  ),
+  "toggle-group": owned(
+    nativeRuleId("button"),
+    "a row of Toggles; their native buttons are the button rule's",
   ),
   "toolbar-icon-action": owned(
     nativeRuleId("button"),

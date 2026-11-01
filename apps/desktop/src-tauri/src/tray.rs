@@ -1,8 +1,9 @@
 use tauri::{
   AppHandle, Manager, Wry,
-  menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
+  menu::{Menu, MenuBuilder, MenuItemBuilder, Submenu, SubmenuBuilder},
 };
 
+use crate::PreferencesTab;
 use crate::activity::{ActivityRecordingStatus, TrayActivitySnapshot};
 use crate::i18n::{active_locale, t, t_fmt, t_plural};
 use crate::types::{AppSnapshot, SessionSnapshot};
@@ -225,6 +226,48 @@ pub fn refresh(app: &AppHandle, snapshot: &AppSnapshot) {
   }
 }
 
+/// Shows a short mark beside the status icon, or removes it.
+#[cfg_attr(
+  not(dictation),
+  allow(dead_code, reason = "only builds with the speech engine drive these")
+)]
+pub fn set_status_mark(app: &AppHandle, mark: Option<&'static str>) {
+  let handle = app.clone();
+  if app
+    .run_on_main_thread(move || {
+      #[cfg(target_os = "macos")]
+      let main_thread =
+        TrayMainThread::new().expect("tray work must run on the main thread");
+      #[cfg(not(target_os = "macos"))]
+      let main_thread = TrayMainThread;
+      set_status_mark_on_main_thread(&handle, mark, &main_thread);
+    })
+    .is_err()
+  {
+    tracing::warn!("tray mark skipped: the event loop is gone");
+  }
+}
+
+#[cfg_attr(
+  not(dictation),
+  allow(dead_code, reason = "only builds with the speech engine drive these")
+)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the tray owner: the main-thread proof keeps every native handle local"
+)]
+fn set_status_mark_on_main_thread(
+  app: &AppHandle,
+  mark: Option<&'static str>,
+  _main_thread: &TrayMainThread,
+) {
+  if let Some(tray) = app.tray_by_id("main")
+    && tray.set_title(mark).is_err()
+  {
+    tracing::warn!("tray mark failed");
+  }
+}
+
 /// The status icon and its owning screen in one logical coordinate space;
 /// `None` when there is no icon or the OS cannot place it (an icon in
 /// Windows' hidden overflow area). The handle is read and dropped on the
@@ -343,49 +386,18 @@ fn build_tray_menu_with_activity(
   let clipboard_enabled = !crate::managed_policy::current().clipboard_disabled;
   if clipboard_enabled {
     builder = builder.item(
-      &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard"))
+      &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("clipboard.title"))
         .build(app)?,
     );
   }
-  // Activity gets its own group: status, the recording toggle and the window.
   let activity_enabled = crate::activity::is_enabled(app);
-  if activity.is_some() || activity_enabled {
+  if activity_enabled {
     if clipboard_enabled {
       builder = builder.separator();
     }
-    if let Some(activity) = activity {
-      builder = builder.item(
-        &MenuItemBuilder::with_id(
-          ACTIVITY_STATUS_ITEM,
-          activity_status_label(activity),
-        )
-        .enabled(false)
-        .build(app)?,
-      );
-      if activity.status == ActivityRecordingStatus::Recording
-        && let Some(name) = &activity.now
-      {
-        builder = builder.item(
-          &MenuItemBuilder::with_id(
-            ACTIVITY_NOW_ITEM,
-            t_fmt("tray.activityNow", &[("name", name)]),
-          )
-          .enabled(false)
-          .build(app)?,
-        );
-      }
-      if let Some((action, label)) = activity_action(activity.status) {
-        builder = builder.item(&MenuItemBuilder::with_id(action, t(label)).build(app)?);
-      }
-    }
-    if activity_enabled {
-      builder = builder.item(
-        &MenuItemBuilder::with_id(OPEN_ACTIVITY_ACTION, t("tray.activity"))
-          .build(app)?,
-      );
-    }
-    builder = builder.separator();
-  } else if clipboard_enabled {
+    builder = builder.item(&build_activity_menu(app, activity)?);
+  }
+  if clipboard_enabled || activity_enabled {
     builder = builder.separator();
   }
 
@@ -508,6 +520,42 @@ fn build_tray_menu_with_activity(
   builder.build()
 }
 
+fn build_activity_menu(
+  app: &AppHandle,
+  activity: Option<&TrayActivitySnapshot>,
+) -> tauri::Result<Submenu<Wry>> {
+  let mut menu = SubmenuBuilder::new(app, t("tray.activity"));
+  if let Some(activity) = activity {
+    menu = menu.item(
+      &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, activity_status_label(activity))
+        .enabled(false)
+        .build(app)?,
+    );
+    if activity.status == ActivityRecordingStatus::Recording
+      && let Some(name) = &activity.now
+    {
+      menu = menu.item(
+        &MenuItemBuilder::with_id(
+          ACTIVITY_NOW_ITEM,
+          t_fmt("tray.activityNow", &[("name", name)]),
+        )
+        .enabled(false)
+        .build(app)?,
+      );
+    }
+    menu = menu.separator();
+    if let Some((action, label)) = activity_action(activity.status) {
+      menu = menu.item(&MenuItemBuilder::with_id(action, t(label)).build(app)?);
+    }
+  }
+  menu
+    .item(
+      &MenuItemBuilder::with_id(OPEN_ACTIVITY_ACTION, t("tray.openActivity"))
+        .build(app)?,
+    )
+    .build()
+}
+
 pub fn get_session_id_from_action<'a>(
   action: &'a str,
   prefix: &str,
@@ -520,7 +568,7 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
     return MenuAction::Quit;
   }
   if action == OPEN_PREFERENCES_ACTION || action == RECONNECT_ACCOUNT_ACTION {
-    return MenuAction::OpenPreferences("general");
+    return MenuAction::OpenPreferences(PreferencesTab::General);
   }
   if action == OPEN_CLIPBOARD_ACTION {
     return MenuAction::OpenClipboard;
@@ -535,7 +583,7 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
     return MenuAction::SetActivityRecording(ActivityRecordingStatus::Recording);
   }
   if action == OPEN_ABOUT_ACTION {
-    return MenuAction::OpenPreferences("about");
+    return MenuAction::OpenPreferences(PreferencesTab::About);
   }
   if action == CHECK_FOR_UPDATES_ACTION {
     return MenuAction::CheckForUpdates;
@@ -566,12 +614,12 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
     return MenuAction::RetrySession(id.to_string());
   }
 
-  MenuAction::OpenPreferences("general")
+  MenuAction::OpenPreferences(PreferencesTab::General)
 }
 
 pub enum MenuAction {
   Quit,
-  OpenPreferences(&'static str),
+  OpenPreferences(PreferencesTab),
   OpenClipboard,
   OpenActivity,
   SetActivityRecording(ActivityRecordingStatus),
@@ -619,7 +667,7 @@ mod tests {
   fn reconnect_opens_the_account_settings() {
     assert!(matches!(
       handle_menu_action(RECONNECT_ACCOUNT_ACTION),
-      MenuAction::OpenPreferences("general")
+      MenuAction::OpenPreferences(PreferencesTab::General)
     ));
   }
 
@@ -887,7 +935,7 @@ mod tests {
   fn test_handle_menu_action_preferences() {
     assert!(matches!(
       handle_menu_action("open-preferences"),
-      MenuAction::OpenPreferences("general")
+      MenuAction::OpenPreferences(PreferencesTab::General)
     ));
   }
 
@@ -903,7 +951,7 @@ mod tests {
   fn test_handle_menu_action_about() {
     assert!(matches!(
       handle_menu_action("open-about"),
-      MenuAction::OpenPreferences("about")
+      MenuAction::OpenPreferences(PreferencesTab::About)
     ));
   }
 
@@ -967,7 +1015,7 @@ mod tests {
   fn test_handle_menu_action_unknown_defaults_to_preferences() {
     assert!(matches!(
       handle_menu_action("some-unknown-action"),
-      MenuAction::OpenPreferences("general")
+      MenuAction::OpenPreferences(PreferencesTab::General)
     ));
   }
 }

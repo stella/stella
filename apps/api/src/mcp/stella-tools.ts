@@ -127,13 +127,17 @@ import {
 import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
+import { externalRefFromColumns } from "@/api/lib/imports/external-ref";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
+import { storedCorpusValidationFailure } from "@/api/lib/legal-search/corpus-storage";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
   createCursorPage,
@@ -215,6 +219,7 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
+  caseLawSearchTimeoutResult,
   countryInputSchema,
   countryNormalization,
   cursorInput,
@@ -811,7 +816,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.nonEmpty(),
         v.maxLength(LIMITS.caseLawProvisionFilterMaxLength),
         v.description(
-          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
+          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total.',
         ),
       ),
     ),
@@ -2276,6 +2281,10 @@ const readCaseLawSearchAnswer = (
   answer: Parameters<typeof isSearchCaseLawSuccess>[0],
   cursor: string | undefined,
 ): CaseLawSearchAnswer => {
+  const timeout = caseLawSearchTimeoutResult(answer);
+  if (timeout !== null) {
+    return { type: "failed", result: timeout };
+  }
   if (isSearchIndexUnavailable(answer)) {
     return { type: "failed", result: searchIndexUnavailableResult(answer) };
   }
@@ -2596,6 +2605,7 @@ const caseLawSearchResult = ({
     decisionId: hit.decisionId,
     resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
     decisionType: hit.decisionType,
+    decisionTypeKind: hit.decisionTypeKind,
     ecli: hit.ecli,
     language: hit.language,
     matchingPassages: hit.matchingPassages,
@@ -2655,7 +2665,7 @@ type SearchProvisionArgRead =
 /**
  * The provision argument, resolved and, for a search with queries, its
  * citing set read once for every phrasing. A set too wide for one search to
- * filter by is said in a warning on each phrasing, with its exact size.
+ * filter by is said in a warning on each phrasing, without enumerating every citation.
  */
 const readSearchProvision = async ({
   args,
@@ -2712,7 +2722,6 @@ const readSearchProvision = async ({
         ? [
             provisionCitedWidelyWarning({
               provision: text,
-              citingDecisions: provisionScope.citingDecisions,
             }),
           ]
         : [],
@@ -3110,6 +3119,18 @@ const decisionNotFoundItem = (decisionId: string): DecisionItemResult => ({
   message:
     "No decision the public may read has this id. Find one with search_case_law and pass its decisionId.",
   status: DECISION_READ_STATUS.notFound,
+});
+
+const DECISION_BATCH_ENTRY_FAILURE = failureSink({
+  event: "case_law.decision.batch_entry_failed",
+  expected: [],
+});
+
+const decisionReadFailedItem = (decisionId: string): DecisionItemResult => ({
+  decisionId,
+  message:
+    "This decision could not be read on the server; the other entries are unaffected. Read it again on its own later; if it fails again, report it with prepare_feedback and use search_case_law for another decision on the point.",
+  status: DECISION_READ_STATUS.readFailed,
 });
 
 /**
@@ -3695,6 +3716,29 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     readsSharedPublicLawCorpus
   )();
 
+  // A read that fails on the server fails its own entry, never the call: each
+  // id is answered on its own, so the entry answers `read_failed` and the
+  // others still read. The failure is reported for the row's repair.
+  const failedIds = new Set<string>();
+  const isolated = async <T>(
+    decisionId: string,
+    step: string,
+    attempt: () => Promise<T>,
+  ): Promise<{ type: "read"; value: T } | { type: "failed" }> => {
+    const outcome = await Result.tryPromise(attempt);
+    if (Result.isOk(outcome)) {
+      return { type: "read", value: outcome.value };
+    }
+    if (storedCorpusValidationFailure(outcome.error) === null) {
+      observeFailure(outcome.error, {
+        sink: DECISION_BATCH_ENTRY_FAILURE,
+        ctx: { decisionId, step },
+      });
+    }
+    failedIds.add(decisionId);
+    return { type: "failed" };
+  };
+
   // One read per distinct id: a batch naming the same decision twice reads it
   // once and answers both of its positions.
   const uniqueIds = [...new Set(decisionIds)];
@@ -3702,11 +3746,18 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     await mapWithConcurrency({
       items: uniqueIds,
       limit: LIMITS.caseLawCitationPassageConcurrency,
-      operation: async (decisionId) =>
-        [
+      operation: async (decisionId) => {
+        const stored = await isolated(
           decisionId,
-          await readDecision(decisionId, STORED_ONLY_DOCUMENT_HYDRATION),
-        ] as const,
+          "readCaseLawDecision.storedRead",
+          async () =>
+            await readDecision(decisionId, STORED_ONLY_DOCUMENT_HYDRATION),
+        );
+        return [
+          decisionId,
+          stored.type === "read" ? stored.value : null,
+        ] as const;
+      },
     }),
   );
 
@@ -3753,12 +3804,17 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     await mapWithConcurrency({
       items: fetchedIds,
       limit: LIMITS.caseLawDecisionBatchHydrationsMax,
-      operation: async (decisionId) => await readDecision(decisionId, onDemand),
+      operation: async (decisionId) =>
+        await isolated(
+          decisionId,
+          "readCaseLawDecision.hydratedRead",
+          async () => await readDecision(decisionId, onDemand),
+        ),
     })
   ).entries()) {
     const decisionId =
       fetchedIds[index] ?? panic("Lost a hydrated case-law decision id");
-    reads.set(decisionId, hydrated);
+    reads.set(decisionId, hydrated.type === "read" ? hydrated.value : null);
   }
 
   // Citation data requires search admission even when the decision itself
@@ -3781,15 +3837,22 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     await mapWithConcurrency({
       items: digestIds,
       limit: LIMITS.caseLawCitationPassageConcurrency,
-      operation: async (decisionId) =>
-        [
+      operation: async (decisionId) => {
+        const digest = await isolated(
           decisionId,
-          await readDigest({
-            caseLawDb: caseLawPublicReadDb,
-            decisionId: brandPersistedCaseLawDecisionId(decisionId),
-            surface: "search",
-          }),
-        ] as const,
+          "readCaseLawDecision.citationDigest",
+          async () =>
+            await readDigest({
+              caseLawDb: caseLawPublicReadDb,
+              decisionId: brandPersistedCaseLawDecisionId(decisionId),
+              surface: "search",
+            }),
+        );
+        return [
+          decisionId,
+          digest.type === "read" ? digest.value : undefined,
+        ] as const;
+      },
     }),
   );
 
@@ -3808,18 +3871,20 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   return toolDataResult(
     projectionPayload(READ_CASE_LAW_DECISION_PROJECTION, {
       items: decisionIds.map((decisionId, index) =>
-        decisionItemResult({
-          decisionId,
-          windowChars: Math.max(1, windowChars[index] ?? 0),
-          outline: decisionIds.length === 1 ? "include" : "omit",
-          read: readOf(decisionId),
-          digest: digests.get(decisionId),
-          readsSharedCorpus,
-          documentHydration: onDemand.type,
-          position,
-          includedFields,
-          seenTextVersion,
-        }),
+        failedIds.has(decisionId)
+          ? decisionReadFailedItem(decisionId)
+          : decisionItemResult({
+              decisionId,
+              windowChars: Math.max(1, windowChars[index] ?? 0),
+              outline: decisionIds.length === 1 ? "include" : "omit",
+              read: readOf(decisionId),
+              digest: digests.get(decisionId),
+              readsSharedCorpus,
+              documentHydration: onDemand.type,
+              position,
+              includedFields,
+              seenTextVersion,
+            }),
       ),
     }),
   );
@@ -3979,6 +4044,7 @@ const handleReadContactTool: TypedMcpToolHandler<
     phones: arrayOrEmpty(contact.phones),
     dateOfBirth: dateOfBirthFromColumns(contact),
     nationalityCodes: contact.nationalityCodes,
+    external: externalRefFromColumns(contact),
   });
 
   const textFields = runTextFieldSpecs(
@@ -3992,6 +4058,8 @@ const handleReadContactTool: TypedMcpToolHandler<
     redactInAnonymized: () => {
       payload.dateOfBirth = null;
       payload.nationalityCodes = [];
+      // A source-system id can embed names or file numbers.
+      payload.external = null;
     },
   });
 };
@@ -4093,6 +4161,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
             sources: entry.sources.map((source) => ({
               adapterKey: source.adapterKey,
               name: source.name,
+              edition: source.edition,
               lastSyncAt: source.lastSyncAt,
               decisionYearFrom: source.decisionYearFrom,
               decisionYearTo: source.decisionYearTo,
@@ -4114,6 +4183,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
             sources: entry.sources.map((source) => ({
               adapterKey: source.adapterKey,
               name: source.name,
+              edition: source.edition,
               lastSyncAt: source.lastSyncAt,
               decisionYearFrom: source.decisionYearFrom,
               decisionYearTo: source.decisionYearTo,

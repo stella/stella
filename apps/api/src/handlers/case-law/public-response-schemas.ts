@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import { DOCTRINAL_TREATMENTS } from "@stll/api-contract/case-law-doctrine";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -38,6 +39,10 @@ import type { readCaseLawCorpusStatusHandler } from "@/api/handlers/case-law/dec
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
+import {
+  populationCountsFreshnessSchema,
+  populationCountsReadFreshnessSchema,
+} from "@/api/lib/case-law/population-count-freshness";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import { LIMITS } from "@/api/lib/limits";
@@ -94,6 +99,7 @@ export const listDecisionsResponseSchema = page(
     caseNumberType: v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),
     courtAbbreviation: nullableBoundedString(512),
     courtTier: v.picklist(COURT_TIER_LABELS),
+    decisionTypeKind: v.union([v.picklist(DECISION_TYPE_KINDS), v.null()]),
     sourceUrl: nullableBoundedString(8192),
     headnote,
     citationCount: v.number(),
@@ -135,6 +141,7 @@ const facet = v.object({
   count: v.number(),
 } satisfies Record<keyof FacetBucket, v.GenericSchema>);
 export const decisionFacetsResponseSchema = v.object({
+  countsFreshness: v.optional(populationCountsReadFreshnessSchema),
   country: v.pipe(v.array(facet), v.maxLength(LIMITS.caseLawFacetLimit)),
   court: v.pipe(v.array(facet), v.maxLength(LIMITS.caseLawFacetLimit)),
   year: v.pipe(v.array(facet), v.maxLength(LIMITS.caseLawYearFacetLimit)),
@@ -174,6 +181,7 @@ const courts = v.pipe(
   v.maxLength(LIMITS.caseLawFacetLimit + 1),
 );
 export const corpusStatusResponseSchema = v.object({
+  countsFreshness: v.optional(populationCountsReadFreshnessSchema),
   decisions: v.number(),
   updatedAt: date,
   health: v.enum(CASE_LAW_COVERAGE_HEALTH),
@@ -202,7 +210,9 @@ const citation = v.object({
   ]),
   decision: v.union([relatedDecision, v.null()]),
 } satisfies Record<
-  keyof Omit<DecisionCitationRow, "evidenceQuote">,
+  // The printing version is internal: it locates a passage, and no response
+  // carries it.
+  keyof Omit<DecisionCitationRow, "evidenceQuote" | "printedBy">,
   v.GenericSchema
 >);
 // A leading citation always names a held decision; only the general list
@@ -321,6 +331,13 @@ const countryCoverage = {
         name: boundedString(2048),
         publicHomeUrl: boundedString(8192),
         health: v.enum(CASE_LAW_COVERAGE_HEALTH),
+        edition: v.variant("type", [
+          v.object({ type: v.literal("live") }),
+          v.object({
+            type: v.literal("snapshot"),
+            snapshotDate: boundedString(10),
+          }),
+        ]),
         lastSyncAt: date,
         decisionYearFrom: numberOrNull,
         decisionYearTo: numberOrNull,
@@ -409,6 +426,8 @@ const provisionProcessingState = v.union([
 ]);
 
 const coverageSnapshotEntries = {
+  // Existing stored summaries predate the population fold metadata.
+  countsFreshness: v.optional(populationCountsFreshnessSchema),
   generatedAt: boundedString(128),
   provisionProcessing: v.pipe(
     v.array(
