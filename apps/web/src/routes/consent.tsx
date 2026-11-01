@@ -7,7 +7,7 @@ import {
   redirect,
   useLocation,
 } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -43,6 +43,10 @@ import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
+import {
+  consentCompletion,
+  isConsentAllowDisabled,
+} from "@/routes/-consent-completion.logic";
 import { ConsentSuccess } from "@/routes/-consent-success";
 
 export const Route = createFileRoute("/consent")({
@@ -231,11 +235,22 @@ function ConsentPage() {
       return;
     }
 
-    if (!accept) {
-      window.location.assign(redirectUrl);
-      return;
+    const completion = consentCompletion({
+      accept,
+      redirectUrl,
+      organizationName,
+    });
+    switch (completion.status) {
+      case "redirect":
+        window.location.assign(completion.redirectUrl);
+        return;
+      case "connected":
+        setSubmission(completion);
+        return;
+      default:
+        completion satisfies never;
+        panic("Unhandled consent completion");
     }
-    setSubmission({ status: "connected", redirectUrl });
   };
 
   if (submission.status === "connected") {
@@ -261,7 +276,12 @@ function ConsentPage() {
       }
       decision={
         <ConsentDecisionBar
-          allowDisabled={clientQuery.isError || !clientQuery.data}
+          allowDisabled={isConsentAllowDisabled({
+            clientInfoFailed: clientQuery.isError,
+            clientInfoLoaded:
+              clientQuery.data !== undefined && clientQuery.data !== null,
+            session: sessionView,
+          })}
           hasError={hasError}
           isPending={isPending}
           onDecide={(accept) => {

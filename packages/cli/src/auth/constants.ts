@@ -116,7 +116,7 @@ export const CLI_DEFAULT_SCOPES: readonly string[] = [
 /** Minimum scopes needed for the default CLI login to be useful. */
 export const CLI_REQUIRED_SCOPES = ["openid", "stella:read"] as const;
 
-export const CLIENT_NAME = "stella-cli";
+export const CLIENT_NAME = "stella CLI";
 
 /** `--server` resolution: env var name, checked between the flag and the config file. */
 export const SERVER_URL_ENV_VAR = "STELLA_SERVER_URL";

@@ -48,8 +48,10 @@ const boundaries: LoginBoundaries = {
     await onBrowserOpen(url);
     return { status: browserLaunchStatus };
   },
-  startLoopbackListener: async () =>
-    loopbackMode === "headless" ? undefined : await startLoopbackListener(),
+  startLoopbackListener: async (options) =>
+    loopbackMode === "headless"
+      ? undefined
+      : await startLoopbackListener(options),
 };
 
 const base64url = (value: object): string =>

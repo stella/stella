@@ -285,7 +285,7 @@ export const login = async (
     // will actually be redirected back to (the listener's ephemeral port, or
     // the portless default if binding failed), and it must stay identical
     // through to the token exchange.
-    const listener = await io.startLoopbackListener();
+    const listener = await io.startLoopbackListener({ expectedState: state });
     const redirectUri = listener?.redirectUri ?? LOOPBACK_REDIRECT_URI;
 
     const authorizeUrl = buildAuthorizeUrl({

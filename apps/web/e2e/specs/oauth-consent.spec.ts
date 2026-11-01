@@ -12,6 +12,7 @@ const AUTH_BASE_URL = `${API_BASE_URL}/api/auth`;
 const CONSENT_SCOPES = "openid profile stella:read stella:search";
 const CALLBACK_PORT = 54_321;
 const LOCALE_STORAGE_KEY = getStorageKey("i18n");
+const RENDERED_HEADING_BINDING = "__oauthConsentRenderedHeading";
 
 const token = () => randomUUID().replaceAll("-", "");
 const loopbackRedirectUriFor = (id: string) =>
@@ -158,12 +159,23 @@ test("OAuth consent keeps its decision in view on a laptop and a phone", async (
   }
 });
 
-test("OAuth consent allows and declines through the top-level callback", async ({
+test("OAuth consent skips loopback completion and keeps hosted completion", async ({
   context,
   page,
 }) => {
   await setEnglishLocale(page);
   const apiRequest = context.request;
+  // Headings the consent document rendered, reported from the page as they
+  // appear so a heading shown just before the navigation is still recorded.
+  const renderedHeadings: string[] = [];
+  await page.exposeBinding(
+    RENDERED_HEADING_BINDING,
+    (_source, text: unknown) => {
+      if (typeof text === "string") {
+        renderedHeadings.push(text);
+      }
+    },
+  );
 
   const scenarios = [
     { decision: "allow", destination: "loopback" },
@@ -189,6 +201,21 @@ test("OAuth consent allows and declines through the top-level callback", async (
     });
 
     await openConsent({ page, clientId, id, redirectUri: callbackUrl });
+    await page.evaluate((binding) => {
+      new MutationObserver(() => {
+        const report: unknown = Reflect.get(window, binding);
+        if (typeof report !== "function") {
+          return;
+        }
+        for (const node of document.querySelectorAll("h1")) {
+          Reflect.apply(report, window, [node.textContent]);
+        }
+      }).observe(document.body, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+      });
+    }, RENDERED_HEADING_BINDING);
     const callbackRequestPromise = page.waitForRequest((request) =>
       request.url().startsWith(callbackUrl),
     );
@@ -199,7 +226,7 @@ test("OAuth consent allows and declines through the top-level callback", async (
       })
       .click();
 
-    if (decision === "allow") {
+    if (decision === "allow" && destination === "hosted") {
       await expect(
         page.getByRole("heading", {
           name: `Connected to Consent browser test ${id}`,
@@ -219,7 +246,14 @@ test("OAuth consent allows and declines through the top-level callback", async (
 
     const callbackParams = callback.searchParams;
     if (decision === "allow") {
-      expect(Date.now() - clickedAt).toBeGreaterThanOrEqual(800);
+      if (destination === "hosted") {
+        expect(Date.now() - clickedAt).toBeGreaterThanOrEqual(800);
+      } else {
+        expect(callbackParams.get("organization_name")).not.toBeNull();
+        expect(renderedHeadings).not.toContain(
+          `Connected to Consent browser test ${id}`,
+        );
+      }
       expect(callbackParams.get("code")).not.toBeNull();
     } else {
       expect(callbackParams.get("code")).toBeNull();

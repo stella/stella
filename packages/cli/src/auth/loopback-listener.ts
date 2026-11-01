@@ -6,10 +6,13 @@
 // matches on hostname/pathname/protocol/search only, so any ephemeral port
 // still satisfies the registered redirect_uri.
 
+import { panic } from "better-result";
+import { timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import type { ServerResponse } from "node:http";
 
-import { LOOPBACK_REDIRECT_PATH } from "./constants.js";
+import { sha256Base64Url } from "../sha256.js";
+import { CLIENT_NAME, LOOPBACK_REDIRECT_PATH } from "./constants.js";
 import { LoopbackCallbackError, LoopbackTimeoutError } from "./errors.js";
 
 export type LoopbackCallback =
@@ -30,20 +33,30 @@ export type LoopbackListener = {
   readonly close: () => void;
 };
 
-const renderCallbackPage = (ok: boolean): string => {
-  const title = ok ? "Signed in" : "Sign-in failed";
+/** A success redirect whose `state` matched this sign-in. */
+type VerifiedCallback = {
+  readonly kind: "verified";
+  readonly code: string;
+  readonly state: string;
+  readonly organizationName: string | null;
+};
+
+// Only a verified callback carries query text onto the page; the failure
+// page renders fixed text.
+type CallbackPageOptions =
+  | { readonly status: "success"; readonly callback: VerifiedCallback }
+  | { readonly status: "failure" };
+
+const renderCallbackPage = (page: CallbackPageOptions) => {
+  const ok = page.status === "success";
+  const organizationName = ok ? page.callback.organizationName : null;
+  const title = ok ? "Signed in to stella" : "Sign-in failed";
   const message = ok
-    ? "Return to your terminal to continue."
-    : "Return to the terminal for details.";
+    ? `Return to your terminal to continue with ${CLIENT_NAME}.`
+    : `Return to your terminal for details, then try signing in to ${CLIENT_NAME} again.`;
   const statusColor = ok ? "#18181b" : "#b91c1c";
 
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${title}</title>
-    <style>
+  const styles = `
       :root {
         color-scheme: light dark;
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -87,9 +100,8 @@ const renderCallbackPage = (ok: boolean): string => {
         height: 28px;
         width: 28px;
       }
-      .label {
-        color: #71717a;
-        font-size: 13px;
+      .wordmark {
+        font-size: 22px;
         font-weight: 500;
         letter-spacing: 0;
         line-height: 1;
@@ -110,6 +122,9 @@ const renderCallbackPage = (ok: boolean): string => {
         margin: 10px 0 0;
         text-wrap: pretty;
       }
+      .organization {
+        overflow-wrap: anywhere;
+      }
       @media (prefers-color-scheme: dark) {
         body {
           background: #09090b;
@@ -127,7 +142,6 @@ const renderCallbackPage = (ok: boolean): string => {
         h1 {
           color: ${ok ? "#fafafa" : "#fca5a5"};
         }
-        .label,
         p {
           color: #a1a1aa;
         }
@@ -135,7 +149,23 @@ const renderCallbackPage = (ok: boolean): string => {
           fill: currentColor;
         }
       }
-    </style>
+`;
+  const escapedOrganizationName = organizationName
+    ?.replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
+  return {
+    contentSecurityPolicy: `default-src 'none'; style-src 'sha256-${sha256Base64Url(styles)}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    html: `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${title}</title>
+    <style>${styles}</style>
   </head>
   <body>
     <main>
@@ -144,24 +174,34 @@ const renderCallbackPage = (ok: boolean): string => {
           <path d="M6.58 11.3 16.69 5.05a5.9 5.9 0 0 1 6.62.01l14.68 9.07V9.26L25.52 1.55A11.8 11.8 0 0 0 20 0c-1.97 0-3.88.54-5.53 1.56L4.37 7.81A9.3 9.3 0 0 0 0 15.61a9.3 9.3 0 0 0 4.37 7.8l3.26 2.02-.01.01 11.15 6.9c.14.09.27.16.39.2.68.26 1.42.19 2.03-.19l9.59-5.93.1-.07 2.07-1.28-2.82-1.72-1.1-.69-9.02 5.56-.41-.24-13.01-8.05a5.57 5.57 0 0 1-2.41-4.31c0-1.79.88-3.36 2.41-4.3Z" />
           <path d="M33.34 29.25 23.24 35.5a5.9 5.9 0 0 1-6.63-.01L1.94 26.43v4.86l12.47 7.71a11.8 11.8 0 0 0 5.52 1.55c1.97 0 3.88-.54 5.53-1.56l10.1-6.25a9.3 9.3 0 0 0 4.37-7.8 9.3 9.3 0 0 0-4.37-7.8l-3.26-2.02.01-.01-11.15-6.9a1.6 1.6 0 0 0-.39-.2 1.64 1.64 0 0 0-2.03.19l-9.59 5.93-.1.07-2.07 1.28 2.82 1.72 1.1.69 9.02-5.56.41.24 13.01 8.05a5.57 5.57 0 0 1 2.41 4.31c0 1.79-.88 3.36-2.41 4.3Z" />
         </svg>
-        <span class="label">stella cli</span>
+        <span class="wordmark">stella</span>
       </div>
       <section>
         <h1>${title}</h1>
+        ${ok && escapedOrganizationName ? `<p class="organization"><bdi>${escapedOrganizationName}</bdi></p>` : ""}
         <p>${message}</p>
       </section>
     </main>
   </body>
-</html>`;
+</html>`,
+  };
 };
 
 const sendCallbackPage = (
   response: ServerResponse,
-  ok: boolean,
-  onSent: () => void,
+  statusCode: 200 | 400,
+  page: CallbackPageOptions,
+  onSent?: () => void,
 ) => {
-  response.writeHead(200, { "Content-Type": "text/html" });
-  response.end(renderCallbackPage(ok), onSent);
+  const { html, contentSecurityPolicy } = renderCallbackPage(page);
+  response.writeHead(statusCode, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Content-Security-Policy": contentSecurityPolicy,
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+  });
+  response.end(html, onSent);
 };
 
 const raceWithTimeout = async (
@@ -188,15 +228,56 @@ const raceWithTimeout = async (
   }
 };
 
+const isExpectedState = (received: string, expected: string): boolean => {
+  const receivedBytes = Buffer.from(received);
+  const expectedBytes = Buffer.from(expected);
+  return (
+    receivedBytes.length === expectedBytes.length &&
+    timingSafeEqual(receivedBytes, expectedBytes)
+  );
+};
+
+/**
+ * Reads a success redirect. The state is compared before any other query value
+ * is read, so only the redirect for this sign-in can put text on the page.
+ */
+const readSuccessCallback = (
+  url: URL,
+  expectedState: string,
+): VerifiedCallback | { readonly kind: "incomplete" | "state_mismatch" } => {
+  const state = url.searchParams.get("state");
+  if (!state) {
+    return { kind: "incomplete" };
+  }
+  if (!isExpectedState(state, expectedState)) {
+    return { kind: "state_mismatch" };
+  }
+  const code = url.searchParams.get("code");
+  if (!code) {
+    return { kind: "incomplete" };
+  }
+  return {
+    code,
+    kind: "verified",
+    organizationName: url.searchParams.get("organization_name"),
+    state,
+  };
+};
+
+type LoopbackListenerOptions = {
+  /** The `state` sent in the authorize request this listener answers. */
+  readonly expectedState: string;
+};
+
 /**
  * Starts the loopback HTTP listener. Resolves to `undefined` if binding fails
  * (sandboxed/offline environments) so callers can fall back to the manual
  * paste flow instead of crashing. Async because `node:http`'s `listen` reports
  * its OS-assigned port on the `listening` event, not synchronously.
  */
-export const startLoopbackListener = async (): Promise<
-  LoopbackListener | undefined
-> => {
+export const startLoopbackListener = async ({
+  expectedState,
+}: LoopbackListenerOptions): Promise<LoopbackListener | undefined> => {
   let deliver: ((callback: LoopbackCallback) => void) | undefined;
   const received = new Promise<LoopbackCallback>((resolve) => {
     deliver = resolve;
@@ -216,7 +297,7 @@ export const startLoopbackListener = async (): Promise<
     if (error) {
       const errorDescription = url.searchParams.get("error_description");
       const state = url.searchParams.get("state");
-      sendCallbackPage(response, false, () => {
+      sendCallbackPage(response, 200, { status: "failure" }, () => {
         deliver?.({
           error,
           kind: "error",
@@ -227,17 +308,29 @@ export const startLoopbackListener = async (): Promise<
       return;
     }
 
-    const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state");
-    if (!code || !state) {
-      response.writeHead(400);
-      response.end("Missing code or state");
-      return;
+    const callback = readSuccessCallback(url, expectedState);
+    switch (callback.kind) {
+      case "incomplete":
+        sendCallbackPage(response, 400, { status: "failure" });
+        return;
+      case "state_mismatch":
+        sendCallbackPage(response, 400, { status: "failure" }, () => {
+          deliver?.({ error: "invalid_state", kind: "error" });
+        });
+        return;
+      case "verified":
+        sendCallbackPage(response, 200, { status: "success", callback }, () => {
+          deliver?.({
+            code: callback.code,
+            kind: "success",
+            state: callback.state,
+          });
+        });
+        return;
+      default:
+        callback satisfies never;
+        panic("Unhandled loopback callback");
     }
-
-    sendCallbackPage(response, true, () => {
-      deliver?.({ code, kind: "success", state });
-    });
   });
 
   const listenerPort = await new Promise<number | undefined>((resolve) => {
