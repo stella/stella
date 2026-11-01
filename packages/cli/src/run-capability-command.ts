@@ -9,6 +9,8 @@ import { Result } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 
+import { chunkCapabilityIds, resolveBulkIdFlags } from "./batch/bulk.js";
+import { runCapabilityChunks } from "./batch/capability-chunks.js";
 import type { Context } from "./context.js";
 import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import { callTool, type CallToolResult } from "./mcp-client.js";
@@ -49,6 +51,29 @@ const withCursor = (
     ...base,
     input: { ...input, [part]: { ...partObj, cursor } },
   };
+};
+
+type ComposeCapabilityFlagsOptions = {
+  base: Record<string, unknown>;
+  flags: LeafFlags;
+  spec: CapabilityLeafSpec;
+};
+
+const composeCapabilityFlags = async ({
+  base,
+  flags,
+  spec,
+}: ComposeCapabilityFlagsOptions) => {
+  const inputFlags = resolveBulkIdFlags(spec, flags);
+  if (Result.isError(inputFlags)) {
+    return { ok: false, message: inputFlags.error } as const;
+  }
+  return await composeInputFromFlags({
+    base,
+    flagPath: (flagSpec) => `${flagSpec.part}.${flagSpec.partPath}`,
+    flagSpecs: spec.flags,
+    flags: inputFlags.value,
+  });
 };
 
 /** Run one capability leaf end to end. Sets `process.exitCode` per spec S4. */
@@ -99,12 +124,7 @@ export const runCapabilityCommand = async ({
     setExit(context, EXIT_CODES.validation);
     return;
   }
-  const built = await composeInputFromFlags({
-    base: inputBase,
-    flagPath: (flagSpec) => `${flagSpec.part}.${flagSpec.partPath}`,
-    flagSpecs: spec.flags,
-    flags,
-  });
+  const built = await composeCapabilityFlags({ base: inputBase, flags, spec });
   if (!built.ok) {
     writers.stderr(`${built.message}\n`);
     setExit(context, EXIT_CODES.validation);
@@ -211,6 +231,21 @@ export const runCapabilityCommand = async ({
       ...(spec.requestTimeoutMs === undefined
         ? {}
         : { requestTimeoutMs: spec.requestTimeoutMs }),
+    });
+    return;
+  }
+
+  const chunks = chunkCapabilityIds(spec, input);
+  if (chunks.length > 1) {
+    await runCapabilityChunks({
+      context,
+      flags,
+      spec,
+      chunks,
+      toolArgs,
+      serverUrl,
+      token,
+      renderCall,
     });
     return;
   }

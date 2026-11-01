@@ -298,3 +298,96 @@ test("a browser cancel that loses to a desktop rejection keeps its reason", asyn
   expect(ui.result.current.isSigning).toBe(false);
   client.clear();
 });
+
+test("revoking authority while handoff creation is pending prevents deep-link launch", async () => {
+  window.location.href = "http://localhost/signing-authority-test";
+  const handoff = Promise.withResolvers<undefined>();
+  const { expiresAt } = stubApi({
+    handoff: handoff.promise,
+    readSession: () => ({
+      closeReason: null,
+      expiresAt,
+      finalizedVersionNumber: 1,
+      status: "finalized",
+    }),
+  });
+  const { client, ui } = mountSign();
+  let current = true;
+  let signing: Promise<void> | undefined;
+
+  await act(async () => {
+    signing = ui.result.current.sign({ authority: () => current, target });
+  });
+  current = false;
+  await act(async () => {
+    handoff.resolve(undefined);
+    await signing;
+  });
+
+  expect(window.location.href).not.toContain("stella://pdf-signing");
+  await waitFor(() => {
+    expect(document.body.textContent).not.toContain(copy.waitingTitle);
+  });
+  client.clear();
+});
+
+test("a handoff failure after authority is revoked closes the toast without a failure notice", async () => {
+  const handoff = Promise.withResolvers<undefined>();
+  fetchBoundary.mockImplementation(
+    Object.assign(
+      async (input: Parameters<typeof fetch>[0]) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.includes("pdf-signing-handoffs")) {
+          await handoff.promise;
+          return new Response(JSON.stringify({ error: "unavailable" }), {
+            headers: { "Content-Type": "application/json" },
+            status: 503,
+          });
+        }
+        return json({});
+      },
+      { preconnect: globalThis.fetch.preconnect },
+    ),
+  );
+  const { client, ui } = mountSign();
+  let current = true;
+  let signing: Promise<void> | undefined;
+
+  await act(async () => {
+    signing = ui.result.current.sign({ authority: () => current, target });
+  });
+  expect(document.body.textContent).toContain(copy.waitingTitle);
+  current = false;
+  await act(async () => {
+    handoff.resolve(undefined);
+    await signing;
+  });
+
+  await waitFor(() => {
+    expect(document.body.textContent).not.toContain(copy.waitingTitle);
+  });
+  expect(document.body.textContent).not.toContain(copy.startFailedTitle);
+  client.clear();
+});
+
+test("retry retained after expiry does nothing once authority is revoked", async () => {
+  const { calls, expiresAt } = stubApi({
+    readSession: () => ({
+      closeReason: null,
+      expiresAt,
+      finalizedVersionNumber: null,
+      status: "expired",
+    }),
+  });
+  const { client, ui } = mountSign();
+  let current = true;
+
+  await act(async () => {
+    await ui.result.current.sign({ authority: () => current, target });
+  });
+  current = false;
+  fireEvent.click(screen.getByRole("button", { name: en.common.retry }));
+
+  expect(calls.handoff).toBe(1);
+  client.clear();
+});

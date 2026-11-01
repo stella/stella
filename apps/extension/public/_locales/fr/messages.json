@@ -75,8 +75,8 @@
   "allowWebsiteAccess": {
     "message": "Autoriser l’accès aux sites"
   },
-  "connectTab": {
-    "message": "Connecter cet onglet stella"
+  "connectStella": {
+    "message": "Connecter stella"
   },
   "adoptTab": {
     "message": "Utiliser cet onglet avec stella"
@@ -97,9 +97,9 @@
     "message": "Vérification de la connexion…"
   },
   "statusConnectedElsewhere": {
-    "message": "Un autre onglet stella est connecté"
+    "message": "stella est connecté à une autre adresse"
   },
-  "connectTabInstead": {
-    "message": "Connecter cet onglet stella à la place"
+  "connectStellaInstead": {
+    "message": "Connecter stella ici à la place"
   }
 }

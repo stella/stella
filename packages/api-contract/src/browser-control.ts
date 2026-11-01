@@ -458,9 +458,27 @@ export type BrowserExtensionResponse = v.InferOutput<
   typeof browserExtensionResponseSchema
 >;
 
-export type BrowserClientCapability = {
-  protocolVersion: typeof BROWSER_CONTROL_PROTOCOL_VERSION;
-};
+export const BROWSER_EXTENSION_STATUS = {
+  checking: "checking",
+  connected: "connected",
+  needsSiteAccess: "needs-site-access",
+  notInstalled: "not-installed",
+  notPaired: "not-paired",
+  /** A computer whose browser cannot run the extension (Safari, Firefox). */
+  unsupportedBrowser: "unsupported-browser",
+  /** A phone or tablet, or a client that is not a browser at all. */
+  unsupportedDevice: "unsupported-device",
+} as const;
+
+export type BrowserExtensionStatus =
+  (typeof BROWSER_EXTENSION_STATUS)[keyof typeof BROWSER_EXTENSION_STATUS];
+
+export type BrowserExtensionCapability = {
+  [Status in BrowserExtensionStatus]: {
+    protocolVersion: number;
+    status: Status;
+  };
+}[BrowserExtensionStatus];
 
 export const isReadOnlyBrowserCommand = (
   command: BrowserControlCommand,
