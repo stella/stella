@@ -100,14 +100,14 @@ test("CSP assertions await violation delivery from the document", async ({
   page,
 }) => {
   const policy = await installContentSecurityPolicyCollector(page);
-  await page.route("**/__csp-collector", (route) =>
-    route.fulfill({
+  await page.route("**/__csp-collector", async (route) => {
+    await route.fulfill({
       contentType: "text/html",
       headers: { "content-security-policy": "script-src 'nonce-collector'" },
       body: '<script nonce="collector">window.collectorReady = true;</script>',
-    }),
-  );
-  await page.goto("/__csp-collector");
+    });
+  });
+  await page.goto("/__csp-collector", { waitUntil: "domcontentloaded" });
   await policy.assertClean();
   await page.evaluate(() => {
     const report = window.__recordContentSecurityPolicyViolation;

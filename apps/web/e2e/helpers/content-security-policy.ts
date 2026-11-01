@@ -139,10 +139,11 @@ export const installContentSecurityPolicyCollector = async (page: Page) => {
       latestDocument = body;
     }
   });
-  const flushViolations = () =>
-    page.evaluate(async () => {
+  const flushViolations = async () => {
+    await page.evaluate(async () => {
       await Promise.all(window.__pendingContentSecurityPolicyViolations);
     });
+  };
   return {
     assertClean: async () => {
       const html = await latestDocument;
