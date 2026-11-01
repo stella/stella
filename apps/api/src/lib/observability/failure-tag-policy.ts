@@ -349,6 +349,7 @@ export const TAGGED_FAILURE_REASON = {
   PropertyTestConfigError: "tagged_failure",
   ProviderEventReplayError: "tagged_failure",
   ProvisionBackfillUnitError: "tagged_failure",
+  ProvisionWalkIndexNotReadyError: "tagged_failure",
   PublicLawStatementError: "tagged_failure",
   PublicReadAdmissionCoordinationError: "tagged_failure",
   PublicReadCleanupError: "tagged_failure",
