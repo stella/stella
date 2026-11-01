@@ -225,12 +225,13 @@ jobs:
       ui_playground_matrix: ${{ steps.ui-playground-plan.outputs.matrix || '[]' }}
       # The job and result gate consume the same event/depth decision.
       ci_browser_scope_required: ${{ steps.changed-files.outputs.ci_browser_scope_required }}
+      ui_browser_required: ${{ steps.changed-files.outputs.ui_browser_required }}
       ci_browser_required: >-
         ${{ steps.completed-depth.outputs.run_required != 'false'
         && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         && steps.changed-files.outputs.package_checks_required == 'true'
         && steps.changed-files.outputs.ci_browser_scope_required == 'true'
-        && ((github.event_name == 'pull_request' && (steps.changed-files.outputs.desktop_browser_required == 'true' || steps.ui-playground-plan.outputs.specs != '[]'))
+        && ((github.event_name == 'pull_request' && (steps.changed-files.outputs.ui_browser_required == 'true' || steps.changed-files.outputs.desktop_browser_required == 'true' || steps.ui-playground-plan.outputs.specs != '[]'))
         || (github.event_name != 'pull_request'
         && steps.depth.outputs.suite_depth == 'full')
         || (github.event_name == 'merge_group'
@@ -1011,6 +1012,7 @@ jobs:
           SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
           EVENT_NAME: ${{ github.event_name }}
           DESKTOP_REQUIRED: ${{ steps.changed-files.outputs.desktop_browser_required }}
+          UI_REQUIRED: ${{ steps.changed-files.outputs.ui_browser_required }}
         run: |
           if [[ "$SCOPE_UNKNOWN" == "true" ]]; then
             echo "::warning::Changed files are unknown; running every geometry spec."
@@ -1024,7 +1026,7 @@ jobs:
           fi
           echo "specs=$specs" >> "$GITHUB_OUTPUT"
           all_specs=$(find apps/web/e2e/ui-playground -maxdepth 1 -name '*.geometry.spec.ts' -print | sort | jq -Rsc 'split("\n") | map(select(length > 0))')
-          matrix=$(UI_PLAYGROUND_SELECTED_SPECS="$specs" UI_PLAYGROUND_ALL_SPECS="$all_specs" bun scripts/ui-playground-shards.ts)
+          matrix=$(UI_PLAYGROUND_SELECTED_SPECS="$specs" UI_PLAYGROUND_ALL_SPECS="$all_specs" UI_REQUIRED="$UI_REQUIRED" bun scripts/ui-playground-shards.ts)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
       - name: Plan query performance scope
@@ -3416,10 +3418,11 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
+          UI_REQUIRED: ${{ needs.ci-plan.outputs.ui_browser_required }}
           SELECTED_SPECS: ${{ needs.ci-plan.outputs.ui_playground_specs }}
         run: |
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            [[ "$SELECTED_SPECS" != '[]' ]] && echo "required=true" >> "$GITHUB_OUTPUT" || echo "required=false" >> "$GITHUB_OUTPUT"
+            [[ "$UI_REQUIRED" == true || "$SELECTED_SPECS" != '[]' ]] && echo "required=true" >> "$GITHUB_OUTPUT" || echo "required=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "${HEAVY_ONLY:-false}" == true ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
@@ -3553,8 +3556,7 @@ jobs:
           dependency-mode: preinstalled
 
       - name: Test UI browser interactions
-        # On a pull request the UI leg runs only the selected playground specs.
-        if: matrix.suite == 'ui' && github.event_name != 'pull_request' && steps.ui-browser-tests.outputs.required == 'true'
+        if: matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-browser-interactions.json
         run: bun --filter @stll/ui test:browser
