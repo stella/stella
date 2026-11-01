@@ -1,5 +1,6 @@
 import { EventType } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
+import { Result } from "better-result";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 
 import type { TanStackAIProvider } from "@stll/ai-catalog";
@@ -263,99 +264,141 @@ describe("a request that got no response is retried by the generation layer", ()
   });
 });
 
+const CHECKPOINT_TOKEN = "Y2hlY2twb2ludA==";
+
 /** A Google answer that stops at a checkpoint, as a long one does. */
 const continuedAnswer = (text: string): string =>
   text.replace(
     '"finishReason":"STOP"',
-    '"finishReason":"CONTINUATION","continuationToken":"Y2hlY2twb2ludA=="',
+    () =>
+      `"finishReason":"CONTINUATION","continuationToken":"${CHECKPOINT_TOKEN}"`,
   );
+
+/**
+ * Google's streamed answer stopping at a checkpoint, then the answer a
+ * continuation would get: it carries no token, so a client that continued
+ * sends exactly one more request and stops, and the count shows it.
+ */
+const streamedCheckpointThenRest = (): ProviderWireCassette => {
+  const text = cassetteFor(cassettes, "google", "text");
+  const [exchange] = text.exchanges;
+  if (exchange?.response.body.encoding !== "text") {
+    throw new Error("The Google text cassette has a text answer");
+  }
+  const continued = continuedAnswer(exchange.response.body.text);
+  expect(continued).not.toBe(exchange.response.body.text);
+  const { repeat: _repeat, ...rest } = exchange;
+  return {
+    ...text,
+    exchanges: [
+      {
+        ...rest,
+        response: {
+          ...exchange.response,
+          body: { encoding: "text", text: continued },
+        },
+      },
+      rest,
+    ],
+  };
+};
+
+/** The same for the unary API a structured request uses. */
+const unaryCheckpointThenRest = (model: string) => {
+  const answer = (candidate: Record<string, unknown>) => ({
+    request: {
+      method: "POST" as const,
+      path: `/v1beta/models/${model}:generateContent`,
+    },
+    response: {
+      status: 200,
+      headers: { "content-type": "application/json" },
+      body: {
+        encoding: "text" as const,
+        text: JSON.stringify({
+          candidates: [
+            {
+              content: { parts: [{ text: "{}" }], role: "model" },
+              index: 0,
+              ...candidate,
+            },
+          ],
+        }),
+      },
+    },
+  });
+  return {
+    model,
+    exchanges: [
+      answer({
+        finishReason: "CONTINUATION",
+        continuationToken: CHECKPOINT_TOKEN,
+      }),
+      answer({ finishReason: "STOP" }),
+    ],
+  };
+};
+
+const googleAdapter = (model: string) =>
+  createTanStackTextAdapterFactory({
+    apiKey: "cassette-replay-no-credentials",
+    dataClass: "public_corpus",
+    provider: "google",
+  })(model);
+
+const fixtureChatOptions = (model: string) => ({
+  logger: resolveDebugOption(false),
+  messages: [{ role: "user" as const, content: "Fixture" }],
+  model,
+});
+
+const drain = async (stream: AsyncIterable<unknown> | undefined) => {
+  if (stream === undefined) {
+    throw new Error("The Google adapter streams structured output");
+  }
+  for await (const _chunk of stream) {
+    // The run ends at the checkpoint.
+  }
+};
 
 describe("Google answers that stop at a continuation checkpoint are not continued", () => {
   test("a streamed run sends its request once", async () => {
-    const text = cassetteFor(cassettes, "google", "text");
-    const [exchange] = text.exchanges;
-    if (exchange?.response.body.encoding !== "text") {
-      throw new Error("The Google text cassette has a text answer");
-    }
-    const continued = continuedAnswer(exchange.response.body.text);
-    expect(continued).not.toBe(exchange.response.body.text);
-    const cassette: ProviderWireCassette = {
-      ...text,
-      exchanges: [
-        {
-          ...exchange,
-          response: {
-            ...exchange.response,
-            body: { encoding: "text", text: continued },
-          },
-          // A continuation hop would be answered, and counted.
-          repeat: true,
-        },
-      ],
-    };
+    const cassette = streamedCheckpointThenRest();
     const served = replay();
     served.serve(cassette);
-    const model = cassette.model;
-    const adapter = createTanStackTextAdapterFactory({
-      apiKey: "cassette-replay-no-credentials",
-      dataClass: "public_corpus",
-      provider: "google",
-    })(model);
-    for await (const _chunk of adapter.chatStream({
-      logger: resolveDebugOption(false),
-      messages: [{ role: "user", content: "Fixture" }],
-      model,
-    })) {
-      // The run ends at the checkpoint.
-    }
+    const adapter = googleAdapter(cassette.model);
+    await drain(adapter.chatStream(fixtureChatOptions(cassette.model)));
+    expect(served.requests()).toHaveLength(1);
+    served.takeFindings();
+  });
+
+  test("a streamed structured request sends its request once", async () => {
+    const cassette = streamedCheckpointThenRest();
+    const served = replay();
+    served.serve(cassette);
+    const adapter = googleAdapter(cassette.model);
+    await Result.tryPromise({
+      try: async () =>
+        await drain(
+          adapter.structuredOutputStream?.({
+            chatOptions: fixtureChatOptions(cassette.model),
+            outputSchema: { type: "object", properties: {} },
+          }),
+        ),
+      // The text answer is not the object the schema asks for; only the
+      // request count is read here.
+      catch: (error: unknown) => error,
+    });
     expect(served.requests()).toHaveLength(1);
     served.takeFindings();
   });
 
   test("a structured request sends its request once", async () => {
-    const text = cassetteFor(cassettes, "google", "text");
-    const model = text.model;
+    const model = cassetteFor(cassettes, "google", "text").model;
     const served = replay();
-    served.serve({
-      model,
-      exchanges: [
-        {
-          request: {
-            method: "POST",
-            path: `/v1beta/models/${model}:generateContent`,
-          },
-          response: {
-            status: 200,
-            headers: { "content-type": "application/json" },
-            body: {
-              encoding: "text",
-              text: JSON.stringify({
-                candidates: [
-                  {
-                    content: { parts: [{ text: "{}" }], role: "model" },
-                    finishReason: "CONTINUATION",
-                    continuationToken: "Y2hlY2twb2ludA==",
-                    index: 0,
-                  },
-                ],
-              }),
-            },
-          },
-          repeat: true,
-        },
-      ],
-    });
-    const adapter = createTanStackTextAdapterFactory({
-      apiKey: "cassette-replay-no-credentials",
-      dataClass: "public_corpus",
-      provider: "google",
-    })(model);
-    await adapter.structuredOutput({
-      chatOptions: {
-        logger: resolveDebugOption(false),
-        messages: [{ role: "user", content: "Fixture" }],
-        model,
-      },
+    served.serve(unaryCheckpointThenRest(model));
+    await googleAdapter(model).structuredOutput({
+      chatOptions: fixtureChatOptions(model),
       outputSchema: { type: "object", properties: {} },
     });
     expect(served.requests()).toHaveLength(1);
