@@ -154,6 +154,7 @@ export const DOC_SOURCES = {
       "expo-dev-client",
       "expo-document-picker",
       "expo-doctor",
+      "expo-file-system",
       "expo-font",
       "expo-glass-effect",
       "expo-notifications",

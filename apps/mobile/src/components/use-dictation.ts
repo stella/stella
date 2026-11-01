@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 
+import { Result } from "better-result";
 import {
   AudioQuality,
   IOSOutputFormat,
@@ -9,6 +10,7 @@ import {
   useAudioRecorderState,
 } from "expo-audio";
 import type { RecordingOptions, RecordingStatus } from "expo-audio";
+import { File } from "expo-file-system";
 
 import { useSession } from "@/connection/session-provider";
 import { DICTATION_MAX_SECONDS, transcribeRecording } from "@/state/dictation";
@@ -39,12 +41,32 @@ export type DictationPhase = "idle" | "recording" | "transcribing";
 /** Why a dictation gave no text. */
 export type DictationNotice = "denied" | "failed" | "silent";
 
+/** Gives the microphone back, so other apps' audio resumes. */
+const releaseMicrophone = async () => {
+  await setAudioModeAsync({ allowsRecording: false });
+};
+
+/**
+ * Removes a recording once nothing reads it any more: the audio of a
+ * dictation stays on the phone only while it is being transcribed. Whether
+ * it is gone.
+ */
+const discardRecording = (uri: string): boolean =>
+  Result.try(() => {
+    const file = new File(uri);
+    if (file.exists) {
+      file.delete();
+    }
+  }).isOk();
+
 /**
  * The composer's microphone. `start` asks for the microphone the first
  * time, then records; `finish` stops and sends the recording to be
  * transcribed, and the text goes to `onText`; `cancel` drops it. A
  * recording that reaches the transcription's limit of a minute stops by
- * itself and is transcribed like a finished one.
+ * itself and is transcribed like a finished one. Every way a dictation
+ * ends gives the microphone back and deletes the recording, and a failure
+ * on the way shows as the `failed` notice.
  */
 export const useDictation = (onText: (text: string) => void) => {
   const { state } = useSession();
@@ -53,10 +75,12 @@ export const useDictation = (onText: (text: string) => void) => {
   // What a stop means, read when the recorder reports it: a recording that
   // stops by itself at the limit is kept.
   const keep = useRef(true);
+  // Set before the first await of `start`, so a second tap while the
+  // permission prompt or the recorder is still opening is ignored.
+  const starting = useRef(false);
 
   const transcribe = async (uri: string) => {
     if (state.status !== "signed-in") {
-      setPhase("idle");
       return;
     }
     setPhase("transcribing");
@@ -65,7 +89,6 @@ export const useDictation = (onText: (text: string) => void) => {
       source: state.source,
       uri,
     });
-    setPhase("idle");
     if (result.isErr()) {
       setNotice("failed");
       return;
@@ -77,25 +100,37 @@ export const useDictation = (onText: (text: string) => void) => {
     onText(result.value);
   };
 
+  const settle = async (status: RecordingStatus) => {
+    const released = await Result.tryPromise(releaseMicrophone);
+    const usable = !status.hasError && released.isOk();
+    if (!usable) {
+      setNotice("failed");
+    }
+    const { url } = status;
+    if (url === null) {
+      return;
+    }
+    const transcribed =
+      usable && keep.current
+        ? await Result.tryPromise(async () => await transcribe(url))
+        : Result.ok();
+    // The upload reads the file, so it is deleted only once it has settled.
+    if (!discardRecording(url) || transcribed.isErr()) {
+      setNotice("failed");
+    }
+  };
+
   const onStatus = (status: RecordingStatus) => {
     if (!status.isFinished) {
       return;
     }
-    // Hand the microphone back, so other apps' audio resumes.
-    setAudioModeAsync({ allowsRecording: false }).catch(() => undefined);
-    if (status.hasError || status.url === null) {
-      setPhase("idle");
-      setNotice(status.hasError ? "failed" : undefined);
-      return;
-    }
-    if (!keep.current) {
-      setPhase("idle");
-      return;
-    }
-    transcribe(status.url).catch(() => {
-      setPhase("idle");
-      setNotice("failed");
-    });
+    settle(status)
+      .catch(() => {
+        setNotice("failed");
+      })
+      .finally(() => {
+        setPhase("idle");
+      });
   };
 
   const recorder = useAudioRecorder(DICTATION_RECORDING, onStatus);
@@ -109,7 +144,15 @@ export const useDictation = (onText: (text: string) => void) => {
       return;
     }
     await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-    await recorder.prepareToRecordAsync();
+    const prepared = await Result.tryPromise(
+      async () => await recorder.prepareToRecordAsync(),
+    );
+    if (prepared.isErr()) {
+      // No recording started, so no finished status will release it.
+      setNotice("failed");
+      await releaseMicrophone();
+      return;
+    }
     keep.current = true;
     recorder.record({ forDuration: DICTATION_MAX_SECONDS });
     setPhase("recording");
@@ -125,10 +168,18 @@ export const useDictation = (onText: (text: string) => void) => {
     notice,
     elapsedMs: phase === "recording" ? durationMillis : 0,
     start: () => {
-      start().catch(() => {
-        setPhase("idle");
-        setNotice("failed");
-      });
+      if (starting.current || phase !== "idle") {
+        return;
+      }
+      starting.current = true;
+      start()
+        .catch(() => {
+          setPhase("idle");
+          setNotice("failed");
+        })
+        .finally(() => {
+          starting.current = false;
+        });
     },
     finish: () => {
       stop(true).catch(() => {
@@ -139,7 +190,12 @@ export const useDictation = (onText: (text: string) => void) => {
     cancel: () => {
       stop(false).catch(() => {
         setPhase("idle");
+        setNotice("failed");
       });
+    },
+    /** Forgets the last dictation's notice, as a sent message does. */
+    dismissNotice: () => {
+      setNotice(undefined);
     },
   };
 };

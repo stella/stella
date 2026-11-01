@@ -92,6 +92,9 @@ export const ChatComposer = ({
     if (!canSend) {
       return;
     }
+    // A refusal of this send is what the composer shows next, not an older
+    // dictation's failure.
+    dictation.dismissNotice();
     const taken = files.attachments;
     const accepted = onSend({ text: message, files: readyFiles(taken) }, () => {
       // Handed back only into an empty box, so nothing typed or attached
