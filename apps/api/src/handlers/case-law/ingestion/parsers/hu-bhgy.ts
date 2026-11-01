@@ -1184,6 +1184,11 @@ export const parseHuBhgyDecision = (
   /** The header label the lines below a labelled one still belong to. */
   let continuedRole: ParagraphRole | null = null;
   let region: Region = "front";
+  /**
+   * Read through a call: the line handlers move `region`, and a direct
+   * comparison after them would still see the value narrowed before them.
+   */
+  const inFrontMatter = (): boolean => region === "front";
   let decisionDate: string | undefined;
   let dateBeforeSignature: string | undefined;
   /**
@@ -1432,7 +1437,7 @@ export const parseHuBhgyDecision = (
       continue;
     }
     lineTexts.push(plainText);
-    if (region === "front") {
+    if (inFrontMatter()) {
       for (const row of item.table.rows) {
         const labelled = huBhgyHeaderLabelIn(
           row.map(({ value }) => value.text).join("\t"),
