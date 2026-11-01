@@ -1,0 +1,300 @@
+{
+  "apps/api/scripts/seed-dev.ts::names-contacts-table": {
+    "reason": "Development seed: every contacts statement runs inside `organizationTransaction`, which is `withOwnerOrganizationScope` for the seed organization.",
+    "sites": {
+      "seed.clearSeedData": 1,
+      "seed.seedContacts": 2
+    }
+  },
+  "apps/api/src/db/auth-schema.ts::names-contacts-table": {
+    "reason": "Names the OAuth client's `contacts` column, not the contacts table.",
+    "sites": {
+      "oauthClient.contacts": 1
+    }
+  },
+  "apps/api/src/db/contact-vat-id-repair.ts::names-contacts-table": {
+    "reason": "Online repair of a committed migration on the migration session: every contacts statement follows a `set_config` naming one organization, page by page; covered by contacts-rls-maintenance.postgres.test.ts.",
+    "sites": {
+      "TABLE_NAME": 1
+    }
+  },
+  "apps/api/src/db/import-provenance-columns.ts::names-contacts-table": {
+    "reason": "Migration-time DDL catalog: names the table for a constraint or index the online migration phase validates; it reads and writes no contact row.",
+    "sites": {
+      "IMPORT_PROVENANCE_TABLES": 1
+    }
+  },
+  "apps/api/src/db/invoice-language-constraint-validation.ts::names-contacts-table": {
+    "reason": "Migration-time DDL catalog: names the table for a constraint or index the online migration phase validates; it reads and writes no contact row.",
+    "sites": {
+      "INVOICE_LANGUAGE_CONSTRAINTS.tableName": 1
+    }
+  },
+  "apps/api/src/db/online-unique-indexes.ts::names-contacts-table": {
+    "reason": "Migration-time DDL catalog: names the table for a constraint or index the online migration phase validates; it reads and writes no contact row.",
+    "sites": {
+      "EXECUTABLE_ONLINE_UNIQUE_INDEXES.tableName": 1,
+      "IMPORT_PROVENANCE_UNIQUE_INDEXES.tableName": 1
+    }
+  },
+  "apps/api/src/db/sanctions-monitoring-constraint-validation.ts::names-contacts-table": {
+    "reason": "Migration-time DDL catalog: names the table for a constraint or index the online migration phase validates; it reads and writes no contact row.",
+    "sites": {
+      "SANCTIONS_MONITORING_CONSTRAINTS.tableName": 1
+    }
+  },
+  "apps/api/src/handlers/audit-logs/resource-resolvers.ts::names-contacts-table": {
+    "reason": "Audit log page resolver: runs in the `safeDb` transaction of `queryAuditLogPage` (HTTP and MCP), scoped to the reader's organization.",
+    "sites": {
+      "resolveContact": 1
+    }
+  },
+  "apps/api/src/handlers/client-invoices/prefill.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "prefillClientInvoice.result.client": 1
+    }
+  },
+  "apps/api/src/handlers/contacts/create.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "checkContactsCountLimit": 1,
+      "createContactHandler.outcome.existing.table": 1,
+      "insertContactRow": 1
+    }
+  },
+  "apps/api/src/handlers/contacts/delete.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only. The review reset calls it with the review organization's `safeDb`.",
+    "sites": {
+      "deleteContactHandler.txResult": 1,
+      "deleteContactHandler.txResult.contact": 1
+    }
+  },
+  "apps/api/src/handlers/contacts/export.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "exportContacts.exportResult.contactsToExport": 1
+    }
+  },
+  "apps/api/src/handlers/contacts/get.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "readContactById.reads.contact": 1
+    }
+  },
+  "apps/api/src/handlers/contacts/import-contacts.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "planImportWrites.countRow": 1,
+      "planImportWrites.existingIdByRef.table": 1,
+      "planImportWrites.existingIds": 1,
+      "planImportWrites.existingTaxIds": 1
+    }
+  },
+  "apps/api/src/handlers/contacts/list-query.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "selectContactListRows": 1
+    }
+  },
+  "apps/api/src/handlers/contacts/search.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "searchContacts.items": 1
+    }
+  },
+  "apps/api/src/handlers/contacts/update.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "contactRateUpdates.beyondRange": 1,
+      "lockExistingContact.rows": 1,
+      "updateContactHandler.outcome.rows": 1
+    }
+  },
+  "apps/api/src/handlers/desktop-time-entries/candidates.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "createDesktopMatterCandidatesEndpoint.page": 1
+    }
+  },
+  "apps/api/src/handlers/dev/routes.ts::names-contacts-table": {
+    "reason": "Local development route: cleans the session organization through its `scopedDb`, scoped to that organization.",
+    "sites": {
+      "cleanOrganization": 1
+    }
+  },
+  "apps/api/src/handlers/workspaces/contacts/create.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "createWorkspaceContactHandler.txResult.contact": 1
+    }
+  },
+  "apps/api/src/handlers/workspaces/read-navigation.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "readWorkspaceNavigation.rows": 1
+    }
+  },
+  "apps/api/src/handlers/workspaces/read-overview-activity.query.ts::names-contacts-table": {
+    "reason": "Matter overview query fragment: joins contacts inside the matter read's organization-scoped application transaction.",
+    "sites": {
+      "createActivityExpressions.teamContactNameSnapshot": 1
+    }
+  },
+  "apps/api/src/handlers/workspaces/update.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "updateWorkspaceHandler.txResult.client": 1
+    }
+  },
+  "apps/api/src/lib/account-deletion-steps.ts::names-contacts-table": {
+    "reason": "Coverage declaration: lists the tables account deletion clears; the contacts attorney references are cleared by member-assignment-offboarding inside `withOwnerOrganizationScope`, one membership organization at a time.",
+    "sites": {
+      "REASSIGN_ACTIVE_TASKS_TABLES": 1
+    }
+  },
+  "apps/api/src/lib/account-export/user-owned-tables.gen.ts::names-contacts-table": {
+    "reason": "Generated list of user-owned tables; the account export registry exempts contacts as organization data, so no export reads them.",
+    "sites": {
+      "USER_OWNED_TABLE_NAMES": 1
+    }
+  },
+  "apps/api/src/lib/billing/invoice-prefill.ts::names-contacts-table": {
+    "reason": "Invoice prefill reader: runs in the invoice and client-invoice handlers' organization-scoped `safeDb` transactions.",
+    "sites": {
+      "readInvoicePrefillContext.matters": 1
+    }
+  },
+  "apps/api/src/lib/db/aggregate-lock.ts::names-contacts-table": {
+    "reason": "Matter creation client lock: its only caller, matter creation, holds the request's organization-scoped `safeDb` transaction.",
+    "sites": {
+      "lockMatterCreationClient": 1
+    }
+  },
+  "apps/api/src/lib/imports/upsert-by-external-id.ts::names-contacts-table": {
+    "reason": "Contact import writer: runs in the contact import handler's organization-scoped `safeDb` transaction.",
+    "sites": {
+      "writeImportedContacts.conflict": 1,
+      "writeImportedContacts.inserted": 1,
+      "writeImportedContacts.upserted": 1
+    }
+  },
+  "apps/api/src/lib/lists/sanctions/monitoring-backfill.ts::names-contacts-table": {
+    "reason": "Sanctions monitoring: handlers pass their organization-scoped `safeDb`; the scheduler tasks run each tenant through `createRootOrganizationBackgroundDb`, the application role scoped to that organization.",
+    "sites": {
+      "advanceSanctionsMonitoringBackfill.claim.page": 1
+    }
+  },
+  "apps/api/src/lib/lists/sanctions/monitoring-diff.ts::names-contacts-table": {
+    "reason": "Sanctions monitoring: handlers pass their organization-scoped `safeDb`; the scheduler tasks run each tenant through `createRootOrganizationBackgroundDb`, the application role scoped to that organization.",
+    "sites": {
+      "commitSanctionsMonitoringBatch.persistItems.contactRows": 1
+    }
+  },
+  "apps/api/src/lib/lists/sanctions/monitoring-drain.ts::names-contacts-table": {
+    "reason": "Sanctions monitoring: handlers pass their organization-scoped `safeDb`; the scheduler tasks run each tenant through `createRootOrganizationBackgroundDb`, the application role scoped to that organization.",
+    "sites": {
+      "processSanctionsContactMarks.contactRows": 1,
+      "recordFailedDrain": 1
+    }
+  },
+  "apps/api/src/lib/lists/sanctions/monitoring-opt-out.ts::names-contacts-table": {
+    "reason": "Sanctions monitoring: handlers pass their organization-scoped `safeDb`; the scheduler tasks run each tenant through `createRootOrganizationBackgroundDb`, the application role scoped to that organization.",
+    "sites": {
+      "excludeSanctionsContact.contact": 1,
+      "includeSanctionsContact": 1,
+      "includeSanctionsContact.contact": 1
+    }
+  },
+  "apps/api/src/lib/lists/sanctions/monitoring-read.ts::names-contacts-table": {
+    "reason": "Sanctions monitoring: handlers pass their organization-scoped `safeDb`; the scheduler tasks run each tenant through `createRootOrganizationBackgroundDb`, the application role scoped to that organization.",
+    "sites": {
+      "listOpenSanctionsMatches.rows": 1,
+      "listSanctionsMonitoringEvents.rows": 1,
+      "readContactSanctions.contact": 1
+    }
+  },
+  "apps/api/src/lib/lists/sanctions/monitoring-refresh.ts::names-contacts-table": {
+    "reason": "Names the contacts refresh kind for the monitoring queue, not a statement.",
+    "sites": {
+      "prepareSanctionsMonitoringRefresh.type": 1
+    }
+  },
+  "apps/api/src/lib/lists/sanctions/monitoring-review.ts::names-contacts-table": {
+    "reason": "Sanctions monitoring: handlers pass their organization-scoped `safeDb`; the scheduler tasks run each tenant through `createRootOrganizationBackgroundDb`, the application role scoped to that organization.",
+    "sites": {
+      "reviewSanctionsMatch.contact": 1
+    }
+  },
+  "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts::names-contacts-table": {
+    "reason": "Transition declaration: names the table for `transitionBatch`, which runs inside the caller's organization-scoped sanctions transaction.",
+    "sites": {
+      "SANCTIONS_MONITORING_TRANSITION_IDENTITIES.CONTACT_MONITORING_TRANSITIONS.tableName": 1
+    }
+  },
+  "apps/api/src/lib/lists/sanctions/monitoring-transition-specs.ts::names-contacts-table": {
+    "reason": "Transition declaration: names the table for `transitionBatch`, which runs inside the caller's organization-scoped sanctions transaction.",
+    "sites": {
+      "tables": 1
+    }
+  },
+  "apps/api/src/lib/member-assignment-offboarding.ts::names-contacts-table": {
+    "reason": "Attorney reference cleanup: `clearMemberContactAssignments` runs only inside `withOwnerOrganizationScope`, which `clearContactAssignmentsByOrganization` opens per organization.",
+    "sites": {
+      "clearMemberContactAssignments": 1,
+      "clearMemberContactAssignments.contactResult.try": 1,
+      "clearMemberContactAssignments.rowCount": 1
+    }
+  },
+  "apps/api/src/lib/resource-authorization.ts::names-contacts-table": {
+    "reason": "Names the contacts domain policy as the owner of contact authorization, not a statement.",
+    "sites": {
+      "RESOURCE_AUTHORIZATION_DISPOSITION.owner": 1
+    }
+  },
+  "apps/api/src/lib/review-organization/reset-scope.ts::names-contacts-table": {
+    "reason": "Review reset sweep: deletes the table by name; `sweepReviewOrganization` sends every table whose owner policy names the organization through `withOwnerOrganizationScope`.",
+    "sites": {
+      "REVIEW_RESET_CLEARED_TABLES": 1
+    }
+  },
+  "apps/api/src/lib/review-organization/reset.ts::names-contacts-table": {
+    "reason": "Labels the contacts deletion step; the enumeration runs in `withOwnerOrganizationScope` and each deletion through the delete handler's `safeDb`.",
+    "sites": {
+      "deleteContacts": 1
+    }
+  },
+  "apps/api/src/lib/review-organization/seed.ts::names-contacts-table": {
+    "reason": "Review organization seed: writes contacts through the review organization's `safeDb`.",
+    "sites": {
+      "seedContacts": 1,
+      "seedContacts.existing": 1
+    }
+  },
+  "apps/api/src/lib/search/index-global.ts::names-contacts-table": {
+    "reason": "Projection writers take the handle their caller scoped: contact handlers pass their `safeDb` transaction, and the projection repair drain and the supplemental rebuild wrap them in `withOwnerOrganizationScope`.",
+    "sites": {
+      "rebuildContactPage.page": 1,
+      "reindexWorkspacesForContact.contact": 1,
+      "writeContactProjections.sources": 1
+    }
+  },
+  "apps/api/src/lib/search/projection-repair-queue.ts::names-contacts-table": {
+    "reason": "Enqueues repairs inside the caller's organization-scoped transaction: contact handlers' `safeDb` transactions and the offboarding owner scope.",
+    "sites": {
+      "enqueueContactSearchRepairs": 1
+    }
+  },
+  "apps/api/src/mcp/matter-tools.ts::names-contacts-table": {
+    "reason": "MCP tool: reads contacts through the caller's organization-scoped application handle, whose row policies admit the credential's organization only.",
+    "sites": {
+      "handleSaveMatterTool.client": 1
+    }
+  },
+  "apps/api/src/mcp/stella-tools.ts::names-contacts-table": {
+    "reason": "MCP tool: reads contacts through the caller's organization-scoped application handle, whose row policies admit the credential's organization only.",
+    "sites": {
+      "handleReadContactTool.contact": 1
+    }
+  }
+}
