@@ -127,9 +127,11 @@ const openLinkedInvoice = async (
   }
   const eInvoice = await buildEInvoice(linked);
   const { invoice } = document;
-  const paid = invoice.status === INVOICE_STATUS.PAID;
+  const settled = invoice.status === INVOICE_STATUS.PAID;
+  // A settled invoice was either paid or credited in full; the page says which.
+  const paid = settled && !linked.fullyCredited;
   const payable =
-    paid ||
+    settled ||
     !requestsPayment({
       documentType: invoice.documentType,
       amountMinor: linked.amountDue,
@@ -148,7 +150,7 @@ const openLinkedInvoice = async (
       title: data.value.title,
       paid,
       // Credited in full rather than paid: the page states there is nothing due.
-      credited: !paid && linked.fullyCredited,
+      credited: linked.fullyCredited,
       outstandingAmount: amountDueCents(linked.amountDue),
       seller: data.value.seller?.name ?? null,
       buyer: data.value.buyer.name,

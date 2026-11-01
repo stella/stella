@@ -2836,6 +2836,7 @@ export const lockOriginalInvoice = async (
       documentType: invoices.documentType,
       currency: invoices.currency,
       totalAmount: invoices.totalAmount,
+      sentAt: invoices.sentAt,
     })
     .from(invoices)
     .where(

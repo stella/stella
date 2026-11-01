@@ -36,6 +36,7 @@ import {
 } from "@/api/lib/billing/invoice-lines";
 import {
   hasActiveInvoicePayments,
+  settleCreditedInvoice,
   settleSentInvoice,
 } from "@/api/lib/billing/invoice-payments";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
@@ -651,6 +652,30 @@ type ApplyTransitionOptions = {
   workspaceId: SafeId<"workspace">;
 };
 
+/**
+ * Issuing a credit note, or taking it back, changes what is still due on its
+ * original, so the original's settled status is decided again.
+ */
+const settleOriginalOfCredit = async (
+  tx: Transaction,
+  credit: { documentType: string; originalInvoiceId: SafeId<"invoice"> | null },
+  options: ApplyTransitionOptions,
+): Promise<Result<unknown, HandlerError>> =>
+  credit.documentType !== "credit_note" ||
+  credit.originalInvoiceId === null ||
+  options.action === "send"
+    ? Result.ok(null)
+    : await settleCreditedInvoice(tx, {
+        scope: {
+          invoiceId: credit.originalInvoiceId,
+          now: options.now,
+          recordAuditEvent: options.recordAuditEvent,
+          organizationId: options.organizationId,
+          userId: options.actorUserId,
+        },
+        workspaceId: options.workspaceId,
+      });
+
 const applyTransition = async (
   tx: Transaction,
   options: ApplyTransitionOptions,
@@ -831,6 +856,10 @@ const applyTransition = async (
     );
   }
   const row = updated.row;
+  const original = await settleOriginalOfCredit(tx, existing, options);
+  if (original.isErr()) {
+    return Result.err(original.error);
+  }
   if (options.action === "send") {
     return (
       await settleSentInvoice(tx, {

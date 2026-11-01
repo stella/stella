@@ -18,7 +18,10 @@ import type { InvoiceStatus } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
+import {
+  lockInvoiceInStatus,
+  lockOriginalInvoice,
+} from "@/api/lib/db/aggregate-lock";
 import { outerColumnReference } from "@/api/lib/db/outer-column-reference";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
@@ -30,14 +33,16 @@ import type { CentsAmount } from "@/api/lib/money";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 
 /**
- * The owner of invoice payments: every payment write, and the rule that an
- * invoice is paid exactly when its non-voided payments reach its total.
+ * The owner of invoice payments: every payment write, the amount still due,
+ * and the rule that an invoice is paid (settled) exactly when its non-voided
+ * payments and its issued credit notes together reach its total.
  *
  * Payments are recorded on an issued invoice, finalized or sent: firms often
  * send invoices outside stella. Reaching the total marks it paid from either;
- * voiding a payment that takes a paid invoice back below its total returns it
- * to sent when it was ever marked sent (`invoices.sentAt`), else to finalized.
- * A draft has no issued total, and a void invoice is no longer owed.
+ * voiding a payment or a credit note that takes a paid invoice back below its
+ * total returns it to sent when it was ever marked sent (`invoices.sentAt`),
+ * else to finalized. A draft has no issued total, and a void invoice is no
+ * longer owed.
  *
  * Every write takes the invoice aggregate lock (`lockInvoiceInStatus`) before
  * it reads the paid sum, so two concurrent payments are serialized and the
@@ -352,11 +357,12 @@ type LockedInvoice = {
 };
 
 /**
- * The status an invoice's paid sum decides, from the status it holds: paid
- * once payments cover what issued credit notes leave of it, and back to the
- * issued status it had (sent if it was ever marked sent, else finalized) once
- * no longer covered. Credit alone never marks an invoice paid: a fully
- * credited invoice without payments keeps its issued status, with nothing due.
+ * The status an invoice's settlement decides, from the status it holds: paid
+ * once recorded payments and issued credit notes together cover it, and back
+ * to the issued status it had (sent if it was ever marked sent, else
+ * finalized) once no longer covered. Paid is the settled state: an invoice
+ * credited in full is settled by its credit notes, so it is paid as well and
+ * never stays issued with nothing due.
  */
 const settledStatus = (
   invoice: LockedInvoice,
@@ -369,10 +375,9 @@ const settledStatus = (
   });
   const settled =
     outstandingAmount === 0 &&
-    (paidAmount > 0 ||
-      (invoice.totalAmount === 0 &&
-        (invoice.status === INVOICE_STATUS.SENT ||
-          invoice.status === INVOICE_STATUS.PAID)));
+    (invoice.totalAmount !== 0 ||
+      invoice.status === INVOICE_STATUS.SENT ||
+      invoice.status === INVOICE_STATUS.PAID);
   const issued =
     invoice.status === INVOICE_STATUS.FINALIZED ||
     invoice.status === INVOICE_STATUS.SENT;
@@ -516,6 +521,44 @@ const settleStatus = async (
           hint: "Reload the invoice and try again.",
         }),
       );
+};
+
+const SETTLEABLE_STATUSES: ReadonlySet<InvoiceStatus> = new Set([
+  INVOICE_STATUS.FINALIZED,
+  INVOICE_STATUS.SENT,
+  INVOICE_STATUS.PAID,
+]);
+
+/**
+ * Re-decides an original invoice's status after one of its credit notes was
+ * issued, voided or reverted to draft, under the original's row lock: the
+ * credit taken off it changed, so it may now be settled or open again.
+ */
+export const settleCreditedInvoice = async (
+  tx: Transaction,
+  {
+    scope,
+    workspaceId,
+  }: {
+    scope: InvoiceSettlementScope;
+    workspaceId: SafeId<"workspace">;
+  },
+): Promise<Result<InvoiceStatus | null, HandlerError>> => {
+  const original = (
+    await lockOriginalInvoice(tx, { invoiceId: scope.invoiceId, workspaceId })
+  ).at(0);
+  if (
+    original === undefined ||
+    original.documentType === "credit_note" ||
+    !SETTLEABLE_STATUSES.has(original.status)
+  ) {
+    return Result.ok(original?.status ?? null);
+  }
+  return await settleStatus(tx, {
+    scope,
+    invoice: original,
+    amounts: await readSettlementAmounts(tx, scope),
+  });
 };
 
 /** Settles a sent invoice under the send transition's existing aggregate lock. */
