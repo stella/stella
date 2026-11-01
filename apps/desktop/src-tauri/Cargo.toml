@@ -168,7 +168,8 @@ plist = "1.10"
 stella-desktop-macos = { path = "crates/macos-park", version = "0.0.1" }
 stella-desktop-macos-signing = { path = "crates/macos-signing", version = "0.0.1" }
 
-[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+# The targets `build.rs` marks with `cfg(dictation)`.
+[target.'cfg(any(all(target_os = "macos", target_arch = "aarch64"), target_os = "windows"))'.dependencies]
 cpal = "0.18"
 transcribe-cpp = "=0.4.1"
 

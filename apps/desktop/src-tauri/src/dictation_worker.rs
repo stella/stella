@@ -91,7 +91,7 @@ fn serve(
   }
 }
 
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#[cfg(dictation)]
 mod engine {
   use std::path::{Path, PathBuf};
 
@@ -116,7 +116,7 @@ mod engine {
 
 /// Serves as the worker when the process was started as one, and returns its
 /// exit code; `None` for an ordinary launch.
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#[cfg(dictation)]
 pub fn run_if_requested(args: &[std::ffi::OsString]) -> Option<i32> {
   if args.get(1).is_none_or(|arg| arg != WORKER_ARG) {
     return None;

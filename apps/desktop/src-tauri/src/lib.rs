@@ -33,11 +33,13 @@ mod device_preference;
 mod device_proof;
 mod diagnostics;
 mod dictation;
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#[cfg(dictation)]
 mod dictation_audio;
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#[cfg(dictation)]
 mod dictation_engine;
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#[cfg(dictation)]
+mod dictation_input;
+#[cfg(dictation)]
 mod dictation_worker;
 #[cfg(test)]
 mod e2e;
@@ -105,12 +107,12 @@ pub fn run_codex_token_helper() -> Option<i32> {
 /// Runs the speech worker when the process was started as one, and returns
 /// its exit code; `None` for an ordinary launch.
 pub fn run_dictation_worker() -> Option<i32> {
-  #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+  #[cfg(dictation)]
   {
     let args = std::env::args_os().collect::<Vec<_>>();
     dictation_worker::run_if_requested(&args)
   }
-  #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+  #[cfg(not(dictation))]
   None
 }
 

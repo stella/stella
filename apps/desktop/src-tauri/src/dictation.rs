@@ -5,8 +5,8 @@
 //! `dictation_engine` owns capture, transcription and insertion on one thread.
 
 #![cfg_attr(
-  not(all(target_os = "macos", target_arch = "aarch64")),
-  allow(dead_code, reason = "only the Apple Silicon engine drives these")
+  not(dictation),
+  allow(dead_code, reason = "only builds with the speech engine drive these")
 )]
 
 use std::{
@@ -36,8 +36,8 @@ const DISABLED_VALUE: &str = "off";
 /// Payload-free: windows read the new state through the snapshot command.
 const CHANGED_EVENT: &str = "dictation-changed";
 
-/// The speech model runs on Metal; other builds offer no dictation yet.
-const SUPPORTED: bool = cfg!(all(target_os = "macos", target_arch = "aarch64"));
+/// Set by the build script for targets the speech engine supports.
+const SUPPORTED: bool = cfg!(dictation);
 
 /// Parakeet Ultra by Moondream (CC BY 4.0), quantized by handy-computer.
 const MODEL_FILE_NAME: &str = "parakeet-ultra-Q8_0.gguf";
@@ -219,9 +219,9 @@ fn on_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
 }
 
 fn start(app: &AppHandle) {
-  #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+  #[cfg(dictation)]
   {
-    stella_desktop_macos::request_accessibility_permission();
+    crate::dictation_input::request_access();
     let sender = crate::dictation_engine::spawn(app.clone());
     change(app, |inner| inner.commands = sender);
   }

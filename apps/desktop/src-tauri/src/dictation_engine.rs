@@ -22,12 +22,15 @@ use tauri::AppHandle;
 use crate::{
   dictation::{self, Command, Failure, Phase},
   dictation_audio::{MODEL_SAMPLE_RATE, holds_speech, resample, to_mono},
+  dictation_input,
   dictation_worker::{self, Response},
 };
 
 /// A warm model answers at once but holds about a gigabyte of memory.
 const WORKER_IDLE: Duration = Duration::from_secs(300);
 const MAX_RECORDING_SECONDS: usize = 600;
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 pub fn spawn(app: AppHandle) -> Option<Sender<Command>> {
   let (sender, receiver) = mpsc::channel();
@@ -81,8 +84,7 @@ fn begin() -> Result<Recorder, Failure> {
   if dictation::installed_model().is_none() {
     return Err(Failure::ModelMissing);
   }
-  if !stella_desktop_macos::accessibility_trusted() {
-    stella_desktop_macos::request_accessibility_permission();
+  if !dictation_input::request_access() {
     return Err(Failure::Accessibility);
   }
   Recorder::start().ok_or(Failure::Microphone)
@@ -106,7 +108,7 @@ fn finish(recorder: Recorder, worker: &mut Option<Worker>) -> Result<(), Failure
     return Ok(());
   }
   // The trailing space lets the next dictation continue the sentence.
-  stella_desktop_macos::type_text(&format!("{text} "))
+  dictation_input::type_text(&format!("{text} "))
     .map_err(|_typing| Failure::Accessibility)
 }
 
@@ -143,12 +145,19 @@ struct Worker {
 
 impl Worker {
   fn start() -> io::Result<Self> {
-    let mut child = Process::new(std::env::current_exe()?)
+    let mut process = Process::new(std::env::current_exe()?);
+    process
       .arg(dictation_worker::WORKER_ARG)
       .stdin(Stdio::piped())
       .stdout(Stdio::piped())
-      .stderr(Stdio::null())
-      .spawn()?;
+      .stderr(Stdio::null());
+    // A console window must not flash up for a background process.
+    #[cfg(target_os = "windows")]
+    std::os::windows::process::CommandExt::creation_flags(
+      &mut process,
+      CREATE_NO_WINDOW,
+    );
+    let mut child = process.spawn()?;
     let stdin = child.stdin.take().ok_or(io::ErrorKind::BrokenPipe)?;
     let stdout = child.stdout.take().ok_or(io::ErrorKind::BrokenPipe)?;
     Ok(Self {

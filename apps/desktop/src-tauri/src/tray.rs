@@ -228,8 +228,8 @@ pub fn refresh(app: &AppHandle, snapshot: &AppSnapshot) {
 
 /// Shows a short mark beside the status icon, or removes it.
 #[cfg_attr(
-  not(all(target_os = "macos", target_arch = "aarch64")),
-  allow(dead_code, reason = "only the Apple Silicon engine drives these")
+  not(dictation),
+  allow(dead_code, reason = "only builds with the speech engine drive these")
 )]
 pub fn set_status_mark(app: &AppHandle, mark: Option<&'static str>) {
   let handle = app.clone();
@@ -249,8 +249,8 @@ pub fn set_status_mark(app: &AppHandle, mark: Option<&'static str>) {
 }
 
 #[cfg_attr(
-  not(all(target_os = "macos", target_arch = "aarch64")),
-  allow(dead_code, reason = "only the Apple Silicon engine drives these")
+  not(dictation),
+  allow(dead_code, reason = "only builds with the speech engine drive these")
 )]
 #[allow(
   clippy::disallowed_methods,
