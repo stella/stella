@@ -60,37 +60,34 @@ describe("revealing the active tab", () => {
   }: {
     tab: Edges | null;
     scrollLeft?: number;
-  }) => {
-    const strip = {
-      scrollLeft,
-      getBoundingClientRect: () => ({ left: 100, right: 300 }),
-      querySelector: () =>
-        tab === null ? null : { getBoundingClientRect: () => tab },
-    };
-    return { strip, list: strip as unknown as Element };
-  };
+  }) => ({
+    scrollLeft,
+    getBoundingClientRect: () => ({ left: 100, right: 300 }),
+    querySelector: () =>
+      tab === null ? null : { getBoundingClientRect: () => tab },
+  });
 
   test("scrolls a tab past the far edge back in", () => {
-    const { strip, list } = stripWith({ tab: { left: 280, right: 350 } });
-    revealActiveTab(list);
+    const strip = stripWith({ tab: { left: 280, right: 350 } });
+    revealActiveTab(strip);
     expect(strip.scrollLeft).toBe(50);
   });
 
   test("scrolls a tab before the near edge back in", () => {
-    const { strip, list } = stripWith({
+    const strip = stripWith({
       scrollLeft: 120,
       tab: { left: 60, right: 130 },
     });
-    revealActiveTab(list);
+    revealActiveTab(strip);
     expect(strip.scrollLeft).toBe(80);
   });
 
   test("moves a right-to-left strip by the same edge distance", () => {
-    const { strip, list } = stripWith({
+    const strip = stripWith({
       scrollLeft: -200,
       tab: { left: 280, right: 350 },
     });
-    revealActiveTab(list);
+    revealActiveTab(strip);
     expect(strip.scrollLeft).toBe(-150);
   });
 
@@ -99,11 +96,11 @@ describe("revealing the active tab", () => {
       scrollLeft: 30,
       tab: { left: 150, right: 220 },
     });
-    revealActiveTab(visible.list);
-    expect(visible.strip.scrollLeft).toBe(30);
+    revealActiveTab(visible);
+    expect(visible.scrollLeft).toBe(30);
 
     const empty = stripWith({ scrollLeft: 30, tab: null });
-    revealActiveTab(empty.list);
-    expect(empty.strip.scrollLeft).toBe(30);
+    revealActiveTab(empty);
+    expect(empty.scrollLeft).toBe(30);
   });
 });

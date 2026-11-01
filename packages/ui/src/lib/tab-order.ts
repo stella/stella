@@ -9,12 +9,22 @@
  * the whole of the workaround, so compare identity rather than count, because
  * React moves the same nodes when it reorders keyed children.
  */
+type TabEdges = { left: number; right: number };
+
+type TabStrip = {
+  scrollLeft: number;
+  getBoundingClientRect: () => TabEdges;
+  querySelector: (selector: string) => {
+    getBoundingClientRect: () => TabEdges;
+  } | null;
+};
+
 /**
  * Brings the active tab back inside a horizontal strip that scrolled it out of
  * view. Moves the strip only, never an ancestor, and works from rendered edges
  * so a right-to-left strip needs no separate case.
  */
-export const revealActiveTab = (list: Element) => {
+export const revealActiveTab = (list: TabStrip) => {
   const active = list.querySelector('[role="tab"][aria-selected="true"]');
   if (active === null) {
     return;
