@@ -107,8 +107,11 @@ export const pairStellaTab = async (
   tabId: number,
 ): Promise<PairStellaTabResult> => {
   const tab = await chrome.tabs.get(tabId).catch(() => null);
-  const origin = tab?.url ? trustedStellaOriginFromUrl(tab.url) : null;
-  if (tab?.id === undefined || origin === null) {
+  if (tab === null) {
+    return { status: "unsupported-tab" };
+  }
+  const origin = tab.url ? trustedStellaOriginFromUrl(tab.url) : null;
+  if (tab.id === undefined || origin === null) {
     return { status: "unsupported-tab" };
   }
 

@@ -62,9 +62,9 @@ const readActiveTab = async (): Promise<PopupTab | null> =>
 const activeTabKind = (tab: PopupTab | null): PopupActiveTab => {
   const url = tab?.url ?? "";
   if (trustedStellaOriginFromUrl(url) !== null) {
-    return tab?.id === undefined
-      ? { kind: "unsupported" }
-      : { kind: "stella", tabId: tab.id };
+    return tab?.id !== undefined
+      ? { kind: "stella", tabId: tab.id }
+      : { kind: "unsupported" };
   }
   if (parseControllableUrl(url) !== null) {
     return { kind: "controllable" };
@@ -128,9 +128,9 @@ const render = (view: PopupView): void => {
 
 const pairActiveTab = async (activeTab: PopupTab | null): Promise<void> => {
   const result =
-    activeTab?.id === undefined
-      ? ({ status: "unsupported-tab" } as const)
-      : await sendPopupRequest({ tabId: activeTab.id, type: "pair" });
+    activeTab?.id !== undefined
+      ? await sendPopupRequest({ tabId: activeTab.id, type: "pair" })
+      : ({ status: "unsupported-tab" } as const);
   if (result.status !== "done") {
     renderFailure(
       result.status === "failed" ? "accessUpdateFailed" : "unsupportedTab",
@@ -152,16 +152,19 @@ const adoptFailureMessage = {
 >;
 
 const adoptActiveTab = async (activeTab: PopupTab | null): Promise<void> => {
-  if (activeTab?.id === undefined) {
+  if (activeTab?.id !== undefined) {
+    const result = await sendPopupRequest({
+      tabId: activeTab.id,
+      type: "adopt",
+    });
+    if (result.status !== "adopted") {
+      renderFailure(adoptFailureMessage[result.status]);
+      return;
+    }
+    render(handedTabView(new URL(result.url).origin));
+  } else {
     renderFailure("unsupportedTab");
-    return;
   }
-  const result = await sendPopupRequest({ tabId: activeTab.id, type: "adopt" });
-  if (result.status !== "adopted") {
-    renderFailure(adoptFailureMessage[result.status]);
-    return;
-  }
-  render(handedTabView(new URL(result.url).origin));
 };
 
 const execute = (
