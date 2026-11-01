@@ -1450,7 +1450,7 @@
     "audioContent": "Sugeneruotas garsas",
     "browserExtension": {
       "connect": "Prijungti plėtinį",
-      "connectDescription": "Šiame skirtuke spustelėkite stella plėtinio piktogramą naršyklės įrankių juostoje. Jei prašoma, leiskite pasiekti svetaines ir prijunkite šį skirtuką.",
+      "connectDescription": "Spustelėkite stella plėtinio piktogramą naršyklės įrankių juostoje, jei prašoma, leiskite pasiekti svetaines ir prijunkite stella. Vienas prijungimas galioja visiems jūsų stella skirtukams.",
       "connected": "Plėtinys prijungtas",
       "description": "Jums paprašius, stella gali atidaryti ir skaityti svetaines atskirame skirtuke.",
       "install": "Įdiegti plėtinį",

@@ -1450,7 +1450,7 @@
     "audioContent": "Loodud heli",
     "browserExtension": {
       "connect": "Ühenda laiendus",
-      "connectDescription": "Klõpsa sellel vahekaardil brauseri tööriistaribal stella laienduse ikooni. Kui küsitakse, luba juurdepääs veebisaitidele ja ühenda see vahekaart.",
+      "connectDescription": "Klõpsa brauseri tööriistaribal stella laienduse ikooni, luba küsimisel juurdepääs veebisaitidele ja ühenda stella. Üks ühendus kehtib kõigil sinu stella vahekaartidel.",
       "connected": "Laiendus on ühendatud",
       "description": "stella saab sinu palvel veebilehti eraldi vahekaardil avada ja lugeda.",
       "install": "Paigalda laiendus",

@@ -1450,7 +1450,7 @@
     "audioContent": "Generiertes Audio",
     "browserExtension": {
       "connect": "Erweiterung verbinden",
-      "connectDescription": "Klicken Sie in diesem Tab auf das stella-Symbol in der Browserleiste. Erlauben Sie bei Nachfrage den Zugriff auf Websites und verbinden Sie diesen Tab.",
+      "connectDescription": "Klicken Sie auf das stella-Symbol in der Browserleiste, erlauben Sie bei Nachfrage den Zugriff auf Websites und verbinden Sie stella. Eine Verbindung gilt für alle Ihre stella-Tabs.",
       "connected": "Erweiterung verbunden",
       "description": "stella kann auf Ihren Wunsch Websites in einem separaten Tab öffnen und lesen.",
       "install": "Erweiterung installieren",

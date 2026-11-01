@@ -1450,7 +1450,7 @@
     "audioContent": "Audio generado",
     "browserExtension": {
       "connect": "Conectar extensión",
-      "connectDescription": "En esta pestaña, haz clic en el icono de la extensión stella en la barra del navegador. Si se solicita, permite el acceso a los sitios web y conecta esta pestaña.",
+      "connectDescription": "Haz clic en el icono de la extensión stella en la barra del navegador, permite el acceso a los sitios web si se solicita y conecta stella. Una sola conexión sirve para todas tus pestañas de stella.",
       "connected": "Extensión conectada",
       "description": "stella puede abrir y leer sitios web en otra pestaña cuando se lo pidas.",
       "install": "Instalar extensión",

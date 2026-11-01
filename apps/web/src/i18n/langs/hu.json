@@ -1450,7 +1450,7 @@
     "audioContent": "Generált hang",
     "browserExtension": {
       "connect": "Bővítmény csatlakoztatása",
-      "connectDescription": "Ezen a lapon kattintson a stella bővítmény ikonjára a böngésző eszköztárán. Ha a rendszer kéri, engedélyezze a webhelyekhez való hozzáférést, majd csatlakoztassa ezt a lapot.",
+      "connectDescription": "Kattintson a stella bővítmény ikonjára a böngésző eszköztárán, engedélyezze kérésre a webhelyekhez való hozzáférést, majd csatlakoztassa a stellát. Egy csatlakozás az összes stella-lapjára érvényes.",
       "connected": "Bővítmény csatlakoztatva",
       "description": "A stella kérésére külön lapon nyithat meg és olvashat el weboldalakat.",
       "install": "Bővítmény telepítése",

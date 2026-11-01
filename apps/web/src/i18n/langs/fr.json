@@ -1450,7 +1450,7 @@
     "audioContent": "Audio généré",
     "browserExtension": {
       "connect": "Connecter l’extension",
-      "connectDescription": "Dans cet onglet, cliquez sur l’icône de l’extension stella dans la barre du navigateur. Autorisez l’accès aux sites si cela vous est demandé, puis connectez cet onglet.",
+      "connectDescription": "Cliquez sur l’icône de l’extension stella dans la barre du navigateur, autorisez l’accès aux sites si cela vous est demandé, puis connectez stella. Une seule connexion suffit pour tous vos onglets stella.",
       "connected": "Extension connectée",
       "description": "À votre demande, stella peut ouvrir et lire des sites web dans un autre onglet.",
       "install": "Installer l’extension",
