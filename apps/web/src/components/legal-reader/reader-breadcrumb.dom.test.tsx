@@ -961,13 +961,14 @@ test("reader breadcrumb gives outer levels to the menu before the current title,
     disconnect() {}
   };
   const current = path.at(-1) ?? panic("The fixture needs a current heading");
-  // Outer levels are labels alone (84px); the current heading is "§ 5"
-  // (28px) and, with its title, 160px. Each crumb adds 16px of padding.
+  // Outer levels are labels alone (100px); the current heading is "§ 5"
+  // (44px) and, with its title, 176px. The measurer is the crumb's own button,
+  // so these widths hold its padding.
   const measured = (part: "label" | "full", anchorId: string) => {
     if (anchorId !== current.anchorId) {
-      return 84;
+      return 100;
     }
-    return part === "label" ? 28 : 160;
+    return part === "label" ? 44 : 176;
   };
   const resizeTo = async (width: number) => {
     const navigation = screen.getByRole("navigation");
