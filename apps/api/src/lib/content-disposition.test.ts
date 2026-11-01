@@ -30,6 +30,24 @@ describe("contentDisposition", () => {
     );
   });
 
+  test("drops format characters from a stored name in both parameters", () => {
+    expect(contentDisposition("a\u202Etxt.pdf")).toBe(
+      'attachment; filename="atxt.pdf"',
+    );
+
+    const header = contentDisposition("n\u202Eález.pdf");
+    expect(header).not.toContain("%E2%80%AE");
+    expect(header).toBe(
+      "attachment; filename=\"n_lez.pdf\"; filename*=UTF-8''n%C3%A1lez.pdf",
+    );
+  });
+
+  test("keeps right-to-left letters in filename*", () => {
+    expect(decodeURIComponent(contentDisposition("שלום.pdf"))).toContain(
+      "filename*=UTF-8''שלום.pdf",
+    );
+  });
+
   test("removes every HTTP control character from filename parameters", () => {
     const controls = Array.from({ length: 160 }, (_, codePoint) => codePoint)
       .filter(

@@ -422,6 +422,10 @@ if (!databaseUrl || !runPostgresTests) {
                       }),
                   },
                   enqueueCleanup: async () => await Promise.resolve(),
+                  flushWorkspaceSearchRepairs: async () => ({
+                    failed: 0,
+                    repaired: 0,
+                  }),
                 },
               );
             })();
@@ -513,6 +517,10 @@ if (!databaseUrl || !runPostgresTests) {
                     }),
                 },
                 enqueueCleanup: async () => await Promise.resolve(),
+                flushWorkspaceSearchRepairs: async () => ({
+                  failed: 0,
+                  repaired: 0,
+                }),
               },
             );
           })();
