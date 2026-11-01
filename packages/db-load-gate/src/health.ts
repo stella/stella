@@ -59,6 +59,11 @@ export type HealthConfig = {
   holdBackoffCapMs: number;
   maxHeldMs: number;
 };
+/**
+ * The defaults a deployment's settings start from. Every load decision takes
+ * its config explicitly, so the deployment's settings, not these defaults,
+ * govern each gate.
+ */
 export const defaultConfig = {
   startFloor: 70,
   hardFloor: 40,
@@ -177,7 +182,7 @@ export const combine = (signals: Signal[]): Verdict => {
 export const decideStart = (
   verdict: Verdict,
   kind: WorkKind,
-  config: HealthConfig = defaultConfig,
+  config: HealthConfig,
 ) => {
   validateConfig(config);
   return {
@@ -199,7 +204,7 @@ export type BuildProgress = {
 };
 export const decideWhileRunning = (
   history: Signal[],
-  config: HealthConfig = defaultConfig,
+  config: HealthConfig,
   progress?: BuildProgress,
 ) => {
   validateConfig(config);
@@ -237,7 +242,7 @@ export type NextBatchOptions = {
   state: BatchState;
   verdict: Verdict;
   lastDurationMs: number | null;
-  config?: HealthConfig;
+  config: HealthConfig;
   clock: () => number;
   outcome?: BatchOutcome;
 };
@@ -304,7 +309,7 @@ export const nextBatch = ({
   state,
   verdict,
   lastDurationMs,
-  config = defaultConfig,
+  config,
   clock,
   outcome = "success",
 }: NextBatchOptions) => {
@@ -418,7 +423,7 @@ export const nextBatch = ({
 export const isHeldTooLong = (
   state: Pick<BatchState, "heldSince">,
   now: number,
-  config: HealthConfig = defaultConfig,
+  config: HealthConfig,
 ) => {
   validateConfig(config);
   if (state.heldSince === null || now <= state.heldSince) {
@@ -472,7 +477,7 @@ type BackfillHeartbeatOptions = {
   previousHeldSince: number | null;
   verdict: Verdict;
   now: number;
-  config?: HealthConfig;
+  config: HealthConfig;
 };
 
 /** Emit once per minute, including while no batch can run. */
@@ -482,7 +487,7 @@ export const backfillHeartbeat = ({
   previousHeldSince,
   verdict,
   now,
-  config = defaultConfig,
+  config,
 }: BackfillHeartbeatOptions) => {
   const yielded = state.heldSince !== null;
   const event = (() => {

@@ -1,16 +1,13 @@
 import { Result } from "better-result";
 
-import {
-  decideStart,
-  defaultConfig,
-  nextBatch,
-} from "@stll/db-load-gate/health";
+import { decideStart, nextBatch } from "@stll/db-load-gate/health";
 import type {
   BatchState,
   HealthConfig,
   Verdict,
 } from "@stll/db-load-gate/health";
 
+import { loadGateHealthConfig } from "../env-online-index";
 import { commitReplaySafeIngestionBatch } from "../lib/replay-safe-ingestion";
 import type { IngestionTransactionRunner } from "../lib/replay-safe-ingestion";
 
@@ -63,7 +60,7 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
   clock,
   log,
   isStatementTimeout = () => false,
-  config = defaultConfig,
+  config = loadGateHealthConfig(),
 }: AdaptiveBackfillOptions<Transaction, Item, Cursor>) => {
   // Metric I/O precedes the transaction and never holds row locks.
   const reading = await Result.tryPromise(readVerdict);

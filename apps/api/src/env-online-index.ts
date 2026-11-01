@@ -104,3 +104,22 @@ export const readOnlineIndexConfig = (
     maintenanceWorkMemMb: env.ONLINE_INDEX_MAINTENANCE_WORK_MEM_MB,
   };
 };
+
+const processLoadGateHealth: { config?: HealthConfig } = {};
+
+/**
+ * The health config every runtime gate builds on: the package defaults
+ * with the `DB_LOAD_GATE_*` settings applied. A gate that starts from the
+ * package defaults instead ignores an operator's floors and busy windows, so
+ * this module is the only runtime importer of those defaults. The process
+ * environment is read once; an explicit environment is read on every call.
+ */
+export const loadGateHealthConfig = (
+  environment?: Record<string, string | undefined>,
+): HealthConfig => {
+  if (environment !== undefined) {
+    return readOnlineIndexConfig(environment).health;
+  }
+  processLoadGateHealth.config ??= readOnlineIndexConfig().health;
+  return processLoadGateHealth.config;
+};
