@@ -8,7 +8,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import * as v from "valibot";
 
 import {
   checkParserVersions,
@@ -252,27 +251,16 @@ test("a queue entry is checked against the entry ahead of it, not the target bra
     expect.stringContaining("test-a: parser version 2 must exceed base 2"),
   ]);
 
-  const workflow = v.parse(
-    v.looseObject({
-      jobs: v.record(
-        v.string(),
-        v.looseObject({
-          steps: v.optional(
-            v.array(
-              v.looseObject({
-                name: v.optional(v.string()),
-                env: v.optional(v.record(v.string(), v.unknown())),
-              }),
-            ),
-          ),
-        }),
-      ),
-    }),
-    Bun.YAML.parse(
-      readFileSync(
-        path.join(import.meta.dirname, "../.github/workflows/ci.yml"),
-        "utf-8",
-      ),
+  // This guard runs before dependencies are installed, so the workflow is
+  // read with plain property lookups rather than a schema library.
+  const field = (value: unknown, key: string): unknown =>
+    typeof value === "object" && value !== null
+      ? Reflect.get(value, key)
+      : undefined;
+  const workflow: unknown = Bun.YAML.parse(
+    readFileSync(
+      path.join(import.meta.dirname, "../.github/workflows/ci.yml"),
+      "utf-8",
     ),
   );
   const previousEntryBase = [
@@ -281,10 +269,14 @@ test("a queue entry is checked against the entry ahead of it, not the target bra
     " || needs.ci-plan.outputs.target_base_sha }}",
   ].join("");
   for (const job of ["pr-heavy-gate", "ci-quick-checks"]) {
-    const guard = workflow.jobs[job]?.steps?.find(
-      ({ name }) => name === "parser-version-guard: Check parser version guard",
+    const steps = field(field(field(workflow, "jobs"), job), "steps");
+    const list: unknown[] = Array.isArray(steps) ? steps : [];
+    const guard = list.find(
+      (step) =>
+        field(step, "name") ===
+        "parser-version-guard: Check parser version guard",
     );
-    expect(guard?.env?.["BASE_SHA"], job).toBe(previousEntryBase);
+    expect(field(field(guard, "env"), "BASE_SHA"), job).toBe(previousEntryBase);
   }
 });
 
