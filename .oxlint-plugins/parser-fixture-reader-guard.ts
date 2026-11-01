@@ -20,6 +20,18 @@ const PARSERS = new Set<string>(Object.values(PARSER_FIXTURE_OWNERS).flat());
 /** How a report names a parser read through a computed, non-literal key. */
 const COMPUTED_KEY = "a computed parser key";
 
+/**
+ * The property a member access reads. A computed key is read only as a
+ * string literal: an identifier key names a value, not the property, so it
+ * could hide a parser.
+ */
+const memberName = (node: { computed: boolean; property: unknown }) => {
+  if (!node.computed) {
+    return getPropertyName(node.property);
+  }
+  return isStringLiteral(node.property) ? node.property.value : COMPUTED_KEY;
+};
+
 const PARSER_MODULE_PATH =
   /(?:^|\/)(?:handlers\/case-law\/ingestion\/(?:parsers|adapters)|lib\/legal-search\/parsers)(?:\/[^/]+)+$/u;
 
@@ -115,14 +127,7 @@ export default eslintCompatPlugin({
             ) {
               return;
             }
-            // A computed key is read only as a string literal: an identifier
-            // key names a value, not the property, so it could hide a parser.
-            const name =
-              node.computed === true
-                ? isStringLiteral(node.property)
-                  ? node.property.value
-                  : COMPUTED_KEY
-                : getPropertyName(node.property);
+            const name = memberName(node);
             if (
               name === null ||
               (name !== COMPUTED_KEY && !PARSERS.has(name))
