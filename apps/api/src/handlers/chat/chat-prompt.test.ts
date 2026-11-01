@@ -93,7 +93,7 @@ const SKILL_METADATA = [
 ] as const;
 
 const ONLY_ON_A_WEBSITE_REQUEST =
-  "Only if the user asks you to open, read or operate a website, tell them, in their language, ";
+  "Only if the user asks you to open, visit, read or operate a website, or to do something in their browser, tell them, in their language, ";
 const OTHERWISE_NO_EXTENSION_MENTION =
   "otherwise do not mention the browser extension.";
 

@@ -49,7 +49,7 @@ export const BROWSER_EXTENSION_CAPABILITY = {
   [BROWSER_EXTENSION_STATUS.connected]: {
     toolOffered: true,
     availability:
-      "Browser tools are available for this turn. Use them when the user asks you to operate a website.",
+      "Browser tools are available for this turn. Use them when the user asks you to open, visit, read or operate a website, or to do something in their browser.",
   },
   [BROWSER_EXTENSION_STATUS.needsSiteAccess]: {
     toolOffered: false,
@@ -75,9 +75,16 @@ export const BROWSER_EXTENSION_CAPABILITY = {
   [BROWSER_EXTENSION_STATUS.unsupportedBrowser]: {
     toolOffered: false,
     availability:
-      "Browser tools are not available in this chat because this browser cannot run the stella browser extension.",
+      "Browser tools are not available in this chat because the user is on a computer whose browser cannot run the stella browser extension.",
     recoveryStep:
-      "that browser control requires a browser that supports the stella Chrome extension",
+      "to open stella in Google Chrome on this computer and install the stella browser extension there",
+  },
+  [BROWSER_EXTENSION_STATUS.unsupportedDevice]: {
+    toolOffered: false,
+    availability:
+      "Browser tools are not available in this chat because the user is not chatting from a computer browser that can run the stella browser extension.",
+    recoveryStep:
+      "that you can use their browser when they chat with stella in Google Chrome on a computer with the stella browser extension",
   },
 } satisfies Record<
   BrowserExtensionStatus | typeof BROWSER_EXTENSION_PROTOCOL_MISMATCH,
@@ -94,7 +101,7 @@ export const composeBrowserExtensionPromptLine = (
 ): string =>
   row.toolOffered
     ? `BROWSER: ${row.availability}`
-    : `BROWSER: ${row.availability} Only if the user asks you to open, read or operate a website, tell them, in their language, ${row.recoveryStep}; otherwise do not mention the browser extension. Do not claim you have no way to use a browser.`;
+    : `BROWSER: ${row.availability} Only if the user asks you to open, visit, read or operate a website, or to do something in their browser, tell them, in their language, ${row.recoveryStep}, before you answer another way such as with web search; otherwise do not mention the browser extension. Do not claim you have no way to use a browser.`;
 
 export const browserExtensionPolicy = (
   extension: BrowserExtensionCapability,

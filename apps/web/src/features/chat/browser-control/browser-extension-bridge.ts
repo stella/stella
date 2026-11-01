@@ -52,6 +52,10 @@ const BROWSER_EXTENSION_STATES = {
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     status: "unsupported-browser",
   },
+  "unsupported-device": {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: "unsupported-device",
+  },
 } satisfies Record<BrowserExtensionStatus, BrowserExtensionCapability>;
 
 type PendingRequest = {
@@ -280,41 +284,51 @@ type BrowserExtensionNavigator = {
   userAgentData?: { brands: readonly { brand: string }[]; mobile?: boolean };
 };
 
-export const supportsBrowserExtension = (
+type BrowserExtensionSupport =
+  | "supported"
+  | typeof BROWSER_EXTENSION_STATUS.unsupportedBrowser
+  | typeof BROWSER_EXTENSION_STATUS.unsupportedDevice;
+
+/**
+ * Whether this browser can run the Chrome extension. A computer with another
+ * browser can still switch to Chrome; a phone or tablet cannot run it at all,
+ * so the chat tells the two apart.
+ */
+export const browserExtensionSupport = (
   browser: BrowserExtensionNavigator | undefined,
-): boolean => {
+): BrowserExtensionSupport => {
   if (
     !browser ||
-    /Android|Firefox|FxiOS|CriOS|iPhone|iPad|iPod/u.test(browser.userAgent) ||
+    /Android|FxiOS|CriOS|iPhone|iPad|iPod/u.test(browser.userAgent) ||
     browser.userAgentData?.mobile === true
   ) {
-    return false;
+    return BROWSER_EXTENSION_STATUS.unsupportedDevice;
   }
-  if (browser.userAgentData) {
-    return browser.userAgentData.brands.some(
-      ({ brand }) => brand === "Chromium" || brand === "Google Chrome",
-    );
+  if (/Firefox/u.test(browser.userAgent)) {
+    return BROWSER_EXTENSION_STATUS.unsupportedBrowser;
   }
-  return /Chrome|Chromium/u.test(browser.userAgent);
+  const chromium = browser.userAgentData
+    ? browser.userAgentData.brands.some(
+        ({ brand }) => brand === "Chromium" || brand === "Google Chrome",
+      )
+    : /Chrome|Chromium/u.test(browser.userAgent);
+  return chromium ? "supported" : BROWSER_EXTENSION_STATUS.unsupportedBrowser;
 };
 
 /**
  * The single live state of the extension for this stella tab. Unsupported means
- * the browser cannot run the Chrome extension; checking lasts until the first
- * announcement or deadline; not-installed follows one missed
- * announcement deadline; access and pairing are reported by the extension;
- * connected means this tab owns a controller and can execute commands.
+ * the browser (or the whole device) cannot run the Chrome extension; checking
+ * lasts until the first announcement or deadline; not-installed follows one
+ * missed announcement deadline; access and pairing are reported by the
+ * extension; connected means stella can execute commands from this tab.
  */
 export const getBrowserExtensionState = (): BrowserExtensionCapability => {
   const runtime = bridgeRuntime;
-  if (
-    !supportsBrowserExtension(
-      typeof navigator === "undefined" ? undefined : navigator,
-    )
-  ) {
-    return BROWSER_EXTENSION_STATES[
-      BROWSER_EXTENSION_STATUS.unsupportedBrowser
-    ];
+  const support = browserExtensionSupport(
+    typeof navigator === "undefined" ? undefined : navigator,
+  );
+  if (support !== "supported") {
+    return BROWSER_EXTENSION_STATES[support];
   }
   if (
     runtime === null ||
