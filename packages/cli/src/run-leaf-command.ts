@@ -433,11 +433,11 @@ export const scopeGranted = ({
   scope: string;
 }): boolean => {
   const claims = decodeAccessTokenClaims(token);
-  if (claims?.scope === undefined) {
-    // Opaque token or no scope claim: cannot verify locally, let the server rule.
-    return true;
+  if (claims?.scope !== undefined) {
+    return claims.scope.split(/\s+/u).includes(`stella:${scope}`);
   }
-  return claims.scope.split(/\s+/u).includes(`stella:${scope}`);
+  // Opaque token or no scope claim: cannot verify locally, let the server rule.
+  return true;
 };
 
 export const scopePreflightFailure = ({
@@ -450,8 +450,11 @@ export const scopePreflightFailure = ({
   token: string;
 }): { loginCommand: string; missingScope: string } | undefined => {
   const claims = decodeAccessTokenClaims(token);
-  if (claims?.scope === undefined) {
-    // Opaque token or no scope claim: cannot verify locally, let the server rule.
+  // Opaque token or no scope claim: cannot verify locally, let the server rule.
+  if (claims === undefined) {
+    return undefined;
+  }
+  if (claims.scope === undefined) {
     return undefined;
   }
 
@@ -1206,9 +1209,9 @@ export const renderToolError = ({
       actionAdmissionRefusalOutput({
         refusal: admission,
         format,
-        ...(envelope?.requestId === undefined
-          ? {}
-          : { requestId: envelope.requestId }),
+        ...(envelope?.requestId !== undefined
+          ? { requestId: envelope.requestId }
+          : {}),
       }),
     );
     setExit(context, classifyToolError(errorPayload));

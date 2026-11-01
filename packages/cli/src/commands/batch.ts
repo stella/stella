@@ -308,14 +308,10 @@ export const resolveBatchCommand = ({
       const spec = node.spec;
       const access = spec.readOnlyHint === true ? "read" : "write";
       const schema = { ...spec.inputSchema };
-      if (
-        Array.isArray(schema["required"]) &&
-        spec.discriminatorInject !== undefined
-      ) {
+      const inject = spec.discriminatorInject;
+      if (Array.isArray(schema["required"]) && inject !== undefined) {
         schema["required"] = schema["required"].filter(
-          (key) =>
-            typeof key !== "string" ||
-            spec.discriminatorInject?.[key] === undefined,
+          (key) => typeof key !== "string" || inject[key] === undefined,
         );
       }
       return {
