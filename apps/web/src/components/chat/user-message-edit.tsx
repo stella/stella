@@ -529,8 +529,11 @@ export const useUserMessageEdit = ({
     editor: (
       // Shown on hover of the message (the `group` of `Message`), on focus and
       // on touch; hidden while the sticky layout pins the message as a
-      // compact header.
-      <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100 group-data-[stuck=true]/sticky:hidden focus-within:opacity-100 pointer-coarse:opacity-100">
+      // compact header. With a fine pointer it only appears on hover, so it
+      // floats over the bubble's bottom corner instead of reserving an empty
+      // row in every message; the caller's text box is its `relative` anchor.
+      // A touch screen keeps it in flow, since it is always visible there.
+      <div className="pointer-fine:bg-secondary flex justify-end opacity-0 transition-opacity group-hover:opacity-100 group-data-[stuck=true]/sticky:hidden focus-within:opacity-100 pointer-coarse:opacity-100 pointer-fine:absolute pointer-fine:-right-1.5 pointer-fine:-bottom-1 pointer-fine:rounded-md">
         <Button
           aria-label={t("chat.editMessage")}
           onClick={() => {
@@ -550,7 +553,7 @@ export const useUserMessageEdit = ({
   };
 };
 
-/** A sent user message body with its edit action below it. */
+/** A sent user message body with its edit action in its bottom corner. */
 export const EditableUserMessage = ({
   children,
   ...options
@@ -560,7 +563,7 @@ export const EditableUserMessage = ({
     return editor;
   }
   return (
-    <div className="flex min-w-0 flex-col">
+    <div className="relative flex min-w-0 flex-col">
       {children}
       {editor}
     </div>
