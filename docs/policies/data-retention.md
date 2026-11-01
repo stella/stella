@@ -8,7 +8,8 @@
 
 Define how Stella retains and deletes data to comply with
 data-protection obligations and honour user deletion requests.
-When data is deleted, it is actually deleted: Stella does not
+When data is deleted, it is actually deleted: apart from the
+document version tombstones described below, Stella does not
 use soft deletes.
 
 ## Scope
@@ -21,10 +22,14 @@ views, and associated metadata.
 
 <!-- evidence: retention-hard-delete -->
 
-1. **Hard deletes only.** The schema contains no `deletedAt`,
-   `isDeleted`, or soft-delete columns. When a user or
-   administrator deletes a resource, the corresponding rows
-   and objects are permanently removed.
+1. **Hard deletes only.** When a user or administrator deletes
+   a resource, the corresponding rows and objects are
+   permanently removed. The one tombstone is a document
+   version (`entity_versions.deleted_at`): deleting a single
+   version hides it from every read while its row and objects
+   stay with the document, including when the document moves
+   to another matter. Deleting the document removes all of its
+   versions and their objects.
 
 2. **Cascade by design.** Foreign key constraints in the modular
    database schema (`apps/api/src/db/schema/`) enforce

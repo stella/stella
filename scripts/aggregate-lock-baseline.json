@@ -1117,19 +1117,19 @@
   },
   {
     "file": "apps/api/src/handlers/entities/copy-utils.ts",
+    "fingerprint": "283d775750eceb2316124405129bd37a7c02e865c1714f888636ef9a59898fcd",
+    "count": 1,
+    "reason": "builder-for in apps/api/src/handlers/entities/copy-utils.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+  },
+  {
+    "file": "apps/api/src/handlers/entities/copy-utils.ts",
     "fingerprint": "506e0a73952efaa9d8e51a79df764f962ed84631f4e5c412c97947bc3bdfaa0e",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/entities/copy-utils.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/handlers/entities/copy-utils.ts",
-    "fingerprint": "98cd7cb60a713d341e6e0828f08fc0b80f87b37d8ba36017239afac88ae4243e",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/entities/copy-utils.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/entities/copy-utils.ts",
-    "fingerprint": "e0dc6d9e35ce81868d56ddabebb7112d01d3755a830b055b6b566d6b2b927528",
+    "fingerprint": "967f4e5695ca1cc03734e94f136c8637c38fafda85d7fa1a37f86c24f6524c5e",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/entities/copy-utils.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
@@ -2611,7 +2611,7 @@
   },
   {
     "file": "apps/api/src/lib/entity-versions/insert-entity-version.ts",
-    "fingerprint": "32926171d96c6201ad4e99a743aa597ca989f855d36cedccd952ed43044100a6",
+    "fingerprint": "a8c617873ab9527542001f85c1adce6b8f01d9f37b0dc1c00e7f45d77c804a1b",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/entity-versions/insert-entity-version.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
