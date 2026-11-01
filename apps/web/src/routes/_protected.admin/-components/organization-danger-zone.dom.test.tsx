@@ -12,6 +12,37 @@ const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { OrganizationDangerZone } = await import("./organization-danger-zone");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { AuthenticatedUserProvider } =
+  await import("@/lib/authenticated-user-context");
+const { organizationAuditExportLatestOptions } =
+  await import("@/lib/organization/audit-export-queries");
+
+const user = {
+  id: "owner-fixture",
+  activeOrganizationId: "organization-fixture",
+  email: "owner@example.test",
+  name: "Owner",
+  image: null,
+  preferredName: null,
+  timezoneId: "UTC",
+  wordEditShortcut: null,
+};
+
+type AuditArchive = Awaited<
+  ReturnType<
+    NonNullable<
+      ReturnType<typeof organizationAuditExportLatestOptions>["queryFn"]
+    >
+  >
+>;
+
+const CURRENT_ARCHIVE = {
+  id: "11111111-1111-4111-8111-111111111111",
+  status: "ready",
+  expiresAt: "2099-01-01T00:00:00.000Z",
+  coversCurrentTrail: true,
+} as const satisfies AuditArchive;
 
 afterEach(() => {
   cleanup();
@@ -21,24 +52,39 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-const mount = (isOwner = true, afterSuccess?: () => Promise<void>) => {
+const mount = (
+  isOwner = true,
+  afterSuccess?: () => Promise<void>,
+  auditArchive: AuditArchive = CURRENT_ARCHIVE,
+) => {
   let completed = 0;
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
+      mutations: { retry: false },
+    },
+  });
+  client.setQueryData(
+    organizationAuditExportLatestOptions("organization-fixture", user.id)
+      .queryKey,
+    auditArchive,
+  );
   render(
-    <QueryClientProvider
-      client={
-        new QueryClient({ defaultOptions: { mutations: { retry: false } } })
-      }
-    >
+    <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <OrganizationDangerZone
-          organizationId="organization-fixture"
-          organizationName="Novak Legal"
-          isOwner={isOwner}
-          onSuccess={async () => {
-            completed += 1;
-            await afterSuccess?.();
-          }}
-        />
+        <FormattingProvider locale="en" timeZone="UTC">
+          <AuthenticatedUserProvider user={user}>
+            <OrganizationDangerZone
+              organizationId="organization-fixture"
+              organizationName="Novak Legal"
+              isOwner={isOwner}
+              onSuccess={async () => {
+                completed += 1;
+                await afterSuccess?.();
+              }}
+            />
+          </AuthenticatedUserProvider>
+        </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>,
   );
@@ -149,12 +195,82 @@ test("successful leave remains completed when destination refresh fails", async 
   });
   fireEvent.click(leave);
   await waitFor(() =>
-    expect(screen.getByRole("status").textContent).toBe(
-      messages.admin.organizationLeft,
-    ),
+    expect(
+      screen.getByText(messages.admin.organizationLeft).getAttribute("role"),
+    ).toBe("status"),
   );
   expect(completed()).toBe(1);
   expect(leave).toHaveProperty("disabled", true);
   fireEvent.click(leave);
   expect(requests).toBe(1);
+});
+
+test("deletion waits for a current activity log archive the owner can request", async () => {
+  const requests: { method: string; path: string }[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      requests.push({
+        method: request.method,
+        path: new URL(request.url).pathname,
+      });
+      return Response.json({ id: CURRENT_ARCHIVE.id, status: "requested" });
+    },
+  );
+  mount(true, undefined, null);
+  expect(
+    screen.getByRole("button", { name: messages.admin.deleteOrganization }),
+  ).toHaveProperty("disabled", true);
+
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.admin.auditArchiveRequest }),
+  );
+
+  await waitFor(() =>
+    expect(screen.getByRole("status").textContent).toContain(
+      messages.admin.auditArchiveWorking,
+    ),
+  );
+  expect(requests).toContainEqual({
+    method: "POST",
+    path: "/v1/organizations/audit-export",
+  });
+  expect(
+    screen.getByRole("button", { name: messages.admin.deleteOrganization }),
+  ).toHaveProperty("disabled", true);
+});
+
+test("an outdated archive offers a new export and keeps deletion closed", () => {
+  mount(true, undefined, { ...CURRENT_ARCHIVE, coversCurrentTrail: false });
+  expect(screen.getByRole("status").textContent).toBe(
+    messages.admin.auditArchiveOutdated,
+  );
+  expect(
+    screen.getByRole("button", { name: messages.admin.auditArchiveRequestNew }),
+  ).toBeDefined();
+  expect(
+    screen.getByRole("button", { name: messages.admin.deleteOrganization }),
+  ).toHaveProperty("disabled", true);
+});
+
+test("a deletion refused for an outdated archive says to export again", async () => {
+  refuse("organization_audit_export_stale", "Export the activity log again.");
+  mount();
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.admin.deleteOrganization }),
+  );
+  const dialog = await screen.findByRole("alertdialog");
+  fireEvent.change(within(dialog).getByRole("textbox"), {
+    target: { value: "Novak Legal" },
+  });
+  fireEvent.click(
+    within(dialog).getByRole("button", {
+      name: messages.admin.deleteOrganization,
+    }),
+  );
+  await waitFor(() =>
+    expect(within(dialog).getByRole("alert").textContent).toContain(
+      messages.admin.auditArchiveOutdated,
+    ),
+  );
 });
