@@ -8,10 +8,13 @@ type ReplayWriteOptions = {
   modifiedAt?: { column: PgColumn; value: Date | SQL };
 };
 
-/** SQL values use the very same column encoders as Drizzle's SET builder. */
-export const replayWrite = <T extends PgTable>(
-  table: T,
-  values: PgUpdateSetSource<T>,
+/**
+ * The plan over any relation, an alias included; the values were checked
+ * against the table by the typed entry points.
+ */
+const replayWritePlan = (
+  table: PgTable,
+  values: Readonly<Record<string, unknown>>,
   { modifiedAt }: ReplayWriteOptions = {},
 ) => {
   const columns = getColumns(table);
@@ -69,6 +72,13 @@ export const replayWrite = <T extends PgTable>(
   });
 };
 
+/** SQL values use the very same column encoders as Drizzle's SET builder. */
+export const replayWrite = <T extends PgTable>(
+  table: T,
+  values: PgUpdateSetSource<T>,
+  options: ReplayWriteOptions = {},
+) => replayWritePlan(table, values, options);
+
 /** An accepted unchanged write is distinct from a failed ownership fence. */
 export type ReplayWriteOutcome<T> =
   | { status: "written"; row: T }
@@ -93,7 +103,7 @@ export const replayWriteOutcome = <T>(
 
 const replayWriteAssignments = (
   table: PgTable,
-  { set }: ReturnType<typeof replayWrite>,
+  { set }: ReturnType<typeof replayWritePlan>,
 ): SQL => {
   const columns = getColumns(table);
   return sql.join(
@@ -171,7 +181,7 @@ export const replayRawWrite = <T extends PgTable>({
   result,
 }: RawReplayWriteOptions<T>) => {
   const target = alias === undefined ? table : tableAlias(table, alias);
-  const plan = replayWrite(target, values);
+  const plan = replayWritePlan(target, values);
   const assignments = replayWriteAssignments(target, plan);
   const relation =
     alias === undefined
