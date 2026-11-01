@@ -110,7 +110,8 @@ const expandValue = (value: unknown, state: ExpansionState) => {
         if (state.budget < 0) {
           return EXPANSION_FAILED;
         }
-        const { value: current, depth } = work;
+        const current: unknown = work.value;
+        const depth: number = work.depth;
         if (Array.isArray(current)) {
           const items: unknown[] = [];
           if (current.length === 0) {

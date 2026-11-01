@@ -504,7 +504,7 @@ describe("generateRouteMap: flag mapping (S3)", () => {
       expect.unreachable("Expected an enum classification");
     }
     expect(calls).toEqual([]);
-    expect([...classified.spec.enum]).toEqual(["ready"]);
+    expect(classified.spec.enum).toEqual(["ready"]);
     expect(classified.spec.enum).not.toBe(values);
   });
 

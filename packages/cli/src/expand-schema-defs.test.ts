@@ -237,7 +237,10 @@ const generatedDocument = fc
         return { ...document, body: { $ref: "https://example.test/schema" } };
       case "invalid-defs":
         return { ...document, $defs: [] };
+      case "none":
+        return document;
       default:
+        refusal satisfies never;
         return document;
     }
   });

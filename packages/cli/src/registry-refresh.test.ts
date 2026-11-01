@@ -214,7 +214,6 @@ describe("resolveCommandTree (S5.3)", () => {
         env,
         force: true,
         bakedListings: [],
-        fetchLatestVersion: async () => undefined,
         fetchRaw: okFetch(
           JSON.stringify({ tools: [], _meta: { featureAccess } }),
         ),
