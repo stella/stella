@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { stripInvisibleFormatting } from "@stll/text-normalize";
+import { stripInvisibleFormatting } from "@/api/lib/sanitize-filename";
 
 const entityNameSchema = v.pipe(v.string(), v.brand("EntityName"));
 

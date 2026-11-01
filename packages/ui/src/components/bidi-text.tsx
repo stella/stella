@@ -12,12 +12,13 @@ const DIRECTIONAL_CONTROLS = /[\u202A-\u202E\u2066-\u2069]/gu;
  * directional control inside it still reorders its letters, so stored text
  * loses those controls before it renders.
  */
+export const stripDirectionalControls = (text: string): string =>
+  text.replaceAll(DIRECTIONAL_CONTROLS, "");
+
 export const withoutDirectionalControls = (
   children: React.ReactNode,
 ): React.ReactNode =>
-  typeof children === "string"
-    ? children.replaceAll(DIRECTIONAL_CONTROLS, "")
-    : children;
+  typeof children === "string" ? stripDirectionalControls(children) : children;
 
 export const BidiText = (props: BidiTextProps) => {
   if (props.as === "span") {

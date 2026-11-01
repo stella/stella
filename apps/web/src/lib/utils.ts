@@ -1,4 +1,4 @@
-import { stripInvisibleFormatting } from "@stll/text-normalize";
+import { stripDirectionalControls } from "@stll/ui/bidi-text";
 
 /**
  * Type-narrowing `.includes()` that avoids
@@ -16,7 +16,7 @@ export const downloadFile = (blob: Blob, fileName: string) => {
 
   const link = document.createElement("a");
   link.href = url;
-  link.download = stripInvisibleFormatting(fileName);
+  link.download = stripDirectionalControls(fileName);
 
   document.body.append(link);
   link.click();

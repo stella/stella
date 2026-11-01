@@ -1,7 +1,5 @@
 import * as v from "valibot";
 
-import { stripInvisibleFormatting } from "@stll/text-normalize";
-
 /**
  * Branded type for filenames that have been sanitized.
  *
@@ -25,6 +23,17 @@ export type SanitizedFileName = v.InferOutput<typeof sanitizedFileNameSchema>;
 const UNSAFE_CHARS_RE = /["/\\<>\r\n\0|*?:]/gu;
 const PATH_TRAVERSAL_RE = /\.\./gu;
 const MAX_FILENAME_LENGTH = 255;
+
+/**
+ * Every format character (`Cf`) except ZWNJ and ZWJ: those two select letter
+ * forms in Persian and Indic scripts and join emoji sequences, so removing
+ * them changes what a name says, and neither can reorder text.
+ */
+const INVISIBLE_FORMATTING_RE = /(?![\u200C\u200D])\p{Cf}/gu;
+
+/** Removes the characters a stored name or a download name must not carry. */
+export const stripInvisibleFormatting = (text: string): string =>
+  text.replaceAll(INVISIBLE_FORMATTING_RE, "");
 
 const truncateUnicode = (value: string, maxLength: number): string => {
   const characters: string[] = [];
