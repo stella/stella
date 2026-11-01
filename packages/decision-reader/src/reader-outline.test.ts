@@ -9,6 +9,7 @@ import {
   outlineFromHeadings,
   parseProvisionDesignation,
   provisionHeadingLine,
+  READER_BREADCRUMB_CLEARANCE,
   resolveAnchorPct,
   statuteOutlineFromHeadings,
   withProvisionRanges,
@@ -260,13 +261,21 @@ describe("anchor jump", () => {
     expect(window.location.hash).toBe("paragraf-47");
   });
 
-  test("scrolls the container to the block, not to the viewport", () => {
+  test("scrolls the container to the block, below the reader's controls bar", () => {
     const container = createContainer({ "#paragraf-47": 450 });
 
     jumpToAnchor("paragraf-47", container);
 
     // 450 (block) - 50 (container) + 100 (already scrolled).
-    expect(container.scrolledTo).toBe(500);
+    expect(container.scrolledTo).toBe(500 - READER_BREADCRUMB_CLEARANCE);
+  });
+
+  test("rounds toward the block, so the trail reads it as current", () => {
+    const container = createContainer({ "#paragraf-47": 450.25 });
+
+    jumpToAnchor("paragraf-47", container);
+
+    expect(container.scrolledTo).toBe(501 - READER_BREADCRUMB_CLEARANCE);
   });
 
   test("does nothing when the anchor is not on the page", () => {

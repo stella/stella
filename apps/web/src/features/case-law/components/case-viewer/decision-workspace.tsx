@@ -13,6 +13,10 @@ import type { DecisionProvisionCard } from "@stll/decision-reader/decision-text"
 import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import {
+  READER_BREADCRUMB_CLEARANCE,
+  scrollReaderToBlock,
+} from "@stll/decision-reader/reader-outline";
+import {
   readerSelectionMatches,
   visibleDecisionBlocks,
   visibleReaderAnchorPiecesOf,
@@ -55,7 +59,6 @@ import type {
   AnswerMarginItem,
   ProvisionMarginItem,
 } from "@/components/legal-reader/margin-notes";
-import { READER_BREADCRUMB_CLEARANCE } from "@/components/legal-reader/reader-breadcrumb-scroll";
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
@@ -769,13 +772,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     if (!container || !el) {
       return;
     }
-    container.scrollTo({
-      top:
-        el.getBoundingClientRect().top -
-        container.getBoundingClientRect().top +
-        container.scrollTop,
-      behavior: "instant",
-    });
+    scrollReaderToBlock(el, container);
     const blocks = astBlocks;
     const range = paragraphRangeIndices(blocks, {
       startAnchorId: anchorId,
@@ -1019,13 +1016,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   if (!el) {
                     return;
                   }
-                  container.scrollTo({
-                    top:
-                      el.getBoundingClientRect().top -
-                      container.getBoundingClientRect().top +
-                      container.scrollTop,
-                    behavior: "instant",
-                  });
+                  scrollReaderToBlock(el, container);
                   delete el.dataset["highlight"];
                   forceReflow(el);
                   el.dataset["highlight"] = "";

@@ -13,6 +13,7 @@ import {
 } from "@stll/api-contract/statute-route";
 import {
   jumpToAnchor,
+  READER_BREADCRUMB_CLEARANCE,
   resolveAnchorPct,
   STATUTE_OUTLINE_COLLAPSE_LEVEL,
   statuteOutlineFromHeadings,
@@ -46,7 +47,6 @@ import {
   outlineMatchItems,
   rankOutlineMatches,
 } from "@/components/legal-reader/outline-jump-field.logic";
-import { READER_BREADCRUMB_CLEARANCE } from "@/components/legal-reader/reader-breadcrumb-scroll";
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { useRecordOpenedLawDocument } from "@/features/law-search-history/law-search-history-query";

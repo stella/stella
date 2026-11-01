@@ -3,6 +3,7 @@ import type { RefObject } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { scrollReaderToBlock } from "@stll/decision-reader/reader-outline";
 import { ChevronUpIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -98,13 +99,7 @@ export const CurrentSection = ({
     if (!element) {
       return;
     }
-    container.scrollTo({
-      top:
-        element.getBoundingClientRect().top -
-        container.getBoundingClientRect().top +
-        container.scrollTop,
-      behavior: "instant",
-    });
+    scrollReaderToBlock(element, container);
     delete element.dataset["highlight"];
     forceReflow(element);
     element.dataset["highlight"] = "";
