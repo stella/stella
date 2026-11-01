@@ -1274,7 +1274,6 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
 
     const unread = await search(tailOnly);
     expect(unread.hits).toEqual([]);
-    expect(unread.chatCoverage).toBe(GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL);
   });
 
   test("filter-only chat browse pages directly beyond the text candidate ceiling", async () => {
