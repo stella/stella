@@ -904,6 +904,8 @@ describe("--input contract help", () => {
       "^[A-Za-z]{2}$",
       "^\\d+$",
       "^\\d{8}$",
+      "^[\\w+-]+(?:\\.[\\w+-]+)*@[\\da-zA-Z]+(?:[.-][\\da-zA-Z]+)*\\.[a-zA-Z]{2,}$",
+      "^(?:[A-Z]{2}-)+\\d{3,5}$",
     ];
 
     for (const pattern of patterns) {

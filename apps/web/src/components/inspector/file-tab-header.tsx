@@ -8,7 +8,7 @@ import type {
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Maximize2Icon, Minimize2Icon } from "@stll/ui/icons";
+import { Maximize2Icon, Minimize2Icon, PrinterIcon } from "@stll/ui/icons";
 
 import { fileExtensionSuffix } from "@/components/file-extension-suffix";
 import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
@@ -105,11 +105,31 @@ type FileTabHeaderActionsOptions = {
   mainViewHasFileActions: boolean;
   /** The current PDF file the signer may sign, or `null` to offer no signing. */
   pdfSignTarget: PdfSignTarget | null;
+  /** The preview is rendered text, which the print stylesheet prints alone. */
+  printsTextPreview: boolean;
   tab: FileTab;
 };
 
+const PrintTextPreviewButton = () => {
+  const t = useTranslations();
+  const label = t("common.print");
+  return (
+    <Button
+      aria-label={label}
+      onClick={() => {
+        window.print();
+      }}
+      size="icon-xs"
+      tooltip={label}
+      variant="ghost"
+    >
+      <PrinterIcon className="size-3.5" />
+    </Button>
+  );
+};
+
 /**
- * Download, open-in-desktop-app and sign, shared by the peek header and the
+ * Download, print, open-in-desktop-app and sign, shared by the peek header and the
  * full-view header so the two cannot drift apart. Each persona appends its own
  * actions after these.
  */
@@ -118,6 +138,7 @@ export const fileTabHeaderActions = ({
   downloadRenditions,
   mainViewHasFileActions,
   pdfSignTarget,
+  printsTextPreview,
   tab,
 }: FileTabHeaderActionsOptions): HeaderAction[] => {
   const startDownload = (variant: DownloadVariant) => {
@@ -145,6 +166,13 @@ export const fileTabHeaderActions = ({
           renditions={downloadRenditions}
         />
       ),
+    });
+  }
+  if (printsTextPreview) {
+    actions.push({
+      id: "print",
+      requires: AVAILABLE_EVERYWHERE,
+      render: () => <PrintTextPreviewButton />,
     });
   }
   if (desktopEditTarget !== null) {

@@ -1,4 +1,5 @@
 import type { APIRequestContext } from "@playwright/test";
+import { Result } from "better-result";
 
 /** The API server's origin; its auth and dev routes live outside `/v1`. */
 export const E2E_API_ORIGIN =
@@ -13,6 +14,41 @@ const API_REQUEST_TIMEOUT_MS = 30_000;
 type Json =
   Record<string, unknown> | unknown[] | string | number | boolean | null;
 
+/**
+ * Playwright keeps API sockets alive between requests, and the API closes a
+ * socket that sat idle. A request written to a socket the server has just
+ * closed fails before the API sees it ("socket hang up", ECONNRESET). Only an
+ * idempotent request is sent again, once, on a fresh socket.
+ */
+const STALE_SOCKET = /socket hang up|ECONNRESET/u;
+
+const isStaleSocket = (error: unknown): boolean => {
+  for (
+    let current: unknown = error;
+    current instanceof Error;
+    current = current.cause
+  ) {
+    if (STALE_SOCKET.test(current.message)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+export const withStaleSocketRetry = async <T>(
+  send: () => Promise<T>,
+): Promise<T> => {
+  const first = await Result.tryPromise(send);
+  if (Result.isOk(first)) {
+    return first.value;
+  }
+  if (!isStaleSocket(first.error)) {
+    const { cause } = first.error;
+    throw cause instanceof Error ? cause : first.error;
+  }
+  return await send();
+};
+
 const url = (path: string) =>
   `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 
@@ -20,9 +56,10 @@ export const apiGet = async <T = unknown>(
   request: APIRequestContext,
   path: string,
 ): Promise<T> => {
-  const response = await request.get(url(path), {
-    timeout: API_REQUEST_TIMEOUT_MS,
-  });
+  const response = await withStaleSocketRetry(
+    async () =>
+      await request.get(url(path), { timeout: API_REQUEST_TIMEOUT_MS }),
+  );
   if (!response.ok()) {
     throw new Error(
       `GET ${path} -> ${String(response.status())}: ${await response.text()}`,
@@ -35,9 +72,10 @@ export const apiStatus = async (
   request: APIRequestContext,
   path: string,
 ): Promise<number> => {
-  const response = await request.get(url(path), {
-    timeout: API_REQUEST_TIMEOUT_MS,
-  });
+  const response = await withStaleSocketRetry(
+    async () =>
+      await request.get(url(path), { timeout: API_REQUEST_TIMEOUT_MS }),
+  );
   const status = response.status();
   await response.dispose();
   return status;
@@ -76,9 +114,11 @@ export const apiDeleteStatus = async (
   request: APIRequestContext,
   path: string,
 ): Promise<{ status: number; body: string }> => {
-  const response = await request.delete(url(path), {
-    timeout: API_REQUEST_TIMEOUT_MS,
-  });
+  // A DELETE is idempotent here: a repeat answers 404, which callers accept.
+  const response = await withStaleSocketRetry(
+    async () =>
+      await request.delete(url(path), { timeout: API_REQUEST_TIMEOUT_MS }),
+  );
   const result = { status: response.status(), body: await response.text() };
   await response.dispose();
   return result;
@@ -109,6 +149,7 @@ export const apiUploadDocx = async (
   }
   return (await response.json()) as {
     entityId: string;
+    fieldId: string;
     fileId: string;
     fileName: string;
     renamed: boolean;

@@ -25,18 +25,6 @@ import {
   caseLawReplayBatches,
   caseLawReplayBlocked,
 } from "@/api/db/schema";
-import {
-  STORED_RAW_REPARSE_REJECTION,
-  storedRawResultReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceAdapter,
-  StoredRawReader,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  StoredRawReparseRejection,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { processStoredDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -67,6 +55,18 @@ import {
   sanitizeResult,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  STORED_RAW_REPARSE_REJECTION,
+  storedRawResultReader,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SourceAdapter,
+  StoredRawReader,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  StoredRawReparseRejection,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   PARSER_REPARSE_FEATURES,
   PARSER_VERSION_SCOPES,
@@ -227,7 +227,12 @@ export type CaseLawReplayScope =
   | (typeof CASE_LAW_REPLAY_SCOPE)[keyof typeof CASE_LAW_REPLAY_SCOPE]
   | { type: "decision"; decisionId: SafeId<"caseLawDecision"> }
   | { type: "court"; court: string }
-  | { type: "celex"; celex: string };
+  | { type: "celex"; celex: string }
+  /**
+   * The decisions a parser version wrote. A version that stored a defect is
+   * a window of rows, and naming it replays that window and nothing else.
+   */
+  | { type: "parser-version"; parserVersion: number };
 
 const replayScopePredicate = (scope: CaseLawReplayScope): SQL | undefined => {
   switch (scope.type) {
@@ -239,6 +244,8 @@ const replayScopePredicate = (scope: CaseLawReplayScope): SQL | undefined => {
       return eq(caseLawDecisions.court, scope.court);
     case "celex":
       return sql`${caseLawDecisions.metadata}->>'celex' = ${scope.celex}`;
+    case "parser-version":
+      return eq(caseLawDecisions.parserVersion, scope.parserVersion);
     default:
       scope satisfies never;
       return panic(`Unhandled scope: ${String(scope)}`);
@@ -1626,15 +1633,10 @@ const failureDetail = (error: unknown): string => {
 /** Pause between lease attempts while a replay waits for the source. */
 export const REPLAY_LEASE_RETRY_PAUSE_MS = 5000;
 
-export type ReplayLeaseAcquisition<TLease> =
-  | { type: "acquired"; lease: TLease; waitedMs: number }
-  | { type: "unavailable"; waitedMs: number };
-
-// Generic over the lease because the wait reads nothing from it: an acquire
-// either produced one or did not.
-export type AcquireReplayLeaseOptions<TLease> = {
-  acquire: () => Promise<TLease | null>;
-  /** Paused time the acquire may be retried for; 0 attempts once. */
+type WithReplayLeaseOptions<T> = {
+  /** One complete operation under the source's lease; `null` while it is held. */
+  run: () => Promise<T | null>;
+  /** Paused time the operation may be retried for; 0 attempts once. */
   waitBudgetMs: number;
   /** Called once, when the first attempt lost and the wait begins. */
   onWaitStart?: () => void;
@@ -1643,7 +1645,8 @@ export type AcquireReplayLeaseOptions<TLease> = {
 };
 
 /**
- * Take a source's ingestion lease, waiting out an ingestion that holds it.
+ * Wait for a lease owner to run one complete operation, without exporting
+ * its lease, waiting out an ingestion that holds the source.
  *
  * An ingestion takes the lease per reconciliation unit and releases it in
  * between, so a single attempt made while the source is being crawled loses
@@ -1654,30 +1657,30 @@ export type AcquireReplayLeaseOptions<TLease> = {
  * counting attempts too would make the number of tries depend on database
  * latency.
  */
-export const acquireReplayLease = async <TLease>({
-  acquire,
+export const runWithReplayLease = async <T>({
+  run,
   waitBudgetMs,
   onWaitStart,
   sleep = Bun.sleep,
-}: AcquireReplayLeaseOptions<TLease>): Promise<
-  ReplayLeaseAcquisition<TLease>
+}: WithReplayLeaseOptions<T>): Promise<
+  | { type: "completed"; value: T; waitedMs: number }
+  | { type: "unavailable"; waitedMs: number }
 > => {
-  const lease = await acquire();
-  if (lease !== null) {
-    return { type: "acquired", lease, waitedMs: 0 };
+  const first = await run();
+  if (first !== null) {
+    return { type: "completed", value: first, waitedMs: 0 };
   }
   if (waitBudgetMs < REPLAY_LEASE_RETRY_PAUSE_MS) {
     return { type: "unavailable", waitedMs: 0 };
   }
-
   onWaitStart?.();
   let waitedMs = 0;
   while (waitedMs + REPLAY_LEASE_RETRY_PAUSE_MS <= waitBudgetMs) {
     await sleep(REPLAY_LEASE_RETRY_PAUSE_MS);
     waitedMs += REPLAY_LEASE_RETRY_PAUSE_MS;
-    const retried = await acquire();
-    if (retried !== null) {
-      return { type: "acquired", lease: retried, waitedMs };
+    const value = await run();
+    if (value !== null) {
+      return { type: "completed", value, waitedMs };
     }
   }
   return { type: "unavailable", waitedMs };

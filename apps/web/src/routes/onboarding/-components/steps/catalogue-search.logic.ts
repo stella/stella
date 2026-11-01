@@ -10,6 +10,7 @@ type SearchableCatalogueEntry = {
 type FilterCatalogueEntriesOptions<T extends SearchableCatalogueEntry> = {
   compareName: (left: string, right: string) => number;
   jurisdictionFilter: ReadonlySet<string>;
+  localizedDescription: (entry: T) => string;
   localizedName: (entry: T) => string;
   otherEntries: readonly T[];
   query: string;
@@ -21,6 +22,7 @@ export const filterOnboardingCatalogueEntries = <
 >({
   compareName,
   jurisdictionFilter,
+  localizedDescription,
   localizedName,
   otherEntries,
   query,
@@ -40,6 +42,7 @@ export const filterOnboardingCatalogueEntries = <
       matches(entry.displayName) ||
       matches(localizedName(entry)) ||
       matches(entry.description) ||
+      matches(localizedDescription(entry)) ||
       entry.tags.some(matches)
     );
   };

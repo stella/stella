@@ -22,7 +22,8 @@
     "toolUsed": "Naudota: {tool}",
     "threadTitle": "Pokalbis",
     "threadLoadFailed": "Nepavyko įkelti šio pokalbio.",
-    "threadEmptyDescription": "Šiame pokalbyje dar nėra žinučių.",
+    "greeting": "Prie ko norėtumėte dirbti?",
+    "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
     "sections": {
       "today": "Šiandien",
       "yesterday": "Vakar",
@@ -39,6 +40,19 @@
     "answerNeedsInput": "Šiam atsakymui reikia jūsų įvesties. Tęskite jį stella žiniatinklio programoje.",
     "answerFailed": "Atsakymo užbaigti nepavyko.",
     "composerMenu": "Atverti priedų ir įrankių meniu",
+    "attachFile": "Prisegti failą",
+    "attachment": "Priedas",
+    "fileTooLarge": "Failas viršija {maxSize} limitą",
+    "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
+    "unsupportedFileType": "Nepalaikomas failo tipas",
+    "uploadFailed": "Nepavyko apdoroti failo",
+    "scanDocument": "Nuskenuoti dokumentą",
+    "removeAttachment": "Pašalinti {name}",
+    "attachmentReading": "Ruošiama…",
+    "attachmentUploading": "Įkeliama…",
+    "pickFailed": "Nepavyko atidaryti failų parinkiklio. Bandykite dar kartą.",
+    "sendFileRefused": "Nepavyko išsiųsti failo, todėl žinutė nebuvo išsiųsta. Pašalinkite failą ir bandykite dar kartą.",
+    "sendFileNotAnonymizable": "Šis pokalbis anonimizuotas, o stella nepavyko anonimizuoti vieno iš failų, todėl niekas nebuvo išsiųsta. Pašalinkite failą ir bandykite dar kartą.",
     "pickTitle": "Pasirinkite pokalbį",
     "pickDescription": "Pasirinkite giją iš sąrašo arba pradėkite naują mygtuku +."
   },
@@ -60,7 +74,8 @@
       "none": "Be datos",
       "today": "Šiandien",
       "tomorrow": "Rytoj",
-      "nextWeek": "Po savaitės"
+      "nextWeek": "Po savaitės",
+      "pick": "Pasirinkti datą"
     },
     "due": {
       "overdue": "Pavėluotos",
@@ -75,7 +90,14 @@
     "statusFailed": "Nepavyko pakeisti užduoties. Bandykite dar kartą.",
     "pickTitle": "Pasirinkite užduotį",
     "pickDescription": "Pasirinkite užduotį iš sąrašo, kad ją matytumėte čia.",
-    "openMatter": "Atidaryti bylą"
+    "openMatter": "Atidaryti bylą",
+    "assignedTo": "Priskirta",
+    "nobody": "Nepriskirta",
+    "assign": "Priskirti",
+    "doneAssigning": "Atlikta",
+    "someone": "Kažkas",
+    "membersFailed": "Nepavyko įkelti bylos narių.",
+    "assignFailed": "Užduoties priskirti nepavyko. Bandykite dar kartą."
   },
   "matters": {
     "emptyTitle": "Bylų dar nėra",
@@ -119,7 +141,9 @@
     },
     "add": "Pridėti",
     "scanDocument": "Nuskenuoti dokumentą",
-    "newTask": "Nauja užduotis"
+    "newTask": "Nauja užduotis",
+    "uploadDocument": "Įkelti dokumentą",
+    "uploadFailed": "Dokumento įkelti nepavyko. Bandykite dar kartą."
   },
   "entity": {
     "type": "Tipas",
@@ -141,7 +165,16 @@
     "preview": "Atidaryti peržiūrą",
     "previewDescription": "Šis failas atidaromas sistemos peržiūroje.",
     "unrendered": "Šio dokumento čia parodyti negalima, bet sistemos peržiūra gali jį atidaryti.",
-    "details": "Išsami informacija"
+    "details": "Išsami informacija",
+    "zoomOut": "Mažinti",
+    "zoomIn": "Didinti",
+    "zoomFit": "Pritaikyti pločiui",
+    "fit": "Plotis",
+    "appearance": {
+      "system": "Išvaizda: automatinė",
+      "light": "Išvaizda: šviesi",
+      "dark": "Išvaizda: tamsi"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -169,7 +202,8 @@
     "server": "Serveris",
     "signOut": "Atsijungti",
     "deleteAccount": "Ištrinti paskyrą",
-    "deleteAccountHint": "Atveria jūsų paskyrą žiniatinklyje, kur galite ją ištrinti kartu su viskuo, kas jūsų."
+    "deleteAccountHint": "Atveria jūsų paskyrą žiniatinklyje, kur galite ją ištrinti kartu su viskuo, kas jūsų.",
+    "signOutFailed": "Nepavyko atsijungti. Bandykite dar kartą."
   },
   "header": {
     "search": "Ieškoti"
@@ -183,6 +217,7 @@
     "headnote": "Santrauka",
     "textUnavailable": "Šiam sprendimui teksto nėra",
     "openSource": "Atverti pirminį šaltinį",
+    "openFailed": "Nepavyko atidaryti nuorodos.",
     "loadFailed": "Nepavyko įkelti teismų praktikos.",
     "share": "Bendrinti"
   },
@@ -268,6 +303,29 @@
   "palette": {
     "placeholder": "Ieškokite bylų ir pokalbių arba paleiskite komandą",
     "noResults": "Niekas neatitinka „{query}“"
+  },
+  "search": {
+    "placeholder": "Ieškoti stella",
+    "clear": "Išvalyti paiešką",
+    "cancel": "Atšaukti",
+    "recent": "Naujausios paieškos",
+    "clearRecent": "Išvalyti",
+    "hint": "Ieškokite bylose, dokumentuose, užduotyse, pokalbiuose ir teismų praktikoje.",
+    "filters": "Filtrai",
+    "noResultsTitle": "Rezultatų nėra",
+    "noResults": "Niekas neatitinka „{query}“. Pabandykite kitus žodžius arba pašalinkite filtrą.",
+    "loadFailed": "Paieškos atlikti nepavyko.",
+    "retry": "Bandyti dar kartą",
+    "type": {
+      "document": "Dokumentai",
+      "matter": "Bylos",
+      "task": "Užduotys",
+      "caseLaw": "Teismų praktika",
+      "chat": "Pokalbiai",
+      "folder": "Aplankai",
+      "message": "El. laiškai",
+      "link": "Nuorodos"
+    }
   },
   "pane": {
     "showList": "Rodyti sąrašą",
