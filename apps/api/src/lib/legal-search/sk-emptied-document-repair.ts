@@ -172,7 +172,7 @@ type EmptiedDocumentRequeueOutcome =
  */
 const POISON_SQLSTATE_CLASSES = new Set(["22", "23"]);
 
-class EmptiedDocumentBatchError extends TaggedError(
+export class EmptiedDocumentBatchError extends TaggedError(
   "EmptiedDocumentBatchError",
 )<{
   message: string;
@@ -260,7 +260,7 @@ const requeueEmptiedDocumentBatchTx = async (
 const requeueIsolatedBatch = async (
   scopedDb: ScopedDb,
   options: RequeueBatchOptions,
-): Promise<EmptiedDocumentRowOutcome[]> => {
+): Promise<Result<EmptiedDocumentRowOutcome[], EmptiedDocumentBatchError>> => {
   const attempted = await Result.tryPromise({
     try: async () =>
       await scopedDb(
@@ -273,36 +273,44 @@ const requeueIsolatedBatch = async (
       }),
   });
   if (attempted.isOk()) {
-    return attempted.value;
+    return attempted;
   }
   const sqlState = getPgErrorCode(attempted.error.cause);
   if (
     sqlState === undefined ||
     !POISON_SQLSTATE_CLASSES.has(sqlState.slice(0, 2))
   ) {
-    throw attempted.error;
+    return attempted;
   }
   const { decisionIds } = options;
   if (decisionIds.length === 1) {
-    return decisionIds.map((decisionId) => ({
-      decisionId,
-      outcome: {
-        type: "quarantined",
-        reason: "projection-or-update-failed",
-        sqlState,
-      },
-    }));
+    return Result.ok(
+      decisionIds.map((decisionId) => ({
+        decisionId,
+        outcome: {
+          type: "quarantined",
+          reason: "projection-or-update-failed",
+          sqlState,
+        },
+      })),
+    );
   }
   const middle = Math.floor(decisionIds.length / 2);
   const left = await requeueIsolatedBatch(scopedDb, {
     ...options,
     decisionIds: decisionIds.slice(0, middle),
   });
+  if (left.isErr()) {
+    return left;
+  }
   const right = await requeueIsolatedBatch(scopedDb, {
     ...options,
     decisionIds: decisionIds.slice(middle),
   });
-  return left.concat(right);
+  if (right.isErr()) {
+    return right;
+  }
+  return Result.ok(left.value.concat(right.value));
 };
 
 /** Decisions one requeue call resets at most. */
@@ -329,7 +337,9 @@ export const requeueEmptiedDocuments = async ({
   scopedDb,
   since,
   sourceId,
-}: RequeueEmptiedDocumentsOptions): Promise<EmptiedDocumentRowOutcome[]> => {
+}: RequeueEmptiedDocumentsOptions): Promise<
+  Result<EmptiedDocumentRowOutcome[], EmptiedDocumentBatchError>
+> => {
   if (decisionIds.length > MAX_EMPTIED_DOCUMENT_REQUEUE) {
     return panic(
       `requeue takes at most ${String(MAX_EMPTIED_DOCUMENT_REQUEUE)} decisions, got ${String(decisionIds.length)}`,
@@ -351,8 +361,11 @@ export const requeueEmptiedDocuments = async ({
       since,
       sourceId,
     });
-    await onBatch?.(batchOutcomes);
-    outcomes.push(...batchOutcomes);
+    if (batchOutcomes.isErr()) {
+      return batchOutcomes;
+    }
+    await onBatch?.(batchOutcomes.value);
+    outcomes.push(...batchOutcomes.value);
   }
-  return outcomes;
+  return Result.ok(outcomes);
 };

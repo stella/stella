@@ -14,6 +14,7 @@ import { Temporal } from "@stll/time";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  type EmptiedDocumentBatchError,
   MAX_EMPTIED_DOCUMENT_REQUEUE,
   MAX_EMPTIED_DOCUMENT_SCAN,
   requeueEmptiedDocuments,
@@ -237,7 +238,10 @@ export const runEmptiedDocumentRepair = async (
   command: EmptiedDocumentRepairCommand,
   { record, scopedDb, sourceId, write }: RunEmptiedDocumentRepairOptions,
 ): Promise<
-  Result<EmptiedDocumentRepairReport, EmptiedDocumentRepairArgumentsError>
+  Result<
+    EmptiedDocumentRepairReport,
+    EmptiedDocumentRepairArgumentsError | EmptiedDocumentBatchError
+  >
 > => {
   const scan = await scanEmptiedDocuments({
     scopedDb,
@@ -274,7 +278,7 @@ export const runEmptiedDocumentRepair = async (
   const { actor, reason } = command.write;
   // Each batch is recorded as it commits, so a run stopped partway still
   // names every row it changed.
-  const outcomes = await requeueEmptiedDocuments({
+  const requeue = await requeueEmptiedDocuments({
     scopedDb,
     sourceId,
     since: command.since,
@@ -296,6 +300,10 @@ export const runEmptiedDocumentRepair = async (
       }
     },
   });
+  if (requeue.isErr()) {
+    return requeue;
+  }
+  const outcomes = requeue.value;
   const countOf = (type: string) =>
     outcomes.filter(({ outcome }) => outcome.type === type).length;
   const requeued = countOf("requeued");

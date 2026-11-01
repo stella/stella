@@ -356,7 +356,7 @@ test("an applied run requeues each qualifying decision into the walk once", asyn
     since: SINCE,
     decisionIds: requeued,
   });
-  expect(again.map(({ outcome }) => outcome.type)).toEqual(
+  expect(again.unwrap().map(({ outcome }) => outcome.type)).toEqual(
     requeued.map(() => "no-longer-eligible"),
   );
 });
@@ -393,7 +393,7 @@ test("a rejected row is quarantined without rolling back its healthy batch sibli
       sql`ALTER TABLE case_law_decisions DROP CONSTRAINT reject_empty_requeue`,
     );
   });
-  expect(result).toEqual(
+  expect(result.unwrap()).toEqual(
     ids.map((decisionId) => ({
       decisionId,
       outcome:
@@ -427,7 +427,7 @@ test("an error that is not about a row's data ends the run and quarantines nothi
     throw unavailable;
   };
   const recorded: unknown[] = [];
-  const rejection = await requeueEmptiedDocuments({
+  const run = await requeueEmptiedDocuments({
     scopedDb: failingDb,
     sourceId,
     since: SINCE,
@@ -435,10 +435,9 @@ test("an error that is not about a row's data ends the run and quarantines nothi
     onBatch: async (outcomes) => {
       recorded.push(...outcomes);
     },
-  }).then(
-    () => null,
-    (error: unknown) => error,
-  );
-  expect(rejection).toMatchObject({ _tag: "EmptiedDocumentBatchError" });
+  });
+  expect(run.isErr() ? run.error : null).toMatchObject({
+    _tag: "EmptiedDocumentBatchError",
+  });
   expect(recorded).toEqual([]);
 });
