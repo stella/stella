@@ -630,7 +630,6 @@
     "guideAllowed": "A stella desktop engedélyt kapott",
     "never": {
       "screenRecording": "Képernyőfelvétel",
-      "microphone": "Mikrofon",
       "camera": "Kamera",
       "keystrokes": "Billentyűleütések",
       "fullDiskAccess": "Teljes lemezhozzáférés",

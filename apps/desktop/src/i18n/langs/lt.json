@@ -630,7 +630,6 @@
     "guideAllowed": "stella desktop leidžiama",
     "never": {
       "screenRecording": "Ekrano įrašymas",
-      "microphone": "Mikrofonas",
       "camera": "Kamera",
       "keystrokes": "Klavišų paspaudimai",
       "fullDiskAccess": "Visa prieiga prie disko",

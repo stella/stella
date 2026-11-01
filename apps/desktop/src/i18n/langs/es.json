@@ -630,7 +630,6 @@
     "guideAllowed": "stella desktop tiene permiso",
     "never": {
       "screenRecording": "Grabación de pantalla",
-      "microphone": "Micrófono",
       "camera": "Cámara",
       "keystrokes": "Pulsaciones de teclas",
       "fullDiskAccess": "Acceso total al disco",

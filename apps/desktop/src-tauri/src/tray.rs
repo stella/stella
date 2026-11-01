@@ -262,9 +262,9 @@ fn set_status_mark_on_main_thread(
   _main_thread: &TrayMainThread,
 ) {
   if let Some(tray) = app.tray_by_id("main")
-    && let Err(error) = tray.set_title(mark)
+    && tray.set_title(mark).is_err()
   {
-    tracing::warn!(%error, "tray mark failed");
+    tracing::warn!("tray mark failed");
   }
 }
 
