@@ -86,6 +86,7 @@ export const TAGGED_FAILURE_REASON = {
   ChatTurnUnsettledToolCallError: "tagged_failure",
   ChatTurnsUnsettledError: "tagged_failure",
   ChunkBudgetError: "tagged_failure",
+  CitationProbeRecheckListError: "tagged_failure",
   CitationProbeS3ReadError: "tagged_failure",
   CitationScopesRejectedError: "tagged_failure",
   CitationStorageFieldError: "tagged_failure",
