@@ -24,13 +24,13 @@ import { panic } from "better-result";
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
 
-import {
-  EU_VAT_ID_SQL_COMPACT,
-  EU_VAT_ID_SQL_PATTERN,
-} from "@/api/lib/billing/invoice-prefill.logic";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { createBackfillRuntime } from "./backfill-runtime";
+import {
+  EU_VAT_ID_SQL_COMPACT,
+  EU_VAT_ID_SQL_PATTERN,
+} from "./eu-vat-id-format";
 import { readConstraintCompletion } from "./online-constraint-completion";
 import { validateOnlineConstraints } from "./online-ddl";
 import type { OnlineConstraintValidation, OnlineTableGate } from "./online-ddl";

@@ -13,13 +13,13 @@ import {
   AUDIT_RESOURCE_TYPE,
 } from "@/api/lib/audit-log.constants";
 import type { AuditAction } from "@/api/lib/audit-log.constants";
-import {
-  EU_VAT_ID_SQL_COMPACT,
-  EU_VAT_ID_SQL_PATTERN,
-} from "@/api/lib/billing/invoice-prefill.logic";
 import type { SafeId } from "@/api/lib/branded-types";
 import { SANCTIONS_CONTACT_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 
+import {
+  EU_VAT_ID_SQL_COMPACT,
+  EU_VAT_ID_SQL_PATTERN,
+} from "../eu-vat-id-format";
 import {
   importProvenanceColumns,
   importProvenanceConstraints,
