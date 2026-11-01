@@ -16,10 +16,11 @@ import {
   readGlobalSystemWorkInventory,
 } from "./global-system-work-census";
 import {
+  classifiedTableRelations,
   deriveOrgWriteGraphInputs,
   parseRecoveryOwnerFiles,
   parseRootConnectionDoorFiles,
-  schemaSqlTableNames,
+  parseTableRelations,
 } from "./org-write-graph-enrollment";
 import {
   countRootConnectionImports,
@@ -13502,122 +13503,58 @@ describe("tree-derived organization graph enrollment", () => {
     );
   });
 
-  test("projects SQL names only from actual table constructors", () => {
+  test("reads relation names only from the literal generated map", () => {
     expect(
-      schemaSqlTableNames(
-        new Map([
-          [
-            "apps/api/src/lib/flow-types.ts",
-            `export const flowRuns = { label: "not a table" };`,
-          ],
-          [
-            "apps/api/src/db/schema/flows.ts",
-            `import * as p from "drizzle-orm/pg-core"; export const flowRuns = p.pgTable("flow_runs", {});`,
-          ],
-        ]),
-        new Set(["flowRuns"]),
-        "head",
+      parseTableRelations(
+        'export const TABLE_RELATIONS = { flowRuns: "flow_runs", signals: "signals" } as const;',
       ),
-    ).toEqual(new Map([["flow_runs", "flowRuns"]]));
-  });
-
-  test("projects names from the direct withRLS table constructor", () => {
-    expect(
-      schemaSqlTableNames(
-        new Map([
-          [
-            "apps/api/src/db/schema/flows.ts",
-            `import { pgTable } from "drizzle-orm/pg-core"; export const flowRuns = pgTable.withRLS("flow_runs", {});`,
-          ],
-        ]),
-        new Set(["flowRuns"]),
-        "head",
-      ),
-    ).toEqual(new Map([["flow_runs", "flowRuns"]]));
-  });
-
-  test("resolves immutable relation aliases in their declaration scope", () => {
-    expect(
-      schemaSqlTableNames(
-        new Map([
-          [
-            "apps/api/src/db/schema/flows.ts",
-            `
-        import * as p from "drizzle-orm/pg-core";
-        const RELATION = "flow_runs";
-        const ALIAS = RELATION;
-        { const RELATION = "unrelated"; }
-        export const flowRuns = p.pgTable(ALIAS, {});
-      `,
-          ],
-        ]),
-        new Set(["flowRuns"]),
-        "head",
-      ),
-    ).toEqual(new Map([["flow_runs", "flowRuns"]]));
-  });
-
-  test("rejects mutable, dynamic and cyclic relation bindings", () => {
-    for (const declarations of [
-      'let RELATION = "flow_runs";',
-      "const RELATION = getRelation();",
-      "const RELATION = ALIAS; const ALIAS = RELATION;",
+    ).toEqual(
+      new Map([
+        ["flowRuns", "flow_runs"],
+        ["signals", "signals"],
+      ]),
+    );
+    for (const content of [
+      "export const OTHER = {};",
+      "export const TABLE_RELATIONS = relations;",
+      "export const TABLE_RELATIONS = { flowRuns: relation };",
+      'export const TABLE_RELATIONS = { [key]: "flow_runs" };',
+      'export const TABLE_RELATIONS = { flowRuns: "flow_runs", flowRuns: "runs" };',
     ]) {
-      expect(() =>
-        schemaSqlTableNames(
-          new Map([
-            [
-              "apps/api/src/db/schema/flows.ts",
-              `import * as p from "drizzle-orm/pg-core"; ${declarations} export const flowRuns = p.pgTable(RELATION, {});`,
-            ],
-          ]),
-          new Set(["flowRuns"]),
-          "head",
-        ),
-      ).toThrow(/SQL relation name/iu);
+      expect(() => parseTableRelations(content)).toThrow(
+        /TABLE_RELATIONS|repeats table/iu,
+      );
     }
   });
 
-  test("rejects duplicate and missing table constructors and SQL names", () => {
-    const table = `import * as p from "drizzle-orm/pg-core"; export const flowRuns = p.pgTable("flow_runs", {});`;
+  test("a classified table missing from the map is fatal, never counted as zero", () => {
+    const relations = new Map([
+      ["flowRuns", "flow_runs"],
+      ["signals", "signals"],
+    ]);
+    expect(classifiedTableRelations(relations, new Set(["flowRuns"]))).toEqual(
+      new Map([["flow_runs", "flowRuns"]]),
+    );
     expect(() =>
-      schemaSqlTableNames(
-        new Map([
-          ["apps/api/src/db/schema/flows.ts", table],
-          ["apps/api/src/db/schema/other.ts", table],
-        ]),
-        new Set(["flowRuns"]),
-        "head",
-      ),
-    ).toThrow("multiple declarations");
+      classifiedTableRelations(relations, new Set(["flowRuns", "newTable"])),
+    ).toThrow(/Classified table newTable has no entry/iu);
     expect(() =>
-      schemaSqlTableNames(
+      classifiedTableRelations(
         new Map([
-          ["apps/api/src/lib/flow-types.ts", `export const flowRuns = {};`],
-        ]),
-        new Set(["flowRuns"]),
-        "head",
-      ),
-    ).toThrow("no declaration-derived SQL relation name");
-    expect(() =>
-      schemaSqlTableNames(
-        new Map([
-          ["apps/api/src/db/schema/flows.ts", table],
-          [
-            "apps/api/src/db/schema/signals.ts",
-            `import * as p from "drizzle-orm/pg-core"; export const signals = p.pgTable("flow_runs", {});`,
-          ],
+          ["flowRuns", "flow_runs"],
+          ["signals", "flow_runs"],
         ]),
         new Set(["flowRuns", "signals"]),
-        "head",
       ),
     ).toThrow("Duplicate SQL relation name");
   });
 });
-
 describe("historical organization graph metadata", () => {
   const headRegistry = `export const ORG_SCOPE_TABLES = { flowRuns: flowRunScope, newTable: newTableScope } as const;
     export const GLOBAL_SCOPE_TABLES = {} as const;`;
+  const headRelations =
+    'export const TABLE_RELATIONS = { flowRuns: "flow_runs", newTable: "new_table" } as const;';
+  const head = { registry: headRegistry, tableRelations: headRelations };
   const rootOwnership = new Map([
     [
       "scripts/ownership/root-door.ts",
@@ -13630,15 +13567,38 @@ describe("historical organization graph metadata", () => {
       `import * as p from "drizzle-orm/pg-core"; export const flowRuns = p.pgTable("flow_runs", {});`,
     ],
   ]);
+  const recoveryOwner = [
+    'const CLASSES = ["claims"] as const;',
+    String.raw`export default { id: "recovery-bookkeeping", owner: CLASSES.map((kind) => ${"`"}apps/api/src/lib/db/recovery-bookkeeping/${"${"}kind}.ts${"`"}) } as const;`,
+  ].join("\n");
+  const headOwnership = new Map([
+    ...rootOwnership,
+    ["scripts/ownership/recovery-bookkeeping.ts", recoveryOwner],
+  ]);
 
-  test("base uses HEAD classifications without a base registry and permits newer tables", () => {
+  test("base uses HEAD classifications and relation names without base copies", () => {
     const result = deriveOrgWriteGraphInputs(historicalSources, rootOwnership, {
       role: "base",
-      headRegistryContent: headRegistry,
+      head,
     });
     expect(result.orgTables).toEqual(new Set(["flowRuns", "newTable"]));
-    expect(result.sqlTables).toEqual(new Map([["flow_runs", "flowRuns"]]));
+    expect(result.sqlTables).toEqual(
+      new Map([
+        ["flow_runs", "flowRuns"],
+        ["new_table", "newTable"],
+      ]),
+    );
     expect(result.recoveryOwnerFiles).toEqual(new Set());
+  });
+
+  test("base requires the measured HEAD metadata", () => {
+    expect(() =>
+      deriveOrgWriteGraphInputs(historicalSources, rootOwnership, {
+        role: "base",
+      }),
+    ).toThrow(
+      /requires the measured HEAD scope registry and table relations/iu,
+    );
   });
 
   test("base recovery metadata may be absent only when canonical modules are absent", () => {
@@ -13652,7 +13612,7 @@ describe("historical organization graph metadata", () => {
           ],
         ]),
         rootOwnership,
-        { role: "base", headRegistryContent: headRegistry },
+        { role: "base", head },
       ),
     ).toThrow(/recovery-bookkeeping.ts while recovery modules exist/iu);
   });
@@ -13668,7 +13628,7 @@ describe("historical organization graph metadata", () => {
     expect(() =>
       deriveOrgWriteGraphInputs(historicalSources, ownership, {
         role: "base",
-        headRegistryContent: headRegistry,
+        head,
       }),
     ).toThrow(/literal recovery CLASSES array/iu);
   });
@@ -13676,25 +13636,12 @@ describe("historical organization graph metadata", () => {
   test("HEAD derives strict metadata from its complete tree", () => {
     const completeSources = new Map([
       ...historicalSources,
-      [
-        "apps/api/src/db/schema/new-table.ts",
-        `import * as p from "drizzle-orm/pg-core"; export const newTable = p.pgTable("new_table", {});`,
-      ],
+      ["apps/api/src/lib/db/table-relations.gen.ts", headRelations],
       ["apps/api/src/db/org-scope-registry.ts", headRegistry],
     ]);
-    const recoveryOwner = [
-      'const CLASSES = ["claims"] as const;',
-      String.raw`export default { id: "recovery-bookkeeping", owner: CLASSES.map((kind) => ${"`"}apps/api/src/lib/db/recovery-bookkeeping/${"${"}kind}.ts${"`"}) } as const;`,
-    ].join("\n");
-    const completeOwnership = new Map([
-      ...rootOwnership,
-      ["scripts/ownership/recovery-bookkeeping.ts", recoveryOwner],
-    ]);
-    const result = deriveOrgWriteGraphInputs(
-      completeSources,
-      completeOwnership,
-      { role: "head" },
-    );
+    const result = deriveOrgWriteGraphInputs(completeSources, headOwnership, {
+      role: "head",
+    });
     expect(result.orgTables).toEqual(new Set(["flowRuns", "newTable"]));
     expect(result.sqlTables).toEqual(
       new Map([
@@ -13707,15 +13654,7 @@ describe("historical organization graph metadata", () => {
     );
   });
 
-  test("HEAD requires its registry and every classified schema declaration", () => {
-    const recoveryOwner = [
-      'const CLASSES = ["claims"] as const;',
-      String.raw`export default { id: "recovery-bookkeeping", owner: CLASSES.map((kind) => ${"`"}apps/api/src/lib/db/recovery-bookkeeping/${"${"}kind}.ts${"`"}) } as const;`,
-    ].join("\n");
-    const headOwnership = new Map([
-      ...rootOwnership,
-      ["scripts/ownership/recovery-bookkeeping.ts", recoveryOwner],
-    ]);
+  test("HEAD requires its registry, its relation map and every classified table in it", () => {
     expect(() =>
       deriveOrgWriteGraphInputs(historicalSources, headOwnership, {
         role: "head",
@@ -13723,8 +13662,21 @@ describe("historical organization graph metadata", () => {
     ).toThrow(
       /Missing tree source apps\/api\/src\/db\/org-scope-registry.ts/iu,
     );
+    const withRegistry = new Map([
+      ...historicalSources,
+      ["apps/api/src/db/org-scope-registry.ts", headRegistry],
+    ]);
     expect(() =>
-      schemaSqlTableNames(historicalSources, new Set(["newTable"]), "head"),
-    ).toThrow(/no declaration-derived SQL relation name/iu);
+      deriveOrgWriteGraphInputs(withRegistry, headOwnership, { role: "head" }),
+    ).toThrow(
+      /Missing tree source apps\/api\/src\/lib\/db\/table-relations.gen.ts/iu,
+    );
+    withRegistry.set(
+      "apps/api/src/lib/db/table-relations.gen.ts",
+      'export const TABLE_RELATIONS = { flowRuns: "flow_runs" } as const;',
+    );
+    expect(() =>
+      deriveOrgWriteGraphInputs(withRegistry, headOwnership, { role: "head" }),
+    ).toThrow(/Classified table newTable has no entry/iu);
   });
 });

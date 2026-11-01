@@ -62,7 +62,11 @@ import {
   TRACKED_SUPPRESSION_RULES,
   type TrackedRule,
 } from "./lint-suppressions";
-import { deriveOrgWriteGraphInputs } from "./org-write-graph-enrollment";
+import {
+  deriveOrgWriteGraphInputs,
+  type OrgWriteGraphHeadMetadata,
+  orgWriteGraphHeadMetadata,
+} from "./org-write-graph-enrollment";
 import {
   isApiProductionModule,
   isOutboundProductionModule,
@@ -142,7 +146,7 @@ type SourceTree = {
   readonly root: string;
   readonly role: MeasurementRole;
   readonly trackedFiles?: ReadonlySet<string> | undefined;
-  readonly headOrgScopeRegistry?: string | undefined;
+  readonly headOrgGraph?: OrgWriteGraphHeadMetadata | undefined;
   readonly globs: Map<string, readonly string[]>;
   readonly contents: Map<string, string>;
 };
@@ -1277,7 +1281,6 @@ const ROOT_CONNECTION_DOOR_FILES: ReadonlySet<string> = new Set(
   ROOT_CONNECTION_DOORS.flatMap((door) => door.owner),
 );
 
-const ORG_SCOPE_REGISTRY_FILE = "apps/api/src/db/org-scope-registry.ts";
 const orgWriteBudgetPath = (file: string): string =>
   file === "apps/api/src/lib/member-assignment-offboarding.ts" ||
   file === "apps/api/src/lib/member-assignment-offboarding-owner.ts"
@@ -3564,9 +3567,8 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       );
       const graphInputs = deriveOrgWriteGraphInputs(sources, ownershipSources, {
         role: context.role,
-        ...(context.role === "base" &&
-        context.headOrgScopeRegistry !== undefined
-          ? { headRegistryContent: context.headOrgScopeRegistry }
+        ...(context.role === "base" && context.headOrgGraph !== undefined
+          ? { head: context.headOrgGraph }
           : {}),
       });
       const { rootDoorFiles, ...analysisInputs } = graphInputs;
@@ -4185,7 +4187,7 @@ type TreeScan = {
   readonly snapshot: Baseline;
   readonly role: MeasurementRole;
   readonly files: ReadonlyMap<string, FileCounts>;
-  readonly headOrgScopeRegistry?: string | undefined;
+  readonly headOrgGraph?: OrgWriteGraphHeadMetadata | undefined;
 };
 
 type ScanTreeOptions = {
@@ -4210,18 +4212,18 @@ export const scanTree = ({
     (metric) =>
       metric.scope === "repo" && metric.id === "unscoped-org-owner-writes",
   );
-  let headOrgScopeRegistry = previous?.headOrgScopeRegistry;
+  let headOrgGraph = previous?.headOrgGraph;
   if (needsOrgWriteGraph && tree.role === "head") {
-    headOrgScopeRegistry = readSource(tree, ORG_SCOPE_REGISTRY_FILE);
+    headOrgGraph = orgWriteGraphHeadMetadata((file) => readSource(tree, file));
   }
-  if (needsOrgWriteGraph && headOrgScopeRegistry === undefined) {
+  if (needsOrgWriteGraph && headOrgGraph === undefined) {
     return panic(
-      "Base organization graph measurement requires the measured HEAD scope registry",
+      "Base organization graph measurement requires the measured HEAD scope registry and table relations",
     );
   }
   const metricContext: SourceTree = {
     ...tree,
-    ...(headOrgScopeRegistry === undefined ? {} : { headOrgScopeRegistry }),
+    ...(headOrgGraph === undefined ? {} : { headOrgGraph }),
   };
   const metricsByFile = new Map<string, FileMetric[]>();
   for (const metric of metrics) {
@@ -4301,7 +4303,7 @@ export const scanTree = ({
     snapshot: inspection.baseline,
     role: tree.role,
     files,
-    ...(headOrgScopeRegistry === undefined ? {} : { headOrgScopeRegistry }),
+    ...(headOrgGraph === undefined ? {} : { headOrgGraph }),
   };
 };
 
@@ -7364,6 +7366,24 @@ const runSelfTest = (): number => {
       root,
       "packages/cast-fixture/src/casts.test.ts",
       "const z = value as Widget;\n",
+    );
+
+    // The organization write graph reads HEAD's declared scope registry,
+    // relation map and recovery owner; an empty graph counts zero.
+    writeFixture(
+      root,
+      "apps/api/src/db/org-scope-registry.ts",
+      "export const ORG_SCOPE_TABLES = {};\nexport const GLOBAL_SCOPE_TABLES = {};\n",
+    );
+    writeFixture(
+      root,
+      "apps/api/src/lib/db/table-relations.gen.ts",
+      "export const TABLE_RELATIONS = {} as const;\n",
+    );
+    writeFixture(
+      root,
+      "scripts/ownership/recovery-bookkeeping.ts",
+      `const CLASSES = [] as const;\nexport default { id: "recovery-bookkeeping", owner: CLASSES.map((kind) => \`apps/api/src/lib/db/recovery-bookkeeping/\${kind}.ts\`) };\n`,
     );
 
     writeFileSync(path.join(root, "package.json"), "{}");

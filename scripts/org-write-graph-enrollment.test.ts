@@ -6,7 +6,7 @@ const registryFile = "apps/api/src/db/org-scope-registry.ts";
 const bookkeepingFile = "apps/api/src/lib/db/recovery-bookkeeping/scheduler.ts";
 const authorityFile = "apps/api/src/lib/scheduler/task-authority.ts";
 const globalFile = "apps/api/src/lib/db/global-system-work.ts";
-const schemaFile = "apps/api/src/db/schema/scheduler.ts";
+const tableRelationsFile = "apps/api/src/lib/db/table-relations.gen.ts";
 const descriptor = `schedulerJobs: {
   table: schedulerJobs,
   ownership: "mixed",
@@ -35,9 +35,14 @@ const authority = `export const SCHEDULER_TASK_AUTHORITY = {
 const global = `export const GLOBAL_SYSTEM_JOBS = {
   "flow-schedule-orphan-page": {owner: "apps/api/src/lib/flows/sync-flow-schedule-trigger.ts"},
 };`;
-const schema = `import {pgTable} from "drizzle-orm/pg-core";
-  export const schedulerJobs = pgTable("scheduler_jobs", {});
-  export const flowRuns = pgTable("flow_runs", {});`;
+const tableRelations = `export const TABLE_RELATIONS = {
+  flowRuns: "flow_runs",
+  schedulerJobs: "scheduler_jobs",
+} as const;`;
+const head = (headRegistry: string) => ({
+  registry: headRegistry,
+  tableRelations,
+});
 const ownership = new Map([
   [
     "scripts/ownership/root-door.ts",
@@ -54,7 +59,7 @@ const sources = () =>
     [bookkeepingFile, bookkeeping],
     [authorityFile, authority],
     [globalFile, global],
-    [schemaFile, schema],
+    [tableRelationsFile, tableRelations],
   ]);
 const replaceFixture = ({
   source,
@@ -123,7 +128,7 @@ describe("mixed scheduler graph enrollment", () => {
   });
 
   test("historical BASE with no bookkeeping module retains mixed constraint and no native grants", () => {
-    const historical = new Map([[schemaFile, schema]]);
+    const historical = new Map([[tableRelationsFile, tableRelations]]);
     const rootOwnership = new Map(
       [...ownership].filter(
         ([file]) => file !== "scripts/ownership/recovery-bookkeeping.ts",
@@ -131,7 +136,7 @@ describe("mixed scheduler graph enrollment", () => {
     );
     const result = deriveOrgWriteGraphInputs(historical, rootOwnership, {
       role: "base",
-      headRegistryContent: registry,
+      head: head(registry),
     });
     expect(result.schedulerWriteIntents).toEqual({
       table: "schedulerJobs",
@@ -154,7 +159,7 @@ describe("mixed scheduler graph enrollment", () => {
     historical.delete(globalFile);
     const contract = deriveOrgWriteGraphInputs(historical, ownership, {
       role: "base",
-      headRegistryContent: registry,
+      head: head(registry),
     }).schedulerWriteIntents;
     expect(contract?.table).toBe("schedulerJobs");
     expect(contract?.dispositions.size).toBe(0);
@@ -166,7 +171,7 @@ describe("mixed scheduler graph enrollment", () => {
     expect(
       deriveOrgWriteGraphInputs(sources(), ownership, {
         role: "base",
-        headRegistryContent: registry,
+        head: head(registry),
       }).schedulerWriteIntents?.dispositions.get("upsert"),
     ).toBe("by-task");
     const malformed = sources();
@@ -181,7 +186,7 @@ describe("mixed scheduler graph enrollment", () => {
     expect(() =>
       deriveOrgWriteGraphInputs(malformed, ownership, {
         role: "base",
-        headRegistryContent: registry,
+        head: head(registry),
       }),
     ).toThrow(/missing intent disposition upsert/iu);
   });
@@ -201,7 +206,7 @@ describe("mixed scheduler graph enrollment", () => {
       expect(() =>
         deriveOrgWriteGraphInputs(measured, ownership, {
           role: "base",
-          headRegistryContent: changedRegistry,
+          head: head(changedRegistry),
         }),
       ).toThrow(/Typed scheduler intent owner requires a matching mixed/iu);
     },
@@ -209,7 +214,7 @@ describe("mixed scheduler graph enrollment", () => {
 
   test("fixtures without a typed scheduler intent owner keep their existing metadata-less global tables", () => {
     const plain = new Map([
-      [schemaFile, schema],
+      [tableRelationsFile, tableRelations],
       [
         registryFile,
         "export const ORG_SCOPE_TABLES = {flowRuns: {table: flowRuns}}; export const GLOBAL_SCOPE_TABLES = {schedulerJobs: {table: schedulerJobs}};",
@@ -234,7 +239,7 @@ describe("mixed scheduler graph enrollment", () => {
         expect(() =>
           deriveOrgWriteGraphInputs(measured, ownership, {
             role: "base",
-            headRegistryContent: registry,
+            head: head(registry),
           }),
         ).toThrow(/Missing mixed scheduler source/iu);
       }
@@ -344,16 +349,16 @@ describe("mixed scheduler graph enrollment", () => {
   test("unregistered and inconsistent table exports cannot become mixed targets", () => {
     const measured = sources();
     measured.set(
-      schemaFile,
+      tableRelationsFile,
       replaceFixture({
-        source: schema,
-        from: 'export const schedulerJobs = pgTable("scheduler_jobs", {});',
+        source: tableRelations,
+        from: '  schedulerJobs: "scheduler_jobs",\n',
         to: "",
       }),
     );
     expect(() =>
       deriveOrgWriteGraphInputs(measured, ownership, { role: "head" }),
-    ).toThrow(/no declaration-derived SQL relation name/iu);
+    ).toThrow(/Classified table schedulerJobs has no entry/iu);
     const mismatch = sources();
     mismatch.set(
       bookkeepingFile,
@@ -381,7 +386,7 @@ describe("mixed scheduler graph enrollment", () => {
     expect(() =>
       deriveOrgWriteGraphInputs(measured, ownership, {
         role: "base",
-        headRegistryContent: registry,
+        head: head(registry),
       }),
     ).toThrow(/direct exported SCHEDULER_WRITE_INTENT_DISPOSITIONS/iu);
     const missing = sources();
@@ -403,7 +408,7 @@ describe("mixed scheduler graph enrollment", () => {
     expect(() =>
       deriveOrgWriteGraphInputs(measured, ownership, {
         role: "base",
-        headRegistryContent: registry,
+        head: head(registry),
       }),
     ).toThrow(/direct exported SCHEDULER_WRITE_INTENT_DISPOSITIONS/iu);
   });
@@ -418,7 +423,7 @@ describe("mixed scheduler graph enrollment", () => {
       expect(() =>
         deriveOrgWriteGraphInputs(badAuthority, ownership, {
           role,
-          headRegistryContent: registry,
+          head: head(registry),
         }),
       ).toThrow(/missing schedulerOwnership/iu);
       const badGlobal = sources();
@@ -429,7 +434,7 @@ describe("mixed scheduler graph enrollment", () => {
       expect(() =>
         deriveOrgWriteGraphInputs(badGlobal, ownership, {
           role,
-          headRegistryContent: registry,
+          head: head(registry),
         }),
       ).toThrow(/must be a string literal/iu);
     }

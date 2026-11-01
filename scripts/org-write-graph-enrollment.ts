@@ -64,25 +64,6 @@ const literalProperty = (
   return matching.at(0);
 };
 
-const isPgTableConstructor = (callee: Node): boolean => {
-  if (callee.type === "Identifier") {
-    return callee.name === "pgTable";
-  }
-  if (callee.type !== "MemberExpression") {
-    return false;
-  }
-  if (memberName(callee) === "pgTable") {
-    return true;
-  }
-  return (
-    memberName(callee) === "withRLS" &&
-    ((callee.object.type === "Identifier" &&
-      callee.object.name === "pgTable") ||
-      (callee.object.type === "MemberExpression" &&
-        memberName(callee.object) === "pgTable"))
-  );
-};
-
 const recoveryClassNames = (
   source: ReturnType<typeof parseSource>,
   file: string,
@@ -578,126 +559,105 @@ const schedulerWriteGraphContract = ({
 
 export type OrgWriteGraphMeasurementRole = "head" | "base";
 
-export const schemaSqlTableNames = (
-  sources: ReadonlyMap<string, string>,
-  tableExports: ReadonlySet<string>,
-  role: OrgWriteGraphMeasurementRole,
+/** The committed map of each schema table export to its SQL relation name. */
+export const tableRelationsPath = "apps/api/src/lib/db/table-relations.gen.ts";
+
+/** Reads `TABLE_RELATIONS` from the generated map; any other shape is fatal. */
+export const parseTableRelations = (
+  content: string,
 ): ReadonlyMap<string, string> => {
-  const exportRelations = new Map<string, string>();
-  for (const [file, content] of sources) {
-    const source = parseSource(file, content);
-    const constants = new Map<string, Node>();
-    for (const statement of source.program.body) {
-      const declaration =
-        statement.type === "ExportNamedDeclaration"
-          ? statement.declaration
-          : statement;
+  const program = parseSource(tableRelationsPath, content).program;
+  for (const statement of program.body) {
+    if (
+      statement.type !== "ExportNamedDeclaration" ||
+      statement.declaration?.type !== "VariableDeclaration"
+    ) {
+      continue;
+    }
+    for (const declaration of statement.declaration.declarations) {
       if (
-        declaration?.type !== "VariableDeclaration" ||
-        declaration.kind !== "const"
+        declaration.id.type !== "Identifier" ||
+        declaration.id.name !== "TABLE_RELATIONS" ||
+        declaration.init === null
       ) {
         continue;
       }
-      for (const binding of declaration.declarations) {
-        if (binding.id.type !== "Identifier" || binding.init === null) {
-          continue;
-        }
-        if (constants.has(binding.id.name)) {
-          panic(`${file} repeats constant ${binding.id.name}`);
-        }
-        constants.set(binding.id.name, binding.init);
+      const map = unwrap(declaration.init);
+      if (map.type !== "ObjectExpression") {
+        return panic(`${tableRelationsPath} TABLE_RELATIONS must be literal`);
       }
-    }
-    const resolveRelation = (
-      node: Node | undefined,
-      seen: ReadonlySet<string>,
-    ): string | undefined => {
-      if (node === undefined) {
-        return undefined;
-      }
-      const value = unwrap(node);
-      const literal = stringLiteral(value);
-      if (literal !== undefined) {
-        return literal;
-      }
-      if (value.type !== "Identifier" || seen.has(value.name)) {
-        return undefined;
-      }
-      return resolveRelation(
-        constants.get(value.name),
-        new Set([...seen, value.name]),
-      );
-    };
-    for (const statement of source.program.body) {
-      if (
-        statement.type !== "ExportNamedDeclaration" ||
-        statement.declaration?.type !== "VariableDeclaration"
-      ) {
-        continue;
-      }
-      for (const declaration of statement.declaration.declarations) {
-        if (
-          declaration.id.type !== "Identifier" ||
-          !tableExports.has(declaration.id.name)
-        ) {
-          continue;
-        }
-        if (declaration.init === null) {
-          continue;
-        }
-        const initializer = unwrap(declaration.init);
-        if (
-          initializer.type !== "CallExpression" ||
-          !isPgTableConstructor(initializer.callee)
-        ) {
-          continue;
-        }
-        const relation = resolveRelation(
-          initializer.arguments.at(0),
-          new Set(),
-        );
-        if (relation === undefined) {
+      const relations = new Map<string, string>();
+      for (const property of map.properties) {
+        const table =
+          property.type === "Property" &&
+          !property.computed &&
+          !property.method &&
+          property.kind === "init"
+            ? staticPropertyName(property)
+            : undefined;
+        const relation =
+          property.type === "Property" ? stringLiteral(property.value) : "";
+        if (table === undefined || relation === undefined) {
           return panic(
-            `Schema table ${declaration.id.name} must declare its SQL relation name through immutable literal bindings`,
+            `${tableRelationsPath} TABLE_RELATIONS entries must be literal`,
           );
         }
-        if (exportRelations.has(declaration.id.name)) {
-          return panic(
-            `Schema table ${declaration.id.name} has multiple declarations`,
-          );
+        if (relations.has(table)) {
+          return panic(`${tableRelationsPath} repeats table ${table}`);
         }
-        exportRelations.set(declaration.id.name, relation);
+        relations.set(table, relation);
       }
+      return relations;
     }
   }
-  if (role === "head") {
-    for (const table of tableExports) {
-      if (!exportRelations.has(table)) {
-        panic(
-          `Schema table ${table} has no declaration-derived SQL relation name`,
-        );
-      }
-    }
-  }
-  const relations = new Map<string, string>();
-  for (const [table, relation] of exportRelations) {
-    if (relations.has(relation)) {
-      panic(`Duplicate SQL relation name ${relation} in schema declarations`);
-    }
-    relations.set(relation, table);
-  }
-  return relations;
+  return panic(`${tableRelationsPath} must export TABLE_RELATIONS`);
 };
+
+/**
+ * SQL relation name to table export for every classified table. A classified
+ * table without a relation name is fatal: counting its writes as zero would
+ * hide them.
+ */
+export const classifiedTableRelations = (
+  relations: ReadonlyMap<string, string>,
+  tableExports: ReadonlySet<string>,
+): ReadonlyMap<string, string> => {
+  const byRelation = new Map<string, string>();
+  for (const table of tableExports) {
+    const relation =
+      relations.get(table) ??
+      panic(`Classified table ${table} has no entry in ${tableRelationsPath}`);
+    if (byRelation.has(relation)) {
+      return panic(`Duplicate SQL relation name ${relation}`);
+    }
+    byRelation.set(relation, table);
+  }
+  return byRelation;
+};
+
+/** The HEAD-classified inputs a base measurement reuses. */
+export type OrgWriteGraphHeadMetadata = {
+  readonly registry: string;
+  readonly tableRelations: string;
+};
+
+/** The measured HEAD tree's classification inputs. */
+export const orgWriteGraphHeadMetadata = (
+  read: (file: string) => string,
+): OrgWriteGraphHeadMetadata => ({
+  registry: read(scopeRegistryPath),
+  tableRelations: read(tableRelationsPath),
+});
 
 export const deriveOrgWriteGraphInputs = (
   sources: ReadonlyMap<string, string>,
   ownershipSources: ReadonlyMap<string, string>,
   {
     role,
-    headRegistryContent,
+    head,
   }: {
     readonly role: OrgWriteGraphMeasurementRole;
-    readonly headRegistryContent?: string;
+    readonly head?: OrgWriteGraphHeadMetadata;
   },
 ): {
   readonly rootDoorFiles: ReadonlySet<string>;
@@ -725,14 +685,16 @@ export const deriveOrgWriteGraphInputs = (
   } else {
     recoveryOwnerFiles = parseRecoveryOwnerFiles(recoveryContent);
   }
-  const registry =
+  const metadata =
     role === "head"
-      ? (sources.get(scopeRegistryPath) ??
-        panic(`Missing tree source ${scopeRegistryPath}`))
-      : (headRegistryContent ??
+      ? orgWriteGraphHeadMetadata(
+          (file) => sources.get(file) ?? panic(`Missing tree source ${file}`),
+        )
+      : (head ??
         panic(
-          "Base organization graph requires the measured HEAD scope registry",
+          "Base organization graph requires the measured HEAD scope registry and table relations",
         ));
+  const { registry } = metadata;
   const orgTables = new Set(
     scopeTableExportNames(registry, scopeRegistryPath, "ORG_SCOPE_TABLES"),
   );
@@ -752,7 +714,10 @@ export const deriveOrgWriteGraphInputs = (
     recoveryOwnerFiles,
     orgTables,
     globalTables,
-    sqlTables: schemaSqlTableNames(sources, allTables, role),
+    sqlTables: classifiedTableRelations(
+      parseTableRelations(metadata.tableRelations),
+      allTables,
+    ),
     ...(schedulerWriteIntents === undefined ? {} : { schedulerWriteIntents }),
   };
 };

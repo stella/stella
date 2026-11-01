@@ -65,6 +65,7 @@ const seedOrgWriteGraphFixture = (
       `export const ORG_SCOPE_TABLES = { ${registry(orgTables)} };`,
       `export const GLOBAL_SCOPE_TABLES = { ${registry(globalTables)} };`,
     ].join("\n"),
+    "apps/api/src/lib/db/table-relations.gen.ts": `export const TABLE_RELATIONS = ${JSON.stringify(tables)} as const;`,
     "scripts/ownership/org-writer-fixture.ts": `export default {
       id: "org-writer-fixture",
       group: "root-connection",
