@@ -2392,7 +2392,6 @@
     "unverifiedCitationHint": "Nepavyko susieti šios citatos su šaltinio dokumentu.",
     "uploadFiles": "Įkelti failus",
     "urlIdentifier": "URL identifikatorius",
-    "urlIdentifierPlaceholder": "mano-organizacija",
     "user": "Naudotojas",
     "value": "Reikšmė",
     "vatId": "PVM mokėtojo kodas",
@@ -2443,6 +2442,7 @@
     "scopeMemoryWrite": "Kurti ir atnaujinti asistento atmintį",
     "scopeOfflineAccess": "Išlaikyti jus prisijungusį be pakartotinio patvirtinimo",
     "scopeOnboarding": "Konfigūruoti jūsų organizacijos praktikos jurisdikcijas",
+    "scopeOrganizationCreate": "Kurti naujas organizacijas, kurių savininkas būsite jūs",
     "scopeProfile": "Pasiekti jūsų profilio informaciją",
     "scopeRead": "Skaityti jūsų dokumentus, bylas ir kontaktus",
     "scopeReadAnonymized": "Skaityti anonimizuotas jūsų dokumentų ir bylų versijas",
@@ -2969,7 +2969,6 @@
     "failedToVerifyOtp": "Nepavyko patvirtinti kodo",
     "matterNotFound": "Byla nerasta",
     "partyAlreadyExists": "Kontaktas jau turi šią rolę byloje",
-    "slugAlreadyTaken": "Šis slug jau užimtas",
     "uploadFailed": "Įkėlimas nepavyko"
   },
   "feedback": {
@@ -4722,6 +4721,13 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Naudojami numatytieji nustatymai"
     },
+    "creationEvaluationLimitReached": "Išnaudojote visus {limit} organizacijų bandomuosius laikotarpius. Ištrynus organizaciją, bandomasis laikotarpis neatkuriamas. Naudokite esamą organizaciją arba kreipkitės į pagalbos tarnybą dėl mokamos prieigos.",
+    "creationInvalidName": "Įveskite tinkamą organizacijos pavadinimą (iki {maxLength} simbolių).",
+    "creationNotAllowed": "Ši paskyra negali kurti organizacijų.",
+    "creationOutcomeUnknown": "Užklausa galėjo sukurti organizaciją. Bandykite dar kartą, kad patikrintumėte rezultatą.",
+    "creationRateLimited": "Pastaruoju metu sukurta per daug organizacijų. Bandykite dar kartą vėliau.",
+    "creationRefused": "Organizacijos sukurti nepavyko. Patikrinkite duomenis ir bandykite dar kartą.",
+    "creationSlugConflict": "Šis organizacijos adresas jau naudojamas. Pasirinkite kitą pavadinimą arba adresą.",
     "invitations": {
       "cancelInvitation": "Atšaukti kvietimą",
       "emailAddressLabel": "El. pašto adresas",
@@ -4736,6 +4742,7 @@
       "statuses": {
         "accepted": "Priimtas",
         "canceled": "Atšauktas",
+        "expired": "Nebegalioja",
         "pending": "Laukiama",
         "rejected": "Atmestas"
       }
@@ -4769,6 +4776,8 @@
       "typeEmailToConfirm": "Įveskite {email}, kad patvirtintumėte",
       "updateRole": "Atnaujinti rolę"
     },
+    "newOrganization": "Nauja organizacija",
+    "newOrganizationDescription": "Sukurkite organizaciją, kurios savininkas būsite jūs.",
     "roles": {
       "admin": "Administratorius",
       "descriptions": {
@@ -4784,6 +4793,9 @@
       "owner": "Savininkas"
     },
     "settingsDescription": "Redaguokite organizacijos pavadinimą ir slug",
+    "startOver": "Pradėti iš naujo",
+    "startOverDescription": "Pradinė užklausa galėjo jau sukurti organizaciją. Prieš pradėdami iš naujo patikrinkite savo organizacijas; nauja užklausa gali sukurti dar vieną organizaciją.",
+    "startOverTitle": "Siųsti naują kūrimo užklausą?",
     "switchOrganization": "Pakeisti organizaciją"
   },
   "publicTools": {
@@ -5379,6 +5391,7 @@
         "title": "Atminties išgavimas",
         "toggleLabel": "Fone siūlyti atminties įrašus iš pokalbių istorijos"
       },
+      "pastInvitations": "Ankstesni kvietimai",
       "pendingInvitations": "Laukiantys kvietimai",
       "practiceJurisdictions": "Jurisdikcijos",
       "practiceJurisdictionsDescription": "Pasirinkite jums aktualias jurisdikcijas.",
@@ -6216,8 +6229,7 @@
   "validation": {
     "invalidEmail": "Įveskite galiojantį el. pašto adresą.",
     "organizationNameRequired": "Organizacijos pavadinimas yra privalomas",
-    "slugFormat": "Slug gali būti tik mažosios raidės, skaičiai ir brūkšneliai",
-    "slugRequired": "Slug yra privalomas"
+    "slugFormat": "Slug gali būti tik mažosios raidės, skaičiai ir brūkšneliai"
   },
   "verify": {
     "history": "{history, select, refiled {Atspausdinta su nuorodos numeriu <bdi>{reference}</bdi>; dabar dokumentas registruotas numeriu <bdi>{currentReference}</bdi> byloje <bdi>{matterName}</bdi>.} superseded {Šis nuorodos numeris rodo į {version, number} versiją; dabartinė versija yra {currentVersion, number}.} other {Atspausdinta su nuorodos numeriu <bdi>{reference}</bdi>; dabar dokumentas registruotas numeriu <bdi>{currentReference}</bdi> byloje <bdi>{matterName}</bdi>. Šis nuorodos numeris rodo į {version, number} versiją; dabartinė versija yra {currentVersion, number}.}}",
