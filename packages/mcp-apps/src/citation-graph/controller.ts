@@ -69,7 +69,7 @@ export const createGraphController = (bridge: GraphBridge) => {
     if (page === undefined && !canExpand(model, decisionId)) {
       return;
     }
-    if (page !== undefined && page.nextCursor === null) {
+    if (page?.nextCursor === null) {
       return;
     }
     const current = generation;

@@ -875,8 +875,7 @@ const readRtfInto = (
   const enterDestination = (destination: Destination): void => {
     flushRun();
     const frame = stack.at(-1);
-    // parser-output-unchanged: the empty-stack case already skipped the hold; it is now written out.
-    if (frame !== undefined && frame.heldParagraph === null) {
+    if (frame?.heldParagraph === null) {
       frame.heldParagraph = paragraph;
       paragraph = { content: [], alignment: undefined, following: [] };
       hasPendingRun = false;

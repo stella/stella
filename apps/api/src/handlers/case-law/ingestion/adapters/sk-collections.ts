@@ -406,12 +406,7 @@ export const createSkCollectionConnector = ({
         const currentCache =
           cache?.parserVersion === SK_COLLECTION_PARSER_VERSION ? cache : null;
         // A publisher without validators is fetched once per immutable issue URL.
-        // parser-output-unchanged: a missing cache still skips the shortcut; the null check is now written out.
-        if (
-          currentCache !== null &&
-          currentCache.etag === null &&
-          currentCache.lastModified === null
-        ) {
+        if (currentCache?.etag === null && currentCache.lastModified === null) {
           return Result.ok({ status: "unchanged", cache: currentCache });
         }
         const headers = new Headers({ "User-Agent": USER_AGENT });

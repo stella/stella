@@ -469,6 +469,7 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-optional-chain-null-compare.fixture.ts", [
     "no-optional-chain-null-compare/no-optional-chain-null-compare",
+    "no-optional-chain-null-compare/no-optional-chain-absent-match",
   ]),
   fixtureRuleOverride("no-constructed-fetch-object.fixture.ts", [
     "no-constructed-fetch-object/no-constructed-fetch-object",

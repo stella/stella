@@ -93,7 +93,7 @@ const useTimeEntryRate = ({
   });
   const missingRate =
     billable &&
-    ((rateQuery.data !== undefined && rateQuery.data.hourlyRate === null) ||
+    (rateQuery.data?.hourlyRate === null ||
       (rateRefusal?.workspaceId === workspaceId &&
         rateRefusal.userId === userId &&
         rateRefusal.date === date &&

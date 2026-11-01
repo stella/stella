@@ -712,7 +712,7 @@ export const resolveDecisionIdentityTx = async (
   const incomingSupersedesExisting =
     observed.sourceDocumentId !== undefined &&
     (ecliIdentity.type === "adopted" ||
-      (existing !== undefined && existing.sourceDocumentId === null) ||
+      existing?.sourceDocumentId === null ||
       existing?.sourceDocumentId === observed.sourceDocumentId ||
       (existingIdentity !== undefined &&
         (observed.sourceDocumentIdAliases?.includes(existingIdentity) ===

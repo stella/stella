@@ -107,7 +107,7 @@ type SanctionsSourceRow = Awaited<ReturnType<typeof loadSanctionsRows>>[number];
 const activeEditionFromRow = (
   row: SanctionsSourceRow | undefined,
 ): SanctionsSourceFreshness["edition"] => {
-  if (row === undefined || row.activeEditionId === null) {
+  if (row?.activeEditionId === null || row?.activeEditionId === undefined) {
     return null;
   }
   if (
@@ -131,7 +131,7 @@ const activeEditionFromRow = (
 const heldUpdateFromRow = (
   row: SanctionsSourceRow | undefined,
 ): SanctionsSourceFreshness["heldUpdate"] => {
-  if (row === undefined || row.heldGuardCode === null) {
+  if (row?.heldGuardCode === null || row?.heldGuardCode === undefined) {
     return null;
   }
   if (row.heldEditionId === null || row.heldAt === null) {

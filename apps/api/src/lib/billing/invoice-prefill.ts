@@ -193,7 +193,7 @@ export const resolveInvoicePrefillContext = (
 ) => {
   const matter = matters.get(workspaceId);
   const buyer =
-    matter === undefined || matter.clientName === null
+    matter?.clientName === null || matter?.clientName === undefined
       ? EMPTY_BUYER_SNAPSHOT
       : buyerSnapshotFromContact({
           displayName: matter.clientName,

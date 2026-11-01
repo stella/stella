@@ -924,12 +924,7 @@ export const createDraftInvoice = async (
     .insert(invoices)
     .values({
       organizationId,
-      workspaceId:
-        originalScope !== null &&
-        originalScope !== undefined &&
-        originalScope.workspaceId === null
-          ? null
-          : workspaceId,
+      workspaceId: originalScope?.workspaceId === null ? null : workspaceId,
       clientId: originalScope?.clientId ?? clientId,
       invoiceNumber: body.invoiceNumber ?? null,
       documentType,
