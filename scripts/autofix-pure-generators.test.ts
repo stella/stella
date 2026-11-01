@@ -45,7 +45,6 @@ const PURE_AUTOFIX = {
     "scripts/generate-main-heavy-infrastructure-steps.ts",
   // Parses schema source without opening a database connection.
   "status-tables": "apps/api/scripts/generate-status-tables.ts",
-  "table-relations": "apps/api/scripts/generate-table-relations.ts",
   "account-export-tables": "apps/api/scripts/generate-account-export-tables.ts",
   // Reads declaration syntax and committed migration inventory; writes only its owner block.
   "online-unique-index-names":

@@ -1326,28 +1326,6 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
-    // The organization write ratchet maps SQL writes to tables from this
-    // committed map instead of parsing the API schema in the measured tree.
-    id: "table-relations",
-    outputKind: "committed",
-    outputs: ["apps/api/src/lib/db/table-relations.gen.ts"],
-    inputs: [
-      "apps/api/src/db/schema/**",
-      "apps/api/src/db/auth-schema.ts",
-      "apps/api/src/db/agent-auth-schema.ts",
-      "apps/api/scripts/generate-table-relations.ts",
-    ],
-    checkInputs: [
-      "bunfig.toml",
-      ".prettierrc.yml",
-      ...TRANSITIVE_GENERATOR_INPUTS["status-tables"],
-    ],
-    write: ["bun", "apps/api/scripts/generate-table-relations.ts", "--write"],
-    check: ["bun", "apps/api/scripts/generate-table-relations.ts"],
-    autofix: true,
-    after: [],
-  },
-  {
     id: "account-export-tables",
     outputKind: "committed",
     outputs: ["apps/api/src/lib/account-export/user-owned-tables.gen.ts"],

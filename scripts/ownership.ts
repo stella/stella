@@ -51,10 +51,6 @@ export const SCHEMA_INTROSPECTION = [
     reason: "Enumerates full-schema metadata without database operations.",
   },
   {
-    path: "apps/api/scripts/generate-table-relations.ts",
-    reason: "Enumerates full-schema table names without database operations.",
-  },
-  {
     path: "apps/api/src/db/table-policies.ts",
     reason:
       "Collects linked table policies from full-schema exports without database operations.",
