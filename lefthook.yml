@@ -80,6 +80,10 @@ pre-push:
     # Checks each touched TypeScript package once, sequentially.
     typecheck:
       run: bun scripts/pre-push-typecheck.ts --base origin/main
+    # Same check as merge-queue admission: a branch that merged main must stamp
+    # its new migrations after main's newest one. Reads git only.
+    migration-order:
+      run: bun scripts/check-migration-order.ts origin/main
     secrets:
       # The hook's stdin carries the ref updates the push would publish; the
       # scanner scopes each gitleaks run to exactly those commits.

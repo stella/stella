@@ -1353,7 +1353,10 @@ test.each(["never", "hanging"] as const)(
   async (settlement) => {
     const server = pollingServer(settlement);
     const { client, wrapper } = setup();
-    const claimed = cachedLastStatus(client, (status) => status !== undefined);
+    const claimed = cachedLastStatus(
+      client,
+      (status) => status === "streaming",
+    );
     jest.useFakeTimers();
     Object.defineProperty(AbortSignal, "timeout", {
       configurable: true,

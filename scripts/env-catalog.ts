@@ -62,6 +62,8 @@ type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
   ...Object.keys(rateLimitBudgetEnvSchema),
+  "APNS_KEY_ID",
+  "APNS_TEAM_ID",
   "EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL",
   "EMAIL_EVENTS_QUEUE_URL",
   "EMAIL_EVENTS_TOPIC_ARN",
@@ -645,6 +647,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Bearer credential used by the collaboration service for snapshot load and store requests.",
   OPERATOR_API_TOKEN:
     "Deployment-owned bearer credential for operator HTTP access. Unset disables access; use at least 32 characters.",
+  APNS_KEY_ID:
+    "Key ID of the APNs .p8 signing key for mobile push. Set with APNS_TEAM_ID and APNS_PRIVATE_KEY; unset turns mobile push off.",
+  APNS_TEAM_ID:
+    "Apple Developer team ID that owns the APNs signing key and the mobile app.",
+  APNS_PRIVATE_KEY:
+    "The APNs .p8 signing key as PEM (newlines may be escaped as \\n). Alerts carry no content, but the key can send them to any device of the team's apps.",
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_CLIENT_ADDRESS_HEADER:
@@ -1036,6 +1044,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_COLLAB_REDIS_URL: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
   OPERATOR_API_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  APNS_KEY_ID: ENV_CREDENTIAL_KIND.notCredential,
+  APNS_TEAM_ID: ENV_CREDENTIAL_KIND.notCredential,
+  APNS_PRIVATE_KEY: ENV_CREDENTIAL_KIND.credential,
   STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
@@ -1709,6 +1720,8 @@ export const TOOLING_ENV_KEYS = new Set([
   // Historical package builds use current tooling against a separate source root.
   "PACK_SOURCE_ROOT",
   "PGLITE_TEST_SNAPSHOT",
+  // pr-lint passes the pull request description to the log-line guard.
+  "PR_BODY",
   "PR_HEAD_SHA",
   "PR_TITLE",
   // ci-plan: the pull request is armed (auto-merge or the merge-armed label).

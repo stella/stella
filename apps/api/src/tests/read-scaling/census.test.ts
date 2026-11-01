@@ -32,6 +32,8 @@ import { mcpScalingScenarios } from "./mcp-scenarios";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import { mobileUpdateScalingScenario } from "./mobile-updates";
 import { myOpenTasksScalingScenario } from "./my-open-tasks";
+import { organizationCreateScalingScenario } from "./organization-create";
+import { organizationSlugScalingScenario } from "./organization-slug";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -49,6 +51,7 @@ import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
+  organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
@@ -66,6 +69,7 @@ const measuredApiScenarios = [
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
   dictationScalingScenario,
+  organizationSlugScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>
