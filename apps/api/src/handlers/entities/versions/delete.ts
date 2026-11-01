@@ -350,6 +350,7 @@ export const deleteEntityVersionHandler = async function* ({
       // Withdraw desktop sessions in the same transaction so none can resume
       // from the tombstoned version. Durable collaboration rooms were rejected
       // above because they have no participant-owned close transition.
+      // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- every open desktop session on the tombstoned version is cancelled, including one opened after the lock; none may resume from it
       const cancelledSessions = await tx
         .update(desktopEditSessions)
         .set({ status: "cancelled", closedAt: new Date() })
@@ -363,6 +364,7 @@ export const deleteEntityVersionHandler = async function* ({
         .returning({ id: desktopEditSessions.id });
       // A signature over the tombstoned version could never be stored, so its
       // open signing exchanges end here, with the reason the browser shows.
+      // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- every open signing session on the tombstoned version is cancelled, including one opened after the lock; none may store a signature over it
       const cancelledSignings = await tx
         .update(pdfSigningSessions)
         .set({

@@ -228,6 +228,15 @@ export const aggregateLockSites = (
             : memberName(callee);
       const receiver =
         callee.type === "MemberExpression" ? textOf(callee.object) : "";
+      // The generic row-lock owner takes a lock on any table, so each call
+      // is an acquisition of its own, counted like an inline `.for(...)`.
+      if (callee.type === "Identifier" && callee.name === "lockRowsForWrite") {
+        add({
+          primitive: "locked-rows-write",
+          text: textOf(node),
+          offset: node.start,
+        });
+      }
       if (method === "for" && receiver !== "Symbol") {
         add({
           primitive: "builder-for",

@@ -1,0 +1,26 @@
+[
+  {
+    "file": "apps/api/src/handlers/time-entries/batch/update.ts",
+    "from": "bc51ffce8fe7227ad57efae890ed95d71f13edd7c73013aaa974a25c9787bc6f",
+    "to": "8bd7d1932e10fb9b0c563a3145eec8f646f3c587575d959e8f23a2a8bc6ee23e",
+    "reason": "Batch approval locks the same submitted entries and the caller's own drafts through lockRowsForWrite, so its write names only the locked ids."
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/batch/update.ts",
+    "from": "c3117ba7dcce102968bb31361bc04cf99a0798ebcb72c78708932acc1d2ebae8",
+    "to": "7b274673f7038cf97eb001fa49e7274b1219e7ef8ee760da8c2f43f03156585b",
+    "reason": "Batch revert locks the same approved entries through lockRowsForWrite, so its write names only the locked ids."
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/batch/update.ts",
+    "from": "79b524ca823812018b5fb66c7f9c92ce2b38bd5703a8c07b07c5a9d213d7ef91",
+    "to": "b5ec74975c9cafad35c896063c50c38b3000dd32cefbd88645f45731e5b9b165",
+    "reason": "Batch mark-non-billable locks the same billable entries through lockRowsForWrite, so its write names only the locked ids."
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/batch/delete.ts",
+    "from": "06d8436fa79273835b7bf775d500456418fd3298ceadeb8b71eb6315ace7feed",
+    "to": "eb0bc1dee5e8f4c59b2b8de62488286e8302e0cb1267973ca0b904981edca781",
+    "reason": "Batch delete locks the same unbilled entries through lockRowsForWrite, so its delete and write-off name only the locked ids."
+  }
+]

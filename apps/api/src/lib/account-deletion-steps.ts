@@ -745,6 +745,7 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
   await eraseCorrespondenceActorDisplays({ tx, userId: currentUserId });
 
   await tx.delete(member).where(eq(member.userId, currentUserId));
+  // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- account deletion removes every membership of the user; the lock above fenced the reassignment targets, not these rows
   await tx
     .delete(workspaceMembers)
     .where(eq(workspaceMembers.userId, currentUserId));
@@ -1129,6 +1130,7 @@ export const deletePendingUploads = async ({
     await preserveBufferObjectCleanupIntents(tx, recoverableRows);
   }
 
+  // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- account deletion removes every pending upload of the user; the locked rows only decide which objects keep cleanup intents
   await tx
     .delete(pendingUploads)
     .where(eq(pendingUploads.userId, currentUserId));
