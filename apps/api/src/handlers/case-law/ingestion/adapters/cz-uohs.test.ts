@@ -78,6 +78,42 @@ describe("ÚOHS JSON-LD", () => {
     expect(czUohsCollectionOf(listed[3]!)).toBeUndefined();
   });
 
+  test("a list the publisher leaves null reads as empty instead of failing the listing", async () => {
+    const [first, ...rest] = await records();
+    const parsed = parseCzUohsListing({
+      rozhodnutí: [
+        {
+          ...first,
+          instance: null,
+          odbor: null,
+          účastník: null,
+          typ_řízení: null,
+          typ_rozhodnutí: null,
+          dokument: null,
+        },
+        ...rest,
+      ],
+    });
+
+    expect(parsed).toHaveLength(rest.length + 1);
+    expect(parsed[0]).toMatchObject({
+      instance: [],
+      odbor: [],
+      účastník: [],
+      typ_řízení: [],
+      typ_rozhodnutí: [],
+      dokument: [],
+    });
+  });
+
+  test("a list that is neither a list nor null still fails the listing", async () => {
+    const [first] = await records();
+
+    expect(() =>
+      parseCzUohsListing({ rozhodnutí: [{ ...first, dokument: "none" }] }),
+    ).toThrow("Invalid type");
+  });
+
   test("keeps a decision from an unknown department with no collection", async () => {
     globalThis.fetch = asFetchMock(
       async () => new Response("unavailable", { status: 500 }),

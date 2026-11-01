@@ -499,6 +499,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-justified-reader-text.fixture.tsx", [
     "no-justified-reader-text/no-justified-reader-text",
   ]),
+  fixtureRuleOverride("no-raw-reader-scroll.fixture.ts", [
+    "no-raw-reader-scroll/no-raw-reader-scroll",
+  ]),
   fixtureRuleOverride("no-sm-breakpoint-in-desktop.fixture.tsx", [
     "no-sm-breakpoint-in-desktop/no-sm-breakpoint-in-desktop",
   ]),
@@ -2090,6 +2093,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/no-auto-hyphenation-in-reader.ts",
     "./.oxlint-plugins/no-justified-reader-text.ts",
+    "./.oxlint-plugins/no-raw-reader-scroll.ts",
     "./.oxlint-plugins/no-sm-breakpoint-in-desktop.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
@@ -3117,7 +3121,10 @@ const config = defineConfig({
       // The desktop shell runs in the system WebView of its minimum macOS
       // version, which predates `Array#toSorted` and `Array#toReversed`; sort
       // or reverse a fresh array there (apps/desktop/tests/webview-baseline).
-      files: ["apps/desktop/src/**/*.{ts,tsx}"],
+      files: [
+        "apps/desktop/src/**/*.{ts,tsx}",
+        "packages/ui/src/calendar/day-calendar.logic.ts",
+      ],
       rules: {
         "unicorn/no-array-sort": "off",
         "unicorn/no-array-reverse": "off",
@@ -4019,6 +4026,25 @@ const config = defineConfig({
       excludeFiles: ["**/*.test.tsx"],
       rules: {
         "no-justified-reader-text/no-justified-reader-text": "error",
+      },
+    },
+    {
+      // A reader's controls bar floats over the top of its text: a jump lands
+      // below it through `scrollReaderToBlock`, the rule's one owner.
+      files: [
+        "packages/decision-reader/src/**/*.{ts,tsx}",
+        "apps/web/src/components/legal-reader/**/*.{ts,tsx}",
+        "apps/web/src/features/case-law/**/*.{ts,tsx}",
+        "apps/web/src/features/statutes/**/*.{ts,tsx}",
+        "apps/web/src/routes/law/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-reader-scroll.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.{ts,tsx}",
+        "packages/decision-reader/src/reader-landing.ts",
+      ],
+      rules: {
+        "no-raw-reader-scroll/no-raw-reader-scroll": "error",
       },
     },
     {

@@ -54,8 +54,14 @@ const createFakeChrome = () => {
     browserController: {
       controllerId: CONTROLLER_ID,
       origin: "https://my.stll.app",
-      tabId: CONTROLLER_TAB_ID,
     },
+    browserStellaTabs: [
+      {
+        documentId: "document-stella",
+        origin: "https://my.stll.app",
+        tabId: CONTROLLER_TAB_ID,
+      },
+    ],
   };
   const tabs = new Map<number, FakeTab>([
     [
@@ -492,9 +498,9 @@ describe("controlled tab confinement", () => {
     expect(await replaceControlledTab(9, 5)).toBe(false);
   });
 
-  test("never adopts the controller's stella tab or a stella page", async () => {
+  test("never adopts a stella tab or a stella page", async () => {
     const { log } = installFakeChrome();
-    // Even if the controller's tab showed a public page, it stays stella's.
+    // Even if a stella tab now showed a public page, it stays stella's.
     expect(
       await adoptControlledTab(
         CONTROLLER_ID,

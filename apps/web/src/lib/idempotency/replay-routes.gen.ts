@@ -11,6 +11,8 @@ export const REPLAY_CAPABLE_ROUTES = [
   },
   { method: "POST", path: "/v1/entities/:workspaceId/folder-from-selection" },
   { method: "POST", path: "/v1/invoices/:workspaceId/:invoiceId/lines" },
+  { method: "POST", path: "/v1/legislation/matter-links/:workspaceId" },
+  { method: "POST", path: "/v1/legislation/matter-links/:workspaceId/batch" },
   { method: "POST", path: "/v1/lists/:workspaceId/claim-comments" },
   { method: "POST", path: "/v1/lists/:workspaceId/claim-reviews" },
   { method: "POST", path: "/v1/lists/:workspaceId/claim-reviews/bulk" },

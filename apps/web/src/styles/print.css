@@ -1,0 +1,45 @@
+/* The app shell is a fixed-height frame of scroll panes, so printing it as it
+ * stands clips everything to one page. Chrome never prints and panes expand.
+ * With a `data-print-root` document in view, only that document prints: the
+ * path down to it loses its frame, and everything off that path is removed.
+ * `display` stays on the path so a hidden tab's document stays hidden. */
+@media print {
+  [data-slot="sidebar"] {
+    display: none !important;
+  }
+
+  html,
+  body,
+  [data-slot="sidebar-wrapper"],
+  [data-slot="sidebar-inset"] {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  body:has([data-print-root])
+    *:not(:has([data-print-root]), [data-print-root], [data-print-root] *) {
+    display: none !important;
+  }
+
+  *:has([data-print-root]),
+  [data-print-root],
+  [data-print-root] * {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  *:has([data-print-root]) {
+    border: 0 !important;
+    flex: none !important;
+    grid-template: none !important;
+    margin: 0 !important;
+    max-width: none !important;
+    padding: 0 !important;
+    position: static !important;
+    transform: none !important;
+    width: auto !important;
+  }
+}

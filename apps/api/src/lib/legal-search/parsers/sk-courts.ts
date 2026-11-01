@@ -59,6 +59,7 @@ import {
   type PdfPrintedLine,
   readPdfLineJoins,
 } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
+import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   buildBoldRanges,
   isBoldFont,
@@ -325,7 +326,9 @@ const buildSpanSegments = (
   //    for bold detection. Building text from individual
   //    spans breaks words that @libpdf splits across
   //    multiple spans (e.g., "N" + "apadnuté").
-  const lineText = normalizeSpanText(lineBbox.text);
+  // The gaps stay as the page sets them until each segment is cleaned: a
+  // wider gap is the word boundary between two letter-spaced words.
+  const lineText = lineBbox.text.replaceAll("\u00A0", " ").trim();
   if (lineText) {
     // Build a bold map: for each char offset, is it bold?
     // Walk spans and line text in parallel.
@@ -362,9 +365,12 @@ const buildSpanSegments = (
     }
   }
 
-  // Clean up: trim each segment text
+  // Clean up: read letter-spaced words (`t ý m  s p á c h a l :`) while the
+  // wider gap between two of them still marks the word boundary, then trim.
   for (const seg of segments) {
-    seg.text = seg.text.replace(/ {2,}/gu, " ").trim();
+    const text =
+      seg.anonymized === true ? seg.text : collapseLetterSpacing(seg.text);
+    seg.text = text.replace(/ {2,}/gu, " ").trim();
   }
 
   return segments.filter((s) => s.text !== "");

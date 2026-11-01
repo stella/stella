@@ -1533,3 +1533,62 @@ for (const destination of ["header", "footer"] as const) {
     },
   );
 }
+
+describe("the operative part's introduction, wherever the court prints it", () => {
+  /** Each block's kind and role, then the words it opens with. */
+  const rolesOf = (blocks: readonly Block[]) =>
+    blocks.map((block) =>
+      block.type === "paragraph"
+        ? `p:${block.role ?? "-"}:${block.plainText.split(" ").slice(0, 4).join(" ")}`
+        : `${block.type}:${block.plainText}`,
+    );
+
+  // The header is a table; the kind printed alone below it (`V é g z é s`)
+  // introduces the operative part, whose sentences may open with a party's
+  // name.
+  test("Kf.700217/2022/7: the kind below the header table opens the operative part", async () => {
+    const bytes = await Bun.file(
+      new URL("hu-bhgy-kf-700217-2022-7.docx", FIXTURES_DIR),
+    ).arrayBuffer();
+    const parsed = parseHuBhgyDecision({
+      document: await parseDocx(bytes, {
+        detectVariables: false,
+        preloadFonts: false,
+      }),
+      listedCaseNumber: "Kf.700217/2022/7",
+      court: "Fővárosi Ítélőtábla",
+      sourceUrl: "https://eakta.birosag.hu/anonimizalt-hatarozatok",
+      documentUrl: "https://eakta.birosag.hu/hatarozat-letoltes/",
+      documentId: "84d8db7d-444a-4ab4-9585-3b38169dbc6b",
+      statutes: [],
+    });
+    expect(rolesOf(parsed.documentAst.blocks).slice(2, 6)).toEqual([
+      "heading:V é g z é s",
+      "p:holding:A Fővárosi Ítélőtábla az",
+      "p:holding:A felperes másodfokú eljárásban",
+      "p:holding:A végzés ellen fellebbezésnek",
+    ]);
+    expect(parsed.decisionType).toBe("végzés");
+  });
+
+  // A partial judgment introduces its operative part as `r é s z í t é l e t e t .`
+  test("G.41582/2011/98: a partial judgment's operative part is the holding", async () => {
+    const bytes = await Bun.file(
+      new URL("hu-bhgy-g-41582-2011-98.rtf", FIXTURES_DIR),
+    ).bytes();
+    const parsed = parseHuBhgyDecision({
+      document: readRtf(bytes),
+      listedCaseNumber: "G.41582/2011/98",
+      court: "Fővárosi Törvényszék",
+      sourceUrl: "https://eakta.birosag.hu/anonimizalt-hatarozatok",
+      documentUrl: "https://eakta.birosag.hu/hatarozat-letoltes/",
+      documentId: "AHK4T__16044485",
+      statutes: [],
+    });
+    expect(rolesOf(parsed.documentAst.blocks).slice(4, 6)).toEqual([
+      "heading:r é s z í t é l e t e t .",
+      "p:holding:A bíróság a keresetet",
+    ]);
+    expect(parsed.decisionType).toBe("részítélet");
+  });
+});
