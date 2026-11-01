@@ -17,7 +17,8 @@ import {
 
 import {
   type AtCourtTextSection,
-  readAtDecisionRegions,
+  type AtPrintedLine,
+  readAtDecisionRoles,
 } from "@/api/handlers/case-law/ingestion/parsers/at-decision-regions";
 
 const config = (numRuns: number) =>
@@ -26,6 +27,11 @@ const config = (numRuns: number) =>
 const DOCKET = "W224 2231206-1";
 
 const PLACE_DATE = "Wien, am 2. Jänner 2026";
+
+const LETTERHEAD = "St. Pölten, am 4. September 2023";
+
+/** A place and date closes only its own line. */
+const PLACE_DATES: ReadonlySet<string> = new Set([PLACE_DATE, LETTERHEAD]);
 
 /** Every marker the reader acts on, and prose that is none. */
 const PRINTED_LINES = [
@@ -48,6 +54,11 @@ const PRINTED_LINES = [
   PLACE_DATE,
   "Der Beschwerde wird Folge gegeben.",
   "Der Beschwerdeführer hat durch seinen Vertreter vorgebracht:",
+  "Das Rekursgericht hat erwogen:",
+  "Das Landesverwaltungsgericht Wien erkennt durch seinen Richter Dr. X",
+  "Die Auflage A.1 wird wie folgt abgeändert:",
+  "Beilage: Erlagschein",
+  LETTERHEAD,
   "Gemäß § 28 Abs. 2 VwGVG ist der Bescheid zu beheben.",
 ] as const;
 
@@ -82,36 +93,43 @@ const rankOf = (role: ParagraphRole | undefined): number => {
   }
 };
 
-const lineArb = fc.record({
-  text: fc.constantFrom(...PRINTED_LINES),
-  section: fc.constantFrom(...SECTIONS),
-});
+const lineArb: fc.Arbitrary<AtPrintedLine> = fc.oneof(
+  fc.record({
+    type: fc.constant("paragraph" as const),
+    text: fc.constantFrom(...PRINTED_LINES),
+    section: fc.constantFrom(...SECTIONS),
+  }),
+  fc.record({
+    type: fc.constant("heading" as const),
+    text: fc.constantFrom(...PRINTED_LINES),
+  }),
+  fc.constant({ type: "break" as const }),
+  fc.constant({ type: "field" as const }),
+);
 
 describe("Austrian decision regions", () => {
   test("a paragraph never returns to a part the reader has left", () => {
     assertProperty(
       "a paragraph never returns to a part the reader has left",
-      fc.property(
-        fc.array(lineArb, { maxLength: 40 }),
-        fc.array(fc.constantFrom(...PRINTED_LINES), { maxLength: 5 }),
-        (lines, headingTexts) => {
-          const regions = readAtDecisionRegions([DOCKET]);
-          let reached = 0;
-          for (const [index, { text, section }] of lines.entries()) {
-            const heading = headingTexts[index];
-            if (heading !== undefined) {
-              regions.heading(heading);
-            }
-            const role = regions.paragraph(text, section);
-            if (text === PLACE_DATE && role === "closing") {
-              continue;
-            }
-            const rank = rankOf(role);
-            expect(rank).toBeGreaterThanOrEqual(reached);
-            reached = rank;
+      fc.property(fc.array(lineArb, { maxLength: 40 }), (lines) => {
+        const roles = readAtDecisionRoles(lines, [DOCKET]);
+        expect(roles).toHaveLength(lines.length);
+        let reached = 0;
+        for (const [index, line] of lines.entries()) {
+          const role = roles[index];
+          if (line.type !== "paragraph") {
+            // Headings, fields and breaks take no role from the reader.
+            expect(role).toBeUndefined();
+            continue;
           }
-        },
-      ),
+          if (PLACE_DATES.has(line.text) && role === "closing") {
+            continue;
+          }
+          const rank = rankOf(role);
+          expect(rank).toBeGreaterThanOrEqual(reached);
+          reached = rank;
+        }
+      }),
       config(500),
     );
   });

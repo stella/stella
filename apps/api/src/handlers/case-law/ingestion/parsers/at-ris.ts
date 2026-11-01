@@ -17,8 +17,9 @@ import { rewriteInlineWhitespace } from "@stll/legal-ast/inline-line";
 
 import {
   type AtCourtTextSection,
+  type AtPrintedLine,
   isAtBenchRecital,
-  readAtDecisionRegions,
+  readAtDecisionRoles,
 } from "@/api/handlers/case-law/ingestion/parsers/at-decision-regions";
 import {
   readRisContent,
@@ -115,7 +116,7 @@ const paragraphRole = (
 
 /**
  * The court's own text, by where the publisher filed it. Its role comes from
- * what the court printed (`readAtDecisionRegions`); the label only says
+ * what the court printed (`readAtDecisionRoles`); the label only says
  * where the text starts.
  */
 const courtTextSection = (
@@ -352,26 +353,53 @@ export const parseRisDecisionXml = (
 
   const blocks: Block[] = [];
   const sections = new Map<string, string[]>();
-  const regions = readAtDecisionRegions([
-    input.caseNumber,
-    ...items.flatMap((item) =>
-      item.type === "paragraph" && item.contentType === "gz"
-        ? [plainTextOf(item.inlines)]
-        : [],
-    ),
-  ]);
   let blockIndex = 0;
   let bodyStarted = false;
   const units = joinWrappedLines(items);
-  for (const [index, item] of units.entries()) {
-    if (item.type === "break") {
-      continue;
+  const rendered = units.map((unit) => {
+    if (unit.type === "break") {
+      return undefined;
     }
     const inlines = rewriteInlineWhitespace(
-      item.inlines,
+      unit.inlines,
       collapseLetterSpacing,
     );
-    const text = plainTextOf(inlines);
+    return { inlines, text: plainTextOf(inlines) };
+  });
+  // The court's text is read whole before any role is given: where its
+  // parts start and end can depend on lines further down.
+  const courtRoles = readAtDecisionRoles(
+    units.map((unit, index): AtPrintedLine => {
+      const text = rendered[index]?.text ?? "";
+      if (unit.type === "break") {
+        return { type: "break" };
+      }
+      if (unit.type === "heading") {
+        return { type: "heading", text };
+      }
+      const section =
+        unit.type === "paragraph"
+          ? courtTextSection(unit.contentType)
+          : undefined;
+      return section === undefined
+        ? { type: "field" }
+        : { type: "paragraph", text, section };
+    }),
+    [
+      input.caseNumber,
+      ...units.flatMap((unit, index) =>
+        unit.type === "paragraph" && unit.contentType === "gz"
+          ? [rendered[index]?.text ?? ""]
+          : [],
+      ),
+    ],
+  );
+  for (const [index, item] of units.entries()) {
+    const line = rendered[index];
+    if (item.type === "break" || line === undefined) {
+      continue;
+    }
+    const { inlines, text } = line;
     blockIndex += 1;
     if (item.type === "heading") {
       const heading = {
@@ -391,22 +419,20 @@ export const parseRisDecisionXml = (
       } satisfies HeadingBlock;
       blocks.push(heading);
       bodyStarted ||= startsDecisionBody(heading);
-      regions.heading(text);
       continue;
     }
     if (item.contentType !== undefined) {
-      const printed = sections.get(item.contentType);
-      if (printed === undefined) {
+      const sectionText = sections.get(item.contentType);
+      if (sectionText === undefined) {
         sections.set(item.contentType, [text]);
       } else {
-        printed.push(text);
+        sectionText.push(text);
       }
     }
-    const section = courtTextSection(item.contentType);
     const role =
-      section === undefined
+      courtTextSection(item.contentType) === undefined
         ? publisherFieldRole(item.contentType, text)
-        : regions.paragraph(text, section);
+        : courtRoles[index];
     const block = {
       id: `b${blockIndex}`,
       anchorId: `p-${blockIndex}`,

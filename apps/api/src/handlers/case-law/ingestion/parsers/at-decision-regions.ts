@@ -7,14 +7,15 @@
  * administrative court or a tribunal files the whole decision under `text`,
  * and the VwGH files the bench recital under `betreff`. Findok labels
  * nothing. The court itself prints the same markers everywhere: the kind of
- * decision and the formula, a recital naming the authority and the bench
+ * decision and the formula, a recital naming the authority and its bench
  * that ends in a colon (`zu Recht erkannt:`, `wie folgt entschieden:`), an
  * optional `Spruch` label, then `Begründung` or `Entscheidungsgründe`, and a
  * `Rechtsmittelbelehrung` and the place and date at the end.
  *
- * The reader walks the decision once and only moves forward: head matter,
- * operative part, reasons, closing. A marker that would move it back (a
- * `Spruch` printed inside the reasons) leaves the region as it is.
+ * The reader sees the whole decision before it assigns a role and only moves
+ * forward: head matter, operative part, reasons, closing, annex. A marker
+ * that would move it back (a `Spruch` printed inside the reasons) leaves the
+ * region as it is.
  */
 import { panic } from "better-result";
 
@@ -29,20 +30,25 @@ import { normalizeUnicode } from "@stll/text-normalize";
  */
 export type AtCourtTextSection = "operative" | "reasons" | "text";
 
-type Region =
-  | "head"
-  | "subject"
-  | "recital"
-  | "operative"
-  | "reasons"
-  | "closing"
-  | "annex";
+/**
+ * One printed line of the decision, in order. A heading's label moves the
+ * reader; a publisher field (court, date, norms) is passed over and keeps
+ * the role its label gives it; a paragraph break is spacing a recital runs
+ * across.
+ */
+export type AtPrintedLine =
+  | { type: "heading"; text: string }
+  | { type: "paragraph"; text: string; section: AtCourtTextSection }
+  | { type: "field" }
+  | { type: "break" };
 
-/** Head matter in any of its forms comes first, then the parts in order. */
+type Region =
+  "head" | "subject" | "operative" | "reasons" | "closing" | "annex";
+
+/** Head matter in either of its forms comes first, then the parts in order. */
 const REGION_RANK = {
   head: 0,
   subject: 0,
-  recital: 0,
   operative: 1,
   reasons: 2,
   closing: 3,
@@ -81,13 +87,12 @@ const CLOSING_LABELS: ReadonlySet<string> = new Set([
 
 /**
  * `Anhänge zu den Auflagen:` after the instructions on appeal: material the
- * ruling attaches, which is neither its reasons nor its closing. Only the
- * closing leads there, so a `Beilage` the ruling names never ends it.
+ * ruling attaches, which is neither its reasons nor its closing. The label
+ * stands alone on its line and ends in a colon (`Beilage: Erlagschein` names
+ * an enclosure, not an annex), and only the closing leads there, so a
+ * `Beilage` the ruling names never ends it.
  */
-const ANNEX_LABEL_RE = /^(?:anhang|anhänge|beilage|beilagen)\b/u;
-
-/** A label is a short line; prose that starts with `Beilage` is not one. */
-const MAX_LABEL_CHARS = 60;
+const ANNEX_LABEL_RE = /^(?:anhang|anhänge|beilage|beilagen)\b[^:]{0,60}:$/iu;
 
 /**
  * The recital names the deciding authority before its verb: `Das
@@ -98,23 +103,58 @@ const MAX_LABEL_CHARS = 60;
 const RECITAL_RE =
   /^(?:Das|Der|Die)\s+(?:[\p{L}.-]+\s+){0,6}?[\p{L}-]*(?:gerichtshof|gericht|senat|amt|behörde|kommission|kammer)(?:\s+[\p{L}.-]+){0,4}?\s+(?:hat|haben|erkennt|beschließt|entscheidet)\b/iu;
 
-const DURCH_RE = /\bdurch\b/u;
+/**
+ * The authority whose decision is under review, not the one deciding: `Die
+ * belangte Behörde hat durch …`, `Das Erstgericht hat …`, `Das Rekursgericht
+ * hat erwogen:`.
+ */
+const REVIEWED_AUTHORITY_RE = /^(?:Das|Der|Die)\s+(?:belangte\b|erst|rekurs)/iu;
+
+/**
+ * The recital names the bench: `durch die Richterin`, `durch den
+ * Vorsitzenden`, `durch das Mitglied`, `als Einzelrichter`.
+ */
+const BENCH_RE =
+  /\b(?:durch|als)\s+(?:[\p{L}.,*-]+\s+){0,8}?[\p{L}-]*(?:richter|vorsitzend|mitglied|präsident|hofr[aä]t|berichter)\p{L}*/iu;
+
+/**
+ * The words that announce the ruling and end the recital, wherever on the
+ * line they fall: `zu Recht erkannt:`, `den Beschluss gefasst:`,
+ * `entschieden (Bescheiderlassung durch Verkündung am 19.10.2004):`. A bare
+ * `wie folgt:` is not among them: a ruling prints it (`wird wie folgt
+ * abgeändert:`).
+ */
+const RULING_ANNOUNCED_RE =
+  /(?:erkannt|entschieden|beschlossen|gefasst|zu\s+Recht|verfügt)\s*(?:\([^)]*\)\s*)?:/iu;
 
 const ENDS_WITH_COLON_RE = /:\s*$/u;
 
 /**
- * `Wien, am 2. Jänner 2026`, `Linz, 18.02.2010`: the place and date. Only
- * that line closes: a letter the reasons quote prints one too, and the text
- * after it is still the reasons.
+ * A recital line that ends its sentence: a word of at least three lowercase
+ * letters and a full stop (`… entschieden.`), never an abbreviation (`Dr.`)
+ * or a list number (`2.`) a recital wraps after.
+ */
+const ENDS_SENTENCE_RE = /\p{Ll}{3,}\.["“”»]?\s*$/u;
+
+/** The most lines a recital runs over (the Umweltsenat lists every appellant). */
+const MAX_RECITAL_LINES = 12;
+
+/**
+ * `Wien, am 2. Jänner 2026`, `Linz, den 18.02.2010.`: the place and date.
+ * Only that line closes: a letter the reasons quote prints one too, and the
+ * text after it is still the reasons. At the head it is the letterhead.
  */
 const PLACE_DATE_RE =
-  /^\p{Lu}[\p{L} .-]{1,40},\s*(?:am\s+)?(?:\d{1,2}\.\s*\p{L}+\s+\d{4}|\d{1,2}\.\s*\d{1,2}\.\s*\d{4})$/u;
+  /^\p{Lu}[\p{L} .-]{1,40},\s*(?:am\s+|den\s+)?(?:\d{1,2}\.\s*\p{L}+\s+\d{4}|\d{1,2}\.\s*\d{1,2}\.\s*\d{4})\.?$/u;
 
 /** `GZ 611.058/001-BKS/2003`, `W224 2231206-1/13E`: the docket repeated. */
-const DOCKET_PREFIX_RE = /^(?:GZ|Zahl|Zl\.)[:\s]+/iu;
+const DOCKET_PREFIX_RE = /^(?:GZ|Zahl|Zl\.|Geschäftszahl)[:\s]+/iu;
 
 /** What a repeated docket may print after the docket itself: `/13E`, `-22`. */
 const MAX_DOCKET_SUFFIX_CHARS = 12;
+
+/** A docket continues past its end only with a separator, never a digit. */
+const DOCKET_CONTINUES_RE = /^[\p{L}\p{N}]/u;
 
 const labelOf = (text: string): string =>
   normalizeUnicode(text, "NFC")
@@ -126,45 +166,54 @@ const labelOf = (text: string): string =>
 const compact = (text: string): string =>
   text.replaceAll(/\s+/gu, "").toLocaleLowerCase("de");
 
+/** Whether `text` is the deciding authority's recital of itself and its bench. */
 export const isAtBenchRecital = (text: string): boolean =>
   RECITAL_RE.test(text) &&
-  (DURCH_RE.test(text) || ENDS_WITH_COLON_RE.test(text));
-
-export type AtDecisionRegions = {
-  /** A heading printed in the decision: only its label moves the region. */
-  heading: (text: string) => void;
-  /** The role of a paragraph of the court's own text; none in an annex. */
-  paragraph: (
-    text: string,
-    section: AtCourtTextSection,
-  ) => ParagraphRole | undefined;
-};
+  !REVIEWED_AUTHORITY_RE.test(text) &&
+  (BENCH_RE.test(text) || RULING_ANNOUNCED_RE.test(text));
 
 /**
- * Read the regions of one decision, paragraph by paragraph in printed order.
- * `dockets` are the case numbers the publisher lists for it; a head line
- * that repeats one is the docket line, not the ruling.
+ * Whether the recital ends on this line. Its first line may end it any way a
+ * sentence ends; a line it wrapped onto only with the words that announce
+ * the ruling, so a ruling printed after a recital that never ends is not
+ * read into it.
  */
-export const readAtDecisionRegions = (
+const endsRecital = (text: string, first: boolean): boolean =>
+  RULING_ANNOUNCED_RE.test(text) ||
+  (first && (ENDS_WITH_COLON_RE.test(text) || ENDS_SENTENCE_RE.test(text)));
+
+const isMovingLabel = (label: string): boolean =>
+  label === OPERATIVE_LABEL ||
+  REASONS_LABELS.has(label) ||
+  CLOSING_LABELS.has(label);
+
+/**
+ * The role of each printed line, in order; `undefined` for headings,
+ * publisher fields and an annex. `dockets` are the case numbers the
+ * publisher lists for the decision: a head line that repeats one is the
+ * docket line, not the ruling.
+ */
+export const readAtDecisionRoles = (
+  lines: readonly AtPrintedLine[],
   dockets: readonly string[],
-): AtDecisionRegions => {
+): (ParagraphRole | undefined)[] => {
   const docketKeys = dockets.map(compact).filter((docket) => docket !== "");
+  const labels = lines.map((line) =>
+    line.type === "heading" || line.type === "paragraph"
+      ? labelOf(line.text)
+      : "",
+  );
+  // Instructions on appeal close the decision once, at its end. An earlier
+  // `Rechtsmittelbelehrung` is the reasons quoting the decision under review.
+  const closingAt = labels.findLastIndex((label) => CLOSING_LABELS.has(label));
+
   let region: Region = "head";
   /** A recital, or a `Spruch` label above it, announced the ruling. */
   let rulingAnnounced = false;
+  /** The last line of a recital being read, if one is. */
+  let recitalEnd: number | undefined;
+  let lastSection: AtCourtTextSection | undefined;
 
-  const repeatsDocket = (text: string): boolean => {
-    const printed = compact(text.replace(DOCKET_PREFIX_RE, ""));
-    return docketKeys.some(
-      (docket) =>
-        printed.startsWith(docket) &&
-        printed.length - docket.length <= MAX_DOCKET_SUFFIX_CHARS,
-    );
-  };
-
-  const beforeOperative = (): boolean => REGION_RANK[region] === 0;
-
-  /** Move on to a later region; never back to an earlier one. */
   const advance = (next: Region): void => {
     if (REGION_RANK[next] > REGION_RANK[region]) {
       region = next;
@@ -174,8 +223,7 @@ export const readAtDecisionRegions = (
   const roleOfRegion = (): ParagraphRole | undefined => {
     switch (region) {
       case "head":
-      case "subject":
-      case "recital": {
+      case "subject": {
         return "intro";
       }
       case "operative": {
@@ -197,22 +245,50 @@ export const readAtDecisionRegions = (
     }
   };
 
-  /** A label that moves the region, for paragraphs and headings alike. */
-  const followLabel = (label: string): boolean => {
-    if (CLOSING_LABELS.has(label)) {
-      advance("closing");
-      return true;
-    }
-    if (REASONS_LABELS.has(label)) {
-      advance("reasons");
-      return true;
-    }
-    return false;
+  const repeatsDocket = (text: string): boolean => {
+    const printed = compact(text.replace(DOCKET_PREFIX_RE, ""));
+    return docketKeys.some(
+      (docket) =>
+        printed.startsWith(docket) &&
+        printed.length - docket.length <= MAX_DOCKET_SUFFIX_CHARS &&
+        !DOCKET_CONTINUES_RE.test(printed.slice(docket.length)),
+    );
   };
 
-  /** The head line `text` is, if it is one. */
-  const headLine = (text: string): "intro" | "case-number" | undefined => {
-    const label = labelOf(text);
+  /**
+   * The last line of the recital opening at `start` (see `endsRecital`). A
+   * recital that never ends before a label, a heading or a change of section
+   * is its first line alone, so it cannot swallow the ruling after it.
+   */
+  const recitalEndFrom = (start: number): number => {
+    const limit = Math.min(lines.length, start + MAX_RECITAL_LINES);
+    const first = lines[start];
+    const section = first?.type === "paragraph" ? first.section : undefined;
+    for (let index = start; index < limit; index += 1) {
+      const line = lines[index];
+      if (line?.type === "break") {
+        continue;
+      }
+      if (
+        line?.type !== "paragraph" ||
+        line.section !== section ||
+        (index > start && isMovingLabel(labels[index] ?? ""))
+      ) {
+        return start;
+      }
+      if (endsRecital(line.text, index === start)) {
+        return index;
+      }
+    }
+    return start;
+  };
+
+  /** The role of a head line, if it is one. */
+  const headRole = (
+    index: number,
+    text: string,
+  ): "intro" | "case-number" | undefined => {
+    const label = labels[index] ?? "";
     if (HEAD_TITLES.has(label) || ABRIDGED_RULING_RE.test(label)) {
       return "intro";
     }
@@ -220,12 +296,19 @@ export const readAtDecisionRegions = (
       region = "subject";
       return "intro";
     }
+    if (PLACE_DATE_RE.test(text.trim())) {
+      return "intro";
+    }
     if (repeatsDocket(text)) {
       return "case-number";
     }
     if (isAtBenchRecital(text)) {
       rulingAnnounced = true;
-      region = ENDS_WITH_COLON_RE.test(text) ? "operative" : "recital";
+      recitalEnd = recitalEndFrom(index);
+      if (recitalEnd === index) {
+        recitalEnd = undefined;
+        region = "operative";
+      }
       return "intro";
     }
     return undefined;
@@ -237,78 +320,87 @@ export const readAtDecisionRegions = (
       advance("reasons");
       return;
     }
-    if (beforeOperative()) {
-      return;
-    }
     if (section === "text" && region === "operative") {
       // The ruling was printed under its own label; `text` follows it.
       advance("reasons");
     }
   };
 
-  let lastSection: AtCourtTextSection | undefined;
+  /** A label that moves the reader, printed as a heading or a paragraph. */
+  const followLabel = (index: number): boolean => {
+    const label = labels[index] ?? "";
+    if (index === closingAt) {
+      advance("closing");
+      return true;
+    }
+    if (REASONS_LABELS.has(label)) {
+      advance("reasons");
+      return true;
+    }
+    if (label === OPERATIVE_LABEL) {
+      // Above the recital (`BESCHEID` / `SPRUCH` / `Der … hat …
+      // entschieden:`) the label titles the whole ruling, recital included;
+      // after the subject line or the recital, the ruling starts here.
+      if (region === "subject" || recitalEnd !== undefined) {
+        recitalEnd = undefined;
+        region = "operative";
+      }
+      rulingAnnounced = true;
+      return true;
+    }
+    return false;
+  };
 
-  return {
-    heading: (text) => {
-      followLabel(labelOf(text));
-    },
-    paragraph: (text, section) => {
-      if (section !== lastSection) {
-        lastSection = section;
-        enterSection(section);
+  return lines.map((line, index) => {
+    if (line.type === "field" || line.type === "break") {
+      return undefined;
+    }
+    if (line.type === "heading") {
+      followLabel(index);
+      return undefined;
+    }
+    const { text, section } = line;
+    if (section !== lastSection) {
+      lastSection = section;
+      enterSection(section);
+    }
+    if (recitalEnd !== undefined && !isMovingLabel(labels[index] ?? "")) {
+      if (index >= recitalEnd) {
+        recitalEnd = undefined;
+        region = "operative";
       }
-      const label = labelOf(text);
-      if (followLabel(label)) {
-        return roleOfRegion();
+      return "intro";
+    }
+    if (followLabel(index)) {
+      return roleOfRegion();
+    }
+    if (region === "closing" && ANNEX_LABEL_RE.test(text.trim())) {
+      region = "annex";
+    }
+    if (region === "closing" || region === "annex") {
+      return roleOfRegion();
+    }
+    if (
+      (region === "operative" || region === "reasons") &&
+      PLACE_DATE_RE.test(text.trim())
+    ) {
+      return "closing";
+    }
+    if (region === "head" || region === "subject") {
+      const head = headRole(index, text);
+      if (head !== undefined) {
+        return head;
       }
-      if (label === OPERATIVE_LABEL) {
-        // Above the recital (`BESCHEID` / `SPRUCH` / `Der … hat …
-        // entschieden:`) the label titles the whole ruling, recital included;
-        // after it, the ruling starts here.
-        if (region === "recital" || region === "subject") {
-          region = "operative";
-        }
-        rulingAnnounced = true;
-        return roleOfRegion();
-      }
-      if (
-        region === "closing" &&
-        label.length <= MAX_LABEL_CHARS &&
-        ANNEX_LABEL_RE.test(label)
-      ) {
-        region = "annex";
-      }
-      if (region === "closing" || region === "annex") {
-        return roleOfRegion();
-      }
-      if (
-        (region === "operative" || region === "reasons") &&
-        PLACE_DATE_RE.test(text.trim())
-      ) {
-        return "closing";
-      }
-      if (region === "recital") {
-        if (ENDS_WITH_COLON_RE.test(text)) {
-          region = "operative";
-        }
+      if (region === "subject") {
         return "intro";
       }
-      if (region === "head" || region === "subject") {
-        const head = headLine(text);
-        if (head !== undefined) {
-          return head;
-        }
-        if (region === "subject") {
-          return "intro";
-        }
-        // The first line that is no head matter opens the part its section
-        // names; unlabelled text after a recital is the ruling it announced.
-        region =
-          section === "operative" || (section === "text" && rulingAnnounced)
-            ? "operative"
-            : "reasons";
-      }
-      return roleOfRegion();
-    },
-  };
+      // The first line that is no head matter opens the part its section
+      // names; unlabelled text after a recital is the ruling it announced.
+      region =
+        section === "operative" || (section === "text" && rulingAnnounced)
+          ? "operative"
+          : "reasons";
+    }
+    return roleOfRegion();
+  });
 };

@@ -2,9 +2,12 @@ import { describe, expect, it } from "bun:test";
 
 import type { Block, ParagraphRole } from "@stll/legal-ast/document-ast";
 
+import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
+
 import {
   type AtCourtTextSection,
-  readAtDecisionRegions,
+  type AtPrintedLine,
+  readAtDecisionRoles,
 } from "./at-decision-regions";
 import { parseFindokDecisionXml } from "./at-findok";
 import { parseRisDecisionXml } from "./at-ris";
@@ -195,13 +198,28 @@ describe("Austrian decision regions", () => {
   });
 });
 
-const read = (
-  lines: readonly (readonly [string, AtCourtTextSection])[],
-  dockets: readonly string[] = [],
-) => {
-  const regions = readAtDecisionRegions(dockets);
-  return lines.map(([text, section]) => regions.paragraph(text, section));
-};
+it("types the reasons after an Austrian ruling as reasons, not as the tail", async () => {
+  const blocks = await risBlocks(
+    "at-ris-lvwg-noe.xml",
+    "LVwG-AV-2413/001-2023",
+  );
+  const types = sectionsFromAst(blocks).map((section) => section.type);
+  expect(types).toContain("ruling");
+  expect(types.slice(types.indexOf("ruling") + 1)).not.toContain("footer");
+  expect(types.slice(types.indexOf("ruling") + 1)).toContain("argumentation");
+});
+
+type Line = readonly [string, AtCourtTextSection | "heading"];
+
+const read = (lines: readonly Line[], dockets: readonly string[] = []) =>
+  readAtDecisionRoles(
+    lines.map(([text, section]): AtPrintedLine =>
+      section === "heading"
+        ? { type: "heading", text }
+        : { type: "paragraph", text, section },
+    ),
+    dockets,
+  );
 
 describe("Austrian decision region markers", () => {
   it("never reads a party's sentence as the bench recital", () => {
@@ -216,6 +234,104 @@ describe("Austrian decision region markers", () => {
     ).toEqual(["argumentation", "argumentation"]);
   });
 
+  it("never reads the reviewed authority or the reasons as the recital", () => {
+    for (const opening of [
+      "Das Rekursgericht hat erwogen:",
+      "Die belangte Behörde hat durch Bescheid vom 3. Mai 2020 den Antrag abgewiesen.",
+      "Das Finanzamt hat durch Bescheid vom 3. Mai 2020 die Umsatzsteuer festgesetzt.",
+    ]) {
+      expect(
+        read([
+          [opening, "text"],
+          ["Die Beschwerde ist begründet.", "text"],
+        ]),
+      ).toEqual(["argumentation", "argumentation"]);
+    }
+  });
+
+  it("opens the closing only at the last instructions on appeal", () => {
+    expect(
+      read([
+        ["Der Beschwerde wird Folge gegeben.", "operative"],
+        ["Begründung:", "text"],
+        ["Der Bescheid lautet auszugsweise:", "text"],
+        ["Rechtsmittelbelehrung:", "text"],
+        ["Gegen diesen Bescheid ist die Berufung zulässig.“", "text"],
+        ["Das Verwaltungsgericht hat erwogen:", "text"],
+        ["Die Beschwerde ist begründet.", "text"],
+        ["Rechtsmittelbelehrung:", "text"],
+        ["Gegen dieses Erkenntnis ist die Revision zulässig.", "text"],
+      ]),
+    ).toEqual([
+      "holding",
+      "argumentation",
+      "argumentation",
+      "argumentation",
+      "argumentation",
+      "argumentation",
+      "argumentation",
+      "closing",
+      "closing",
+    ]);
+  });
+
+  it("ends a recital at a ruling it announces mid-line", () => {
+    expect(
+      read([
+        [
+          "Das Landesverwaltungsgericht Wien erkennt durch seinen Richter Dr. X über die Beschwerde des Y zu Recht: Der Beschwerde wird Folge gegeben.",
+          "text",
+        ],
+        ["Die Revision ist nicht zulässig.", "text"],
+        ["Entscheidungsgründe", "text"],
+      ]),
+    ).toEqual(["intro", "holding", "argumentation"]);
+  });
+
+  it("ends a one-line recital at its full stop", () => {
+    expect(
+      read([
+        [
+          "Der Unabhängige Verwaltungssenat hat durch sein Mitglied Dr. X über die Berufung entschieden.",
+          "operative",
+        ],
+        ["Der Berufung wird Folge gegeben.", "operative"],
+      ]),
+    ).toEqual(["intro", "holding"]);
+  });
+
+  it("never reads a ruling into a recital that does not end", () => {
+    expect(
+      read([
+        [
+          "Das Landesverwaltungsgericht Wien erkennt durch seinen Richter Dr. X über die Beschwerde des Y",
+          "text",
+        ],
+        ["Der Beschwerde wird Folge gegeben.", "text"],
+        ["Die Auflage A.1 wird wie folgt abgeändert:", "text"],
+        ["Entscheidungsgründe", "text"],
+      ]),
+    ).toEqual(["intro", "holding", "holding", "argumentation"]);
+  });
+
+  it("follows a Spruch label printed as a heading", () => {
+    expect(
+      read([
+        ["BESCHEID", "text"],
+        ["Spruch", "heading"],
+        ["Der Antrag wird abgewiesen.", "text"],
+      ]),
+    ).toEqual(["intro", undefined, "holding"]);
+    expect(
+      read([
+        ["Betrifft:", "text"],
+        ["Berufung gegen den Bescheid der Landesregierung", "text"],
+        ["SPRUCH", "heading"],
+        ["Die Berufung wird abgewiesen.", "text"],
+      ]),
+    ).toEqual(["intro", "intro", undefined, "holding"]);
+  });
+
   it("closes only the place-and-date line of a letter the reasons quote", () => {
     expect(
       read([
@@ -223,8 +339,28 @@ describe("Austrian decision region markers", () => {
         ["Das Schreiben lautet:", "reasons"],
         ["Wien, am 3. März 2012", "reasons"],
         ["Die Behörde hat darauf nicht reagiert.", "reasons"],
+        ["Wien, den 3. März 2020.", "reasons"],
       ]),
-    ).toEqual(["holding", "argumentation", "closing", "argumentation"]);
+    ).toEqual([
+      "holding",
+      "argumentation",
+      "closing",
+      "argumentation",
+      "closing",
+    ]);
+  });
+
+  it("reads a place and date at the head as the letterhead", () => {
+    expect(
+      read([
+        ["St. Pölten, am 4. September 2023", "text"],
+        [
+          "Das Landesverwaltungsgericht Niederösterreich erkennt durch Dr. X als Einzelrichter zu Recht:",
+          "text",
+        ],
+        ["Der Beschwerde wird Folge gegeben.", "text"],
+      ]),
+    ).toEqual(["intro", "intro", "holding"]);
   });
 
   it("never moves back to the ruling from the reasons", () => {
@@ -242,7 +378,7 @@ describe("Austrian decision region markers", () => {
     expect(
       read([
         [
-          "Das Landesverwaltungsgericht Wien erkennt durch Dr. X zu Recht:",
+          "Das Landesverwaltungsgericht Wien erkennt durch Dr. X als Einzelrichter zu Recht:",
           "text",
         ],
         ["I. Die Bewilligung wird erteilt.", "text"],
@@ -253,15 +389,36 @@ describe("Austrian decision region markers", () => {
     ).toEqual(["intro", "holding", "holding", "holding", "argumentation"]);
   });
 
+  it("keeps an enclosure in the closing, and an annex after it unroled", () => {
+    expect(
+      read([
+        ["Der Beschwerde wird Folge gegeben.", "operative"],
+        ["Rechtsmittelbelehrung:", "text"],
+        ["Beilage: Erlagschein", "text"],
+        ["Wien, am 2. Jänner 2026", "text"],
+        ["Anhänge zu den Auflagen:", "text"],
+        ["Zur Auflage A.1.1.:", "text"],
+      ]),
+    ).toEqual([
+      "holding",
+      "closing",
+      "closing",
+      "closing",
+      undefined,
+      undefined,
+    ]);
+  });
+
   it("reads only a docket the publisher lists as the docket line", () => {
     expect(
       read(
         [
           ["W224 2231206-1/13E", "operative"],
-          ["W999 1111111-1/2E", "operative"],
+          ["Geschäftszahl: W224 2231206-1", "operative"],
+          ["W224 2231206-10/5E", "operative"],
         ],
         ["W224 2231206-1"],
       ),
-    ).toEqual(["case-number", "holding"]);
+    ).toEqual(["case-number", "case-number", "holding"]);
   });
 });

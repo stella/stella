@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "HU_BHGY",
   "key": "hu-bhgy",
-  "parserVersion": 22,
+  "parserVersion": 25,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage."
+    "reason": "Type the reasons printed after the ruling as argumentation, not as the document's tail, in the sections derived from the AST."
   }
 }
