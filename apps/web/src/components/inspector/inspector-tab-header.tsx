@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowLeftIcon, XIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
@@ -76,9 +77,6 @@ type InspectorTabHeaderProps = {
    * (e.g. extension stripped for files, chat title for chats).
    */
   label: string;
-  /** Legal identities wrap; other tab labels keep the compact single-line header. */
-  labelOverflow?: "truncate" | "wrap";
-  labelContent?: ReactNode;
   /**
    * Click handler that puts the label into rename mode. When
    * omitted the label is read-only.
@@ -115,8 +113,6 @@ type InspectorTabHeaderProps = {
 
 export const InspectorTabHeader = ({
   label,
-  labelOverflow = "truncate",
-  labelContent,
   onStartRename,
   onLabelContextMenu,
   rename,
@@ -131,16 +127,14 @@ export const InspectorTabHeader = ({
 
   return (
     <div
-      className={cn(
-        "flex shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3",
-        labelOverflow === "wrap" ? "min-h-12 py-3" : "h-12",
-      )}
+      className="flex h-12 shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3"
+      data-slot="inspector-panel-header"
     >
       {/* Only the label clips: the field's focus ring is drawn outside it. */}
       <div
         className={cn(
           "flex min-w-0 items-center gap-2",
-          !renaming && labelOverflow === "truncate" && "overflow-hidden",
+          !renaming && "overflow-hidden",
         )}
       >
         <Button
@@ -168,20 +162,20 @@ export const InspectorTabHeader = ({
           // Compact layouts stack the matter under the name, the way a
           // sidebar row puts its client under the matter, so the name gets
           // the whole width instead of sharing one line with the chip.
-          <div className="flex min-w-0 flex-col items-start md:flex-row md:items-center md:gap-2">
-            <span
+          <div className="flex min-w-0 flex-col items-start text-xs font-medium md:flex-row md:items-center md:gap-2">
+            <TruncatedText
+              aria-label={label}
               className={cn(
-                "max-w-full min-w-0 text-xs font-medium",
-                labelOverflow === "wrap"
-                  ? "wrap-anywhere whitespace-normal"
-                  : "overflow-hidden text-ellipsis whitespace-pre",
+                "max-w-full whitespace-pre",
                 onStartRename !== undefined && "cursor-text",
               )}
               onContextMenu={onLabelContextMenu}
               onDoubleClick={onStartRename}
+              tabIndex={0}
+              tooltip={label}
             >
-              {labelContent ?? <UserText>{label}</UserText>}
-            </span>
+              <UserText>{label}</UserText>
+            </TruncatedText>
             {matter !== undefined && (
               <>
                 <span

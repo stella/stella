@@ -109,6 +109,7 @@ export const apiUploadDocx = async (
   }
   return (await response.json()) as {
     entityId: string;
+    fieldId: string;
     fileId: string;
     fileName: string;
     renamed: boolean;
