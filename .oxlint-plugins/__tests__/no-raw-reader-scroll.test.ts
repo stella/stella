@@ -14,10 +14,11 @@ describe.serial(RULE_NAME, () => {
       `export const _b = (sc: HTMLElement, el: HTMLElement) => sc.scrollTo({ top: el.getBoundingClientRect().top });`,
       `export const _c = (sc: HTMLElement, top: number) => sc.scrollTo({ top });`,
       `export const _d = (sc: HTMLElement | null, top: number) => sc?.scrollTo({ top });`,
+      `export const _e = (sc: HTMLElement, top: number) => sc.scrollTo(0, top);`,
       "",
     ].join("\n");
 
-    expect(await lint(source)).toEqual([1, 2, 3, 4]);
+    expect(await lint(source)).toEqual([1, 2, 3, 4, 5]);
   });
 
   test("accepts the owner, the document's start and held positions", async () => {
@@ -28,6 +29,7 @@ describe.serial(RULE_NAME, () => {
       `export const _c = (sc: HTMLElement, drift: number) => { sc.scrollTop += drift; };`,
       `export const _d = (sc: HTMLElement) => sc.scrollTo({ left: 40 });`,
       `export const _e = (sc: HTMLElement) => sc.scrollIntoView({ block: "center" });`,
+      `export const _f = (sc: HTMLElement) => sc.scrollTo(0, 0);`,
       "",
     ].join("\n");
 

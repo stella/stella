@@ -13,7 +13,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
-import { scrollReaderToBlock } from "@stll/decision-reader/reader-outline";
+import { scrollReaderToBlock } from "@stll/decision-reader/reader-landing";
 import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
 import { Button } from "@stll/ui/button";
 import { Building2Icon, PenIcon, Trash2Icon } from "@stll/ui/icons";

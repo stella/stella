@@ -17,6 +17,7 @@ export const _flagged = (container: HTMLElement, offset: number) => {
 };
 
 // --- Allowed: the owner, the document's start, a held position ---
+// expect-clean: no-raw-reader-scroll/no-raw-reader-scroll
 export const _owner = (target: Element, container: Element) => {
   scrollReaderToBlock(target, container);
 };

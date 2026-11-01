@@ -11,9 +11,9 @@ import {
   normalizeStatuteStoredSlug,
   type StatuteRouteParams,
 } from "@stll/api-contract/statute-route";
+import { READER_BREADCRUMB_CLEARANCE } from "@stll/decision-reader/reader-landing";
 import {
   jumpToAnchor,
-  READER_BREADCRUMB_CLEARANCE,
   resolveAnchorPct,
   STATUTE_OUTLINE_COLLAPSE_LEVEL,
   statuteOutlineFromHeadings,

@@ -4037,7 +4037,7 @@ const config = defineConfig({
       ],
       excludeFiles: [
         "**/*.test.{ts,tsx}",
-        "packages/decision-reader/src/reader-outline.ts",
+        "packages/decision-reader/src/reader-landing.ts",
       ],
       rules: {
         "no-raw-reader-scroll/no-raw-reader-scroll": "error",

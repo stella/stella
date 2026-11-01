@@ -1,6 +1,6 @@
 // A reader's controls bar floats over the top of its text, so a jump that
 // scrolls a block to the top of the scroller lands it behind the bar.
-// `scrollReaderToBlock` in `reader-outline.ts` is the one owner of where a jump
+// `scrollReaderToBlock` in `reader-landing.ts` is the one owner of where a jump
 // lands; a `scrollTo` with a computed `top` is a second answer to the same
 // question, and the five that existed had all forgotten the bar.
 //
@@ -8,6 +8,7 @@
 //   container.scrollTo({ top: offset, behavior: "instant" });
 //   viewport.scrollTo({ top: target.getBoundingClientRect().top });
 //   scroller.scrollTo({ top });
+//   scroller.scrollTo(0, offset);
 // Allowed:
 //   scrollReaderToBlock(target, container);
 //   scroller.scrollTo({ top: 0, behavior: "instant" });   // the document's start
@@ -22,7 +23,7 @@ import { getPropertyName } from "./utils.ts";
 
 const MESSAGE =
   "A jump in a reader lands below its controls bar: call `scrollReaderToBlock` " +
-  "from `@stll/decision-reader/reader-outline` instead of computing a `top`.";
+  "from `@stll/decision-reader/reader-landing` instead of computing a `top`.";
 
 /** The start of the document needs no clearance: nothing sits above it. */
 const isDocumentStart = (node: { type: string; value?: unknown }): boolean =>
@@ -47,7 +48,11 @@ export default eslintCompatPlugin({
             ) {
               return;
             }
-            const [options] = node.arguments;
+            const [options, top] = node.arguments;
+            if (top !== undefined && !isDocumentStart(top)) {
+              context.report({ node, messageId: "rawScroll" });
+              return;
+            }
             if (options?.type !== "ObjectExpression") {
               return;
             }

@@ -1,5 +1,7 @@
-import { readerBlockByAnchor } from "@stll/decision-reader/reader-landing";
-import { READER_BREADCRUMB_CLEARANCE } from "@stll/decision-reader/reader-outline";
+import {
+  READER_BREADCRUMB_CLEARANCE,
+  readerBlockByAnchor,
+} from "@stll/decision-reader/reader-landing";
 
 const READER_BREADCRUMB_UPDATE_MS = 200;
 

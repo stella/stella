@@ -15,7 +15,7 @@ import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import {
   READER_BREADCRUMB_CLEARANCE,
   scrollReaderToBlock,
-} from "@stll/decision-reader/reader-outline";
+} from "@stll/decision-reader/reader-landing";
 import {
   readerSelectionMatches,
   visibleDecisionBlocks,

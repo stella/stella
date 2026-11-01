@@ -3,6 +3,8 @@ import type { ProvisionUnit } from "@stll/legal-ast/provision-reference";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 
 import { inlinesToPlainText } from "./document-ast-text";
+import { blockOffset, scrollReaderToBlock } from "./reader-landing";
+import type { ReaderBlock, ReaderScroller } from "./reader-landing";
 
 /**
  * Outline over a document's own headings, for the shared rail.
@@ -314,30 +316,10 @@ const spanOf = (
  * The members of a scroll container an anchor jump needs. Narrower than
  * `HTMLElement` so the arithmetic below can be exercised without a DOM.
  */
-type ClientTop = { top: number };
-
-export type AnchorScrollContainer = {
-  querySelector: (
-    selector: string,
-  ) => { getBoundingClientRect: () => ClientTop } | null;
-  getBoundingClientRect: () => ClientTop;
-  scrollTop: number;
+export type AnchorScrollContainer = ReaderScroller & {
+  querySelector: (selector: string) => ReaderBlock | null;
   scrollHeight: number;
-  scrollTo: (options: { top: number; behavior: ScrollBehavior }) => void;
 };
-
-type ReaderBlock = { getBoundingClientRect: () => ClientTop };
-
-type ReaderScroller = Pick<
-  AnchorScrollContainer,
-  "getBoundingClientRect" | "scrollTop" | "scrollTo"
->;
-
-/** How far down its scroller a block sits, whatever is scrolled away. */
-const blockOffset = (target: ReaderBlock, container: ReaderScroller): number =>
-  target.getBoundingClientRect().top -
-  container.getBoundingClientRect().top +
-  container.scrollTop;
 
 const offsetWithin = (
   anchorId: string,
@@ -346,29 +328,6 @@ const offsetWithin = (
   const target = container.querySelector(`#${CSS.escape(anchorId)}`);
 
   return target === null ? null : blockOffset(target, container);
-};
-
-/**
- * How far below the top of the text a block lands: the reader's controls bar
- * floats over that band, so anything higher is hidden behind it. It is
- * `--reader-controls-clearance` as a number, and the line the heading trail
- * reads the current heading at.
- */
-export const READER_BREADCRUMB_CLEARANCE = 64;
-
-/** Every jump in a reader lands here: at the top of the text, below the bar. */
-export const scrollReaderToBlock = (
-  target: ReaderBlock,
-  container: ReaderScroller,
-): void => {
-  // Round toward the block so an integer scroll position crosses the trail's
-  // line, and the trail names the block the reader jumped to.
-  container.scrollTo({
-    top: Math.ceil(
-      blockOffset(target, container) - READER_BREADCRUMB_CLEARANCE,
-    ),
-    behavior: "instant",
-  });
 };
 
 /** Vertical position of an anchored block, as the rail's 0-100 percentage. */

@@ -8,7 +8,7 @@ import {
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 import { decisionTitle } from "@stll/decision-reader/decision-title";
-import { READER_BREADCRUMB_CLEARANCE } from "@stll/decision-reader/reader-outline";
+import { READER_BREADCRUMB_CLEARANCE } from "@stll/decision-reader/reader-landing";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { INSPECTOR_PANE_MIN_WIDTH } from "@stll/ui/inspector";

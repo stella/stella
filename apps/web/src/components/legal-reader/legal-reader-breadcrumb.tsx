@@ -2,8 +2,10 @@ import { useMemo, useState } from "react";
 
 import { panic } from "better-result";
 
-import { readerBlockByAnchor } from "@stll/decision-reader/reader-landing";
-import { scrollReaderToBlock } from "@stll/decision-reader/reader-outline";
+import {
+  readerBlockByAnchor,
+  scrollReaderToBlock,
+} from "@stll/decision-reader/reader-landing";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
