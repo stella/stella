@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -354,14 +354,18 @@ const TaskDetailPanelContent = ({
   ) => {
     // `mutateAsync`, not a per-call `onError`: that one is dropped when another
     // edit starts first, and the refused name would lose its reason.
-    detached(
-      updateMutation
-        .mutateAsync({ taskId, type: "name", value })
-        .catch((error: unknown) =>
-          showError(userErrorFromThrown(error, tCommon("unexpectedError"))),
-        ),
-      "task-detail-panel.rename",
-    );
+    const saveName = async () => {
+      const saved = await Result.tryPromise(
+        async () =>
+          await updateMutation.mutateAsync({ taskId, type: "name", value }),
+      );
+      if (Result.isError(saved)) {
+        showError(
+          userErrorFromThrown(saved.error.cause, tCommon("unexpectedError")),
+        );
+      }
+    };
+    detached(saveName(), "task-detail-panel.rename");
   };
 
   const handleStatusChange = (value: TaskStatus | null) => {
@@ -369,17 +373,29 @@ const TaskDetailPanelContent = ({
       return;
     }
     const previous = isTaskStatus(task?.status) ? task.status : "open";
+    const previousKnown = !updateMutation.isPending;
     const { queryKey } = taskDetailOptions(workspaceId, taskId);
-    updateMutation.mutate(getTaskStatusUpdate(taskId, value, workflowReason), {
-      onSuccess: () =>
+    // The returned promise, not a per-call `onSuccess`: that one is dropped
+    // when the panel closes or another edit starts, and the toast with it. A
+    // failure is reported by the mutation's own `onError`.
+    const saveStatus = async () => {
+      const saved = await Result.tryPromise(
+        async () =>
+          await updateMutation.mutateAsync(
+            getTaskStatusUpdate(taskId, value, workflowReason),
+          ),
+      );
+      if (Result.isOk(saved)) {
         notifyTaskCompletion({
           currentStatus: () => queryClient.getQueryData(queryKey)?.status,
           next: value,
-          previous,
+          previous: previousKnown ? previous : null,
           restore: (status) =>
             updateMutation.mutate(getTaskStatusUpdate(taskId, status, "")),
-        }),
-    });
+        });
+      }
+    };
+    detached(saveStatus(), "task-detail-panel.status");
   };
 
   const handlePriorityChange = (value: TaskPriority | null) => {

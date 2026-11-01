@@ -8,7 +8,8 @@ type TaskStatusChange = {
   /** The status as last read; `undefined` when the task is not loaded here. */
   currentStatus: () => string | undefined;
   next: TaskStatus;
-  previous: TaskStatus;
+  /** `null` when another save was still pending, so it cannot be known. */
+  previous: TaskStatus | null;
   restore: (status: TaskStatus) => void;
 };
 
@@ -30,14 +31,18 @@ export const notifyTaskCompletion = ({
   stellaToast.add({
     title: t("tasks.taskCompleted"),
     type: "success",
-    action: {
-      label: t("common.undo"),
-      onClick: () => {
-        const current = currentStatus();
-        if (current === undefined || current === next) {
-          restore(previous);
-        }
-      },
-    },
+    ...(previous === null
+      ? {}
+      : {
+          action: {
+            label: t("common.undo"),
+            onClick: () => {
+              const current = currentStatus();
+              if (current === undefined || current === next) {
+                restore(previous);
+              }
+            },
+          },
+        }),
   });
 };

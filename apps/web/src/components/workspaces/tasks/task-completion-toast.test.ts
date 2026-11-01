@@ -54,6 +54,18 @@ describe("completing a task", () => {
     expect(restored).toEqual([]);
   });
 
+  test("offers no Undo when the status it would go back to is unknown", () => {
+    const add = spyOn(stellaToast, "add").mockReturnValue("toast");
+    notifyTaskCompletion({
+      currentStatus: () => "done",
+      next: "done",
+      previous: null,
+      restore: () => undefined,
+    });
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(add.mock.calls.at(0)?.at(0)?.action).toBeUndefined();
+  });
+
   test("stays quiet for any other status change", () => {
     const add = spyOn(stellaToast, "add").mockReturnValue("toast");
     for (const next of TASK_STATUSES.filter((status) => status !== "done")) {

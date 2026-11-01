@@ -8,6 +8,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
@@ -287,6 +288,33 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
+
+  // The menu keeps the status it opened with, so the status to go back to is
+  // read when the change is made. The returned promise, not a per-call
+  // `onSuccess`, so the toast survives a closed menu. A failure is reported by
+  // the mutation's own `onError`.
+  const handleMenuStatusChange = (taskId: string, status: TaskStatus) => {
+    const { queryKey } = taskDetailOptions(workspaceId, taskId);
+    const read = () => queryClient.getQueryData(queryKey)?.status;
+    const stored = read();
+    const previous = isTaskStatus(stored) ? stored : currentMenuTaskStatus;
+    const previousKnown = !updateTaskStatus.isPending;
+    const saveStatus = async () => {
+      const saved = await Result.tryPromise(
+        async () => await updateTaskStatus.mutateAsync({ taskId, status }),
+      );
+      if (Result.isOk(saved)) {
+        notifyTaskCompletion({
+          currentStatus: read,
+          next: status,
+          previous: previousKnown ? previous : null,
+          restore: (restored) =>
+            updateTaskStatus.mutate({ taskId, status: restored }),
+        });
+      }
+    };
+    detached(saveStatus(), "overview-view.status");
+  };
 
   const handleTaskContextMenu = useCallback(
     (task: UpcomingTaskContext) => (e: React.MouseEvent) => {
@@ -730,29 +758,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                 if (task === null) {
                                   return;
                                 }
-                                const previous = currentMenuTaskStatus;
-                                updateTaskStatus.mutate(
-                                  { taskId: task.entityId, status },
-                                  {
-                                    onSuccess: () =>
-                                      notifyTaskCompletion({
-                                        currentStatus: () =>
-                                          queryClient.getQueryData(
-                                            taskDetailOptions(
-                                              workspaceId,
-                                              task.entityId,
-                                            ).queryKey,
-                                          )?.status,
-                                        next: status,
-                                        previous,
-                                        restore: (restored) =>
-                                          updateTaskStatus.mutate({
-                                            taskId: task.entityId,
-                                            status: restored,
-                                          }),
-                                      }),
-                                  },
-                                );
+                                handleMenuStatusChange(task.entityId, status);
                               }}
                               value={status}
                             >
