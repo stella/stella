@@ -68,9 +68,9 @@ export const BROWSER_EXTENSION_CAPABILITY = {
   [BROWSER_EXTENSION_STATUS.notPaired]: {
     toolOffered: false,
     availability:
-      "Browser tools are not available in this chat because this stella tab is not connected to the browser extension.",
+      "Browser tools are not available in this chat because stella is not connected to the browser extension.",
     recoveryStep:
-      "to click the stella extension icon in the browser toolbar on this stella tab and connect the tab",
+      "to click the stella extension icon in the browser toolbar and connect stella once for all their stella tabs",
   },
   [BROWSER_EXTENSION_STATUS.unsupportedBrowser]: {
     toolOffered: false,

@@ -12,11 +12,18 @@ const searchResults = createSafeRootHandler(
       "Search the active organization across the matters you can open, by " +
       "text and filters: matters, result types, editors, file types and an " +
       "update date range. A search needs a query or at least one filter " +
-      "besides matters. Pass `cursor` from `nextCursor` for the next page.",
+      "besides matters. Pass `cursor` from `nextCursor` for the next page. " +
+      "Assistant chat results need the `stella:chat` scope.",
     access: "read",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "tool", name: "search" },
+    mcp: {
+      type: "capability",
+      reason: "cross_matter_search",
+      consumesServices: false,
+      // Matter content and the public legal corpus.
+      readClass: "both",
+    },
     body: searchBodySchema,
   } satisfies HandlerConfig,
   async function* ({ body, getActiveWorkspaceIds, scopedDb, session, user }) {
@@ -30,6 +37,7 @@ const searchResults = createSafeRootHandler(
             organizationId: session.activeOrganizationId,
             userId: user.id,
             accessibleWorkspaceIds: activeWorkspaceIds,
+            grantedScopes: session.grantedScopes,
             body,
             scopedDb,
           }),

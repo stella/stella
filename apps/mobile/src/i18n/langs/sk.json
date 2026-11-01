@@ -74,7 +74,8 @@
       "none": "Bez termínu",
       "today": "Dnes",
       "tomorrow": "Zajtra",
-      "nextWeek": "O týždeň"
+      "nextWeek": "O týždeň",
+      "pick": "Vybrať dátum"
     },
     "due": {
       "overdue": "Po termíne",
@@ -164,7 +165,16 @@
     "preview": "Otvoriť náhľad",
     "previewDescription": "Tento súbor sa otvorí v systémovom náhľade.",
     "unrendered": "Tento dokument sa tu nedá zobraziť, systémový náhľad ho však možno otvorí.",
-    "details": "Podrobnosti"
+    "details": "Podrobnosti",
+    "zoomOut": "Oddialiť",
+    "zoomIn": "Priblížiť",
+    "zoomFit": "Prispôsobiť šírke",
+    "fit": "Šírka",
+    "appearance": {
+      "system": "Vzhľad: automaticky",
+      "light": "Vzhľad: svetlý",
+      "dark": "Vzhľad: tmavý"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -192,7 +202,8 @@
     "server": "Server",
     "signOut": "Odhlásiť sa",
     "deleteAccount": "Odstrániť účet",
-    "deleteAccountHint": "Otvorí váš účet na webe, kde ho môžete odstrániť aj so všetkým, čo je vaše."
+    "deleteAccountHint": "Otvorí váš účet na webe, kde ho môžete odstrániť aj so všetkým, čo je vaše.",
+    "signOutFailed": "Odhlásenie sa nepodarilo dokončiť. Skúste to znova."
   },
   "header": {
     "search": "Hľadať"

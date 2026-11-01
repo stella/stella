@@ -385,6 +385,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/analytics-config/src/index.ts",
     "packages/api-contract/src/*",
     "packages/auth-model/src/contract.ts",
+    "packages/auth-model/src/invitation-sections.ts",
     "packages/boe/src/*",
     "packages/business-registries/src/default-formats.ts",
     "packages/business-registries/src/format-clauses.ts",
@@ -1782,6 +1783,26 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "merge-group-parser",
+    outputKind: "committed",
+    outputs: [".github/workflows/cla.yml"],
+    blocks: [
+      {
+        path: ".github/workflows/cla.yml",
+        begin: "// BEGIN GENERATED merge-group parser",
+        end: "// END GENERATED merge-group parser",
+      },
+    ],
+    inputs: [
+      "scripts/merge-group-entries.mjs",
+      "scripts/sync-merge-group-parser.mjs",
+    ],
+    write: ["node", "scripts/sync-merge-group-parser.mjs"],
+    check: ["node", "scripts/sync-merge-group-parser.mjs", "--check"],
+    autofix: false,
+    after: [],
+  },
+  {
     id: "design-tokens",
     outputKind: "committed",
     outputs: ["DESIGN.md"],
@@ -2091,6 +2112,7 @@ const GENERATOR_DECLARATIONS = [
     ],
     inputs: [
       "scripts/env-tool.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "scripts/env-catalog.ts",
       "apps/api/src/env*.ts",
       "apps/web/src/env*.ts",
@@ -2144,6 +2166,7 @@ const GENERATOR_DECLARATIONS = [
       "bunfig.toml",
       "scripts/env-catalog.ts",
       "scripts/env-tool.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "apps/api/src/env*.ts",
       ".github/workflows/release.yml",
       "scripts/create-release-manifest.sh",

@@ -53,6 +53,11 @@ type NotificationEntityRefByKind = TotalEntityRefMap<{
     entityId: SafeId<"entity">;
     workspaceId: SafeId<"workspace">;
   };
+  [NOTIFICATION_KIND.TASK_ASSIGNED]: {
+    entityType: "task";
+    entityId: SafeId<"entity">;
+    workspaceId: SafeId<"workspace">;
+  };
   [NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED]: {
     entityType: "report_export";
     entityId: SafeId<"reportExport">;

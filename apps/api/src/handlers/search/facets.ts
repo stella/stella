@@ -3,8 +3,6 @@ import * as v from "valibot";
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { ENTITY_KINDS } from "@/api/db/schema";
-import { entityKindSchema } from "@/api/db/schema-validators";
 import {
   hasSearchQueryOrSelectiveFilter,
   resolveSelectedWorkspaceIds,
@@ -12,11 +10,9 @@ import {
 import { status } from "@/api/http/status";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
-import { resourceIdSchema, userIdSchema } from "@/api/lib/custom-schema";
-import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
+import { searchFilterFields } from "@/api/lib/search/filter-schema";
 import { searchGlobalFacet } from "@/api/lib/search/index-global";
-import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
 
 const isoDateTime = apiDateTimeSchema;
 
@@ -29,20 +25,8 @@ const FACET_SEARCH_MAX = 256;
 export const searchFacetsBodySchema = v.object({
   facet: v.picklist(FACET_NAMES),
   search: v.optional(v.pipe(v.string(), v.maxLength(FACET_SEARCH_MAX)), ""),
-  query: v.pipe(v.string(), v.maxLength(LIMITS.searchQueryMaxLength)),
-  workspaceIds: v.pipe(v.array(resourceIdSchema("workspace")), v.maxLength(64)),
-  types: v.pipe(
-    v.array(v.picklist(GLOBAL_SEARCH_RESULT_TYPES)),
-    v.maxLength(GLOBAL_SEARCH_RESULT_TYPES.length),
-  ),
-  kinds: v.optional(
-    v.pipe(v.array(entityKindSchema), v.maxLength(ENTITY_KINDS.length)),
-  ),
-  editedByUserIds: v.pipe(v.array(userIdSchema), v.maxLength(64)),
-  mimeTypes: v.pipe(
-    v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
-    v.maxLength(64),
-  ),
+  ...searchFilterFields,
+  kinds: v.optional(searchFilterFields.kinds),
   updatedFrom: v.optional(isoDateTime),
   updatedTo: v.optional(isoDateTime),
   limit: v.optional(
@@ -62,6 +46,8 @@ type SearchFacetsHandlerProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   accessibleWorkspaceIds: SafeId<"workspace">[];
+  /** The caller's access-token scopes; `undefined` for a browser session. */
+  grantedScopes: readonly string[] | undefined;
   body: SearchFacetsBody;
 };
 
@@ -69,6 +55,7 @@ export const searchFacetsHandler = async ({
   scopedDb,
   organizationId,
   accessibleWorkspaceIds,
+  grantedScopes,
   body,
 }: SearchFacetsHandlerProps) => {
   if (!hasSearchQueryOrSelectiveFilter(body)) {
@@ -99,6 +86,7 @@ export const searchFacetsHandler = async ({
       accessibleWorkspaceIds,
       selectedWorkspaceIds: resolved.ids,
       types,
+      grantedScopes,
       editedByUserIds: body.editedByUserIds,
       mimeTypes: body.mimeTypes,
       updatedFrom: body.updatedFrom,

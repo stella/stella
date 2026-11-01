@@ -14,6 +14,12 @@ const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 /** One rejected request answers with a bounded list of failing fields. */
 const MAX_VALIDATION_ISSUES = 20;
 
+/**
+ * A `maxValue` check's message when the value is a byte size, so the answer
+ * can say the file is too large instead of that a number is invalid.
+ */
+export const MAX_BYTES_ISSUE = "byte size over its limit";
+
 type QueryValue = string | string[];
 export type QueryRecord = Record<string, QueryValue>;
 
@@ -158,6 +164,13 @@ const constraintOf = (
   }
   if (type === "min_length" && limit !== undefined) {
     return { constraint: "minLength", limit };
+  }
+  if (
+    type === "max_value" &&
+    limit !== undefined &&
+    issue.message === MAX_BYTES_ISSUE
+  ) {
+    return { constraint: "maxBytes", limit };
   }
   return { constraint: "invalid" };
 };
