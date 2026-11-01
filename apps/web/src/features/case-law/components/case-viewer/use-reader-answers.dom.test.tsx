@@ -128,7 +128,7 @@ type ReaderAnswerStatus = ReaderAnswer["messages"][number]["status"];
  * event loop turns the response takes. The cache event fires inside the
  * query's notification batch, so one zero-time turn afterwards renders it.
  */
-const cachedLastStatus = (
+const cachedLastStatus = async (
   client: InstanceType<typeof QueryClient>,
   reached: (status: ReaderAnswerStatus | undefined) => boolean,
 ) => {
@@ -152,7 +152,7 @@ const cachedLastStatus = (
   };
   const unsubscribe = client.getQueryCache().subscribe(check);
   check();
-  return promise;
+  return await promise;
 };
 
 const renderCachedStatus = async (
