@@ -1124,9 +1124,9 @@
     "loadingMore": "Kraunama daugiau...",
     "marginFilter": {
       "label": "Cituojamų nuostatų filtras",
-      "paragraph": "{count, plural, =0 {¶{paragraph} necituojama jokių nuostatų} one {¶{paragraph} cituojama # nuostata} few {¶{paragraph} cituojamos # nuostatos} many {¶{paragraph} cituojama # nuostatos} other {¶{paragraph} cituojama # nuostatų}}",
-      "selection": "{count, plural, =0 {Pažymėtame tekste necituojama jokių nuostatų} one {Pažymėtame tekste cituojama # nuostata} few {Pažymėtame tekste cituojamos # nuostatos} many {Pažymėtame tekste cituojama # nuostatos} other {Pažymėtame tekste cituojama # nuostatų}}",
-      "unnumberedParagraph": "{count, plural, =0 {Šioje pastraipoje necituojama jokių nuostatų} one {Šioje pastraipoje cituojama # nuostata} few {Šioje pastraipoje cituojamos # nuostatos} many {Šioje pastraipoje cituojama # nuostatos} other {Šioje pastraipoje cituojama # nuostatų}}"
+      "paragraph": "{count, plural, one {¶{paragraph} cituojama # nuostata} few {¶{paragraph} cituojamos # nuostatos} many {¶{paragraph} cituojama # nuostatos} other {¶{paragraph} cituojama # nuostatų}}",
+      "selection": "{count, plural, one {Pažymėtame tekste cituojama # nuostata} few {Pažymėtame tekste cituojamos # nuostatos} many {Pažymėtame tekste cituojama # nuostatos} other {Pažymėtame tekste cituojama # nuostatų}}",
+      "unnumberedParagraph": "{count, plural, one {Šioje pastraipoje cituojama # nuostata} few {Šioje pastraipoje cituojamos # nuostatos} many {Šioje pastraipoje cituojama # nuostatos} other {Šioje pastraipoje cituojama # nuostatų}}"
     },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# sprendimas jau buvo čia išsaugotas} few {# sprendimai jau buvo čia išsaugoti} many {# sprendimo jau buvo čia išsaugota} other {# sprendimų jau buvo čia išsaugota}}",
@@ -4994,6 +4994,7 @@
     "caseLawEmptyState": "Pradėkite rašyti, kad ieškotumėte teismų sprendimų.",
     "caseLawMatchingDecisions": "{count, plural, one {# atitinkantis sprendimas} few {# atitinkantys sprendimai} many {# atitinkančio sprendimo} other {# atitinkančių sprendimų}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ atitinkantis sprendimas} few {#+ atitinkantys sprendimai} many {#+ atitinkančio sprendimo} other {#+ atitinkančių sprendimų}}",
+    "chatCoveragePartial": "Ne visi pokalbiai išnagrinėti iki galo.",
     "continueInChat": "Tęsti pokalbyje",
     "dateFrom": "Nuo",
     "dateTo": "Iki",

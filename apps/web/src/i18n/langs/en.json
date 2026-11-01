@@ -1124,9 +1124,9 @@
     "loadingMore": "Loading more...",
     "marginFilter": {
       "label": "Cited provisions filter",
-      "paragraph": "{count, plural, =0 {No provisions cited in ¶{paragraph}} one {# provision cited in ¶{paragraph}} other {# provisions cited in ¶{paragraph}}}",
-      "selection": "{count, plural, =0 {No provisions cited in the selection} one {# provision cited in the selection} other {# provisions cited in the selection}}",
-      "unnumberedParagraph": "{count, plural, =0 {No provisions cited in this paragraph} one {# provision cited in this paragraph} other {# provisions cited in this paragraph}}"
+      "paragraph": "{count, plural, one {# provision cited in ¶{paragraph}} other {# provisions cited in ¶{paragraph}}}",
+      "selection": "{count, plural, one {# provision cited in the selection} other {# provisions cited in the selection}}",
+      "unnumberedParagraph": "{count, plural, one {# provision cited in this paragraph} other {# provisions cited in this paragraph}}"
     },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# decision was already saved here} other {# decisions were already saved here}}",
@@ -4994,6 +4994,7 @@
     "caseLawEmptyState": "Start typing to search court decisions.",
     "caseLawMatchingDecisions": "{count, plural, one {# matching decision} other {# matching decisions}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ matching decision} other {#+ matching decisions}}",
+    "chatCoveragePartial": "Not every chat was searched in full.",
     "continueInChat": "Continue in chat",
     "dateFrom": "From",
     "dateTo": "To",

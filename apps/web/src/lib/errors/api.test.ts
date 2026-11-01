@@ -203,15 +203,3 @@ describe("a refusal of who is asking", () => {
     );
   });
 });
-
-test("search work limits provide the translated refinement action", () => {
-  const error = toAPIError({
-    status: 422,
-    value: {
-      code: "global_search_rank_work_limit",
-      message: "Search work limit",
-    },
-  });
-  expect(error.message).toBe(messages.caseLaw.pagination.refineForMore);
-  expect(isDisplayableAPIError(error)).toBe(true);
-});

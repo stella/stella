@@ -1124,9 +1124,9 @@
     "loadingMore": "Betöltés folyamatban...",
     "marginFilter": {
       "label": "Hivatkozott rendelkezések szűrője",
-      "paragraph": "{count, plural, =0 {Nincs hivatkozott rendelkezés itt: ¶{paragraph}} one {# hivatkozott rendelkezés itt: ¶{paragraph}} other {# hivatkozott rendelkezés itt: ¶{paragraph}}}",
-      "selection": "{count, plural, =0 {A kijelölésben nincs hivatkozott rendelkezés} one {# hivatkozott rendelkezés a kijelölésben} other {# hivatkozott rendelkezés a kijelölésben}}",
-      "unnumberedParagraph": "{count, plural, =0 {Ebben a bekezdésben nincs hivatkozott rendelkezés} one {# hivatkozott rendelkezés ebben a bekezdésben} other {# hivatkozott rendelkezés ebben a bekezdésben}}"
+      "paragraph": "{count, plural, one {# hivatkozott rendelkezés itt: ¶{paragraph}} other {# hivatkozott rendelkezés itt: ¶{paragraph}}}",
+      "selection": "{count, plural, one {# hivatkozott rendelkezés a kijelölésben} other {# hivatkozott rendelkezés a kijelölésben}}",
+      "unnumberedParagraph": "{count, plural, one {# hivatkozott rendelkezés ebben a bekezdésben} other {# hivatkozott rendelkezés ebben a bekezdésben}}"
     },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# határozat már el volt mentve ide} other {# határozat már el volt mentve ide}}",
@@ -4994,6 +4994,7 @@
     "caseLawEmptyState": "Kezdjen el gépelni a bírósági határozatok közötti kereséshez.",
     "caseLawMatchingDecisions": "{count, plural, one {# egyező határozat} other {# egyező határozat}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ egyező határozat} other {#+ egyező határozat}}",
+    "chatCoveragePartial": "Nem minden csevegésben történt teljes keresés.",
     "continueInChat": "Folytatás a csevegésben",
     "dateFrom": "Mettől",
     "dateTo": "Meddig",

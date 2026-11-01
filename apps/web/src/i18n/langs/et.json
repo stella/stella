@@ -1124,9 +1124,9 @@
     "loadingMore": "Laadib rohkem...",
     "marginFilter": {
       "label": "Viidatud sätete filter",
-      "paragraph": "{count, plural, =0 {¶{paragraph} ei viita ühelegi sättele} one {¶{paragraph} viitab # sättele} other {¶{paragraph} viitab # sättele}}",
-      "selection": "{count, plural, =0 {Valitud tekst ei viita ühelegi sättele} one {Valitud tekst viitab # sättele} other {Valitud tekst viitab # sättele}}",
-      "unnumberedParagraph": "{count, plural, =0 {See lõik ei viita ühelegi sättele} one {See lõik viitab # sättele} other {See lõik viitab # sättele}}"
+      "paragraph": "{count, plural, one {¶{paragraph} viitab # sättele} other {¶{paragraph} viitab # sättele}}",
+      "selection": "{count, plural, one {Valitud tekst viitab # sättele} other {Valitud tekst viitab # sättele}}",
+      "unnumberedParagraph": "{count, plural, one {See lõik viitab # sättele} other {See lõik viitab # sättele}}"
     },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# lahend oli siia juba salvestatud} other {# lahendit oli siia juba salvestatud}}",
@@ -4994,6 +4994,7 @@
     "caseLawEmptyState": "Alustage tippimist, et otsida kohtulahendeid.",
     "caseLawMatchingDecisions": "{count, plural, one {# sobiv kohtulahend} other {# sobivat kohtulahendit}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ sobiv kohtulahend} other {#+ sobivat kohtulahendit}}",
+    "chatCoveragePartial": "Kõiki vestlusi ei otsitud täielikult.",
     "continueInChat": "Jätka vestluses",
     "dateFrom": "Alates",
     "dateTo": "Kuni",
