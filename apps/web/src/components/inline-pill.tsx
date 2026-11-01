@@ -5,6 +5,7 @@ import type {
   ReactNode,
 } from "react";
 
+import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -77,12 +78,6 @@ const TONE_INTERACTIVE: Record<InlinePillTone, string> = {
   success: "hover:bg-success/20",
 };
 
-const TONE_FOCUS_RING: Record<InlinePillTone, string> = {
-  accent: "focus-visible:ring-accent/50",
-  info: "focus-visible:ring-info/50",
-  success: "focus-visible:ring-success/50",
-};
-
 // A chip takes its height from the chip scale it shares with every
 // attachment chip; an inherit pill follows the line it sits in.
 const SIZE: Record<InlinePillSize, string> = {
@@ -91,9 +86,6 @@ const SIZE: Record<InlinePillSize, string> = {
 };
 
 const BASE = "inline-flex items-center gap-0.5 align-middle rounded px-1";
-
-const INTERACTIVE_RESET =
-  "appearance-none border-0 bg-clip-padding cursor-pointer focus-visible:outline-none focus-visible:ring-2";
 
 export const InlinePill = ({
   tone = "accent",
@@ -138,13 +130,8 @@ export const InlinePill = ({
     // The line bound keeps a long label inside a narrow composer or bubble;
     // the 1ch it leaves free holds the space and caret after the chip, which
     // would otherwise wrap onto a line of their own.
-    truncate && "max-w-[min(14rem,calc(100%-1ch))]",
-    renderAsButton &&
-      cn(INTERACTIVE_RESET, TONE_INTERACTIVE[tone], TONE_FOCUS_RING[tone]),
-    // Annotation-only pills (no click handler) signal "this is
-    // informational, hover to see more" rather than "click to
-    // activate". `cursor-help` is the standard cue.
-    renderAsButton && !clickable && "cursor-help",
+    truncate && !renderAsButton && "max-w-[min(14rem,calc(100%-1ch))]",
+    renderAsButton && cn("max-w-full", TONE_INTERACTIVE[tone]),
     className,
   );
 
@@ -152,18 +139,30 @@ export const InlinePill = ({
   // into a single `render` element — splitting span vs button
   // lets us pin the right semantics without a runtime cast.
   const element = renderAsButton ? (
-    <button
+    // A plain Button draws no box of its own: the pill inside it keeps its
+    // height from the chip scale (or the line, for an inherit pill), and the
+    // button adds only the focus ring and the line bound.
+    <Button
       aria-label={ariaLabel}
-      className={sharedClass}
+      className={cn(
+        "inline-flex max-w-full min-w-0",
+        size === "inherit" ? "align-baseline" : "align-middle",
+        truncate && "max-w-[min(14rem,calc(100%-1ch))]",
+        // Annotation-only pills (no click handler) signal "this is
+        // informational, hover to see more" rather than "click to
+        // activate". `cursor-help` is the standard cue.
+        !clickable && "cursor-help",
+      )}
       data-chip-kind={chipKind}
       onClick={onActivate}
-      style={style}
       title={title}
-      type="button"
+      variant="plain"
       {...dataAttrs}
     >
-      {body}
-    </button>
+      <span className={sharedClass} style={style}>
+        {body}
+      </span>
+    </Button>
   ) : (
     <span
       aria-label={ariaLabel}
