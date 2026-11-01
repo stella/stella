@@ -153,6 +153,7 @@ export const organizationDataBoxesChangeResult = (
       return Result.err(
         new HandlerError({
           status: 503,
+          code: "service_unavailable",
           message:
             "The organization's data boxes are being changed; retry shortly",
           retryable: true,

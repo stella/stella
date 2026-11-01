@@ -8,6 +8,7 @@ describe("organizationDataBoxesChangeResult", () => {
     expect(result.isErr()).toBe(true);
     expect(result.isErr() ? result.error : null).toMatchObject({
       status: 503,
+      code: "service_unavailable",
       retryable: true,
       retryAfterMs: 1000,
     });
