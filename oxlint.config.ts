@@ -467,6 +467,10 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-inert-autofocus.fixture.tsx", [
     "no-inert-autofocus/no-inert-autofocus",
   ]),
+  fixtureRuleOverride("no-optional-chain-null-compare.fixture.ts", [
+    "no-optional-chain-null-compare/no-optional-chain-null-compare",
+    "no-optional-chain-null-compare/no-optional-chain-absent-match",
+  ]),
   fixtureRuleOverride("no-constructed-fetch-object.fixture.ts", [
     "no-constructed-fetch-object/no-constructed-fetch-object",
   ]),
@@ -1893,6 +1897,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
     "./.oxlint-plugins/no-inert-autofocus.ts",
+    "./.oxlint-plugins/no-optional-chain-null-compare.ts",
     "./.oxlint-plugins/no-constructed-fetch-object.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
@@ -4478,6 +4483,22 @@ const config = defineConfig({
       ],
       rules: {
         "no-hookless-use-function/no-hookless-use-function": "error",
+      },
+    },
+    {
+      // Product sources are clean; tests and scripts follow the dated
+      // changed-lines rollout in scripts/guard-rollouts.
+      files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/test-support/**",
+        "**/tests/**",
+        "**/e2e/**",
+      ],
+      rules: {
+        "no-optional-chain-null-compare/no-optional-chain-null-compare":
+          "error",
       },
     },
     {
