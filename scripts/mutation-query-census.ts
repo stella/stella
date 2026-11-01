@@ -7,6 +7,13 @@ import ts from "typescript6";
 import { compareCodeUnit } from "@stll/collation";
 
 const MUTATIONS = new Set(["useMutation", "mutationOptions"]);
+// The retry-stable mutation hook runs its caller's mutationFn once per
+// submission, as useMutation does, so its options are read in place. Only
+// that module's export qualifies; a same-named local stays a wrapper.
+const IDEMPOTENT_MUTATION = {
+  file: "apps/web/src/lib/idempotency/use-idempotent-mutation.ts",
+  name: "useIdempotentMutation",
+} as const;
 const ROUTE_READER_HELPERS = new Set([
   "ensureRouteQueryData",
   "ensureRouteInfiniteQueryData",
@@ -939,6 +946,12 @@ class CensusAnalyzer {
     const module = this.resolveModule(from, imported.module);
     if (!module || seen.has(`${module.file}:${imported.imported}`)) {
       return undefined;
+    }
+    if (
+      module.file === IDEMPOTENT_MUTATION.file &&
+      imported.imported === IDEMPOTENT_MUTATION.name
+    ) {
+      return "useMutation";
     }
     seen.add(`${module.file}:${imported.imported}`);
     const reexport = module.reexports.get(imported.imported);

@@ -288,6 +288,58 @@ test("import aliases and transitive wrappers retain every mutation call and bind
   });
 });
 
+test("the idempotent mutation hook reads its caller's options as a mutation primitive", () => {
+  const hook = {
+    file: "apps/web/src/lib/idempotency/use-idempotent-mutation.ts",
+    text: `
+      import { useMutation } from "@tanstack/react-query";
+      export const useIdempotentMutation = ({ mutationFn, ...options }) =>
+        useMutation({ ...options, mutationFn: async (submission) => await submission.execute() });
+    `,
+  };
+  const census = inspectMutationQuerySources([
+    hook,
+    {
+      file: "apps/web/src/consumer.ts",
+      text: `
+      import { useIdempotentMutation as useSubmit } from "@/lib/idempotency/use-idempotent-mutation";
+      import { api } from "@/api";
+      const useEditor = () => useSubmit({
+        mutationFn: async (input) => await api.entities({ workspaceId }).rename.patch(input),
+      });
+    `,
+    },
+  ]);
+  expect(
+    census.mutations.find(({ file }) => file === "apps/web/src/consumer.ts"),
+  ).toMatchObject({
+    kind: "useMutation",
+    callee: "useSubmit",
+    writes: [{ route: "/entities/:workspaceId/rename", method: "patch" }],
+    wrapperOf: [],
+    unresolved: [],
+  });
+
+  // Mutation: the same hook from any other module stays an opaque wrapper.
+  const elsewhere = inspectMutationQuerySources([
+    { ...hook, file: "apps/web/src/lib/other-mutation.ts" },
+    {
+      file: "apps/web/src/consumer.ts",
+      text: `
+      import { useIdempotentMutation } from "@/lib/other-mutation";
+      import { api } from "@/api";
+      const useEditor = () => useIdempotentMutation({
+        mutationFn: async (input) => await api.entities({ workspaceId }).rename.patch(input),
+      });
+    `,
+    },
+  ]);
+  expect(
+    elsewhere.mutations.find(({ file }) => file === "apps/web/src/consumer.ts")
+      ?.kind,
+  ).toBe("wrapper");
+});
+
 test("plain mutation wrappers inherit primitive writes and unresolved options without owning them", () => {
   const census = inspectMutationQuerySources([
     {
