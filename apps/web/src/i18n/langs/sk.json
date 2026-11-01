@@ -4068,6 +4068,28 @@
       "skippedReasonOutsideSkillFolder": "Mimo priečinka zručnosti",
       "skippedReasonUnsupportedExtension": "Nepodporovaný typ súboru",
       "skippedReasonUnsupportedFolder": "Nie je v priečinku so zdrojmi",
+      "starter": {
+        "compare": {
+          "body": "Porovnajte dve verzie tohto dokumentu a vypíšte všetky podstatné zmeny vrátane toho, kde sa nachádzajú.",
+          "description": "Vypíšte všetky podstatné zmeny medzi dvoma verziami",
+          "name": "Porovnať verzie"
+        },
+        "draft": {
+          "body": "Navrhnite vecnú odpoveď na tento list. Zachovajte profesionálny tón, vyjadrite sa ku každému uvedenému bodu a označte otvorené otázky, ktoré mám potvrdiť.",
+          "description": "Pripravte profesionálnu odpoveď na list",
+          "name": "Navrhnúť odpoveď"
+        },
+        "risks": {
+          "body": "Skontrolujte, či tento dokument neobsahuje právne riziká a nejednoznačné ustanovenia a či v ňom nechýbajú ochranné dojednania. Pri každom zistení uveďte konkrétne ustanovenie.",
+          "description": "Nájdite právne riziká a nejednoznačné ustanovenia",
+          "name": "Nájsť riziká"
+        },
+        "summarize": {
+          "body": "Zhrňte tento dokument. Uveďte strany, hlavné povinnosti, termíny, finančné podmienky a prípadné ustanovenia o ukončení alebo zodpovednosti.",
+          "description": "Získajte prehľadné zhrnutie hlavných podmienok",
+          "name": "Zhrnúť dokument"
+        }
+      },
       "uploadHelp": "Použite súbor SKILL.md alebo priečinok .zip obsahujúci SKILL.md a voliteľné zdroje iba na čítanie.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/zrucnosti",
       "version": "Verzia: {version}"

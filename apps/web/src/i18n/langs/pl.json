@@ -4068,6 +4068,28 @@
       "skippedReasonOutsideSkillFolder": "Poza folderem umiejętności",
       "skippedReasonUnsupportedExtension": "Nieobsługiwany typ pliku",
       "skippedReasonUnsupportedFolder": "Poza folderem zasobów",
+      "starter": {
+        "compare": {
+          "body": "Porównaj dwie wersje tego dokumentu i wypisz każdą istotną zmianę wraz z jej lokalizacją.",
+          "description": "Wypisz każdą istotną zmianę między dwiema wersjami",
+          "name": "Porównaj wersje"
+        },
+        "draft": {
+          "body": "Przygotuj wyważoną odpowiedź na to pismo. Zachowaj profesjonalny ton, odnieś się do każdego poruszonego punktu i wskaż otwarte kwestie, które mam potwierdzić.",
+          "description": "Przygotuj profesjonalną odpowiedź na pismo",
+          "name": "Przygotuj odpowiedź"
+        },
+        "risks": {
+          "body": "Sprawdź ten dokument pod kątem ryzyk prawnych, brakujących zabezpieczeń i niejednoznacznych klauzul. Przy każdym ustaleniu wskaż konkretną klauzulę.",
+          "description": "Wskaż ryzyka prawne i niejednoznaczne klauzule",
+          "name": "Znajdź ryzyka"
+        },
+        "summarize": {
+          "body": "Podsumuj ten dokument. Uwzględnij strony, główne zobowiązania, terminy, warunki finansowe oraz ewentualne klauzule dotyczące rozwiązania umowy lub odpowiedzialności.",
+          "description": "Uzyskaj uporządkowane podsumowanie najważniejszych warunków",
+          "name": "Podsumuj dokument"
+        }
+      },
       "uploadHelp": "Użyj pliku SKILL.md lub folderu .zip zawierającego SKILL.md i opcjonalne zasoby tylko do odczytu.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/sciezka/do/umiejetnosci",
       "version": "Wersja: {version}"

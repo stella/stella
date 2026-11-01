@@ -4068,6 +4068,28 @@
       "skippedReasonOutsideSkillFolder": "Väljaspool oskuse kausta",
       "skippedReasonUnsupportedExtension": "Failitüüpi ei toetata",
       "skippedReasonUnsupportedFolder": "Pole ressursikaustas",
+      "starter": {
+        "compare": {
+          "body": "Võrdle selle dokumendi kahte versiooni ja too välja kõik olulised muudatused koos nende asukohaga.",
+          "description": "Too välja kõik olulised muudatused kahe versiooni vahel",
+          "name": "Võrdle versioone"
+        },
+        "draft": {
+          "body": "Koosta sellele kirjale tasakaalukas vastus. Hoia professionaalset tooni, käsitle iga tõstatatud punkti ja too välja avatud küsimused, mida pean kinnitama.",
+          "description": "Koosta kirjale professionaalne vastus",
+          "name": "Koosta vastus"
+        },
+        "risks": {
+          "body": "Vaata see dokument üle õiguslike riskide, puuduvate kaitsesätete ja ebaselgete klauslite leidmiseks. Too iga leiu juures välja konkreetne klausel.",
+          "description": "Leia õiguslikud riskid ja ebaselged klauslid",
+          "name": "Leia riskid"
+        },
+        "summarize": {
+          "body": "Tee sellest dokumendist kokkuvõte. Käsitle pooli, peamisi kohustusi, kuupäevi, rahalisi tingimusi ning lõpetamist või vastutust puudutavaid klausleid.",
+          "description": "Saa struktureeritud kokkuvõte põhitingimustest",
+          "name": "Tee dokumendist kokkuvõte"
+        }
+      },
       "uploadHelp": "Kasuta SKILL.md-faili või .zip-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/tee/oskuseni",
       "version": "Versioon: {version}"

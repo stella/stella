@@ -4068,6 +4068,28 @@
       "skippedReasonOutsideSkillFolder": "Fora da pasta da habilidade",
       "skippedReasonUnsupportedExtension": "Tipo de arquivo não compatível",
       "skippedReasonUnsupportedFolder": "Não está em uma pasta de recursos",
+      "starter": {
+        "compare": {
+          "body": "Compare duas versões deste documento e liste cada alteração relevante com sua localização.",
+          "description": "Liste cada alteração relevante entre duas versões",
+          "name": "Comparar versões"
+        },
+        "draft": {
+          "body": "Redija uma resposta ponderada a esta carta. Mantenha o tom profissional, trate de cada ponto levantado e aponte as questões em aberto para eu confirmar.",
+          "description": "Redija uma resposta profissional a uma carta",
+          "name": "Redigir uma resposta"
+        },
+        "risks": {
+          "body": "Analise este documento em busca de riscos jurídicos, proteções ausentes e cláusulas ambíguas. Cite a cláusula específica de cada achado.",
+          "description": "Identifique riscos jurídicos e cláusulas ambíguas",
+          "name": "Identificar riscos"
+        },
+        "summarize": {
+          "body": "Resuma este documento. Aborde as partes, as principais obrigações, as datas, as condições financeiras e eventuais cláusulas de rescisão ou responsabilidade.",
+          "description": "Obtenha um resumo estruturado das principais condições",
+          "name": "Resumir um documento"
+        }
+      },
       "uploadHelp": "Use um arquivo SKILL.md ou uma pasta .zip contendo SKILL.md e recursos opcionais somente leitura.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/caminho/para/habilidade",
       "version": "Versão: {version}"

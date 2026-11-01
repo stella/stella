@@ -4068,6 +4068,28 @@
       "skippedReasonOutsideSkillFolder": "En dehors du dossier de la compétence",
       "skippedReasonUnsupportedExtension": "Type de fichier non pris en charge",
       "skippedReasonUnsupportedFolder": "Pas dans un dossier de ressources",
+      "starter": {
+        "compare": {
+          "body": "Comparez deux versions de ce document et listez chaque modification importante en indiquant son emplacement.",
+          "description": "Listez chaque modification importante entre deux versions",
+          "name": "Comparer des versions"
+        },
+        "draft": {
+          "body": "Rédigez une réponse mesurée à ce courrier. Gardez un ton professionnel, traitez chaque point soulevé et signalez les questions en suspens que je dois confirmer.",
+          "description": "Rédigez une réponse professionnelle à un courrier",
+          "name": "Rédiger une réponse"
+        },
+        "risks": {
+          "body": "Examinez ce document pour y relever les risques juridiques, les protections manquantes et les clauses ambiguës. Citez la clause précise pour chaque constat.",
+          "description": "Repérez les risques juridiques et les clauses ambiguës",
+          "name": "Repérer les risques"
+        },
+        "summarize": {
+          "body": "Résumez ce document. Couvrez les parties, les principales obligations, les dates, les conditions financières ainsi que les éventuelles clauses de résiliation ou de responsabilité.",
+          "description": "Obtenez un résumé structuré des principales conditions",
+          "name": "Résumer un document"
+        }
+      },
       "uploadHelp": "Utilisez un fichier SKILL.md ou un dossier .zip contenant SKILL.md et des ressources facultatives en lecture seule.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/chemin/vers/competence",
       "version": "Version : {version}"

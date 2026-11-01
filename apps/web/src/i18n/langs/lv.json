@@ -4068,6 +4068,28 @@
       "skippedReasonOutsideSkillFolder": "Ārpus prasmes mapes",
       "skippedReasonUnsupportedExtension": "Neatbalstīts faila tips",
       "skippedReasonUnsupportedFolder": "Nav resursu mapē",
+      "starter": {
+        "compare": {
+          "body": "Salīdziniet divas šī dokumenta versijas un uzskaitiet visas būtiskās izmaiņas, norādot to atrašanās vietu.",
+          "description": "Uzskaitiet visas būtiskās izmaiņas starp divām versijām",
+          "name": "Salīdzināt versijas"
+        },
+        "draft": {
+          "body": "Sagatavojiet izsvērtu atbildi uz šo vēstuli. Saglabājiet profesionālu toni, aplūkojiet katru minēto punktu un norādiet atklātos jautājumus, kas man jāapstiprina.",
+          "description": "Sagatavojiet profesionālu atbildi uz vēstuli",
+          "name": "Sagatavot atbildi"
+        },
+        "risks": {
+          "body": "Pārbaudiet šo dokumentu, meklējot juridiskos riskus, trūkstošus aizsardzības noteikumus un neskaidras klauzulas. Pie katra konstatējuma norādiet konkrēto klauzulu.",
+          "description": "Atrodiet juridiskos riskus un neskaidras klauzulas",
+          "name": "Atrast riskus"
+        },
+        "summarize": {
+          "body": "Apkopojiet šo dokumentu. Ietveriet puses, galvenās saistības, datumus, finanšu noteikumus un visas klauzulas par izbeigšanu vai atbildību.",
+          "description": "Iegūstiet strukturētu galveno noteikumu kopsavilkumu",
+          "name": "Apkopot dokumentu"
+        }
+      },
       "uploadHelp": "Izmantojiet SKILL.md failu vai .zip mapi ar SKILL.md un izvēles tikai lasāmiem resursiem.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cels/uz/prasmi",
       "version": "Versija: {version}"
