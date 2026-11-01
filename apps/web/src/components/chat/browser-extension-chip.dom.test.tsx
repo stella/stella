@@ -125,6 +125,12 @@ const states = {
       value: "Mozilla/5.0 Firefox/140.0",
     });
   },
+  [BROWSER_EXTENSION_STATUS.unsupportedDevice]: async () => {
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (iPhone) CriOS/140.0 Safari/604.1",
+    });
+  },
   [BROWSER_EXTENSION_STATUS.notInstalled]: async () => {
     // Restart under the fake clock so only the announcement deadline advances.
     unmountBridge?.();
@@ -154,17 +160,22 @@ for (const status of Object.values(BROWSER_EXTENSION_STATUS)) {
     switch (status) {
       case BROWSER_EXTENSION_STATUS.checking:
       case BROWSER_EXTENSION_STATUS.unsupportedBrowser:
+      case BROWSER_EXTENSION_STATUS.unsupportedDevice:
         expect(ui.container.innerHTML).toBe("");
         break;
       case BROWSER_EXTENSION_STATUS.connected:
         expect(
-          screen.getByText(messages.chat.browserExtension.connected),
+          screen.getByRole("button", {
+            name: messages.chat.browserExtension.connected,
+          }),
         ).toBeTruthy();
         break;
       case BROWSER_EXTENSION_STATUS.needsSiteAccess:
       case BROWSER_EXTENSION_STATUS.notPaired:
         expect(
-          screen.queryByText(messages.chat.browserExtension.connected),
+          screen.queryByRole("button", {
+            name: messages.chat.browserExtension.connected,
+          }),
         ).toBeNull();
         fireEvent.click(
           screen.getByRole("button", {
@@ -249,11 +260,15 @@ test("the install popover stays text-only where the store build never connects",
 test("pongs update the mounted chip and a missing controller never shows connected", async () => {
   showChip();
   expect(
-    screen.queryByText(messages.chat.browserExtension.connected),
+    screen.queryByRole("button", {
+      name: messages.chat.browserExtension.connected,
+    }),
   ).toBeNull();
   await report({ allSitesGranted: true, controllerId: null });
   expect(
-    screen.queryByText(messages.chat.browserExtension.connected),
+    screen.queryByRole("button", {
+      name: messages.chat.browserExtension.connected,
+    }),
   ).toBeNull();
   expect(
     screen.getByRole("button", {
@@ -262,7 +277,9 @@ test("pongs update the mounted chip and a missing controller never shows connect
   ).toBeTruthy();
   await report({ allSitesGranted: true, controllerId: "controller-1" });
   expect(
-    screen.getByText(messages.chat.browserExtension.connected),
+    screen.getByRole("button", {
+      name: messages.chat.browserExtension.connected,
+    }),
   ).toBeTruthy();
   expect(
     screen.queryByRole("button", {
@@ -271,7 +288,9 @@ test("pongs update the mounted chip and a missing controller never shows connect
   ).toBeNull();
   await report({ allSitesGranted: true, controllerId: null });
   expect(
-    screen.queryByText(messages.chat.browserExtension.connected),
+    screen.queryByRole("button", {
+      name: messages.chat.browserExtension.connected,
+    }),
   ).toBeNull();
   expect(
     screen.getByRole("button", {

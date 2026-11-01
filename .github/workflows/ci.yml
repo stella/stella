@@ -7151,6 +7151,7 @@ jobs:
             pkg:npm/valibot,
             pkg:npm/y-prosemirror,
             pkg:npm/yjs,
+            pkg:cargo/alsa,
             pkg:cargo/brotli-decompressor,
             pkg:cargo/dbus,
             pkg:cargo/filetime,

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
@@ -13,6 +13,7 @@ import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-x
 // parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
+import { type AtPrintedLine, readAtDecisionRoles } from "./at-decision-regions";
 import { compareTextFidelity, normalizeInlineLayout } from "./at-ris-markup";
 import {
   inlinesToPlainText,
@@ -290,6 +291,37 @@ export const parseFindokDecisionXml = (
         cause: undefined,
       }),
     );
+  }
+
+  // Findok labels no part of the decision: its roles are what the court
+  // printed, read over the whole decision.
+  const roles = readAtDecisionRoles(
+    blocks.map((block): AtPrintedLine => {
+      switch (block.type) {
+        case "heading": {
+          return { type: "heading", text: block.plainText };
+        }
+        case "paragraph": {
+          return { type: "paragraph", text: block.plainText, section: "text" };
+        }
+        case "table":
+        case "image": {
+          // Findok's reader emits neither; a block with no text is no line.
+          return { type: "field" };
+        }
+        default: {
+          block satisfies never;
+          return panic("Unhandled Findok block type");
+        }
+      }
+    }),
+    [input.caseNumber],
+  );
+  for (const [index, block] of blocks.entries()) {
+    const role = roles[index];
+    if (block.type === "paragraph" && role !== undefined) {
+      blocks[index] = { ...block, role };
+    }
   }
 
   const textFidelity = compareTextFidelity(
