@@ -27,6 +27,11 @@ import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { cn } from "@stll/ui/utils";
 
+import { ACTIVITY_CHANGED_EVENT } from "../activity/activity-types";
+import {
+  ActivitySettingsPane,
+  ActivitySettingsSkeleton,
+} from "../activity/ActivitySettings";
 import {
   isSupportedLanguage,
   setPreferredLanguage,
@@ -53,6 +58,7 @@ import { accountPresentation } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
 import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import { commandErrorMessage } from "./command-error";
+import { DictationSetting } from "./DictationSetting";
 import { PermissionsSection } from "./PermissionsSection";
 import { ShortcutSetting } from "./ShortcutSetting";
 
@@ -75,7 +81,12 @@ const DEFAULT_UPDATE_SNAPSHOT = {
   updateReady: false,
 } satisfies DesktopUpdateSnapshot;
 
-const PREFERENCES_TABS = ["general", "notifications", "about"] as const;
+const PREFERENCES_TABS = [
+  "general",
+  "activity",
+  "notifications",
+  "about",
+] as const;
 
 type PreferencesTab = (typeof PREFERENCES_TABS)[number];
 type NotificationPreferenceKey = keyof DesktopNotificationPreferences;
@@ -422,6 +433,9 @@ const GeneralPane = ({
       <PanelGroup>
         <ShortcutSetting />
       </PanelGroup>
+      <DictationSetting
+        renderGroup={(content) => <PanelGroup>{content}</PanelGroup>}
+      />
       <AgentSubscriptionsSection
         renderGroup={(content) => (
           <PanelGroup title={tSubscriptions("title")}>{content}</PanelGroup>
@@ -624,8 +638,60 @@ const AboutPane = ({
   );
 };
 
+type ActivityAvailability = "loading" | "enabled" | "disabled";
+
+/**
+ * Whether the account has the activity feature, which decides the Activity
+ * tab. Reads the feature decision only and again on every activity change,
+ * which the native side also emits when the decision changes.
+ */
+const useActivityAvailability = () => {
+  const [availability, setAvailability] =
+    useState<ActivityAvailability>("loading");
+
+  useEffect(() => {
+    let disposed = false;
+    let request = 0;
+    const read = () => {
+      request += 1;
+      const current = request;
+      invoke<boolean>("is_activity_enabled")
+        .then((enabled) => {
+          if (!disposed && current === request) {
+            setAvailability(enabled ? "enabled" : "disabled");
+          }
+          return undefined;
+        })
+        .catch(() => {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+            window: DESKTOP_TELEMETRY_WINDOWS.main,
+          });
+          if (!disposed && current === request) {
+            setAvailability("disabled");
+          }
+        });
+    };
+    read();
+    const stopListening = subscribeDesktopEvent({
+      event: ACTIVITY_CHANGED_EVENT,
+      handler: read,
+      onError: reportSubscriptionFailure,
+      onSubscribed: read,
+    });
+    return () => {
+      disposed = true;
+      stopListening();
+    };
+  }, []);
+
+  return availability;
+};
+
 const App = () => {
   const t = useTranslations("settings");
+  const tActivity = useTranslations("activity");
   const locale = useLocale();
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<AppSnapshot | null>(null);
@@ -644,6 +710,14 @@ const App = () => {
   const accountRefresh = useRef<() => void>(() => undefined);
   const accountGeneration = useRef(0);
   const [activeTab, setActiveTab] = useState<PreferencesTab>(getInitialTab);
+  const activityAvailability = useActivityAvailability();
+  // A requested Activity tab stays shown while availability loads, so opening
+  // it does not flash General first; it falls back only once activity is off.
+  const showActivityTab =
+    activityAvailability === "enabled" ||
+    (activityAvailability === "loading" && activeTab === "activity");
+  const shownTab =
+    activeTab === "activity" && !showActivityTab ? "general" : activeTab;
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -910,13 +984,18 @@ const App = () => {
               setActiveTab(nextTab);
             }
           }}
-          value={activeTab}
+          value={shownTab}
         >
           <div className="px-1">
             <TabsList variant="underline">
               <TabsTab className="h-8 px-2 text-sm" value="general">
                 {t("general")}
               </TabsTab>
+              {showActivityTab ? (
+                <TabsTab className="h-8 px-2 text-sm" value="activity">
+                  {tActivity("title")}
+                </TabsTab>
+              ) : null}
               <TabsTab className="h-8 px-2 text-sm" value="notifications">
                 {t("notifications")}
               </TabsTab>
@@ -974,6 +1053,20 @@ const App = () => {
                 </div>
               </ScrollArea>
             </TabsPanel>
+            {showActivityTab ? (
+              <TabsPanel className="h-full min-h-0" value="activity">
+                <ScrollArea className="h-full">
+                  <div className="p-4">
+                    {/* Activity reads nothing until its access is confirmed. */}
+                    {activityAvailability === "enabled" ? (
+                      <ActivitySettingsPane />
+                    ) : (
+                      <ActivitySettingsSkeleton />
+                    )}
+                  </div>
+                </ScrollArea>
+              </TabsPanel>
+            ) : null}
             <TabsPanel className="h-full min-h-0" value="notifications">
               <ScrollArea className="h-full">
                 <div className="space-y-4 p-4">

@@ -66,12 +66,15 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
       writeFileSync(
         path.join(fixtureScripts, "build-pglite-snapshot.ts"),
         `
+        import { renameSync } from "node:fs";
         const descendant = Bun.spawn(["sh", "-c", 'trap "" INT TERM; sleep 300 & echo "$!"; wait'], {
           stdout: "pipe", stderr: "ignore",
         });
         const ready = await descendant.stdout.getReader().read();
         const leafPid = new TextDecoder().decode(ready.value).trim();
-        await Bun.write(${JSON.stringify(marker)}, String(process.pid) + " " + String(descendant.pid) + " " + leafPid);
+        // The test reads the marker as soon as it exists: publish it whole.
+        await Bun.write(${JSON.stringify(`${marker}.partial`)}, String(process.pid) + " " + String(descendant.pid) + " " + leafPid);
+        renameSync(${JSON.stringify(`${marker}.partial`)}, ${JSON.stringify(marker)});
         setInterval(() => {}, 1000);
       `,
       );

@@ -31,9 +31,10 @@ import {
 
 const RULE_NAME = "no-direct-pdf-save";
 /**
- * The two helpers that save without the signed/encrypted refusal, and the
- * only modules that may import them: an incremental revision for the
- * signing pipeline, and transient copies that only go to a model.
+ * The helpers that save without the signed/encrypted refusal, and the only
+ * modules that may import them: an incremental revision for the signing
+ * pipeline, one for a reader's marks on a downloaded copy, and transient
+ * copies that only go to a model.
  */
 const HELPER_MODULE_SUFFIX = "/files/pdf-signatures";
 const RESTRICTED_HELPERS: ReadonlyMap<string, readonly string[]> = new Map([
@@ -41,6 +42,7 @@ const RESTRICTED_HELPERS: ReadonlyMap<string, readonly string[]> = new Map([
     "appendSigningRevision",
     ["apps/api/src/lib/files/pdf-signing/validation-data.ts"],
   ],
+  ["appendAnnotationRevision", ["apps/api/src/lib/files/marked-pdf.ts"]],
   [
     "savePdfForModelInput",
     [
