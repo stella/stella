@@ -70,7 +70,6 @@ export const LawEntryBox = ({
           <div
             className={cn("relative min-w-0", COMPOSER_LARGE_TEXT_WELL_CLASS)}
           >
-            {/* oxlint-disable-next-line no-native-ui/no-native-textarea -- the composer's own text well, one growing line whose metrics come from the composer constants (COMPOSER_TEXT_CLASS, COMPOSER_LARGE_EDITOR_CLASS) that the chat editor shares; Textarea's default draws a control box and its in-place variant pads and rings the text itself, while the composer rings the whole box, and the shared constants cannot be passed to a component */}
             <textarea
               aria-label={searchLabel}
               autoComplete="off"

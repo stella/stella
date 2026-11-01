@@ -106,7 +106,6 @@ export const TemplateStudioSlashMenu = ({
   return (
     <div
       className="bg-popover text-popover-foreground absolute z-50 flex flex-col rounded-md border text-sm shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
-      // oxlint-disable-next-line no-native-ui/no-native-select -- a caret-anchored slash menu the editor drives with arrow keys while the document keeps focus and selection; Select and Combobox move focus into their own popup, which would end the typed query
       role="listbox"
       style={{
         left: slash.left,
@@ -883,7 +882,6 @@ const SlashMenuRow = ({
       )}
       onMouseEnter={onHighlight}
       ref={rowRef}
-      // oxlint-disable-next-line no-native-ui/no-native-select -- one option of the editor-driven slash listbox above; it never takes focus (the caret stays in the document), so it cannot be a Select or Combobox item
       role="option"
       selected={selected}
       size="row"

@@ -1095,6 +1095,7 @@
     "apps/web/src/components/chat/request-secret-card.tsx": 1
   },
   "no-native-ui/no-native-select": {
+    "apps/web/src/routes/knowledge/-components/template-studio-slash-menu.tsx": 2,
     "packages/chat/src/model-selector.tsx": 3
   },
   "no-native-ui/no-native-separator": {
@@ -1111,7 +1112,8 @@
   "no-native-ui/no-native-textarea": {
     "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 1,
     "apps/web/src/components/chat-pasted-text-node.tsx": 1,
-    "apps/web/src/components/workspaces/editable-field.tsx": 1
+    "apps/web/src/components/workspaces/editable-field.tsx": 1,
+    "apps/web/src/routes/law/-law-home/law-entry-box.tsx": 1
   },
   "no-native-ui/no-native-tooltip": {
     "apps/desktop/src/clipboard/ClipboardApp.tsx": 7,
