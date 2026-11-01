@@ -105,6 +105,13 @@ export type ChatMessageEditErrorCode =
  */
 export const ENCRYPTED_CONTENT_ERROR_CODE = "encrypted_content" as const;
 
+/**
+ * A stored file has nothing to show: no viewer renders its type and no PDF
+ * rendition exists. The file itself is fine and still downloads, so a client
+ * offers the download instead of a retry.
+ */
+export const PREVIEW_UNAVAILABLE_ERROR_CODE = "preview_unavailable" as const;
+
 export const API_FILE_SECURITY_REJECTED_ERROR_CODE =
   "file_security_rejected" as const;
 

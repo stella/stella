@@ -14,6 +14,7 @@ import {
   normalizeApiError,
   parseApiErrorValue,
   parseApiValidationIssues,
+  PREVIEW_UNAVAILABLE_ERROR_CODE,
 } from "@stll/api-contract";
 import type { ApiValidationIssue } from "@stll/api-contract";
 import {
@@ -266,6 +267,7 @@ const CODE_ERROR_KEYS = {
   deepl_key_rejected: "errors.apiCodes.deeplKeyRejected",
   deepl_quota_exceeded: "errors.apiCodes.deeplQuotaExceeded",
   [ENCRYPTED_CONTENT_ERROR_CODE]: "errors.apiCodes.encryptedContent",
+  [PREVIEW_UNAVAILABLE_ERROR_CODE]: "search.previewUnavailable",
   [API_FILE_SECURITY_REJECTED_ERROR_CODE]:
     "errors.apiCodes.fileSecurityRejected",
   forbidden: "errors.apiCodes.forbidden",
@@ -351,6 +353,10 @@ export const apiFieldIssueMessage = (
   );
   return issue === undefined ? undefined : validationIssueMessage(issue);
 };
+
+/** The server has nothing to show for this file; retrying cannot help. */
+export const isPreviewUnavailableError = (error: unknown): boolean =>
+  APIError.is(error) && error.code === PREVIEW_UNAVAILABLE_ERROR_CODE;
 
 export const isDisplayableAPIError = (error: APIError): boolean =>
   isActionAdmissionCode(error.code) ||

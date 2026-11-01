@@ -484,7 +484,7 @@
     "evidenceTitles": "Titres",
     "evidenceApps": "Apps",
     "rangeEmpty": "Rien n’a été enregistré sur cette plage.",
-    "calendarHint": "Ouvrez une suggestion en pointillés pour la vérifier, ou faites glisser dans la colonne Activité pour préparer une saisie sur n’importe quelle plage.",
+    "calendarHint": "Ouvrez une suggestion en pointillés pour la vérifier, ou faites glisser dans la colonne Saisies de temps pour préparer une saisie sur n’importe quelle plage.",
     "narrativeAiPrompt": "Rédiger la description avec stella AI ? Seuls les titres de fenêtres de cette suggestion sont envoyés ; ils ne sont pas conservés.",
     "narrativeAiNo": "Non",
     "narrativeAiApprove": "Approuver",
