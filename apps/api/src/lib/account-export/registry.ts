@@ -19,6 +19,10 @@ type AccountExportDisposition =
 // Actor-attribution FKs on shared legal records do not confer personal ownership.
 // Mixed tables export only their private subset, enforced by the page owner.
 export const ACCOUNT_EXPORT_REGISTRY = {
+  organization_creation_requests: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
+  },
   account: { type: "exempt", reason: ACCOUNT_EXPORT_EXEMPT_REASON.security },
   account_audit_logs: {
     type: "exempt",
@@ -70,6 +74,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
   },
   billing_draft_user_settings: { type: "exported" },
   case_law_matter_links: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
+  legislation_matter_links: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },

@@ -13,6 +13,7 @@ import type { Transaction } from "@/api/db/root";
 import { entities, workspaces } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { normalizeEntityName } from "@/api/lib/entities/entity-name";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { AGENDA_ITEM_KIND, TASK_STATUS } from "@/api/lib/entity-constants";
 import type { AgendaItemKind } from "@/api/lib/entity-constants";
@@ -160,7 +161,7 @@ export const importInfoSoudAgendaItems = async ({
     id: createSafeId<"entity">(),
     workspaceId,
     kind: "task" as const,
-    name: item.name,
+    name: normalizeEntityName(item.name),
     createdBy: actorUserId,
     agendaKind: item.agendaKind,
     status: item.status,

@@ -34,6 +34,7 @@ import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-que
 import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
 import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
+import { timeEntryReportRoute } from "@/api/handlers/time-entries/report/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
@@ -137,6 +138,7 @@ const TIME_BILLING_ROUTES: Readonly<Record<string, readonly RouteEntry[]>> = {
   clientInvoicesRoute,
   memberTimeTargetsRoute,
   myTimeEntriesRoute,
+  timeEntryReportRoute,
   numberSeriesRoute,
   organizationBillingDraftsRoute: organizationSettingsRoute.filter(({ path }) =>
     path.startsWith("/organization-settings/billing-drafts"),

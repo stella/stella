@@ -1,10 +1,11 @@
-import { UPLOAD_FILE_MIN_BYTES } from "@stll/api-contract/limits";
+import { Result } from "better-result";
 
 import type {
   DroppedFileTree,
   DroppedFileTreeFile,
 } from "@/hooks/external-file-drop.logic";
 import { ClientOperationError } from "@/lib/errors/client";
+import { validateUploadFileSize } from "@/lib/files/upload-file-validation";
 
 const DIRECTORY_PATH_SEPARATOR = "\0";
 
@@ -117,15 +118,15 @@ export type FolderReservableFile = {
 };
 
 /**
- * The plan's files the folder reservation can accept. A file smaller than
- * `UPLOAD_FILE_MIN_BYTES` is left out: it takes the single-file path, where
- * the API refuses that file alone instead of the whole folder.
+ * The plan's files the folder reservation can accept. A file of a size the
+ * API refuses is left out: it takes the single-file path, where that file
+ * fails alone instead of the whole folder.
  */
 export const folderReservableFiles = (
   plan: DroppedFolderUploadPlan,
 ): FolderReservableFile[] =>
   plan.files.flatMap((placement, index) =>
-    placement.file.size >= UPLOAD_FILE_MIN_BYTES
+    Result.isOk(validateUploadFileSize(placement.file.size))
       ? [{ key: String(index), placement }]
       : [],
   );
