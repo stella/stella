@@ -9,6 +9,9 @@ on:
   workflow_run:
     workflows: [Deploy main to staging, Main heavy suites, Main PR-depth checks]
     types: [completed]
+  # The final tag starts the production promote, so finalization waits for a
+  # person's release/prod-gate=success on the candidate; setting it re-enters.
+  status:
   workflow_dispatch:
     inputs:
       mode:
@@ -197,12 +200,15 @@ jobs:
   finalize-eligibility:
     name: Decide whether the proof run finalizes a release candidate
     if: >-
-      github.event_name == 'workflow_run' &&
-      github.event.workflow_run.head_repository.full_name == github.repository &&
-      github.event.workflow_run.event == 'workflow_dispatch' &&
-      (github.event.workflow_run.path == '.github/workflows/deploy-staging.yml' ||
-       github.event.workflow_run.path == '.github/workflows/main-heavy.yml' ||
-       github.event.workflow_run.path == '.github/workflows/main-pr-depth.yml')
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.event == 'workflow_dispatch' &&
+       (github.event.workflow_run.path == '.github/workflows/deploy-staging.yml' ||
+        github.event.workflow_run.path == '.github/workflows/main-heavy.yml' ||
+        github.event.workflow_run.path == '.github/workflows/main-pr-depth.yml')) ||
+      (github.event_name == 'status' &&
+       github.event.context == 'release/prod-gate' &&
+       github.event.state == 'success')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -222,7 +228,7 @@ jobs:
   finalize:
     name: Finalize the proven release candidate
     needs: finalize-eligibility
-    if: github.event_name == 'workflow_run' && needs.finalize-eligibility.outputs.sha != ''
+    if: (github.event_name == 'workflow_run' || github.event_name == 'status') && needs.finalize-eligibility.outputs.sha != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: release-app
