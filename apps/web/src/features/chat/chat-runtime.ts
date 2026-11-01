@@ -19,7 +19,7 @@ import {
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
-import type { ChatSendRequest } from "@stll/api-contract";
+import type { ChatSendRequest, ChatTurnIntent } from "@stll/api-contract";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
@@ -42,10 +42,10 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isChatClientRequestActive,
 } from "@/components/chat/chat-ui-tools";
-import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
+import { createBrowserExtensionTool } from "@/features/chat/browser-control/browser-client-tool";
 import {
   BrowserBridgeUnmountedError,
-  getBrowserClientCapability,
+  getBrowserExtensionState,
   isBrowserExtensionBridgeMounted,
 } from "@/features/chat/browser-control/browser-extension-bridge";
 import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
@@ -109,7 +109,7 @@ export type ChatContinuationRequestBody = {
   sendMode?: ChatSendMode | undefined;
   toolScope?: ChatToolScope | undefined;
   truncateAfterMessageId?: SafeId<"chatMessage"> | undefined;
-  turnIntent?: (typeof CHAT_TURN_INTENT)["regenerate"] | undefined;
+  turnIntent?: ChatTurnIntent | undefined;
 };
 export type ChatSendMessageOptions = {
   body?: ChatContinuationRequestBody | undefined;
@@ -174,6 +174,10 @@ export type ChatRuntime = ChatActivitySession & {
   getSnapshot: () => ChatRuntimeSnapshot;
   reload: (options?: ChatSendMessageOptions) => Promise<void>;
   setMessages: (messages: PersistedChatMessage[]) => void;
+  /** Show the thread as the server stores it, after a request the server did
+   *  not accept: its messages replace the page's, and the request's error
+   *  leaves with the turn it described. */
+  showStoredMessages: (messages: PersistedChatMessage[]) => void;
   /** Resolves once the message is appended, without waiting for its stream. */
   startRouteHandoffMessage: (
     message: ChatRouteHandoffMessage,
@@ -208,6 +212,37 @@ export const sendThreadChatMessage = async (
   }
 
   await sendMessage(message, options);
+};
+
+/**
+ * What the server answered a sent message, as soon as it answered: it
+ * accepted the turn (whose answer then streams on), or the request failed
+ * before it did, with the failure it reported.
+ */
+type ChatSendAcceptance =
+  { status: "accepted" } | { status: "failed"; error: Error };
+
+type ChatThreadSendUntilAccepted = (
+  message: ChatUserMessageInput,
+  options?: ChatSendMessageOptions,
+) => Promise<ChatSendAcceptance>;
+
+const threadSendUntilAcceptedByRuntime = new WeakMap<
+  ChatRuntime,
+  ChatThreadSendUntilAccepted
+>();
+
+/** Send `message` and resolve once the server accepted or refused its turn,
+ *  without waiting for the answer to stream. */
+export const sendThreadChatMessageUntilAccepted = async (
+  chat: ChatRuntime,
+  message: ChatUserMessageInput,
+  options?: ChatSendMessageOptions,
+): Promise<ChatSendAcceptance> => {
+  const send =
+    threadSendUntilAcceptedByRuntime.get(chat) ??
+    panic("Missing thread send capability for chat runtime");
+  return await send(message, options);
 };
 
 const getChatApiPath = () => apiUrl("/chat");
@@ -403,6 +438,12 @@ export const createChatRuntime = ({
    *  a generic replay of the same failure stays quiet too; the next request
    *  clears it. */
   let settledTurnRefused = false;
+  /** A send that waits to hear whether the server accepted its turn; the
+   *  request the send posts answers it (see `turnObservingFetchClient`). */
+  let awaitedSendAcceptance:
+    PromiseWithResolvers<ChatSendAcceptance> | undefined;
+  /** TanStack's delivery of the page's latest send, until it has finished. */
+  let clientDelivery: Promise<void> | undefined;
   /** A new message starts a new turn. Stop waits for its response headers
    *  to name the turn; a stop of the previous turn is over. */
   const startTurn = (): void => {
@@ -535,7 +576,23 @@ export const createChatRuntime = ({
 
   const turnObservingFetchClient = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
-      const response = await chatFetchClient(input, init);
+      // A send waiting to hear whether its turn was accepted hears it from
+      // the next request the page posts; a rejoin replays with GET.
+      const acceptance =
+        init?.method === "GET" ? undefined : awaitedSendAcceptance;
+      if (acceptance !== undefined) {
+        awaitedSendAcceptance = undefined;
+      }
+      const received = await Result.tryPromise({
+        try: async () => await chatFetchClient(input, init),
+        catch: toError,
+      });
+      if (Result.isError(received)) {
+        acceptance?.resolve({ status: "failed", error: received.error });
+        return readQueryResult(received);
+      }
+      acceptance?.resolve({ status: "accepted" });
+      const response = received.value;
       const servedTurnId = response.headers.get(CHAT_TURN_ID_HEADER);
       if (servedTurnId !== null) {
         turnId = toSafeId<"chatTurn">(servedTurnId);
@@ -721,7 +778,7 @@ export const createChatRuntime = ({
             {
               ...runContext,
               // The API owns tool schemas and derives browser availability
-              // from browserClient. Keep local executors registered without
+              // from browserExtension. Keep local executors registered without
               // uploading their schemas on every send and continuation.
               clientTools: [],
             },
@@ -743,7 +800,7 @@ export const createChatRuntime = ({
   // The extension budgets browser commands per chat turn, named by its
   // persisted user message, so a runtime rebuilt mid-turn charges the same
   // turn.
-  const browserTool = createBrowserClientTool({
+  const browserTool = createBrowserExtensionTool({
     turnIdFor: (toolCallId) => browserTurnId(snapshot.messages, toolCallId),
   });
 
@@ -1079,7 +1136,12 @@ export const createChatRuntime = ({
     supersedePendingInterrupts();
     const requestWasActive =
       snapshot.isLoading || isChatClientRequestActive(snapshot.status);
-    const stream = client.sendMessage(message, options?.body);
+    // TanStack would queue a send made while it is busy and post it later on
+    // its own; the session's queue retries a refused send itself, so a busy
+    // client refuses it instead of sending it twice.
+    const stream = client.sendMessage(message, options?.body, {
+      whenBusy: "drop",
+    });
     if (!hasUserMessage(snapshot.messages, message.id)) {
       return {
         messageId: message.id,
@@ -1101,10 +1163,34 @@ export const createChatRuntime = ({
     }
     startTurn();
     sendTiming.started(options?.timingSurface, message.id);
+    const delivered = stream.then(
+      () => undefined,
+      () => undefined,
+    );
+    clientDelivery = delivered;
+    detached(
+      (async () => {
+        await delivered;
+        if (clientDelivery === delivered) {
+          clientDelivery = undefined;
+        }
+      })(),
+      "chat-runtime.client-delivery",
+    );
     return { messageId: message.id, status: "started", stream };
   };
 
   const sendThreadMessage: ChatThreadSendMessage = async (message, options) => {
+    // A turn reads ready a few ticks before TanStack has finished delivering
+    // it; a send in that window would be refused as busy, so it waits for
+    // the delivery to end. A request still running is refused as before.
+    if (
+      clientDelivery !== undefined &&
+      !snapshot.isLoading &&
+      !isChatClientRequestActive(snapshot.status)
+    ) {
+      await clientDelivery;
+    }
     const started = startClientSend(message, options);
     const outcome = await Result.tryPromise({
       try: async () => await started.stream,
@@ -1115,6 +1201,48 @@ export const createChatRuntime = ({
       return readQueryResult(
         Result.err(captureRuntimeError(new ChatMessageStartError(message.id))),
       );
+    }
+  };
+
+  const sendThreadMessageUntilAccepted: ChatThreadSendUntilAccepted = async (
+    message,
+    options,
+  ) => {
+    const acceptance = Promise.withResolvers<ChatSendAcceptance>();
+    awaitedSendAcceptance = acceptance;
+    const errorBeforeSend = snapshot.error;
+    // A send that ends before its request was answered (it never started, or
+    // failed while it was prepared) answers from how it ended.
+    const delivered = Result.tryPromise({
+      try: async () => {
+        await sendThreadMessage(message, options);
+      },
+      catch: toError,
+    }).then((outcome): ChatSendAcceptance => {
+      if (Result.isError(outcome)) {
+        return { status: "failed", error: outcome.error };
+      }
+      return snapshot.error !== undefined && snapshot.error !== errorBeforeSend
+        ? { status: "failed", error: snapshot.error }
+        : { status: "accepted" };
+    });
+    const answer = await Promise.race([acceptance.promise, delivered]);
+    if (awaitedSendAcceptance === acceptance) {
+      awaitedSendAcceptance = undefined;
+    }
+    if (answer.status === "failed") {
+      // A refused request is over only once TanStack has handled it: it puts
+      // back the messages it showed before the send, so a caller that shows
+      // other messages afterwards must not race that rollback.
+      await delivered;
+    }
+    return answer;
+  };
+
+  const showStoredMessages = (messages: PersistedChatMessage[]): void => {
+    showMessages(messages);
+    if (snapshot.error !== undefined) {
+      setSnapshot({ error: undefined });
     }
   };
 
@@ -1227,6 +1355,9 @@ export const createChatRuntime = ({
   const closeRequest = (): void => {
     const turnWasActive = isTurnActive();
     client.detach();
+    // The detached delivery is over for this page; a later send never waits
+    // on it.
+    clientDelivery = undefined;
     if (turnWasActive) {
       setSnapshot({ turnAbandoned: true });
       reloadThread();
@@ -1341,6 +1472,7 @@ export const createChatRuntime = ({
       );
     },
     setMessages: showMessages,
+    showStoredMessages,
     startRouteHandoffMessage: async (message, options) => {
       const started = startClientSend(message, options);
       if (started.status === "not_started") {
@@ -1417,6 +1549,7 @@ export const createChatRuntime = ({
   } satisfies ChatRuntime;
 
   threadSendMessageByRuntime.set(runtime, sendThreadMessage);
+  threadSendUntilAcceptedByRuntime.set(runtime, sendThreadMessageUntilAccepted);
 
   return runtime;
 };
@@ -1501,10 +1634,7 @@ export const buildSendRequestBody = ({
     threadId: key.threadId,
   };
 
-  const browserClient = getBrowserClientCapability();
-  if (browserClient) {
-    body.browserClient = browserClient;
-  }
+  body.browserExtension = getBrowserExtensionState();
 
   if (requestBody?.truncateAfterMessageId !== undefined) {
     body.truncateAfterMessageId = requestBody.truncateAfterMessageId;
@@ -1887,7 +2017,10 @@ const normalizeChatContinuationRequestBody = (
       data["truncateAfterMessageId"],
     );
   }
-  if (data["turnIntent"] === CHAT_TURN_INTENT.regenerate) {
+  if (
+    data["turnIntent"] === CHAT_TURN_INTENT.regenerate ||
+    data["turnIntent"] === CHAT_TURN_INTENT.edit
+  ) {
     body.turnIntent = data["turnIntent"];
   }
 

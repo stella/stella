@@ -22,8 +22,8 @@ defaults:
 # /releases/latest/download deep links never 404 and in-app updaters see no
 # spurious update.
 #
-# Builds Windows + macOS in parallel. Windows uses Azure Trusted
-# Signing; macOS uses a Developer ID Application cert + App Store
+# Builds Windows (x64 and ARM64) + macOS in parallel. Windows uses Azure
+# Trusted Signing; macOS uses a Developer ID Application cert + App Store
 # Connect API key for notarization.
 
 on:
@@ -227,7 +227,7 @@ jobs:
   build:
     needs: resolve
     if: ${{ needs.resolve.outputs.should_build == 'true' }}
-    name: Build ${{ matrix.os }}
+    name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     permissions:
@@ -243,6 +243,14 @@ jobs:
             runner: windows-latest
             target: x86_64-pc-windows-msvc
             rust_targets: x86_64-pc-windows-msvc
+            install_timeout_minutes: 30
+          # Cross-compiled on the x64 runner: the frontend build and signing
+          # tools stay x64 and only the Rust binary targets ARM64. Build
+          # scripts run on x64, so its crates are fetched too.
+          - os: windows
+            runner: windows-latest
+            target: aarch64-pc-windows-msvc
+            rust_targets: aarch64-pc-windows-msvc,x86_64-pc-windows-msvc
             install_timeout_minutes: 30
           - os: macos
             runner: macos-15
@@ -507,7 +515,7 @@ jobs:
         # Stella-windows-x64-setup.exe` regardless of the release
         # version. The .sig files for updater archives keep their
         # ordering so latest.json continues to find them.
-        run: bash scripts/rename-desktop-artifacts.sh "apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
+        run: bash scripts/rename-desktop-artifacts.sh "apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle" "${{ matrix.target }}"
 
       - name: Upload installers to GitHub Release
         env:

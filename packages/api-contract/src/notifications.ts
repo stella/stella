@@ -1,6 +1,7 @@
 /**
  * Notifications: per-user, transient awareness pointers ("you were mentioned",
- * "your export finished", "your flow run needs approval", "announcement").
+ * "you were assigned a task", "your export finished", "your flow run needs
+ * approval", "announcement").
  *
  * A notification carries no actionable work state and never represents a
  * deadline or governed work — that is the signals/obligations system. Its only
@@ -14,6 +15,7 @@
 
 export const NOTIFICATION_KIND = {
   MENTION: "mention",
+  TASK_ASSIGNED: "task_assigned",
   REPORT_EXPORT_SUCCEEDED: "report_export_succeeded",
   REPORT_EXPORT_FAILED: "report_export_failed",
   FLOW_RUN_COMPLETED: "flow_run_completed",
@@ -25,6 +27,7 @@ export type NotificationKind =
   (typeof NOTIFICATION_KIND)[keyof typeof NOTIFICATION_KIND];
 export const NOTIFICATION_KINDS = [
   NOTIFICATION_KIND.MENTION,
+  NOTIFICATION_KIND.TASK_ASSIGNED,
   NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED,
   NOTIFICATION_KIND.REPORT_EXPORT_FAILED,
   NOTIFICATION_KIND.FLOW_RUN_COMPLETED,
@@ -42,6 +45,7 @@ export const NOTIFICATION_ENTITY_TYPE = {
   ENTITY: "entity",
   FLOW_RUN: "flow_run",
   REPORT_EXPORT: "report_export",
+  TASK: "task",
 } as const;
 export type NotificationEntityType =
   (typeof NOTIFICATION_ENTITY_TYPE)[keyof typeof NOTIFICATION_ENTITY_TYPE];
@@ -49,6 +53,7 @@ export const NOTIFICATION_ENTITY_TYPES = [
   NOTIFICATION_ENTITY_TYPE.ENTITY,
   NOTIFICATION_ENTITY_TYPE.FLOW_RUN,
   NOTIFICATION_ENTITY_TYPE.REPORT_EXPORT,
+  NOTIFICATION_ENTITY_TYPE.TASK,
 ] as const satisfies readonly NotificationEntityType[];
 
 /**
@@ -73,6 +78,10 @@ type TotalMetadataMap<
  */
 export type NotificationMetadataByKind = TotalMetadataMap<{
   [NOTIFICATION_KIND.MENTION]: { actorName: string };
+  // Who assigned it, never the task's name: like a mention, the row is a
+  // pointer, and the link opens the task as it is now rather than a title
+  // frozen at the moment of assignment.
+  [NOTIFICATION_KIND.TASK_ASSIGNED]: { actorName: string };
   [NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED]: Record<string, never>;
   [NOTIFICATION_KIND.REPORT_EXPORT_FAILED]: Record<string, never>;
   [NOTIFICATION_KIND.FLOW_RUN_COMPLETED]: { flowName: string };

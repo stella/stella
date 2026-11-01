@@ -6,5 +6,9 @@ fn main() {
   if let Some(code) = stella_desktop_lib::run_codex_token_helper() {
     std::process::exit(code);
   }
+  // The speech model's process: it runs the model and starts no app.
+  if let Some(code) = stella_desktop_lib::run_dictation_worker() {
+    std::process::exit(code);
+  }
   stella_desktop_lib::run()
 }

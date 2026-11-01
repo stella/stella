@@ -25,7 +25,12 @@ import {
   type PreCutGate,
   preCutGates,
 } from "./prepare-maintenance-release-gates";
-import { selectPromotedReleaseBelow } from "./promoted-release-policy";
+import {
+  parseReleaseManifest,
+  type ReleaseManifest,
+  selectPromotedReleaseBelow,
+  serializeReleaseManifest,
+} from "./promoted-release-policy";
 import { heavyVerdict } from "./release-heavy-verdict";
 
 // Computed filesystem reads retain these repository Markdown inputs.
@@ -405,29 +410,18 @@ export const parseMaintenanceReleaseOptions = (
 // A `null` value records a stable tag that was built but never promoted; the
 // landing changelog omits it. Preserved as written: a maintenance release
 // after an unpromoted one must not turn that record into a publication date.
-export const readReleaseDates = (
-  rootDir: string,
-): Record<string, string | null> => {
-  const parsed: unknown = JSON.parse(
-    readFileSync(nodePath.join(rootDir, RELEASE_DATES_PATH), "utf-8"),
+export const readReleaseManifest = (rootDir: string): ReleaseManifest => {
+  const parsed = parseReleaseManifest(
+    JSON.parse(
+      readFileSync(nodePath.join(rootDir, RELEASE_DATES_PATH), "utf-8"),
+    ),
   );
-  if (
-    !isRecord(parsed) ||
-    Object.values(parsed).some(
-      (value) => typeof value !== "string" && value !== null,
-    )
-  ) {
+  if (parsed.status === "invalid") {
     throw new MaintenanceReleaseError(
-      `${RELEASE_DATES_PATH} must be an object of string or null values`,
+      `${RELEASE_DATES_PATH}: ${parsed.message}`,
     );
   }
-  const releaseDates: Record<string, string | null> = {};
-  for (const [key, value] of Object.entries(parsed)) {
-    if (typeof value === "string" || value === null) {
-      releaseDates[key] = value;
-    }
-  }
-  return releaseDates;
+  return parsed.manifest;
 };
 
 const atomicWriteFile: ReleaseFileWriter = (path, contents) => {
@@ -503,28 +497,23 @@ export type ReleaseDates = Record<string, string | null>;
 
 /**
  * The release publication manifest as the release PR will carry it: every
- * unpromoted record that GitHub now dates takes its time, the previous final
- * takes GitHub's verdict (a time when promoted, null when not), and a
- * never-tagged previous version records nothing. The cut writes this and
- * checks npm against it, so the cut and the tag see the same promotions.
+ * recorded entry stays as written (a null is a release that was never
+ * promoted, even when GitHub later shows a published release for it), the
+ * previous final takes GitHub's verdict (a time when promoted, null when
+ * not), and a never-tagged previous version records nothing. The cut writes
+ * this and checks npm against it, so the cut and the tag see the same
+ * promotions.
  */
 export const projectReleaseDates = ({
   dates,
   previousRelease,
   previousTag,
-  refreshed,
 }: {
   dates: ReleaseDates;
   previousRelease: PreviousRelease;
   previousTag: string;
-  refreshed: Readonly<Record<string, string>>;
 }): ReleaseDates => {
-  const projected: ReleaseDates = Object.fromEntries(
-    Object.entries(dates).map(([tag, publishedAt]) => [
-      tag,
-      publishedAt ?? refreshed[tag] ?? null,
-    ]),
-  );
+  const projected: ReleaseDates = { ...dates };
   switch (previousRelease.kind) {
     case "published":
       return { ...projected, [previousTag]: previousRelease.publishedAt };
@@ -538,74 +527,15 @@ export const projectReleaseDates = ({
   }
 };
 
-/**
- * Asks GitHub about every release the manifest records as unpromoted, so one
- * promoted after a later cut becomes a reference. Only a published time is
- * taken; a release still unpublished stays null. A lookup that fails is
- * tolerated only for a tag older than the newest promoted release, which can
- * never be the reference; any other failure stops the cut.
- */
-export const refreshUnpromotedReleases = async ({
-  cutVersion,
-  dates,
-  previousTag,
-  readRelease,
-}: {
-  /** The release being cut: the reference is always strictly below it. */
-  cutVersion: string;
-  dates: ReleaseDates;
-  previousTag: string;
-  readRelease: (tag: string) => Promise<PreviousRelease>;
-}): Promise<Record<string, string>> => {
-  // The previous final is read by the cut itself and may be promoted without
-  // being recorded, so it never sets the bound.
-  const newestPromoted = Object.entries(dates)
-    .filter(
-      ([tag, publishedAt]) =>
-        publishedAt !== null &&
-        tag !== previousTag &&
-        Bun.semver.order(tag.slice(1), cutVersion) < 0,
-    )
-    .map(([tag]) => tag.slice(1))
-    .toSorted((left, right) => Bun.semver.order(right, left))
-    .at(0);
-  const refreshed: (readonly [string, string])[] = [];
-  for (const [tag, publishedAt] of Object.entries(dates)) {
-    if (publishedAt !== null || tag === previousTag) {
-      continue;
-    }
-    const outcome = await Result.tryPromise(async () => readRelease(tag));
-    if (Result.isError(outcome)) {
-      if (
-        newestPromoted !== undefined &&
-        Bun.semver.order(tag.slice(1), newestPromoted) < 0
-      ) {
-        continue;
-      }
-      const { cause } = outcome.error;
-      throw new MaintenanceReleaseError(
-        `Could not read ${tag} from GitHub Releases: ${cause instanceof Error ? cause.message : String(cause)}`,
-      );
-    }
-    if (outcome.value.kind === "published") {
-      refreshed.push([tag, outcome.value.publishedAt]);
-    }
-  }
-  return Object.fromEntries(refreshed);
-};
-
 export const prepareMaintenanceReleaseFiles = ({
   previousFinalVersion,
   previousRelease,
-  refreshedReleases = {},
   rootDir,
   versionPackages = runChangesetVersion,
   writeFile = atomicWriteFile,
 }: {
   previousFinalVersion: string;
   previousRelease: PreviousRelease;
-  /** Publication times of releases recorded as unpromoted that GitHub now dates. */
-  refreshedReleases?: Readonly<Record<string, string>>;
   rootDir: string;
   /** Consumes the pending changesets; the repository's own version script. */
   versionPackages?: (rootDir: string) => void;
@@ -648,11 +578,11 @@ export const prepareMaintenanceReleaseFiles = ({
   }
 
   const releaseDatesPath = nodePath.join(rootDir, RELEASE_DATES_PATH);
+  const recordedManifest = readReleaseManifest(rootDir);
   const releaseDates = projectReleaseDates({
-    dates: readReleaseDates(rootDir),
+    dates: recordedManifest.releases,
     previousRelease,
     previousTag,
-    refreshed: refreshedReleases,
   });
   const changesets = readPendingChangesets(rootDir);
   const emptyChangesetPath = nodePath.join(
@@ -690,7 +620,13 @@ export const prepareMaintenanceReleaseFiles = ({
       if (supersededChangelog !== null) {
         rmSync(absolutePreviousChangelogPath);
       }
-      writeFile(releaseDatesPath, `${JSON.stringify(releaseDates, null, 2)}\n`);
+      writeFile(
+        releaseDatesPath,
+        serializeReleaseManifest({
+          note: recordedManifest.note,
+          releases: releaseDates,
+        }),
+      );
       writeFile(versionPath, `${next.value}\n`);
       return {
         changelogPath,
@@ -1774,17 +1710,11 @@ export const cutMaintenanceRelease = async (
   const current = parseStableVersion(effects.latestFinalVersion());
   const previousFinalTag = `v${current.value}`;
   const baseSha = effects.resolveHeadSha();
-  // GitHub's verdict on the previous final and on every release the manifest
-  // records as unpromoted, read before any gate: the npm gate checks against
-  // the manifest the release PR will carry, which the preparation writes.
+  // GitHub's verdict on the previous final, read before any gate: the npm
+  // gate checks against the manifest the release PR will carry, which the
+  // preparation writes.
   const previousRelease = await effects.readPreviousRelease(previousFinalTag);
-  const recordedDates = readReleaseDates(rootDir);
-  const refreshedReleases = await refreshUnpromotedReleases({
-    cutVersion: nextPatchVersion(current).value,
-    dates: recordedDates,
-    previousTag: previousFinalTag,
-    readRelease: effects.readPreviousRelease,
-  });
+  const recordedDates = readReleaseManifest(rootDir).releases;
   await assertPreCutGates({
     allowUnprovenMain: options.allowUnprovenMain,
     context: {
@@ -1794,7 +1724,6 @@ export const cutMaintenanceRelease = async (
         dates: recordedDates,
         previousRelease,
         previousTag: previousFinalTag,
-        refreshed: refreshedReleases,
       }),
       rootDir,
       write: effects.write,
@@ -1816,7 +1745,6 @@ export const cutMaintenanceRelease = async (
       const release = prepareMaintenanceReleaseFiles({
         previousFinalVersion: current.value,
         previousRelease,
-        refreshedReleases,
         rootDir,
         versionPackages: effects.versionPackages,
       });
