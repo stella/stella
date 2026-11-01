@@ -1850,12 +1850,25 @@ describe("OAuth client journeys", () => {
     jest.useFakeTimers();
     const { fetcher: baseFetcher } = fakeOAuth();
     const stalledClient = CANARY_CLIENT_IDS[0];
+    // The idle deadline is armed right before the body read; the stalled body
+    // reports that read so the clock moves only once the deadline exists.
+    const bodyReadStarted = Promise.withResolvers<undefined>();
     const fetcher: CanaryFetcher = async (input, init) => {
       const url = new URL(
         input instanceof Request ? input.url : input.toString(),
       );
       if (url.href === stalledClient) {
-        return new Response(new ReadableStream<Uint8Array>());
+        return new Response(
+          new ReadableStream<Uint8Array>(
+            {
+              pull: async () => {
+                bodyReadStarted.resolve(undefined);
+                await new Promise<never>(() => {});
+              },
+            },
+            { highWaterMark: 0 },
+          ),
+        );
       }
       return await baseFetcher(input, init);
     };
@@ -1868,7 +1881,7 @@ describe("OAuth client journeys", () => {
       },
       fetcher,
     );
-    await flushMicrotasks();
+    await bodyReadStarted.promise;
     jest.advanceTimersByTime(19_999);
     await flushMicrotasks();
     let settled = false;
@@ -1878,9 +1891,9 @@ describe("OAuth client journeys", () => {
     });
     await flushMicrotasks();
     expect(settled).toBe(false);
+    // Only the probe deadline is left on the fake clock: once it fires, the
+    // rest of the journey settles on microtasks alone, however many it takes.
     jest.advanceTimersByTime(1);
-    await flushMicrotasks();
-    expect(settled).toBe(true);
 
     expect(await result).toContainEqual({
       name: `client metadata ${stalledClient}`,
