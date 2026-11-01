@@ -240,7 +240,10 @@ export const auditChatToolExecutions = ({
     name: string,
     tool: ChatTool | undefined,
   ): ChatTool | undefined => {
-    if (tool?.execute === undefined || auditedExecutes.has(tool.execute)) {
+    if (tool === undefined) {
+      return tool;
+    }
+    if (tool.execute === undefined || auditedExecutes.has(tool.execute)) {
       return tool;
     }
     const policyKind = getChatToolPolicy(tool).kind;

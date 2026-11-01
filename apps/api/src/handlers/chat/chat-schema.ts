@@ -1147,15 +1147,15 @@ const normalizeContinuationInput = ({
     refRegistry,
     toolName,
   });
-  if (tool?.inputSchema === undefined) {
-    return Result.ok(withNullsOmitted(input));
+  if (tool?.inputSchema !== undefined) {
+    return validateToolPayload({
+      payload: withToolInputPlaceholdersOmitted(tool.inputSchema, input),
+      payloadName: "input",
+      schema: tool.inputSchema,
+      toolName: tool.name,
+    });
   }
-  return validateToolPayload({
-    payload: withToolInputPlaceholdersOmitted(tool.inputSchema, input),
-    payloadName: "input",
-    schema: tool.inputSchema,
-    toolName: tool.name,
-  });
+  return Result.ok(withNullsOmitted(input));
 };
 
 const validateContinuationToolCallTransition = ({
