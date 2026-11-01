@@ -1,4 +1,4 @@
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import * as WebBrowser from "expo-web-browser";
 import { ScrollView, View } from "react-native";
@@ -15,12 +15,15 @@ const SettingsScreen = () => {
   const t = useTranslations();
   const { signOut, state } = useSession();
   const [pending, startTransition] = useTransition();
-  const session = state.status === "signed-in" ? state.source.session() : null;
+  const [signOutFailed, setSignOutFailed] = useState(false);
+  const session =
+    state.status === "signed-in" ? (state.source.session() ?? null) : null;
   const serverUrl = session?.serverUrl ?? null;
 
   return (
     // The sheet's own bar carries the title and the close button.
     <ScrollView
+      alwaysBounceVertical={false}
       className="bg-background flex-1"
       contentContainerStyle={screenStyles.content}
       contentInsetAdjustmentBehavior="automatic"
@@ -56,13 +59,17 @@ const SettingsScreen = () => {
         loading={pending}
         onPress={() => {
           startTransition(async () => {
-            await signOut();
+            const outcome = await signOut();
+            setSignOutFailed(outcome.isErr());
           });
         }}
         variant="destructive-outline"
       >
         {t("settings.signOut")}
       </Button>
+      {signOutFailed ? (
+        <Text variant="caption">{t("settings.signOutFailed")}</Text>
+      ) : null}
     </ScrollView>
   );
 };

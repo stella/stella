@@ -222,6 +222,7 @@ const ScanReviewScreen = () => {
       </Stack.Toolbar>
       <View className="bg-background flex-1">
         <ScrollView
+          alwaysBounceVertical={false}
           contentContainerStyle={screenStyles.content}
           contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"

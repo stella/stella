@@ -53,6 +53,7 @@ import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { requireProfessionalUseForSignedInRoute } from "@/routes/-auth-context";
 import { createRootHead } from "@/routes/-root-head";
 import "@/styles/app.css";
+import "@/styles/print.css";
 
 const isDev = import.meta.env.DEV;
 const DevRoot = isDev

@@ -32,6 +32,7 @@ import {
   SelectTrigger as StSelectTrigger,
   SelectValue as StSelectValue,
 } from "@stll/ui/select";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import "@stll/folio-react/editor.css";
 
 import { useDocxWheelZoom } from "@/components/docx-preview-zoom";
@@ -821,18 +822,23 @@ const CollaborationPresence = ({
   return (
     <ul className="flex min-h-11 items-center -space-x-2 px-2">
       {users.map((user) => (
-        <li
-          aria-label={user.name}
-          className="border-background rounded-full border-2"
-          key={user.id}
-          title={user.name}
-        >
-          <UserIdentityAvatar
-            className="text-3xs size-7"
-            image={user.image}
-            name={user.name}
-          />
-        </li>
+        <Tooltip key={user.id}>
+          <TooltipTrigger
+            render={
+              <li
+                aria-label={user.name}
+                className="border-background rounded-full border-2"
+              />
+            }
+          >
+            <UserIdentityAvatar
+              className="text-3xs size-7"
+              image={user.image}
+              name={user.name}
+            />
+          </TooltipTrigger>
+          <TooltipPopup>{user.name}</TooltipPopup>
+        </Tooltip>
       ))}
     </ul>
   );
