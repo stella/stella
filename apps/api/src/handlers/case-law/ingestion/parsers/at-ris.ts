@@ -133,6 +133,9 @@ const courtTextSection = (
     case "text": {
       return "text";
     }
+    case undefined: {
+      return undefined;
+    }
     default: {
       return undefined;
     }
@@ -377,10 +380,7 @@ export const parseRisDecisionXml = (
       if (unit.type === "heading") {
         return { type: "heading", text };
       }
-      const section =
-        unit.type === "paragraph"
-          ? courtTextSection(unit.contentType)
-          : undefined;
+      const section = courtTextSection(unit.contentType);
       return section === undefined
         ? { type: "field" }
         : { type: "paragraph", text, section };

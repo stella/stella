@@ -134,7 +134,7 @@ const ENDS_WITH_COLON_RE = /:\s*$/u;
  * letters and a full stop (`… entschieden.`), never an abbreviation (`Dr.`)
  * or a list number (`2.`) a recital wraps after.
  */
-const ENDS_SENTENCE_RE = /\p{Ll}{3,}\.["“”»]?\s*$/u;
+const ENDS_SENTENCE_RE = /\p{Ll}{3}\.["“”»]?$/u;
 
 /** The most lines a recital runs over (the Umweltsenat lists every appellant). */
 const MAX_RECITAL_LINES = 12;
@@ -156,10 +156,24 @@ const MAX_DOCKET_SUFFIX_CHARS = 12;
 /** A docket continues past its end only with a separator, never a digit. */
 const DOCKET_CONTINUES_RE = /^[\p{L}\p{N}]/u;
 
+/** What a label may end with: `Spruch:`, `IM NAMEN DER REPUBLIK!`. */
+const LABEL_END_PUNCTUATION: ReadonlySet<string> = new Set([":", ".", "!"]);
+
+/** `text` without the punctuation and spacing it ends with. */
+const withoutLabelEnd = (text: string): string => {
+  let end = text.length;
+  while (end > 0) {
+    const last = text.charAt(end - 1);
+    if (!LABEL_END_PUNCTUATION.has(last) && last.trim() !== "") {
+      break;
+    }
+    end -= 1;
+  }
+  return text.slice(0, end);
+};
+
 const labelOf = (text: string): string =>
-  normalizeUnicode(text, "NFC")
-    .replaceAll(/\s+/gu, " ")
-    .replace(/[\s:.!]+$/u, "")
+  withoutLabelEnd(normalizeUnicode(text, "NFC").replaceAll(/\s+/gu, " "))
     .trim()
     .toLocaleLowerCase("de");
 
@@ -180,7 +194,8 @@ export const isAtBenchRecital = (text: string): boolean =>
  */
 const endsRecital = (text: string, first: boolean): boolean =>
   RULING_ANNOUNCED_RE.test(text) ||
-  (first && (ENDS_WITH_COLON_RE.test(text) || ENDS_SENTENCE_RE.test(text)));
+  (first &&
+    (ENDS_WITH_COLON_RE.test(text) || ENDS_SENTENCE_RE.test(text.trimEnd())));
 
 const isMovingLabel = (label: string): boolean =>
   label === OPERATIVE_LABEL ||
