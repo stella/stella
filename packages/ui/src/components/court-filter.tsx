@@ -17,30 +17,27 @@ type CourtFilterGroup = {
   label: string | null;
   courts: readonly CourtOption[];
 };
-type CourtFilterProps = {
+type CourtFilterBaseProps = {
   groups: readonly CourtFilterGroup[];
   label: string;
-} & (
-  | {
-      mode: "single";
-      selected: string | undefined;
-      onChange: (value: string | undefined) => void;
-      collapsedGroups: readonly string[];
-      visibleRowLimit: number;
-      showAllLabel: string;
-    }
-  | {
-      mode: "multiple";
-      selected: readonly string[];
-      onChange: (values: string[]) => void;
-      maxSelections: number;
-      selectionHint: string;
-      searchLabel: string;
-      clearLabel: string;
-      emptyLabel: string;
-      matchText: (value: string) => string;
-    }
-);
+};
+type SingleCourtFilterProps = CourtFilterBaseProps & {
+  selected: string | undefined;
+  onChange: (value: string | undefined) => void;
+  collapsedGroups: readonly string[];
+  visibleRowLimit: number;
+  showAllLabel: string;
+};
+type MultipleCourtFilterProps = CourtFilterBaseProps & {
+  selected: readonly string[];
+  onChange: (values: string[]) => void;
+  maxSelections: number;
+  selectionHint: string;
+  searchLabel: string;
+  clearLabel: string;
+  emptyLabel: string;
+  matchText: (value: string) => string;
+};
 
 export const toggleCourtSelection = (
   selected: readonly string[],
@@ -54,7 +51,7 @@ export const toggleCourtSelection = (
 
 type SingleCourtGroupProps = {
   group: CourtFilterGroup;
-  options: Extract<CourtFilterProps, { mode: "single" }>;
+  options: SingleCourtFilterProps;
 };
 const SingleCourtGroup = ({ group, options }: SingleCourtGroupProps) => {
   const panelId = useId();
@@ -154,7 +151,7 @@ const SingleCourtGroup = ({ group, options }: SingleCourtGroupProps) => {
 type MultipleCourtGroupProps = {
   group: CourtFilterGroup;
   courts: readonly CourtOption[];
-  options: Extract<CourtFilterProps, { mode: "multiple" }>;
+  options: MultipleCourtFilterProps;
   hintId: string;
 };
 const MultipleCourtGroup = ({
@@ -232,9 +229,12 @@ const MultipleCourtGroup = ({
   );
 };
 
-const MultipleCourtFilter = (
-  options: Extract<CourtFilterProps, { mode: "multiple" }>,
-) => {
+/**
+ * Court filtering shares an owner while each surface keeps its interaction
+ * model. Each model is its own export, so a bundle carries only the one it
+ * renders.
+ */
+export const MultipleCourtFilter = (options: MultipleCourtFilterProps) => {
   const [query, setQuery] = useState("");
   const hintId = useId();
   const needle = options.matchText(query);
@@ -296,16 +296,10 @@ const MultipleCourtFilter = (
   );
 };
 
-/** Court filtering shares an owner while each surface keeps its interaction model. */
-export const CourtFilter = (props: CourtFilterProps) => {
-  if (props.mode === "multiple") {
-    return <MultipleCourtFilter {...props} />;
-  }
-  return (
-    <div className="flex flex-col gap-3">
-      {props.groups.map((group) => (
-        <SingleCourtGroup key={group.value} group={group} options={props} />
-      ))}
-    </div>
-  );
-};
+export const SingleCourtFilter = (props: SingleCourtFilterProps) => (
+  <div className="flex flex-col gap-3">
+    {props.groups.map((group) => (
+      <SingleCourtGroup key={group.value} group={group} options={props} />
+    ))}
+  </div>
+);

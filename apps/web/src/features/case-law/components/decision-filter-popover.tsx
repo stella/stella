@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { CourtFilter } from "@stll/ui/court-filter";
+import { SingleCourtFilter } from "@stll/ui/court-filter";
 
 import { DateRangeFilter } from "@/components/date-range-filter";
 import {
@@ -107,8 +107,7 @@ export const DecisionFilterPopover = ({
       {facets.courtTiers.length > 0 && (
         <section>
           <FilterSectionHeading>{t("common.court")}</FilterSectionHeading>
-          <CourtFilter
-            mode="single"
+          <SingleCourtFilter
             collapsedGroups={COLLAPSED_COURT_TIERS}
             visibleRowLimit={FACET_SECTION_LIMIT}
             showAllLabel={t("common.showAll")}

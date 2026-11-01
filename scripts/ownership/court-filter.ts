@@ -5,11 +5,12 @@ export default {
   capability: "Court-tier filter rows and selection",
   owner: ["packages/ui/src/components/court-filter.tsx"],
   summary:
-    "The web case-law index and MCP search app share CourtFilter. The caller " +
-    "owns localized labels and single or multiple selection; the component " +
-    "owns searchable court rows, tier selection, and checkbox state. MCP " +
-    "reader bundles reject local definitions of shared UI components through " +
-    "the existing rendered component graph guard.",
+    "The web case-law index and MCP search app share the court filter. The " +
+    "caller owns localized labels and picks SingleCourtFilter or " +
+    "MultipleCourtFilter, so a bundle carries one selection model; the " +
+    "component owns searchable court rows, tier selection, and checkbox " +
+    "state. MCP reader bundles reject local definitions of shared UI " +
+    "components through the existing rendered component graph guard.",
   enforcement: {
     kind: "custom-rule",
     rule: "mcp-reader-ui",

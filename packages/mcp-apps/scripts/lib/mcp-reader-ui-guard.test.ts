@@ -258,11 +258,11 @@ test("production shared export census rejects a local court filter", async () =>
       sharedModule,
       {
         file: "packages/mcp-apps/src/case-law-results/filter.tsx",
-        text: "const CourtFilter = () => <fieldset />;",
+        text: "const MultipleCourtFilter = () => <fieldset />;",
       },
     ],
   });
   expect(issues).toContain(
-    "packages/mcp-apps/src/case-law-results/filter.tsx: local CourtFilter duplicates shared reader UI",
+    "packages/mcp-apps/src/case-law-results/filter.tsx: local MultipleCourtFilter duplicates shared reader UI",
   );
 });

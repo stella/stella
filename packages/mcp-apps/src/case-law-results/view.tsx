@@ -27,7 +27,7 @@ import {
 } from "@stll/ui/accordion";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { CourtFilter } from "@stll/ui/court-filter";
+import { MultipleCourtFilter } from "@stll/ui/court-filter";
 import { DateRangeFilter } from "@stll/ui/date-range-filter";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Field, FieldLabel } from "@stll/ui/field";
@@ -564,8 +564,7 @@ const SearchControls = ({
               align="start"
               className="w-80 max-w-[calc(100vw-2rem)] p-3"
             >
-              <CourtFilter
-                mode="multiple"
+              <MultipleCourtFilter
                 maxSelections={maxCourts}
                 selectionHint={t("courtSelectionHint", {
                   selected: format.number(courts.length),

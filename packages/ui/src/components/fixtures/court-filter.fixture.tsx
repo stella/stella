@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { panic } from "better-result";
 
-import { CourtFilter } from "../court-filter";
+import { MultipleCourtFilter } from "../court-filter";
 import { Field, FieldLabel } from "../field";
 import "./court-filter.fixture.css";
 
@@ -35,8 +35,7 @@ const Fixture = () => {
     <main>
       <Field>
         <FieldLabel>{labels.court}</FieldLabel>
-        <CourtFilter
-          mode="multiple"
+        <MultipleCourtFilter
           groups={[
             {
               value: "supreme",
