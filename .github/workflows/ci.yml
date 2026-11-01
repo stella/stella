@@ -4912,7 +4912,7 @@ jobs:
       - name: Bundle size report
         run: |
           bun scripts/bundle-baseline.ts --self-test
-          bun scripts/bundle-baseline.ts --check
+          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
 
       - name: Bundle duplicate content guard
         # Blocking, unlike the warning-only size report above: a chunk that
