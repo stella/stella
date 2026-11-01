@@ -6444,7 +6444,8 @@ const config = defineConfig({
       ],
       excludeFiles: [
         "apps/api/src/tests/helpers/test-fetch.ts",
-        "apps/api/src/tests/fetch-state-hooks.ts",
+        // The process-wide guard that restores fetch after every test.
+        "apps/api/src/tests/fetch-global-guard.ts",
       ],
       rules: {
         "no-global-fetch-replacement/no-global-fetch-replacement": "error",
