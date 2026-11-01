@@ -75,3 +75,25 @@ test("keeps stored timestamp identifiers out of fresh clock arithmetic", async (
     ),
   ).toEqual([4, 5]);
 });
+
+test("shifts a fresh clock read by named durations but not by stored values", async () => {
+  expect(
+    await lintSingleRule(
+      "no-truncated-timestamp-comparison",
+      [
+        'import {lt} from "drizzle-orm";',
+        'import {DAY_IN_MS, Temporal} from "@stll/time";',
+        "const STALE_MS = 5 * 60 * 1000;",
+        "const QUEUED_MS = DAY_IN_MS;",
+        "const storedMillis = cursor.createdAt.getTime();",
+        "lt(rows.createdAt,new Date(Date.now() - STALE_MS));",
+        "lt(rows.createdAt,new Date(Temporal.Now.instant().epochMilliseconds - QUEUED_MS));",
+        "const cutoff = new Date(Date.now() - 2 * STALE_MS);",
+        "lt(rows.createdAt,cutoff);",
+        "lt(rows.createdAt,new Date(Date.now() - storedMillis));",
+        "let leaseMs = 1000;",
+        "lt(rows.createdAt,new Date(Date.now() - leaseMs));",
+      ].join("\n"),
+    ),
+  ).toEqual([10, 12]);
+});

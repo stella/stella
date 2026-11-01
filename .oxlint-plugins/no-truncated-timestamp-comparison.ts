@@ -341,6 +341,14 @@ const TEMPORAL_MODULES = new Set(["@stll/time", "temporal-polyfill/full"]);
 
 type ClockReadPredicate = (node: unknown) => boolean;
 
+// How a cutoff may be read and shifted. `isDurationName` answers whether an
+// identifier names a fixed duration (`STALE_MS`); a bare name could equally
+// hold a stored timestamp (`cursorMillis`), so only a resolved constant counts.
+type ClockPredicates = {
+  isClockRead: ClockReadPredicate;
+  isDurationName: (node: AstNode) => boolean;
+};
+
 const isDateNowCall = (node: unknown): boolean => {
   if (!isAstNode(node) || node.type !== "CallExpression") {
     return false;
@@ -357,23 +365,28 @@ const isDateNowCall = (node: unknown): boolean => {
   );
 };
 
-const isClockAdjustment = (node: unknown): boolean =>
+const isClockAdjustment = (
+  node: unknown,
+  isDurationName: ClockPredicates["isDurationName"],
+): boolean =>
   isAstNode(node) &&
   (node.type === "Literal" ||
-    (node.type === "UnaryExpression" && isClockAdjustment(node.argument)) ||
+    (node.type === "Identifier" && isDurationName(node)) ||
+    (node.type === "UnaryExpression" &&
+      isClockAdjustment(node.argument, isDurationName)) ||
     (node.type === "BinaryExpression" &&
       (node.operator === "+" ||
         node.operator === "-" ||
         node.operator === "*" ||
         node.operator === "/") &&
-      isClockAdjustment(node.left) &&
-      isClockAdjustment(node.right)));
+      isClockAdjustment(node.left, isDurationName) &&
+      isClockAdjustment(node.right, isDurationName)));
 
 const isClockArithmetic = (
   node: unknown,
-  isClockRead: ClockReadPredicate,
+  predicates: ClockPredicates,
 ): boolean => {
-  if (isClockRead(node)) {
+  if (predicates.isClockRead(node)) {
     return true;
   }
   if (!isAstNode(node) || node.type !== "BinaryExpression") {
@@ -389,9 +402,10 @@ const isClockArithmetic = (
     return false;
   }
   return (
-    (isClockArithmetic(node.left, isClockRead) &&
-      isClockAdjustment(node.right)) ||
-    (isClockAdjustment(node.left) && isClockArithmetic(node.right, isClockRead))
+    (isClockArithmetic(node.left, predicates) &&
+      isClockAdjustment(node.right, predicates.isDurationName)) ||
+    (isClockAdjustment(node.left, predicates.isDurationName) &&
+      isClockArithmetic(node.right, predicates))
   );
 };
 
@@ -400,9 +414,9 @@ const isClockArithmetic = (
 // `cursor.createdAt ?? new Date()` and re-open the truncation bug.
 const isFreshClockRead = (
   node: unknown,
-  isClockRead: ClockReadPredicate,
+  predicates: ClockPredicates,
 ): boolean => {
-  if (isClockRead(node)) {
+  if (predicates.isClockRead(node)) {
     return true;
   }
   if (!isAstNode(node) || node.type !== "NewExpression") {
@@ -417,7 +431,7 @@ const isFreshClockRead = (
   return (
     node.arguments.length === 0 ||
     (node.arguments.length === 1 &&
-      isClockArithmetic(node.arguments[0], isClockRead))
+      isClockArithmetic(node.arguments[0], predicates))
   );
 };
 
@@ -604,8 +618,54 @@ export default eslintCompatPlugin({
           isTestClockNowCall(node) ||
           isTemporalNowEpochMilliseconds(node);
 
+        // A fixed duration: a `const` in this file whose initializer is
+        // itself literal duration arithmetic, or a named duration constant
+        // imported from `@stll/time`. Anything else may be a stored value.
+        const isDurationName = (
+          node: AstNode,
+          seen: ReadonlySet<AstNode> = new Set(),
+        ): boolean => {
+          if (seen.has(node)) {
+            return false;
+          }
+          const variable = resolveInScope(node);
+          if (variable === null) {
+            return false;
+          }
+          const visited = new Set([...seen, node]);
+          return variable.defs.some((definition) => {
+            if (
+              definition.type === "ImportBinding" &&
+              isAstNode(definition.node) &&
+              definition.node.type === "ImportSpecifier" &&
+              isAstNode(definition.parent) &&
+              definition.parent.type === "ImportDeclaration" &&
+              isAstNode(definition.parent.source) &&
+              definition.parent.source.value === "@stll/time"
+            ) {
+              return isIdentifierNamed(definition.node.imported, "DAY_IN_MS");
+            }
+            return (
+              definition.type === "Variable" &&
+              isAstNode(definition.node) &&
+              definition.node.type === "VariableDeclarator" &&
+              isAstNode(definition.parent) &&
+              definition.parent.type === "VariableDeclaration" &&
+              definition.parent.kind === "const" &&
+              isClockAdjustment(definition.node.init, (name) =>
+                isDurationName(name, visited),
+              )
+            );
+          });
+        };
+
+        const clockPredicates: ClockPredicates = {
+          isClockRead: isRecognizedClockRead,
+          isDurationName: (node) => isDurationName(node),
+        };
+
         const isFreshClockOperand = (node: unknown): boolean =>
-          isFreshClockRead(node, isRecognizedClockRead);
+          isFreshClockRead(node, clockPredicates);
 
         const isPgTableCall = (node: unknown): boolean =>
           isAstNode(node) &&
