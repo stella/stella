@@ -2,9 +2,12 @@ import { expect, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { PROCESSED_FIELD_EVIDENCE_READERS } from "@/api/tests/helpers/processed-field-evidence";
 
-import { parseNsDecisionHtml } from "./cz-ns";
+import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "./cz-ns";
+
+const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);
 
 const FIXTURES = "src/handlers/case-law/ingestion/parsers/__fixtures__/";
 const range = (from: number, to: number) =>
