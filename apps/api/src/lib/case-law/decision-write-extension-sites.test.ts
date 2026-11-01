@@ -43,6 +43,9 @@ const MUTATION_OWNERS = {
     applyStoredPayload: "applyStoredPayload",
     markDocumentUnavailableOwned: "markDocumentUnavailableOwned",
   },
+  "lib/legal-search/sk-emptied-document-repair.ts": {
+    requeueEmptiedDocumentBatchTx: "requeueEmptiedDocumentBatchTx",
+  },
   "lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts": {
     backfillCaseLawRedactionTombstones: "backfillCaseLawRedactionTombstones",
   },

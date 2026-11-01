@@ -3,7 +3,7 @@ import { defineConfig } from "tsdown";
 import { resolvePackageBinary } from "../../scripts/resolve-package-binary.ts";
 
 export default defineConfig({
-  entry: ["src/contract.ts"],
+  entry: ["src/contract.ts", "src/invitation-sections.ts"],
   format: ["esm"],
   platform: "neutral",
   // The exported valibot schemas carry inferred types, so tsrs emits the declarations.

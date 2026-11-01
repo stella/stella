@@ -50,6 +50,7 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "case_law_ingestion_failures",
   "case_law_judges",
   "case_law_matter_links",
+  "legislation_matter_links",
   "case_law_polarity_rules",
   "case_law_provision_citations",
   "case_law_raw_sweeps",
