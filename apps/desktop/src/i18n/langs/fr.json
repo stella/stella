@@ -524,7 +524,12 @@
     "aiSteerWriteIn": "Écrire en {language}",
     "aiSteerRemember": "Mémoriser pour la prochaine fois",
     "billingDraftsPreference": "Votre préférence de rédaction",
-    "billingDraftsForgetPreference": "Oublier la préférence"
+    "billingDraftsForgetPreference": "Oublier la préférence",
+    "aiStructureSplit": "{count, plural, one {stella AI propose de diviser cette entrée en # partie} other {stella AI propose de diviser cette entrée en # parties}}",
+    "aiStructureMove": "stella AI propose de déplacer {duration} vers {matter}",
+    "aiStructureCreate": "{count, plural, one {Créer # entrée} other {Créer # entrées}}",
+    "aiStructureMoveAccept": "Déplacer",
+    "aiFlagSplit": "Diviser l’entrée"
   },
   "shortcut": {
     "title": "Raccourci du presse-papiers",

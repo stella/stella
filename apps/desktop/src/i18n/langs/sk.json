@@ -524,7 +524,12 @@
     "aiSteerWriteIn": "Písať v jazyku {language}",
     "aiSteerRemember": "Zapamätať na budúce",
     "billingDraftsPreference": "Vaša preferencia pre návrhy",
-    "billingDraftsForgetPreference": "Zabudnúť preferenciu"
+    "billingDraftsForgetPreference": "Zabudnúť preferenciu",
+    "aiStructureSplit": "{count, plural, one {stella AI navrhuje rozdeliť záznam na # časť} few {stella AI navrhuje rozdeliť záznam na # časti} many {stella AI navrhuje rozdeliť záznam na # časti} other {stella AI navrhuje rozdeliť záznam na # častí}}",
+    "aiStructureMove": "stella AI navrhuje presunúť {duration} do spisu {matter}",
+    "aiStructureCreate": "{count, plural, one {Vytvoriť # záznam} few {Vytvoriť # záznamy} many {Vytvoriť # záznamu} other {Vytvoriť # záznamov}}",
+    "aiStructureMoveAccept": "Presunúť",
+    "aiFlagSplit": "Rozdeliť záznam"
   },
   "shortcut": {
     "title": "Skratka schránky",

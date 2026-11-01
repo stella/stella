@@ -524,7 +524,12 @@
     "aiSteerWriteIn": "Auf {language} schreiben",
     "aiSteerRemember": "Für das nächste Mal merken",
     "billingDraftsPreference": "Ihre Vorgabe für Entwürfe",
-    "billingDraftsForgetPreference": "Vorgabe vergessen"
+    "billingDraftsForgetPreference": "Vorgabe vergessen",
+    "aiStructureSplit": "{count, plural, one {stella AI schlägt vor, dies in # Eintrag aufzuteilen} other {stella AI schlägt vor, dies in # Einträge aufzuteilen}}",
+    "aiStructureMove": "stella AI schlägt vor, {duration} auf {matter} zu verschieben",
+    "aiStructureCreate": "{count, plural, one {# Eintrag anlegen} other {# Einträge anlegen}}",
+    "aiStructureMoveAccept": "Verschieben",
+    "aiFlagSplit": "Eintrag aufteilen"
   },
   "shortcut": {
     "title": "Tastenkürzel für die Zwischenablage",

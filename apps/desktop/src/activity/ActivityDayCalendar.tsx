@@ -50,7 +50,11 @@ import type { ActivityDaySnapshot } from "./activity-types";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { ActivitySuggestionCard } from "./ActivitySuggestionCard";
 import type { DraftAssistView, SuggestionEdit } from "./ActivitySuggestionCard";
-import { cardDraftEntry, cardDraftFrom } from "./billing-draft-logic";
+import {
+  cardDraftEntry,
+  cardDraftFrom,
+  structureItems,
+} from "./billing-draft-logic";
 import type { CardDraft, DraftFailureKind } from "./billing-draft-logic";
 import { useBillingDraftSettings } from "./billing-draft-settings";
 import type {
@@ -379,6 +383,39 @@ export const ActivityDayCalendar = ({
       () => openNext(suggestion),
     );
   };
+  /** An accepted split or move creates its entries in one confirmed batch,
+   * each covering its own share of the recorded time. */
+  const acceptStructure = (suggestion: ActivitySuggestion) => {
+    const structure = narratives.structure(suggestion);
+    const edit = narratives.editFor(suggestion);
+    if (
+      !editable ||
+      structure === null ||
+      edit.matter === null ||
+      suggestion.roundedTenths === 0
+    ) {
+      return;
+    }
+    submitBatch(
+      {
+        idempotencyKey: crypto.randomUUID(),
+        items: structureItems({
+          structure,
+          card: {
+            matterId: edit.matter.id,
+            narrative: edit.narrative,
+            billable: edit.billable,
+            classification: edit.classification,
+          },
+          durationMinutes: suggestion.roundedTenths * 6,
+          ranges: suggestion.ranges,
+          date: snapshot.date,
+          timezoneId: timeZone,
+        }),
+      },
+      () => openNext(suggestion),
+    );
+  };
   const reject = (suggestion: ActivitySuggestion) => {
     if (suggestion.type === "matched") {
       setLeftOut((current) => new Set([...current, suggestion.id]));
@@ -424,6 +461,8 @@ export const ActivityDayCalendar = ({
         assist={narratives.view(openSuggestion)}
         earlierEntries={narratives.earlierEntries(openSuggestion)}
         flags={narratives.flags(openSuggestion)}
+        structure={narratives.structure(openSuggestion)}
+        onAcceptStructure={() => acceptStructure(openSuggestion)}
         onDraft={() => narratives.draft(openSuggestion)}
         onAllow={() => narratives.allow(openSuggestion)}
         onRefine={(steer, remember) =>
@@ -743,6 +782,8 @@ type Drafted = {
   flags: CardDraft["flags"];
   /** The server's result, which a refinement sends back unchanged. */
   result: CardDraft["result"];
+  /** A split or move the draft proposes for the matter it was written for. */
+  structure: CardDraft["structure"];
   /** The matter the draft was written for. */
   matterId: string;
   /** Why the last refinement failed, until the next one. */
@@ -775,21 +816,32 @@ type DraftAnswer =
 const draftedFrom = (draft: CardDraft, matterId: string): Drafted => ({
   earlierEntries: draft.earlierEntries,
   flags: draft.flags,
+  structure: draft.structure,
   result: draft.result,
   matterId,
   refineFailure: null,
 });
 
+/** What stella AI changes on a card; a `null` billable keeps the card's. */
+type AiChange = Pick<SuggestionEdit, "narrative" | "classification"> & {
+  billable: boolean | null;
+};
+
 /** A card with AI text applied, keeping what it replaces for Undo. */
 const withAiText = (
   edit: SuggestionEdit,
-  change: Pick<SuggestionEdit, "narrative" | "classification">,
+  change: AiChange,
 ): SuggestionEdit => ({
   ...edit,
   narrative: change.narrative.slice(0, DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH),
   classification: change.classification,
+  billable: change.billable ?? edit.billable,
   written: edit.written + 1,
-  undo: { narrative: edit.narrative, classification: edit.classification },
+  undo: {
+    narrative: edit.narrative,
+    classification: edit.classification,
+    billable: edit.billable,
+  },
 });
 
 /** What a card's stella AI area shows. */
@@ -916,7 +968,7 @@ function useSuggestionDrafts({
    * decides against the card as it is when the change lands. */
   const apply = (
     suggestion: ActivitySuggestion,
-    change: Pick<SuggestionEdit, "narrative" | "classification">,
+    change: AiChange,
     when: (edit: SuggestionEdit) => boolean = () => true,
   ) =>
     setEdits((current) => {
@@ -963,7 +1015,10 @@ function useSuggestionDrafts({
       }
       return { kind, type: "failed" };
     }
-    const draft = cardDraftFrom(outcome.response.value);
+    const draft = cardDraftFrom(outcome.response.value, {
+      matterId,
+      durationMinutes: suggestion.roundedTenths * 6,
+    });
     return draft === null
       ? { kind: "failed", type: "failed" }
       : { draft, type: "drafted" };
@@ -1002,6 +1057,7 @@ function useSuggestionDrafts({
         {
           narrative: answer.draft.narrative,
           classification: answer.draft.classification,
+          billable: answer.draft.billable,
         },
         (edit) => edit.matter?.id === matter.id && edit.narrative === before,
       );
@@ -1103,6 +1159,7 @@ function useSuggestionDrafts({
           matter?.id === status.drafted.matterId
             ? status.proposal.classification
             : null,
+        billable: status.proposal.billable,
       });
       setStatus(suggestion.id, { ...status.drafted, type: "drafted" });
     },
@@ -1137,6 +1194,7 @@ function useSuggestionDrafts({
             undo: {
               narrative: edit.narrative,
               classification: edit.classification,
+              billable: edit.billable,
             },
           },
         };
@@ -1148,6 +1206,15 @@ function useSuggestionDrafts({
     flags: (suggestion: ActivitySuggestion) => {
       const status = statusFor(suggestion);
       return status.type === "drafted" ? status.flags : [];
+    },
+    /** The split or move on offer, while the card keeps the matter it was
+     * drafted for. */
+    structure: (suggestion: ActivitySuggestion) => {
+      const status = statusFor(suggestion);
+      return status.type === "drafted" &&
+        editFor(suggestion).matter?.id === status.matterId
+        ? status.structure
+        : null;
     },
     view: (suggestion: ActivitySuggestion) =>
       draftAssistView({

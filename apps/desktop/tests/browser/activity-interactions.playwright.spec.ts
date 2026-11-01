@@ -105,6 +105,10 @@ type DraftingFixture = {
   held?: boolean;
   /** The remembered drafting instruction the server starts with. */
   preference?: string;
+  /** What a guided draft proposes beyond its text, as the contract spells
+   * it, and whether its guideline note is fixed by a split. */
+  operations?: unknown[];
+  flagFix?: "split";
 };
 
 const RELEASE_DRAFT = "__STELLA_TEST_RELEASE_DRAFT__";
@@ -478,10 +482,13 @@ const installNativeBoundary = async ({
                         fileName: "Outside counsel guidelines.pdf",
                         section: "4.2",
                       },
+                      ...(draftingFixture.flagFix === undefined
+                        ? {}
+                        : { fix: draftingFixture.flagFix }),
                     },
                   ],
                   matchedEarlierEntryIds: [earlierEntry.id],
-                  operations: [],
+                  operations: draftingFixture.operations ?? [],
                 })),
                 checkedGuidelines: [
                   {
@@ -2725,6 +2732,190 @@ test("a guided draft shows its codes and guideline notes, and the accepted entry
       ],
     }),
   ]);
+});
+
+test("a guided split creates its parts as entries, each over its own share of the time", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: {
+      ...DRAFTING,
+      mode: "guided",
+      consent: "granted",
+      flagFix: "split",
+      operations: [
+        {
+          type: "split",
+          parts: [10, 20].map((durationMinutes, index) => ({
+            durationMinutes,
+            narrative: `Part ${String(index + 1)}`,
+            classification: {
+              type: "ledes",
+              taskCode: "L120",
+              activityCode: "A104",
+            },
+            billable: true,
+          })),
+        },
+      ],
+    },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const proposal = card.getByRole("region", {
+    name: "stella AI suggests splitting this into 2 entries",
+  });
+  await expect(proposal).toContainText("Part 1");
+  await expect(proposal).toContainText("Part 2");
+  // Nothing is created until the split is accepted.
+  expect(batchRequests(await tauriInvocations(page))).toEqual([]);
+  await card
+    .getByRole("region", { name: enMessages.activity.aiDraftFlags })
+    .getByRole("button", { name: enMessages.activity.aiFlagSplit })
+    .click();
+  await expect(suggestionCard(page, "Second matter")).toBeFocused();
+  const [batch] = batchRequests(await tauriInvocations(page));
+  expect(batch).toEqual(
+    expect.objectContaining({
+      items: [
+        {
+          entry: expect.objectContaining({
+            matterId: "matter-1",
+            durationMinutes: 10,
+            narrative: "Part 1",
+          }),
+          ranges: [
+            { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:10:00Z" },
+          ],
+        },
+        {
+          entry: expect.objectContaining({
+            matterId: "matter-1",
+            durationMinutes: 20,
+            narrative: "Part 2",
+          }),
+          ranges: [
+            { start: "2026-10-07T09:10:00Z", end: "2026-10-07T09:30:00Z" },
+          ],
+        },
+      ],
+    }),
+  );
+});
+
+/** A matter the server named from the firm's records, outside the card's
+ * candidates. */
+const OTHER_CLIENT_MATTER_ID = "00000000-0000-4000-8000-0000000000b2";
+
+test("a guided move of part of the time keeps the rest on the card's matter", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: {
+      ...DRAFTING,
+      mode: "guided",
+      consent: "granted",
+      operations: [
+        {
+          type: "move",
+          targetMatterId: OTHER_CLIENT_MATTER_ID,
+          targetMatterName: "Other client matter",
+          durationMinutes: 10,
+          narrative: "Called about the service agreement.",
+          classification: { type: "activity_group", activityGroup: "client" },
+          billable: false,
+        },
+      ],
+    },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const proposal = card.getByRole("region", {
+    name: /Other client matter/u,
+  });
+  await expect(proposal).toContainText("Called about the service agreement.");
+  await proposal
+    .getByRole("button", { name: enMessages.activity.aiStructureMoveAccept })
+    .click();
+  await expect(suggestionCard(page, "Second matter")).toBeFocused();
+  const [batch] = batchRequests(await tauriInvocations(page));
+  expect(batch).toEqual(
+    expect.objectContaining({
+      items: [
+        {
+          entry: expect.objectContaining({
+            matterId: "matter-1",
+            durationMinutes: 20,
+            narrative: GENERATED_NARRATIVE,
+            billable: true,
+          }),
+          ranges: [
+            { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:20:00Z" },
+          ],
+        },
+        {
+          entry: expect.objectContaining({
+            matterId: OTHER_CLIENT_MATTER_ID,
+            durationMinutes: 10,
+            narrative: "Called about the service agreement.",
+            billable: false,
+            classification: {
+              type: "activity_group",
+              activityGroup: "client",
+            },
+          }),
+          ranges: [
+            { start: "2026-10-07T09:20:00Z", end: "2026-10-07T09:30:00Z" },
+          ],
+        },
+      ],
+    }),
+  );
+});
+
+test("a split proposed for one matter is not offered once the card's matter changes", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: {
+      ...DRAFTING,
+      mode: "guided",
+      consent: "granted",
+      operations: [
+        {
+          type: "split",
+          parts: [15, 15].map((durationMinutes) => ({
+            durationMinutes,
+            narrative: "Half",
+            classification: {
+              type: "ledes",
+              taskCode: "L120",
+              activityCode: "A104",
+            },
+            billable: true,
+          })),
+        },
+      ],
+    },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const proposal = card.getByRole("region", {
+    name: "stella AI suggests splitting this into 2 entries",
+  });
+  await expect(proposal).toBeVisible();
+  await card.getByRole("button", { name: "Example matter" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /Second matter/u })
+    .click();
+  await expect(proposal).toHaveCount(0);
 });
 
 test("choosing another matter drops a guided draft's codes", async ({

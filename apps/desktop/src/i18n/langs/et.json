@@ -524,7 +524,12 @@
     "aiSteerWriteIn": "Kirjuta keeles: {language}",
     "aiSteerRemember": "Jäta järgmiseks korraks meelde",
     "billingDraftsPreference": "Teie kavandite eelistus",
-    "billingDraftsForgetPreference": "Unusta eelistus"
+    "billingDraftsForgetPreference": "Unusta eelistus",
+    "aiStructureSplit": "{count, plural, one {stella AI soovitab jagada selle # kandeks} other {stella AI soovitab jagada selle # kandeks}}",
+    "aiStructureMove": "stella AI soovitab viia {duration} toimikusse {matter}",
+    "aiStructureCreate": "{count, plural, one {Loo # kanne} other {Loo # kannet}}",
+    "aiStructureMoveAccept": "Vii üle",
+    "aiFlagSplit": "Jaga kanne"
   },
   "shortcut": {
     "title": "Lõikelaua otsetee",

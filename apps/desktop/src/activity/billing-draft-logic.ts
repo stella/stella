@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -6,12 +7,18 @@ import {
   desktopBillingDraftSettingsResponseSchema,
 } from "@stll/api-contract/desktop-billing-drafts";
 import type {
+  DesktopBillingDraft,
+  DesktopBillingDraftOperation,
   DesktopBillingDraftRequest,
   DesktopBillingDraftResponse,
   DesktopBillingDraftReview,
   DesktopBillingDraftSettingsResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
-import type { DesktopTimeEntryClassification } from "@stll/api-contract/desktop-time-entries";
+import type {
+  DesktopTimeEntryBatch,
+  DesktopTimeEntryClassification,
+} from "@stll/api-contract/desktop-time-entries";
+import { Temporal } from "@stll/time";
 
 import { documentName } from "./activity-logic";
 import type { DayReviewGroup } from "./day-review-logic";
@@ -125,25 +132,114 @@ export const draftFailureKind = (cause: unknown): DraftFailureKind => {
 };
 
 /** A note a guided draft raises against the firm's billing guidelines, with
- * the file and section it cites. */
-export type GuidelineFlag = { text: string; fileName: string; section: string };
+ * the file and section it cites; `split` when splitting the entry fixes it. */
+export type GuidelineFlag = {
+  text: string;
+  fileName: string;
+  section: string;
+  fix: "split" | null;
+};
+
+/** A guided draft's proposal to change the card's one entry into others: a
+ * split into parts, or time moved to another matter. A merge needs several
+ * entries, which a card never sends. */
+export type CardStructure = Extract<
+  DesktopBillingDraftOperation,
+  { type: "split" | "move" }
+>;
 
 /** What a card shows from a review: its description, the earlier entries the
- * draft followed and, from a guided draft, the entry's classification and
- * the guideline notes. */
+ * draft followed and, from a guided draft, the entry's classification, a
+ * billable choice, the guideline notes and a structural proposal. */
 export type CardDraft = {
   narrative: string;
   earlierEntries: DesktopBillingDraftReview["earlierEntries"];
   classification: DesktopTimeEntryClassification | null;
+  /** The billable choice the draft proposes, or `null` to keep the card's. */
+  billable: boolean | null;
   flags: GuidelineFlag[];
+  structure: CardStructure | null;
   /** The server's result as it came, which a refining request sends back
    * unchanged. */
   result: DesktopBillingDraftResponse;
 };
 
+/** A guided draft's description, classification and billable choice after
+ * its operations, in order. */
+const draftScalars = (draft: DesktopBillingDraft) => {
+  let narrative = draft.narrative;
+  let classification = draft.classification;
+  let billable: boolean | null = null;
+  for (const operation of draft.operations) {
+    switch (operation.type) {
+      case "rewrite":
+        narrative = operation.narrative;
+        break;
+      case "change_classification":
+        classification = operation.classification;
+        break;
+      case "set_billable":
+        billable = operation.billable;
+        break;
+      case "split":
+      case "merge":
+      case "move":
+        break;
+      default:
+        operation satisfies never;
+        return panic("Unknown billing draft operation");
+    }
+  }
+  return { narrative, classification, billable };
+};
+
+/**
+ * The draft's split or move, only when it accounts for exactly the time the
+ * card recorded: a split's parts add up to the entry, and a move takes part
+ * or all of it to another matter. Anything else would bill time that was not
+ * recorded, so it is not offered.
+ */
+const cardStructure = (
+  draft: DesktopBillingDraft,
+  durationMinutes: number,
+  matterId: string,
+): CardStructure | null => {
+  for (const operation of draft.operations) {
+    switch (operation.type) {
+      case "split":
+        return operation.parts.reduce(
+          (sum, part) => sum + part.durationMinutes,
+          0,
+        ) === durationMinutes
+          ? operation
+          : null;
+      case "move":
+        return operation.durationMinutes <= durationMinutes &&
+          operation.targetMatterId !== matterId
+          ? operation
+          : null;
+      case "merge":
+      case "rewrite":
+      case "change_classification":
+      case "set_billable":
+        break;
+      default:
+        operation satisfies never;
+        return panic("Unknown billing draft operation");
+    }
+  }
+  return null;
+};
+
+/** The entry a card drafted: its matter and the minutes it records. */
+export type CardDraftTarget = { matterId: string; durationMinutes: number };
+
 /** The card's draft from a server review, or `null` when the answer does not
  * hold the contract or names no draft for the card's entry. */
-export const cardDraftFrom = (value: unknown): CardDraft | null => {
+export const cardDraftFrom = (
+  value: unknown,
+  target: CardDraftTarget,
+): CardDraft | null => {
   const parsed = v.safeParse(desktopBillingDraftReviewSchema, value);
   if (!parsed.success) {
     return null;
@@ -163,7 +259,9 @@ export const cardDraftFrom = (value: unknown): CardDraft | null => {
           narrative: draft.narrative,
           earlierEntries: followed(draft.matchedEarlierEntryIds),
           classification: null,
+          billable: null,
           flags: [],
+          structure: null,
           result,
         };
   }
@@ -174,16 +272,165 @@ export const cardDraftFrom = (value: unknown): CardDraft | null => {
     return null;
   }
   return {
-    narrative: draft.narrative,
+    ...draftScalars(draft),
     earlierEntries: followed(draft.matchedEarlierEntryIds),
-    classification: draft.classification,
-    flags: draft.flags.map(({ text, ruleRef }) => ({
+    flags: draft.flags.map(({ text, ruleRef, fix }) => ({
       text,
       fileName: ruleRef.fileName,
       section: ruleRef.section,
+      fix: fix ?? null,
     })),
+    structure: cardStructure(draft, target.durationMinutes, target.matterId),
     result,
   };
+};
+
+type ActivityRange = { start: string; end: string };
+
+/**
+ * Cuts the ranges, in time order, into consecutive parts weighted by minutes,
+ * so every part of a split or move keeps time it actually covers and no two
+ * parts overlap.
+ */
+export const partitionRanges = (
+  ranges: readonly ActivityRange[],
+  weights: readonly number[],
+): ActivityRange[][] => {
+  const spans = ranges
+    .map(({ start, end }) => ({
+      startMs: Temporal.Instant.from(start).epochMilliseconds,
+      endMs: Temporal.Instant.from(end).epochMilliseconds,
+    }))
+    .toSorted((left, right) => left.startMs - right.startMs);
+  const totalMs = spans.reduce(
+    (sum, { startMs, endMs }) => sum + endMs - startMs,
+    0,
+  );
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  if (totalMs < weights.length || totalWeight <= 0) {
+    return panic("Ranges are too short to partition");
+  }
+  const parts: ActivityRange[][] = [];
+  let spanIndex = 0;
+  let cursorMs = spans.at(0)?.startMs ?? 0;
+  let consumedMs = 0;
+  let cumulativeWeight = 0;
+  for (const [partIndex, weight] of weights.entries()) {
+    cumulativeWeight += weight;
+    // Each part keeps at least a millisecond, and leaves one for every part
+    // after it.
+    const targetMs =
+      partIndex === weights.length - 1
+        ? totalMs
+        : Math.min(
+            Math.max(
+              Math.round((totalMs * cumulativeWeight) / totalWeight),
+              consumedMs + 1,
+            ),
+            totalMs - (weights.length - partIndex - 1),
+          );
+    const part: ActivityRange[] = [];
+    while (consumedMs < targetMs) {
+      const span =
+        spans.at(spanIndex) ?? panic("Partition ran past the ranges");
+      const takeMs = Math.min(span.endMs - cursorMs, targetMs - consumedMs);
+      part.push({
+        start: Temporal.Instant.fromEpochMilliseconds(cursorMs).toString(),
+        end: Temporal.Instant.fromEpochMilliseconds(
+          cursorMs + takeMs,
+        ).toString(),
+      });
+      cursorMs += takeMs;
+      consumedMs += takeMs;
+      if (cursorMs === span.endMs) {
+        spanIndex += 1;
+        cursorMs = spans.at(spanIndex)?.startMs ?? cursorMs;
+      }
+    }
+    parts.push(part);
+  }
+  return parts;
+};
+
+/** One confirmed entry and the recorded ranges it covers. */
+export type StructureBatchItem = {
+  entry: DesktopTimeEntryBatch["entries"][number];
+  ranges: ActivityRange[];
+};
+
+type StructureItemsOptions = {
+  structure: CardStructure;
+  /** The card as the user left it, which a partial move keeps. */
+  card: {
+    matterId: string;
+    narrative: string;
+    billable: boolean;
+    classification: DesktopTimeEntryClassification | null;
+  };
+  durationMinutes: number;
+  ranges: readonly ActivityRange[];
+  date: string;
+  timezoneId: string;
+};
+
+/** The entries an accepted split or move creates, each with its own share of
+ * the recorded time, in time order. */
+export const structureItems = ({
+  structure,
+  card,
+  durationMinutes,
+  ranges,
+  date,
+  timezoneId,
+}: StructureItemsOptions): StructureBatchItem[] => {
+  type Part = {
+    matterId: string;
+    durationMinutes: number;
+    narrative: string;
+    billable: boolean;
+    classification: DesktopTimeEntryClassification | null;
+  };
+  const parts: Part[] = (() => {
+    switch (structure.type) {
+      case "split":
+        return structure.parts.map((part) => ({
+          ...part,
+          matterId: card.matterId,
+        }));
+      case "move": {
+        const moved = {
+          matterId: structure.targetMatterId,
+          durationMinutes: structure.durationMinutes,
+          narrative: structure.narrative,
+          billable: structure.billable,
+          classification: structure.classification,
+        };
+        const kept = durationMinutes - structure.durationMinutes;
+        return kept > 0 ? [{ ...card, durationMinutes: kept }, moved] : [moved];
+      }
+      default:
+        structure satisfies never;
+        return panic("Unknown card structure");
+    }
+  })();
+  const shares = partitionRanges(
+    ranges,
+    parts.map((part) => part.durationMinutes),
+  );
+  return parts.map((part, index) => ({
+    entry: {
+      matterId: part.matterId,
+      dateWorked: date,
+      timezoneId,
+      durationMinutes: part.durationMinutes,
+      narrative: part.narrative,
+      billable: part.billable,
+      ...(part.classification === null
+        ? {}
+        : { classification: part.classification }),
+    },
+    ranges: shares.at(index) ?? panic("A structure part has no ranges"),
+  }));
 };
 
 const scopedSettingsSchema = v.strictObject({

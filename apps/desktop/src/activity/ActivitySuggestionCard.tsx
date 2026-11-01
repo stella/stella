@@ -54,7 +54,10 @@ export type SuggestionEdit = {
   /** What a guided draft classified the entry as, for the chosen matter. */
   classification: DesktopTimeEntryClassification | null;
   /** What the last applied stella AI change replaced, for Undo. */
-  undo: Pick<SuggestionEdit, "narrative" | "classification"> | null;
+  undo: Pick<
+    SuggestionEdit,
+    "narrative" | "classification" | "billable"
+  > | null;
 };
 
 /** What the stella AI strip above the narrative shows. `hidden` when the
@@ -88,6 +91,8 @@ type ActivitySuggestionCardProps = {
   earlierEntries: CardDraft["earlierEntries"];
   /** The current guided draft's notes against the billing guidelines. */
   flags: CardDraft["flags"];
+  /** A split or move the current guided draft proposes. */
+  structure: CardDraft["structure"];
   onDraft: () => void;
   onAllow: () => void;
   onRefine: (steer: string, remember: boolean) => void;
@@ -97,6 +102,8 @@ type ActivitySuggestionCardProps = {
   onRestoreTemplate: () => void;
   onEdit: (change: Partial<SuggestionEdit>) => void;
   onAccept: () => void;
+  /** Creates the entries the proposed split or move makes. */
+  onAcceptStructure: () => void;
   onReject: () => void;
   onClose: () => void;
   onCopy: () => Promise<boolean>;
@@ -142,6 +149,7 @@ export const ActivitySuggestionCard = ({
   assist,
   earlierEntries,
   flags,
+  structure,
   onDraft,
   onAllow,
   onRefine,
@@ -151,6 +159,7 @@ export const ActivitySuggestionCard = ({
   onRestoreTemplate,
   onEdit,
   onAccept,
+  onAcceptStructure,
   onReject,
   onClose,
   onCopy,
@@ -289,7 +298,19 @@ export const ActivitySuggestionCard = ({
         value={edit.narrative}
       />
       <DraftClassification classification={edit.classification} />
-      <GuidelineFlags flags={flags} />
+      <GuidelineFlags
+        flags={flags}
+        onSplit={
+          editable && structure?.type === "split" ? onAcceptStructure : null
+        }
+      />
+      {structure === null ? null : (
+        <StructureProposal
+          editable={editable}
+          onAccept={onAcceptStructure}
+          structure={structure}
+        />
+      )}
       <EarlierEntries entries={earlierEntries} />
       <div className="flex flex-wrap items-center gap-2">
         <Label className="gap-2 text-xs">
@@ -607,8 +628,14 @@ const DraftClassification = ({
 };
 
 /** What a guided draft noted against the firm's billing guidelines, each
- * with the file and section it cites. */
-const GuidelineFlags = ({ flags }: { flags: CardDraft["flags"] }) => {
+ * with the file and section it cites; a note a split fixes offers it. */
+const GuidelineFlags = ({
+  flags,
+  onSplit,
+}: {
+  flags: CardDraft["flags"];
+  onSplit: (() => void) | null;
+}) => {
   const t = useTranslations("activity");
   if (flags.length === 0) {
     return null;
@@ -632,9 +659,88 @@ const GuidelineFlags = ({ flags }: { flags: CardDraft["flags"] }) => {
                 section: flag.section,
               })}
             </span>
+            {flag.fix === "split" && onSplit !== null ? (
+              <Button
+                className="self-start"
+                onClick={onSplit}
+                size="xs"
+                variant="outline"
+              >
+                {t("aiFlagSplit")}
+              </Button>
+            ) : null}
           </li>
         ))}
       </ul>
+    </section>
+  );
+};
+
+/** A guided draft's split or move: the entries it would create, which only
+ * Accept creates. */
+const StructureProposal = ({
+  structure,
+  editable,
+  onAccept,
+}: {
+  structure: NonNullable<CardDraft["structure"]>;
+  editable: boolean;
+  onAccept: () => void;
+}) => {
+  const t = useTranslations("activity");
+  const durationLabel = useDurationLabel();
+  const minutes = (value: number) => durationLabel(value * 60_000);
+  // A proposal never changes once shown, so a part's place is its identity.
+  const parts = (
+    structure.type === "split"
+      ? structure.parts
+      : [
+          {
+            durationMinutes: structure.durationMinutes,
+            narrative: structure.narrative,
+          },
+        ]
+  ).map(({ durationMinutes, narrative }, position) => ({
+    durationMinutes,
+    narrative,
+    key: `part-${String(position)}`,
+  }));
+  const title =
+    structure.type === "split"
+      ? t("aiStructureSplit", { count: structure.parts.length })
+      : t("aiStructureMove", {
+          duration: minutes(structure.durationMinutes),
+          matter: structure.targetMatterName,
+        });
+  return (
+    <section
+      aria-label={title}
+      className="bg-muted/60 flex flex-col gap-1.5 rounded-lg border px-2.5 py-2 text-xs"
+    >
+      <span className="flex items-center gap-1.5 font-medium">
+        <AiActionIcon aria-hidden="true" className="size-3.5 shrink-0" />
+        <bdi className="min-w-0 text-pretty">{title}</bdi>
+      </span>
+      <ul className="flex flex-col gap-1">
+        {parts.map((part) => (
+          <li className="flex gap-2" key={part.key}>
+            <span className="text-muted-foreground shrink-0 tabular-nums">
+              {minutes(part.durationMinutes)}
+            </span>
+            <bdi className="min-w-0 text-pretty">{part.narrative}</bdi>
+          </li>
+        ))}
+      </ul>
+      <Button
+        className="self-start"
+        disabled={!editable}
+        onClick={onAccept}
+        size="xs"
+      >
+        {structure.type === "split"
+          ? t("aiStructureCreate", { count: structure.parts.length })
+          : t("aiStructureMoveAccept")}
+      </Button>
     </section>
   );
 };

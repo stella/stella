@@ -524,7 +524,12 @@
     "aiSteerWriteIn": "Escribir en {language}",
     "aiSteerRemember": "Recordar para la próxima vez",
     "billingDraftsPreference": "Tu preferencia de redacción",
-    "billingDraftsForgetPreference": "Olvidar la preferencia"
+    "billingDraftsForgetPreference": "Olvidar la preferencia",
+    "aiStructureSplit": "{count, plural, one {stella AI propone dividir este registro en # parte} other {stella AI propone dividir este registro en # partes}}",
+    "aiStructureMove": "stella AI propone mover {duration} a {matter}",
+    "aiStructureCreate": "{count, plural, one {Crear # registro} other {Crear # registros}}",
+    "aiStructureMoveAccept": "Mover",
+    "aiFlagSplit": "Dividir registro"
   },
   "shortcut": {
     "title": "Atajo del portapapeles",
