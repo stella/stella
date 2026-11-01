@@ -2256,6 +2256,7 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
         run: |
           bun scripts/check-published-exports.ts packages/fetch
+          bun scripts/check-published-exports.ts packages/html
           bun scripts/check-published-exports.ts packages/scan-engine
 
       - name: Rebuild every npm package to verify identical tarball bytes

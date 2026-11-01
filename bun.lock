@@ -1094,6 +1094,7 @@
         "@stll/sha256": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "tsdown": "catalog:",
       },
     },
     "packages/infosoud": {
