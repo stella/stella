@@ -81,6 +81,36 @@ describe("table policy owner", () => {
     }
   });
 
+  test("the linked flow scheduler policies install the SQL their inline declaration did", () => {
+    // Captured from the inline declaration on scheduler_jobs before the move.
+    const source = String.raw`"scheduler_jobs"."task" = 'flow.run' AND EXISTS (
+      SELECT 1 FROM public.flow_definitions scheduler_definition
+      WHERE "scheduler_jobs"."id" = 'flow.run.' || (scheduler_definition.id)::text
+        AND scheduler_definition.organization_id = nullif(current_setting('app.organization_id', true), '')
+    )`;
+    const consistent = String.raw`${source} AND "scheduler_jobs"."id" = 'flow.run.' || (lower("scheduler_jobs"."payload"->>'definitionId'))::text`;
+    expect(scopedOwnerPolicyDefinitions([schema.schedulerJobs])).toEqual([
+      {
+        tableName: "scheduler_jobs",
+        name: "scheduler_flow_system_access",
+        as: "permissive",
+        for: "all",
+        role: "stella_system",
+        using: source,
+        withCheck: consistent,
+      },
+      {
+        tableName: "scheduler_jobs",
+        name: "scheduler_flow_system_scope",
+        as: "restrictive",
+        for: "all",
+        role: "stella_system",
+        using: source,
+        withCheck: consistent,
+      },
+    ]);
+  });
+
   test("every linked policy is exported and reaches the installer", () => {
     const installed = new Set<unknown>(SCOPED_OWNER_POLICY_TABLES);
     for (const policy of LINKED_POLICIES) {

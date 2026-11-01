@@ -17,6 +17,10 @@ import type {
   FlowTrigger,
   FlowTriggerSource,
 } from "@/api/lib/flows/flow-types";
+import {
+  FLOW_RUN_TASK,
+  flowScheduleJobIdSql,
+} from "@/api/lib/scheduler/flow-schedule-identity";
 
 import {
   entityFeatureGateChecks,
@@ -24,6 +28,7 @@ import {
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
 import { registeredReviewResetPolicies } from "../review-reset-policies";
+import { stellaSystem } from "../rls";
 import {
   jsonb,
   organization,
@@ -38,7 +43,7 @@ import {
   user,
   wsPolicies,
 } from "./common";
-import { workspaces } from "./contacts";
+import { schedulerJobs, workspaces } from "./contacts";
 import { entities } from "./entities";
 
 const FLOW_REMOVED_ACTOR_STATUSES = [
@@ -345,3 +350,34 @@ export const flowRunSteps = p.pgTable(
       .on(table.reviewTaskEntityId),
   ],
 );
+
+// Flow schedule triggers are the only organization rows in the platform
+// scheduler table: the system role reaches a `flow.run` job only while its
+// definition exists in the caller's organization.
+const flowScheduleJobSource =
+  sql`${schedulerJobs.task} = ${sql.raw(`'${FLOW_RUN_TASK}'`)} AND EXISTS (
+      SELECT 1 FROM public.flow_definitions scheduler_definition
+      WHERE ${schedulerJobs.id} = ${flowScheduleJobIdSql(sql`scheduler_definition.id`)}
+        AND scheduler_definition.organization_id = nullif(current_setting('app.organization_id', true), '')
+    )`.inlineParams();
+const consistentFlowScheduleJobSource =
+  sql`${flowScheduleJobSource} AND ${schedulerJobs.id} = ${flowScheduleJobIdSql(sql`lower(${schedulerJobs.payload}->>'definitionId')`)}`.inlineParams();
+
+export const schedulerFlowSystemAccess = p
+  .pgPolicy("scheduler_flow_system_access", {
+    for: "all",
+    to: stellaSystem,
+    using: flowScheduleJobSource,
+    withCheck: consistentFlowScheduleJobSource,
+  })
+  .link(schedulerJobs);
+
+export const schedulerFlowSystemScope = p
+  .pgPolicy("scheduler_flow_system_scope", {
+    as: "restrictive",
+    for: "all",
+    to: stellaSystem,
+    using: flowScheduleJobSource,
+    withCheck: consistentFlowScheduleJobSource,
+  })
+  .link(schedulerJobs);

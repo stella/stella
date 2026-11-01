@@ -22,15 +22,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { SANCTIONS_CONTACT_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 
 import {
-  FLOW_RUN_TASK,
-  flowScheduleJobIdSql,
-} from "../../lib/scheduler/flow-schedule-identity";
-import {
   importProvenanceColumns,
   importProvenanceConstraints,
 } from "../import-provenance-columns";
 import { registeredReviewResetPolicies } from "../review-reset-policies";
-import { stellaSystem } from "../rls";
 import {
   FOLIO_COLLAB_TOKEN_OFFBOARDING_ROLE_NAME,
   MEMBER_EXCHANGE_OFFBOARDING_ROLE_NAME,
@@ -864,59 +859,36 @@ export const schedulerJobs = p.pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (table) => {
-    const existingSource =
-      sql`${table.task} = ${sql.raw(`'${FLOW_RUN_TASK}'`)} AND EXISTS (
-      SELECT 1 FROM public.flow_definitions scheduler_definition
-      WHERE ${table.id} = ${flowScheduleJobIdSql(sql`scheduler_definition.id`)}
-        AND scheduler_definition.organization_id = nullif(current_setting('app.organization_id', true), '')
-    )`.inlineParams();
-    const consistentSource =
-      sql`${existingSource} AND ${table.id} = ${flowScheduleJobIdSql(sql`lower(${table.payload}->>'definitionId')`)}`.inlineParams();
-    return [
-      p
-        .index("scheduler_jobs_enabled_next_run_idx")
-        .on(table.enabled, table.nextRunAt),
-      p.index("scheduler_jobs_task_idx").on(table.task),
-      p.index("scheduler_jobs_locked_until_idx").on(table.lockedUntil),
-      p
-        .index("scheduler_jobs_paused_until_idx")
-        .on(table.pausedUntil)
-        .where(sql`${table.pausedUntil} IS NOT NULL`),
-      p.check(
-        "scheduler_jobs_pause_attribution_check",
-        sql`${table.pausedUntil} IS NULL OR (${table.pausedBy} IS NOT NULL AND length(btrim(${table.pausedBy})) > 0 AND ${table.pauseReason} IS NOT NULL AND length(btrim(${table.pauseReason})) >= 8)`,
-      ),
-      p.check(
-        "scheduler_jobs_pause_finite_check",
-        sql`${table.pausedUntil} IS NULL OR isfinite(${table.pausedUntil})`,
-      ),
-      // The pause audit watches every pause, so it can never be paused itself.
-      p.check(
-        "scheduler_jobs_pause_audit_unpausable_check",
-        sql`${table.id} <> 'scheduler.pauseAudit.hourly' OR ${table.pausedUntil} IS NULL`,
-      ),
-      p.pgPolicy("scheduler_jobs_no_stella_access", {
-        for: "all",
-        to: stella,
-        using: sql`false`,
-        withCheck: sql`false`,
-      }),
-      p.pgPolicy("scheduler_flow_system_access", {
-        for: "all",
-        to: stellaSystem,
-        using: existingSource,
-        withCheck: consistentSource,
-      }),
-      p.pgPolicy("scheduler_flow_system_scope", {
-        as: "restrictive",
-        for: "all",
-        to: stellaSystem,
-        using: existingSource,
-        withCheck: consistentSource,
-      }),
-    ];
-  },
+  (table) => [
+    p
+      .index("scheduler_jobs_enabled_next_run_idx")
+      .on(table.enabled, table.nextRunAt),
+    p.index("scheduler_jobs_task_idx").on(table.task),
+    p.index("scheduler_jobs_locked_until_idx").on(table.lockedUntil),
+    p
+      .index("scheduler_jobs_paused_until_idx")
+      .on(table.pausedUntil)
+      .where(sql`${table.pausedUntil} IS NOT NULL`),
+    p.check(
+      "scheduler_jobs_pause_attribution_check",
+      sql`${table.pausedUntil} IS NULL OR (${table.pausedBy} IS NOT NULL AND length(btrim(${table.pausedBy})) > 0 AND ${table.pauseReason} IS NOT NULL AND length(btrim(${table.pauseReason})) >= 8)`,
+    ),
+    p.check(
+      "scheduler_jobs_pause_finite_check",
+      sql`${table.pausedUntil} IS NULL OR isfinite(${table.pausedUntil})`,
+    ),
+    // The pause audit watches every pause, so it can never be paused itself.
+    p.check(
+      "scheduler_jobs_pause_audit_unpausable_check",
+      sql`${table.id} <> 'scheduler.pauseAudit.hourly' OR ${table.pausedUntil} IS NULL`,
+    ),
+    p.pgPolicy("scheduler_jobs_no_stella_access", {
+      for: "all",
+      to: stella,
+      using: sql`false`,
+      withCheck: sql`false`,
+    }),
+  ],
 );
 
 export const schedulerJobRuns = p.pgTable(
