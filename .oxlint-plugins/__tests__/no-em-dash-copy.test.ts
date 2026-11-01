@@ -82,7 +82,9 @@ for (const marker of [
       `const p = <p>${content}</p>;`,
       `const p = <>${content}</>;`,
     ]);
-    const results = await Promise.all(sources.map((source) => lint(source)));
+    const results = await Promise.all(
+      sources.map(async (source) => await lint(source)),
+    );
     for (const result of results) {
       expect(result).toEqual([1]);
     }
@@ -113,7 +115,9 @@ test("rejects lone string markers used to compose copy", async () => {
     "const p = <p><>—</>{label}</p>;",
     'const p = <input placeholder={"—" + label} />;',
   ];
-  const results = await Promise.all(sources.map((source) => lint(source)));
+  const results = await Promise.all(
+    sources.map(async (source) => await lint(source)),
+  );
   for (const result of results) {
     expect(result).toEqual([1]);
   }
@@ -129,7 +133,9 @@ test("keeps sole-content markers local to their containing element", async () =>
     'const p = <td>{("—")}</td>;',
     "const p = <td><>—</></td>;",
   ];
-  const results = await Promise.all(sources.map((source) => lint(source)));
+  const results = await Promise.all(
+    sources.map(async (source) => await lint(source)),
+  );
   for (const result of results) {
     expect(result).toEqual([]);
   }

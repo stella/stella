@@ -35,26 +35,26 @@ const EM_DASH_ENTITY = /&(?:mdash|#8212|#x0*2014);/iu;
 const EMPTY_CELL_MARKER = /^(?:\u2014|&mdash;|&#8212;|&#x0*2014;)$/iu;
 
 const containsEmDash = (raw: string | null | undefined): boolean =>
-  raw !== null && raw !== undefined && raw.includes(EM_DASH);
+  raw?.includes(EM_DASH) === true;
 
 // Follow the complete value to its owner: a marker segment is not a marker
 // value when a template, concatenation or rendered sibling adds content.
-const isSoleMarkerContent = (node: ESTree.Node): boolean => {
-  let raw: string;
-  switch (node.type) {
-    case "Literal":
-      raw = (node.raw ?? "").slice(1, -1);
-      break;
-    case "TemplateElement":
-      raw = node.value.raw;
-      break;
-    case "JSXText":
-      raw = (node.raw ?? node.value).trim();
-      break;
-    default:
-      return false;
+const markerText = (node: ESTree.Node): string | null => {
+  if (node.type === "Literal") {
+    return (node.raw ?? "").slice(1, -1);
   }
-  if (!EMPTY_CELL_MARKER.test(raw)) {
+  if (node.type === "TemplateElement") {
+    return node.value.raw;
+  }
+  if (node.type === "JSXText") {
+    return (node.raw ?? node.value).trim();
+  }
+  return null;
+};
+
+const isSoleMarkerContent = (node: ESTree.Node): boolean => {
+  const raw = markerText(node);
+  if (raw === null || !EMPTY_CELL_MARKER.test(raw)) {
     return false;
   }
   let content: ESTree.Node = node;
