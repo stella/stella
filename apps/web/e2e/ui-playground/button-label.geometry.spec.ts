@@ -36,7 +36,7 @@ for (const [state, expected] of Object.entries(buttonLabelBenches)) {
       if (target === null) {
         throw new Error("The bench rendered no button.");
       }
-      const label = target.querySelector('[data-slot="truncated-text"]');
+      const label = target.querySelector('[data-slot="button-label"]');
       const cardBox = card.getBoundingClientRect();
       const buttonBox = target.getBoundingClientRect();
       return {

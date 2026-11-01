@@ -44,7 +44,7 @@ test("a text label is one run cut to the button's width", () => {
 
   const button = view.getByRole("button", { name: "Open Dunaj matter" });
   expect(button.classList.contains("max-w-full")).toBe(true);
-  const labels = button.querySelectorAll('[data-slot="truncated-text"]');
+  const labels = button.querySelectorAll('[data-slot="button-label"]');
   expect(labels).toHaveLength(1);
   expect(labels[0]?.textContent).toBe("Open Dunaj matter");
   // The glyph stays a sibling of the label, not inside it.
@@ -72,7 +72,7 @@ test("labels that wrap, sit in a sentence or lay out their own content are not c
     "Icon label",
   ]) {
     const button = view.getByRole("button", { name });
-    expect(button.querySelector('[data-slot="truncated-text"]')).toBeNull();
+    expect(button.querySelector('[data-slot="button-label"]')).toBeNull();
     expect(button.classList.contains("max-w-full")).toBe(true);
   }
 });
