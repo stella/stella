@@ -1149,6 +1149,11 @@ export const invoices = p.pgTable(
     p
       .index("invoices_ws_original_idx")
       .on(table.workspaceId, table.originalInvoiceId),
+    // The issued credit of an original sums the credit notes that name it.
+    p
+      .index("invoices_original_credit_idx")
+      .on(table.originalInvoiceId, table.organizationId)
+      .where(sql`${table.originalInvoiceId} IS NOT NULL`),
     p.check(
       "invoices_document_type_check",
       sql`${table.documentType} in (${sql.join(NUMBER_SERIES_DOCUMENT_TYPE_SQL_VALUES, sql`, `)})`,
