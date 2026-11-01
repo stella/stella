@@ -237,6 +237,7 @@ import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type {
   Negotiation,
   PlaybookListItem,
@@ -1306,7 +1307,7 @@ const ReviewRunPanel = ({
     playbookDetailView.type === "items" ? playbookDetailView.items : undefined;
 
   const navigate = useNavigate();
-  const saveAsPlaybook = useMutation({
+  const saveAsPlaybook = useIdempotentMutation({
     mutationFn: saveRunAsPlaybook,
     onSuccess: () => {
       stellaToast.add({
@@ -3974,26 +3975,29 @@ const ReviewResultCard = ({
             onAddCounterpartyNote={addCounterpartyNote}
             onAskInChat={() =>
               useInspectorCommandStore.getState().requestFileChatDraft({
-                delivery: FILE_CHAT_DRAFT_DELIVERY.draft,
                 fileFieldId: targetFileFieldId,
-                markdown: buildFindingChatDraft({
-                  item,
-                  passageTextById: passageTexts.textById,
-                  references,
-                  impactLabel: isDirectedImpact(finding.impact)
-                    ? impactLabel(finding.impact, perspective)
-                    : null,
-                  labels: {
-                    finding: t("inspector.review.chatDraft.finding"),
-                    impact: t("inspector.review.chatDraft.impact"),
-                    issue: t("inspector.review.chatDraft.issue"),
-                    question: t("inspector.review.chatDraft.question"),
-                    rationale: t("inspector.review.chatDraft.rationale"),
-                    recommendation: t("inspector.review.recommendation"),
-                    reference: t("inspector.review.referenceDocument"),
-                    target: t("inspector.review.targetDocument"),
-                  },
-                }),
+                handoff: {
+                  type: "prose",
+                  delivery: FILE_CHAT_DRAFT_DELIVERY.draft,
+                  markdown: buildFindingChatDraft({
+                    item,
+                    passageTextById: passageTexts.textById,
+                    references,
+                    impactLabel: isDirectedImpact(finding.impact)
+                      ? impactLabel(finding.impact, perspective)
+                      : null,
+                    labels: {
+                      finding: t("inspector.review.chatDraft.finding"),
+                      impact: t("inspector.review.chatDraft.impact"),
+                      issue: t("inspector.review.chatDraft.issue"),
+                      question: t("inspector.review.chatDraft.question"),
+                      rationale: t("inspector.review.chatDraft.rationale"),
+                      recommendation: t("inspector.review.recommendation"),
+                      reference: t("inspector.review.referenceDocument"),
+                      target: t("inspector.review.targetDocument"),
+                    },
+                  }),
+                },
               })
             }
             onDecide={(decision) => onDecide(item.id, decision)}

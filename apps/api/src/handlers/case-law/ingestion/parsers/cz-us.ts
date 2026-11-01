@@ -1,3 +1,4 @@
+// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
@@ -69,6 +70,7 @@ import {
   type DecisionDocumentAst,
   hasInlineChildren,
   type Inline,
+  type ParagraphRole,
   plainTextOf,
 } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: mapInlineText moved unchanged to the shared inline-line module.
@@ -95,7 +97,13 @@ import {
 import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
+import {
+  type OpinionHeadingKind,
+  separateOpinionAuthorLine,
+  type SeparateOpinionHeading,
+  separateOpinionHeading,
+  separateOpinionHeadingNamesAuthor,
+} from "@/api/lib/legal-search/parsers/separate-opinion-heading";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
@@ -160,20 +168,6 @@ export const parseUsDecisionHtml = (
       plainText: hiddenMeta.decisionForm,
     });
   }
-
-  // Build validation HTML from extracted lines instead of
-  // passing the raw page HTML. The page HTML concatenates
-  // all text without whitespace between sections, creating
-  // phantom words like "tarifu.ii.skutkové" that aren't in
-  // the AST. Using per-line <p> tags preserves word boundaries.
-  const validationParagraphs = lines.map((line) =>
-    line.kind === "body" ? line.value.plainText : line.note.value.plainText,
-  );
-  validateAndLog(
-    { parser: "cz-us", caseNumber: input.caseNumber },
-    { type: "paragraphs", paragraphs: validationParagraphs },
-    blocks,
-  );
 
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
@@ -692,30 +686,6 @@ const readsAsSentence = (text: string): boolean =>
   UNFINISHED_TITLE_RE.test(text) ||
   (text.endsWith(".") && text.split(/\s+/u).length > TITLE_SENTENCE_MAX_WORDS);
 
-/**
- * Heading opening a separate opinion. The court prints it either on its own
- * or as the next enumerated item, and names the dissenting judges after it,
- * so the pattern is anchored at the start and bounded by length rather than
- * closed at the end.
- */
-const DISSENT_HEADING_RE =
-  /^(?:Odli[šs]n[ée]\s+stanovisko|Odli[šs]n[áa]\s+stanoviska|Stanovisko\s+men[šs]iny)(?<tail>.*)$/iu;
-/**
- * The early plenary set its opinions under a bare, letter-spaced
- * "S T A N O V I S K O" and named the judges on the following lines.
- */
-const BARE_OPINION_HEADING_RE = /^STANOVISKO(?<tail>)$/u;
-/**
- * What the heading line goes on with: nothing, or whose opinion it is and
- * what it is to. "Odlišné stanovisko odůvodňuji takto:" is a sentence of the
- * opinion, not its heading.
- */
-const DISSENT_HEADING_TAIL_RE =
-  /^(?:\s*[.:]?$|\s+(?:(?:k|ke|ve|podle)\s|soud|předsed|místopředsed|JUDr|prof|doc|Mgr|pléna|člen|men[šs]in|podan|uplatn|vyjádřen))/iu;
-/** A heading line that names its author. */
-const NAMES_AUTHOR_RE = /(?:^|\s)(?:soudc|soudky|soudkyň|JUDr)/iu;
-/** The judges named on the lines after a bare heading. */
-const AUTHOR_CONTINUATION_RE = /^(?:soudc|soudky|soudkyň)/iu;
 const DISSENT_HEADING_MAX_CHARS = 120;
 /**
  * A closing names the place and the date and nothing else. A paragraph that
@@ -746,7 +716,8 @@ type UsClassificationState = {
   blockIndex: number;
   inRuling: boolean;
   inOduvodneni: boolean;
-  inDissent: boolean;
+  /** The separate opinion the lines belong to, if any. */
+  separateOpinion: OpinionHeadingKind | null;
   /** Whether the ruling zone has produced a holding yet. */
   sawHolding: boolean;
   consumedLines: Set<ParsedLine>;
@@ -839,9 +810,9 @@ const classifyUsBodyLine = ({
 
   // A separate opinion runs to the end of the document, so the heading
   // opens a zone rather than a section.
-  const dissentTail = opinionHeadingTail(normalized);
-  if (dissentTail !== undefined) {
-    state.inDissent = true;
+  const opinion = opinionHeading(normalized);
+  if (opinion !== undefined) {
+    state.separateOpinion = opinion.kind;
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
@@ -849,7 +820,7 @@ const classifyUsBodyLine = ({
       type: "heading",
       level: 2,
       role: "section-heading",
-      ...(NAMES_AUTHOR_RE.test(dissentTail)
+      ...(separateOpinionHeadingNamesAuthor(opinion.tail)
         ? { inlines, plainText }
         : withAuthorContinuation({ heading: normalized, i, lines, state })),
     });
@@ -1012,7 +983,10 @@ const classifyUsBodyLine = ({
     id: makeUsBlockId(state),
     anchorId: makeAnchorId("p", state.blockIndex),
     type: "paragraph",
-    role: state.inDissent ? "dissent" : undefined,
+    role:
+      state.separateOpinion === null
+        ? undefined
+        : OPINION_PARAGRAPH_ROLE[state.separateOpinion],
     inlines,
     plainText,
   });
@@ -1036,27 +1010,32 @@ const opensRuling = (
   state: UsClassificationState,
   plainText: string,
 ): boolean =>
-  !state.inOduvodneni && !state.inDissent && TAKTO_TAIL_RE.test(plainText);
+  !state.inOduvodneni &&
+  state.separateOpinion === null &&
+  TAKTO_TAIL_RE.test(plainText);
 
 /**
- * What follows the title of a separate opinion's heading on its line, or
- * `undefined` for a line that is no such heading. The court numbers some of
- * these headings; the number is stripped for the match alone, because the
- * heading block carries the line the court printed.
+ * The role of a separate opinion's paragraphs. A concurring judge agrees with
+ * the outcome; the opinion is that judge's reasoning, not a dissent.
  */
-const opinionHeadingTail = (line: ParsedLineData): string | undefined => {
-  const { plainText } = stripInlineLinePrefix(line, NUMBERED_PARA_RE).line;
-  if (plainText.length > DISSENT_HEADING_MAX_CHARS) {
-    return undefined;
-  }
-  const tail = (
-    DISSENT_HEADING_RE.exec(plainText) ??
-    BARE_OPINION_HEADING_RE.exec(plainText)
-  )?.groups?.["tail"];
-  return tail !== undefined && DISSENT_HEADING_TAIL_RE.test(tail)
-    ? tail
-    : undefined;
-};
+const OPINION_PARAGRAPH_ROLE = {
+  dissent: "dissent",
+  concurring: "argumentation",
+} as const satisfies Record<OpinionHeadingKind, ParagraphRole>;
+
+/**
+ * A separate opinion's heading on this line, or `undefined` for a line that
+ * is no such heading. The court numbers some of these headings; the number is
+ * stripped for the match alone, because the heading block carries the line
+ * the court printed.
+ */
+const opinionHeading = (
+  line: ParsedLineData,
+): SeparateOpinionHeading | undefined =>
+  separateOpinionHeading(
+    stripInlineLinePrefix(line, NUMBERED_PARA_RE).line.plainText,
+    DISSENT_HEADING_MAX_CHARS,
+  );
 
 /**
  * A Roman-numbered line that reads as a section title: one that opens with
@@ -1094,10 +1073,7 @@ const withAuthorContinuation = ({
   const inlines = [...heading.inlines];
   let { plainText } = heading;
   let next = findNextNonEmpty(lines, i + 1);
-  if (
-    next === undefined ||
-    !AUTHOR_CONTINUATION_RE.test(next.value.plainText)
-  ) {
+  if (next === undefined || !separateOpinionAuthorLine(next.value.plainText)) {
     return { inlines, plainText };
   }
   while (
@@ -1123,7 +1099,7 @@ export const classifyUsDocumentLines = (
     blockIndex: 0,
     inRuling: false,
     inOduvodneni: false,
-    inDissent: false,
+    separateOpinion: null,
     sawHolding: false,
     consumedLines: new Set(),
   };

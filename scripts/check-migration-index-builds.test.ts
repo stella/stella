@@ -10,6 +10,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
 import { checkMigrationIndexBuilds } from "./check-migration-safety";
 import findingsSnapshot from "./migration-index-findings.json" with { type: "json" };
@@ -744,17 +746,20 @@ describe("high-volume index-build migration rule", () => {
     );
     expect(corpusFindings).toEqual(findingsSnapshot);
 
+    const baseRevision = treeBaseRevision({
+      repoRoot: path.resolve(import.meta.dir, ".."),
+    });
     const previous = Bun.spawnSync([
       "git",
       "show",
-      "origin/main:scripts/migration-index-findings.json",
+      `${baseRevision}:scripts/migration-index-findings.json`,
     ]);
     if (previous.exitCode !== 0) {
       // The first snapshot has no predecessor. Other Git failures must not
       // silently disable the shrink-only check.
       expect(previous.exitCode).toBe(128);
       expect(new TextDecoder().decode(previous.stderr)).toContain(
-        "not in 'origin/main'",
+        `not in '${baseRevision}'`,
       );
       return;
     }

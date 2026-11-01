@@ -1,4 +1,7 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
+// parser-output-unchanged: The retention check moved from this adapter to the pipeline; no stored field or AST changes.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
@@ -69,6 +72,37 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
+import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
+import type { CommonCourtRulingKeyInput } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
+import {
+  PL_COURTS_RULING_DECISION_TYPES,
+  PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
+import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import {
+  parsePlDecisionContent,
+  PL_DECISION_MARKUP,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
+import type { PlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
+import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
+import { arrayOrEmpty } from "@/api/lib/array";
+import {
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  sourceTextField,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/utils";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
 import {
   decodeSourceRawEnvelope,
   defineSourceAdapter,
@@ -77,13 +111,14 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
   STORED_RAW_REPARSE_REJECTION,
   storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   DecisionJudgeInput,
   DecisionSupplement,
@@ -102,41 +137,7 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
   SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
-import type { CommonCourtRulingKeyInput } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
-import {
-  PL_COURTS_RULING_DECISION_TYPES,
-  PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  parsePlDecisionContent,
-  PL_DECISION_MARKUP,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import {
-  readPlNcourtContent,
-  validatePlNcourtDocument,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
-import type { PlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
-import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
-import { arrayOrEmpty } from "@/api/lib/array";
-import {
-  absentDecisionTextFields,
-  checkedDecisionMetadata,
-  sourceTextField,
-  TEXT_ABSENCE_REASON,
-} from "@/api/lib/case-law/decision-text";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
-import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -1027,6 +1028,7 @@ const documentMetadataOf = (
     ? {}
     : {
         legalReferences: orUndefined(content.legalReferences),
+        rejectedLegalReferences: orUndefined(content.rejectedLegalReferences),
         documentTitle: content.title,
         document:
           Object.keys(content.attributes).length === 0
@@ -1104,20 +1106,10 @@ export const assemblePlNcourtDecision = ({
     keywords: listOf(detail, "themePhrases"),
     statutes: listOf(detail, "legalBases"),
   });
+  // The pipeline checks the blocks against the stored XML itself
+  // (retention/sources/pl-ncourt.ts), not against the HTML rendered from it.
   const documentAst: DocumentAst | EmptyAst =
     document?.documentAst ?? EMPTY_AST;
-  if (content !== null && document !== null) {
-    validatePlNcourtDocument(
-      {
-        parser: ADAPTER_KEYS.PL_NCOURT,
-        caseNumber,
-        language: PL_NCOURT_LANGUAGE,
-        url: contentUrlOf(id),
-      },
-      content,
-      document.documentAst.blocks,
-    );
-  }
 
   const sourceRaw = encodeSourceRawEnvelope({
     [RAW_PART.LISTING]: listingXml,
@@ -2152,6 +2144,7 @@ const fetchUnreadableWindow = async (
     return Result.ok({
       decisions: [],
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlNcourtCursor({
         ...cursor,
         window: Math.ceil(cursor.window / 2),
@@ -2170,6 +2163,7 @@ const fetchUnreadableWindow = async (
   return Result.ok({
     decisions: [buildPlNcourtQuarantine(quarantine.value)],
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlNcourtCursor({
       ...cursor,
       offset: cursor.offset + 1,
@@ -2273,6 +2267,7 @@ const plNcourtFetchPage = async (
   if (lapStart && parsed.from >= today()) {
     return Result.ok({
       decisions: [],
+      publisherRequest: PUBLISHER_REQUEST.NONE,
       nextCursor: encodePlNcourtCursor(parsed),
     });
   }
@@ -2294,6 +2289,7 @@ const plNcourtFetchPage = async (
     return Result.ok({
       decisions: [],
       sourceUrl: listed.value.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlNcourtCursor({
         ...cursor,
         offset: Math.max(0, cursor.offset - PL_NCOURT_REWIND),
@@ -2330,6 +2326,7 @@ const plNcourtFetchPage = async (
         }),
     ...(supplements.length === 0 ? {} : { supplements }),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlNcourtCursor(afterWindow({ cursor, listing, read })),
   });
 };

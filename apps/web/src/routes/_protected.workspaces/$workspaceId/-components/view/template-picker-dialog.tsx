@@ -134,21 +134,20 @@ export const TemplatePickerDialog = ({
     template: WorkspaceViewTemplate,
     settled: () => void,
   ) => {
-    const newId = createUuid();
     const hasAITemplateProperty = template.templateProperties.some(
       (p) => p.createIfMissing && p.tool.type === "ai-model",
     );
     createView.mutate(
       {
-        id: newId,
+        id: createUuid(),
         name: template.name,
         layout: template.layout,
         templateProperties: template.templateProperties,
       },
       {
         onSettled: settled,
-        onSuccess: () => {
-          onCreated(newId);
+        onSuccess: (view) => {
+          onCreated(view.id);
           onOpenChange(false);
           if (hasAITemplateProperty) {
             detached(startWorkflow(), "template-picker-dialog.start-workflow");
@@ -162,17 +161,16 @@ export const TemplatePickerDialog = ({
   };
 
   const createAvt = (settled: () => void) => {
-    const newId = createUuid();
     createView.mutate(
       {
-        id: newId,
+        id: createUuid(),
         name: t("workspaces.views.layouts.avt"),
         layout: EMPTY_AVT_LAYOUT,
       },
       {
         onSettled: settled,
-        onSuccess: () => {
-          onCreated(newId);
+        onSuccess: (view) => {
+          onCreated(view.id);
           onOpenChange(false);
         },
         onError: (error) => {

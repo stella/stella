@@ -25,6 +25,7 @@ import {
   STATUTE_STATUS_LABEL_KEYS,
 } from "@/features/statutes/statute-status";
 import { useFormatter } from "@/i18n/formatting-context";
+import { caseLawCountryName } from "@/lib/case-law-route";
 
 import { CaseFileSwitcher } from "./-components/public-decision-case-file";
 import type { LawCrumbTrail } from "./-law-crumb-trail.logic";
@@ -91,6 +92,12 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
         statusLabelKey === null ? trail.status : t(statusLabelKey);
       return (
         <>
+          <BreadcrumbSeparator className={LAW_ANCESTOR_CRUMB_CLASS} />
+          <BreadcrumbItem className={LAW_ANCESTOR_CRUMB_CLASS}>
+            <Link {...trail.country.link} activeOptions={{ exact: true }}>
+              {caseLawCountryName(format, trail.country.code)}
+            </Link>
+          </BreadcrumbItem>
           {trail.yearLink !== null && (
             <>
               <BreadcrumbSeparator className={LAW_ANCESTOR_CRUMB_CLASS} />
@@ -162,6 +169,12 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
     case "decision":
       return (
         <>
+          <BreadcrumbSeparator className={LAW_ANCESTOR_CRUMB_CLASS} />
+          <BreadcrumbItem className={LAW_ANCESTOR_CRUMB_CLASS}>
+            <Link {...trail.country.link} activeOptions={{ exact: true }}>
+              {caseLawCountryName(format, trail.country.code)}
+            </Link>
+          </BreadcrumbItem>
           <BreadcrumbSeparator className={LAW_ANCESTOR_CRUMB_CLASS} />
           {/* A court's name can outgrow the bar on its own, so this crumb
               shrinks and truncates the name rather than keeping its width. */}

@@ -22,7 +22,8 @@
     "toolUsed": "Naudota: {tool}",
     "threadTitle": "Pokalbis",
     "threadLoadFailed": "Nepavyko įkelti šio pokalbio.",
-    "threadEmptyDescription": "Šiame pokalbyje dar nėra žinučių.",
+    "greeting": "Prie ko norėtumėte dirbti?",
+    "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
     "sections": {
       "today": "Šiandien",
       "yesterday": "Vakar",
@@ -39,6 +40,19 @@
     "answerNeedsInput": "Šiam atsakymui reikia jūsų įvesties. Tęskite jį stella žiniatinklio programoje.",
     "answerFailed": "Atsakymo užbaigti nepavyko.",
     "composerMenu": "Atverti priedų ir įrankių meniu",
+    "attachFile": "Prisegti failą",
+    "attachment": "Priedas",
+    "fileTooLarge": "Failas viršija {maxSize} limitą",
+    "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
+    "unsupportedFileType": "Nepalaikomas failo tipas",
+    "uploadFailed": "Nepavyko apdoroti failo",
+    "scanDocument": "Nuskenuoti dokumentą",
+    "removeAttachment": "Pašalinti {name}",
+    "attachmentReading": "Ruošiama…",
+    "attachmentUploading": "Įkeliama…",
+    "pickFailed": "Nepavyko atidaryti failų parinkiklio. Bandykite dar kartą.",
+    "sendFileRefused": "Nepavyko išsiųsti failo, todėl žinutė nebuvo išsiųsta. Pašalinkite failą ir bandykite dar kartą.",
+    "sendFileNotAnonymizable": "Šis pokalbis anonimizuotas, o stella nepavyko anonimizuoti vieno iš failų, todėl niekas nebuvo išsiųsta. Pašalinkite failą ir bandykite dar kartą.",
     "pickTitle": "Pasirinkite pokalbį",
     "pickDescription": "Pasirinkite giją iš sąrašo arba pradėkite naują mygtuku +."
   },
@@ -60,7 +74,8 @@
       "none": "Be datos",
       "today": "Šiandien",
       "tomorrow": "Rytoj",
-      "nextWeek": "Po savaitės"
+      "nextWeek": "Po savaitės",
+      "pick": "Pasirinkti datą"
     },
     "due": {
       "overdue": "Pavėluotos",
@@ -75,7 +90,14 @@
     "statusFailed": "Nepavyko pakeisti užduoties. Bandykite dar kartą.",
     "pickTitle": "Pasirinkite užduotį",
     "pickDescription": "Pasirinkite užduotį iš sąrašo, kad ją matytumėte čia.",
-    "openMatter": "Atidaryti bylą"
+    "openMatter": "Atidaryti bylą",
+    "assignedTo": "Priskirta",
+    "nobody": "Nepriskirta",
+    "assign": "Priskirti",
+    "doneAssigning": "Atlikta",
+    "someone": "Kažkas",
+    "membersFailed": "Nepavyko įkelti bylos narių.",
+    "assignFailed": "Užduoties priskirti nepavyko. Bandykite dar kartą."
   },
   "matters": {
     "emptyTitle": "Bylų dar nėra",
@@ -119,13 +141,31 @@
     },
     "add": "Pridėti",
     "scanDocument": "Nuskenuoti dokumentą",
-    "newTask": "Nauja užduotis"
+    "newTask": "Nauja užduotis",
+    "uploadDocument": "Įkelti dokumentą",
+    "uploadFailed": "Dokumento įkelti nepavyko. Bandykite dar kartą."
   },
   "entity": {
     "type": "Tipas",
     "reference": "Numeris",
     "currentVersion": "Dabartinė versija",
     "loadFailed": "Nepavyko įkelti šio įrašo."
+  },
+  "document": {
+    "title": "Dokumentas",
+    "failedTitle": "Nepavyko atidaryti šio dokumento",
+    "failure": {
+      "offline": "Esate neprisijungę. Prisijunkite prie interneto ir bandykite dar kartą.",
+      "noFile": "Šis dokumentas dar neturi failo.",
+      "failed": "Atidarant kažkas nepavyko. Po akimirkos bandykite dar kartą.",
+      "unsupported": "Atnaujinkite programėlę, kad galėtumėte atidaryti dokumentus.",
+      "android": "Android programėlėje dokumentų dar negalima atidaryti."
+    },
+    "retry": "Bandyti dar kartą",
+    "preview": "Atidaryti peržiūrą",
+    "previewDescription": "Šis failas atidaromas sistemos peržiūroje.",
+    "unrendered": "Šio dokumento čia parodyti negalima, bet sistemos peržiūra gali jį atidaryti.",
+    "details": "Išsami informacija"
   },
   "signIn": {
     "beta": "Beta",
@@ -151,7 +191,9 @@
   "settings": {
     "accountTitle": "Paskyra",
     "server": "Serveris",
-    "signOut": "Atsijungti"
+    "signOut": "Atsijungti",
+    "deleteAccount": "Ištrinti paskyrą",
+    "deleteAccountHint": "Atveria jūsų paskyrą žiniatinklyje, kur galite ją ištrinti kartu su viskuo, kas jūsų."
   },
   "header": {
     "search": "Ieškoti"
@@ -161,11 +203,11 @@
     "newest": "Naujausi sprendimai",
     "noResults": "Niekas neatitiko žodžių, kurių reikalavo ši paieška.",
     "noResultsHint": "Pabandykite mažiau arba kitų žodžių: terminų, kuriuos vartotų teismo sprendimas, o ne sakinio, kuriuo užduodamas klausimas.",
-    "unavailable": "Paieška laikinai nepasiekiama",
     "retry": "Bandyti dar kartą",
     "headnote": "Santrauka",
     "textUnavailable": "Šiam sprendimui teksto nėra",
     "openSource": "Atverti pirminį šaltinį",
+    "openFailed": "Nepavyko atidaryti nuorodos.",
     "loadFailed": "Nepavyko įkelti teismų praktikos.",
     "share": "Bendrinti"
   },
@@ -177,6 +219,14 @@
   "writes": {
     "consentNeeded": "Kad galėtumėte keisti duomenis programėlėje, stella reikia jūsų leidimo. Prisijunkite iš naujo, kad jį suteiktumėte.",
     "signInAgain": "Prisijungti iš naujo"
+  },
+  "loads": {
+    "offline": "stella nepavyko susisiekti su jūsų serveriu. Patikrinkite ryšį ir bandykite dar kartą.",
+    "outdated": "Serveris atsakė formatu, kurio ši programėlės versija nesupranta. Atnaujinkite programėlę arba serverį, jei jį administruojate.",
+    "consent": "Šis prisijungimas neleidžia programėlei to skaityti. Prisijunkite iš naujo, kad suteiktumėte prieigą.",
+    "session": "Jūsų prisijungimas baigėsi. Prisijunkite iš naujo.",
+    "server": "Serveryje įvyko klaida (klaidos kodas {status}). Netrukus bandykite dar kartą.",
+    "refused": "Serveris atmetė užklausą (klaidos kodas {status})."
   },
   "timers": {
     "title": "Laikmačiai",
@@ -199,7 +249,8 @@
     "retry": "Bandyti dar kartą",
     "unavailable": "Jūsų organizacijoje laiko apskaita neįjungta.",
     "startFailed": "Nepavyko paleisti laikmačio. Bandykite dar kartą.",
-    "changeFailed": "Nepavyko pakeisti laikmačio. Bandykite dar kartą."
+    "changeFailed": "Nepavyko pakeisti laikmačio. Bandykite dar kartą.",
+    "more": "{count, plural, one {dar # laikmatis} few {dar # laikmačiai} other {dar # laikmačių}}"
   },
   "scan": {
     "title": "Nuskenuoti dokumentą",
@@ -210,7 +261,27 @@
     "matterTitle": "Byla",
     "uploadFailed": "Nepavyko įkelti skenavimo. Bandykite dar kartą.",
     "failedTitle": "Skenuoti nepavyko",
-    "failed": "Kamera negalėjo išsaugoti skenavimo. Bandykite dar kartą."
+    "failed": "Kamera negalėjo išsaugoti skenavimo. Bandykite dar kartą.",
+    "save": "Išsaugoti",
+    "saveTitle": "Išsaugoti byloje",
+    "share": "Bendrinti",
+    "addPages": "Pridėti puslapių",
+    "page": "Puslapis {number}",
+    "rotatePage": "Pasukti puslapį {number}",
+    "removePage": "Pašalinti puslapį {number}",
+    "deletePage": "Ištrinti",
+    "movePage": "Perkelti puslapį {number}",
+    "moveUp": "Perkelti aukštyn",
+    "moveDown": "Perkelti žemyn",
+    "noPages": "Puslapių neliko. Daugiau nuskenuokite mygtuku „Pridėti puslapių“.",
+    "kilobytes": "{size} KB",
+    "megabytes": "{size} MB",
+    "pdfFailed": "Nepavyko sukurti PDF. Bandykite dar kartą.",
+    "shareFailed": "Nepavyko bendrinti PDF. Bandykite dar kartą.",
+    "discardTitle": "Atmesti šį skenavimą?",
+    "discardMessage": "Jo puslapiai neišsaugoti byloje ir bus ištrinti iš šio įrenginio.",
+    "discard": "Atmesti",
+    "keepEditing": "Toliau redaguoti"
   },
   "shortcuts": {
     "search": "Ieškoti",

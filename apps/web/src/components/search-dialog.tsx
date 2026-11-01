@@ -11,6 +11,7 @@ import type {
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
@@ -21,6 +22,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@stll/api-contract";
+import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -55,6 +57,10 @@ import { cn } from "@stll/ui/utils";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { CompanyRegistryPreview } from "@/components/company-registry-preview";
+import {
+  isLegalCitationSearch,
+  legalCitationSearchOptions,
+} from "@/components/legal-citation-search";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { SavedSearches } from "@/components/saved-searches";
 import {
@@ -62,6 +68,11 @@ import {
   toSearchFilters,
 } from "@/components/saved-searches.logic";
 import { SearchCaseLawGroup } from "@/components/search-case-law-group";
+import {
+  citationCommandHits,
+  citationCommandRoute,
+  SearchCitationResults,
+} from "@/components/search-citation-results";
 import {
   SearchCompanyResult,
   useCompanyRegistrySearch,
@@ -133,6 +144,7 @@ import {
 import type { SearchFilters } from "@/components/search-filters.logic";
 import { SearchScopeFilter, SearchScopeInput } from "@/components/search-scope";
 import type { SearchScope } from "@/components/search-scope";
+import { useCaseLawReadingLanguages } from "@/features/case-law/reading-languages";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import { invalidateGroupedChatThreads } from "@/features/chat/queries";
@@ -140,10 +152,6 @@ import { useCommandActions } from "@/features/command-palette/hooks/use-command-
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import {
-  isPublicLawPreviewEnabled,
-  usePublicLawPreviewEnabled,
-} from "@/hooks/use-public-law-preview";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import {
@@ -154,17 +162,20 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { defaultCaseLawCountryForLocale } from "@/lib/case-law-route";
 import { getChatSendMode } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { unwrapApiResponse } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
 import {
   CapabilityAction,
   useActionCapabilities,
 } from "@/lib/organization/feature-access/capability-actions";
+import { isPublicLawEnabled } from "@/lib/public-law-launch";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import {
   hasSearchQueryOrSelectiveFilter,
@@ -189,6 +200,7 @@ import {
   selectSearchPreviewHit,
   shouldShowSearchPreview,
 } from "@/lib/search.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { navigateToWorkspaceReveal } from "@/lib/workspaces/reveal-navigation";
 import {
   getCurrentWorkspaceDocument,
@@ -329,6 +341,7 @@ type SearchResultsStatus =
   | { type: "hidden" }
   | { type: "unavailable" }
   | { type: "error" }
+  | { type: "refine" }
   | { type: "loading" }
   | { query: string | null; type: "empty" }
   | { type: "results" };
@@ -527,6 +540,7 @@ const resolveSearchResultsStatus = ({
   isBlockingSearchError,
   isLoading,
   searchQuery,
+  searchError,
 }: {
   hasActiveSearch: boolean;
   hasQuery: boolean;
@@ -536,6 +550,7 @@ const resolveSearchResultsStatus = ({
   isBlockingSearchError: boolean;
   isLoading: boolean;
   searchQuery: string;
+  searchError: unknown;
 }): SearchResultsStatus => {
   if (!hasVisibleSearch) {
     return { type: "hidden" };
@@ -544,6 +559,12 @@ const resolveSearchResultsStatus = ({
     return { type: "unavailable" };
   }
   if (hasActiveSearch && isBlockingSearchError) {
+    if (
+      APIError.is(searchError) &&
+      searchError.code === GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE
+    ) {
+      return { type: "refine" };
+    }
     return { type: "error" };
   }
   if (
@@ -582,6 +603,89 @@ const getRecentsSnapshotKey = (open: boolean, scope: SearchRecentsScope) =>
     ? `${scope.organizationId}:${scope.userId}`
     : null;
 
+type CitationSearchOptions = {
+  open: boolean;
+  mode: SearchDialogMode;
+  publicLawEnabled: boolean;
+  searchScope: SearchScope;
+  query: string;
+  debouncedQuery: string;
+  locale: Parameters<typeof defaultCaseLawCountryForLocale>[0];
+};
+
+const useCitationSearch = ({
+  open,
+  mode,
+  publicLawEnabled,
+  searchScope,
+  query,
+  debouncedQuery,
+  locale,
+}: CitationSearchOptions) => {
+  const citationCountry = defaultCaseLawCountryForLocale(locale);
+  const citationShaped =
+    mode.type === "browse" &&
+    publicLawEnabled &&
+    searchScope === "all" &&
+    citationCountry !== null &&
+    isLegalCitationSearch({ country: citationCountry, query: debouncedQuery });
+  const citationEnabled = open && query === debouncedQuery && citationShaped;
+  const citationQuery = useQuery({
+    ...legalCitationSearchOptions({
+      country: citationCountry ?? "",
+      query: debouncedQuery,
+    }),
+    enabled: citationEnabled,
+  });
+  useQueryViewError(queryView(citationQuery), "SearchDialog:legalCitation");
+  const hits = citationCommandHits(
+    citationEnabled ? citationQuery.data : undefined,
+  );
+
+  return {
+    hits,
+    query: citationQuery,
+    enabled: citationEnabled,
+    citationShaped,
+    // Use the existing advanced-search phrase grammar, so individual docket
+    // tokens cannot activate the ordinary keyword/prefix recall fallbacks.
+    matterQuery: citationShaped
+      ? `"${debouncedQuery.trim().replaceAll('"', " ")}"`
+      : debouncedQuery.trim(),
+  };
+};
+
+type CaseLawExpansion = {
+  query: string | null;
+  expanded: boolean;
+};
+
+type CitationSearchDisplayOptions = {
+  citationShaped: boolean;
+  debouncedQuery: string;
+  expansion: CaseLawExpansion | null;
+  isPlaceholderData: boolean;
+  isLoading: boolean;
+};
+
+const resolveCitationSearchDisplay = ({
+  citationShaped,
+  debouncedQuery,
+  expansion,
+  isPlaceholderData,
+  isLoading,
+}: CitationSearchDisplayOptions) => {
+  const expansionQuery = citationShaped ? debouncedQuery : null;
+  const hasStaleHits = citationShaped && isPlaceholderData;
+  return {
+    expansionQuery,
+    expanded:
+      expansion?.query === expansionQuery ? expansion.expanded : citationShaped,
+    hasStaleHits,
+    isLoading: isLoading || hasStaleHits,
+  };
+};
+
 export const SearchDialog = ({
   open,
   onOpenChange,
@@ -593,13 +697,14 @@ export const SearchDialog = ({
   // The AI search API caps locale at 16 chars; send the base language, not the
   // formatting locale (which may carry a region and -u- extensions).
   const apiLocale = useI18nStore((s) => s.loadedLang);
+  const readingLanguages = useCaseLawReadingLanguages();
   const navigate = useNavigate();
   const router = useRouter();
   const currentView = useCurrentWorkspaceView();
   const queryClient = useQueryClient();
   const user = useAuthenticatedUser();
   const isMobile = useIsMobile();
-  const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
+  const publicLawEnabled = isPublicLawEnabled();
   const [closeActionQueue] = useState(createDialogCloseActionQueue);
   const owner = useStorageOwner();
   const searchRecentsScope = useMemo(
@@ -648,13 +753,11 @@ export const SearchDialog = ({
   }, [open]);
   const [query, setQuery] = useState("");
   const [selectedSearchScope, setSearchScope] = useState<SearchScope>("all");
-  const searchScope = resolveSearchScope(
-    selectedSearchScope,
-    publicLawPreviewEnabled,
-  );
+  const searchScope = resolveSearchScope(selectedSearchScope, publicLawEnabled);
   const [scopeFilterOpen, setScopeFilterOpen] = useState(false);
   const [registryExpanded, setRegistryExpanded] = useState(false);
-  const [caseLawExpanded, setCaseLawExpanded] = useState(false);
+  const [caseLawExpansion, setCaseLawExpansion] =
+    useState<CaseLawExpansion | null>(null);
   const [supplementalPreview, setSupplementalPreview] =
     useState<SupplementalPreview>({ type: "internal" });
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -722,7 +825,7 @@ export const SearchDialog = ({
   const updatedTo = resolveUpdatedTo(filters.time);
   const availableSearchTypes = GLOBAL_SEARCH_RESULT_TYPES.filter(
     (type) =>
-      isAvailableSearchKind(type, publicLawPreviewEnabled) &&
+      isAvailableSearchKind(type, publicLawEnabled) &&
       isSearchTypeInScope(type, searchScope),
   );
   const selectedSearchTypes = filters.types.filter(isSearchKindOption);
@@ -782,13 +885,28 @@ export const SearchDialog = ({
     expanded: registryExpanded,
     visible: showLazySearchGroups,
     registryVisible: scopeVisibility.registryVisible,
-    caseLawEnabled: publicLawPreviewEnabled,
+    caseLawEnabled: publicLawEnabled,
   });
   const companySearch = useCompanyRegistrySearch(
     scopeVisibility.companyQuery,
     scopeVisibility.companySearchVisible,
   );
 
+  const {
+    hits: citationHits,
+    query: citationQuery,
+    enabled: citationEnabled,
+    citationShaped,
+    matterQuery: matterSearchQuery,
+  } = useCitationSearch({
+    open,
+    mode,
+    publicLawEnabled,
+    searchScope,
+    query,
+    debouncedQuery,
+    locale: apiLocale,
+  });
   const {
     data,
     error: searchError,
@@ -806,7 +924,7 @@ export const SearchDialog = ({
       enabled: hasActiveSearch,
       organizationId: searchRecentsScope.organizationId,
       userId: searchRecentsScope.userId,
-      query: searchQuery,
+      query: matterSearchQuery,
       workspaceIds: filters.workspaceIds,
       kinds: filters.kinds,
       types: activeSearchTypes,
@@ -816,7 +934,20 @@ export const SearchDialog = ({
       updatedTo,
     }),
   );
+
   const isBlockingSearchError = isSearchError && !isFetchNextPageError;
+  const {
+    expansionQuery: caseLawExpansionQuery,
+    expanded: caseLawExpanded,
+    hasStaleHits: hasStaleCitationHits,
+    isLoading: isLoadingSearchResults,
+  } = resolveCitationSearchDisplay({
+    citationShaped,
+    debouncedQuery,
+    expansion: caseLawExpansion,
+    isPlaceholderData,
+    isLoading,
+  });
 
   // Keyed by value: the caller rebuilds the mode object every render, and the
   // exclusion only needs to invalidate when the excluded set itself changes.
@@ -824,7 +955,12 @@ export const SearchDialog = ({
     mode.type === "pick" ? mode.excludeEntityIds : NO_EXCLUDED_ENTITY_IDS;
   const excludedEntityIdsKey = excludedEntityIds.join("|");
   const allHits = useMemo(() => {
-    if (!data || searchScope === "registries" || !hasActiveSearch) {
+    if (
+      !data ||
+      searchScope === "registries" ||
+      !hasActiveSearch ||
+      hasStaleCitationHits
+    ) {
       return EMPTY_SEARCH_HITS;
     }
     const hits = data.pages.flatMap((page) => page.hits);
@@ -835,7 +971,13 @@ export const SearchDialog = ({
     return hits.filter(
       (hit) => !("entityId" in hit) || !excluded.has(hit.entityId),
     );
-  }, [data, excludedEntityIdsKey, searchScope, hasActiveSearch]);
+  }, [
+    data,
+    excludedEntityIdsKey,
+    searchScope,
+    hasActiveSearch,
+    hasStaleCitationHits,
+  ]);
   const previewLocatorCandidates =
     data?.pages.at(0)?.previewLocatorCandidates ??
     EMPTY_SEARCH_PREVIEW_LOCATOR_CANDIDATES;
@@ -847,7 +989,9 @@ export const SearchDialog = ({
   });
   const showPreview = shouldShowSearchPreview({ isMobile, previewEnabled });
   const displayedPreviewHit = selectDisplayedSearchPreviewHit({
-    hit: previewHit,
+    hit: citationHits.some((hit) => hit.id === highlightedHitId)
+      ? null
+      : previewHit,
     showPreview,
   });
   const supplementalDisplay = resolveSupplementalPreview({
@@ -867,7 +1011,9 @@ export const SearchDialog = ({
   // ignore them entirely while the query is empty so a cleared input
   // doesn't leave stale numbers in the sidebar.
   const firstPage =
-    hasActiveSearch && !isBlockingSearchError ? data?.pages.at(0) : undefined;
+    hasActiveSearch && !isBlockingSearchError && !hasStaleCitationHits
+      ? data?.pages.at(0)
+      : undefined;
   const facets = firstPage?.facets;
   const typeBuckets = facets ? facets.type : EMPTY_FACET_BUCKETS;
   const mimeTypeBuckets = facets ? facets.mimeType : EMPTY_FACET_BUCKETS;
@@ -909,7 +1055,7 @@ export const SearchDialog = ({
     setLastRecentsOwner(owner);
     setLastRecentsSnapshotKey(recentsSnapshotKey);
     setRegistryExpanded(false);
-    setCaseLawExpanded(false);
+    setCaseLawExpansion(null);
     setSupplementalPreview({ type: "internal" });
     setRecentPreviewFile(null);
   }
@@ -927,7 +1073,7 @@ export const SearchDialog = ({
     enabled: hasActiveSearch,
     organizationId: searchRecentsScope.organizationId,
     userId: searchRecentsScope.userId,
-    query: searchQuery,
+    query: matterSearchQuery,
     kinds: filters.kinds,
     ...searchFilterParams,
   };
@@ -1086,7 +1232,7 @@ export const SearchDialog = ({
   const clearSearch = () => {
     clearSearchQuery();
     setRegistryExpanded(false);
-    setCaseLawExpanded(false);
+    setCaseLawExpansion(null);
     setSupplementalPreview({ type: "internal" });
     setSearchScope("all");
     setFilters(initialFiltersForMode(mode, initialWorkspaceId));
@@ -1103,7 +1249,7 @@ export const SearchDialog = ({
   };
 
   const handleSummarizeResults = () => {
-    const trimmedQuery = searchQuery.trim();
+    const trimmedQuery = matterSearchQuery.trim();
     if (
       capabilities.ai.type !== "available" ||
       !trimmedQuery ||
@@ -1146,7 +1292,7 @@ export const SearchDialog = ({
   };
 
   const handleOpenSummaryChat = () => {
-    const trimmedQuery = searchQuery.trim();
+    const trimmedQuery = matterSearchQuery.trim();
     const summaryData = summarizeSearchMutation.data;
     if (
       capabilities.ai.type !== "available" ||
@@ -1435,7 +1581,7 @@ export const SearchDialog = ({
     }
 
     if (hit.type === "case-law") {
-      if (!isPublicLawPreviewEnabled()) {
+      if (!isPublicLawEnabled()) {
         onOpenChange(false);
         stellaToast.add({
           title: t("common.comingSoon"),
@@ -1562,7 +1708,7 @@ export const SearchDialog = ({
     !hasUnavailableSelectedType &&
     !isBlockingSearchError &&
     hasResults;
-  const commandHits = shouldShowResults ? allHits : [];
+  const commandHits = [...citationHits, ...(shouldShowResults ? allHits : [])];
   const resultsStatus = resolveSearchResultsStatus({
     hasActiveSearch,
     hasQuery,
@@ -1570,8 +1716,9 @@ export const SearchDialog = ({
     hasUnavailableSelectedType,
     hasVisibleSearch: scopeVisibility.visibleSearch,
     isBlockingSearchError,
-    isLoading,
+    isLoading: isLoadingSearchResults,
     searchQuery,
+    searchError,
   });
   const filterEditorIdsKey = filters.editedByUserIds.join("|");
 
@@ -1787,6 +1934,21 @@ export const SearchDialog = ({
                   return;
                 }
                 const highlightedHit = commandHits.at(eventDetails.index);
+                if (highlightedHit?.type === "legal-citation") {
+                  if (eventDetails.reason !== "none") {
+                    setSupplementalPreview((preview) =>
+                      preview.type === "internal"
+                        ? preview
+                        : { type: "internal" },
+                    );
+                  }
+                  debouncedSetHighlightedHitId.cancel();
+                  setHighlightedHitId(highlightedHit.id);
+                  if (eventDetails.reason === "keyboard" && resultsElement) {
+                    resultsElement.scrollTop = 0;
+                  }
+                  return;
+                }
                 if (highlightedHit) {
                   setSupplementalPreview({ type: "internal" });
                   if (eventDetails.reason === "keyboard") {
@@ -1797,9 +1959,12 @@ export const SearchDialog = ({
                   }
                 }
                 if (eventDetails.reason === "keyboard") {
-                  hitVirtualizer.scrollToIndex(eventDetails.index, {
-                    align: "auto",
-                  });
+                  hitVirtualizer.scrollToIndex(
+                    eventDetails.index - citationHits.length,
+                    {
+                      align: "auto",
+                    },
+                  );
                 }
               }}
               onValueChange={(value, eventDetails) => {
@@ -1901,7 +2066,7 @@ export const SearchDialog = ({
                   open={scopeFilterOpen}
                   onOpenChange={setScopeFilterOpen}
                   visible={mode.type === "browse"}
-                  caseLawEnabled={publicLawPreviewEnabled}
+                  caseLawEnabled={publicLawEnabled}
                   onChange={(scope) => {
                     setSearchScope(scope);
                     setFilters(initialFiltersForMode(mode, initialWorkspaceId));
@@ -1967,7 +2132,7 @@ export const SearchDialog = ({
                       hasSearchCriteria={hasSearchCriteria}
                       locale={locale}
                       mimeTypeBuckets={mimeTypeBuckets}
-                      publicLawPreviewEnabled={publicLawPreviewEnabled}
+                      publicLawEnabled={publicLawEnabled}
                       setFilters={setFilters}
                       typeBuckets={typeBuckets}
                       workspaceBuckets={workspaceBuckets}
@@ -2041,6 +2206,20 @@ export const SearchDialog = ({
                             ))}
                           </MenuSection>
                         )}
+                      <SearchCitationResults
+                        enabled={citationEnabled}
+                        query={citationQuery}
+                        hits={citationHits}
+                        onOpen={(hit) => {
+                          onOpenChange(false);
+                          detached(
+                            navigate(
+                              citationCommandRoute(hit, readingLanguages),
+                            ),
+                            "search-citation.open",
+                          );
+                        }}
+                      />
                       <SearchResultsContent
                         onRetry={() => {
                           detached(
@@ -2062,6 +2241,7 @@ export const SearchDialog = ({
                             }
                           }}
                           hits={allHits}
+                          indexOffset={citationHits.length}
                           onOpenResult={openSearchResult}
                           pagination={{
                             fetchNextPage,
@@ -2113,7 +2293,10 @@ export const SearchDialog = ({
                       caseLawProps={{
                         expanded: caseLawExpanded,
                         onExpandedChange: (expanded) => {
-                          setCaseLawExpanded(expanded);
+                          setCaseLawExpansion({
+                            query: caseLawExpansionQuery,
+                            expanded,
+                          });
                           setSupplementalPreview({ type: "internal" });
                         },
                         query,
@@ -2150,7 +2333,7 @@ export const SearchDialog = ({
                   onResize={resizePreviewColumn}
                   previewLocatorCandidates={previewLocatorCandidates}
                   previewWidth={previewWidth}
-                  query={searchQuery}
+                  query={matterSearchQuery}
                   scope={searchRecentsScope}
                   visible={showPreview}
                 />
@@ -2196,7 +2379,7 @@ type SearchFacetsBodyProps = {
   mimeTypeBuckets: ComponentProps<
     typeof SearchableFacetGroup
   >["defaultBuckets"];
-  publicLawPreviewEnabled: boolean;
+  publicLawEnabled: boolean;
   setFilters: (update: SearchFiltersUpdate) => void;
   typeBuckets: readonly ComponentProps<typeof FacetGroup>["buckets"][number][];
   workspaceBuckets: ComponentProps<
@@ -2211,7 +2394,7 @@ const SearchFacetsBody = ({
   hasSearchCriteria,
   locale,
   mimeTypeBuckets,
-  publicLawPreviewEnabled,
+  publicLawEnabled,
   setFilters,
   typeBuckets,
   workspaceBuckets,
@@ -2231,7 +2414,7 @@ const SearchFacetsBody = ({
       if (!isSearchKindOption(bucket.value)) {
         return [];
       }
-      if (!isAvailableSearchKind(bucket.value, publicLawPreviewEnabled)) {
+      if (!isAvailableSearchKind(bucket.value, publicLawEnabled)) {
         return [];
       }
       // Case law stays out of the main list until its group opens, so a
@@ -2598,6 +2781,14 @@ const SearchResultsContent = ({
           </p>
         </div>
       );
+    case "refine":
+      return (
+        <div className="flex h-full items-center justify-center px-4 py-8">
+          <p className="text-muted-foreground text-sm">
+            {t("caseLaw.pagination.refineForMore")}
+          </p>
+        </div>
+      );
     case "error":
       return (
         <div className="flex h-full flex-col items-center justify-center gap-3 px-4 py-8">
@@ -2642,6 +2833,7 @@ const SearchResultsContent = ({
 type SearchHitResultsProps = {
   measureContainer: (element: HTMLDivElement | null) => void;
   hits: readonly GlobalSearchHit[];
+  indexOffset: number;
   onOpenResult: ComponentProps<typeof SearchResultItem>["onClick"];
   pagination: {
     fetchNextPage: () => Promise<unknown>;
@@ -2671,6 +2863,7 @@ type SearchHitResultsProps = {
 const SearchHitResults = ({
   measureContainer,
   hits,
+  indexOffset,
   onOpenResult,
   pagination,
   summary,
@@ -2719,7 +2912,7 @@ const SearchHitResults = ({
             >
               <SearchResultItem
                 hit={hit}
-                index={virtualHit.index}
+                index={indexOffset + virtualHit.index}
                 onClick={onOpenResult}
                 resultNumber={virtualHit.index + 1}
               />

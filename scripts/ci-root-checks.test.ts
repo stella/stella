@@ -239,6 +239,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/schema-introspection.ts",
   ],
   "ci-checks-rest/Test capability shard merge and package parity": [
+    "packages/scripts/src/tree-base-revision.ts",
     "scripts/capability-shard-merge.test.ts",
     "scripts/capability-shard-pack.test.ts",
     "scripts/changeset-guard.ts",
@@ -325,6 +326,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/generated-artifacts.ts",
   ],
   "ci-checks-rest/Schema introspection invariants": [
+    "packages/scripts/src/tree-base-revision.ts",
     "packages/scripts/src/typescript-program.ts",
     "scripts/generated-artifacts.ts",
     "scripts/outbound-transport-ownership.ts",
@@ -362,6 +364,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/publish-manifest.test.ts",
   ],
   "ci-checks-rest/Test main heavy workflow contracts": [
+    "packages/scripts/src/tree-base-revision.ts",
     "scripts/ci-expression-context.ts",
     "scripts/ci-plan-variables.ts",
     "scripts/main-heavy-plan.test.ts",
@@ -507,6 +510,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "packages/scripts/src/generated-file-inventory.ts",
     "packages/scripts/src/generated-input-identity.ts",
     "packages/scripts/src/process-memory.ts",
+    "packages/scripts/src/tree-base-revision.ts",
     "scripts/api-test-impact.ts",
     "scripts/ci-check-pool-registry.ts",
     "scripts/ci-checks-partition.test.ts",
@@ -572,6 +576,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test preview scope tool availability": [
     "scripts/visual-preview-scope.test.ts",
+    "scripts/visual-preview-scope.ts",
   ],
   "ci-checks-rest/Test public document fetch": [
     "scripts/fetch-public-documents.test.ts",
@@ -599,6 +604,12 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-policy/Dependabot group guard (installed packages)": [
     "scripts/dependabot-grouping.test.ts",
+  ],
+  "ci-checks-policy/Web raw JSON API census self-test": [
+    "scripts/web-raw-json-api-census.ts",
+  ],
+  "ci-checks-policy/Web raw JSON API census": [
+    "scripts/web-raw-json-api-census.ts",
   ],
 };
 

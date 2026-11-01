@@ -27,7 +27,10 @@ elif [[ -n "$SHA" ]] && jq -e \
   fi
 fi
 
-description="Main PR-depth checks: $state"
+# `code-check=covered` marks a run whose code check compared main with the last
+# green commit (or checked everything); main-pr-depth-green-base.sh accepts
+# only such statuses as a base.
+description="Main PR-depth checks: $state; code-check=covered"
 if [[ -n "${PROOF_MAIN_BASE:-}" ]]; then
   description="$description; main=$PROOF_MAIN_BASE"
 fi

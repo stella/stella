@@ -98,7 +98,7 @@ export const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
   // internal-only public reads with no MCP tool.
   "apps/api/src/handlers/public-knowledge/endpoints.ts": 6,
   "apps/api/src/handlers/search/routes.ts": 5,
-  "apps/api/src/handlers/workspaces/routes.ts": 4,
+  "apps/api/src/handlers/workspaces/routes.ts": 3,
 };
 
 /**
@@ -225,10 +225,13 @@ export const classifyCoverage = ({
       if (!registry.has(exposure.name)) {
         unknownToolNames.push({ id, name: exposure.name });
       }
-    } else if (exposure.type === "covered") {
-      referencedTools.add(exposure.by);
-      if (!registry.has(exposure.by)) {
-        unknownToolNames.push({ id, name: exposure.by });
+    } else if (exposure.type === "covered" || exposure.type === "capability") {
+      const { by } = exposure;
+      if (by !== undefined) {
+        referencedTools.add(by);
+        if (!registry.has(by)) {
+          unknownToolNames.push({ id, name: by });
+        }
       }
     }
   }

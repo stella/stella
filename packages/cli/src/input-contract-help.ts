@@ -499,24 +499,48 @@ const pathRequired = (schema: JsonSchema, path: string): boolean => {
 };
 
 const characterForClass = (characterClass: string): string | undefined => {
-  if (characterClass.includes("0-9")) {
+  if (characterClass.includes("0-9") || characterClass.includes("\\d")) {
     return "0";
   }
   if (characterClass.includes("A-Z")) {
     return "A";
   }
-  if (characterClass.includes("a-z")) {
+  if (characterClass.includes("a-z") || characterClass.includes("\\w")) {
     return "a";
   }
   return characterClass.at(0);
 };
 
-const patternExample = (pattern: string): string | undefined => {
-  if (!pattern.startsWith("^") || !pattern.endsWith("$")) {
-    return undefined;
+/** The index of the `)` closing the group opened at `open`. */
+const groupEnd = (body: string, open: number): number | undefined => {
+  let depth = 0;
+  for (let index = open; index < body.length; index += 1) {
+    const character = body[index];
+    if (character === "\\") {
+      index += 1;
+    } else if (character === "[") {
+      const end = body.indexOf("]", index + 1);
+      if (end === -1) {
+        return undefined;
+      }
+      index = end;
+    } else if (character === "(") {
+      depth += 1;
+    } else if (character === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
   }
+  return undefined;
+};
 
-  const body = pattern.slice(1, -1);
+// One candidate string: each token, groups included, repeated as often as
+// its quantifier's minimum (once for `+` and `?`, never for `*`).
+// Alternation, wildcards and lookarounds give no candidate; the caller still
+// tests the candidate against the compiled pattern.
+const patternBodyExample = (body: string): string | undefined => {
   const tokens: string[] = [];
   for (let index = 0; index < body.length; index += 1) {
     const character = body[index];
@@ -541,19 +565,42 @@ const patternExample = (pattern: string): string | undefined => {
       if (escaped === undefined) {
         return undefined;
       }
-      token = escaped === "d" ? "0" : escaped;
+      if (escaped === "d") {
+        token = "0";
+      } else if (escaped === "w") {
+        token = "a";
+      } else {
+        token = escaped;
+      }
       index += 1;
-    } else if ("().|".includes(character)) {
+    } else if (character === "(") {
+      const end = groupEnd(body, index);
+      if (end === undefined) {
+        return undefined;
+      }
+      let inner = body.slice(index + 1, end);
+      if (inner.startsWith("?:")) {
+        inner = inner.slice(2);
+      } else if (inner.startsWith("?")) {
+        return undefined;
+      }
+      const groupExample = patternBodyExample(inner);
+      if (groupExample === undefined) {
+        return undefined;
+      }
+      token = groupExample;
+      index = end;
+    } else if (").|".includes(character)) {
       return undefined;
     } else {
       token = character;
     }
 
     const remainder = body.slice(index + 1);
-    const exact = /^\{(\d+)\}/u.exec(remainder);
-    if (exact !== null) {
-      tokens.push(token.repeat(Number(exact[1])));
-      index += exact[0].length;
+    const counted = /^\{(\d+)(?:,\d*)?\}/u.exec(remainder);
+    if (counted !== null) {
+      tokens.push(token.repeat(Number(counted[1])));
+      index += counted[0].length;
       continue;
     }
     if (remainder.startsWith("+")) {
@@ -572,8 +619,17 @@ const patternExample = (pattern: string): string | undefined => {
     }
     tokens.push(token);
   }
+  return tokens.join("");
+};
 
-  const example = tokens.join("");
+const patternExample = (pattern: string): string | undefined => {
+  if (!pattern.startsWith("^") || !pattern.endsWith("$")) {
+    return undefined;
+  }
+  const example = patternBodyExample(pattern.slice(1, -1));
+  if (example === undefined) {
+    return undefined;
+  }
   const compiled = compileSchemaPattern(pattern);
   if (compiled.status === "invalid") {
     return undefined;

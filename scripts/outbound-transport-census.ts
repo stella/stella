@@ -643,6 +643,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:jose"],
   },
   {
+    path: "apps/api/src/lib/push/apns-client.ts",
+    class: "third-party",
+    reason:
+      "Sends push alerts over HTTP/2 to the two fixed Apple Push Notification service gateways.",
+    transports: ["module:node:http2"],
+  },
+  {
     path: "apps/api/src/lib/redis-client.ts",
     class: "operator-configured-infrastructure",
     reason:
@@ -815,12 +822,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     ],
   },
   {
-    path: "apps/web/src/components/workspaces/request-manual-ocr.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Submits manual OCR requests to the configured API.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/web/src/components/workspaces/row-actions.tsx",
     class: "operator-configured-infrastructure",
     reason:
@@ -875,6 +876,12 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
       "module:better-auth/client/plugins",
       "module:better-auth/react",
     ],
+  },
+  {
+    path: "apps/web/src/lib/api.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Sends typed client requests to the configured API.",
+    transports: ["module:@stll/fetch"],
   },
   {
     path: "apps/web/src/lib/desktop-bridge.ts",
@@ -949,12 +956,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "apps/web/src/lib/workspaces/mutations/use-create-file-entities.ts",
     class: "operator-configured-infrastructure",
     reason: "Uploads new matter files to API-issued storage URLs.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
-    path: "apps/web/src/lib/workspaces/time-entries-api.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Sends time-entry requests to the configured API.",
     transports: ["module:@stll/fetch"],
   },
   {

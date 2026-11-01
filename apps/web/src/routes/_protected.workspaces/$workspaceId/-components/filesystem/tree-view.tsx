@@ -33,7 +33,7 @@ import {
   EyeOffIcon,
   FileIcon,
 } from "@stll/ui/icons";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -1165,16 +1165,7 @@ const ColumnHeaderCell = ({
           }}
           open={isContextOpen}
         >
-          <MenuTrigger
-            render={
-              <Button
-                aria-label={t("common.options")}
-                className="sr-only"
-                tabIndex={-1}
-                variant="plain"
-              />
-            }
-          />
+          <MenuAnchor />
           <MenuPopup anchor={contextAnchor ?? undefined}>
             <MenuItem
               onClick={() => {
@@ -1625,7 +1616,7 @@ export const FilesystemRow = ({
                   { count: folderStatistics.fileCount },
                 )}
               </span>
-              <span className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100">
+              <span className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100 pointer-coarse:opacity-100">
                 <span aria-hidden="true">·</span>
                 <span>{formattedFolderSize}</span>
               </span>

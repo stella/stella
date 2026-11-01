@@ -15,7 +15,6 @@ import {
   ADAPTER_TIMEOUT,
   MAX_SYNC_PAGES,
 } from "@/api/handlers/case-law/consts";
-import type { SyncPage } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   applyDecisionBatch,
@@ -57,6 +56,8 @@ import {
   advanceCorpusIngestionCheckpoint,
   CORPUS_SOURCE_TYPE,
   INGESTION_CHECKPOINT_STATUS,
+  PUBLISHER_CHECK,
+  type PublisherCheck,
 } from "@/api/lib/corpus-ingestion-checkpoint";
 import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import {
@@ -76,6 +77,8 @@ import type {
   CycleDeadline,
   StartCycleDeadlineOptions,
 } from "@/api/lib/legal-search/cycle-deadline";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
+import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
@@ -85,6 +88,14 @@ type DbSlot = {
   acquire: (signal?: AbortSignal) => Promise<void>;
   release: () => void;
 };
+
+const STOP_LOGGER = {
+  [INGESTION_STOP_KIND.DEADLINE]: logger.info,
+  [INGESTION_STOP_KIND.SOURCE_UNREACHABLE]: logger.error,
+  [INGESTION_STOP_KIND.PUBLISHER_REFUSAL]: logger.error,
+  [INGESTION_STOP_KIND.ADAPTER_ERROR]: logger.error,
+  [INGESTION_STOP_KIND.INTERNAL_ERROR]: logger.error,
+} as const satisfies Record<IngestionStopKind, typeof logger.info>;
 
 type PipelineInput = {
   onDocumentObservation?: DocumentStageObserver;
@@ -125,6 +136,8 @@ type PipelineInput = {
    * while capping concurrent DB pressure.
    */
   dbSlot?: DbSlot;
+  /** Revalidate the caller's grant before each bounded decision batch. */
+  acquireBatchAdmission?: () => Promise<"granted" | "paused">;
   corpus?: CaseLawCorpusDependencies;
 };
 
@@ -184,7 +197,7 @@ const batchHaltReason = (
         `last: [${stop.tag}] ${stop.message.slice(0, 200)}`
       );
     case "aborted":
-      return panic("A crawl batch carries no abort signal");
+      return CYCLE_HALT_REASON.TIMEOUT;
     default:
       stop satisfies never;
       return panic(`Unhandled batch stop: ${String(stop)}`);
@@ -203,7 +216,7 @@ const batchStopKind = (
     case "failure-streak":
       return stop.stopKind;
     case "aborted":
-      return panic("A crawl batch carries no abort signal");
+      return INGESTION_STOP_KIND.DEADLINE;
     default:
       stop satisfies never;
       return panic(`Unhandled batch stop: ${String(stop)}`);
@@ -220,6 +233,16 @@ const pageItemCount = ({
   unreadItems,
 }: SyncPage): number =>
   decisions.length + (supplements?.length ?? 0) + (unreadItems?.length ?? 0);
+
+/** One when the publisher answered a request for the page, else zero. */
+const publisherAnsweredCount = ({ publisherRequest }: SyncPage): number =>
+  publisherRequest === PUBLISHER_REQUEST.ANSWERED ? 1 : 0;
+
+/** Whether a run heard from the publisher, from the pages it answered. */
+const publisherCheckOf = (answeredPages: number): PublisherCheck =>
+  answeredPages > 0
+    ? PUBLISHER_CHECK.ANSWERED
+    : PUBLISHER_CHECK.NOT_ASKED_OR_FAILED;
 
 const PAGE_SLOT = {
   HELD: "held",
@@ -242,6 +265,7 @@ const runScopedIngestionPipeline = async ({
   maxDecisions,
   batchRecordLimit = CASE_LAW_INGESTION_BATCH_LIMITS.records,
   dbSlot,
+  acquireBatchAdmission,
   corpus = CASE_LAW_CORPUS_DEPENDENCIES,
 }: PipelineInput): Promise<IngestionPipelineResult> => {
   const resolveSourceContract = createSourceContractResolver(scopedDb);
@@ -266,6 +290,8 @@ const runScopedIngestionPipeline = async ({
   let searchVectorFailures = 0;
   let s3UploadFailures = 0;
   let pagesProcessed = 0;
+  /** Pages the publisher answered a request for, whatever they held. */
+  let publisherAnsweredPages = 0;
   /** Track recent cursors to detect parking (stagnation or ping-pong). */
   const recentCursors = new Set<string | null>();
   /**
@@ -399,7 +425,7 @@ const runScopedIngestionPipeline = async ({
         deadline?.signal.aborted || pageSignal.aborted
           ? INGESTION_STOP_KIND.DEADLINE
           : observedPageResult.value.error.stopKind;
-      logger.error(
+      STOP_LOGGER[pageStopKind](
         "case_law.ingestion.adapter_halted",
         sanitizeErrorAttributesForOutput({
           adapterKey: adapter.key,
@@ -460,7 +486,7 @@ const runScopedIngestionPipeline = async ({
       await dbSlot.acquire(deadline?.signal);
       return PAGE_SLOT.HELD;
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
+      if (deadline?.signal.aborted) {
         return PAGE_SLOT.CYCLE_ENDED;
       }
       throw error;
@@ -486,6 +512,13 @@ const runScopedIngestionPipeline = async ({
     observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
     for (const batch of admitPageDecisions(decisions, batchRecordLimit)) {
+      if (
+        deadline?.signal.aborted ||
+        (await acquireBatchAdmission?.()) === "paused"
+      ) {
+        stopKind = INGESTION_STOP_KIND.DEADLINE;
+        return CYCLE_HALT_REASON.TIMEOUT;
+      }
       if (batch.admission === DECISION_ADMISSION.OVERSIZED_RECORD) {
         // A page's records are applied whatever their size; one over the
         // byte bound goes alone, and is reported.
@@ -512,6 +545,7 @@ const runScopedIngestionPipeline = async ({
           polarityRules,
           context: { adapterKey: adapter.key, cursor },
           failureStreak: consecutiveFailures,
+          signal: deadline?.signal,
           insertLimit:
             maxDecisions === undefined ? undefined : maxDecisions - inserted,
         },
@@ -562,25 +596,27 @@ const runScopedIngestionPipeline = async ({
     }
     const failures: IngestionFailureRow[] = [];
     for (const supplement of supplements) {
-      const placed = await Result.tryPromise({
-        try: async () =>
-          // db-await-in-loop: each supplement locks its docket and may rewrite its judgment, ordered per observation
-          await processSupplement(
-            {
-              supplement,
-              sourceId: source.id,
-              scopedDb,
-              observedAt: new Date(),
-              nextObservationOrder,
-              reparseStoredRaw,
-              readStoredRaw: readStoredRawFromS3,
-              corpus,
-              polarityRules,
-            },
-            resolveSourceContract,
-          ),
-        catch: (cause) => cause,
-      });
+      const placed = (
+        await Result.tryPromise({
+          try: async () =>
+            // db-await-in-loop: each supplement locks its docket and may rewrite its judgment, ordered per observation
+            await processSupplement(
+              {
+                supplement,
+                sourceId: source.id,
+                scopedDb,
+                observedAt: new Date(),
+                nextObservationOrder,
+                reparseStoredRaw,
+                readStoredRaw: readStoredRawFromS3,
+                corpus,
+                polarityRules,
+              },
+              resolveSourceContract,
+            ),
+          catch: (cause) => cause,
+        })
+      ).andThen((outcome) => outcome);
       if (Result.isError(placed)) {
         // As a decision's failure is: recorded and stepped over, so one
         // poison supplement cannot pin the source. It is not lost: nothing
@@ -734,6 +770,7 @@ const runScopedIngestionPipeline = async ({
     // overlapping; this durable token orders the resulting database writes.
     const { observationOrder, page } = observedPage;
     checkpointObservationOrder = observationOrder;
+    publisherAnsweredPages += publisherAnsweredCount(page);
     const observedAt = new Date();
 
     // Released before the next page fetch so external API calls don't hold
@@ -780,7 +817,7 @@ const runScopedIngestionPipeline = async ({
 
       if (haltReason) {
         stopKind ??= INGESTION_STOP_KIND.INTERNAL_ERROR;
-        logger.error("case_law.ingestion.adapter_halted", {
+        STOP_LOGGER[stopKind]("case_law.ingestion.adapter_halted", {
           adapterKey: adapter.key,
           cursor: cursor ?? "",
           reason: haltReason,
@@ -820,6 +857,7 @@ const runScopedIngestionPipeline = async ({
       id: source.id,
       leaseToken: sourceLease.leaseToken,
       observationOrder: checkpointObservationOrder,
+      publisherCheck: publisherCheckOf(publisherAnsweredPages),
       type: CORPUS_SOURCE_TYPE.CASE_LAW,
     },
   });

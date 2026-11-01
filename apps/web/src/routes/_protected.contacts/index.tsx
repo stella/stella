@@ -88,11 +88,9 @@ import { pageTitle } from "@/lib/page-title";
 import { queryView } from "@/lib/query-view.logic";
 import type { QueryView } from "@/lib/query-view.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
-import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
-import { createUuid } from "@/lib/uuid";
 import { routePresentation } from "@/routes/-route-presentation";
 import { PersonDetailsFields } from "@/routes/_protected.contacts/-components/person-details-fields";
 import {
@@ -460,8 +458,9 @@ const useContactColumns = () => {
             }
             return (
               <a
-                className="text-muted-foreground hover:text-foreground block max-w-xs hover:underline"
+                className="text-muted-foreground hover:text-foreground inline-block max-w-xs align-middle hover:underline"
                 href={`mailto:${primaryEmail.address}`}
+                onClick={(event) => event.stopPropagation()}
               >
                 <TruncatedText>{primaryEmail.address}</TruncatedText>
               </a>
@@ -549,8 +548,7 @@ const ContactTableRow = ({
       tabIndex={0}
     >
       {row.getAllCells().map((cell) => {
-        const stopsRowClick =
-          cell.column.id === "email" || cell.column.id === "actions";
+        const stopsRowClick = cell.column.id === "actions";
         return (
           <TableCell
             key={cell.id}
@@ -613,7 +611,7 @@ const ContactRowActions = ({ contact }: { contact: ContactItem }) => {
           content={t("common.actions")}
           render={
             <MenuTrigger
-              className="opacity-0! transition-opacity group-hover:opacity-100!"
+              className="opacity-0! transition-opacity group-hover:opacity-100! pointer-coarse:opacity-100!"
               render={<Button size="icon-xs" variant="ghost" />}
             />
           }
@@ -939,7 +937,6 @@ const CreateContactDialog = ({
             : undefined;
 
         await createContact.mutateAsync({
-          id: toSafeId<"contact">(createUuid()),
           type: value.type,
           displayName: value.displayName,
           ...(firstName && { firstName }),
