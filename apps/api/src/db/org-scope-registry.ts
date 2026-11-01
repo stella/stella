@@ -106,6 +106,8 @@ import {
   caseLawSearchDocuments,
   caseLawSitemapChanges,
   caseLawSitemapCountryGenerations,
+  caseLawSitemapDrainProgress,
+  caseLawSitemapRefreshCursor,
   caseLawSitemapShardCounts,
   caseLawSitemapShards,
   caseLawSourceArrivals,
@@ -214,6 +216,7 @@ import {
   legalListItemComments,
   legalListItemReviews,
   legalListItems,
+  legalListItemSourceDecisions,
   legalListItemSources,
   legalLists,
   legalListSections,
@@ -261,6 +264,7 @@ import {
   playbookDefinitionVersions,
   properties,
   propertyDependencies,
+  pushDevices,
   rateEntries,
   rateTables,
   registrationDailyBudget,
@@ -1331,6 +1335,15 @@ export const ORG_SCOPE_TABLES = {
     workspaceId: sql`${legalListItemSources.workspaceId}`,
     rowId: sql`${legalListItemSources.id}::text`,
   },
+  legalListItemSourceDecisions: {
+    identityKind: "primary-key",
+    table: legalListItemSourceDecisions,
+    organizationId: workspaceOrganization(
+      sql`${legalListItemSourceDecisions.workspaceId}`,
+    ),
+    workspaceId: sql`${legalListItemSourceDecisions.workspaceId}`,
+    rowId: sql`${legalListItemSourceDecisions.id}::text`,
+  },
   legalListGenerationRuns: {
     identityKind: "primary-key",
     table: legalListGenerationRuns,
@@ -1929,6 +1942,18 @@ export const GLOBAL_SCOPE_TABLES = {
     ownership: "public-corpus",
     reason: "Public corpus rows admitted by the declared corpus policy.",
   },
+  caseLawSitemapDrainProgress: {
+    table: caseLawSitemapDrainProgress,
+    ownership: "public-corpus",
+    reason:
+      "Public corpus identities and serving projections have no tenant owner.",
+  },
+  caseLawSitemapRefreshCursor: {
+    table: caseLawSitemapRefreshCursor,
+    ownership: "public-corpus",
+    reason:
+      "Public corpus identities and serving projections have no tenant owner.",
+  },
   caseLawSitemapShardCounts: {
     table: caseLawSitemapShardCounts,
     ownership: "public-corpus",
@@ -1951,6 +1976,12 @@ export const GLOBAL_SCOPE_TABLES = {
     table: agentRegistration,
     ownership: "account",
     reason: "Authentication ceremony, credentials, or account lifecycle state.",
+  },
+  pushDevices: {
+    table: pushDevices,
+    ownership: "account",
+    reason:
+      "Per-person device registration; row security admits only the registering person.",
   },
   apikey: {
     table: apikey,
