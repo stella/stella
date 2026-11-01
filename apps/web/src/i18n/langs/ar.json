@@ -5833,6 +5833,7 @@
       "open": "مفتوحة"
     },
     "subtasks": "المهام الفرعية",
+    "taskCompleted": "تم إكمال المهمة",
     "title": "المهام",
     "untitled": "مهمة بلا عنوان",
     "workTypeValues": {

@@ -5833,6 +5833,7 @@
       "open": "Open"
     },
     "subtasks": "Subtasks",
+    "taskCompleted": "Task completed",
     "title": "Tasks",
     "untitled": "Untitled task",
     "workTypeValues": {

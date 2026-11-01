@@ -5833,6 +5833,7 @@
       "open": "Avatud"
     },
     "subtasks": "Alamülesanded",
+    "taskCompleted": "Ülesanne on lõpetatud",
     "title": "Ülesanded",
     "untitled": "Pealkirjata ülesanne",
     "workTypeValues": {
