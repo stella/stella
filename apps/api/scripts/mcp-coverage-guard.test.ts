@@ -295,6 +295,39 @@ describe("classifyCoverage", () => {
     expect(issues.staleWaivers).toEqual([]);
   });
 
+  test("a capability names its curated wrapper and validates that reference", () => {
+    const classify = (by: string) =>
+      classifyCoverage({
+        appTools: [],
+        endpoints: [
+          {
+            id: "create.ts",
+            exposure: parseExposure({
+              type: "capability",
+              reason: "organization_management",
+              consumesServices: false,
+              confirmation: "required",
+              by,
+            }),
+          },
+        ],
+        registryToolNames: ["create_organization"],
+        waivers: {},
+      });
+    expect(classify("create_organization").orphanTools).toEqual([]);
+    expect(classify("ghost").unknownToolNames).toEqual([
+      { id: "create.ts", name: "ghost" },
+    ]);
+    expect(
+      parseExposure({
+        type: "capability",
+        reason: "organization_management",
+        consumesServices: false,
+        by: 1,
+      }).type,
+    ).toBe("invalid");
+  });
+
   test("flags an orphan tool that no endpoint references and no waiver covers", () => {
     const issues = classifyCoverage({
       appTools: [],

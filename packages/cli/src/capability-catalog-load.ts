@@ -43,6 +43,7 @@ const catalogEntrySchema = v.object({
   confirmation: v.optional(v.literal("required")),
   idempotency: v.optional(v.object({ type: v.literal("replay") })),
   scope: v.string(),
+  accountScope: v.optional(v.string()),
   additionalScopes: v.optional(v.array(v.string())),
   requestTimeoutMs: v.optional(
     v.pipe(
@@ -160,6 +161,9 @@ export const parseCapabilityCatalog = (
     }
     if (entry.featureAccess !== undefined) {
       projected.featureAccess = entry.featureAccess;
+    }
+    if (entry.accountScope !== undefined) {
+      projected.accountScope = entry.accountScope;
     }
     if (entry.additionalScopes !== undefined) {
       projected.additionalScopes = entry.additionalScopes;

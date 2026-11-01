@@ -2392,7 +2392,6 @@
     "unverifiedCitationHint": "Cette citation n'a pas pu être associée au document source.",
     "uploadFiles": "Importer des fichiers",
     "urlIdentifier": "Identifiant URL",
-    "urlIdentifierPlaceholder": "mon-organisation",
     "user": "Utilisateur",
     "value": "Valeur",
     "vatId": "Numéro de TVA",
@@ -2443,6 +2442,7 @@
     "scopeMemoryWrite": "Créer et modifier les souvenirs de l’assistant",
     "scopeOfflineAccess": "Vous garder connecté sans approbation répétée",
     "scopeOnboarding": "Configurer les juridictions d’exercice de votre organisation",
+    "scopeOrganizationCreate": "Créer de nouvelles organisations dont vous serez propriétaire",
     "scopeProfile": "Accéder aux informations de votre profil",
     "scopeRead": "Lire vos documents, dossiers et contacts",
     "scopeReadAnonymized": "Lire les versions anonymisées de vos documents et dossiers",
@@ -2970,7 +2970,6 @@
     "failedToVerifyOtp": "Impossible de vérifier le code",
     "matterNotFound": "Dossier introuvable",
     "partyAlreadyExists": "Ce contact a déjà ce rôle dans le dossier",
-    "slugAlreadyTaken": "Ce slug est déjà utilisé",
     "uploadFailed": "Échec de l'import"
   },
   "feedback": {
@@ -4723,6 +4722,13 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Valeurs par défaut utilisées"
     },
+    "creationEvaluationLimitReached": "Vous avez utilisé les {limit} périodes d’essai d’organisation. Supprimer une organisation ne rétablit pas de période d’essai. Utilisez une organisation existante ou contactez l’assistance pour obtenir un accès payant.",
+    "creationInvalidName": "Saisissez un nom d’organisation valide ({maxLength} caractères maximum).",
+    "creationNotAllowed": "Ce compte ne peut pas créer d’organisations.",
+    "creationOutcomeUnknown": "La demande a peut-être créé une organisation. Réessayez pour en vérifier le résultat.",
+    "creationRateLimited": "Trop d’organisations ont été créées récemment. Réessayez plus tard.",
+    "creationRefused": "L’organisation n’a pas pu être créée. Vérifiez les informations et réessayez.",
+    "creationSlugConflict": "Cette adresse d’organisation est déjà utilisée. Choisissez un autre nom ou une autre adresse.",
     "invitations": {
       "cancelInvitation": "Annuler l'invitation",
       "emailAddressLabel": "Adresse e-mail",
@@ -4737,6 +4743,7 @@
       "statuses": {
         "accepted": "Acceptée",
         "canceled": "Annulée",
+        "expired": "Expirée",
         "pending": "En attente",
         "rejected": "Refusée"
       }
@@ -4770,6 +4777,8 @@
       "typeEmailToConfirm": "Saisissez {email} pour confirmer",
       "updateRole": "Mettre à jour le rôle"
     },
+    "newOrganization": "Nouvelle organisation",
+    "newOrganizationDescription": "Créez une organisation dont vous serez propriétaire.",
     "roles": {
       "admin": "Administrateur",
       "descriptions": {
@@ -4785,6 +4794,9 @@
       "owner": "Propriétaire"
     },
     "settingsDescription": "Modifier le nom et le slug de votre organisation",
+    "startOver": "Recommencer",
+    "startOverDescription": "La demande initiale a peut-être déjà créé une organisation. Vérifiez vos organisations avant de recommencer ; une nouvelle demande pourrait créer une organisation supplémentaire.",
+    "startOverTitle": "Lancer une nouvelle demande de création ?",
     "switchOrganization": "Changer d'organisation"
   },
   "publicTools": {
@@ -5383,6 +5395,7 @@
         "title": "Extraction de mémoire",
         "toggleLabel": "Suggérer des souvenirs à partir de l'historique des conversations en arrière-plan"
       },
+      "pastInvitations": "Invitations passées",
       "pendingInvitations": "Invitations en attente",
       "practiceJurisdictions": "Juridictions",
       "practiceJurisdictionsDescription": "Sélectionnez les juridictions qui vous concernent.",
@@ -6220,8 +6233,7 @@
   "validation": {
     "invalidEmail": "Saisissez une adresse e-mail valide.",
     "organizationNameRequired": "Le nom de l'organisation est requis",
-    "slugFormat": "Le slug ne doit contenir que des lettres minuscules, des chiffres et des tirets",
-    "slugRequired": "Le slug est requis"
+    "slugFormat": "Le slug ne doit contenir que des lettres minuscules, des chiffres et des tirets"
   },
   "verify": {
     "history": "{history, select, refiled {Imprimé sous la référence <bdi>{reference}</bdi> ; désormais classé sous la référence <bdi>{currentReference}</bdi> dans le dossier <bdi>{matterName}</bdi>.} superseded {Cette référence renvoie à la version {version, number} ; la version actuelle est la {currentVersion, number}.} other {Imprimé sous la référence <bdi>{reference}</bdi> ; désormais classé sous la référence <bdi>{currentReference}</bdi> dans le dossier <bdi>{matterName}</bdi>. Cette référence renvoie à la version {version, number} ; la version actuelle est la {currentVersion, number}.}}",
