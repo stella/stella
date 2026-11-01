@@ -10,8 +10,14 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { insertOrganizationWithEvaluation } from "@/api/lib/db/organization-creation";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
-import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
+import {
+  newOrganizationEvaluation,
+  recordNewOrganizationAccessState,
+} from "@/api/lib/usage/organization-access-state";
 
 // Better Auth's default id length, the shape every auth row holds.
 const AUTH_ID_LENGTH = 32;
@@ -121,19 +127,27 @@ export const createReviewAccountOrganizationStore = (db: OwnerDatabase) => ({
     ownerUserId: SafeId<"user">;
   }) => {
     const membership = { organizationId, userId: ownerUserId };
-    // One transaction: the organization, its recorded state and starter
-    // taxonomy, and the owner membership land together or not at all.
-    await db.transaction(async (tx) => {
+    // One transaction: the organization with its evaluation grant and account
+    // audit, its recorded state and starter taxonomy, and the owner membership
+    // land together or not at all.
+    await withAggregateTransaction(db, async (tx) => {
       const recordAuditEvent = createBackgroundAuditRecorder(
         provisioningAuditBindings(membership),
       );
       const now = new Date();
-      await tx.insert(organization).values({
-        id: organizationId,
-        name: ORGANIZATION_NAME,
-        slug: `review-${organizationId.toLowerCase()}`,
-        createdAt: now,
+      const created = await insertOrganizationWithEvaluation(tx, {
+        userId: ownerUserId,
+        evaluation: newOrganizationEvaluation(),
+        organization: {
+          id: organizationId,
+          name: ORGANIZATION_NAME,
+          slug: `review-${organizationId.toLowerCase()}`,
+          createdAt: now,
+        },
       });
+      if (created.isErr()) {
+        return abortTransaction(created.error);
+      }
       await recordNewOrganizationAccessState(tx, { organizationId, now });
       await ensureDefaultDocumentTypes(organizationId, tx);
       await recordAuditEvent(

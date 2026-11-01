@@ -2383,12 +2383,6 @@
   },
   {
     "file": "apps/api/src/lib/db/review-account-organization-store.ts",
-    "fingerprint": "1fcf00e008360eb5f033a462f285ddbbd8f4d41781d72a88264bc4cb3cbd923d",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/db/review-account-organization-store.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/db/review-account-organization-store.ts",
     "fingerprint": "bc875a6d6b5ef9de98986b51730f0605da5078efd4ba26cf973d9a7d60395907",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/db/review-account-organization-store.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
@@ -3818,12 +3812,6 @@
   {
     "file": "apps/api/src/lib/smoke-session/store.ts",
     "fingerprint": "326f765f3c03c2e99910a85afe7db4f6513fee49d2b2411ca021958da8964190",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/smoke-session/store.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/smoke-session/store.ts",
-    "fingerprint": "ff719d72b7876a4af5200d6429f800531bfc02595810776d1b80513808694667",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/smoke-session/store.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
