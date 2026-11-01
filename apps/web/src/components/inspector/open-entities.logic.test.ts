@@ -120,7 +120,7 @@ describe("toRequestedFileTab", () => {
     toRequestedFileTab({
       entityId: subject.entityId,
       fields: definedFields(subject),
-      label: subject.name,
+      label: "Label",
       workspaceId: WORKSPACE_ID,
     });
 

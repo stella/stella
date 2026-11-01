@@ -67,6 +67,7 @@ import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { findDocumentSearchResult } from "@/lib/document-search";
 import type { DocumentSearchResult } from "@/lib/document-search";
+import { isPreviewUnavailableError } from "@/lib/errors/api";
 import { fileOptions } from "@/lib/files/queries";
 import {
   PDF_COLOR_MODES,
