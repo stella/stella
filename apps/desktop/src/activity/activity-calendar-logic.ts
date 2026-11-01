@@ -223,9 +223,10 @@ export const activityBlocks = (
   const thresholdMs = shortSegmentThresholdMs(granularity);
   const isLoose = (draft: TopicDraft) =>
     draft.matter === null && draft.endMs - draft.startMs < thresholdMs;
+  // A copy sorted in place: older WebViews lack `toSorted`.
   const drafts = joinSameTopic(
-    segments
-      .toSorted(
+    [...segments]
+      .sort(
         (left, right) =>
           left.startMs - right.startMs || left.endMs - right.endMs,
       )

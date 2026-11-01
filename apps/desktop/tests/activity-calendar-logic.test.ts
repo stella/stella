@@ -50,9 +50,9 @@ const SERVICES = matter("services", "Service agreement");
 type SegmentOptions = {
   from: number;
   to: number;
-  app?: string;
-  title?: string;
-  matterId?: string;
+  app?: string | undefined;
+  title?: string | undefined;
+  matterId?: string | undefined;
 };
 const segment = ({
   from,
@@ -100,14 +100,14 @@ describe("activity blocks", () => {
       expect(blocks.flatMap(({ sources }) => sources)).toHaveLength(
         segments.length,
       );
-      expect(blocks.at(0)).toMatchObject({
-        matter: null,
-        startMs: ms(0),
-        apps: [
-          { identifier: "com.example.editor" },
-          { identifier: "com.example.browser" },
-        ],
-      });
+      expect(blocks.at(0)).toMatchObject({ matter: null, startMs: ms(0) });
+      // Both apps had the same time, so their order is not part of this.
+      expect(
+        blocks
+          .at(0)
+          ?.apps.map(({ identifier }) => identifier)
+          .toSorted((left, right) => left.localeCompare(right)),
+      ).toEqual(["com.example.browser", "com.example.editor"]);
     }
   });
 
