@@ -620,6 +620,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-fetch-timeout.fixture.ts", [
     "require-fetch-timeout/require-fetch-timeout",
   ]),
+  fixtureRuleOverride("no-fetch-response-body-replacement.fixture.ts", [
+    "no-fetch-response-body-replacement/no-fetch-response-body-replacement",
+  ]),
   fixtureRuleOverride("require-bounded-request-schema.fixture.ts", [
     "require-bounded-request-schema/require-bounded-request-schema",
   ]),
@@ -1995,6 +1998,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-api-error-check.ts",
     "./.oxlint-plugins/require-function-replacer.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
+    "./.oxlint-plugins/no-fetch-response-body-replacement.ts",
     "./.oxlint-plugins/require-file-transport-disposition.ts",
     "./.oxlint-plugins/require-escape-like.ts",
     "./.oxlint-plugins/sql-perf.ts",
@@ -5283,6 +5287,8 @@ const config = defineConfig({
       files: ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
       rules: {
         "require-fetch-timeout/require-fetch-timeout": "error",
+        "no-fetch-response-body-replacement/no-fetch-response-body-replacement":
+          "error",
         "require-escape-like/require-escape-like": "error",
       },
     },
