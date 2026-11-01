@@ -631,10 +631,13 @@ const wordGapOf = (lines: readonly MarkupLine[]): WordGap => {
  * A seam where the file lost a line break: a finished sentence, then the
  * next numbered paragraph or point (`… porušené boli. 2. Uznesenie …`).
  */
-const LOST_LINE_BREAK = /(?<=[.!?][“”"»)]*) (?=\d{1,3}\.[  ]+\p{Lu})/gu;
+const LOST_LINE_BREAK = /(?<=[.!?][“”"»)]{0,3}) (?=\d{1,3}\.[  ]{1,4}\p{Lu})/gu;
 
-/** A seam inside a word: a letter, then the lowercase rest of the word. */
-const SPACED_WORD_SEAM = /(?<=\p{L}\p{M}*) (?=\p{Ll})/gu;
+/**
+ * A seam inside a word: a letter (with at most a few combining marks), then
+ * the lowercase rest of the word. Bounded repeats keep every match linear.
+ */
+const SPACED_WORD_SEAM = /(?<=\p{L}\p{M}{0,4}) (?=\p{Ll})/gu;
 
 /** A line split before the given offsets of its text. */
 const splitLineAt = (
