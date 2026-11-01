@@ -20,7 +20,7 @@ import { Temporal } from "@stll/time";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { StrictMode, useRef } = await import("react");
-const { QueryClient, QueryClientProvider } =
+const { notifyManager, QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { act, cleanup, fireEvent, render, renderHook, waitFor } =
   await import("@testing-library/react");
@@ -44,6 +44,9 @@ const originalAbortSignalTimeout = AbortSignal.timeout;
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(async () => {
   restoreRealTimers();
+  notifyManager.setScheduler((notify) => {
+    setTimeout(notify, 0);
+  });
   Object.defineProperty(AbortSignal, "timeout", {
     configurable: true,
     value: originalAbortSignalTimeout,
@@ -125,8 +128,9 @@ type ReaderAnswerStatus = ReaderAnswer["messages"][number]["status"];
 
 /**
  * Settles once the cached reader answers reach a status, whatever number of
- * event loop turns the response takes. The cache event fires inside the
- * query's notification batch, so one zero-time turn afterwards renders it.
+ * event loop turns the response takes. A test that reads the hook right after
+ * also calls `deliverQueryNotificationsInline`, so the hook has the status by
+ * the time this settles.
  */
 const cachedLastStatus = async (
   client: InstanceType<typeof QueryClient>,
@@ -153,6 +157,17 @@ const cachedLastStatus = async (
   const unsubscribe = client.getQueryCache().subscribe(check);
   check();
   return await promise;
+};
+
+/**
+ * Hands query notifications to observers as they happen instead of on a timer
+ * turn, so a cached write reaches the hook with no race against the turn a
+ * test waits for. Timers under test stay on the fake clock.
+ */
+const deliverQueryNotificationsInline = () => {
+  notifyManager.setScheduler((notify) => {
+    notify();
+  });
 };
 
 const renderCachedStatus = async (
@@ -1353,6 +1368,7 @@ test.each(["never", "hanging"] as const)(
   async (settlement) => {
     const server = pollingServer(settlement);
     const { client, wrapper } = setup();
+    deliverQueryNotificationsInline();
     const claimed = cachedLastStatus(
       client,
       (status) => status === "streaming",
