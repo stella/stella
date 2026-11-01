@@ -203,6 +203,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   notifications: "stella:matters_write",
   "vat-rates": "stella:billing_write",
   "organization-settings": "stella:admin_write",
+  organizations: "stella:admin_write",
   playbooks: "stella:knowledge_write",
   // Now carries property create/update/delete capabilities, so it reuses the
   // workspace write bucket rather than the read scope its read tool used.
@@ -264,6 +265,7 @@ const UNMAPPED_DOMAINS: ReadonlySet<string> = new Set<string>();
 const SCOPE_STRICTNESS: Record<string, number> = {
   "stella:account_export_read": 2,
   "stella:account_export_write": 3,
+  "stella:organization_create": 3,
   "stella:search": 0,
   "stella:read": 1,
   "stella:onboarding": 2,
@@ -295,6 +297,9 @@ const SCOPE_STRICTNESS: Record<string, number> = {
  * the same consent.
  */
 const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
+  // Creating an organization is an account-level grant, not an administrative
+  // write inside the caller's current organization.
+  "organizations.create": "stella:organization_create",
   "memories.create": "stella:memory_write",
   "memories.update": "stella:memory_write",
   // Document writes that reach storage through helpers shared with other
@@ -485,8 +490,10 @@ type CapabilityEntry = {
   readClass?: McpReadClass;
   destructive: boolean;
   confirmation?: "required";
+  idempotency?: { type: "replay" };
   consumesServices: CatalogServiceClassification;
   scope: string;
+  accountScope?: string;
   /** Additional OAuth grants required by a compound covering tool. */
   additionalScopes?: readonly string[];
   /** API-owned finite transport deadline for this generated capability command. */
@@ -768,8 +775,10 @@ type BuildCatalogEntryOptions = {
   consumesServices: ServiceClassification;
   readClass: McpReadClass | undefined;
   scope: string;
+  accountScope: string | undefined;
   additionalScopes: readonly string[];
   requestTimeoutMs: number | undefined;
+  idempotency: { type: "replay" } | undefined;
   hasPermissions: boolean;
   permissions: unknown;
   /**
@@ -804,7 +813,9 @@ const buildCatalogEntry = ({
   readClass,
   scope,
   additionalScopes,
+  accountScope,
   requestTimeoutMs,
+  idempotency,
   hasPermissions,
   permissions,
   compactedInputSchema,
@@ -828,8 +839,10 @@ const buildCatalogEntry = ({
       ? VALIDATED_INPUT_SERVICE_CLASSIFICATION
       : consumesServices,
   scope,
+  ...(accountScope === undefined ? {} : { accountScope }),
   ...(additionalScopes.length === 0 ? {} : { additionalScopes }),
   ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
+  ...(idempotency === undefined ? {} : { idempotency }),
   ...(allowsArchivedWorkspace
     ? { allowsArchivedWorkspace: true as const }
     : {}),
@@ -1209,6 +1222,15 @@ const buildCatalog = async (): Promise<BuildResult> => {
     endpoint: (typeof endpoints)[number],
     id: string,
   ) => {
+    const accountScopeValue = endpoint.config["accountScope"];
+    const accountScope =
+      typeof accountScopeValue === "string" ? accountScopeValue : undefined;
+    if (accountScopeValue !== undefined && accountScope === undefined) {
+      errors.push(
+        `capability "${id}" declares invalid accountScope; expected an OAuth scope`,
+      );
+      return undefined;
+    }
     const requestTimeoutValue = endpoint.config["requestTimeoutMs"];
     const requestTimeoutMs =
       typeof requestTimeoutValue === "number" &&
@@ -1234,7 +1256,21 @@ const buildCatalog = async (): Promise<BuildResult> => {
         `capability "${id}" declares invalid access ${JSON.stringify(declaredAccessValue)}; expected "read" or "write"`,
       );
     }
-    return { requestTimeoutMs, declaredAccess } as const;
+    const declaredIdempotency = endpoint.config["idempotency"];
+    const idempotency =
+      isRecord(declaredIdempotency) && declaredIdempotency["type"] === "replay"
+        ? { type: "replay" as const }
+        : undefined;
+    if (declaredIdempotency !== undefined && idempotency === undefined) {
+      errors.push(`capability "${id}" declares invalid idempotency policy`);
+      return undefined;
+    }
+    return {
+      requestTimeoutMs,
+      declaredAccess,
+      accountScope,
+      idempotency,
+    } as const;
   };
 
   /** Compile one discovered handler into its catalog and dispatch projections. */
@@ -1298,7 +1334,8 @@ const buildCatalog = async (): Promise<BuildResult> => {
     if (metadata === undefined) {
       return;
     }
-    const { requestTimeoutMs, declaredAccess } = metadata;
+    const { requestTimeoutMs, declaredAccess, accountScope, idempotency } =
+      metadata;
     const verbs = extractVerbs(permissions);
     const inferredAccess = resolveAccess({
       id,
@@ -1529,7 +1566,9 @@ const buildCatalog = async (): Promise<BuildResult> => {
         }),
         scope,
         additionalScopes,
+        accountScope,
         requestTimeoutMs,
+        idempotency,
         hasPermissions,
         permissions,
         compactedInputSchema,

@@ -29,9 +29,10 @@ export const PENDING_CONTRACT_MIGRATIONS = [
     expiresAt: "2026-11-12",
     relations: ["case_law_coverage_summaries"],
   },
+  // Reader retirement not verified; #7708 tracks the revoke.
   {
     name: "20261015060000_case_law_decisions_base_table_contract",
-    expiresAt: "2026-10-29",
+    expiresAt: "2026-11-03",
     relations: ["case_law_decisions"],
   },
 ] as const satisfies readonly PendingContractMigration[];

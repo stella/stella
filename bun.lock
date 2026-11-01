@@ -713,7 +713,7 @@
     },
     "packages/ai-catalog": {
       "name": "@stll/ai-catalog",
-      "version": "0.8.2",
+      "version": "0.9.0",
       "dependencies": {
         "valibot": "catalog:",
       },
@@ -870,7 +870,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.2.16",
+      "version": "0.3.0",
       "dependencies": {
         "@ag-ui/core": "1.0.3",
         "@stll/ai-catalog": "workspace:^",
@@ -878,6 +878,8 @@
         "@tanstack/ai-client": "catalog:",
         "@types/hast": "^3.0.5",
         "better-result": "catalog:",
+        "cheerio": "^1.2.0",
+        "domhandler": "^6.0.1",
         "linkify-it": "6.1.0",
         "tldts": "7.4.19",
         "valibot": "catalog:",
@@ -918,7 +920,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "6.2.2",
+      "version": "6.3.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1581,7 +1583,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.59.1",
+      "version": "0.60.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1680,7 +1682,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.15.1",
+      "version": "0.15.2",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",

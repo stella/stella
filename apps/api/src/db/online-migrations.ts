@@ -47,6 +47,7 @@ import {
   CASE_LAW_PARSED_SOURCE_VALIDATION,
 } from "./case-law-parsed-source-hash-repair";
 import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
+import { CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR } from "./case-law-source-config-object-repair";
 import {
   CHAT_CONTENT_V3_CONSTRAINTS,
   CHAT_CONTENT_V3_REPAIR,
@@ -110,6 +111,10 @@ import {
 } from "./matter-time-expense-retention-validation";
 import { DEFAULT_MIGRATION_TIMING, timed } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
+import {
+  NOTIFICATION_TASK_ASSIGNED_CONSTRAINT_VALIDATIONS,
+  NOTIFICATION_TASK_ASSIGNED_CONSTRAINTS,
+} from "./notification-task-assigned-constraint-validation";
 import {
   createIndexConcurrently,
   createOnlineTableGate,
@@ -272,6 +277,16 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
   publishedCaseLawDecisionIndexDefinitionPredicateSql();
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  {
+    name: "account_audit_logs_user_event_idx",
+    introducedBy: "20261031213547_organization_created_audit_event",
+    tableName: "account_audit_logs",
+    isUnique: false,
+    createSql:
+      'CREATE INDEX CONCURRENTLY "account_audit_logs_user_event_idx" ON public.account_audit_logs (user_id, event_type)',
+    definitionBody:
+      "ON public.account_audit_logs USING btree (user_id, event_type)",
+  },
   {
     name: "chat_run_log_entries_message_snapshot_idx",
     introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
@@ -794,7 +809,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     definitionBody:
       "ON public.file_comparison_uploads USING btree (organization_id, user_id)",
     isUnique: false,
-    introducedBy: "20261031151034_file_comparison_claims",
+    introducedBy: "20261101034834_file_comparison_claims",
     name: "file_comparison_uploads_org_user_idx",
     tableName: "file_comparison_uploads",
   },
@@ -805,7 +820,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     definitionBody:
       "ON public.style_sets USING btree (deletion_cleanup_attempt_count, deleted_at, id) WHERE (deleted_at IS NOT NULL)",
     isUnique: false,
-    introducedBy: "20261031150934_style_set_deletion_cleanup",
+    introducedBy: "20261101034734_style_set_deletion_cleanup",
     name: "style_sets_deletion_cleanup_idx",
     tableName: "style_sets",
   },
@@ -817,7 +832,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     definitionBody:
       "ON public.organization_file_objects USING btree (reconcile_after, object_key) WHERE ((write_id IS NOT NULL) AND (reconciliation_state = 'active'::text))",
     isUnique: false,
-    introducedBy: "20261031151134_file_reservation_reconciliation_state",
+    introducedBy: "20261101034934_file_reservation_reconciliation_state",
     name: "organization_file_objects_active_reconcile_idx",
     tableName: "organization_file_objects",
   },
@@ -827,7 +842,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     definitionBody:
       "ON public.organization_file_objects USING btree (organization_id, reconcile_after, object_key) WHERE ((write_id IS NOT NULL) AND (reconciliation_state = 'active'::text))",
     isUnique: false,
-    introducedBy: "20261031151134_file_reservation_reconciliation_state",
+    introducedBy: "20261101034934_file_reservation_reconciliation_state",
     name: "organization_file_objects_org_active_reconcile_idx",
     tableName: "organization_file_objects",
   },
@@ -983,12 +998,12 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
   // The reconciliation sweep orders write rows by their scheduled retry, not
   // by their last write, and skips quarantined rows.
   {
-    introducedBy: "20261031151134_file_reservation_reconciliation_state",
+    introducedBy: "20261101034934_file_reservation_reconciliation_state",
     legacyName: "organization_file_objects_pending_reconcile_idx",
     replacementNames: ["organization_file_objects_active_reconcile_idx"],
   },
   {
-    introducedBy: "20261031151134_file_reservation_reconciliation_state",
+    introducedBy: "20261101034934_file_reservation_reconciliation_state",
     legacyName: "organization_file_objects_org_pending_reconcile_idx",
     replacementNames: ["organization_file_objects_org_active_reconcile_idx"],
   },
@@ -1043,6 +1058,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
   TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
   USAGE_ACTION_TYPE_CONSTRAINT_VALIDATION,
+  ...NOTIFICATION_TASK_ASSIGNED_CONSTRAINT_VALIDATIONS,
   CONTACT_VAT_ID_REPAIR,
   INVOICE_SENT_AT_BACKFILL,
   INVOICE_LEGACY_PAYMENT_BACKFILL,
@@ -1061,6 +1077,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL,
   LEGAL_LIST_SOURCE_DECISION_BACKFILL,
   CASE_LAW_SITEMAP_PACKING_ENROLLMENT,
+  CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR,
 ];
 
 /**
@@ -1089,6 +1106,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...EMAIL_UNDELIVERABLE_CONSTRAINTS,
     ...TIME_ENTRY_SUBMITTED_CONSTRAINTS,
     ...USAGE_ACTION_TYPE_CONSTRAINTS,
+    ...NOTIFICATION_TASK_ASSIGNED_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
     ...FILE_LIFECYCLE_CONSTRAINTS,
     ...FILE_OBJECT_RECONCILIATION_CONSTRAINTS,

@@ -1848,18 +1848,6 @@
     "reason": "builder-for in apps/api/src/handlers/workspaces/correspondence/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/workspaces/create.ts",
-    "fingerprint": "87c32a58ba6b1c5a18031d920289b53b0b64354edf4e2507a9c0158a9d201f85",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/workspaces/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/workspaces/create.ts",
-    "fingerprint": "f21f8abbda2d4e934f9c2ddc7114c5a90c995bf62dda71ab3ad2b811f8f94b0c",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/workspaces/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/workspaces/duplicate.ts",
     "fingerprint": "d78ba97bf0c7d80a42df8d4514bffaa61fe817a097d7a6f498b7ed9c7f39dccf",
     "count": 1,
