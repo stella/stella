@@ -36,7 +36,10 @@ import {
   CatalogueRow,
   type CatalogueRowDisplay,
 } from "@/components/catalogue/catalogue-row";
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { isCatalogueEntryAvailableDuringOnboarding } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
@@ -134,6 +137,13 @@ export const CatalogueStep = ({
     const key = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
     return key ? t(key) : entry.displayName;
   };
+  const localizedDescription = (entry: LoadedCatalogueEntry) => {
+    const key = nativeToolDescriptionKey({
+      slug: entry.slug,
+      kind: entry.kind,
+    });
+    return key ? t(key) : entry.description;
+  };
   const compareLocalizedName = compareByLocale(locale);
 
   const recommendedEntries = selectableEntries
@@ -157,6 +167,7 @@ export const CatalogueStep = ({
   const filteredEntries = filterOnboardingCatalogueEntries({
     compareName: compareLocalizedName,
     jurisdictionFilter,
+    localizedDescription,
     localizedName,
     otherEntries,
     query,

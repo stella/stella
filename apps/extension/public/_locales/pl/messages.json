@@ -75,8 +75,8 @@
   "allowWebsiteAccess": {
     "message": "Zezwól na dostęp do stron"
   },
-  "connectTab": {
-    "message": "Połącz tę kartę stelli"
+  "connectStella": {
+    "message": "Połącz stellę"
   },
   "adoptTab": {
     "message": "Użyj tej karty ze stellą"
@@ -97,9 +97,9 @@
     "message": "Sprawdzanie połączenia…"
   },
   "statusConnectedElsewhere": {
-    "message": "Połączona jest inna karta stella"
+    "message": "stella jest połączona pod innym adresem"
   },
-  "connectTabInstead": {
-    "message": "Połącz tę kartę stella zamiast tamtej"
+  "connectStellaInstead": {
+    "message": "Połącz stellę tutaj zamiast tamtej"
   }
 }

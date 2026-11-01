@@ -44,13 +44,18 @@ import type { VerifyBearerToken } from "@/api/mcp/auth";
  * with the scope it requires and the handler module that serves it.
  * `api-oauth-routes.test.ts` proves each entry: the live route serves that
  * handler, the handler is not account control, and the capability catalog
- * assigns its capability exactly this scope. A realtime or file-delivery
- * handler has no capability; its entry names that reason and the scope its
- * domain carries, and the test holds the handler to that reason instead. Account-control routes
+ * assigns its capability exactly this scope. A realtime, file-delivery or
+ * search-screen handler has no capability; its entry names that reason and the
+ * scope its domain carries, and the test holds the handler to that reason
+ * instead. Account-control routes
  * (sign-in methods, keys, connections, deletion) never belong here: a lost
  * phone must not be able to keep itself connected.
  */
 export const API_OAUTH_ROUTES = {
+  "POST /v1/dictation/transcribe": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/dictation/transcribe.ts",
+  },
   "GET /v1/workspaces/:workspaceId/vocabulary": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/workspaces/vocabulary/get.ts",
@@ -212,6 +217,37 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:billing_write",
     handler: "apps/api/src/handlers/time-timers/discard.ts",
   },
+  // Search reads only the matters the caller can open, as a browser session's
+  // search does. The AI refine, summary and preview routes stay closed.
+  "POST /v1/search": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/search/results/list.ts",
+  },
+  "POST /v1/search/facets": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/search/facets/list.ts",
+    uncataloged: "search_ui",
+  },
+  // The caller's own recent searches, read only. Recording, clearing and
+  // deleting entries carry `stella:knowledge_write`, which this resource does
+  // not grant, so those routes stay closed.
+  "GET /v1/search-history": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/search-history/list.ts",
+  },
+  // The device the app runs on, for push alerts. Registering touches only
+  // the person's own device rows and changes nothing they work on, so it
+  // needs no write scope; the handlers are internal to agents.
+  "PUT /v1/me/push-devices": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/me/push-devices/register.ts",
+    uncataloged: "native_device",
+  },
+  "DELETE /v1/me/push-devices/:token": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/me/push-devices/unregister.ts",
+    uncataloged: "native_device",
+  },
 } as const satisfies Record<
   string,
   {
@@ -220,7 +256,8 @@ export const API_OAUTH_ROUTES = {
     /** The named export serving the route, when it is not the default. */
     exportName?: string;
     /** Why the handler has no capability: its `mcp.internal` reason. */
-    uncataloged?: "realtime_stream" | "upload_mechanics";
+    uncataloged?:
+      "realtime_stream" | "upload_mechanics" | "search_ui" | "native_device";
   }
 >;
 

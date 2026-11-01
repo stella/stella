@@ -227,6 +227,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/lists/verification/*",
     "apps/api/src/lib/legal-search/document-builders/html-whitespace.ts",
     "apps/api/src/lib/legal-search/document-builders/inline-style.ts",
+    "apps/api/src/lib/load/request-latency-budget.ts",
     "apps/api/src/lib/load/work-admission.ts",
     "apps/api/src/lib/load/work-budget.ts",
     "apps/api/src/lib/load/work-pools.ts",
@@ -235,6 +236,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/memory/*",
     "apps/api/src/lib/observability/data-invariants/*",
     "apps/api/src/lib/ocr-local/recognize-local.ts",
+    "apps/api/src/lib/push/apns-config.ts",
+    "apps/api/src/lib/push/push-delivery-queue.ts",
     "apps/api/src/lib/review-organization/*",
     "apps/api/src/lib/scheduler/*",
     "apps/api/src/lib/scheduler/tasks/*",
@@ -339,7 +342,6 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/lists/verification/contract.ts",
     "apps/api/src/lib/lists/verification/run-cap-config.ts",
     "apps/api/src/lib/markdown/ai-tool.ts",
-    "apps/api/src/lib/markdown/html-to-markdown.ts",
     "apps/api/src/lib/markdown/sanitize-html.ts",
     "apps/api/src/lib/mcp-connectors/app-urls.ts",
     "apps/api/src/lib/mcp-connectors/catalog-metadata.ts",
@@ -383,6 +385,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/analytics-config/src/index.ts",
     "packages/api-contract/src/*",
     "packages/auth-model/src/contract.ts",
+    "packages/auth-model/src/invitation-sections.ts",
     "packages/boe/src/*",
     "packages/business-registries/src/default-formats.ts",
     "packages/business-registries/src/format-clauses.ts",
@@ -423,6 +426,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/catalogue/entries/skills/jurisrank/manifest.json",
     "packages/catalogue/src/*",
     "packages/chat-limits/src/index.ts",
+    "packages/chat/src/html-to-markdown.ts",
     "packages/collation/src/collation.ts",
     "packages/collation/src/index.ts",
     "packages/concurrency/src/*",
@@ -1745,23 +1749,6 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
-    id: "guard-rollout-manifest",
-    outputKind: "committed",
-    outputs: ["scripts/guard-rollouts.gen.ts"],
-    inputs: [
-      "scripts/generate-guard-rollouts.ts",
-      "scripts/guard-rollouts/*.ts",
-      "scripts/generated-artifacts.ts",
-      "packages/scripts/src/generated-artifact-format.ts",
-      "packages/portable-path/src/index.ts",
-    ],
-    checkInputs: ["bunfig.toml", ".prettierrc.yml"],
-    write: ["bun", "scripts/generate-guard-rollouts.ts", "--write"],
-    check: ["bun", "scripts/generate-guard-rollouts.ts", "--check"],
-    autofix: true,
-    after: [],
-  },
-  {
     // Refreshes only the reviewed digests of jobs whose kind, qualifier and
     // privilege are unchanged since the merge base; new, reclassified and
     // privileged jobs keep failing the check until a human reviews them.
@@ -1792,6 +1779,26 @@ const GENERATOR_DECLARATIONS = [
     checkedWith: ["bun", "scripts/check-ci-job-classification.ts"],
     // Its outputs live under .github/, which the autofix action may not
     // modify, so pull requests refresh them by hand.
+    autofix: false,
+    after: [],
+  },
+  {
+    id: "merge-group-parser",
+    outputKind: "committed",
+    outputs: [".github/workflows/cla.yml"],
+    blocks: [
+      {
+        path: ".github/workflows/cla.yml",
+        begin: "// BEGIN GENERATED merge-group parser",
+        end: "// END GENERATED merge-group parser",
+      },
+    ],
+    inputs: [
+      "scripts/merge-group-entries.mjs",
+      "scripts/sync-merge-group-parser.mjs",
+    ],
+    write: ["node", "scripts/sync-merge-group-parser.mjs"],
+    check: ["node", "scripts/sync-merge-group-parser.mjs", "--check"],
     autofix: false,
     after: [],
   },
@@ -2105,6 +2112,7 @@ const GENERATOR_DECLARATIONS = [
     ],
     inputs: [
       "scripts/env-tool.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "scripts/env-catalog.ts",
       "apps/api/src/env*.ts",
       "apps/web/src/env*.ts",
@@ -2158,6 +2166,7 @@ const GENERATOR_DECLARATIONS = [
       "bunfig.toml",
       "scripts/env-catalog.ts",
       "scripts/env-tool.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "apps/api/src/env*.ts",
       ".github/workflows/release.yml",
       "scripts/create-release-manifest.sh",

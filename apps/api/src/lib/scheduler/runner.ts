@@ -23,7 +23,11 @@ import {
   ConfigurationError,
   SchedulerJobTimeoutError,
 } from "@/api/lib/errors/tagged-errors";
-import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
+import {
+  errorFingerprint,
+  errorSystemFields,
+  errorTag,
+} from "@/api/lib/errors/utils";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
@@ -916,6 +920,9 @@ const resolveRunOutcome = async ({
     "scheduler.run_id": runId,
     "scheduler.runner_id": runnerId,
     "scheduler.task": job.task,
+    // A panic has no code or cause, so its frame is the only thing that names
+    // the failing site. The fingerprint carries no message.
+    ...errorFingerprint(raceError),
     ...errorSystemFields(raceError),
   });
   await finishRunFailure({
