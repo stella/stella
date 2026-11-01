@@ -502,7 +502,7 @@
     "download": "Atsisiųsti ({size} MB)",
     "downloading": "Atsisiunčiamas kalbos modelis: {percent} %",
     "downloadFailed": "Kalbos modelio atsisiųsti nepavyko.",
-    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, CC BY 4.0.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "{shortcut} naudoja kita programa.",
     "failure": {
       "accessibility": "Leiskite prieigą prie pritaikymo neįgaliesiems funkcijų, kad „stella“ galėtų rašyti kitose programose.",

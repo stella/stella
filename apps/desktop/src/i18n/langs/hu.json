@@ -502,7 +502,7 @@
     "download": "Letöltés ({size} MB)",
     "downloading": "A beszédmodell letöltése: {percent}%",
     "downloadFailed": "A beszédmodellt nem sikerült letölteni.",
-    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, CC BY 4.0.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
     "shortcutTaken": "Egy másik alkalmazás használja ezt: {shortcut}.",
     "failure": {
       "accessibility": "Engedélyezze a Kisegítő lehetőségek hozzáférést, hogy a stella más alkalmazásokba írhasson.",
