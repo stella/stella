@@ -156,7 +156,7 @@ const TEXTAREA_FLOOR_CLASS_NAMES = {
 } as const satisfies Record<ControlSize, string>;
 
 function textLength(value: TextareaProps["value"]): number {
-  if (value === undefined || value === null) {
+  if (value === undefined) {
     return 0;
   }
   return String(value).length;
