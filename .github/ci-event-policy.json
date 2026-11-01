@@ -109,6 +109,7 @@
     "deploy-staging.yml/rc-manifest": "main",
     "deploy-staging.yml/build-api": "main",
     "deploy-staging.yml/build-web": "main",
+    "deploy-staging.yml/mock-model-journeys": "main",
     "deploy-staging.yml/promote-staging": "main",
     "publish-npm.yml/release-trigger": "main",
     "publish-npm.yml/pack": "main",

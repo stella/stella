@@ -451,7 +451,7 @@ test("waiver scope, required reason and manual-only boundary mutations are rejec
   );
 });
 
-test("both application journey outcomes belong to the serialized staging promotion", () => {
+test("both application journey results gate the serialized staging verification", () => {
   const promotion =
     workflow.jobs["promote-staging"] ?? panic("Missing promotion owner");
   expect(promotion["concurrency"]).toEqual({
@@ -467,10 +467,17 @@ test("both application journey outcomes belong to the serialized staging promoti
     expect(index).toBeGreaterThan(-1);
     expect(index).toBeLessThan(verification);
     const journey = steps.at(index) ?? panic("Missing application journey");
-    expect(journey.uses).toBe("./.github/actions/user-journeys");
-    expect(journey.with?.["expected-commit"]).toBe(
-      `\${{ needs.resolve.outputs.sha }}`,
-    );
+    if (id === "deployed-journeys") {
+      expect(journey.uses).toBe("./.github/actions/user-journeys");
+      expect(journey.with?.["expected-commit"]).toBe(
+        `\${{ needs.resolve.outputs.sha }}`,
+      );
+    } else {
+      expect(journey.name).toBe("Require mock-model journey success");
+      expect(journey.run).toContain(
+        `\${GITHUB_RUN_ID}/attempts/\${GITHUB_RUN_ATTEMPT}/jobs`,
+      );
+    }
     expect(journey["continue-on-error"]).toBeUndefined();
   }
 });
