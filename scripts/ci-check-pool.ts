@@ -36,6 +36,7 @@ import {
 } from "node:fs";
 import { availableParallelism, totalmem } from "node:os";
 import path from "node:path";
+import { constrainedMemory } from "node:process";
 
 import {
   CHECK_POOL_JOBS,
@@ -278,6 +279,18 @@ const MIB = 1_048_576;
 /** What the runner's OS, its agent and the pool itself keep: at least 2 GiB. */
 export const MEMORY_HEADROOM_MIB = 2048;
 export const MEMORY_HEADROOM_SHARE = 0.15;
+/**
+ * The runner's real memory: the host's, or less when a cgroup limits this
+ * process (a container reports the host's memory but cannot use it).
+ */
+export const runnerMemoryBytes = (
+  host: number,
+  constrained: number | undefined,
+) =>
+  constrained !== undefined && constrained > 0 && constrained < host
+    ? constrained
+    : host;
+
 /**
  * The memory concurrent checks may use: the runner's real memory less a
  * headroom of 15 %, at least 2 GiB. Checks that exceed the runner together
@@ -1452,12 +1465,13 @@ const main = async () => {
     : Math.max(1, availableParallelism() - 1);
   const selected = planned.filter(({ status }) => status === "selected").length;
   const budgets = readCheckBudgets(root);
+  const runnerBytes = runnerMemoryBytes(totalmem(), constrainedMemory());
   const memory: MemoryAdmission = {
-    budgetMiB: memoryBudgetMiB(totalmem()),
+    budgetMiB: memoryBudgetMiB(runnerBytes),
     peakMiB: (check) => checkPeakRssMiB(budgets, job, check.name),
   };
   print(
-    `${job}: ${selected} of ${planned.length} checks selected; running ${Math.min(concurrency, selected)} at a time within ${memory.budgetMiB} of ${Math.floor(totalmem() / MIB)} MiB`,
+    `${job}: ${selected} of ${planned.length} checks selected; running ${Math.min(concurrency, selected)} at a time within ${memory.budgetMiB} of ${Math.floor(runnerBytes / MIB)} MiB`,
   );
   const unreported = new Map<number, UnreportedCheck>();
   const stop = poolStopper(directory, unreported);

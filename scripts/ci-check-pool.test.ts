@@ -43,6 +43,7 @@ import {
   readCheckLog,
   resolveEnv,
   runChecks,
+  runnerMemoryBytes,
   runnerWorkerStartedAt,
   selectChecks,
   stillRunningLines,
@@ -756,24 +757,35 @@ test("every pooled check has exactly one budget", () => {
   ).toThrow("no budget");
 });
 
-test("a budget without a measured peak is invalid", () => {
+test("a budget without a measured peak fails only its own check", () => {
   const budgets = (budget: Record<string, number>) =>
     JSON.stringify({
       "ci-checks-policy": {},
       "ci-checks-rest": { Lint: budget },
       "code-quality-web-rest": {},
     });
-  expect(() => parseCheckBudgets(budgets({ minutes: 5, samples: 0 }))).toThrow(
-    "invalid budget: Lint",
+  const unmeasured = parseCheckBudgets(budgets({ minutes: 5, samples: 0 }));
+  expect(checkBudgetMinutes(unmeasured, "ci-checks-rest", "Lint")).toBe(5);
+  expect(() => checkPeakRssMiB(unmeasured, "ci-checks-rest", "Lint")).toThrow(
+    "Lint: no measured peak memory",
   );
   expect(() =>
     parseCheckBudgets(budgets({ minutes: 5, samples: 0, peakRssMiB: 0 })),
   ).toThrow("invalid budget: Lint");
   expect(
-    parseCheckBudgets(budgets({ minutes: 5, samples: 0, peakRssMiB: 512 }))[
-      "ci-checks-rest"
-    ]["Lint"]?.peakRssMiB,
+    checkPeakRssMiB(
+      parseCheckBudgets(budgets({ minutes: 5, samples: 0, peakRssMiB: 512 })),
+      "ci-checks-rest",
+      "Lint",
+    ),
   ).toBe(512);
+});
+
+test("a cgroup limit below the host's memory is the runner's memory", () => {
+  expect(runnerMemoryBytes(16, 8)).toBe(8);
+  expect(runnerMemoryBytes(16, 32)).toBe(16);
+  expect(runnerMemoryBytes(16, 0)).toBe(16);
+  expect(runnerMemoryBytes(16, undefined)).toBe(16);
 });
 
 test("the memory budget keeps 15 % of the runner, at least 2 GiB", () => {
@@ -1726,4 +1738,92 @@ test("only a failed check's own error commands reach the job log", () => {
       ...flat,
     ].join("\n"),
   );
+});
+
+test("the pool run admits checks by the peaks in its budgets file", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-check-pool-memory-"));
+  const scripts = path.join(directory, "scripts");
+  mkdirSync(scripts);
+  mkdirSync(path.join(directory, ".github/ci-checks"), { recursive: true });
+  mkdirSync(path.join(directory, ".github/workflows"), { recursive: true });
+  for (const file of [
+    "ci-check-pool.ts",
+    "ci-check-pool-registry.ts",
+    "github-expression.ts",
+  ]) {
+    copyFileSync(path.join(root, "scripts", file), path.join(scripts, file));
+  }
+  writeFileSync(
+    path.join(directory, ".github/workflows/ci.yml"),
+    Bun.YAML.stringify({
+      jobs: { "ci-checks-rest": { "timeout-minutes": 60, steps: [] } },
+    }),
+  );
+  writeFileSync(
+    path.join(directory, ".github/ci-checks/ci-checks-rest.yml"),
+    Bun.YAML.stringify({
+      checks: [
+        { name: "Heavy check", run: "echo heavy" },
+        { name: "Light check", run: "echo light" },
+      ].map((entry) => ({ ...entry, if: "true" })),
+    }),
+  );
+  // The heavy check exceeds any runner, so it runs alone; the light one
+  // declares less than any process uses, so its peak asks for a refresh.
+  writeFileSync(
+    path.join(directory, ".github/ci-checks/budgets.json"),
+    JSON.stringify({
+      "ci-checks-policy": {},
+      "ci-checks-rest": {
+        "Heavy check": { minutes: 10, samples: 0, peakRssMiB: 100_000_000 },
+        "Light check": { minutes: 10, samples: 0, peakRssMiB: 1 },
+      },
+      "code-quality-web-rest": {},
+    }),
+  );
+  writeFileSync(path.join(directory, "needs.json"), "{}");
+  try {
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        path.join(scripts, "ci-check-pool.ts"),
+        "run",
+        "ci-checks-rest",
+      ],
+      {
+        cwd: directory,
+        env: {
+          PATH: process.env["PATH"] ?? "",
+          RUNNER_TEMP: directory,
+          GITHUB_JOB: "ci-checks-rest",
+          CI_CHECK_POOL_JOB_STARTED_AT: String(Date.now()),
+          CI_CHECK_POOL_CONCURRENCY: "2",
+          CI_CHECK_POOL_NEEDS_FILE: path.join(directory, "needs.json"),
+          CI_CHECK_POOL_STEPS: "{}",
+          CI_CHECK_POOL_INPUTS: "{}",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [output, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(output).toMatch(/running 2 at a time within \d+ of \d+ MiB/u);
+    // Two slots, yet the light check starts only after the heavy one ended.
+    const heavyFinished = output.indexOf("Finished check: Heavy check");
+    const lightStarted = output.indexOf("Starting check: Light check");
+    expect(heavyFinished).toBeGreaterThan(-1);
+    expect(lightStarted).toBeGreaterThan(heavyFinished);
+    expect(output).toMatch(
+      /^Peak memory of Light check: \d+ MiB, above its measured 1 MiB; run bun scripts\/ci-check-budgets.ts refresh$/mu,
+    );
+    expect(output).not.toContain("Peak memory of Heavy check");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

@@ -203,7 +203,7 @@ export type TimeBudget = {
 };
 export type CheckBudget = TimeBudget & {
   /** The largest peak RSS a passing run measured, in MiB: the pool's admission weight. */
-  peakRssMiB: number;
+  peakRssMiB?: number;
 };
 export type CheckBudgets = Readonly<
   Record<CheckPoolJob, Readonly<Record<string, CheckBudget>>>
@@ -216,7 +216,8 @@ const BUDGET_KEYS = new Set([
   "p99Seconds",
   "peakRssMiB",
 ]);
-// A budget without a measured peak cannot be admitted by memory, so it is invalid.
+// A budget without a measured peak still parses: only its own check fails,
+// when the pool asks for the peak (checkPeakRssMiB), never the whole pool.
 const isBudget = (value: unknown): value is CheckBudget =>
   record(value) &&
   Object.keys(value).every((key) => BUDGET_KEYS.has(key)) &&
@@ -224,8 +225,9 @@ const isBudget = (value: unknown): value is CheckBudget =>
   Number(value["minutes"]) >= 1 &&
   Number.isInteger(value["samples"]) &&
   Number(value["samples"]) >= 0 &&
-  Number.isInteger(value["peakRssMiB"]) &&
-  Number(value["peakRssMiB"]) >= 1;
+  (value["peakRssMiB"] === undefined ||
+    (Number.isInteger(value["peakRssMiB"]) &&
+      Number(value["peakRssMiB"]) >= 1));
 
 export const parseCheckBudgets = (source: string): CheckBudgets => {
   const parsed: unknown = JSON.parse(source);
@@ -290,7 +292,15 @@ export const checkPeakRssMiB = (
   budgets: CheckBudgets,
   job: CheckPoolJob,
   name: string,
-) => checkBudgetOf(budgets, job, name).peakRssMiB;
+) => {
+  const { peakRssMiB } = checkBudgetOf(budgets, job, name);
+  if (peakRssMiB === undefined) {
+    throw new CheckPoolRegistryError(
+      `${name}: no measured peak memory in ${CHECK_BUDGETS_PATH}; run bun scripts/ci-check-budgets.ts refresh`,
+    );
+  }
+  return peakRssMiB;
+};
 
 /** Where the pool leaves per-check outcomes for the receipt recorder. */
 export const checkPoolResultsPath = (job: CheckPoolJob, runnerTemp: string) =>
