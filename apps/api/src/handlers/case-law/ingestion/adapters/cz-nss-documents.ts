@@ -1,5 +1,7 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
+
+import { load } from "@stll/html";
 
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -37,7 +39,7 @@ export const decodeNssDocument = (
 };
 
 export const isNssDocumentPlaceholder = (html: string): boolean => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const body = visibleHtmlText($("body")).trim();
   return body === "N/A" || body.length === 0;
 };
@@ -67,7 +69,7 @@ export const nssRegistryDocumentUrl = ({
   html,
   reference,
 }: NssRegistryDocumentOptions): Result<string | null, PublisherTargetError> => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   for (const anchor of $("tbody a[href]").toArray()) {
     const link = $(anchor);
     if (
@@ -133,7 +135,7 @@ export const NSS_REGISTRY_FIELDS = [
 
 /** Read publisher labels, so a new registry column cannot disappear silently. */
 export const listNssRegistryFields = (html: string): string[] => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   return [
     ...$("table")
       .toArray()

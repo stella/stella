@@ -30,6 +30,7 @@ on:
       - packages/business-registries/CHANGELOG.md
       - packages/ai-catalog/CHANGELOG.md
       - packages/anonymize-chat/CHANGELOG.md
+      - packages/html/CHANGELOG.md
       - packages/chat/CHANGELOG.md
       - packages/country-codes/CHANGELOG.md
       - packages/conditions/CHANGELOG.md
@@ -81,6 +82,7 @@ on:
           - agent-input
           - mcp-kit
           - fetch
+          - html
           - scan-engine
           - cli
         default: all
@@ -589,6 +591,15 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+      - name: Upload html tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'html')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-html
+          path: release-artifacts/html/
+          retention-days: 1
+          if-no-files-found: error
+
       - name: Upload scan-engine tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'scan-engine')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -867,6 +878,37 @@ jobs:
       RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
       RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
 
+  release-html:
+    name: Publish @stll/html
+    needs:
+      - release-trigger
+      - pack
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'html')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-html
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/html/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
   release-chat:
     name: Publish @stll/chat
     needs:
@@ -874,6 +916,7 @@ jobs:
       - pack
       - release-ai-catalog
       - release-ui
+      - release-html
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
@@ -887,6 +930,7 @@ jobs:
       && contains(fromJSON(needs.pack.outputs.packages), 'chat')
       && (!contains(fromJSON(needs.pack.outputs.packages), 'ai-catalog') || needs.release-ai-catalog.result == 'success')
       && (!contains(fromJSON(needs.pack.outputs.packages), 'ui') || needs.release-ui.result == 'success')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'html') || needs.release-html.result == 'success')
     permissions:
       actions: read
       contents: write
@@ -1507,6 +1551,7 @@ jobs:
       - release-text-normalize
       - release-anonymize-chat
       - release-ui
+      - release-html
       - release-chat
       - release-country-codes
       - release-business-registries

@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 // parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks.
 /**
  * Block machinery shared by the CourtListener text formats: a builder that
@@ -10,18 +11,18 @@
  */
 
 import { panic } from "better-result";
-import type * as cheerio from "cheerio";
+
+import type * as cheerio from "@stll/html";
 import {
   type AnyNode,
+  createText,
   type Element,
   hasChildren,
   isCDATA,
   isTag,
   isText,
   type ParentNode,
-  Text,
-} from "domhandler";
-
+} from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import {
   type Block,
@@ -524,7 +525,7 @@ export const cdataAsText = (root: ParentNode): void => {
     }
     for (const [index, child] of parent.children.entries()) {
       if (isCDATA(child)) {
-        const text = new Text(textOf(child));
+        const text = createText(textOf(child));
         text.parent = parent;
         text.prev = child.prev;
         text.next = child.next;

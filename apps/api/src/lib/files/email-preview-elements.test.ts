@@ -1,13 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { load } from "cheerio";
-import { isTag } from "domhandler";
 
+import { load } from "@stll/html";
 import {
   EMAIL_PREVIEW_DOM_OPTIONS,
+  serializeEmailPreviewMarkup,
+} from "@stll/html/email";
+import { isTag } from "@stll/html/nodes";
+
+import {
   type ParsedEmail,
   renderEmailBodyHtml,
   renderEmailHtml,
-  serializeEmailPreviewMarkup,
 } from "@/api/lib/files/email-to-html";
 
 const PARSER_DIVERGENT_ELEMENTS = [
@@ -93,16 +96,16 @@ describe("email preview elements", () => {
 
   test("uses one document mode for email preview parsing and output", async () => {
     const source = await Bun.file(
-      new URL("email-to-html.ts", import.meta.url),
+      new URL("../../../../../packages/html/src/email.ts", import.meta.url),
     ).text();
 
     expect(source.match(/(?<![A-Za-z])load\(/gu) ?? []).toHaveLength(1);
     expect(source).toContain("load(html, EMAIL_PREVIEW_DOM_OPTIONS)");
     expect(source.match(/\.html\(/gu) ?? []).toHaveLength(0);
     expect(source.match(/(?<![A-Za-z])serializeOuter\(/gu) ?? []).toHaveLength(
-      2,
+      1,
     );
-    expect(source).toContain("serializeOuter(html, EMAIL_PREVIEW_DOM_OPTIONS)");
+    expect(source).toContain("serializeEmailNode(html)");
     expect(source).toContain("serializeOuter(node, EMAIL_PREVIEW_DOM_OPTIONS)");
   });
 

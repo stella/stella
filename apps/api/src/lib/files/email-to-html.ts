@@ -12,10 +12,6 @@
  * the document: email HTML is untrusted input.
  */
 import { panic, Result, TaggedError } from "better-result";
-import { type Cheerio, type CheerioOptions, load } from "cheerio";
-import { type Element, isTag, isText } from "domhandler";
-import { serializeOuter } from "parse5";
-import { adapter as htmlparser2Adapter } from "parse5-htmlparser2-tree-adapter";
 import PostalMime, { type Address } from "postal-mime";
 
 import {
@@ -34,6 +30,13 @@ import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import type { Cheerio } from "@stll/html";
+import {
+  loadEmailDocument,
+  serializeEmailNode,
+  serializeEmailPreviewMarkup,
+} from "@stll/html/email";
+import { type Element, isTag, isText } from "@stll/html/nodes";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
@@ -1001,21 +1004,7 @@ type EmailFoldCandidate = {
 type EmailBodyToken =
   { type: "candidate"; candidate: EmailFoldCandidate } | { type: "content" };
 
-type CheerioApi = ReturnType<typeof load>;
-
-export const EMAIL_PREVIEW_DOM_OPTIONS: Readonly<CheerioOptions> =
-  Object.freeze({
-    scriptingEnabled: false,
-    treeAdapter: htmlparser2Adapter,
-  });
-
-const loadEmailDocument = (html: string): CheerioApi =>
-  load(html, EMAIL_PREVIEW_DOM_OPTIONS);
-
-export const serializeEmailPreviewMarkup = ($: CheerioApi): string => {
-  const html = $("html").get(0);
-  return html ? serializeOuter(html, EMAIL_PREVIEW_DOM_OPTIONS) : "";
-};
+type CheerioApi = ReturnType<typeof loadEmailDocument>;
 
 const serializeEmailDocument = ($: CheerioApi): string => {
   $("noscript").remove();
@@ -1481,7 +1470,7 @@ const stripLeadingRfc822Headers = (body: ReturnType<CheerioApi>): void => {
   const html = body
     .contents()
     .toArray()
-    .map((node) => serializeOuter(node, EMAIL_PREVIEW_DOM_OPTIONS))
+    .map((node) => serializeEmailNode(node))
     .join("");
   if (!html) {
     return;

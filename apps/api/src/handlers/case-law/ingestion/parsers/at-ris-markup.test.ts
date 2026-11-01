@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 
+import { load } from "@stll/html";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
 import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
@@ -58,7 +58,7 @@ describe("RIS element vocabulary", () => {
   test.each(FIXTURES)(
     "%s: every element it prints is in the table",
     async (name) => {
-      const $ = cheerio.load(await fixtureXml(name), { xml: true });
+      const $ = load(await fixtureXml(name), { xml: true });
       const names = new Set(
         $("nutzdaten *")
           .toArray()
@@ -180,7 +180,7 @@ describe("RIS markup read as text", () => {
 
   test("each entry of a register section stays a paragraph of its own", async () => {
     const xml = await fixtureXml("at-ris-justiz-headnote");
-    const $ = cheerio.load(xml, { xml: true });
+    const $ = load(xml, { xml: true });
     const entries = $('absatz[ct="entscheidungstexte"]')
       .toArray()
       .filter((element) => $(element).text().trim() !== "");
@@ -199,7 +199,7 @@ describe("RIS markup read as text", () => {
 
 describe("RIS text fidelity", () => {
   const contentOf = (xml: string) => {
-    const $ = cheerio.load(xml, { xml: true });
+    const $ = load(xml, { xml: true });
     const content = $("nutzdaten").first().get(0);
     if (content === undefined) {
       throw new Error("fixture has no nutzdaten");

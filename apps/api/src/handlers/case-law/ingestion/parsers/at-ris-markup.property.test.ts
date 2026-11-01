@@ -3,9 +3,9 @@
  * and its plain text, whatever order a decision prints them in.
  */
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import { load } from "@stll/html";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import {
   assertProperty,
@@ -193,7 +193,7 @@ const BLOCK_BODIES = [
 ] as const;
 
 const readItems = (body: string) => {
-  const $ = cheerio.load(`<risdok><nutzdaten>${body}</nutzdaten></risdok>`, {
+  const $ = load(`<risdok><nutzdaten>${body}</nutzdaten></risdok>`, {
     xml: true,
   });
   const content = $("nutzdaten").first().get(0);

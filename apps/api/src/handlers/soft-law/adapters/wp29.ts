@@ -1,5 +1,6 @@
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
+
+import { load } from "@stll/html";
 
 import {
   excludedSourceField,
@@ -139,7 +140,7 @@ const metadata = ({
 
 /** The archive carries years and partial dates; none are promoted to adoption dates. */
 export const parseWp29Archive = (html: string) => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const sections = $(".contentsection.block").filter((_, node) =>
     /^\d{4}$/u.test(normalize($(node).children("h2").text())),
   );
@@ -249,7 +250,7 @@ export const parseWp29Archive = (html: string) => {
 };
 
 export const parseWp29NewsroomIndex = (html: string, url: string) => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   if (!$("#main-content").length || !$("#leftentityselect").length) {
     return Result.err(invalid("WP29 newsroom category structure is missing"));
   }
@@ -315,7 +316,7 @@ export const parseWp29NewsroomDocument = ({
   url,
   indexUrl,
 }: ParseWp29NewsroomOptions) => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const title = normalize($("#main-content h1.ecl-page-header__title").text());
   const reference = sourceReference(title);
   if (!title) {
@@ -534,7 +535,7 @@ const listWp29Assets = (entry: SoftLawEntry) => {
     if (!listing) {
       return Result.err(invalid("WP29 archive raw is missing"));
     }
-    const $ = cheerio.load(
+    const $ = load(
       Buffer.from(listing.contentBase64, "base64").toString("utf-8"),
     );
     const row = $(".contentsection.block > ul > li").filter((_, node) =>
@@ -598,7 +599,7 @@ export const wp29Adapter = {
     listSourceFields: (parts) => {
       const discovered = new Set<string>();
       for (const html of Object.values(parts)) {
-        const $ = cheerio.load(html);
+        const $ = load(html);
         if ($("h1.ecl-page-header__title, .contentsection a.link-ico").length) {
           discovered.add("title");
         }

@@ -166,6 +166,7 @@
       "Fetch and scan engine published export map guard",
       "Generated API type review diff",
       "Generated route tree review diff",
+      "HTML published export map guard",
       "Install dependencies",
       "Load merge base measurement",
       "MCP app derived outputs guard",

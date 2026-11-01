@@ -1,0 +1,61 @@
+{
+  "name": "@stll/html",
+  "version": "0.0.0",
+  "description": "String-only HTML parsing with Cheerio traversal",
+  "keywords": [
+    "cheerio",
+    "html",
+    "parse5",
+    "parser",
+    "xml"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/html",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/html"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/load.ts",
+    "./nodes": "./src/nodes.ts",
+    "./bounded": "./src/bounded.ts",
+    "./email": "./src/email.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "tsdown",
+    "pack:dry-run": "bun pm pack --dry-run",
+    "test": "bun test src",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/html",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/html",
+    "prepack": "bun run build"
+  },
+  "devDependencies": {
+    "@stll/sha256": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:",
+    "tsdown": "catalog:"
+  },
+  "dependencies": {
+    "better-result": "catalog:",
+    "cheerio": "^1.2.0",
+    "domhandler": "^6.0.1",
+    "parse5": "catalog:",
+    "parse5-htmlparser2-tree-adapter": "catalog:"
+  }
+}

@@ -9,8 +9,6 @@
 
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
-import type { Element } from "domhandler";
 import JSZip from "jszip";
 
 import {
@@ -18,6 +16,9 @@ import {
   caseLawSourceLanguagesOf,
 } from "@stll/api-contract/case-law-source-languages";
 import { writeZipEntry } from "@stll/docx-utils";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import type { Element } from "@stll/html/nodes";
 import type { DocumentStageObservation } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import type { Transaction } from "@/api/db/root";
@@ -717,7 +718,7 @@ describe("the branch notice is read per expression", () => {
   });
 
   test("retains every repeated work and expression value in source order", () => {
-    const $ = cheerio.load(noticeEn, { xml: true });
+    const $ = load(noticeEn, { xml: true });
     const work = $("NOTICE > WORK").first();
     const expression = $("NOTICE > EXPRESSION").first();
     const dossierEvent = work
@@ -946,7 +947,7 @@ describe("stored Formex refresh", () => {
       }),
     ).toEqual({ type: "notice-missing" });
 
-    const $notice = cheerio.load(noticeEn, { xml: true });
+    const $notice = load(noticeEn, { xml: true });
     $notice("NOTICE > MANIFESTATION").remove();
     expect(
       await refreshEcjStoredFormex({
@@ -1325,7 +1326,7 @@ for (const candidate of [
   "mailto:publisher@example.org",
 ]) {
   test(`notice manifestation URI provenance: ${candidate}`, async () => {
-    const $ = cheerio.load(noticeEn, { xml: true });
+    const $ = load(noticeEn, { xml: true });
     const manifestations = $("NOTICE > MANIFESTATION");
     expect(manifestations.length).toBeGreaterThan(0);
     manifestations.each((_, element) => {

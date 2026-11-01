@@ -1,9 +1,10 @@
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
-import type { Element } from "domhandler";
 import * as v from "valibot";
 
 import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import type { Element } from "@stll/html/nodes";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -202,7 +203,7 @@ export const extractReadableMarkdownFromHtml = (
   html: string,
   baseUrl: URL,
 ): string => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   sanitizePreviewHtml($, baseUrl);
 
   const root = findReadableRoot($);
@@ -328,7 +329,7 @@ const renderReadableBlockMarkdown = (
 };
 
 const extractHtmlTitle = (html: string): string | null => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const title =
     $("meta[property='og:title']").attr("content") ??
     $("meta[name='twitter:title']").attr("content") ??

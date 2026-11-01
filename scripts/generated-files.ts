@@ -193,6 +193,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "chat-transcripts": ["packages/scripts/src/child-exit-status.ts"],
   "cli-registry": [
+    "packages/html/src/*",
     "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/lib/imports/external-ref.ts",
     "apps/api/src/lib/imports/upsert-by-external-id.ts",
@@ -543,6 +544,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "failure-tags": ["scripts/generated-artifacts.ts"],
   "mcp-app-bundles": [
+    "packages/html/src/*",
     "packages/portable-path/src/index.ts",
     "packages/scripts/src/*",
     "packages/text-normalize/src/*",

@@ -117,6 +117,7 @@
     "publish-npm.yml/release-text-normalize": "main",
     "publish-npm.yml/release-anonymize-chat": "main",
     "publish-npm.yml/release-ui": "main",
+    "publish-npm.yml/release-html": "main",
     "publish-npm.yml/release-chat": "main",
     "publish-npm.yml/release-country-codes": "main",
     "publish-npm.yml/release-business-registries": "main",

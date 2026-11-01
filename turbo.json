@@ -1172,6 +1172,7 @@
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1254,6 +1255,7 @@
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1328,6 +1330,7 @@
         "$TURBO_ROOT$/packages/db-load-gate/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1402,6 +1405,7 @@
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1485,6 +1489,7 @@
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1543,6 +1548,7 @@
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/errors/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
         "$TURBO_ROOT$/packages/mcp-apps/**",
         "$TURBO_ROOT$/packages/playwright-tools/**",
@@ -1656,6 +1662,9 @@
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/mcp-kit/src/**"],
       "cache": false
     },
+    "@stll/html#test": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/api/src/**"]
+    },
     "@stll/api#test": {
       "dependsOn": [
         "transit",
@@ -1672,6 +1681,7 @@
         "API_TEST_DURATIONS_FILE"
       ],
       "inputs": [
+        "$TURBO_ROOT$/packages/html/src/email.ts",
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/docker/postgres/prod-parity.conf",
         "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",

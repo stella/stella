@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
-import { load } from "cheerio";
 import { readFile } from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
 
+import { load } from "@stll/html";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { SoftLawAccessError } from "@/api/lib/legal-search/soft-law-access-types";

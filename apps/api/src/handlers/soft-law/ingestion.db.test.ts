@@ -1,12 +1,12 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { load } from "cheerio";
 import { and, eq, sql } from "drizzle-orm";
 import fc from "fast-check";
 import { readFile } from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
 
 import type { fetchWithTimeout } from "@stll/fetch";
+import { load } from "@stll/html";
 import { assertProperty } from "@stll/property-testing";
 import { sha256Hex } from "@stll/sha256/bun";
 
