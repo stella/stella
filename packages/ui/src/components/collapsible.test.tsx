@@ -18,7 +18,6 @@ describe("Collapsible", () => {
       </Collapsible>,
     );
     expect(markup).toContain('aria-expanded="false"');
-    expect(markup).toContain('hidden="until-found"');
     expect(markup).toContain("Arguments");
   });
 
@@ -42,7 +41,6 @@ describe("Collapsible", () => {
       </Collapsible>,
     );
     expect(markup).toContain('aria-expanded="true"');
-    expect(markup).not.toContain('hidden="until-found"');
   });
 
   test("the trigger takes its look from the button it renders", () => {

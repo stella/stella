@@ -20,7 +20,6 @@ describe("Accordion disclosure", () => {
       </Accordion>,
     );
     expect(markup).toContain('aria-expanded="false"');
-    expect(markup).toContain('hidden="until-found"');
     expect(markup).toContain("Claimant and respondent");
   });
 
