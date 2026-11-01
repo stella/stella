@@ -16,13 +16,11 @@ import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { timestamptz } from "@/api/db/columns";
+import { SITEMAP_DRAIN_TRANSITION_IDENTITY } from "@/api/lib/case-law/sitemap-drain-transitions";
 import { FLOW_RUN_SCOPED_TRANSITIONS } from "@/api/lib/db/flow-run-transition-spec";
 import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
 import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
-import {
-  SITEMAP_DRAIN_TRANSITION_IDENTITY,
-  TRANSITIONS,
-} from "@/api/lib/db/transition-specs";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   defineFixedLifecycle,
   defineKeyedTransitions,

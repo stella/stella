@@ -2,7 +2,6 @@ import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-ti
 
 import {
   caseLawDecisionCitationStatsState,
-  caseLawSitemapDrainProgress,
   desktopTimeEntryBatches,
 } from "@/api/db/schema";
 import { ACCOUNT_EXPORT_TRANSITIONS } from "@/api/lib/account-export/store";
@@ -14,6 +13,7 @@ import {
   EU_COMPLETION_RECEIPT_LIFECYCLE,
 } from "@/api/lib/case-law/eu-completion-transitions";
 import { CASE_LAW_REPLAY_BATCH_TRANSITIONS } from "@/api/lib/case-law/replay-batch-transitions";
+import { SITEMAP_DRAIN_TRANSITIONS } from "@/api/lib/case-law/sitemap-drain-transitions";
 import {
   FLOW_RUN_SCOPED_TRANSITIONS,
   FLOW_RUN_STEP_TRANSITIONS_V1,
@@ -92,25 +92,6 @@ const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
   key: "decisionId",
   edges: { pending: ["exact"], exact: [] },
   options: { terminal: ["exact"] },
-});
-
-export const SITEMAP_DRAIN_TRANSITION_IDENTITY = {
-  tableName: "caseLawSitemapDrainProgress",
-  key: "country",
-  scope: ["year", "month"],
-  stateColumn: "phase",
-} as const;
-
-const SITEMAP_DRAIN_TRANSITIONS = defineScopedTransitions({
-  table: caseLawSitemapDrainProgress,
-  key: SITEMAP_DRAIN_TRANSITION_IDENTITY.key,
-  scope: SITEMAP_DRAIN_TRANSITION_IDENTITY.scope,
-  stateColumn: SITEMAP_DRAIN_TRANSITION_IDENTITY.stateColumn,
-  edges: {
-    draining: ["awaiting_visibility"],
-    awaiting_visibility: ["draining"],
-  },
-  initial: ["draining"],
 });
 
 const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
