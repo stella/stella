@@ -430,5 +430,33 @@ export const persistCorrespondenceContent = async ({
       status: "created" as const,
     });
   }
-  return panic("Correspondence insert returned no record");
+  // A concurrent filing of the same message committed the record after this
+  // plan read none; the unique key waited for it, so this read sees it.
+  const [winner] = await tx
+    .select({ id: correspondence.id, contentHash: correspondence.contentHash })
+    .from(correspondence)
+    .where(
+      and(
+        eq(correspondence.organizationId, organizationId),
+        eq(correspondence.workspaceId, workspaceId),
+        eq(correspondence.dedupKey, content.dedupKey),
+      ),
+    )
+    .limit(1);
+  if (winner === undefined) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "The filing conflicts with another correspondence record",
+      }),
+    );
+  }
+  if (winner.contentHash !== content.contentHash) {
+    return Result.ok({ status: "invalid_content" as const });
+  }
+  return Result.ok({
+    id: winner.id,
+    contentHash: winner.contentHash,
+    status: "existing" as const,
+  });
 };
