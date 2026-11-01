@@ -40,7 +40,6 @@ import {
 } from "@/components/public-law-table/public-law-route-pagination.logic";
 import type { PublicLawPageSize } from "@/components/public-law-table/public-law-route-pagination.logic";
 import { usePublicLawPageArrival } from "@/components/public-law-table/use-public-law-page-arrival";
-import { selectionShownOnPage } from "@/components/workspaces/ai-column-run.logic";
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
 import { shouldAutoRewrite } from "@/features/case-law/case-law-empty-results.logic";
 import {
@@ -136,6 +135,7 @@ import {
 } from "@/routes/law/-components/public-law-list-failure";
 
 import { caseLawResultsFeedback } from "./-case-law-filter-notice";
+import { usePageSelection } from "./-case-law-page-selection";
 import {
   type CaseLawSearchChange,
   nextCaseLawIndexSearch,
@@ -144,7 +144,6 @@ import type { CaseLawIndexSearch } from "./-case-law-search-schema";
 import { Route } from "./index";
 
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
-const EMPTY_SELECTION: readonly string[] = [];
 const NO_SHOWN_QUESTIONS: readonly string[] = [];
 const EMPTY_DECISIONS: readonly Decision[] = [];
 const NO_BROWSE_FACETS: CaseLawBrowseFacets = {
@@ -223,34 +222,6 @@ const useCaseLawResultsTiming = ({
     query ?? "",
     page !== undefined && !isPlaceholderData,
   );
-};
-
-/**
- * The rows picked on this page. Picked rows narrow a run to them; the page
- * they belong to is the only page they mean anything on, so a step forward
- * clears them, and a new answer on the same page keeps only the picks it
- * still shows (see {@link selectionShownOnPage}).
- */
-const usePageSelection = (
-  currentPage: number,
-  pageDecisionIds: readonly string[],
-) => {
-  const [selectedIds, setSelectedIds] =
-    useState<readonly string[]>(EMPTY_SELECTION);
-  const [selectionPage, setSelectionPage] = useState(currentPage);
-  if (selectionPage !== currentPage) {
-    setSelectionPage(currentPage);
-    setSelectedIds(EMPTY_SELECTION);
-    return [EMPTY_SELECTION, setSelectedIds] as const;
-  }
-  const shown = selectionShownOnPage({
-    pageRowIds: pageDecisionIds,
-    selectedRowIds: selectedIds,
-  });
-  if (shown !== null) {
-    setSelectedIds(shown);
-  }
-  return [selectedIds, setSelectedIds] as const;
 };
 
 type PublicCaseLawIndexProps = {

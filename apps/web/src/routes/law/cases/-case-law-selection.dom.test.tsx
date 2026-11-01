@@ -35,7 +35,7 @@ plugin({
     }));
   },
 });
-const { cleanup, fireEvent, render, waitFor } =
+const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { useState } = await import("react");
 const { QueryClient, QueryClientProvider } =
@@ -48,6 +48,7 @@ const { ActionCapabilitiesProvider } =
   await import("@/lib/organization/feature-access/capability-actions");
 const { DecisionTable } =
   await import("@/features/case-law/components/decision-table");
+const { usePageSelection } = await import("./-case-law-page-selection");
 
 afterEach(cleanup);
 afterAll(async () => {
@@ -83,16 +84,31 @@ const question = {
 } as const;
 const noopSelectionRun = (_selectedIds: readonly string[]) => undefined;
 
+/** What a new answer changes under a drawn table: its rows, or its page. */
+type AnswerControls = {
+  showPage: (page: number, rows: readonly Decision[]) => void;
+};
+
 const Fixture = ({
   locale = "en",
   messages = en,
   onRun = noopSelectionRun,
+  onAnswerControls,
 }: {
   locale?: "en" | "de";
   messages?: typeof en;
   onRun?: (selectedIds: readonly string[]) => void;
+  onAnswerControls?: (controls: AnswerControls) => void;
 }) => {
-  const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
+  const [answer, setAnswer] = useState<{
+    page: number;
+    rows: readonly Decision[];
+  }>({ page: 1, rows: decisions });
+  onAnswerControls?.({
+    showPage: (page, rows) => setAnswer({ page, rows }),
+  });
+  const rowIds = answer.rows.map(({ id }) => id);
+  const [selectedIds, setSelectedIds] = usePageSelection(answer.page, rowIds);
   const questions: QuestionColumnSurface = {
     type: "available",
     addable: [],
@@ -107,13 +123,13 @@ const Fixture = ({
     onRunColumn: () => undefined,
     onRunSelectedRows: () => onRun(selectedIds),
     onShowPassage: () => undefined,
-    pageDecisionIds: decisions.map(({ id }) => id),
+    pageDecisionIds: rowIds,
     queuedAnswerKeys: new Set(),
     refusedAnswerKeys: new Set(),
     selectedDecisionIds: selectedIds,
     suggestion: {
       ...UNSEARCHED_SCOPE,
-      decisionIds: decisions.map(({ id }) => id),
+      decisionIds: rowIds,
     },
   };
 
@@ -138,7 +154,7 @@ const Fixture = ({
           <QueryClientProvider client={new QueryClient()}>
             <DecisionTable
               dateOrder={null}
-              decisions={decisions}
+              decisions={answer.rows}
               firstRowNumber={1}
               isLoading={false}
               layout={DEFAULT_DECISION_TABLE_LAYOUT}
@@ -188,6 +204,58 @@ test("the selection action receives only selected decision ids and Clear empties
     view.queryByRole("button", { name: "Run AI columns for 1 row" }),
   ).toBeNull();
   expect(onRun).toHaveBeenCalledTimes(1);
+});
+
+test("a new answer on the same page keeps only the picks it still shows", async () => {
+  const onRun = mock((_selectedIds: readonly string[]) => undefined);
+  let controls: AnswerControls | undefined;
+  const view = renderFixture({
+    onRun,
+    onAnswerControls: (next) => {
+      controls = next;
+    },
+  });
+
+  fireEvent.click(
+    await waitFor(() =>
+      view.getByRole("checkbox", { name: en.common.selectAllRows }),
+    ),
+  );
+  expect(view.getByText("2 selected")).not.toBeNull();
+
+  const [decisionOne] = decisions;
+  act(() =>
+    controls?.showPage(1, decisionOne === undefined ? [] : [decisionOne]),
+  );
+  await waitFor(() => expect(view.getByText("1 selected")).not.toBeNull());
+  fireEvent.click(
+    view.getByRole("button", { name: "Run AI columns for 1 row" }),
+  );
+  expect(onRun).toHaveBeenLastCalledWith(["decision-one"]);
+
+  act(() => controls?.showPage(1, []));
+  await waitFor(() => expect(view.queryByText("1 selected")).toBeNull());
+  act(() => controls?.showPage(1, decisions));
+  expect(view.queryByText("1 selected")).toBeNull();
+  expect(view.queryByText("2 selected")).toBeNull();
+});
+
+test("a step to another page clears the picks even when it shows the same rows", async () => {
+  let controls: AnswerControls | undefined;
+  const view = renderFixture({
+    onAnswerControls: (next) => {
+      controls = next;
+    },
+  });
+
+  fireEvent.click(
+    await waitFor(() =>
+      view.getByRole("checkbox", { name: "Select 18 C 2/2026" }),
+    ),
+  );
+  expect(view.getByText("1 selected")).not.toBeNull();
+  act(() => controls?.showPage(2, decisions));
+  await waitFor(() => expect(view.queryByText("1 selected")).toBeNull());
 });
 
 test("the header checkbox selects every decision on the page and the toolbar counts them", async () => {
