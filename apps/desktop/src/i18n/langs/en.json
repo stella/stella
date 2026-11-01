@@ -484,7 +484,7 @@
     "evidenceTitles": "Titles",
     "evidenceApps": "Apps",
     "rangeEmpty": "Nothing was recorded in this range.",
-    "calendarHint": "Open a dashed suggestion to review it, or drag across Activity to draft an entry for any range.",
+    "calendarHint": "Open a dashed suggestion to review it, or drag across Time entries to draft an entry for any range.",
     "narrativeAiPrompt": "Write the description with stella AI? Only this suggestion's window titles are sent; they are not stored.",
     "narrativeAiNo": "No",
     "narrativeAiApprove": "Approve",

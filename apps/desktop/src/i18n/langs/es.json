@@ -484,7 +484,7 @@
     "evidenceTitles": "Títulos",
     "evidenceApps": "Aplicaciones",
     "rangeEmpty": "No se registró nada en este intervalo.",
-    "calendarHint": "Abra una sugerencia con borde discontinuo para revisarla, o arrastre en la columna Actividad para preparar un registro de cualquier intervalo.",
+    "calendarHint": "Abra una sugerencia con borde discontinuo para revisarla, o arrastre en la columna Registros de tiempo para preparar un registro de cualquier intervalo.",
     "narrativeAiPrompt": "¿Redactar la descripción con stella AI? Solo se envían los títulos de ventana de esta sugerencia; no se guardan.",
     "narrativeAiNo": "No",
     "narrativeAiApprove": "Aprobar",
