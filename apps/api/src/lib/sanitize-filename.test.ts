@@ -102,7 +102,7 @@ describe("sanitizeFilename", () => {
 
   test("no format character but a joiner survives either form", () => {
     assertProperty(
-      "sanitized-filename-has-no-format-characters",
+      "no format character but a joiner survives either form",
       fc.property(fc.string({ unit: "binary" }), (name) => {
         for (const sanitized of [
           sanitizeFilename(name),

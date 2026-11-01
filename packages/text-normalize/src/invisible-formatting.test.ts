@@ -48,7 +48,7 @@ describe("stripInvisibleFormatting", () => {
 
   test("leaves no format character but the two joiners", () => {
     assertProperty(
-      "strip-invisible-formatting-fixed-point",
+      "leaves no format character but the two joiners",
       fc.property(fc.string({ unit: "binary" }), (text) => {
         const stripped = stripInvisibleFormatting(text);
         expect(stripped.replaceAll(/[\u200C\u200D]/gu, "")).not.toMatch(
