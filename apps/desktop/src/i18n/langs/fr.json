@@ -511,6 +511,22 @@
     "aiDraftFlags": "Remarques sur les règles de facturation",
     "aiDraftFlagSource": "{file}, {section}"
   },
+  "dictation": {
+    "title": "Dictée",
+    "description": "Maintenez {shortcut} et parlez. Le texte apparaît dans l'application que vous utilisez. La parole est transcrite sur cet ordinateur et n'est pas conservée.",
+    "modelNeeded": "Le modèle vocal s'exécute sur cet ordinateur.",
+    "download": "Télécharger ({size} Mo)",
+    "downloading": "Téléchargement du modèle vocal : {percent} %",
+    "downloadFailed": "Le modèle vocal n'a pas pu être téléchargé.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
+    "shortcutTaken": "Une autre application utilise {shortcut}.",
+    "failure": {
+      "accessibility": "Autorisez l'accès Accessibilité pour que stella puisse écrire dans d'autres applications.",
+      "microphone": "stella n'entend pas votre micro. Vérifiez l'accès au micro dans les Réglages Système.",
+      "modelMissing": "Téléchargez d'abord le modèle vocal.",
+      "transcription": "La transcription a échoué. Réessayez."
+    }
+  },
   "shortcut": {
     "title": "Raccourci du presse-papiers",
     "description": "Ouvre l'historique du presse-papiers depuis n'importe quelle app.",
@@ -630,7 +646,6 @@
     "guideAllowed": "stella desktop est autorisé",
     "never": {
       "screenRecording": "Enregistrement de l'écran",
-      "microphone": "Microphone",
       "camera": "Caméra",
       "keystrokes": "Frappes au clavier",
       "fullDiskAccess": "Accès complet au disque",

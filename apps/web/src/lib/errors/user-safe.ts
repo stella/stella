@@ -1,3 +1,5 @@
+import { UnhandledException } from "better-result";
+
 import { isAIFailureCode } from "@stll/api-contract";
 import { isActionAdmissionCode } from "@stll/api-contract/action-admission";
 
@@ -39,10 +41,26 @@ export const userErrorMessage = (
   fallback: string,
 ): string => displayedMessage(toAPIError(error), fallback);
 
+/**
+ * `Result.tryPromise` wraps whatever a call threw, so the typed error the
+ * message depends on sits one level down. A transport failure stays wrapped:
+ * it says nothing about the operation, so the caller's own wording stands.
+ */
+const unwrapThrown = (error: unknown): unknown => {
+  if (!UnhandledException.is(error)) {
+    return error;
+  }
+  const { cause } = error;
+  return APIError.is(cause) && cause.transportKind !== undefined
+    ? error
+    : cause;
+};
+
 export const userErrorFromThrown = (
-  error: unknown,
+  thrown: unknown,
   fallback: string,
 ): string => {
+  const error = unwrapThrown(thrown);
   if (
     AuthClientError.is(error) ||
     UploadFileSizeError.is(error) ||

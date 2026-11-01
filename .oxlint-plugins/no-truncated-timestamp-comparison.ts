@@ -1,4 +1,5 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { Ranged } from "@oxlint/plugins";
 
 import { isAstNode, resolveVariable } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
@@ -560,8 +561,7 @@ type TextRenderingMatchers = {
 // The column a named rendering reads is a timestamp by the naming convention.
 const namedRenderingIsTimestamp = (match: RegExpExecArray): boolean => {
   const groups = match.groups ?? {};
-  const name =
-    groups["cast"] ?? groups["format"] ?? groups["paren"] ?? groups["plain"];
+  const name = groups.cast ?? groups.format ?? groups.paren ?? groups.plain;
   return name !== undefined && trailingNameIsTimestampColumn(name);
 };
 
@@ -1104,7 +1104,7 @@ export default eslintCompatPlugin({
             return true;
           }
           const trailing = LEADING_TEXT_COMPARISON.exec(after);
-          return trailing !== null && !assigns(trailing.groups?.["operator"]);
+          return trailing !== null && !assigns(trailing.groups?.operator);
         };
 
         // True when the interpolation at `index` renders a timestamp column
@@ -1140,7 +1140,7 @@ export default eslintCompatPlugin({
         // `updated_at::text = ${token}`, `${token} = CAST(updated_at AS
         // text)`, `to_char(t.updated_at, 'YYYY') = ${token}`.
         const reportNamedTimestampText = (
-          node: unknown,
+          node: Ranged,
           quasis: unknown[],
           expressions: unknown[],
         ) => {
@@ -1155,8 +1155,12 @@ export default eslintCompatPlugin({
                   precedingSql + text.slice(0, start),
                 )
               ) {
+                // The interpolation beside the rendering, else the template.
                 context.report({
-                  node: expressions[index] ?? expressions[index - 1] ?? node,
+                  node:
+                    [expressions[index], expressions[index - 1]].find(
+                      isAstNode,
+                    ) ?? node,
                   messageId: "timestampTextComparison",
                 });
               }
@@ -1370,14 +1374,17 @@ export default eslintCompatPlugin({
           CallExpression(node) {
             const callee = calleeName(node);
             const args = Array.isArray(node.arguments) ? node.arguments : [];
-            if (reportRawStatement(node, args)) {
+            if (isAstNode(node) && reportRawStatement(node, args)) {
               return;
             }
             // `inArray(timestampCasToken(t.updatedAt), tokens)` compares the
             // same text, once per listed token.
             if (callee !== undefined && DRIZZLE_LIST_COMPARISONS.has(callee)) {
               const [listed] = args;
-              if (isTimestampTextOperand(listed, textMatchers)) {
+              if (
+                listed !== undefined &&
+                isTimestampTextOperand(listed, textMatchers)
+              ) {
                 context.report({
                   node: listed,
                   messageId: "timestampTextComparison",

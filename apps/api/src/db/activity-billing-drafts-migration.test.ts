@@ -34,7 +34,7 @@ const createDatabase = async () => {
   await db.exec(
     await Bun.file(
       new URL(
-        "../../drizzle/20261031200738_activity_billing_drafts/migration.sql",
+        "../../drizzle/20261101221234_activity_billing_drafts/migration.sql",
         import.meta.url,
       ),
     ).text(),
