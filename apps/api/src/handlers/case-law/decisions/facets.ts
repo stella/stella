@@ -7,10 +7,7 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 
 import { status } from "@/api/http/status";
-import {
-  caseLawPublicReadDb,
-  type CaseLawPublicReadTransaction,
-} from "@/api/lib/case-law-public-read-db";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
   type NonRedistributableSourcesError,
   readNonRedistributableCaseLawSourceIds,
@@ -23,10 +20,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { createBrowseFacetsCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
-import {
-  pgFtsBrowseFacets,
-  readPgFtsBrowseFacets,
-} from "@/api/lib/legal-search/pg-fts-browse-facets";
+import { pgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import {
   readPublicLawCountry,
   tPublicLawCountry,
@@ -125,26 +119,6 @@ export const readBrowseFacetsUnderPolicy = async ({
     excludedSourceIds,
     populationVersion: populationCountsCacheVersion(freshness.value),
     limit: LIMITS.caseLawFacetLimit,
-  });
-};
-
-/** Facets for a caller holding a database connection; every database read uses it. */
-export const readBrowseFacetsWithin = async (
-  tx: CaseLawPublicReadTransaction,
-  { country, excludedSourceIds }: BrowseFacetsUnderPolicyRead,
-): Promise<Result<LegalBrowseFacets, LegalBrowseFacetsError>> => {
-  const query = {
-    jurisdiction: country.toUpperCase(),
-    excludedSourceIds,
-    limit: LIMITS.caseLawFacetLimit,
-  };
-  return await Result.tryPromise({
-    try: async () => await readPgFtsBrowseFacets(tx, query),
-    catch: (cause) =>
-      new LegalBrowseFacetsError({
-        message: "maintained browse facets failed",
-        cause,
-      }),
   });
 };
 

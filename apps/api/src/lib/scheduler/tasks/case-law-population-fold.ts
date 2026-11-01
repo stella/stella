@@ -72,7 +72,6 @@ export const createCaseLawPopulationFoldTask =
               return;
             }
             boundedSignal.throwIfAborted();
-            // db-await-in-loop: each bounded fold commits independently under fresh load admission.
             const result = await runtime.step(async ({ tx, size }) => {
               boundedSignal.throwIfAborted();
               const row = executedRows(
