@@ -19,6 +19,7 @@ describe("completing a task", () => {
       add.mockClear();
       const restored: TaskStatus[] = [];
       notifyTaskCompletion({
+        currentStatus: () => "done",
         next: "done",
         previous,
         restore: (status) => restored.push(status),
@@ -36,12 +37,39 @@ describe("completing a task", () => {
     }
   });
 
+  test("Undo leaves a status changed since the toast appeared", () => {
+    const add = spyOn(stellaToast, "add").mockReturnValue("toast");
+    const restored: TaskStatus[] = [];
+    notifyTaskCompletion({
+      currentStatus: () => "in_progress",
+      next: "done",
+      previous: "open",
+      restore: (status) => restored.push(status),
+    });
+    const undo = add.mock.calls.at(0)?.at(0)?.action?.onClick;
+    if (undo === undefined) {
+      throw new TypeError("The completion toast must offer an undo");
+    }
+    Reflect.apply(undo, undefined, []);
+    expect(restored).toEqual([]);
+  });
+
   test("stays quiet for any other status change", () => {
     const add = spyOn(stellaToast, "add").mockReturnValue("toast");
     for (const next of TASK_STATUSES.filter((status) => status !== "done")) {
-      notifyTaskCompletion({ next, previous: "open", restore: () => {} });
+      notifyTaskCompletion({
+        currentStatus: () => undefined,
+        next,
+        previous: "open",
+        restore: () => {},
+      });
     }
-    notifyTaskCompletion({ next: "done", previous: "done", restore: () => {} });
+    notifyTaskCompletion({
+      currentStatus: () => undefined,
+      next: "done",
+      previous: "done",
+      restore: () => {},
+    });
 
     expect(add).not.toHaveBeenCalled();
   });

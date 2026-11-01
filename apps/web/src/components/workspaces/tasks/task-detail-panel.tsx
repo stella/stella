@@ -352,12 +352,15 @@ const TaskDetailPanelContent = ({
     value: string,
     showError: (message: string) => void,
   ) => {
-    updateMutation.mutate(
-      { taskId, type: "name", value },
-      {
-        onError: (error) =>
+    // `mutateAsync`, not a per-call `onError`: that one is dropped when another
+    // edit starts first, and the refused name would lose its reason.
+    detached(
+      updateMutation
+        .mutateAsync({ taskId, type: "name", value })
+        .catch((error: unknown) =>
           showError(userErrorFromThrown(error, tCommon("unexpectedError"))),
-      },
+        ),
+      "task-detail-panel.rename",
     );
   };
 
@@ -366,9 +369,11 @@ const TaskDetailPanelContent = ({
       return;
     }
     const previous = isTaskStatus(task?.status) ? task.status : "open";
+    const { queryKey } = taskDetailOptions(workspaceId, taskId);
     updateMutation.mutate(getTaskStatusUpdate(taskId, value, workflowReason), {
       onSuccess: () =>
         notifyTaskCompletion({
+          currentStatus: () => queryClient.getQueryData(queryKey)?.status,
           next: value,
           previous,
           restore: (status) =>

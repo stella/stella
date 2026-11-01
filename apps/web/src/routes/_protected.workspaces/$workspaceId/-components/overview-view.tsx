@@ -87,7 +87,7 @@ import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-fil
 import { overviewOptions, workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { flowRunsOptions } from "@/lib/workspaces/queries/flow-runs";
-import { taskKeys } from "@/lib/workspaces/queries/tasks";
+import { taskDetailOptions, taskKeys } from "@/lib/workspaces/queries/tasks";
 import {
   timeEntrySummaryOptions,
   timeEntryTeamSummaryOptions,
@@ -736,6 +736,13 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                   {
                                     onSuccess: () =>
                                       notifyTaskCompletion({
+                                        currentStatus: () =>
+                                          queryClient.getQueryData(
+                                            taskDetailOptions(
+                                              workspaceId,
+                                              task.entityId,
+                                            ).queryKey,
+                                          )?.status,
                                         next: status,
                                         previous,
                                         restore: (restored) =>

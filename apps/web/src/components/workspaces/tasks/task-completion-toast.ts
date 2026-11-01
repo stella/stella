@@ -5,6 +5,8 @@ import { stellaToast } from "@stll/ui/toast";
 import { getTranslator } from "@/i18n/translator";
 
 type TaskStatusChange = {
+  /** The status as last read; `undefined` when the task is not loaded here. */
+  currentStatus: () => string | undefined;
   next: TaskStatus;
   previous: TaskStatus;
   restore: (status: TaskStatus) => void;
@@ -12,9 +14,11 @@ type TaskStatusChange = {
 
 /**
  * A completed task leaves the agenda the moment the status saves, so the
- * change is confirmed with a way back to where it was.
+ * change is confirmed with a way back to where it was. Undo leaves alone a
+ * status someone has changed since.
  */
 export const notifyTaskCompletion = ({
+  currentStatus,
   next,
   previous,
   restore,
@@ -26,6 +30,14 @@ export const notifyTaskCompletion = ({
   stellaToast.add({
     title: t("tasks.taskCompleted"),
     type: "success",
-    action: { label: t("common.undo"), onClick: () => restore(previous) },
+    action: {
+      label: t("common.undo"),
+      onClick: () => {
+        const current = currentStatus();
+        if (current === undefined || current === next) {
+          restore(previous);
+        }
+      },
+    },
   });
 };
