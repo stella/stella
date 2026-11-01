@@ -20,6 +20,7 @@ import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { EntityRow } from "@/components/entity-row";
 import { LoadFailedCard } from "@/components/load-failure";
 import { useRecentSearches } from "@/components/use-recent-searches";
+import type { RecentSearchesAccount } from "@/components/use-recent-searches";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import { HistoryIcon, XIcon } from "@/icons.gen";
@@ -67,20 +68,36 @@ const SearchScreen = () => {
   if (state.status !== "signed-in") {
     return null;
   }
-  const { serverUrl, userId } = state.source.session();
+  const session = state.source.session();
+  if (session === undefined) {
+    return null;
+  }
+  const account = { serverUrl: session.serverUrl, userId: session.userId };
   // One screen per account, so nothing typed or picked carries over to another.
-  return <SearchStella key={`${serverUrl} ${userId}`} source={state.source} />;
+  return (
+    <SearchStella
+      key={`${account.serverUrl} ${account.userId}`}
+      account={account}
+      source={state.source}
+    />
+  );
 };
 
 export default SearchScreen;
 
-const SearchStella = ({ source }: { source: AccessTokenSource }) => {
+const SearchStella = ({
+  account,
+  source,
+}: {
+  account: RecentSearchesAccount;
+  source: AccessTokenSource;
+}) => {
   const t = useTranslations("search");
   const router = useRouter();
   const colors = useAppColors();
   const ui = useUiColors();
   const { end } = useSession();
-  const recents = useRecentSearches(source);
+  const recents = useRecentSearches(source, account);
   const [query, setQuery] = useState("");
   const [qualifiers, setQualifiers] = useState(NO_QUALIFIERS);
   const [matterNames, setMatterNames] = useState<ReadonlyMap<string, string>>(

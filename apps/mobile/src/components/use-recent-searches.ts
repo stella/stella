@@ -17,8 +17,16 @@ import type { RecentSearches } from "@/state/recent-searches";
  * and hides the server's here. The server's list is a nicety, so a failure
  * to read it lists the device's alone.
  */
-export const useRecentSearches = (source: AccessTokenSource) => {
-  const { serverUrl, userId } = source.session();
+/** The account whose searches these are, fixed for the screen's lifetime. */
+export type RecentSearchesAccount = {
+  readonly serverUrl: string;
+  readonly userId: string;
+};
+
+export const useRecentSearches = (
+  source: AccessTokenSource,
+  { serverUrl, userId }: RecentSearchesAccount,
+) => {
   const key = recentSearchesKey(serverUrl, userId);
   // The list belongs to the key it was loaded under; another account's
   // shows none until its own loads.
