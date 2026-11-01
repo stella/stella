@@ -2163,13 +2163,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "packages/cli/src/auth/oauth-client-registration.ts",
-    "function": "module/registerLoopbackClient",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "packages/cli/src/auth/oauth-metadata.ts",
     "function": "module/fetchCandidate",
     "kind": "total-timeout-body",

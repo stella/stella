@@ -24,6 +24,7 @@ import {
   deletePersonalBillingRates,
   deletePersonalWorkspaceViewTemplatesAndAgentSkills,
   deletePrivateLegalReaderAnswers,
+  deletePushDevices,
   deleteSearchHistory,
   deleteUserFiles,
   reassignActiveTaskAssignmentsAndDropMemberships,
@@ -351,6 +352,7 @@ export const verifyAndDeleteUser = async (
           );
           await deletePersonalBillingRates(tx, currentUserId);
           await deleteSearchHistory(tx, currentUserId);
+          await deletePushDevices(tx, currentUserId);
 
           await recordAccountDeletionRequest({
             tx,
