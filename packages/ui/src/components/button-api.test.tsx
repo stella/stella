@@ -314,6 +314,19 @@ describe("Button loading keeps its width", () => {
     expect(markup).not.toContain("absolute inset-0 m-auto");
   });
 
+  test("an icon that draws nothing is no icon: the label keeps its place", () => {
+    for (const icon of ["", true, []]) {
+      const markup = renderToStaticMarkup(
+        <Button icon={icon} loading>
+          Save draft
+        </Button>,
+      );
+
+      expect(markup).toMatch(/data-slot="button-label"[^>]*>Save draft</u);
+      expect(markup).toContain("absolute inset-0 m-auto");
+    }
+  });
+
   test("an idle button renders its content directly", () => {
     const markup = renderToStaticMarkup(<Button>Save draft</Button>);
 

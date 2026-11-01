@@ -14,6 +14,7 @@ import {
   resolveButtonDisposition,
 } from "../lib/button-disposition";
 import { MENU_ROW_CLASS_NAME } from "../lib/menu-row";
+import { rendersNothing } from "../lib/renders-nothing";
 import { cn } from "../lib/utils";
 import {
   BUTTON_PLAIN_VARIANT,
@@ -383,7 +384,7 @@ function buttonContent({
       </>
     );
   }
-  const hasIcon = icon !== undefined && icon !== null && icon !== false;
+  const hasIcon = !rendersNothing(icon);
   const loader = (
     <Loader
       animation="none"
