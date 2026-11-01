@@ -410,6 +410,12 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `organization-settings.sanctions-monitoring.update` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings sanctions-monitoring-update` |
 | `organization-settings.update` | write | stella:admin_write | — | curated tool `update_organization_settings` |
 
+## organizations
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `organizations.slug.update` | write | stella:admin_write | — | generic invoke → `stella capability organizations slug-update` |
+
 ## playbooks
 
 | Capability | Access | Scope | Feature | Reachable via |
@@ -753,6 +759,7 @@ mechanics, and similar), not gaps in coverage.
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
+| native_device | 2 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
 | public_indexing | 9 |
