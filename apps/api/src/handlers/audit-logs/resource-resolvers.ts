@@ -1,8 +1,11 @@
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { AuditResourceKind } from "@stll/api-contract/audit-log";
+import type {
+  AuditNamedResourceKind,
+  AuditResourceKind,
+} from "@stll/api-contract/audit-log";
 
-import { workspaceIdCheck } from "@/api/db/rls";
+import { workspaceCheck, workspaceIdCheck } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
   contacts,
@@ -32,7 +35,13 @@ type ResolveOptions = {
 
 type ResourceNames = Map<string, string | null>;
 type Resolver = (options: ResolveOptions) => Promise<ResourceNames>;
-type Resolution = Resolver | { type: "unresolvable"; reason: string };
+type Unresolvable = { type: "unresolvable"; reason: string };
+/** A kind resolves exactly when the contract lists it as named. */
+type Resolutions = {
+  [Kind in AuditResourceKind]: Kind extends AuditNamedResourceKind
+    ? Resolver
+    : Unresolvable;
+};
 
 const toNames = (rows: { id: string; name: string | null }[]) =>
   new Map(rows.map(({ id, name }) => [id, name]));
@@ -89,7 +98,7 @@ const resolveEntity: Resolver = async (options) => {
       .where(
         and(
           inArray(entities.id, ids.map(brandPersistedEntityId)),
-          workspaceIdCheck,
+          workspaceCheck,
         ),
       ),
   );
@@ -445,7 +454,7 @@ const AUDIT_RESOURCE_RESOLVERS = {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },
-} as const satisfies Record<AuditResourceKind, Resolution>;
+} as const satisfies Resolutions;
 
 export const resolveAuditResourceNames = async ({
   tx,

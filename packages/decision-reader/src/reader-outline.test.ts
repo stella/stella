@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { Block, HeadingBlock } from "@stll/legal-ast/document-ast";
 
+import { READER_BREADCRUMB_CLEARANCE } from "./reader-landing";
 import type { AnchorScrollContainer } from "./reader-outline";
 import {
   headingCase,
@@ -260,13 +261,31 @@ describe("anchor jump", () => {
     expect(window.location.hash).toBe("paragraf-47");
   });
 
-  test("scrolls the container to the block, not to the viewport", () => {
+  test("scrolls the container to the block, below the reader's controls bar", () => {
     const container = createContainer({ "#paragraf-47": 450 });
 
     jumpToAnchor("paragraf-47", container);
 
     // 450 (block) - 50 (container) + 100 (already scrolled).
-    expect(container.scrolledTo).toBe(500);
+    expect(container.scrolledTo).toBe(500 - READER_BREADCRUMB_CLEARANCE);
+  });
+
+  test("a followed address lands a block on the line a jump does", async () => {
+    const css = await Bun.file(
+      new URL("reader.css", import.meta.url).pathname,
+    ).text();
+
+    expect(css).toContain(
+      `--reader-anchor-offset: ${READER_BREADCRUMB_CLEARANCE}px;`,
+    );
+  });
+
+  test("rounds toward the block, so the trail reads it as current", () => {
+    const container = createContainer({ "#paragraf-47": 450.25 });
+
+    jumpToAnchor("paragraf-47", container);
+
+    expect(container.scrolledTo).toBe(501 - READER_BREADCRUMB_CLEARANCE);
   });
 
   test("does nothing when the anchor is not on the page", () => {
