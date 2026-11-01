@@ -1,4 +1,6 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { Temporal } from "temporal-polyfill/full";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -7,7 +9,16 @@ import {
   type StoredSession,
 } from "@/connection/session";
 
-import { listMatterMembers, readTask, setTaskAssignee } from "./tasks";
+import { ApiRequestError } from "./api-request";
+import {
+  chosenAssignees,
+  chosenDueDate,
+  createTask,
+  listMatterMembers,
+  newTaskAssignees,
+  readTask,
+  setTaskAssignee,
+} from "./tasks";
 
 const SESSION: StoredSession = {
   serverUrl: "https://stella.example.com",
@@ -127,5 +138,89 @@ describe("task assignees", () => {
         body: { taskId: "task-1", userId: "user-2" },
       },
     ]);
+  });
+
+  test("a new task sends its assignees and due day, and leaves out what is unset", async () => {
+    const chosen = recording({ entityId: "task-9" });
+    const created = await createTask({
+      assigneeIds: ["user-2", "user-1"],
+      dueDate: "2026-11-06",
+      fetch: chosen.fetch,
+      matterId: "matter-1",
+      name: "Draft the reply",
+      source: sourceFor(chosen.fetch),
+    });
+    expect(created.isOk() ? created.value : null).toBe("task-9");
+    expect(chosen.sent.at(-1)?.body).toEqual({
+      assigneeIds: ["user-2", "user-1"],
+      dueDate: "2026-11-06",
+      name: "Draft the reply",
+    });
+
+    const nobody = recording({ entityId: "task-10" });
+    await createTask({
+      assigneeIds: [],
+      dueDate: null,
+      fetch: nobody.fetch,
+      matterId: "matter-1",
+      name: "Unassigned",
+      source: sourceFor(nobody.fetch),
+    });
+    expect(nobody.sent.at(-1)?.body).toEqual({
+      assigneeIds: [],
+      name: "Unassigned",
+    });
+
+    const unset = recording({ entityId: "task-11" });
+    await createTask({
+      dueDate: null,
+      fetch: unset.fetch,
+      matterId: "matter-1",
+      name: "Mine",
+      source: sourceFor(unset.fetch),
+    });
+    expect(unset.sent.at(-1)?.body).toEqual({ name: "Mine" });
+  });
+
+  test("only chosen people who are the matter's members get a new task, in the members' order", () => {
+    const members = [
+      { userId: "user-3", user: { id: "user-3", name: "Member Three" } },
+      { userId: "user-1", user: { id: "user-1", name: "Member One" } },
+      { userId: "user-2", user: null },
+    ];
+    expect(
+      chosenAssignees(new Set(["user-1", "user-3", "user-9"]), members),
+    ).toEqual(["user-3", "user-1"]);
+    expect(chosenAssignees(new Set(), members)).toEqual([]);
+    expect(chosenAssignees(new Set(["user-1"]), [])).toEqual([]);
+  });
+
+  test("a new task leaves its assignees to the server only when there is no member list", () => {
+    const members = [
+      { userId: "user-1", user: { id: "user-1", name: "Member One" } },
+      { userId: "user-2", user: null },
+    ];
+    const chosen = new Set(["user-2"]);
+    expect(newTaskAssignees(chosen, Result.ok(members))).toEqual(["user-2"]);
+    expect(newTaskAssignees(new Set(), Result.ok(members))).toEqual([]);
+    expect(newTaskAssignees(chosen, null)).toBeUndefined();
+    expect(
+      newTaskAssignees(
+        chosen,
+        Result.err(
+          new ApiRequestError({ message: "Bad gateway", status: 502 }),
+        ),
+      ),
+    ).toBeUndefined();
+  });
+
+  test("a new task's due day is the picked day, else the preset, else none", () => {
+    const today = Temporal.PlainDate.from("2026-12-31");
+    expect(chosenDueDate({ days: null, picked: "2027-02-14" }, today)).toBe(
+      "2027-02-14",
+    );
+    expect(chosenDueDate({ days: 1, picked: null }, today)).toBe("2027-01-01");
+    expect(chosenDueDate({ days: 0, picked: null }, today)).toBe("2026-12-31");
+    expect(chosenDueDate({ days: null, picked: null }, today)).toBeNull();
   });
 });

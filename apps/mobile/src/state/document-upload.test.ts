@@ -7,7 +7,12 @@ import {
 } from "@/connection/session";
 import type { StoredSession } from "@/connection/session";
 
-import { readFileProperty, uploadDocument } from "./document-upload";
+import {
+  pickedFileSaveParams,
+  readFileProperty,
+  UPLOAD_ORIGIN,
+  uploadDocument,
+} from "./document-upload";
 
 const SESSION: StoredSession = {
   signInId: "sign-in-1",
@@ -127,5 +132,43 @@ describe("uploading a document", () => {
       "PUT storage c2lnbmVk",
       "POST /v1/uploads/m1/u1/abort",
     ]);
+  });
+});
+
+describe("a picked file's save sheet", () => {
+  test("keeps a non-PDF's type, size, digest and the matter it was picked for", () => {
+    expect(
+      pickedFileSaveParams({
+        file: {
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          name: "Dodatek č. 1.docx",
+          uri: "file:///cache/Dodatek.docx",
+        },
+        matterId: "matter-1",
+        sha256Hex: "ab".repeat(32),
+        size: 48_213,
+      }),
+    ).toEqual({
+      matterId: "matter-1",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      name: "Dodatek č. 1.docx",
+      origin: UPLOAD_ORIGIN.file,
+      sha256Hex: "ab".repeat(32),
+      size: "48213",
+      uri: "file:///cache/Dodatek.docx",
+    });
+  });
+
+  test("leaves the matter to the sheet when none was given, and names an untyped file a byte stream", () => {
+    const params = pickedFileSaveParams({
+      file: { name: "export", uri: "file:///cache/export" },
+      matterId: undefined,
+      sha256Hex: "00".repeat(32),
+      size: 0,
+    });
+    expect(params).not.toHaveProperty("matterId");
+    expect(params.mimeType).toBe("application/octet-stream");
   });
 });

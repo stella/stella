@@ -74,7 +74,8 @@
       "none": "Kuupäevata",
       "today": "Täna",
       "tomorrow": "Homme",
-      "nextWeek": "Nädala pärast"
+      "nextWeek": "Nädala pärast",
+      "pick": "Vali kuupäev"
     },
     "due": {
       "overdue": "Tähtaeg möödas",
@@ -140,7 +141,9 @@
     },
     "add": "Lisa",
     "scanDocument": "Skanni dokument",
-    "newTask": "Uus ülesanne"
+    "newTask": "Uus ülesanne",
+    "uploadDocument": "Laadi üles dokument",
+    "uploadFailed": "Dokumenti ei õnnestunud üles laadida. Proovige uuesti."
   },
   "entity": {
     "type": "Tüüp",

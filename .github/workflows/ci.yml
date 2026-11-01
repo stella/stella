@@ -1752,6 +1752,8 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Checks workflow-owned declarations and metadata at the workflow revision."
+          GH_RETRY_SCRIPT: ${{ github.workspace }}/scripts/gh-retry.sh
+          GH_TOKEN: ${{ github.token }}
         # Remove the tooling checkout so later source checks see only the
         # candidate tree. A digest that only needs a mechanical refresh is
         # rewritten by the autofix generator; this check (the script's
@@ -3641,7 +3643,9 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+          # Outside a pull request or merge group the base is this tree, so a
+          # changed-file scan would check nothing.
+          if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "merge_group" ]]; then
             bun run check:result-consumption -- --all --leg api
           else
             bun run check:result-consumption -- --base "origin/$BASE_REF" --leg api
@@ -7140,6 +7144,7 @@ jobs:
     permissions:
       contents: read
       actions: write
+      pull-requests: read
     steps: *quick-checks-steps
 
   # Aggregation job for branch protection. The ruleset requires

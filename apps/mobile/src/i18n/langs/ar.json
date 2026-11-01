@@ -74,7 +74,8 @@
       "none": "بلا تاريخ",
       "today": "اليوم",
       "tomorrow": "غدًا",
-      "nextWeek": "بعد أسبوع"
+      "nextWeek": "بعد أسبوع",
+      "pick": "اختيار تاريخ"
     },
     "due": {
       "overdue": "متأخرة",
@@ -140,7 +141,9 @@
     },
     "add": "إضافة",
     "scanDocument": "مسح مستند ضوئيًا",
-    "newTask": "مهمة جديدة"
+    "newTask": "مهمة جديدة",
+    "uploadDocument": "رفع مستند",
+    "uploadFailed": "تعذّر رفع المستند. حاول مرة أخرى."
   },
   "entity": {
     "type": "النوع",

@@ -74,7 +74,8 @@
       "none": "Kein Datum",
       "today": "Heute",
       "tomorrow": "Morgen",
-      "nextWeek": "In einer Woche"
+      "nextWeek": "In einer Woche",
+      "pick": "Datum wählen"
     },
     "due": {
       "overdue": "Überfällig",
@@ -140,7 +141,9 @@
     },
     "add": "Hinzufügen",
     "scanDocument": "Dokument scannen",
-    "newTask": "Neue Aufgabe"
+    "newTask": "Neue Aufgabe",
+    "uploadDocument": "Dokument hochladen",
+    "uploadFailed": "Das Dokument konnte nicht hochgeladen werden. Versuchen Sie es erneut."
   },
   "entity": {
     "type": "Typ",

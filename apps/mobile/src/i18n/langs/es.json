@@ -74,7 +74,8 @@
       "none": "Sin fecha",
       "today": "Hoy",
       "tomorrow": "Mañana",
-      "nextWeek": "En una semana"
+      "nextWeek": "En una semana",
+      "pick": "Elegir fecha"
     },
     "due": {
       "overdue": "Vencidas",
@@ -140,7 +141,9 @@
     },
     "add": "Añadir",
     "scanDocument": "Escanear un documento",
-    "newTask": "Nueva tarea"
+    "newTask": "Nueva tarea",
+    "uploadDocument": "Subir documento",
+    "uploadFailed": "No se pudo subir el documento. Inténtelo de nuevo."
   },
   "entity": {
     "type": "Tipo",
