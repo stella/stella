@@ -251,7 +251,10 @@ import {
 } from "@/api/lib/rate-limit/action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { SseStreamBinding } from "@/api/lib/sse";
-import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
+import {
+  resolveTanStackTextModel,
+  withProviderChatRunRetry,
+} from "@/api/lib/tanstack-ai-generate";
 import {
   modelAcceptsStreamingToolUse,
   validateTanStackDevModelOverride,
@@ -1805,59 +1808,66 @@ const runChatAttempt = async function* ({
     return;
   }
 
-  const stream = streamChatChunks({
-    ...chatAttemptRequestOptions({
-      caching,
-      model,
-      modelTools,
-      task,
-      system: baseSystem,
-      systemLayers,
-      toolCallIds,
-    }),
-    messages: preparedMessages,
-    ...(externalMcpToolSource
-      ? {
-          mcp: {
-            clients: guardedMcpClients({
-              boundary: thirdPartyBoundary,
-              provider: model.provider,
-              source: externalMcpToolSource,
-              tenantWorkspaceIds,
-            }),
-            connection: "close",
-            lazyTools: true,
-          },
-        }
-      : {}),
-    agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
-    abortController,
-    threadId,
-    ...(runId === undefined ? {} : { runId }),
-    ...(parentRunId === undefined ? {} : { parentRunId }),
-    ...(resume === undefined ? {} : { resume }),
-    middleware: [
-      analytics.middleware,
-      createChatRuntimeMiddleware({
-        abortSignal,
-        baseSystem,
-        caching,
-        compactionAnalytics,
-        compactionFeature,
-        onHistoryTrimmed,
-        model,
-        modelId,
-        organizationId,
-        modelAdmission,
-        orgAIConfig,
-        managedAIResidency,
-        task,
-        state,
-        systemLayers,
-        tenantWorkspaceIds,
+  // The provider request is sent again while the run fails before its
+  // first output; the generation layer owns that retry.
+  const stream = withProviderChatRunRetry({
+    abortSignal,
+    model,
+    open: () =>
+      streamChatChunks({
+        ...chatAttemptRequestOptions({
+          caching,
+          model,
+          modelTools,
+          task,
+          system: baseSystem,
+          systemLayers,
+          toolCallIds,
+        }),
+        messages: preparedMessages,
+        ...(externalMcpToolSource
+          ? {
+              mcp: {
+                clients: guardedMcpClients({
+                  boundary: thirdPartyBoundary,
+                  provider: model.provider,
+                  source: externalMcpToolSource,
+                  tenantWorkspaceIds,
+                }),
+                connection: "close",
+                lazyTools: true,
+              },
+            }
+          : {}),
+        agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
+        abortController,
         threadId,
+        ...(runId === undefined ? {} : { runId }),
+        ...(parentRunId === undefined ? {} : { parentRunId }),
+        ...(resume === undefined ? {} : { resume }),
+        middleware: [
+          analytics.middleware,
+          createChatRuntimeMiddleware({
+            abortSignal,
+            baseSystem,
+            caching,
+            compactionAnalytics,
+            compactionFeature,
+            onHistoryTrimmed,
+            model,
+            modelId,
+            organizationId,
+            modelAdmission,
+            orgAIConfig,
+            managedAIResidency,
+            task,
+            state,
+            systemLayers,
+            tenantWorkspaceIds,
+            threadId,
+          }),
+        ],
       }),
-    ],
   });
 
   for await (const chunk of stream) {
