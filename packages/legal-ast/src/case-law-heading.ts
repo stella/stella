@@ -17,5 +17,6 @@ export const caseLawSectionHeading = (
   if (match === null) {
     return null;
   }
+  // parser-output-unchanged: the same levels with the comparison flipped and the branches swapped.
   return { level: match.groups?.["subsection"] !== undefined ? 4 : 3 };
 };
