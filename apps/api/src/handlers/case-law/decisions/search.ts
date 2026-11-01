@@ -83,6 +83,7 @@ import {
 } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import {
+  type DecisionDatePosition,
   decisionDatePositionOf,
   decisionDateRankAfterSql,
   decisionDateRankOrderBySql,
@@ -3412,6 +3413,12 @@ type ListCaseLawProvisionDecisionsOptions = {
   };
 };
 
+/** Where a relevance page of a provision list ended. */
+type ProvisionAuthorityPosition = {
+  key: number;
+  id: SafeId<"caseLawDecision">;
+};
+
 /**
  * The authority a relevance page of a provision list ended on, bound to the
  * request it was issued for. The key must be a finite number, the column's
@@ -3420,7 +3427,7 @@ type ListCaseLawProvisionDecisionsOptions = {
 const readProvisionAuthorityCursor = (
   cursor: string,
   context: string,
-): { key: number; id: SafeId<"caseLawDecision"> } | null => {
+): ProvisionAuthorityPosition | null => {
   const parts = decodePaginationCursor(cursor);
   if (parts?.length !== 3) {
     return null;
@@ -3587,7 +3594,7 @@ const provisionListOrder = ({
   switch (sort) {
     case "relevance": {
       const key = publishedCaseLawDecisions.citationAuthority;
-      return provisionOrderOf({
+      return provisionOrderOf<ProvisionAuthorityPosition>({
         cursor,
         positions: {
           encode: (position) =>
@@ -3606,7 +3613,7 @@ const provisionListOrder = ({
         "newest",
         publishedCaseLawDecisions.decisionDate,
       );
-      return provisionOrderOf({
+      return provisionOrderOf<DecisionDatePosition>({
         cursor,
         positions: {
           encode: (position) => encodeDecisionDateCursor(context, position),
