@@ -132,8 +132,9 @@ const Textarea = ({
         )}
       />
       {counted ? (
+        // Readable by assistive technology, so the current count is not
+        // a sighted-only fact.
         <span
-          aria-hidden="true"
           className="text-muted-foreground pointer-events-none absolute end-3 bottom-1.5 text-xs tabular-nums"
           data-slot="textarea-count"
         >

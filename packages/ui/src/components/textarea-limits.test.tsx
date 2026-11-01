@@ -54,6 +54,10 @@ describe("Textarea limits", () => {
 
     expect(markup).toContain('data-slot="textarea-count"');
     expect(countText(markup)).toBe("5/280");
+    // The count is in the accessibility tree, not only on screen.
+    expect(markup).not.toMatch(
+      /<span[^>]*aria-hidden="true"[^>]*data-slot="textarea-count"/u,
+    );
     // HTML attribute names are case-insensitive, and react-dom releases
     // differ in the case they print.
     expect(markup).toMatch(/ maxlength="280"/iu);
