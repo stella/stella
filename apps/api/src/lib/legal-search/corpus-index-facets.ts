@@ -106,7 +106,10 @@ const browseFacetSpecs = (yearFacetField: string) =>
     country: { field: "jurisdiction", order: { _count: "desc" } },
     court: { field: "court", order: { _count: "desc" } },
     year: { field: yearFacetField, order: { _key: "desc" } },
-  }) as const satisfies Record<keyof LegalBrowseFacets, BrowseFacetSpec>;
+  }) as const satisfies Record<
+    Exclude<keyof LegalBrowseFacets, "countsFreshness">,
+    BrowseFacetSpec
+  >;
 
 export const browseFacetNames = Object.keys(browseFacetSpecs("year"));
 

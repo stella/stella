@@ -373,7 +373,7 @@ export const readCaseLawCorpusStatusHandler = async (
       facets.value.countsFreshness ??
         panic("Maintained facets returned no population freshness"),
     ),
-    readFacets: async () => facets,
+    readFacets: async () => await Promise.resolve(facets),
     readUpdatedAt: async (read) =>
       await caseLawDb(
         async (tx) => await readCaseLawCorpusStatusQuery(tx, read),

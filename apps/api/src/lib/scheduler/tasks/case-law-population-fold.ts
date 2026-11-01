@@ -38,9 +38,16 @@ type PopulationFoldOptions = {
 export const createCaseLawPopulationFoldTask =
   ({
     createRuntime = createScriptBackfillRuntime,
-    clock = performance.now,
+    clock = () => performance.now(),
   }: PopulationFoldOptions = {}): SchedulerTask =>
-  async ({ db, logger, runId, signal, scheduleContinuation, dueAt }) => {
+  async ({
+    db,
+    logger,
+    runId,
+    signal,
+    scheduleContinuation,
+    dueAt,
+  }): Promise<Result<void, SchedulerTaskFailure>> => {
     const deadline = clock() + RUN_BUDGET_MS;
     signal.throwIfAborted();
     const boundedSignal = AbortSignal.any([
@@ -121,7 +128,7 @@ export const createCaseLawPopulationFoldTask =
     if (outcome.isErr()) {
       if (outcome.error instanceof BackfillHeldError) {
         logger.info("scheduler.case_law_population_fold_held");
-        return;
+        return Result.ok();
       }
       return Result.err(
         new SchedulerTaskFailure({
@@ -130,6 +137,7 @@ export const createCaseLawPopulationFoldTask =
         }),
       );
     }
+    return Result.ok();
   };
 
 export const foldCaseLawPopulationCountsTask =

@@ -623,12 +623,12 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
         await db.execute(
           sql`SELECT pg_advisory_lock(19054, 1), pg_advisory_lock(19054, 2)`,
         );
-        const run = (
+        const run = async (
           writer: GatedTestDb,
           gate: number,
           rows: ReturnType<typeof populationDecisionRow>[],
         ) =>
-          Result.tryPromise({
+          await Result.tryPromise({
             try: async () =>
               await writer.transaction(async (tx) => {
                 await tx.execute(sql`SELECT set_config('statement_timeout', '10s', true), set_config('lock_timeout', '0', true),
@@ -730,12 +730,12 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
         populationDecisionRow(firstSource, "CZE"),
       ];
       try {
-        const run = (
+        const run = async (
           writer: GatedTestDb,
           rows: ReturnType<typeof populationDecisionRow>[],
           ready: ReturnType<typeof Promise.withResolvers<undefined>>,
         ) =>
-          Result.tryPromise({
+          await Result.tryPromise({
             try: async () =>
               await writer.transaction(async (tx) => {
                 await tx.execute(
@@ -750,7 +750,7 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
                 );
                 ready.resolve(undefined);
                 if (written.isErr()) {
-                  return abortTransaction(written.error);
+                  abortTransaction(written.error);
                 }
                 await bothReady;
                 await tx.insert(caseLawDecisions).values(second);

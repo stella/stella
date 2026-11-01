@@ -801,10 +801,10 @@ const foldFixturePopulation = async (database: GatedTestDb) => {
       typeof row["folded"] !== "number" ||
       typeof row["done"] !== "boolean"
     ) {
-      return panic("Invalid fixture population fold result");
+      panic("Invalid fixture population fold result");
     }
     if (row["folded"] === 0 && !row["done"]) {
-      return panic("Fixture population fold owner is busy");
+      panic("Fixture population fold owner is busy");
     }
     done = row["done"];
   }

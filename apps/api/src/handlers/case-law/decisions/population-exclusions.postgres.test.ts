@@ -236,7 +236,7 @@ describe.skipIf(!enabled)(
           );
           expect(complete).toBe(true);
           if ("message" in answer) {
-            return panic("Exclusion fixture must produce a coverage answer");
+            panic("Exclusion fixture must produce a coverage answer");
           }
           const country = answer.countries.find(
             ({ country: countryCode }) => countryCode === "CZE",
@@ -244,7 +244,7 @@ describe.skipIf(!enabled)(
           if (
             country?.availability !== CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE
           ) {
-            return panic("Exclusion fixture country must be searchable");
+            panic("Exclusion fixture country must be searchable");
           }
           expect(country.searchable).toBe(INCLUDED_COURTS);
           expect(country.sources).toHaveLength(1);
