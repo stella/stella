@@ -476,6 +476,7 @@ export const prepareCorpusProjectionReplacementsTx = async <
   // Rotate every inspected row to the pending queue's tail. A revision that
   // cleanup already owns can then reduce this batch's result, but it cannot
   // leave a fixed old prefix that hides later replacements.
+  // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- rotates exactly the locked state rows, named by their (family, generation, entity) primary key taken from the lock result; the table has no id column
   await tx
     .update(corpusIndexProjectionStates)
     .set({ updatedAt: transitionAt })
@@ -797,7 +798,6 @@ export const startCorpusProjectionAppendBatchTx = async (
     .returning({ id: corpusIndexProjectionIntents.id });
   const startedIds = new Set(started.map(({ id }) => id));
   if (started.length > 0 && started.length !== leases.length) {
-    // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- updates the rows the guarded transition above returned, a subset of the leased intents locked above
     await tx
       .update(corpusIndexProjectionIntents)
       .set({ appendRequestRevisionCount: started.length })
@@ -1367,7 +1367,6 @@ export const commitCorpusProjectionAppendTx = async (
       updatedAt: transitionAt,
     })
     .where(eq(corpusIndexProjectionIntents.id, intent.id));
-  // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- names the state row locked above by the intent's own (family, generation, entity) key, and the desired-state guards make it a compare-and-set on that row
   const applied = await tx
     .update(corpusIndexProjectionStates)
     .set({
@@ -1387,9 +1386,9 @@ export const commitCorpusProjectionAppendTx = async (
     })
     .where(
       and(
-        eq(corpusIndexProjectionStates.family, intent.family),
-        eq(corpusIndexProjectionStates.generation, intent.generation),
-        eq(corpusIndexProjectionStates.entityId, intent.entityId),
+        eq(corpusIndexProjectionStates.family, identity.family),
+        eq(corpusIndexProjectionStates.generation, identity.generation),
+        eq(corpusIndexProjectionStates.entityId, identity.entityId),
         eq(corpusIndexProjectionStates.desiredAction, "upsert"),
         eq(corpusIndexProjectionStates.desiredEpoch, intent.epoch),
         eq(corpusIndexProjectionStates.desiredFingerprint, intent.fingerprint),

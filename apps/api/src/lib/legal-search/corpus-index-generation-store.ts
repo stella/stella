@@ -338,13 +338,14 @@ export const setServingCorpusIndexGenerationTx = async (
         eq(corpusIndexGenerations.status, "serving"),
       ),
     );
+  // oxlint-disable-next-line require-locked-rows-write/require-locked-rows-write -- promotes the target row the lock above returned and checked, by its (family, generation) primary key; the table has no id column
   const promoted = await tx
     .update(corpusIndexGenerations)
     .set({ status: "serving", updatedAt: sql`clock_timestamp()` })
     .where(
       and(
-        eq(corpusIndexGenerations.family, targetRow.family),
-        eq(corpusIndexGenerations.generation, targetRow.generation),
+        eq(corpusIndexGenerations.family, target.family),
+        eq(corpusIndexGenerations.generation, target.generation),
       ),
     )
     .returning();

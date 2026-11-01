@@ -16,19 +16,25 @@ import {
  * rows also writes every row that started to match after the lock was taken,
  * and that row was never checked. The write must be derived from the locked
  * rows: lock through `lockRowsForWrite` (apps/api/src/lib/db/aggregate-lock.ts)
- * and write with `.where(locked.where(...))`, which names the locked ids, or
- * name a value computed from the lock result in the write's WHERE (or its
- * `UPDATE ... FROM` source). A `const locked = await lockRowsForWrite({ table:
- * t })` is a lock on `t` here too: a later write to `t` in the function must
- * use `locked.where(...)` as its whole WHERE.
+ * and write with `.where(locked.where(...))`, which names the locked ids. A
+ * `const locked = await lockRowsForWrite({ table: t })` (or another helper in
+ * LOCKED_ROWS_HELPERS) is a lock on `t` here too: a later write to `t` in the
+ * function must use `locked.where(...)` as its whole WHERE.
  *
- * Also accepted, because the write names the rows the lock named:
- * - the write keeps the lock's own single-row key, `eq(table.id, x)` in both;
- * - the lock is key-shaped (only `eq(table.column, key)` where a key is a
- *   variable, not a literal or an enum member, `inArray(table.column, keys)`,
- *   and `and` / `or` of those) and the write keeps every one of its
- *   conjuncts, narrowing them as it likes: every existing row the key names
- *   was locked whatever its state.
+ * After a plain `.for(...)` lock, the write's WHERE must have a top-level AND
+ * conjunct that pins `table.id` (`eq` / `inArray`) and one of:
+ * - the pinned ids come from the lock result (or from rows an earlier write
+ *   to the table returned after the lock);
+ * - an `UPDATE ... FROM` source built from the lock result, joined by
+ *   `eq(table.id, ...)`;
+ * - the ids are keys chosen elsewhere, not the id set the lock filtered;
+ * - the pin is the lock's own single-row key, `eq(table.id, x)` in both.
+ * Or the lock is key-shaped (only `eq(table.column, key)` where a key is a
+ * variable, not a literal or an enum member, `inArray(table.column, keys)`,
+ * and `and` / `or` of those) and the write keeps every one of its conjuncts:
+ * every existing row the key names was locked whatever its state.
+ * A value from the lock under `or`, `notInArray` or a non-id column does not
+ * count: it can widen the write.
  *
  * A row joins a key only by being inserted, which the key's uniqueness or a
  * parent lock governs; this rule is about rows whose state changes into a
@@ -46,12 +52,19 @@ import {
  *   const rows = await tx.select().from(t).where(open).for("update");
  *   await tx.update(t).set(done).where(inArray(t.id, rows.map((r) => r.id)));
  *
- * Out of scope: raw SQL locks, and lock helpers that return rows to a caller
- * in another function; the rule reads one function at a time.
+ * Out of scope, because the rule reads one function at a time and only
+ * Drizzle builders: raw SQL locks and raw `tx.execute(sql\`UPDATE ...\`)`
+ * writes, lock helpers outside LOCKED_ROWS_HELPERS that return rows to a
+ * caller, and writes made by a helper function the locking function calls.
  */
 
 const RULE_NAME = "require-locked-rows-write";
-const LOCK_OWNER = "lockRowsForWrite";
+// Owner helpers that lock rows and return `{ rows, ids, where }`, with the
+// table they lock: null reads it from the `table` option.
+const LOCKED_ROWS_HELPERS = new Map<string, string | null>([
+  ["lockRowsForWrite", null],
+  ["lockUnbillableRateCandidates", "timeEntries"],
+]);
 const WRITE_LOCKS = new Set(["update", "no key update"]);
 const FUNCTION_TYPES = new Set([
   "ArrowFunctionExpression",
@@ -87,11 +100,14 @@ type LockSite = {
 
 type WriteSite = {
   node: AstNode;
+  /** The outermost call of the builder chain, which carries its result. */
+  outer: AstNode;
   method: string;
   table: string;
-  // The WHERE argument and any `UPDATE ... FROM` source.
-  selection: AstNode[];
+  /** `UPDATE ... FROM` sources. */
+  from: AstNode[];
   where: AstNode | null;
+  returning: boolean;
 };
 
 const parentOf = (node: AstNode): AstNode | null =>
@@ -132,8 +148,61 @@ const chainArgument = (calls: AstNode[], method: string) => {
   return call ? firstArgument(call) : null;
 };
 
-const tableName = (node: AstNode | null) =>
-  isIdentifier(node) ? node.name : null;
+const programOf = (node: AstNode) => {
+  let current: AstNode | null = node;
+  while (current && current.type !== "Program") {
+    current = parentOf(current);
+  }
+  return current;
+};
+
+// `const t = timeEntries` and `const t = schema.timeEntries` aliases in a file.
+const tableAliases = new WeakMap<AstNode, Map<string, AstNode>>();
+const aliasesIn = (program: AstNode) => {
+  const known = tableAliases.get(program);
+  if (known) {
+    return known;
+  }
+  const aliases = new Map<string, AstNode>();
+  for (const node of everyNode(program)) {
+    if (
+      node.type === "VariableDeclarator" &&
+      isIdentifier(node.id) &&
+      isAstNode(node.init) &&
+      (node.init.type === "Identifier" || node.init.type === "MemberExpression")
+    ) {
+      aliases.set(node.id.name, node.init);
+    }
+  }
+  tableAliases.set(program, aliases);
+  return aliases;
+};
+
+// The table a handle names, by its schema export: `timeEntries`,
+// `schema.timeEntries` and a local alias of either all name `timeEntries`.
+const tableName = (node: AstNode | null, depth = 0): string | null => {
+  if (!node || depth > MAX_EXPANSION_DEPTH) {
+    return null;
+  }
+  if (node.type === "MemberExpression") {
+    return node.computed === true ? null : memberPropertyName(node);
+  }
+  if (!isIdentifier(node)) {
+    return null;
+  }
+  const program = programOf(node);
+  const alias = program ? aliasesIn(program).get(node.name) : undefined;
+  return alias ? tableName(alias, depth + 1) : node.name;
+};
+
+// `table.column` for a table handle named `table`.
+const columnOf = (node: unknown, table: string) =>
+  isAstNode(node) &&
+  node.type === "MemberExpression" &&
+  isAstNode(node.object) &&
+  tableName(node.object) === table
+    ? memberPropertyName(node)
+    : null;
 
 const enclosingFunction = (node: AstNode): AstNode | null => {
   let current = parentOf(node);
@@ -386,12 +455,12 @@ const idPin = (
     return null;
   }
   const [column, value] = argumentsOf(node);
-  return isAstNode(column) &&
-    column.type === "MemberExpression" &&
-    isIdentifier(column.object, table) &&
-    memberPropertyName(column) === "id" &&
-    isAstNode(value)
-    ? `${node.callee.name}:${text(value)}`
+  return columnOf(column, table) === "id" && isAstNode(value)
+    ? {
+        operator: node.callee.name,
+        value,
+        key: `${node.callee.name}:${normalized(text(value))}`,
+      }
     : null;
 };
 
@@ -522,9 +591,7 @@ const isKeyShaped = (scope: AstNode, node: AstNode, table: string): boolean => {
   }
   const [column, value] = argumentsOf(node);
   return (
-    isAstNode(column) &&
-    column.type === "MemberExpression" &&
-    isIdentifier(column.object, table) &&
+    columnOf(column, table) !== null &&
     (operator === "inArray" ? isKeyList(value) : isKeyValue(value))
   );
 };
@@ -539,8 +606,9 @@ const writeSite = (call: AstNode): WriteSite | null => {
     return null;
   }
   // Walk outward along the builder: update(t).set(v).from(s).where(w).
-  const selection: AstNode[] = [];
+  const from: AstNode[] = [];
   let where: AstNode | null = null;
+  let returning = false;
   let current = call;
   let parent = parentOf(current);
   while (
@@ -556,20 +624,25 @@ const writeSite = (call: AstNode): WriteSite | null => {
     const argument = firstArgument(outer);
     if (step === "where" && argument) {
       where = argument;
-      selection.push(argument);
     } else if (step === "from" && argument) {
-      selection.push(argument);
+      from.push(argument);
+    } else if (step === "returning") {
+      returning = true;
     }
     current = outer;
     parent = parentOf(current);
   }
-  return { node: call, method, table, selection, where };
+  return { node: call, outer: current, method, table, from, where, returning };
 };
 
 // `lockRowsForWrite({ table: t, query })` locks rows of `t`; its result is
 // the lock result.
 const ownerLockSite = (node: AstNode): LockSite | null => {
-  if (!isIdentifier(node.callee, LOCK_OWNER)) {
+  if (!isIdentifier(node.callee)) {
+    return null;
+  }
+  const fixedTable = LOCKED_ROWS_HELPERS.get(node.callee.name);
+  if (fixedTable === undefined) {
     return null;
   }
   const options = firstArgument(node);
@@ -583,9 +656,9 @@ const ownerLockSite = (node: AstNode): LockSite | null => {
       isIdentifier(property.key, "table") &&
       property.computed !== true,
   );
-  const table = tableName(
-    isAstNode(tableProperty?.value) ? tableProperty.value : null,
-  );
+  const table =
+    fixedTable ??
+    tableName(isAstNode(tableProperty?.value) ? tableProperty.value : null);
   if (!table) {
     return null;
   }
@@ -625,13 +698,22 @@ const lockSite = (node: AstNode): LockSite | null => {
     : null;
 };
 
-// `locked.where(...)` on a binding of the helper's result.
-const isLockedWhere = (where: AstNode | null, names: ReadonlySet<string>) =>
-  where?.type === "CallExpression" &&
-  calledMethod(where) === "where" &&
-  isAstNode(where.callee) &&
-  isIdentifier(where.callee.object) &&
-  names.has(where.callee.object.name);
+// `locked.where(...)` on a binding of the helper's result, or the destructured
+// `where(...)` of `const { where } = await lockRowsForWrite(...)`.
+const isLockedWhere = (where: AstNode | null, names: ReadonlySet<string>) => {
+  if (where?.type !== "CallExpression" || !isAstNode(where.callee)) {
+    return false;
+  }
+  const callee = where.callee;
+  if (isIdentifier(callee)) {
+    return names.has(callee.name);
+  }
+  return (
+    calledMethod(where) === "where" &&
+    isIdentifier(callee.object) &&
+    names.has(callee.object.name)
+  );
+};
 
 export default eslintCompatPlugin({
   meta: { name: RULE_NAME },
@@ -662,44 +744,83 @@ export default eslintCompatPlugin({
               isLockedWhere(write.where, lock.bindings),
             );
           }
-          const derived = new Set<string>();
+          const seed = new Set<string>();
           for (const lock of preceding) {
-            for (const name of deriveBindings(lock.owner, lock.bindings)) {
-              derived.add(name);
+            for (const name of lock.bindings) {
+              seed.add(name);
             }
           }
-          const selection = write.selection.flatMap((node) =>
-            conjunctsOf(scope, node),
+          // Rows an earlier write to the same table returned after the lock
+          // are a subset of what that write reached, so they count as locked.
+          for (const earlier of writes) {
+            if (
+              earlier.returning &&
+              earlier.table === write.table &&
+              earlier.node.range[1] < write.node.range[0] &&
+              preceding.some(
+                (lock) =>
+                  lock.node.range[1] < earlier.node.range[0] &&
+                  contains(lock.owner, earlier.node),
+              )
+            ) {
+              for (const name of lockBindings(earlier.outer)) {
+                seed.add(name);
+              }
+            }
+          }
+          const derived = deriveBindings(scope, seed);
+          // Only top-level AND conjuncts narrow the write; anything under
+          // `or`, `not` or `notInArray` can widen it.
+          const conjuncts = conjunctsOf(scope, write.where);
+          const pins = conjuncts.flatMap(
+            (node) => idPin(node, write.table, text) ?? [],
           );
-          if (readsAny(selection, derived)) {
+          // `eq` / `inArray(table.id, <from the locked rows>)`.
+          if (pins.some(({ value }) => readsAny(value, derived))) {
+            return true;
+          }
+          // `UPDATE ... FROM (<locked rows>) WHERE table.id = source.id`.
+          if (
+            readsAny(write.from, derived) &&
+            pins.some(({ operator }) => operator === "eq")
+          ) {
             return true;
           }
           const writeConjuncts = new Set(
-            selection.map((node) => normalized(text(node))),
-          );
-          const writePins = new Set(
-            selection.flatMap((node) => idPin(node, write.table, text) ?? []),
+            conjuncts.map((node) => normalized(text(node))),
           );
           return preceding.some((lock) => {
-            const conjuncts = conjunctsOf(lock.owner, lock.where);
+            const lockConjuncts = conjunctsOf(lock.owner, lock.where);
+            const lockPins = lockConjuncts.flatMap(
+              (node) => idPin(node, lock.table, text) ?? [],
+            );
             // A key-shaped lock holds every existing row it names, so a write
             // that keeps all of its conjuncts reaches only locked rows,
             // whatever it adds to narrow them.
             const keepsKeyLock =
-              conjuncts.length > 0 &&
-              conjuncts.every(
+              lockConjuncts.length > 0 &&
+              lockConjuncts.every(
                 (node) =>
                   isKeyShaped(lock.owner, node, lock.table) &&
                   writeConjuncts.has(normalized(text(node))),
               );
             // One row by primary key: the lock read exactly that row.
-            const keepsRowKey = conjuncts.some((node) => {
-              const pin = idPin(node, lock.table, text);
-              return (
-                pin !== null && pin.startsWith("eq:") && writePins.has(pin)
-              );
-            });
-            return keepsKeyLock || keepsRowKey;
+            const keepsRowKey = lockPins.some(
+              (lockPin) =>
+                lockPin.operator === "eq" &&
+                pins.some(({ key }) => key === lockPin.key),
+            );
+            // Rows named by ids chosen elsewhere (`inArray(t.id, dependents)`)
+            // cannot move into the set. Ids the lock itself filtered by state
+            // can: that is the re-derived write this rule exists for.
+            const namesOtherIds = pins.some(
+              (pin) =>
+                (pin.operator === "inArray"
+                  ? isKeyList(pin.value)
+                  : isKeyValue(pin.value)) &&
+                lockPins.every(({ key }) => key !== pin.key),
+            );
+            return keepsKeyLock || keepsRowKey || namesOtherIds;
           });
         };
         return {

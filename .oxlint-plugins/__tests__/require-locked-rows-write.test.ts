@@ -29,8 +29,41 @@ await tx.delete(t).where(and(inArray(t.id, ids), eq(t.status, STATUS.SUBMITTED))
   test("reports both lock strengths and an unconditional write", async () => {
     expect(
       await lint(`const rows = await tx.select().from(t).where(eq(t.status, "open")).for("no key update");
-await tx.update(t).set({ seen: true });`),
-    ).toEqual([3]);
+await tx.update(t).set({ seen: true });
+const others = await tx.select().from(u).where(eq(u.status, "open")).for("update");
+await tx.delete(u).where(eq(u.status, "open"));
+await tx.select().from(v).where(eq(v.status, "open")).for("share");
+await tx.delete(v).where(eq(v.status, "open"));`),
+    ).toEqual([3, 5]);
+  });
+
+  test("reports writes that read the lock but can widen past it", async () => {
+    expect(
+      await lint(`${filteredLock}
+const lockedIds = rows.map((row) => row.id);
+await tx.update(t).set({ done: true }).where(or(inArray(t.id, lockedIds), eq(t.status, "open")));
+await tx.update(t).set({ done: true }).where(notInArray(t.id, lockedIds));
+await tx.update(t).set({ done: true }).where(eq(t.status, rows[0].status));`),
+    ).toEqual([7, 8, 9]);
+  });
+
+  test("resolves schema members and local aliases to one table", async () => {
+    expect(
+      await lint(`const entries = schema.timeEntries;
+await tx.select().from(schema.timeEntries).where(eq(entries.status, "open")).for("update");
+await tx.update(timeEntries).set({ x: 1 }).where(eq(timeEntries.status, "open"));
+await tx.delete(entries).where(eq(schema.timeEntries.status, "open"));`),
+    ).toEqual([4, 5]);
+  });
+
+  test("accepts ids chosen elsewhere and rows a guarded write returned", async () => {
+    expect(
+      await lint(`await tx.select().from(t).where(eq(t.id, id)).for("update");
+await tx.update(t).set({ stale: true }).where(inArray(t.id, [...dependents]));
+await tx.select().from(t).where(and(inArray(t.id, ids), eq(t.lease, lease))).for("update");
+const started = await tx.update(t).set({ s: 1 }).where(and(inArray(t.id, ids), eq(t.lease, lease))).returning({ id: t.id });
+await tx.update(t).set({ n: 1 }).where(inArray(t.id, started.map(({ id }) => id)));`),
+    ).toEqual([]);
   });
 
   test("accepts writes derived from the locked rows", async () => {
@@ -82,6 +115,16 @@ await tx.update(t).set({ status: "done" }).where(or(locked.where(), eq(t.status,
 await tx.delete(t).where(inArray(t.id, locked.ids));
 await tx.update(other).set({ status: "done" });`),
     ).toEqual([5, 6, 7]);
+  });
+
+  test("accepts a destructured where() and knows the owner's other lock helpers", async () => {
+    expect(
+      await lint(`const { rows, where } = await lockRowsForWrite({ table: t, query: q });
+await tx.update(t).set({ s: 1 }).where(where(eq(t.kind, "draft")));
+const candidates = await lockUnbillableRateCandidates(tx, condition);
+await tx.update(timeEntries).set({ billable: true }).where(candidates.where());
+await tx.update(timeEntries).set({ billable: true }).where(condition);`),
+    ).toEqual([6]);
   });
 
   test("honours a reasoned exemption on the write", async () => {
