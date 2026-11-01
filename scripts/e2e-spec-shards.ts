@@ -4,6 +4,11 @@ import path from "node:path";
 
 import { buildImportGraph } from "./api-test-impact";
 import {
+  changedBrowserSuiteSpecs,
+  hostedSuiteSpecFiles,
+  hostedSuiteSpecs,
+} from "./ci-browser-suites";
+import {
   ROUTE_SMOKE_SPEC_PATH,
   routeSmokeAffected,
 } from "./detect-route-smoke-changes";
@@ -107,19 +112,37 @@ export const selectE2eSpecs = (
   }
 };
 
+// Browser suites this job hosts beside the web specs (scripts/ci-browser-suites.ts).
+const PRODUCTION_JOB = "e2e-production-shard";
+
 export const selectedE2ePlan = (
   changedFiles: readonly string[],
   root = process.cwd(),
 ) => {
-  const selection = selectE2eSpecPlan(changedFiles, root);
+  // A hosted suite's own spec runs on its own; it cannot move a web spec.
+  const hosted = hostedSuiteSpecFiles(PRODUCTION_JOB, root);
+  const selection = selectE2eSpecPlan(
+    changedFiles.filter((file) => !hosted.has(file)),
+    root,
+  );
   // The growing geometry matrix needs both independently balanced CI shards,
   // including when a PR changes only the spec or one of its fixture helpers.
   if (
     selection.status === "all" ||
     selection.specs.includes(GEOMETRY_SPEC_PATH)
   ) {
-    return { status: "full", matrix: allE2eMatrix(), specs: [] } as const;
+    return {
+      status: "full",
+      matrix: allE2eMatrix(),
+      specs: [],
+      suiteSpecs: [],
+    } as const;
   }
+  // The first leg runs the hosted suites' changed specs.
+  const suiteSpecs = hostedSuiteSpecs(
+    changedBrowserSuiteSpecs(changedFiles, { root }),
+    PRODUCTION_JOB,
+  );
   // The dedicated network leg owns route smoke; the general run excludes it.
   const specs = selection.specs.filter(
     (spec) => spec !== ROUTE_SMOKE_SPEC_PATH,
@@ -131,11 +154,12 @@ export const selectedE2ePlan = (
     status: "selected",
     matrix: {
       shard: [
-        ...(specs.length > 0 ? [1] : []),
+        ...(specs.length > 0 || suiteSpecs.length > 0 ? [1] : []),
         ...(routeSmokeAffected(changedFiles, root) ? specialLegs : []),
       ],
     },
     specs,
+    suiteSpecs,
   } as const;
 };
 

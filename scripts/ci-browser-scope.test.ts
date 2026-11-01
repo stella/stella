@@ -406,9 +406,10 @@ for (const name of [
 
 test("the emitted-scope proof rejects constant emitters", () => {
   const run = scopeStep("Check extension browser test scope");
+  const start = run.indexOf("HEAD -- ");
   const selector = run.slice(
-    run.indexOf("HEAD -- "),
-    run.indexOf("; then") + "; then".length,
+    start,
+    run.indexOf("; then", start) + "; then".length,
   );
   for (const constant of ["false", "true"]) {
     const planted = `if false && git diff --quiet origin/main...${selector}\n  :\nfi\necho "required=${constant}" >> "$GITHUB_OUTPUT"`;

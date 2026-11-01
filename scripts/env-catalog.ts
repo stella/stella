@@ -1508,6 +1508,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "UI_PLAYGROUND_SELECTED_SPECS",
   "UI_PLAYGROUND_ALL_SPECS",
   "DESKTOP_REQUIRED",
+  // CI browser suite planning reads the changed paths, and each browser leg
+  // passes the specs it carries; the shard planner adds the suite legs.
+  "BROWSER_SUITE_CHANGED_PATHS",
+  "BROWSER_SUITE_LEGS",
+  "LEG_SPECS",
+  "SCOPE_UNKNOWN",
   // CI image resolution and smoke tooling; product defaults remain upstream.
   "CI_IMAGE_MIRROR_ENABLED",
   "CI_PLAYWRIGHT_IMAGE",

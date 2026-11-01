@@ -4094,12 +4094,14 @@ type PlaywrightSelectionOptions = {
   mode: "full" | "selected";
   specs: string;
   shard?: number;
+  suiteSpecs?: string;
 };
 
 const runPlaywrightSelection = ({
   mode,
   specs,
   shard = 1,
+  suiteSpecs = "[]",
 }: PlaywrightSelectionOptions) => {
   const step = jobSteps(ciJobs["e2e-production-shard"]).find(
     ({ name }) => name === "Run Playwright shard",
@@ -4127,6 +4129,7 @@ const runPlaywrightSelection = ({
         GITHUB_WORKSPACE: nodePath.resolve(import.meta.dir, ".."),
         E2E_MODE: mode,
         E2E_SPECS: specs,
+        E2E_SUITE_SPECS: suiteSpecs,
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -4395,6 +4398,16 @@ test("a selected Playwright leg fails before loading an empty spec list", () => 
   expect(result.exitCode).toBe(1);
   expect(result.stderr.toString()).toContain("Selected E2E leg has no specs");
   expect(result.stdout.toString()).toBe("");
+});
+
+test("a selected leg without web specs runs only the hosted suites' changed specs", () => {
+  const result = runPlaywrightSelection({
+    mode: "selected",
+    specs: "[]",
+    suiteSpecs: JSON.stringify(["apps/api/e2e/citation-graph.spec.mts"]),
+  });
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
+  expect(result.stdout.toString()).not.toContain("@stll/web");
 });
 
 test("production shards keep full-depth core coverage and exclude unrelated fast PRs", () => {
@@ -6987,6 +7000,7 @@ test.each([
           JSON.stringify({
             matrix: JSON.parse(matrix),
             specs: JSON.parse(specs),
+            suiteSpecs: [],
           }),
         );
       }
@@ -7023,6 +7037,7 @@ test.each([
           `matrix=${full ? '{"shard":[1,2,"network-baseline"]}' : matrix}`,
           `mode=${full ? "full" : "selected"}`,
           `specs=${full ? "[]" : specs}`,
+          "suite_specs=[]",
           `selection_required=${required}`,
           `required=${required}`,
           "",
@@ -7524,6 +7539,7 @@ type BrowserPlanOptions = {
   packageChecksRequired?: string;
   browserScopeRequired?: string;
   uiPlaygroundSpecs?: string;
+  browserSuiteLegs?: string;
 };
 type HeavyGatePlanOptions = {
   event: Event;
@@ -7570,6 +7586,7 @@ const browserPlanOutput = ({
   packageChecksRequired = "true",
   browserScopeRequired = "true",
   uiPlaygroundSpecs = "[]",
+  browserSuiteLegs = "[]",
 }: BrowserPlanOptions) => {
   const { outputs } = v.parse(
     v.object({ outputs: v.record(v.string(), v.string()) }),
@@ -7591,6 +7608,7 @@ const browserPlanOutput = ({
         "steps.depth.outputs.suite_depth": depth,
         "steps.depth.outputs.queue_depth": queueDepth,
         "steps.ui-playground-plan.outputs.specs": uiPlaygroundSpecs,
+        "steps.browser-suite-plan.outputs.legs": browserSuiteLegs,
       },
     }),
   );
@@ -7615,6 +7633,29 @@ test("a PR that selects UI playground specs requires the browser job", () => {
   ).toBe("true");
   expect(plan("false", "[]")).toBe("false");
   expect(plan("true", "[]")).toBe("true");
+});
+
+test("a PR that changes specs of a whole-suite browser leg requires the browser job", () => {
+  const legs = JSON.stringify([
+    { suite: "ui", specs: ["apps/extension/e2e/bridge.spec.ts"] },
+  ]);
+  expect(
+    browserPlanOutput({
+      event: "pull_request",
+      depth: "fast",
+      desktopRequired: "false",
+      browserSuiteLegs: legs,
+    }),
+  ).toBe("true");
+  expect(
+    browserPlanOutput({
+      event: "pull_request",
+      depth: "fast",
+      desktopRequired: "false",
+      browserSuiteLegs: legs,
+      browserScopeRequired: "false",
+    }),
+  ).toBe("false");
 });
 
 test("Playwright image-only changes admit browser suites in merge groups", () => {

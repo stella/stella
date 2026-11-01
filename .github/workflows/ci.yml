@@ -205,6 +205,8 @@ jobs:
       e2e_production_matrix: ${{ steps.e2e-pr-plan.outputs.matrix }}
       e2e_production_mode: ${{ steps.e2e-pr-plan.outputs.mode }}
       e2e_production_specs: ${{ steps.e2e-pr-plan.outputs.specs }}
+      # Changed specs of the other browser suites the first leg runs.
+      e2e_production_suite_specs: ${{ steps.e2e-pr-plan.outputs.suite_specs || '[]' }}
       browser_spec_selection_required: ${{ steps.e2e-pr-plan.outputs.selection_required }}
       # Selected browser specs, armed route smoke and screenshots build the web app.
       web_build_pr_required: >-
@@ -219,6 +221,8 @@ jobs:
       desktop_browser_required: ${{ steps.changed-files.outputs.desktop_browser_required }}
       ui_playground_specs: ${{ steps.ui-playground-plan.outputs.specs || '[]' }}
       ui_playground_matrix: ${{ steps.ui-playground-plan.outputs.matrix || '[]' }}
+      # ci-browser legs that run a pull request's changed suite specs.
+      browser_suite_legs: ${{ steps.browser-suite-plan.outputs.legs || '[]' }}
       # The job and result gate consume the same event/depth decision.
       ci_browser_scope_required: ${{ steps.changed-files.outputs.ci_browser_scope_required }}
       ci_browser_required: >-
@@ -226,7 +230,7 @@ jobs:
         && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         && steps.changed-files.outputs.package_checks_required == 'true'
         && steps.changed-files.outputs.ci_browser_scope_required == 'true'
-        && ((github.event_name == 'pull_request' && (steps.changed-files.outputs.desktop_browser_required == 'true' || steps.ui-playground-plan.outputs.specs != '[]'))
+        && ((github.event_name == 'pull_request' && (steps.changed-files.outputs.desktop_browser_required == 'true' || steps.ui-playground-plan.outputs.specs != '[]' || (steps.browser-suite-plan.outputs.legs || '[]') != '[]'))
         || (github.event_name != 'pull_request'
         && steps.depth.outputs.suite_depth == 'full')
         || (github.event_name == 'merge_group'
@@ -999,6 +1003,22 @@ jobs:
           HEAVY_ONLY: ${{ inputs.heavy_only }}
         run: bun scripts/ci-plan-scope.ts
 
+      # A pull request runs the specs it changes in every browser suite whose
+      # merge-group job runs them; scripts/ci-browser-suites.ts owns the suites.
+      - name: Plan changed browser suite specs
+        id: browser-suite-plan
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success'
+        env:
+          BROWSER_SUITE_CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
+          SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if ! plan=$(bun scripts/ci-browser-suites.ts plan); then
+            echo "::warning::Browser suite selection failed; running every changed-spec suite in full."
+            plan=$(SCOPE_UNKNOWN=true bun scripts/ci-browser-suites.ts plan)
+          fi
+          echo "$plan" >> "$GITHUB_OUTPUT"
+
       - name: Plan UI playground geometry specs
         id: ui-playground-plan
         if: steps.completed-depth.outputs.run_required != 'false' && steps.changed-files.outcome == 'success'
@@ -1007,6 +1027,7 @@ jobs:
           SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
           EVENT_NAME: ${{ github.event_name }}
           DESKTOP_REQUIRED: ${{ steps.changed-files.outputs.desktop_browser_required }}
+          BROWSER_SUITE_LEGS: ${{ steps.browser-suite-plan.outputs.legs || '[]' }}
         run: |
           if [[ "$SCOPE_UNKNOWN" == "true" ]]; then
             echo "::warning::Changed files are unknown; running every geometry spec."
@@ -1343,10 +1364,12 @@ jobs:
             matrix=$(bun scripts/e2e-spec-shards-core.ts all)
             mode=full
             specs='[]'
+            suite_specs='[]'
           else
             matrix=$(jq -c .matrix "$SELECTED_PLAN_PATH")
             mode=$SELECTED_MODE
             specs=$(jq -c .specs "$SELECTED_PLAN_PATH")
+            suite_specs=$(jq -c .suiteSpecs "$SELECTED_PLAN_PATH")
           fi
           # route-smoke runs the same seeded network proof for affected merge
           # groups, so do not start a second production stack for that leg.
@@ -1357,6 +1380,7 @@ jobs:
             echo "matrix=$matrix"
             echo "mode=$mode"
             echo "specs=$specs"
+            echo "suite_specs=$suite_specs"
           } >> "$GITHUB_OUTPUT"
           if [[ "$matrix" == '{"shard":[]}' ]]; then
             {
@@ -3354,10 +3378,11 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
-          SELECTED_SPECS: ${{ needs.ci-plan.outputs.ui_playground_specs }}
+          LEG_SPECS: ${{ toJSON(matrix.specs) }}
+        # A pull request leg runs only the specs it carries.
         run: |
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            [[ "$SELECTED_SPECS" != '[]' ]] && echo "required=true" >> "$GITHUB_OUTPUT" || echo "required=false" >> "$GITHUB_OUTPUT"
+            [[ "$LEG_SPECS" != '[]' ]] && echo "required=true" >> "$GITHUB_OUTPUT" || echo "required=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "${HEAVY_ONLY:-false}" == true ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
@@ -3404,16 +3429,22 @@ jobs:
           echo "required=false" >> "$GITHUB_OUTPUT"
 
       - name: Check extension browser test scope
-        if: github.event_name != 'pull_request' && needs.ci-plan.outputs.package_checks_required == 'true'
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
         id: extension-browser-tests
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
+          LEG_SPECS: ${{ toJSON(matrix.specs) }}
         # The extension's Playwright specs load the built extension into a
         # persistent Chromium; they run only when the extension, its protocol
-        # contract, or the browser runtime changed.
+        # contract, or the browser runtime changed. A pull request leg runs
+        # only the specs it carries.
         run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            [[ "$LEG_SPECS" != '[]' ]] && echo "required=true" >> "$GITHUB_OUTPUT" || echo "required=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "${HEAVY_ONLY:-false}" == true ]] || ! git diff --quiet "origin/$BASE_REF"...HEAD -- \
             .github/actions/setup-playwright \
             .github/workflows/ci.yml \
@@ -3491,11 +3522,21 @@ jobs:
           dependency-mode: preinstalled
 
       - name: Test UI browser interactions
-        # On a pull request the UI leg runs only the selected playground specs.
-        if: matrix.suite == 'ui' && github.event_name != 'pull_request' && steps.ui-browser-tests.outputs.required == 'true'
+        # On a pull request the UI leg runs only the changed component specs.
+        if: matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-ui-browser-interactions.json
-        run: bun --filter @stll/ui test:browser
+          EVENT_NAME: ${{ github.event_name }}
+          LEG_SPECS: ${{ toJSON(matrix.specs) }}
+        run: |
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            bun --filter @stll/ui test:browser
+            exit 0
+          fi
+          listed=$(bun scripts/ci-browser-suites.ts specs ui-components)
+          [[ -n "$listed" ]] || { echo "No changed specs in this suite."; exit 0; }
+          mapfile -t specs <<< "$listed"
+          bun --filter @stll/ui test:browser -- "${specs[@]}"
 
       - name: Test desktop browser interactions
         if: matrix.suite == 'desktop' && steps.desktop-browser-tests.outputs.required == 'true'
@@ -3527,10 +3568,21 @@ jobs:
           bun run test:e2e:ui-playground "${specs[@]}"
 
       - name: Test extension browser boundary
+        # On a pull request the UI leg runs only the changed extension specs.
         if: matrix.suite == 'ui' && steps.extension-browser-tests.outputs.required == 'true'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-extension-browser-boundary.json
-        run: bun --filter @stll/extension test:e2e
+          EVENT_NAME: ${{ github.event_name }}
+          LEG_SPECS: ${{ toJSON(matrix.specs) }}
+        run: |
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            bun --filter @stll/extension test:e2e
+            exit 0
+          fi
+          listed=$(bun scripts/ci-browser-suites.ts specs extension)
+          [[ -n "$listed" ]] || { echo "No changed specs in this suite."; exit 0; }
+          mapfile -t specs <<< "$listed"
+          bun --filter @stll/extension test:e2e -- "${specs[@]}"
 
       - name: Upload browser test timings
         if: always()
@@ -5380,6 +5432,7 @@ jobs:
           E2E_EXPECT_DEV_ROUTES: "false"
           E2E_MODE: ${{ needs.ci-plan.outputs.e2e_production_mode }}
           E2E_SPECS: ${{ needs.ci-plan.outputs.e2e_production_specs }}
+          E2E_SUITE_SPECS: ${{ needs.ci-plan.outputs.e2e_production_suite_specs }}
         run: |
           set -euo pipefail
           SECONDS=0
@@ -5389,10 +5442,15 @@ jobs:
               ;;
             selected)
               specs_output=$(jq -r '.[]' <<< "$E2E_SPECS")
-              [[ -n "$specs_output" ]] || {
-                echo "Selected E2E leg has no specs" >&2
-                exit 1
-              }
+              if [[ -z "$specs_output" ]]; then
+                # The leg may run only the changed specs of a hosted suite.
+                [[ "${E2E_SUITE_SPECS:-[]}" != '[]' ]] || {
+                  echo "Selected E2E leg has no specs" >&2
+                  exit 1
+                }
+                echo "No selected web specs; this leg runs the changed browser suite specs."
+                exit 0
+              fi
               args=()
               while IFS= read -r spec; do
                 args+=("$spec")
@@ -5422,7 +5480,8 @@ jobs:
           exit "$status"
 
       # API-owned browser checks (visual sandbox) need the API from this stack
-      # but no web app; one shard runs them.
+      # but no web app; one shard runs them. A selected pull request leg runs
+      # only the changed API browser specs.
       - name: Run API browser checks
         timeout-minutes: 3
         if: >-
@@ -5431,7 +5490,18 @@ jobs:
           && matrix.shard == 1
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-api-browser-checks.json
-        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser
+          E2E_MODE: ${{ needs.ci-plan.outputs.e2e_production_mode }}
+          LEG_SPECS: ${{ needs.ci-plan.outputs.e2e_production_suite_specs }}
+        run: |
+          set -euo pipefail
+          if [[ "$E2E_MODE" != selected ]]; then
+            bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser
+            exit 0
+          fi
+          listed=$(bun scripts/ci-browser-suites.ts specs api-browser)
+          [[ -n "$listed" ]] || { echo "No changed specs in this suite."; exit 0; }
+          mapfile -t specs <<< "$listed"
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/api test:e2e:browser -- "${specs[@]}"
 
       - name: Run route-smoke Playwright shard
         timeout-minutes: 3

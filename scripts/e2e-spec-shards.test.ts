@@ -56,6 +56,7 @@ describe("e2e spec shard selection", () => {
         status: "selected",
         matrix: { shard: [1] },
         specs: [spec],
+        suiteSpecs: [],
       });
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -77,6 +78,7 @@ describe("e2e spec shard selection", () => {
           status: "full",
           matrix: allE2eMatrix(),
           specs: [],
+          suiteSpecs: [],
         });
       } finally {
         rmSync(root, { recursive: true, force: true });
@@ -131,6 +133,7 @@ describe("e2e spec shard selection", () => {
         status: "selected",
         matrix: { shard: [] },
         specs: [],
+        suiteSpecs: [],
       });
       write("apps/web/e2e/specs/deleted.spec.ts");
       rmSync(path.join(root, "apps/web/e2e/specs/deleted.spec.ts"));
@@ -191,6 +194,7 @@ test.each([
       status: "full",
       matrix: allE2eMatrix(),
       specs: [],
+      suiteSpecs: [],
     });
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -237,6 +241,7 @@ test.each(["globalSetup", "globalTeardown"] as const)(
           status: "full",
           matrix: allE2eMatrix(),
           specs: [],
+          suiteSpecs: [],
         },
       );
     } finally {
@@ -281,6 +286,7 @@ test("a transitive global hook import outside e2e selects every shard", () => {
       status: "full",
       matrix: allE2eMatrix(),
       specs: [],
+      suiteSpecs: [],
     });
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -298,6 +304,7 @@ test("a config import used by specs selects every shard when changed", () => {
       status: "full",
       matrix: allE2eMatrix(),
       specs: [],
+      suiteSpecs: [],
     });
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -321,6 +328,7 @@ test.each(["missing", "unreadable"] as const)(
           status: "full",
           matrix: allE2eMatrix(),
           specs: [],
+          suiteSpecs: [],
         },
       );
     } finally {
@@ -340,6 +348,7 @@ test("a computed global hook configuration selects every shard", () => {
       status: "full",
       matrix: allE2eMatrix(),
       specs: [],
+      suiteSpecs: [],
     });
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -372,6 +381,7 @@ test.each([
       status: "full",
       matrix: allE2eMatrix(),
       specs: [],
+      suiteSpecs: [],
     });
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -400,6 +410,7 @@ test("a route-smoke-only PR runs only the dedicated network leg", () => {
       status: "selected",
       matrix: { shard: ["network-baseline"] },
       specs: [],
+      suiteSpecs: [],
     });
   } finally {
     rmSync(root, { recursive: true, force: true });
