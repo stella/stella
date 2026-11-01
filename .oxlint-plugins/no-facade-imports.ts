@@ -61,6 +61,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/lib/errors/api-tag",
   "@/lib/errors/auth",
   "@/lib/errors/client",
+  "@/lib/errors/failure-surface",
   "@/lib/errors/localization",
   "@/lib/errors/provider-diagnostic",
   "@/lib/errors/provider-setup-guidance",

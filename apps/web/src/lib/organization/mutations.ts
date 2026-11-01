@@ -8,6 +8,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import type { Role } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
+import type { FailureSurface } from "@/lib/errors/failure-surface";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationKeys } from "@/lib/organization/queries";
 
@@ -55,11 +56,12 @@ type InviteMemberVars = {
   resend?: boolean;
 };
 
-export const useInviteMember = () => {
+export const useInviteMember = (errorSurface: FailureSurface) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: { errorSurface },
     mutationFn: async ({ email, role, resend }: InviteMemberVars) => {
       const result = await authClient.organization.inviteMember({
         email,

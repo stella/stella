@@ -16,8 +16,13 @@ import { resetReportedErrorsForTests } from "@/lib/analytics/reported-error";
 import { BoundedSet } from "@/lib/bounded-set";
 import type { DetachedOperationId } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import { APIError, isCancellation } from "@/lib/errors/api";
+import {
+  APIError,
+  apiFieldIssueMessage,
+  isCancellation,
+} from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { isShownInline } from "@/lib/errors/failure-surface";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { notifySessionExpired } from "@/lib/errors/session-expired";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -190,6 +195,9 @@ export const notifyUserError = <Cause>(
     notice: refusal?.messageKey ?? title,
     occurrence,
   });
+  if (isShownInline(error)) {
+    return false;
+  }
   if (refusal) {
     const t = getTranslator();
     stellaToast.add({
@@ -246,6 +254,22 @@ export const notifyUserError = <Cause>(
   }
   stellaToast.add(toast);
   return true;
+};
+
+/**
+ * One failure, one message: the issue a rejected request names on `field`, for
+ * the form to show beside it, or a toast when the failure names no such issue.
+ */
+export const fieldIssueOrToast = (
+  error: unknown,
+  field: string,
+  fallback: string,
+): string | undefined => {
+  const issue = apiFieldIssueMessage(error, field);
+  if (issue === undefined) {
+    notifyUserError(error, fallback);
+  }
+  return issue;
 };
 
 const SERVER_ERROR_THRESHOLD = 500;

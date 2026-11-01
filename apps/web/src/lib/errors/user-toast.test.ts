@@ -7,7 +7,12 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { reportErrorOnce } from "@/lib/analytics/reported-error";
 import { toAPIError } from "@/lib/errors/api";
 import {
+  FAILURE_SURFACE,
+  recordFailureSurface,
+} from "@/lib/errors/failure-surface";
+import {
   detachedUserAction,
+  fieldIssueOrToast,
   notifyUserError,
   notifyUserProblem,
   resetUserErrorReportDedupeForTests,
@@ -47,6 +52,65 @@ const settle = async () => {
 afterEach(() => {
   resetUserErrorReportDedupeForTests();
   mock.restore();
+});
+
+describe("a failure a form shows itself", () => {
+  const refused = () =>
+    toAPIError({
+      status: 400,
+      value: { code: "some_refusal", message: "Refused" },
+    });
+
+  test("raises no toast for a failure declared inline, and still reports it", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    const add = spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+    const error = refused();
+    recordFailureSurface(error, FAILURE_SURFACE.inline);
+
+    expect(notifyUserError(error, FAILURE)).toBe(false);
+
+    expect(add).not.toHaveBeenCalled();
+    expect(userVisibleReports(capture)).toHaveLength(1);
+  });
+
+  test.each([FAILURE_SURFACE.toast, undefined])(
+    "keeps the toast for a failure on surface %s",
+    (surface) => {
+      spyOn(getAnalytics(), "captureError").mockImplementation(() => undefined);
+      const add = spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+      const error = refused();
+      recordFailureSurface(error, surface);
+
+      expect(notifyUserError(error, FAILURE)).toBe(true);
+
+      expect(add).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test("an issue on the field is returned and no toast is raised", () => {
+    const add = spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+    const error = toAPIError({
+      status: 422,
+      value: {
+        code: "validation",
+        message: "Invalid request",
+        issues: [{ field: "name", constraint: "required" }],
+      },
+    });
+
+    expect(fieldIssueOrToast(error, "name", FAILURE)).toBeString();
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  test("a failure no field can show becomes a toast", () => {
+    spyOn(getAnalytics(), "captureError").mockImplementation(() => undefined);
+    const add = spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+
+    expect(fieldIssueOrToast(refused(), "name", FAILURE)).toBeUndefined();
+    expect(add).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("notifyUserProblem", () => {

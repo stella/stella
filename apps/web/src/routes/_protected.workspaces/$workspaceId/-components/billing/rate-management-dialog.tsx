@@ -38,8 +38,8 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { apiFieldIssueMessage, unwrapApiResponse } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { fieldIssueOrToast, notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { localISODate } from "@/lib/local-iso-date";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
@@ -210,10 +210,8 @@ const RateTablesView = ({
         setShowForm(false);
         return undefined;
       },
-      (error: unknown) => {
-        notifyUserError(error, t("common.somethingWentWrong"));
-        return apiFieldIssueMessage(error, "name");
-      },
+      (error: unknown) =>
+        fieldIssueOrToast(error, "name", t("common.somethingWentWrong")),
     );
 
   const handleSetDefault = (id: string) => {

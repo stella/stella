@@ -36,6 +36,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import type { Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
+import { FAILURE_SURFACE } from "@/lib/errors/failure-surface";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { roleTranslationKeys } from "@/lib/organization/consts";
 import { useInviteMember } from "@/lib/organization/mutations";
@@ -105,7 +106,7 @@ const InviteMemberForm = ({
 }: InviteMemberFormProps) => {
   const t = useTranslations();
   const [isOpen, setIsOpen] = useState(false);
-  const inviteMember = useInviteMember();
+  const inviteMember = useInviteMember(FAILURE_SURFACE.inline);
   const schema = useMemo(
     () => inviteMemberSchema(currentUserRole, t("validation.invalidEmail")),
     [currentUserRole, t],
