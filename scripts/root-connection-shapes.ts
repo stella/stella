@@ -1546,6 +1546,32 @@ const GRAPH_GLOBAL_ALIASES = new Set([
 const TAGGED_ERROR_BASE_PREFIX = "<result:tagged-error-base:";
 const TAGGED_ERROR_CLASS_PREFIX = "<result:tagged-error-class:";
 
+// Drizzle condition builders render a predicate from columns, SQL and values;
+// they run no query and keep no reference to their arguments.
+const DRIZZLE_CONDITION_BUILDERS: ReadonlySet<string> = new Set([
+  "and",
+  "asc",
+  "between",
+  "desc",
+  "eq",
+  "gt",
+  "gte",
+  "ilike",
+  "inArray",
+  "isNotNull",
+  "isNull",
+  "like",
+  "lt",
+  "lte",
+  "ne",
+  "not",
+  "notBetween",
+  "notIlike",
+  "notInArray",
+  "notLike",
+  "or",
+]);
+
 const GRAPH_NATIVE_MODULES = new Set([
   "node:fs",
   "fs",
@@ -8351,6 +8377,19 @@ class OrgWriteGraphEngine {
     ) {
       return this.#callSqlConstructor({ node, frame, args });
     }
+    if (
+      this.#alternatives(fn).every(
+        (part) =>
+          part.kind === "external" &&
+          part.module === "drizzle-orm" &&
+          DRIZZLE_CONDITION_BUILDERS.has(part.name),
+      )
+    ) {
+      const condition = this.#conditionBuilderResult(args);
+      if (condition !== undefined) {
+        return condition;
+      }
+    }
     return this.#invoke({ fn, args, caller: frame, call: node });
   };
 
@@ -9726,6 +9765,48 @@ class OrgWriteGraphEngine {
       return this.#join(...result);
     }
     return undefined;
+  };
+
+  /**
+   * A Drizzle condition over columns, SQL fragments and plain values is a
+   * predicate: it keeps their SQL targets and nothing else. Any other argument
+   * (a handle, a query, a callable, a mutable container) is left to the
+   * generic delegate checks.
+   */
+  readonly #conditionBuilderResult = (
+    args: readonly OrgGraphValue[],
+  ): OrgGraphValue | undefined => {
+    const targets = new Map<string, OrgGraphValue>();
+    let unresolved = false;
+    const accepts = (value: OrgGraphValue): boolean =>
+      this.#alternatives(value).every((part) => {
+        if (
+          part.kind === "column" ||
+          part.kind === "literal" ||
+          part.kind === "input" ||
+          part.kind === "bottom"
+        ) {
+          return true;
+        }
+        if (part.kind === "array") {
+          return part.stability === "fixed" && part.values.every(accepts);
+        }
+        if (part.kind !== "sql") {
+          // Every other value may carry a capability or mutable state.
+          return false;
+        }
+        unresolved ||= part.unresolved;
+        for (const [token, target] of part.targets) {
+          if (targets.has(token) && targets.get(token) !== target) {
+            return false;
+          }
+          targets.set(token, target);
+        }
+        return true;
+      });
+    return args.every(accepts)
+      ? { kind: "sql", text: "", targets, unresolved }
+      : undefined;
   };
 
   readonly #callSqlConstructor = ({

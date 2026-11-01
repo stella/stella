@@ -1452,6 +1452,35 @@ describe("delegated organization write graph", () => {
     }
   `;
 
+  test("drizzle conditions over columns are predicates, not opaque delegates", () => {
+    const result = analyze(
+      `${header}
+      import { and, eq, inArray } from "drizzle-orm";
+      export const reach = () => withOrgScope({tx: rootDb, scope, actor, fn: (tx) => {write({type: "write", tx, table: flowRuns}); return null;}});
+      export const run = (id) => rootDb.update(flowRuns).set({ status: "running" }).where(and(eq(flowRuns.id, id), inArray(flowRuns.status, ["pending"])));
+      `,
+      helper,
+    );
+    expect(
+      result.hits.map(({ table, operation }) => `${table}#${operation}`),
+    ).toEqual(["flowRuns#update"]);
+  });
+
+  test("a drizzle condition still refuses a database handle or a callable", () => {
+    for (const argument of ["rootDb", "() => rootDb"]) {
+      expect(() =>
+        analyze(
+          `${header}
+          import { eq } from "drizzle-orm";
+          export const reach = () => withOrgScope({tx: rootDb, scope, actor, fn: (tx) => {write({type: "write", tx, table: flowRuns}); return null;}});
+          export const run = () => rootDb.update(flowRuns).set({ status: "running" }).where(eq(flowRuns.id, ${argument}));
+          `,
+          helper,
+        ),
+      ).toThrow(/delegate/iu);
+    }
+  });
+
   test("a canonical TaggedError subclass keeps its primitive metadata", () => {
     const routeErrorFile = "apps/api/src/lib/other/route-error.ts";
     const result = analyze(
