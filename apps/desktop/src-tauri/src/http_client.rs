@@ -3,7 +3,6 @@
 
 #![allow(
   clippy::disallowed_types,
-  clippy::disallowed_methods,
   reason = "the desktop HTTP owner constructs identified clients; callers use DesktopHttpClient"
 )]
 
@@ -25,6 +24,10 @@ pub struct DesktopHttpClient(reqwest::Client);
 
 impl DesktopHttpClient {
   pub fn new(options: HttpClientOptions) -> reqwest::Result<Self> {
+    #[allow(
+      clippy::disallowed_methods,
+      reason = "construct the identified desktop client"
+    )]
     let mut builder = reqwest::Client::builder()
       .user_agent(DESKTOP_HTTP_USER_AGENT)
       .default_headers(reqwest::header::HeaderMap::from_iter([(
