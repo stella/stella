@@ -512,16 +512,14 @@ const schedulerWriteGraphContract = ({
     ownerSource !== undefined && declaresSchedulerIntents(ownerSource);
   // The inverse is required: removing the mixed row cannot disable an actual
   // typed intent owner's table constraint or turn it into a pure global table.
-  const dispositions =
-    declared && ownerSource !== undefined
-      ? parseSchedulerWriteIntentDispositions(ownerSource)
-      : undefined;
-  const writtenTable =
-    declared && ownerSource !== undefined
-      ? parseSchedulerWriteTable(ownerSource)
-      : undefined;
+  const dispositions = declared
+    ? parseSchedulerWriteIntentDispositions(ownerSource)
+    : undefined;
+  const writtenTable = declared
+    ? parseSchedulerWriteTable(ownerSource)
+    : undefined;
   if (
-    declared &&
+    writtenTable !== undefined &&
     (descriptor === undefined || descriptor.table !== writtenTable)
   ) {
     return panic(

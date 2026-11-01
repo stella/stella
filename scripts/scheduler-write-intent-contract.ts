@@ -560,7 +560,10 @@ export const parseSchedulerWriteIntentDispositions = (
     result.set(operation, value.value);
   }
   for (const operation of operations) {
-    if (operation === undefined || !result.has(operation)) {
+    if (operation === undefined) {
+      return invalid("missing intent disposition for an unnamed operation");
+    }
+    if (!result.has(operation)) {
       return invalid(`missing intent disposition ${operation}`);
     }
   }
