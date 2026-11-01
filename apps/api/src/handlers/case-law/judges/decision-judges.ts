@@ -264,7 +264,7 @@ export const replaceDecisionJudges = async (
                     eq(caseLawDecisionJudges.nameKey, nameKey),
                   ),
                 ),
-              ),
+              ) ?? panic("Retained judge keys require at least one row"),
             ),
       ),
     );

@@ -390,10 +390,11 @@ export const recordSlice = async ({
   tx,
 }: RecordSliceOptions): Promise<RecordedSlice> => {
   // audit: skip — public case-law corpus bookkeeping, no workspace data
-  const where = and(
-    eq(caseLawSources.id, sourceId),
-    sql`${caseLawSources.config} -> ${LISTING_CENSUS_CONFIG_KEY}::text IS NOT DISTINCT FROM ${observed === null ? null : JSON.stringify(observed)}::text::jsonb`,
-  );
+  const where =
+    and(
+      eq(caseLawSources.id, sourceId),
+      sql`${caseLawSources.config} -> ${LISTING_CENSUS_CONFIG_KEY}::text IS NOT DISTINCT FROM ${observed === null ? null : JSON.stringify(observed)}::text::jsonb`,
+    ) ?? panic("Listing checkpoint writes require a source predicate");
   const matched = await lockCaseLawReplaySource({ tx, where });
   const write = replayWrite(caseLawSources, {
     config: sql`jsonb_set(coalesce(${caseLawSources.config}, '{}'::jsonb), ${`{${LISTING_CENSUS_CONFIG_KEY}}`}::text[], ${JSON.stringify(next)}::text::jsonb)`,
