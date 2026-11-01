@@ -2392,7 +2392,6 @@
     "unverifiedCitationHint": "Tuto citaci se nepodařilo spárovat se zdrojovým dokumentem.",
     "uploadFiles": "Nahrát soubory",
     "urlIdentifier": "Identifikátor URL",
-    "urlIdentifierPlaceholder": "moje-organizace",
     "user": "Uživatel",
     "value": "Hodnota",
     "vatId": "DIČ",
@@ -2443,6 +2442,7 @@
     "scopeMemoryWrite": "Vytváření a úprava paměti asistenta",
     "scopeOfflineAccess": "Udržení vašeho přihlášení bez nutnosti opakovaného souhlasu",
     "scopeOnboarding": "Nastavit jurisdikce, ve kterých vaše organizace působí",
+    "scopeOrganizationCreate": "Vytvářet nové organizace, jejichž vlastníkem budete",
     "scopeProfile": "Přístup k informacím vašeho profilu",
     "scopeRead": "Čtení vašich dokumentů, spisů a kontaktů",
     "scopeReadAnonymized": "Čtení anonymizovaných verzí vašich dokumentů a spisů",
@@ -2991,7 +2991,6 @@
     "failedToVerifyOtp": "Nepodařilo se ověřit kód",
     "matterNotFound": "Spis nenalezen",
     "partyAlreadyExists": "Kontakt již má tuto roli ve spisu",
-    "slugAlreadyTaken": "Tento slug je již obsazený",
     "uploadFailed": "Nahrávání selhalo"
   },
   "feedback": {
@@ -4744,6 +4743,13 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Používá výchozí nastavení"
     },
+    "creationEvaluationLimitReached": "Využili jste všechna {limit} zkušební období organizací. Smazáním organizace se zkušební období neobnoví. Použijte existující organizaci nebo kontaktujte podporu a domluvte si placený přístup.",
+    "creationInvalidName": "Zadejte platný název organizace (nejvýše {maxLength} znaků).",
+    "creationNotAllowed": "Tento účet nemůže vytvářet organizace.",
+    "creationOutcomeUnknown": "Požadavek už mohl organizaci vytvořit. Zkuste to znovu a ověřte výsledek.",
+    "creationRateLimited": "V poslední době bylo vytvořeno příliš mnoho organizací. Zkuste to později.",
+    "creationRefused": "Organizaci se nepodařilo vytvořit. Zkontrolujte údaje a zkuste to znovu.",
+    "creationSlugConflict": "Tuto adresu organizace už někdo používá. Zvolte jiný název nebo adresu.",
     "invitations": {
       "cancelInvitation": "Zrušit pozvánku",
       "emailAddressLabel": "E-mailová adresa",
@@ -4758,6 +4764,7 @@
       "statuses": {
         "accepted": "Přijato",
         "canceled": "Zrušeno",
+        "expired": "Platnost vypršela",
         "pending": "Čeká",
         "rejected": "Odmítnuto"
       }
@@ -4791,6 +4798,8 @@
       "typeEmailToConfirm": "Pro potvrzení napište {email}",
       "updateRole": "Aktualizovat roli"
     },
+    "newOrganization": "Nová organizace",
+    "newOrganizationDescription": "Vytvořte organizaci, jejímž vlastníkem budete.",
     "roles": {
       "admin": "Administrátor",
       "descriptions": {
@@ -4806,6 +4815,9 @@
       "owner": "Vlastník"
     },
     "settingsDescription": "Upravte název a slug organizace",
+    "startOver": "Začít znovu",
+    "startOverDescription": "Původní požadavek už mohl organizaci vytvořit. Než začnete znovu, zkontrolujte své organizace; nový požadavek by mohl vytvořit další organizaci.",
+    "startOverTitle": "Zahájit nový požadavek na vytvoření?",
     "switchOrganization": "Přepnout organizaci"
   },
   "publicTools": {
@@ -5407,6 +5419,7 @@
         "title": "Extrakce paměti",
         "toggleLabel": "Navrhovat záznamy do paměti z historie chatů na pozadí"
       },
+      "pastInvitations": "Dřívější pozvánky",
       "pendingInvitations": "Čekající pozvánky",
       "practiceJurisdictions": "Jurisdikce",
       "practiceJurisdictionsDescription": "Vyberte jurisdikce, které jsou pro vás relevantní.",
@@ -6244,8 +6257,7 @@
   "validation": {
     "invalidEmail": "Zadejte platnou e-mailovou adresu.",
     "organizationNameRequired": "Název organizace je povinný",
-    "slugFormat": "Slug smí obsahovat pouze malá písmena, čísla a pomlčky",
-    "slugRequired": "Slug je povinný"
+    "slugFormat": "Slug smí obsahovat pouze malá písmena, čísla a pomlčky"
   },
   "verify": {
     "history": "{history, select, refiled {Vytištěno pod číslem <bdi>{reference}</bdi>; nyní je dokument veden pod číslem <bdi>{currentReference}</bdi> ve spisu <bdi>{matterName}</bdi>.} superseded {Toto referenční číslo odkazuje na verzi {version, number}; aktuální verze je {currentVersion, number}.} other {Vytištěno pod číslem <bdi>{reference}</bdi>; nyní je dokument veden pod číslem <bdi>{currentReference}</bdi> ve spisu <bdi>{matterName}</bdi>. Toto referenční číslo odkazuje na verzi {version, number}; aktuální verze je {currentVersion, number}.}}",

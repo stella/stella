@@ -251,6 +251,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Account-scoped record; organization removal does not erase the user account.",
   "action_cost_records.user_id":
     "Retained accounting, telemetry or contribution history; no membership grant.",
+  "organization_creation_requests.user_id":
+    "Account-owned creation replay receipt; membership removal must not reopen the creation request, and account or organization deletion cascades the row. Grants no membership.",
   "organization_professional_use_acceptances.accepted_by_user_id":
     "Acceptance record of who created the organization; grants no membership.",
   "user_professional_use_acceptances.user_id":
