@@ -6,7 +6,6 @@ import {
   DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX,
   DAY_CALENDAR_SLOT_HEIGHT_PX,
   granularityMs,
-  mergeShortSegments,
 } from "@stll/ui/day-calendar.logic";
 import type {
   DayCalendarGranularity,
@@ -85,51 +84,245 @@ export const shortSegmentThresholdMs = (granularity: DayCalendarGranularity) =>
   (granularityMs(granularity) * DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX) /
   DAY_CALENDAR_SLOT_HEIGHT_PX[granularity];
 
-export type ActivityBlock =
-  | (DayCalendarRange & { id: string; segment: MatchedSegment; type: "single" })
-  | (DayCalendarRange & {
-      apps: AppTotal[];
-      id: string;
-      sources: MatchedSegment[];
-      type: "mixed";
-    });
+/** Pauses up to this long do not split one topic's block. */
+export const TOPIC_BRIDGE_GAP_MS = 2 * MINUTE_MS;
 
-/** The Activity column: each recorded segment, with runs of rapid switching
- * merged into one block that lists its apps, longest first. */
+/**
+ * One topic's stretch of the day in the Activity column: a matter's time, or,
+ * where nothing matched a matter, one document or window's time. The apps it
+ * moved through are its details, not blocks of their own.
+ */
+export type ActivityBlock = DayCalendarRange & {
+  apps: AppTotal[];
+  id: string;
+  matter: DesktopTimeEntryMatterCandidate | null;
+  /** Every recorded segment in the block, in time order. */
+  sources: MatchedSegment[];
+  /** The title the block spent longest on; `null` when none was recorded. */
+  title: string | null;
+};
+
+type TopicDraft = DayCalendarRange & {
+  matter: DesktopTimeEntryMatterCandidate | null;
+  sources: MatchedSegment[];
+  topic: string;
+};
+
+const draftDurationMs = (draft: TopicDraft) =>
+  draft.sources.reduce(
+    (sum, segment) => sum + segment.endMs - segment.startMs,
+    0,
+  );
+
+const joinDrafts = (into: TopicDraft, from: TopicDraft): TopicDraft => ({
+  ...into,
+  endMs: Math.max(into.endMs, from.endMs),
+  sources: [...into.sources, ...from.sources].sort(
+    (left, right) => left.startMs - right.startMs,
+  ),
+  startMs: Math.min(into.startMs, from.startMs),
+});
+
+/** Neighbouring drafts of one topic, a pause apart at most, as one. */
+const joinSameTopic = (drafts: readonly TopicDraft[]): TopicDraft[] => {
+  const joined: TopicDraft[] = [];
+  for (const draft of drafts) {
+    const last = joined.at(-1);
+    if (
+      last !== undefined &&
+      last.topic === draft.topic &&
+      draft.startMs - last.endMs <= TOPIC_BRIDGE_GAP_MS
+    ) {
+      joined[joined.length - 1] = joinDrafts(last, draft);
+      continue;
+    }
+    joined.push(draft);
+  }
+  return joined;
+};
+
+/** The topic a stretch spent longest on. */
+const dominantTopic = (
+  sources: readonly MatchedSegment[],
+  topicOf: (segment: MatchedSegment) => string,
+): string => {
+  const totals = new Map<string, number>();
+  for (const segment of sources) {
+    const topic = topicOf(segment);
+    totals.set(
+      topic,
+      (totals.get(topic) ?? 0) + segment.endMs - segment.startMs,
+    );
+  }
+  let topic = "";
+  let longestMs = Number.NEGATIVE_INFINITY;
+  for (const [candidate, durationMs] of totals) {
+    if (durationMs > longestMs) {
+      topic = candidate;
+      longestMs = durationMs;
+    }
+  }
+  return topic;
+};
+
+/**
+ * Which neighbour a stretch too short for a label joins: one a pause apart at
+ * most, of its own topic first, then one with no matter, then the longer.
+ */
+const preferredNeighbour = (
+  draft: TopicDraft,
+  before: TopicDraft | undefined,
+  after: TopicDraft | undefined,
+): "before" | "after" | null => {
+  const rank = (other: TopicDraft | undefined, gapMs: number) =>
+    other === undefined || gapMs > TOPIC_BRIDGE_GAP_MS
+      ? null
+      : (other.topic === draft.topic ? 4 : 0) +
+        (other.matter === null ? 2 : 0) +
+        draftDurationMs(other) / Number.MAX_SAFE_INTEGER;
+  const beforeRank = rank(before, draft.startMs - (before?.endMs ?? 0));
+  const afterRank = rank(
+    after,
+    (after?.startMs ?? Number.POSITIVE_INFINITY) - draft.endMs,
+  );
+  if (beforeRank === null && afterRank === null) {
+    return null;
+  }
+  if (afterRank === null) {
+    return "before";
+  }
+  return beforeRank === null || afterRank > beforeRank ? "after" : "before";
+};
+
+/**
+ * The Activity column, one block per topic: consecutive time on one matter is
+ * one block whatever apps it moved through, and time no matter claimed groups
+ * by the document or window title it was on. A pause of up to
+ * {@link TOPIC_BRIDGE_GAP_MS} does not split a block. A stretch too short to
+ * hold a label line joins its neighbour unless it is a matter's own time, so
+ * quick switching never draws slivers and a matter's time always shows. Every
+ * segment lands in exactly one block.
+ */
 export const activityBlocks = (
   segments: readonly MatchedSegment[],
   granularity: DayCalendarGranularity,
-): ActivityBlock[] =>
-  mergeShortSegments(
-    segments.map((segment) => ({
-      ...segment,
-      id: `${String(segment.startMs)}:${segment.appIdentifier}`,
-    })),
-    { thresholdMs: shortSegmentThresholdMs(granularity) },
-  ).map((merged) => {
-    switch (merged.type) {
-      case "single":
-        return {
-          endMs: merged.segment.endMs,
-          id: merged.segment.id,
-          segment: merged.segment,
-          startMs: merged.segment.startMs,
-          type: "single",
-        };
-      case "mixed":
-        return {
-          apps: appTotals(merged.sources),
-          endMs: merged.endMs,
-          id: merged.id,
-          sources: merged.sources,
-          startMs: merged.startMs,
-          type: "mixed",
-        };
-      default:
-        merged satisfies never;
-        return panic("Unhandled merged activity segment");
+): ActivityBlock[] => {
+  const titleOf = segmentTitles(segments);
+  const topicOf = (segment: MatchedSegment) => {
+    if (segment.matter !== null) {
+      return `matter:${segment.matter.id}`;
     }
+    if (segment.call) {
+      return `call:${segment.appIdentifier}`;
+    }
+    const title = titleOf(segment);
+    return title === null
+      ? `app:${segment.appIdentifier}`
+      : `title:${title.toLocaleLowerCase()}`;
+  };
+  const thresholdMs = shortSegmentThresholdMs(granularity);
+  const isLoose = (draft: TopicDraft) =>
+    draft.matter === null && draft.endMs - draft.startMs < thresholdMs;
+  const drafts = joinSameTopic(
+    segments
+      .toSorted(
+        (left, right) =>
+          left.startMs - right.startMs || left.endMs - right.endMs,
+      )
+      .map((segment) => ({
+        endMs: segment.endMs,
+        matter: segment.matter,
+        sources: [segment],
+        startMs: segment.startMs,
+        topic: topicOf(segment),
+      })),
+  );
+  // Quick switching: consecutive stretches with no matter, each too short for
+  // a label, are one stretch named by the topic it spent longest on.
+  const runs: { draft: TopicDraft; loose: boolean }[] = [];
+  for (const draft of drafts) {
+    const last = runs.at(-1);
+    const loose = isLoose(draft);
+    if (
+      loose &&
+      last?.loose === true &&
+      draft.startMs - last.draft.endMs <= TOPIC_BRIDGE_GAP_MS
+    ) {
+      const merged = joinDrafts(last.draft, draft);
+      last.draft = {
+        ...merged,
+        topic: dominantTopic(merged.sources, topicOf),
+      };
+      continue;
+    }
+    runs.push({ draft, loose });
+  }
+  // A stretch still too short for a label joins a neighbour.
+  const placed: TopicDraft[] = [];
+  let carried: TopicDraft | null = null;
+  for (const [index, run] of runs.entries()) {
+    const draft: TopicDraft =
+      carried === null ? run.draft : joinDrafts(run.draft, carried);
+    carried = null;
+    if (!run.loose || !isLoose(draft)) {
+      placed.push(draft);
+      continue;
+    }
+    const before = placed.at(-1);
+    const side = preferredNeighbour(draft, before, runs[index + 1]?.draft);
+    switch (side) {
+      case "before":
+        if (before === undefined) {
+          return panic("A short activity stretch has no earlier neighbour");
+        }
+        placed[placed.length - 1] = joinDrafts(before, draft);
+        break;
+      case "after":
+        carried = draft;
+        break;
+      case null:
+        placed.push(draft);
+        break;
+      default:
+        side satisfies never;
+        return panic("Unhandled activity neighbour");
+    }
+  }
+  const blocks = joinSameTopic(placed);
+  return blocks.map((draft) => {
+    const titleTotals = new Map<string, number>();
+    for (const segment of draft.sources) {
+      const title = titleOf(segment);
+      if (title !== null) {
+        titleTotals.set(
+          title,
+          (titleTotals.get(title) ?? 0) + segment.endMs - segment.startMs,
+        );
+      }
+    }
+    let title: string | null = null;
+    let longestMs = 0;
+    for (const [candidate, durationMs] of titleTotals) {
+      if (durationMs > longestMs) {
+        title = candidate;
+        longestMs = durationMs;
+      }
+    }
+    const first = draft.sources.at(0);
+    return {
+      apps: appTotals(draft.sources),
+      endMs: draft.endMs,
+      id:
+        first === undefined
+          ? draft.topic
+          : `${draft.topic}:${String(first.startMs)}:${first.appIdentifier}`,
+      matter: draft.matter,
+      sources: draft.sources,
+      startMs: draft.startMs,
+      title,
+    };
   });
+};
 
 const rawSegmentTitle = (segment: MatchedSegment) => {
   // Evidence lists the document name before the window title.
