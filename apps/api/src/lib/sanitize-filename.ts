@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { stripInvisibleFormatting } from "@stll/text-normalize/invisible-formatting";
+
 /**
  * Branded type for filenames that have been sanitized.
  *
@@ -54,8 +56,9 @@ const stripLeadingAndTrailingDots = (name: string): string => {
 };
 
 export const sanitizeFilename = (name: string): SanitizedFileName => {
-  const sanitized = name
-    .toWellFormed()
+  // Format characters go first: one hidden between two dots would otherwise
+  // survive the traversal check and leave `..` behind.
+  const sanitized = stripInvisibleFormatting(name.toWellFormed())
     .replace(UNSAFE_CHARS_RE, "_")
     .replace(PATH_TRAVERSAL_RE, "__");
   const sanitizedWithoutEdgeDots = stripLeadingAndTrailingDots(sanitized);
@@ -73,7 +76,7 @@ export const sanitizeFilename = (name: string): SanitizedFileName => {
 export const sanitizeFilenamePreservingExtension = (
   name: string,
 ): SanitizedFileName => {
-  const wellFormedName = name.toWellFormed();
+  const wellFormedName = stripInvisibleFormatting(name.toWellFormed());
   const lastDot = wellFormedName.lastIndexOf(".");
   if (lastDot === -1) {
     return sanitizeFilename(wellFormedName);

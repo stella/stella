@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import type { SanitizedFileName } from "./sanitize-filename";
 import {
@@ -65,6 +68,52 @@ describe("sanitizeFilename", () => {
 
     expect(fileName).toHaveLength(255);
     expect(fileName.endsWith(".docx")).toBe(true);
+  });
+
+  test("removes format characters and keeps letters", () => {
+    expect<string>(sanitizeFilename("a\u202Etxt.pdf")).toBe("atxt.pdf");
+    expect<string>(
+      sanitizeFilename("\u200E\u200F\u2066a\u2069\u00AD\u200B.pdf"),
+    ).toBe("a.pdf");
+    expect<string>(sanitizeFilename("Příloha č. 1.docx")).toBe(
+      "Příloha č. 1.docx",
+    );
+    expect<string>(sanitizeFilename("شلום.pdf")).toBe("شلום.pdf");
+  });
+
+  test("checks traversal after format characters are gone", () => {
+    expect<string>(sanitizeFilename("a.\u202E.b")).toBe("a__b");
+  });
+
+  test("falls back when only format characters remain", () => {
+    expect<string>(sanitizeFilename("\u202E\u200F")).toBe("file");
+  });
+
+  test("the extension-preserving form treats the extension the same way", () => {
+    expect<string>(
+      sanitizeFilenamePreservingExtension("a\u202E.t\u202Ext"),
+    ).toBe("a.txt");
+    expect<string>(
+      sanitizeFilenamePreservingExtension(
+        `${"a".repeat(260)}.d\u200Bo\u200Bc\u200Bx`,
+      ),
+    ).toBe(`${"a".repeat(250)}.docx`);
+  });
+
+  test("no format character but a joiner survives either form", () => {
+    assertProperty(
+      "sanitized-filename-has-no-format-characters",
+      fc.property(fc.string({ unit: "binary" }), (name) => {
+        for (const sanitized of [
+          sanitizeFilename(name),
+          sanitizeFilenamePreservingExtension(name),
+        ]) {
+          expect(`${sanitized}`.replaceAll(/[\u200C\u200D]/gu, "")).not.toMatch(
+            /\p{Cf}/u,
+          );
+        }
+      }),
+    );
   });
 });
 

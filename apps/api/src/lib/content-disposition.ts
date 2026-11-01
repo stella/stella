@@ -1,3 +1,5 @@
+import { stripInvisibleFormatting } from "@stll/text-normalize/invisible-formatting";
+
 const ASCII_FILENAME_RE = /^[\u0020-\u007E]+$/u;
 const FALLBACK_FILENAME = "attachment";
 
@@ -27,7 +29,10 @@ export const contentDisposition = (
   name: string,
   disposition: "attachment" | "inline" = "attachment",
 ): string => {
-  const headerSafeName = stripHttpControlCharacters(name) || FALLBACK_FILENAME;
+  // Stored names can predate the write-time rule, so the header strips again.
+  const headerSafeName =
+    stripHttpControlCharacters(stripInvisibleFormatting(name)) ||
+    FALLBACK_FILENAME;
   const isSafeAscii =
     ASCII_FILENAME_RE.test(headerSafeName) &&
     !headerSafeName.includes('"') &&
