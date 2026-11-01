@@ -1,6 +1,10 @@
 import { useState } from "react";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -29,6 +33,7 @@ import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import { openMcpOAuthWindow } from "@/lib/mcp-oauth-channel";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 type CreatedConnector = {
   slug: string;
@@ -59,6 +64,24 @@ type AddServerParams = {
 
 const initialWizard = (): WizardState => ({ step: "url", url: "" });
 
+const invalidateMcpQueries = (
+  queryClient: QueryClient,
+  organizationId: string,
+) => {
+  detached(
+    queryClient.invalidateQueries({
+      queryKey: catalogueKeys.all(organizationId),
+    }),
+    "add-mcp-server-sheet.invalidate",
+  );
+  detached(
+    queryClient.invalidateQueries({
+      queryKey: knowledgeKeys.mcp.all(organizationId),
+    }),
+    "add-mcp-server-sheet.invalidate",
+  );
+};
+
 export const AddMcpServerSheet = ({
   open,
   onOpenChange,
@@ -68,20 +91,7 @@ export const AddMcpServerSheet = ({
   const queryClient = useQueryClient();
   const [wizard, setWizard] = useState<WizardState>(initialWizard);
 
-  const invalidate = () => {
-    detached(
-      queryClient.invalidateQueries({
-        queryKey: catalogueKeys.all(organizationId),
-      }),
-      "add-mcp-server-sheet.invalidate",
-    );
-    detached(
-      queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.mcp.all(organizationId),
-      }),
-      "add-mcp-server-sheet.invalidate",
-    );
-  };
+  const invalidate = () => invalidateMcpQueries(queryClient, organizationId);
 
   const close = () => {
     setWizard(initialWizard());
@@ -97,11 +107,17 @@ export const AddMcpServerSheet = ({
     });
   };
 
-  const connectMutation = useMutation({
+  const connectMutationFn = resourceMutation({
+    mutation: "connectMcpServer",
+    queryClient,
+    scope: { type: "organization" },
     mutationFn: async (connector: CreatedConnector) => {
       const data = await mcpConnectorConnection.start(connector.slug);
       return { connector, data };
     },
+  });
+  const connectMutation = useMutation({
+    mutationFn: connectMutationFn,
     onSuccess: ({ connector, data }) => {
       if (data.type === "bearer") {
         setWizard({ step: "token", createdConnector: connector, token: "" });
@@ -129,11 +145,17 @@ export const AddMcpServerSheet = ({
     onError: handleApiError,
   });
 
-  const addServerMutation = useIdempotentMutation({
+  const addServerMutationFn = resourceMutation({
+    mutation: "addMcpServer",
+    queryClient,
+    scope: { type: "organization" },
     mutationFn: async (params: AddServerParams) => {
       const response = await api.mcp.connectors.post(params);
       return unwrapApiResponse(response);
     },
+  });
+  const addServerMutation = useIdempotentMutation({
+    mutationFn: addServerMutationFn,
     onSuccess: (data, { url }) => {
       switch (data.type) {
         case "confirmation_required":
@@ -155,7 +177,10 @@ export const AddMcpServerSheet = ({
     onError: handleApiError,
   });
 
-  const saveTokenMutation = useIdempotentMutation({
+  const saveTokenMutationFn = resourceMutation({
+    mutation: "saveMcpToken",
+    queryClient,
+    scope: { type: "organization" },
     mutationFn: async (payload: { connectorSlug: string; token: string }) => {
       const response = await api.mcp.connections.post({
         connectorSlug: payload.connectorSlug,
@@ -163,6 +188,9 @@ export const AddMcpServerSheet = ({
       });
       return unwrapApiResponse(response);
     },
+  });
+  const saveTokenMutation = useIdempotentMutation({
+    mutationFn: saveTokenMutationFn,
     onSuccess: () => {
       stellaToast.add({
         title: t("knowledge.mcp.connectedToast"),

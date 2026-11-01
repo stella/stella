@@ -170,11 +170,17 @@ export const useWorkspaceSSE = (
   const handleParsedEvent = useLatestCallback(
     (event: WorkspaceRealtimeEvent): WorkspaceRealtimeQueryAction[] => {
       options.onEvent?.(event);
-      return getWorkspaceRealtimeQueryActions(event, workspaceId);
+      return getWorkspaceRealtimeQueryActions(event, {
+        workspaceId,
+        queryClient,
+      });
     },
   );
   const refreshAfterReconnect = useLatestCallback(() => {
-    for (const action of getWorkspaceReconnectQueryActions(workspaceId)) {
+    for (const action of getWorkspaceReconnectQueryActions({
+      workspaceId,
+      queryClient,
+    })) {
       switch (action.type) {
         case WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE:
           detached(

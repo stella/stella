@@ -166,6 +166,7 @@ const ComposerSubmitButton = ({
       type="button"
       onClick={() =>
         submit.mutate({
+          workspaceId,
           issue: true,
           body: {
             invoiceDate: "2026-10-27",

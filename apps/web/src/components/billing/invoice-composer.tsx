@@ -66,6 +66,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import {
   clientInvoicesKeys,
   invoiceByIdOptions,
@@ -324,6 +325,7 @@ export const InvoiceComposer = ({
 
   const send = (issue: boolean) =>
     submit.mutate({
+      workspaceId,
       issue,
       body: {
         invoiceDate,
@@ -441,121 +443,124 @@ export const useComposerSubmit = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const submit = useIdempotentSubmit();
-  return useMutation({
-    mutationFn: async ({
+  const createInvoiceRequest = async ({
+    issue,
+    body,
+  }: {
+    workspaceId: string;
+    issue: boolean;
+    body: CreateInvoiceBody;
+  }): Promise<IssuedInvoice> =>
+    await submitComposedInvoice({
       issue,
-      body,
-    }: {
-      issue: boolean;
-      body: CreateInvoiceBody;
-    }): Promise<IssuedInvoice> => {
-      const invoices = api.invoices({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      });
-      return await submitComposedInvoice({
-        issue,
-        create: async () => {
-          if (client === undefined) {
-            return unwrapApiResponse(
-              await submit.run({
-                operation: `invoices.${workspaceId}.create`,
-                body,
-                send: async (payload) =>
-                  await invokeCapability("invoices.create", async (request) =>
-                    invoices.put(payload, request),
-                  ),
-              }),
-            );
-          }
+      create: async () => {
+        if (client === undefined) {
           return unwrapApiResponse(
             await submit.run({
-              operation: `client-invoices.${client.clientId}.create`,
-              body: {
-                ...clientInvoiceDetails(body),
-                matters: client.matters.flatMap((matter) => {
-                  const timeEntryIds = matter.prefill.timeEntries
-                    .filter((entry) =>
-                      body.timeEntryIds.includes(
-                        toSafeId<"timeEntry">(entry.id),
-                      ),
-                    )
-                    .map((entry) => toSafeId<"timeEntry">(entry.id));
-                  const expenseIds = matter.prefill.expenses
-                    .filter((expense) =>
-                      body.expenseIds?.includes(
-                        toSafeId<"expense">(expense.id),
-                      ),
-                    )
-                    .map((expense) => toSafeId<"expense">(expense.id));
-                  return timeEntryIds.length + expenseIds.length === 0
-                    ? []
-                    : [
-                        {
-                          workspaceId: toSafeId<"workspace">(
-                            matter.workspaceId,
-                          ),
-                          timeEntryIds,
-                          expenseIds,
-                        },
-                      ];
-                }),
-              },
-              send: async (payload, replayRequest) =>
-                await invokeCapability(
-                  "client-invoices.create",
-                  async (request) =>
-                    api["client-invoices"]({
-                      clientId: toSafeId<"contact">(client.clientId),
-                    }).put(payload, {
-                      ...request,
-                      headers: {
-                        "Idempotency-Key":
-                          replayRequest.headers["Idempotency-Key"],
-                        ...request.headers,
-                      },
-                    }),
+              operation: `invoices.${workspaceId}.create`,
+              body,
+              send: async (payload) =>
+                await invokeCapability("invoices.create", async (request) =>
+                  api
+                    .invoices({
+                      workspaceId: toSafeId<"workspace">(workspaceId),
+                    })
+                    .put(payload, request),
                 ),
             }),
           );
-        },
-        finalize: async (id) => {
-          const finalized = await invokeCapability(
-            "invoices.transition",
-            async (request) =>
-              invoices({
+        }
+        return unwrapApiResponse(
+          await submit.run({
+            operation: `client-invoices.${client.clientId}.create`,
+            body: {
+              ...clientInvoiceDetails(body),
+              matters: client.matters.flatMap((matter) => {
+                const timeEntryIds = matter.prefill.timeEntries
+                  .filter((entry) =>
+                    body.timeEntryIds.includes(toSafeId<"timeEntry">(entry.id)),
+                  )
+                  .map((entry) => toSafeId<"timeEntry">(entry.id));
+                const expenseIds = matter.prefill.expenses
+                  .filter((expense) =>
+                    body.expenseIds?.includes(toSafeId<"expense">(expense.id)),
+                  )
+                  .map((expense) => toSafeId<"expense">(expense.id));
+                return timeEntryIds.length + expenseIds.length === 0
+                  ? []
+                  : [
+                      {
+                        workspaceId: toSafeId<"workspace">(matter.workspaceId),
+                        timeEntryIds,
+                        expenseIds,
+                      },
+                    ];
+              }),
+            },
+            send: async (payload, replayRequest) =>
+              await invokeCapability(
+                "client-invoices.create",
+                async (request) =>
+                  api["client-invoices"]({
+                    clientId: toSafeId<"contact">(client.clientId),
+                  }).put(payload, {
+                    ...request,
+                    headers: {
+                      "Idempotency-Key":
+                        replayRequest.headers["Idempotency-Key"],
+                      ...request.headers,
+                    },
+                  }),
+              ),
+          }),
+        );
+      },
+      finalize: async (id) => {
+        const finalized = await invokeCapability(
+          "invoices.transition",
+          async (request) =>
+            api
+              .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
                 invoiceId: toSafeId<"invoice">(id),
-              }).transition.post({ action: "finalize" }, request),
-          );
-          unwrapApiResponse(finalized);
-        },
-        read: async (id): Promise<IssuedInvoice> => {
-          const invoice = await queryClient.query(
-            invoiceByIdOptions(workspaceId, id),
-          );
-          return {
-            id: invoice.id,
-            workspaceId,
-            invoiceNumber: invoice.invoiceNumber,
-            issued: invoice.status !== "draft",
-            totalAmount: invoice.totalAmount,
-            currency: invoice.currency,
-            dueDate: invoice.dueDate,
-          };
-        },
-        savedDraft: (created, error) => {
-          notifyUserError(error, t("billing.invoiceComposer.issueFailed"));
-          return {
-            id: created.id,
-            workspaceId,
-            invoiceNumber: null,
-            issued: false,
-            totalAmount: created.totalAmount,
-            currency: body.currency,
-            dueDate: body.dueDate ?? null,
-          };
-        },
-      });
-    },
+              })
+              .transition.post({ action: "finalize" }, request),
+        );
+        unwrapApiResponse(finalized);
+      },
+      read: async (id): Promise<IssuedInvoice> => {
+        const invoice = await queryClient.query(
+          invoiceByIdOptions(workspaceId, id),
+        );
+        return {
+          id: invoice.id,
+          workspaceId,
+          invoiceNumber: invoice.invoiceNumber,
+          issued: invoice.status !== "draft",
+          totalAmount: invoice.totalAmount,
+          currency: invoice.currency,
+          dueDate: invoice.dueDate,
+        };
+      },
+      savedDraft: (created, error) => {
+        notifyUserError(error, t("billing.invoiceComposer.issueFailed"));
+        return {
+          id: created.id,
+          workspaceId,
+          invoiceNumber: null,
+          issued: false,
+          totalAmount: created.totalAmount,
+          currency: body.currency,
+          dueDate: body.dueDate ?? null,
+        };
+      },
+    });
+  const createInvoiceMutation = resourceMutation({
+    mutation: "createInvoice",
+    queryClient,
+    mutationFn: createInvoiceRequest,
+  });
+  return useMutation({
+    mutationFn: createInvoiceMutation,
     onSuccess: (invoice) => {
       for (const queryKey of [
         ...(

@@ -1,6 +1,12 @@
-import { hashKey, QueryClient, QueryObserver } from "@tanstack/react-query";
-import type { QueryFunctionContext, QueryKey } from "@tanstack/react-query";
-import { expect, test } from "bun:test";
+import type { ReactNode } from "react";
+
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type {
+  QueryClient as QueryClientInstance,
+  QueryFunctionContext,
+  QueryKey,
+} from "@tanstack/react-query";
+import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import {
   REALTIME_EVENT_TYPE,
@@ -9,23 +15,37 @@ import {
 } from "@stll/api-contract";
 import type { WorkspaceRealtimeEvent } from "@stll/api-contract";
 
-import { toSafeId } from "@/lib/safe-id";
-import {
+import englishMessages from "@/i18n/langs/en.json";
+import type { WorkspaceRealtimeQueryAction } from "@/lib/workspace-realtime";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+// The rename case drives the real rename hook, which renders under React.
+GlobalRegistrator.register({ url: "http://localhost:3000" });
+const { hashKey, QueryClient, QueryClientProvider, QueryObserver } =
+  await import("@tanstack/react-query");
+const { act, cleanup, renderHook } = await import("@testing-library/react");
+const { IntlProvider } = await import("use-intl");
+const { toSafeId } = await import("@/lib/safe-id");
+const {
   getWorkspaceRealtimeQueryActions,
   getWorkspaceReconnectQueryActions,
   WORKSPACE_REALTIME_QUERY_ACTION,
-} from "@/lib/workspace-realtime";
-import type { WorkspaceRealtimeQueryAction } from "@/lib/workspace-realtime";
-import {
-  applyWorkspaceRealtimeQueryActions,
-  createWorkspaceQueryActionBatch,
-} from "@/lib/workspace-sse";
-import {
-  invalidateDeletedEntityQueries,
-  invalidateRenamedEntityQueries,
-} from "@/lib/workspaces/mutations/entities.logic";
-import * as entityQueries from "@/lib/workspaces/queries/entities";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+} = await import("@/lib/workspace-realtime");
+const { applyWorkspaceRealtimeQueryActions, createWorkspaceQueryActionBatch } =
+  await import("@/lib/workspace-sse");
+const { useRenameEntity } = await import("@/lib/workspaces/mutations/entities");
+const { invalidateDeletedEntityQueries } =
+  await import("@/lib/workspaces/mutations/entities.logic");
+const entityQueries = await import("@/lib/workspaces/queries/entities");
+const { entitiesKeys } =
+  await import("@/lib/workspaces/queries/entities.logic");
+
+afterEach(async () => {
+  await act(async () => cleanup());
+});
+afterAll(async () => {
+  await unregisterDomEnvironment();
+});
 
 const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
 const ENTITY_ID = toSafeId<"entity">("00000000-0000-4000-8000-000000000002");
@@ -130,7 +150,11 @@ const createMeasuredClient = () => {
   };
 };
 
-const observe = (client: QueryClient, queryKey: QueryKey, rowCount: number) => {
+const observe = (
+  client: QueryClientInstance,
+  queryKey: QueryKey,
+  rowCount: number,
+) => {
   client.setQueryData(
     queryKey,
     Array.from({ length: rowCount }, (_, id) => id),
@@ -155,7 +179,7 @@ test("ending a stream applies its pending cache actions once", () => {
   );
   const actions = getWorkspaceRealtimeQueryActions(
     EVENT_CASES[REALTIME_EVENT_TYPE.RESOURCE_UPDATED],
-    WORKSPACE_ID,
+    { workspaceId: WORKSPACE_ID, queryClient: new QueryClient() },
   );
   batch.add(actions);
   batch.add(actions);
@@ -221,10 +245,10 @@ const measureBurst = async ({ event, rowCount, mode }: MeasureBurstOptions) => {
   // Observe every cache scope used by the stream, including unrelated views.
   // Cache events count work regardless of which observer starts it.
   const keys = new Map(
-    getWorkspaceReconnectQueryActions(WORKSPACE_ID).map((action) => [
-      hashKey(action.queryKey),
-      action.queryKey,
-    ]),
+    getWorkspaceReconnectQueryActions({
+      workspaceId: WORKSPACE_ID,
+      queryClient: client,
+    }).map((action) => [hashKey(action.queryKey), action.queryKey]),
   );
   keys.set(
     hashKey(entitiesKeys.detail(WORKSPACE_ID, ENTITY_ID)),
@@ -259,7 +283,10 @@ const measureBurst = async ({ event, rowCount, mode }: MeasureBurstOptions) => {
     };
   });
   for (let index = 0; index < BURST_SIZE; index += 1) {
-    const actions = getWorkspaceRealtimeQueryActions(event, WORKSPACE_ID);
+    const actions = getWorkspaceRealtimeQueryActions(event, {
+      workspaceId: WORKSPACE_ID,
+      queryClient: client,
+    });
     if (mode === "immediate") {
       apply(actions);
     } else {
@@ -317,12 +344,54 @@ test("entity query cases cover every exported query factory", () => {
   ).toEqual(Object.keys(VIEW_QUERY_KEYS).toSorted());
 });
 
-type EntityMutationOptions = Parameters<
-  typeof invalidateRenamedEntityQueries
->[0];
+type EntityMutationOptions = {
+  queryClient: QueryClientInstance;
+  workspaceId: string;
+  entityId: string;
+};
 
-// The cache consequences of the delete and rename mutations, measured through
-// the same functions their hooks call.
+// Commits a rename through the app's own rename hook; only the transport is
+// answered here, so the cache work measured is exactly what a user's rename does.
+const renameThroughHook = async ({
+  queryClient,
+  workspaceId,
+  entityId,
+}: EntityMutationOptions) => {
+  const name = "Renamed.md";
+  const transport = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: string | URL | Request) => {
+        const url = String(input instanceof Request ? input.url : input);
+        if (!url.includes(`/entities/${workspaceId}/rename`)) {
+          throw new Error(`Unexpected transport: ${url}`);
+        }
+        return Response.json({ entityId, name, file: null });
+      },
+      { preconnect: globalThis.fetch.preconnect },
+    ),
+  );
+  const hook = renderHook(() => useRenameEntity(), {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>
+        <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
+          {children}
+        </IntlProvider>
+      </QueryClientProvider>
+    ),
+  });
+  try {
+    await act(async () => {
+      await hook.result.current.mutateAsync({ workspaceId, entityId, name });
+    });
+    expect(transport).toHaveBeenCalledTimes(1);
+  } finally {
+    hook.unmount();
+    transport.mockRestore();
+  }
+};
+
+// The cache consequences of the delete and rename mutations: delete through
+// the function its hook calls, rename through the rename hook itself.
 const entityMutationCases = {
   delete: async (options: EntityMutationOptions) =>
     await invalidateDeletedEntityQueries({
@@ -330,7 +399,7 @@ const entityMutationCases = {
       workspaceId: options.workspaceId,
       entityIds: [options.entityId],
     }),
-  rename: invalidateRenamedEntityQueries,
+  rename: renameThroughHook,
 };
 
 // Other entities' detail keys carry real entity ids, distinct from ENTITY_ID.

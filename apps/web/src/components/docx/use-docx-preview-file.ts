@@ -35,8 +35,6 @@ export const useDocxPreviewFile = ({
       ? optimisticPreview.file
       : keepPreviousData;
   const previewFileQuery = useQuery({
-    ...fileOptions({ workspaceId, fieldId, purpose: "native-display" }),
-    placeholderData: previewPlaceholderData,
     // A reopened document starts from the bytes it was last loaded with —
     // real data, not a placeholder, and the same `ArrayBuffer` object, so
     // `shareFileData` can hand it straight back and Folio does not reparse a
@@ -47,6 +45,8 @@ export const useDocxPreviewFile = ({
       readDocxDocument({ fileFieldId: fieldId, workspaceId })?.value,
     initialDataUpdatedAt: () =>
       readDocxDocument({ fileFieldId: fieldId, workspaceId })?.dataUpdatedAt,
+    ...fileOptions({ workspaceId, fieldId, purpose: "native-display" }),
+    placeholderData: previewPlaceholderData,
   });
   // Only the pristine server copy is cached. The edit-session buffers
   // (`lastEditingBufferRef`, `preservedLoadedBufferRef`) are selected by the

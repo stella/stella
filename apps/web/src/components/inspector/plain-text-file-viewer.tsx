@@ -29,15 +29,25 @@ const PlainTextBody = ({ tab }: PlainTextFileViewerProps) => {
     textFileOptions({ fieldId: tab.id, workspaceId: tab.workspaceId }),
   );
   return (
-    <ScrollArea axis="vertical" className="min-h-0 flex-1">
-      <pre
-        {...DOCKED_COMPOSER_CLEARANCE}
-        className="text-foreground p-6 font-sans text-sm leading-6 wrap-break-word whitespace-pre-wrap"
-        dir="auto"
-      >
-        {data.text}
-      </pre>
-    </ScrollArea>
+    <FileViewerWithAI
+      activeFile={{
+        entityId: tab.entityId,
+        fileFieldId: tab.id,
+        fileName: data.fileName,
+      }}
+      className="flex h-full min-h-0 flex-col"
+      workspaceId={tab.workspaceId}
+    >
+      <ScrollArea axis="vertical" className="min-h-0 flex-1">
+        <pre
+          {...DOCKED_COMPOSER_CLEARANCE}
+          className="text-foreground p-6 font-sans text-sm leading-6 wrap-break-word whitespace-pre-wrap"
+          dir="auto"
+        >
+          {data.text}
+        </pre>
+      </ScrollArea>
+    </FileViewerWithAI>
   );
 };
 
@@ -46,19 +56,11 @@ const PlainTextBody = ({ tab }: PlainTextFileViewerProps) => {
  * retries and a failed read belong to the shared viewer boundary.
  */
 export const PlainTextFileViewer = ({ tab }: PlainTextFileViewerProps) => (
-  <FileViewerWithAI
-    activeFile={{
-      entityId: tab.entityId,
-      fileFieldId: tab.id,
-      fileName: tab.fileName,
-    }}
-    className="flex h-full min-h-0 flex-col"
-    workspaceId={tab.workspaceId}
-  >
+  <div className="flex h-full min-h-0 flex-col">
     <RecoverableViewerBoundary key={tab.id} surface="inspector-text">
       <Suspense fallback={<PlainTextLoading />}>
         <PlainTextBody tab={tab} />
       </Suspense>
     </RecoverableViewerBoundary>
-  </FileViewerWithAI>
+  </div>
 );
