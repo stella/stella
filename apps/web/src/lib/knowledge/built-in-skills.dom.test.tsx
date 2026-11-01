@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import type { AbstractIntlMessages } from "use-intl";
 
 import { listSkillMetadata, readSkillDisplayName } from "@stll/skills";
 import { STARTER_SKILLS } from "@stll/skills/starter-skills";
@@ -161,9 +162,22 @@ describe("built-in skill copy", () => {
   });
 });
 
+type LocalizedCopy = {
+  body: string | null;
+  description: string;
+  name: string;
+};
+
 describe("starter skill copy", () => {
-  const english = createTranslator({ locale: "en", messages: englishMessages });
-  const czech = createTranslator({ locale: "cs", messages: czechMessages });
+  // Abstract catalogues: typing every key of both files is compiler work these
+  // lookups do not need.
+  const englishCatalogue: AbstractIntlMessages = englishMessages;
+  const czechCatalogue: AbstractIntlMessages = czechMessages;
+  const english = createTranslator({
+    locale: "en",
+    messages: englishCatalogue,
+  });
+  const czech = createTranslator({ locale: "cs", messages: czechCatalogue });
 
   test("covers exactly the seeded skills, in the seeded English", () => {
     expect(Object.keys(STARTER_SKILL_COPY).toSorted()).toEqual(
@@ -186,8 +200,10 @@ describe("starter skill copy", () => {
   test("an untouched starter reads entirely in the reader's language", () => {
     for (const seed of STARTER_SKILLS) {
       const copy = STARTER_SKILL_COPY[seed.slug];
-      const localized = localizeStarterSkill(seed, (key) => czech(key));
-      expect<unknown>(localized).toEqual({
+      const localized: LocalizedCopy = localizeStarterSkill(seed, (key) =>
+        czech(key),
+      );
+      expect(localized).toEqual({
         ...seed,
         body: czech(copy.body),
         description: czech(copy.description),
@@ -232,12 +248,12 @@ describe("starter skill copy", () => {
   });
 
   test("a body the list left out stays left out", () => {
-    const localized = localizeStarterSkill(
+    const localized: LocalizedCopy = localizeStarterSkill(
       { ...summarizeSeed, body: null },
       (key) => czech(key),
     );
     expect(localized.body).toBeNull();
-    expect<unknown>(localized.name).toBe(
+    expect(localized.name).toBe(
       czech(STARTER_SKILL_COPY[summarizeSeed.slug].name),
     );
   });
