@@ -144,6 +144,7 @@ test("a granted member sees the feature enabled without reading identity again",
   expect(body).toStrictEqual({
     features: {
       "activity-timeline": { status: "enabled" },
+      "desktop-dictation": { status: "hidden" },
       "local-agents": { status: "hidden" },
     },
   });
