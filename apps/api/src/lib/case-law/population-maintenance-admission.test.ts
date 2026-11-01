@@ -17,7 +17,7 @@ test.each([
         if (statement.includes("to_regclass")) {
           return [{ installed: true }];
         }
-        expect(statement).toContain("ORDER BY id LIMIT $1");
+        expect(statement).toContain("max(id) - min(id) + 1");
         expect(parameters).toEqual([8193]);
         return [{ pending }];
       },

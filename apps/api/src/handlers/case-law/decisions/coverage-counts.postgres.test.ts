@@ -462,10 +462,10 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
         createSafeId<"caseLawDecision">(),
         createSafeId<"caseLawDecision">(),
       ].toSorted();
-      const [firstId, busyId] = decisionIds;
-      if (firstId === undefined || busyId === undefined) {
-        return panic("Busy decision fixture needs its decisions");
-      }
+      const firstId =
+        decisionIds.at(0) ?? panic("Busy decision fixture needs its first row");
+      const busyId =
+        decisionIds.at(1) ?? panic("Busy decision fixture needs its busy row");
       await db.insert(caseLawSources).values({
         id: sourceId,
         adapterKey: `coverage-busy-${sourceId}`,
