@@ -145,21 +145,80 @@ const chatAnswerArbitrary = fc
   .map((blocks) => blocks.join("\n\n"));
 
 /** An answer plus the offsets its stream was cut at, ascending and distinct. */
-const streamedChatAnswerArbitrary = chatAnswerArbitrary.chain((answer) =>
-  fc
-    .uniqueArray(fc.integer({ min: 1, max: Math.max(1, answer.length - 1) }), {
-      maxLength: MAX_STREAM_CUTS,
-    })
-    .map((cuts) => ({
-      answer,
-      prefixes: [
-        ...cuts
-          .toSorted((left, right) => left - right)
-          .map((cut) => answer.slice(0, cut)),
+const withStreamCuts = (answers: fc.Arbitrary<string>) =>
+  answers.chain((answer) =>
+    fc
+      .uniqueArray(
+        fc.integer({ min: 1, max: Math.max(1, answer.length - 1) }),
+        { maxLength: MAX_STREAM_CUTS },
+      )
+      .map((cuts) => ({
         answer,
-      ],
-    })),
+        prefixes: [
+          ...cuts
+            .toSorted((left, right) => left - right)
+            .map((cut) => answer.slice(0, cut)),
+          answer,
+        ],
+      })),
+  );
+
+const streamedChatAnswerArbitrary = withStreamCuts(chatAnswerArbitrary);
+
+const MAX_LINKS_PER_PARAGRAPH = 3;
+const MAX_LINK_BLOCK_KINDS = 3;
+const MAX_LINKED_BLOCKS = 6;
+const MAX_PAGE = 3;
+const MIN_LINKED_BLOCKS = 2;
+
+/** Every kind of link an answer renders with a hint. */
+const hintedLink = fc.oneof(
+  fc
+    .tuple(words, fc.nat({ max: MAX_PAGE }))
+    .map(([text, page]) => `[${text}](https://example.test/p${page})`),
+  fc.constant("https://example.test/auto"),
+  words.map((text) => `[${text}][ref]`),
+  words.map((text) => `<a href="https://example.test/raw">${text}</a>`),
 );
+const linkedParagraph = fc
+  .array(fc.tuple(words, hintedLink), {
+    minLength: AT_LEAST_ONE,
+    maxLength: MAX_LINKS_PER_PARAGRAPH,
+  })
+  .map((pairs) => pairs.flat().join(" "));
+const linkedBlock = fc.oneof(
+  linkedParagraph,
+  fc
+    .array(linkedParagraph, {
+      minLength: AT_LEAST_ONE,
+      maxLength: MAX_LIST_ITEMS,
+    })
+    .map((items) => items.map((item) => `- ${item}`).join("\n")),
+  hintedLink.map((link) => `## ${link}`),
+);
+
+/**
+ * Answers with links in several blocks. Blocks are drawn from a small set, so
+ * an answer often repeats a block word for word. The reference definition
+ * streams last, so reference links turn into links at the end.
+ */
+const linkedAnswerArbitrary = fc
+  .record({
+    kinds: fc.array(linkedBlock, {
+      minLength: AT_LEAST_ONE,
+      maxLength: MAX_LINK_BLOCK_KINDS,
+    }),
+    order: fc.array(fc.nat(), {
+      minLength: MIN_LINKED_BLOCKS,
+      maxLength: MAX_LINKED_BLOCKS,
+    }),
+  })
+  .map(({ kinds, order }) =>
+    [
+      ...order.map((pick) => kinds.at(pick % kinds.length) ?? ""),
+      "[ref]: https://example.test/ref",
+    ].join("\n\n"),
+  );
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const originalFetch = globalThis.fetch;
@@ -546,6 +605,98 @@ describe("streamed chat answers", () => {
         await view.unmount();
       }
     }
+  });
+});
+
+/**
+ * What a screen reader hears as each link's description: the element the
+ * document resolves the link's `aria-describedby` to, and whether that element
+ * belongs to the same answer.
+ */
+const linkDescriptions = (root: Element) =>
+  [...root.querySelectorAll("a")].map((link) => {
+    const hintId = link.getAttribute("aria-describedby");
+    const hint =
+      hintId === null
+        ? null
+        : document.querySelector(`[id="${CSS.escape(hintId)}"]`);
+    return {
+      linkScoped: link.id.startsWith(ANSWER_ID_PREFIX),
+      hintScoped: hintId?.startsWith(ANSWER_ID_PREFIX) ?? false,
+      hint: hint?.textContent ?? null,
+      inAnswer: hint !== null && root.contains(hint),
+    };
+  });
+
+const idsOf = (root: Element): string[] =>
+  [...root.querySelectorAll("[id]")].map((node) => node.id);
+
+/** Every link names itself and its hint in the answer namespace, once. */
+const expectScopedLinkIds = (root: Element, label: object) => {
+  const ids = idsOf(root);
+  expect({ ...label, ids: new Set(ids).size }).toEqual({
+    ...label,
+    ids: ids.length,
+  });
+  expect({ ...label, names: unscopedNames(root) }).toEqual({
+    ...label,
+    names: [],
+  });
+  for (const description of linkDescriptions(root)) {
+    expect({ ...label, ...description }).toEqual({
+      ...label,
+      linkScoped: true,
+      hintScoped: true,
+      hint: messages.common.openInNewTab,
+      inAnswer: true,
+    });
+  }
+};
+
+describe("answer link ids", () => {
+  test("a streamed answer and its reload give every link the same ids", async () => {
+    await assertProperty(
+      "a streamed answer and its reload give every link the same ids",
+      fc.asyncProperty(
+        withStreamCuts(linkedAnswerArbitrary),
+        linkedAnswerArbitrary,
+        async ({ answer, prefixes }, other) => {
+          const streaming = { isAnimating: true };
+          const view = await mountAnswer(prefixes.at(0) ?? "", streaming);
+          for (const prefix of prefixes) {
+            await view.update(prefix);
+            expectScopedLinkIds(view.root, { prefix });
+          }
+          // The fixture reaches the hint path: the answer has hinted links.
+          expect(linkDescriptions(view.root).length).toBeGreaterThan(0);
+          // A fresh render of the whole answer: markup and ids alike.
+          expect(
+            view.root.isEqualNode(await renderedTree(answer, streaming)),
+          ).toBe(true);
+          // The settled frame is the one a reload of the thread shows.
+          const settled = { sourceOffsets: true };
+          await view.update(answer, settled);
+          expectScopedLinkIds(view.root, { settled: true });
+          expect(
+            view.root.isEqualNode(await renderedTree(answer, settled)),
+          ).toBe(true);
+          // Another settled answer on the same page keeps its own ids, so
+          // each link's description resolves inside its own answer.
+          if (other !== answer) {
+            const neighbour = await mountAnswer(other, settled);
+            const shared = idsOf(neighbour.root).filter((id) =>
+              idsOf(view.root).includes(id),
+            );
+            expect(shared).toEqual([]);
+            expectScopedLinkIds(view.root, { neighbour: true });
+            expectScopedLinkIds(neighbour.root, { neighbour: true });
+            await neighbour.unmount();
+          }
+          await view.unmount();
+        },
+      ),
+      { numRuns: 30 },
+    );
   });
 });
 

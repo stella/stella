@@ -1,4 +1,4 @@
-import { isValidElement, useId, useState } from "react";
+import { createContext, isValidElement, use, useId, useState } from "react";
 import type { AnchorHTMLAttributes, ReactElement, ReactNode } from "react";
 
 import { GitHubLogoIcon, XLogoIcon } from "@stll/ui/brand-icons";
@@ -74,54 +74,74 @@ type ChatLinkProps = Omit<
   newTabLabel?: string;
 };
 
+const ChatLinkIdContext = createContext<string | undefined>(undefined);
+
+/**
+ * Gives the link rendered inside it fixed ids, so a surface that renders the
+ * same links again (a streamed answer, then the reloaded one) renders the same
+ * ids: `id` names the link's tooltip trigger and `${id}-hint` its hint.
+ * Without a scope, a link generates its ids.
+ */
+export const ChatLinkIdScope = ({
+  children,
+  id,
+}: {
+  children: ReactNode;
+  id: string;
+}) => <ChatLinkIdContext value={id}>{children}</ChatLinkIdContext>;
+
 /**
  * The hover hint a link carries: the new-tab notice, or the title the source
  * gave it. A link with neither renders bare, so a long answer does not mount
  * a tooltip for every link it has nothing to say about. The tooltip is for the
  * pointer; the same words reach assistive technology as the link's
- * description (see `HintDescription`).
+ * description, a hidden element beside the link (`hintId`), so the link's own
+ * text stays its label.
  */
 const LinkHint = ({
   children,
   hint,
+  hintId,
+  id,
 }: {
   children: ReactElement;
   hint: string | undefined;
-}) =>
-  hint ? (
-    <Tooltip>
-      <TooltipTrigger render={children} />
-      <TooltipPopup>{hint}</TooltipPopup>
-    </Tooltip>
-  ) : (
-    children
-  );
-
-/** The hint as the link's accessible description, which a tooltip is not. */
-const HintDescription = ({
-  hint,
-  id,
-}: {
-  hint: string | undefined;
+  hintId: string;
   id: string;
 }) =>
   hint ? (
-    <span hidden id={id}>
-      {hint}
-    </span>
-  ) : null;
+    <>
+      <Tooltip>
+        <TooltipTrigger id={id} render={children} />
+        <TooltipPopup>{hint}</TooltipPopup>
+      </Tooltip>
+      <span hidden id={hintId}>
+        {hint}
+      </span>
+    </>
+  ) : (
+    children
+  );
 
 export const ChatLink = ({
   appearance = "inline",
   children,
   href,
   iconSource,
+  id,
   newTabLabel,
   title,
   ...anchorProps
 }: ChatLinkProps) => {
   const hint = newTabLabel ?? title;
-  const hintId = useId();
+  const generatedId = useId();
+  const baseId = use(ChatLinkIdContext) ?? generatedId;
+  const hintId = `${baseId}-hint`;
+  // The tooltip trigger owns the anchor's id; a link's own id (a footnote
+  // back-link target) stays its id. Without a tooltip the anchor keeps only
+  // its own id.
+  const triggerId = id ?? baseId;
+  const ownId = hint || id === undefined ? {} : { id };
   const className =
     appearance === "tray"
       ? "bg-muted/50 hover:bg-muted inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -144,9 +164,10 @@ export const ChatLink = ({
       );
     }
     return (
-      <LinkHint hint={hint}>
+      <LinkHint hint={hint} hintId={hintId} id={triggerId}>
         <a
           {...anchorProps}
+          {...ownId}
           aria-describedby={hint ? hintId : anchorProps["aria-describedby"]}
           className={className}
           href={href}
@@ -154,7 +175,6 @@ export const ChatLink = ({
           rel={CHAT_LINK_ATTRIBUTES.rel}
         >
           <bdi className={labelClassName}>{children ?? href}</bdi>
-          <HintDescription hint={hint} id={hintId} />
         </a>
       </LinkHint>
     );
@@ -172,9 +192,10 @@ export const ChatLink = ({
     icon = bundledIcon;
   }
   return (
-    <LinkHint hint={hint}>
+    <LinkHint hint={hint} hintId={hintId} id={triggerId}>
       <a
         {...anchorProps}
+        {...ownId}
         aria-describedby={hint ? hintId : anchorProps["aria-describedby"]}
         className={className}
         href={target.href}
@@ -192,7 +213,6 @@ export const ChatLink = ({
           {icon}
         </span>
         <bdi className={labelClassName}>{label}</bdi>
-        <HintDescription hint={hint} id={hintId} />
       </a>
     </LinkHint>
   );
