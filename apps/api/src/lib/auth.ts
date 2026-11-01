@@ -68,7 +68,7 @@ import { appendSetCookieHeaders } from "@/api/http/context";
 import type { RequestContext, ResponseHeaders } from "@/api/http/context";
 import { status } from "@/api/http/status";
 import type { HttpStatusResponse } from "@/api/http/status";
-import { ORGANIZATION_AUDIT_EXPORT_REFUSAL_CODE } from "@/api/lib/account-export/organization-audit-gate";
+import { ORGANIZATION_AUDIT_EXPORT_REFUSAL_MESSAGE } from "@/api/lib/account-export/organization-audit-gate";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError, detached } from "@/api/lib/analytics/capture";
@@ -1856,10 +1856,7 @@ export const createAuth = (
             code: teardown.value.code,
             error: teardown.value.code,
             message:
-              teardown.value.code ===
-              ORGANIZATION_AUDIT_EXPORT_REFUSAL_CODE.stale
-                ? "Export the activity log again: it has new entries since the last export."
-                : "Export the organization's activity log before deleting the organization.",
+              ORGANIZATION_AUDIT_EXPORT_REFUSAL_MESSAGE[teardown.value.code],
           });
         }
 

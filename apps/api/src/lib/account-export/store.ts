@@ -3,14 +3,16 @@ import { and, asc, desc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import { member } from "@/api/db/auth-schema";
+import { member, organization } from "@/api/db/auth-schema";
 import { SETTING_ORGANIZATION_ID } from "@/api/db/rls";
 import type { rootDb, Transaction } from "@/api/db/root";
 import { accountExports, auditLogs } from "@/api/db/schema";
 import {
   ACCOUNT_EXPORT_ACTIVE_STATUSES,
+  ACCOUNT_EXPORT_KINDS,
   ACCOUNT_EXPORT_LIMITS,
 } from "@/api/lib/account-export/constants";
+import type { AccountExportKind } from "@/api/lib/account-export/constants";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -640,20 +642,49 @@ const readScopedAccountExport = async ({
   return rows.at(0) ?? null;
 };
 
+/**
+ * How a read reaches an export. A browser session is the account holder at
+ * the web app; a delegated reader is an agent or OAuth client acting on the
+ * account under its account-export consent, which covers the account's own
+ * data and never an organization's audit trail.
+ */
+export type AccountExportReader = "browser_session" | "delegated";
+
+/** The one decision of which export kinds a reader may see. */
+const readableKinds = (
+  reader: AccountExportReader,
+): readonly AccountExportKind[] => {
+  switch (reader) {
+    case "browser_session":
+      return ACCOUNT_EXPORT_KINDS;
+    case "delegated":
+      return ["account"];
+    default: {
+      reader satisfies never;
+      return panic("Unknown account export reader");
+    }
+  }
+};
+
 type ReadAccountExportOptions = {
   id: string;
   userId: SafeId<"user">;
+  reader: AccountExportReader;
   db?: AccountExportDb;
 };
 export const readAccountExport = async ({
   id,
   userId,
+  reader,
   db,
 }: ReadAccountExportOptions): Promise<AccountExportRow | null> => {
   const database = await resolveDatabase(db);
   return await withAggregateTransaction(database, async (tx) => {
     await scopeAccount(tx, userId);
-    return await readScopedAccountExport({ tx, id, userId });
+    const row = await readScopedAccountExport({ tx, id, userId });
+    return row !== null && readableKinds(reader).includes(row.kind)
+      ? row
+      : null;
   });
 };
 
@@ -932,20 +963,75 @@ export const canReclaimAccountExportAttempt = async (
     );
   });
 
+/**
+ * Whether the requester may still take an organization audit archive: while
+ * the organization exists only one of its current owners may, and once it is
+ * gone the archive is the requester's alone until it expires.
+ */
+const mayDownloadOrganizationAudit = async (
+  tx: Transaction,
+  {
+    organizationId,
+    userId,
+  }: { organizationId: SafeId<"organization">; userId: SafeId<"user"> },
+): Promise<boolean> => {
+  const organizations = await tx
+    .select({ id: organization.id })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
+    .limit(1);
+  return (
+    organizations.length === 0 ||
+    (await isOrganizationOwner(tx, { organizationId, userId }))
+  );
+};
+
+/**
+ * Hand a ready archive to its requester: record the download on the account
+ * trail and mark the ledger row downloaded, which organization deletion
+ * requires of its audit archive.
+ */
 export const recordAccountExportDownload = async ({
   id,
   userId,
+  reader,
   db,
 }: ReadAccountExportOptions): Promise<AccountExportRow | null> => {
   const database = await resolveDatabase(db);
   return await withAggregateTransaction(database, async (tx) => {
     await lockActiveAccountRow(tx, userId);
+    // Membership is read on the owning connection, before the account scope.
+    const subjects = await tx
+      .select({
+        kind: accountExports.kind,
+        organizationId: accountExports.organizationId,
+      })
+      .from(accountExports)
+      .where(and(eq(accountExports.id, id), eq(accountExports.userId, userId)))
+      .limit(1);
+    const candidate = subjects.at(0);
+    if (
+      candidate === undefined ||
+      !readableKinds(reader).includes(candidate.kind)
+    ) {
+      return null;
+    }
+    const subject = accountExportSubject(candidate);
+    if (
+      subject.kind === "organization_audit" &&
+      !(await mayDownloadOrganizationAudit(tx, {
+        organizationId: subject.organizationId,
+        userId,
+      }))
+    ) {
+      return null;
+    }
     await scopeAccount(tx, userId);
     const result = await withAggregateRowQuery({
       tx,
       aggregate: "accountExport",
       id: { id, userId },
-      mode: "share",
+      mode: "no key update",
       select: (lockedTx) => lockedTx.select().from(accountExports),
       where: sql`${eq(accountExports.status, "ready")} AND ${gt(accountExports.expiresAt, sql`clock_timestamp()`)}`,
     });
@@ -953,6 +1039,13 @@ export const recordAccountExportDownload = async ({
     if (row === undefined) {
       return null;
     }
+    // audit: skip - the account trail records this download just below.
+    await tx
+      .update(accountExports)
+      .set({
+        downloadedAt: sql`coalesce(${accountExports.downloadedAt}, statement_timestamp())`,
+      })
+      .where(eq(accountExports.id, id));
     await createBackgroundAuditRecorder({ account: { userId } })(tx, {
       type: "account.data_export.downloaded",
       resourceId: id,

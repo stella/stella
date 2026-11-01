@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -8,6 +8,7 @@ import {
   projectAuditReadChanges,
 } from "@/api/lib/audit-log-details";
 import type { AuditReadContext } from "@/api/lib/audit-log-details";
+import { auditLogMatterReadable } from "@/api/lib/audit-log-matter-access";
 import type { SafeId } from "@/api/lib/branded-types";
 import { escapeCSV } from "@/api/lib/csv";
 
@@ -39,15 +40,55 @@ export const auditLogExportColumns = (context: AuditReadContext) => ({
   metadata: auditLogs.metadata,
 });
 
-export type AuditLogExportRow = {
-  createdAt: Date;
-  userId: string;
-  action: string;
-  resourceType: string;
-  resourceId: string;
-  changes: Record<string, unknown> | null;
-  metadata: Record<string, unknown> | null;
+/**
+ * The archive reads every row of the organization, so a row whose matter the
+ * reader cannot see keeps only what the activity log shows of any row (when,
+ * who, what kind of action on what kind of resource); its resource id,
+ * metadata and changes never leave the database.
+ */
+export const auditLogArchiveColumns = (context: AuditReadContext) => {
+  const changes = auditReadChangesSql(context);
+  return {
+    createdAt: auditLogs.createdAt,
+    userId: auditLogs.userId,
+    action: auditLogs.action,
+    resourceType: auditLogs.resourceType,
+    resourceId: sql<
+      string | null
+    >`case when ${auditLogMatterReadable} then ${auditLogs.resourceId} end`,
+    changes: sql<Record<
+      string,
+      unknown
+    > | null>`case when ${auditLogMatterReadable} then ${changes} end`,
+    metadata: sql<Record<
+      string,
+      unknown
+    > | null>`case when ${auditLogMatterReadable} then ${auditLogs.metadata} end`,
+    matterReadable: auditLogMatterReadable,
+  };
 };
+
+/** The Changes Status of a row whose matter the reader cannot see. */
+export const AUDIT_LOG_MATTER_WITHHELD_STATUS = "matter_withheld";
+
+export type AuditLogExportRow =
+  | {
+      createdAt: Date;
+      userId: string;
+      action: string;
+      resourceType: string;
+      resourceId: string;
+      changes: Record<string, unknown> | null;
+      metadata: Record<string, unknown> | null;
+      matterReadable?: true;
+    }
+  | {
+      createdAt: Date;
+      userId: string;
+      action: string;
+      resourceType: string;
+      matterReadable: false;
+    };
 
 export type AuditLogExportActor = { name: string; email: string };
 
@@ -87,6 +128,16 @@ export const auditLogExportCsvLine = ({
   featureAccessSnapshot,
   principal,
 }: AuditLogExportCsvLineOptions): string => {
+  const shared = [
+    escapeCSV(new Date(row.createdAt).toISOString()),
+    escapeCSV(actor?.name ?? ""),
+    escapeCSV(actor?.email ?? ""),
+    escapeCSV(row.action),
+    escapeCSV(row.resourceType),
+  ];
+  if (row.matterReadable === false) {
+    return [...shared, "", "", AUDIT_LOG_MATTER_WITHHELD_STATUS].join(",");
+  }
   const details = projectAuditReadChanges({
     resourceType: row.resourceType,
     changes: row.changes,
@@ -95,11 +146,7 @@ export const auditLogExportCsvLine = ({
     principal,
   });
   return [
-    escapeCSV(new Date(row.createdAt).toISOString()),
-    escapeCSV(actor?.name ?? ""),
-    escapeCSV(actor?.email ?? ""),
-    escapeCSV(row.action),
-    escapeCSV(row.resourceType),
+    ...shared,
     escapeCSV(row.resourceId),
     escapeCSV(details.changes ? JSON.stringify(details.changes) : ""),
     escapeCSV(details.changesStatus),

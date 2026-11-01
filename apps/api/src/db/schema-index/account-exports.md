@@ -22,6 +22,7 @@ account_exports.lease_expires_at       timestamptz         null              acc
 account_exports.object_key             text                null              account-exports.ts:52
 account_exports.attempt_object_keys    jsonb               default,not null  account-exports.ts:53
 account_exports.expires_at             timestamptz         null              account-exports.ts:57
-account_exports.created_at             timestamptz         default,not null  account-exports.ts:58
-account_exports.updated_at             timestamptz         default,not null  account-exports.ts:59
+account_exports.downloaded_at          timestamptz         null              account-exports.ts:59  When the requester first downloaded the ready archive; deletion requires it of an audit archive.
+account_exports.created_at             timestamptz         default,not null  account-exports.ts:60
+account_exports.updated_at             timestamptz         default,not null  account-exports.ts:61
 ```

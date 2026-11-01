@@ -5,6 +5,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 
 import { member, organization } from "@/api/db/auth-schema";
 import { entityFeatureGateMetadata } from "@/api/db/entity-feature-gate-metadata";
+import { SETTING_ORGANIZATION_DELETION_IDS } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
   aiMemories,
@@ -1178,6 +1179,10 @@ export const completeOrganizationDeletion = async ({
   await tx
     .delete(chatThreads)
     .where(eq(chatThreads.organizationId, organizationId));
+  // The organization delete guard admits exactly the row named here.
+  await tx.execute(
+    sql`SELECT pg_catalog.set_config(${SETTING_ORGANIZATION_DELETION_IDS}, ${organizationId}, true)`,
+  );
   await tx.delete(organization).where(eq(organization.id, organizationId));
 
   return {

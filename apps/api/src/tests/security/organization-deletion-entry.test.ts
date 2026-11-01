@@ -58,6 +58,27 @@ describe("organization deletion entry points", () => {
     expect(callers.toSorted()).toEqual(ALLOWED_OWNER_CALLERS);
   });
 
+  test("only the deletion owner grants the organization delete guard", async () => {
+    // The database refuses every organization row delete that its
+    // transaction did not name in this setting (migration
+    // 20261101090100_organization_delete_owner_guard); this census keeps the
+    // setting in the owner's hands.
+    const granters: string[] = [];
+    for await (const { relativePath, source } of productionSources()) {
+      if (
+        /\bSETTING_ORGANIZATION_DELETION_IDS\b|app\.organization_deletion_ids/u.test(
+          source,
+        )
+      ) {
+        granters.push(relativePath);
+      }
+    }
+    expect(granters.toSorted()).toEqual([
+      "src/db/rls.ts",
+      "src/lib/organization-storage-teardown.ts",
+    ]);
+  });
+
   test("the owner requires the audit archive before it writes anything", async () => {
     const source = await Bun.file(
       path.join(apiRoot, "src/lib/organization-storage-teardown.ts"),

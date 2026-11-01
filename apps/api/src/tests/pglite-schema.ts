@@ -548,6 +548,22 @@ export const installPgliteTreeParentGuards = async (
   });
 };
 
+const ORGANIZATION_DELETE_OWNER_GUARD_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261101090100_organization_delete_owner_guard",
+  "migration.sql",
+);
+
+/** Install the organization delete guard omitted by declarative schema push. */
+export const installPgliteOrganizationDeleteOwnerGuard = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  await installPgliteMigration({
+    db,
+    migrationPath: ORGANIZATION_DELETE_OWNER_GUARD_MIGRATION_PATH,
+  });
+};
+
 /** Install the scheduler pause triggers omitted by declarative schema push. */
 export const installPgliteSchedulerJobPauseLog = async (
   db: PgliteSchemaDb,

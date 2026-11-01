@@ -23,6 +23,11 @@ ALTER TABLE "account_exports"
 ALTER TABLE "account_exports"
   ADD COLUMN "audit_covered_through" timestamp with time zone;--> statement-breakpoint
 
+-- When the requester first downloaded the ready archive. Deleting an
+-- organization requires that its owner has taken the audit archive.
+ALTER TABLE "account_exports"
+  ADD COLUMN "downloaded_at" timestamp with time zone;--> statement-breakpoint
+
 -- Added validating rather than NOT VALID + VALIDATE: every existing row holds
 -- the defaults the columns were just created with, and account_exports holds a
 -- few rows per account, bounded by the hourly request budget.

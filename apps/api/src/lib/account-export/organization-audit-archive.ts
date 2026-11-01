@@ -1,9 +1,11 @@
+import { panic } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { Buffer } from "node:buffer";
 
 import { Temporal } from "@stll/time";
 
 import { member } from "@/api/db/auth-schema";
+import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { rlsDb } from "@/api/db/root";
 import { auditLogs } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
@@ -16,10 +18,11 @@ import type { AccountExportDataDb } from "@/api/lib/account-export/pages";
 import type { OrganizationAuditCoverage } from "@/api/lib/account-export/store";
 import {
   AUDIT_LOG_EXPORT_CSV_HEADER,
-  auditLogExportColumns,
+  auditLogArchiveColumns,
   auditLogExportCsvLine,
   readAuditLogExportActors,
 } from "@/api/lib/audit-log-export";
+import type { AuditLogExportRow } from "@/api/lib/audit-log-export";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
 import { putTemporaryS3ObjectWithSignal } from "@/api/lib/s3";
@@ -87,9 +90,10 @@ export const buildOrganizationAuditArchive = async ({
   publish = putTemporaryS3ObjectWithSignal,
 }: BuildOrganizationAuditArchiveOptions): Promise<OrganizationAuditCoverage> => {
   await requireOwner(db, { organizationId, userId });
+  // The owner's own matter authorization, as their activity log reads it.
   const scopedDb = createScopedDb(
     scopedDatabase ?? (await resolveScopedDatabase()),
-    [],
+    { type: WORKSPACE_ACCESS_MODE.membership, serverValidatedWorkspaceIds: [] },
     organizationId,
     userId,
   );
@@ -106,6 +110,8 @@ export const buildOrganizationAuditArchive = async ({
     rowCount: 0,
     coveredThrough: null,
   };
+  // Rows of matters the owner cannot open: present, with matter details withheld.
+  let matterWithheldRowCount = 0;
 
   // Keyset on (created_at, id). The cursor's time travels as text so it keeps
   // the column's microseconds, which a JavaScript Date would round away.
@@ -114,7 +120,7 @@ export const buildOrganizationAuditArchive = async ({
     await scopedDb(async (tx) => {
       const rows = await tx
         .select({
-          ...auditLogExportColumns(readContext),
+          ...auditLogArchiveColumns(readContext),
           id: auditLogs.id,
           cursorCreatedAt: sql<string>`${auditLogs.createdAt}::text`,
         })
@@ -145,8 +151,26 @@ export const buildOrganizationAuditArchive = async ({
       // db-await-in-loop: one bounded keyset page at a time keeps the archive streaming within its memory and size ceilings
       const { rows, actors } = await readPage(cursor);
       for (const row of rows) {
+        const exported: AuditLogExportRow = row.matterReadable
+          ? {
+              createdAt: row.createdAt,
+              userId: row.userId,
+              action: row.action,
+              resourceType: row.resourceType,
+              resourceId:
+                row.resourceId ?? panic("Audit row requires its resource id"),
+              changes: row.changes,
+              metadata: row.metadata,
+            }
+          : {
+              createdAt: row.createdAt,
+              userId: row.userId,
+              action: row.action,
+              resourceType: row.resourceType,
+              matterReadable: false,
+            };
         const line = `\n${auditLogExportCsvLine({
-          row,
+          row: exported,
           actor: actors.get(row.userId),
           ...readContext,
         })}`;
@@ -160,6 +184,9 @@ export const buildOrganizationAuditArchive = async ({
         }
         yield encoder.encode(line);
         coverage.rowCount += 1;
+        if (!row.matterReadable) {
+          matterWithheldRowCount += 1;
+        }
         coverage.coveredThrough = row.createdAt;
       }
       const last = rows.at(-1);
@@ -188,6 +215,7 @@ export const buildOrganizationAuditArchive = async ({
           generatedAt,
           organizationId,
           auditRowCount: coverage.rowCount,
+          matterWithheldRowCount,
           coveredThrough:
             coverage.coveredThrough === null
               ? null

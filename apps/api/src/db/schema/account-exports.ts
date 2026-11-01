@@ -55,6 +55,8 @@ export const accountExports = p.pgTable.withRLS(
       .notNull()
       .default([]),
     expiresAt: timestamptz("expires_at"),
+    /** When the requester first downloaded the ready archive; deletion requires it of an audit archive. */
+    downloadedAt: timestamptz("downloaded_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },

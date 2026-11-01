@@ -112,7 +112,14 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
           requested.id,
         );
         expect(
-          (await readAccountExport({ id: requested.id, userId, db }))?.id,
+          (
+            await readAccountExport({
+              reader: "browser_session",
+              id: requested.id,
+              userId,
+              db,
+            })
+          )?.id,
         ).toBe(requested.id);
         const firstClaim = await claimAccountExport(requested.id, db);
         if (firstClaim === null) {
@@ -146,6 +153,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
           }),
         ).toBe(false);
         const ready = await recordAccountExportDownload({
+          reader: "browser_session",
           id: requested.id,
           userId,
           db,
@@ -157,6 +165,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         expect(
           (
             await recordAccountExportDownload({
+              reader: "browser_session",
               id: requested.id,
               userId,
               db,
@@ -209,6 +218,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         expect(otherAccount).toEqual([]);
         expect(
           await readAccountExport({
+            reader: "browser_session",
             id: requested.id,
             userId: recoveryUserId,
             db,
@@ -216,6 +226,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         ).toBeNull();
         expect(
           await recordAccountExportDownload({
+            reader: "browser_session",
             id: requested.id,
             userId: recoveryUserId,
             db,
@@ -247,6 +258,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         expect(await expireAccountExport(requested.id, db)).toBeNull();
         expect(
           await recordAccountExportDownload({
+            reader: "browser_session",
             id: requested.id,
             userId,
             db,
@@ -257,8 +269,14 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         );
         await clearAccountExportObjects(requested.id, db);
         expect(
-          (await readAccountExport({ id: requested.id, userId, db }))
-            ?.attemptObjectKeys,
+          (
+            await readAccountExport({
+              reader: "browser_session",
+              id: requested.id,
+              userId,
+              db,
+            })
+          )?.attemptObjectKeys,
         ).toEqual([firstClaim.objectKey, claim.objectKey]);
         expect((await listRecoverableAccountExports(db)).items).toEqual([]);
         await db.transaction(async (tx) => {
@@ -274,8 +292,14 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         );
         await clearAccountExportObjects(requested.id, db);
         expect(
-          (await readAccountExport({ id: requested.id, userId, db }))
-            ?.attemptObjectKeys,
+          (
+            await readAccountExport({
+              reader: "browser_session",
+              id: requested.id,
+              userId,
+              db,
+            })
+          )?.attemptObjectKeys,
         ).toEqual([]);
 
         const retrying = (
@@ -295,7 +319,14 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
           expect(await failAccountExport(retry, db)).toBe(true);
         }
         expect(
-          (await readAccountExport({ id: retrying.id, userId, db }))?.status,
+          (
+            await readAccountExport({
+              reader: "browser_session",
+              id: retrying.id,
+              userId,
+              db,
+            })
+          )?.status,
         ).toBe("failed");
         expect((await readLatestAccountExport(userId, db))?.id).toBe(
           retrying.id,

@@ -92,8 +92,9 @@ type SeedReadyOrganizationAuditExportOptions = {
 };
 
 /**
- * Record a ready audit archive that holds the organization's current trail,
- * for suites whose subject is what deletion does after its precondition.
+ * Record a ready, downloaded audit archive that holds the organization's
+ * current trail, for suites whose subject is what deletion does after its
+ * precondition.
  */
 export const seedReadyOrganizationAuditExport = async ({
   db,
@@ -123,6 +124,7 @@ export const seedReadyOrganizationAuditExport = async ({
     objectKey: `account-exports/${userId}/${id}/seeded.zip`,
     auditRowCount: counted.at(0)?.count ?? 0,
     expiresAt: sql`clock_timestamp() + interval '1 hour'`,
+    downloadedAt: sql`clock_timestamp()`,
   });
   return id;
 };
