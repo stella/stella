@@ -14,7 +14,7 @@ use std::{
 };
 
 use cpal::{
-  FromSample, Sample, SampleFormat, SizedSample,
+  FromSample, SampleFormat, SizedSample,
   traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use tauri::AppHandle;
@@ -263,7 +263,7 @@ where
   let sink = Arc::clone(buffer);
   device
     .build_input_stream(
-      config,
+      config.clone(),
       move |data: &[T], _info: &cpal::InputCallbackInfo| {
         let mut samples = sink.lock().unwrap_or_else(|error| error.into_inner());
         let room = limit.saturating_sub(samples.len());
