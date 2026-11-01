@@ -36,7 +36,8 @@
     "flowRunAwaitingApproval": "Darbo eiga laukia jūsų patvirtinimo",
     "flowRunCompleted": "Darbo eiga baigta",
     "flowRunFailed": "Darbo eiga nepavyko",
-    "mention": "Jus paminėjo komentare"
+    "mention": "Jus paminėjo komentare",
+    "taskAssigned": "Jums priskirta užduotis"
   },
   "reportExportStatus": {
     "action": "Atidaryti stella",

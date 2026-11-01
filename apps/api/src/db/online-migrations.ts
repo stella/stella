@@ -8,6 +8,7 @@ import {
 } from "@/api/lib/billing/invoice-payment-backfill";
 import { CASE_LAW_COURT_DATE_PUBLISHED_INDEX } from "@/api/lib/case-law/court-date-index";
 import { CASE_LAW_COVERAGE_INDEXES } from "@/api/lib/case-law/coverage-index";
+import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import {
   publishedCaseLawDecisionIndexDefinitionPredicateSql,
   publishedCaseLawDecisionIndexPredicateSql,
@@ -46,6 +47,7 @@ import {
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
   CASE_LAW_PARSED_SOURCE_VALIDATION,
 } from "./case-law-parsed-source-hash-repair";
+import { CASE_LAW_POPULATION_REPAIR } from "./case-law-population-repair";
 import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
 import { CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR } from "./case-law-source-config-object-repair";
 import {
@@ -90,6 +92,10 @@ import {
 } from "./invoice-language-constraint-validation";
 import { LEGAL_LIST_SOURCE_DECISION_BACKFILL } from "./legal-list-source-decision-backfill";
 import {
+  LEGISLATION_MATTER_LINK_CONSTRAINT_VALIDATIONS,
+  LEGISLATION_MATTER_LINK_CONSTRAINTS,
+} from "./legislation-matter-link-constraint-validation";
+import {
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
   LIST_VERIFICATION_CONSTRAINTS,
 } from "./list-verification-constraint-validation";
@@ -99,6 +105,10 @@ import {
 } from "./matter-time-expense-retention-validation";
 import { DEFAULT_MIGRATION_TIMING, timed } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
+import {
+  NOTIFICATION_TASK_ASSIGNED_CONSTRAINT_VALIDATIONS,
+  NOTIFICATION_TASK_ASSIGNED_CONSTRAINTS,
+} from "./notification-task-assigned-constraint-validation";
 import {
   createIndexConcurrently,
   createOnlineTableGate,
@@ -261,6 +271,45 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
   publishedCaseLawDecisionIndexDefinitionPredicateSql();
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  {
+    name: "case_law_population_deltas_source_kind_idx",
+    introducedBy: "20261101022151_case_law_population_counts",
+    tableName: "case_law_population_deltas",
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_population_deltas_source_kind_idx" ON public."case_law_population_deltas" USING btree ("source_id", "kind", "value")',
+    definitionBody:
+      "ON public.case_law_population_deltas USING btree (source_id, kind, value)",
+    isUnique: false,
+  },
+  {
+    name: "case_law_population_projection_activity_idx",
+    introducedBy: "20261101022151_case_law_population_counts",
+    tableName: "case_law_population_projections",
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_population_projection_activity_idx" ON public."case_law_population_projections" USING btree ("country", "court", "updated_at" DESC, "source_id", "created_at") WHERE publication = 'published'`,
+    definitionBody:
+      "ON public.case_law_population_projections USING btree (country, court, updated_at DESC, source_id, created_at) WHERE (publication = 'published'::text)",
+    isUnique: false,
+  },
+  {
+    name: "case_law_population_counts_source_kind_idx",
+    introducedBy: "20261101022151_case_law_population_counts",
+    tableName: "case_law_population_counts",
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_population_counts_source_kind_idx" ON public."case_law_population_counts" USING btree ("source_id", "kind", "value", "total")',
+    definitionBody:
+      "ON public.case_law_population_counts USING btree (source_id, kind, value, total)",
+    isUnique: false,
+  },
+  {
+    name: "account_audit_logs_user_event_idx",
+    introducedBy: "20261031213547_organization_created_audit_event",
+    tableName: "account_audit_logs",
+    isUnique: false,
+    createSql:
+      'CREATE INDEX CONCURRENTLY "account_audit_logs_user_event_idx" ON public.account_audit_logs (user_id, event_type)',
+    definitionBody:
+      "ON public.account_audit_logs USING btree (user_id, event_type)",
+  },
   {
     name: "chat_run_log_entries_message_snapshot_idx",
     introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
@@ -447,6 +496,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "case_law_decisions_country_date_published_idx",
     tableName: "case_law_decisions",
   },
+  CASE_LAW_PROVISION_SEARCH_INDEX,
   {
     introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
     createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_country_language_date_published_idx" ON public."case_law_decisions" USING btree ("country", "language", coalesce("decision_date", '-infinity'::date), "id") WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE}`,
@@ -600,6 +650,16 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     isUnique: false,
     name: "case_law_decisions_provision_scope_cursor_idx",
     tableName: "case_law_decisions",
+  },
+  {
+    introducedBy: "20261101185403_case_law_provision_membership_index",
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_provision_citations_decision_work_subtree_idx" ON public."case_law_provision_citations" USING btree ("decision_id", "jurisdiction", "work_identifier", "anchor" COLLATE "C", "span_start")',
+    definitionBody:
+      'ON public.case_law_provision_citations USING btree (decision_id, jurisdiction, work_identifier, anchor COLLATE "C", span_start)',
+    isUnique: false,
+    name: "case_law_provision_citations_decision_work_subtree_idx",
+    tableName: "case_law_provision_citations",
   },
   {
     createSql:
@@ -969,10 +1029,12 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   ...READER_ANNOTATION_CONSTRAINT_VALIDATIONS,
   READER_ANSWER_CONSTRAINT_VALIDATION,
   ...INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
+  ...LEGISLATION_MATTER_LINK_CONSTRAINT_VALIDATIONS,
   ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS,
   EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
   TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
   USAGE_ACTION_TYPE_CONSTRAINT_VALIDATION,
+  ...NOTIFICATION_TASK_ASSIGNED_CONSTRAINT_VALIDATIONS,
   CONTACT_VAT_ID_REPAIR,
   INVOICE_SENT_AT_BACKFILL,
   INVOICE_LEGACY_PAYMENT_BACKFILL,
@@ -988,6 +1050,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL,
   LEGAL_LIST_SOURCE_DECISION_BACKFILL,
   CASE_LAW_SITEMAP_PACKING_ENROLLMENT,
+  CASE_LAW_POPULATION_REPAIR,
   CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR,
 ];
 
@@ -1013,10 +1076,12 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...READER_ANNOTATION_CONSTRAINTS,
     ...READER_ANSWER_CONSTRAINTS,
     ...INVOICE_LANGUAGE_CONSTRAINTS,
+    ...LEGISLATION_MATTER_LINK_CONSTRAINTS,
     ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
     ...EMAIL_UNDELIVERABLE_CONSTRAINTS,
     ...TIME_ENTRY_SUBMITTED_CONSTRAINTS,
     ...USAGE_ACTION_TYPE_CONSTRAINTS,
+    ...NOTIFICATION_TASK_ASSIGNED_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
     ...IMPORT_PROVENANCE_CONSTRAINTS,
   ];

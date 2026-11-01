@@ -83,6 +83,10 @@ const STACK_FRAME_PREFIX = "at ";
 const RECOGNIZED_FRAME_ORIGIN =
   /^(?:(?:[^\s]*\/)?(?:apps|packages|node_modules)\/|\/app\/|(?:node|bun|native):)/u;
 
+// `panic()` builds its error inside the library, so that frame would name the
+// helper on every panic. The caller is the site that failed.
+const PANIC_HELPER_FRAME = /\/better-result(?:@[^/]*)?\//u;
+
 type EvidenceNodeKind = "error" | "plain" | "primitive" | "tagged";
 
 type EvidenceTruncation = "cycle" | "depth" | "none" | "read_failed";
@@ -501,7 +505,7 @@ const topFrame = (parts: StackParts): FrameEvidence => {
   }
   for (const line of lines.slice(0, MAX_STACK_FRAME_LINES)) {
     const location = frameLocation(line);
-    if (location !== undefined) {
+    if (location !== undefined && !PANIC_HELPER_FRAME.test(location)) {
       return RECOGNIZED_FRAME_ORIGIN.test(location)
         ? { kind: "recognized", location }
         : { kind: "unrecognized" };
