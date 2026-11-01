@@ -2,9 +2,9 @@ import { panic } from "better-result";
 import { realpathSync } from "node:fs";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
-import { withSharedTestPostgresConnection } from "@stll/scripts/src/shared-test-postgres";
 
 import { runMigrations } from "../src/db/migration-runner";
+import { withSharedTestPostgresConnection } from "./shared-test-postgres";
 import { sharedTestTemplateMigrations } from "./shared-test-template-migrations";
 
 const [folder] = process.argv.slice(2);
