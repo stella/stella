@@ -264,6 +264,12 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "documentUrl",
   // Publisher ingestion identity; the public link uses id or slug.
   "sourceDocumentId",
+  // Fallback identity and cohort bookkeeping are not public document labels.
+  "fallbackIdentityKey",
+  "fallbackCohortKey",
+  "fallbackContentHash",
+  "fallbackPublicationHash",
+  "fallbackDocumentHash",
   // The file's document labels use the published primary reference.
   "sheetNumber",
   // Document-fetch queue priority is internal bookkeeping.

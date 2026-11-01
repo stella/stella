@@ -14,6 +14,7 @@ import {
   observeDecision,
   resolveDecisionIdentityTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
+import type { ObservedDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import { planDecisionWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-plan";
 import {
   acquireSourceRawArtifact,
@@ -102,6 +103,7 @@ const settleRowWriteStatus = async ({
       }
       return null;
     }
+    case DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED:
     case DECISION_ROW_WRITE_STATUS.SUPPLEMENTS_MOVED:
       return RECONCILE_CONTENTION;
     case DECISION_ROW_WRITE_STATUS.WINNER_PENDING:
@@ -139,38 +141,52 @@ const storedInputMatchesDecision = (
     existing.id === input.decisionId &&
     existing.sourceRawS3Key === input.sourceRawS3Key);
 
+const unresolvedFallbackIdentity = (
+  observation: ObservedDecision,
+  sourceId: SafeId<"caseLawSource">,
+): ProcessResult | null => {
+  if (observation.storageIdentity.type === "unkeyable") {
+    logger.warn("case_law.ingestion.fallback_identity_unresolved", {
+      sourceId,
+      identityType: observation.storageIdentity.type,
+    });
+    return {
+      status: PROCESS_DECISION_STATUS.RETRYABLE,
+      inserted: false,
+      reason: PROCESS_DECISION_RETRY_REASON.FALLBACK_IDENTITY,
+    };
+  }
+  return null;
+};
+
 /**
  * One pass over a decision: resolve its identity, settle what an existing
  * row makes of it, store its raw payload, plan and write its row, then queue
  * its corpus mirror. Each phase answers the attempt's outcome, or a
  * contention the caller reconciles by running the attempt again.
  */
-const runDecisionAttempt = async ({
-  metadataUrlSchema,
-  retention,
-  statedEcliIdentity,
-  input,
-  inputProvenance,
-  judges,
-  sourceId,
-  scopedDb,
-  observedAt,
-  observationOrder,
-  refresh,
-  sourceFingerprintVersion,
-  sourceFingerprintFromStoredRaw,
-  corpus,
-  corpusBatch,
-  polarityRules,
-  signal,
-  s3Policy,
-}: ProcessDecisionAttemptOptions): Promise<Result<AttemptStep, unknown>> => {
-  signal?.throwIfAborted();
-  const observed = observeDecision({ input, sourceId, metadataUrlSchema });
-  if (observed.isErr()) {
-    return observed;
-  }
-  const observation = observed.value;
+const runDecisionAttempt = async (
+  {
+    metadataUrlSchema,
+    retention,
+    statedEcliIdentity,
+    inputProvenance,
+    judges,
+    sourceId,
+    scopedDb,
+    observedAt,
+    observationOrder,
+    refresh,
+    sourceFingerprintVersion,
+    sourceFingerprintFromStoredRaw,
+    corpus,
+    corpusBatch,
+    polarityRules,
+    signal,
+    s3Policy,
+  }: ProcessDecisionAttemptOptions,
+  observation: ObservedDecision,
+): Promise<Result<AttemptStep, unknown>> => {
   const proposedDecisionId = createSafeId<"caseLawDecision">();
 
   // Opened before the read below that proves the decision is not erased, so
@@ -288,6 +304,7 @@ const runDecisionAttempt = async ({
         ...(s3Policy === undefined ? {} : { s3Policy }),
         ...identity,
         persistedDecisionDate: observation.persistedDecisionDate,
+        storageIdentity: observation.storageIdentity,
         sourceId,
         decisionId,
         result: plan.preparedResult,
@@ -372,7 +389,20 @@ const runDecisionAttempt = async ({
 const processDecisionAttempt = async (
   options: ProcessDecisionAttemptOptions,
 ): Promise<Result<ProcessResult, unknown>> => {
-  const attempted = await runDecisionAttempt(options);
+  options.signal?.throwIfAborted();
+  const observed = observeDecision(options);
+  if (observed.isErr()) {
+    return observed;
+  }
+  const observation = observed.value;
+  const fallbackFailure = unresolvedFallbackIdentity(
+    observation,
+    options.sourceId,
+  );
+  if (fallbackFailure !== null) {
+    return Result.ok(fallbackFailure);
+  }
+  const attempted = await runDecisionAttempt(options, observation);
   if (attempted.isErr()) {
     return attempted;
   }

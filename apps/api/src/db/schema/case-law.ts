@@ -70,6 +70,8 @@ import {
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
+import { PREVIOUS_FALLBACK_DECISION_INDEX } from "@/api/lib/case-law/fallback-decision-identity-constants";
+import { fallbackDecisionIdentityIndexes } from "@/api/lib/case-law/fallback-decision-identity-index";
 import {
   publishedCaseLawDecisionFor,
   unredactedCaseLawDecisionFor,
@@ -705,10 +707,21 @@ export const caseLawDecisions = p.pgTable(
      * makes two unrelated decisions the same row. The publisher's id is
      * unique across the whole source by construction.
      *
-     * Null only for sources that expose no such id; those keep the older
-     * case-number key, which is sound for a source holding one court.
+     * Null for sources without a publisher document id; their fallback
+     * identity uses court-qualified evidence or normalized content.
      */
     sourceDocumentId: p.varchar("source_document_id", { length: 256 }),
+    /** Canonical court and decision evidence for rows without a publisher document id. */
+    fallbackIdentityKey: p.varchar("fallback_identity_key", { length: 320 }),
+    /** Weak source cohort; individual members are identified by normalized content. */
+    fallbackCohortKey: p.varchar("fallback_cohort_key", { length: 320 }),
+    /** Nonunique court/docket publication scope; compatible stated fields disambiguate enrichment. */
+    fallbackPublicationHash: p.varchar("fallback_publication_hash", {
+      length: 64,
+    }),
+    fallbackContentHash: p.varchar("fallback_content_hash", { length: 64 }),
+    /** Canonical document proof shared by weak and strong observations, independent of corpus mode. */
+    fallbackDocumentHash: p.varchar("fallback_document_hash", { length: 64 }),
     /**
      * Sheet number within the court file (číslo listu), where the source
      * appends one to the docket: `11 C 153/2025-28` is sheet 28 of case
@@ -866,16 +879,15 @@ export const caseLawDecisions = p.pgTable(
         languageGroupKey: t.languageGroupKey,
       }),
     ),
-    // Identity, in two halves that together cover every row exactly once.
-    // Where the publisher states an id, that is the key. Where it does not,
-    // the case number still serves, because such a source holds one court
-    // and its numbering is unique within it.
+    // Publisher ids identify documents; fallback keys include court and decision
+    // evidence. The obsolete docket-only index is removed by the contract migration.
     p
       .uniqueIndex("case_law_decisions_source_document_idx")
       .on(t.sourceId, t.sourceDocumentId)
       .where(isNotNull(t.sourceDocumentId)),
+    ...fallbackDecisionIdentityIndexes(t),
     p
-      .uniqueIndex("case_law_decisions_source_case_lang_null_idx")
+      .uniqueIndex(PREVIOUS_FALLBACK_DECISION_INDEX)
       .on(t.sourceId, t.caseNumber, t.language)
       .where(isNull(t.sourceDocumentId)),
     p
@@ -1468,6 +1480,34 @@ export const caseLawDecisionSourceIdentities = p.pgTable(
     p
       .index("case_law_decision_source_identities_decision_idx")
       .on(t.decisionId),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+/** Exact court-qualified fallback keys survive enrichment and retired decision UUIDs. */
+export const caseLawDecisionFallbackIdentities = p.pgTable(
+  "case_law_decision_fallback_identities",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    identityKey: p.varchar("identity_key", { length: 320 }).notNull(),
+    // Canonical aliases resolve retired UUIDs, as for publisher identity reservations.
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.sourceId, t.identityKey],
+      name: "case_law_decision_fallback_identities_pk",
+    }),
+    p
+      .index("case_law_decision_fallback_identities_decision_idx")
+      .on(t.decisionId),
+    p.check(
+      "case_law_decision_fallback_identities_strong_key",
+      sql`left(${t.identityKey}, length('case-number:v2:["decision",')) = 'case-number:v2:["decision",'`,
+    ),
     ...caseLawIngestionOnlyPolicies(),
   ],
 );
