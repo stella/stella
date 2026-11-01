@@ -13,12 +13,20 @@
  * lines report the references the extractor left unresolved, by reason.
  *
  *   AWS_REGION=eu-central-1 bun src/scripts/citation-probe.ts \
- *     --bucket <legal-corpus-bucket> [--sample 18] [--jurisdictions CZE,SVK,POL]
+ *     --bucket <legal-corpus-bucket> [--sample 18] [--jurisdictions CZE,SVK,POL] \
+ *     [--recheck CZE:<document-id>,SVK:<document-id>]
+ *
+ * `--recheck` reads the named documents as well, so a fix can be judged on
+ * the decision that showed the residual: a random sample rarely meets it
+ * again. The ids are corpus document ids, as RESIDUAL lines print them (not
+ * decision ids). Their lines start with RECHECK and stay out of the sample
+ * summary.
  */
 import { Result } from "better-result";
 
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { printError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -39,6 +47,11 @@ import {
   hasNoUsableDocuments,
   readAst,
 } from "@/api/scripts/citation-probe-read";
+import {
+  newestTextKey,
+  parseRecheckTargets,
+  type RecheckTarget,
+} from "@/api/scripts/citation-probe-recheck";
 
 const DEFAULT_JURISDICTIONS = ["CZE", "SVK", "POL"] as const;
 const KEY_PREFIX = "legal-corpus/documents/jurisdiction=";
@@ -67,6 +80,15 @@ if (JURISDICTIONS.length === 0) {
   console.error("citation-probe: --jurisdictions must list ISO alpha-3 codes");
   process.exit(2);
 }
+
+const recheckArg = argValue("--recheck");
+const recheckParsed =
+  recheckArg === undefined ? Result.ok([]) : parseRecheckTargets(recheckArg);
+if (Result.isError(recheckParsed)) {
+  printError("citation-probe:", recheckParsed.error);
+  process.exit(2);
+}
+const RECHECK_TARGETS: readonly RecheckTarget[] = recheckParsed.value;
 
 const CITATION_PROBE_CONCURRENCY = 8;
 
@@ -266,32 +288,30 @@ const sampleKeys = async (jurisdiction: string, want: number) => {
   );
   const keys = new Set<string>();
   for (const docListing of docListings) {
-    const contents = docListing.contents;
-    if (!contents) {
-      continue;
-    }
-    const textEntries = contents.filter((entry) =>
-      entry.key.endsWith("/text.zst"),
-    );
-    // A backfilled document can leave an orphaned content-addressed
-    // payload beside the live one. Newest-write is a heuristic, not a
-    // guarantee (a compare-and-set-rejected write can be newer than the
-    // live payload); resolving the truly live key would need the
-    // database, which this probe deliberately avoids — and a superseded
-    // payload is still real court prose, which is all pattern-mining
-    // needs.
-    const first = textEntries.at(0);
-    if (first) {
-      let newest = first;
-      for (const entry of textEntries) {
-        if ((entry.lastModified ?? "") > (newest.lastModified ?? "")) {
-          newest = entry;
-        }
-      }
-      keys.add(newest.key);
+    // Newest-write is a heuristic, not a guarantee (a compare-and-set-
+    // rejected write can be newer than the live payload); resolving the truly
+    // live key would need the database, which this probe deliberately avoids.
+    const key = newestTextKey(docListing.contents ?? []);
+    if (key !== undefined) {
+      keys.add(key);
     }
   }
   return [...keys];
+};
+
+/** The text key of one named document; undefined when it holds no text. */
+const recheckKey = async ({
+  jurisdiction,
+  documentId,
+}: RecheckTarget): Promise<string | undefined> => {
+  const listing = await withDeadline(
+    s3.list({
+      prefix: `${KEY_PREFIX}${jurisdiction}/${documentId}/`,
+      maxKeys: 64,
+    }),
+    "s3.list-recheck",
+  );
+  return newestTextKey(listing.contents ?? []);
 };
 
 type ProbedDoc = {
@@ -451,6 +471,36 @@ const docs = (
     }),
   )
 ).flat();
+
+// Each named document once, in the order given; a failure is reported on its
+// own line rather than dropping the document from the output.
+for (const target of RECHECK_TARGETS) {
+  const label = `RECHECK ${target.jurisdiction} ${target.documentId}`;
+  const checked = await Result.tryPromise({
+    try: async () => {
+      const key = await recheckKey(target);
+      return key === undefined
+        ? undefined
+        : await probeKey(target.jurisdiction, key);
+    },
+    catch: (cause) => cause,
+  });
+  if (Result.isError(checked)) {
+    console.log(`${label} failed`);
+    continue;
+  }
+  const doc = checked.value;
+  if (doc === undefined) {
+    console.log(`${label} missing`);
+    continue;
+  }
+  console.log(
+    `${label} ${doc.empty ? "empty" : `residuals=${String(doc.residuals.length)}`}`,
+  );
+  for (const residual of doc.residuals.slice(0, 6)) {
+    console.log(`  ${residual}`);
+  }
+}
 
 let totalExtracted = 0;
 let totalResiduals = 0;
