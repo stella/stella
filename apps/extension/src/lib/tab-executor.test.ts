@@ -7,6 +7,7 @@ import {
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 
+import { releaseToUser } from "./tab-containment";
 import {
   adoptControlledTab,
   executeBrowserCommand,
@@ -621,6 +622,108 @@ describe("chat's tabs", () => {
     expect(session["browserControlledTab"]).toMatchObject({
       adopted: false,
       tabId: 7,
+    });
+  });
+
+  /** Calls `onWrite` right after the controlled tab is stored as `tabId`. */
+  const afterControlledTabWrite = (
+    installed: ReturnType<typeof installFakeChrome>,
+    tabId: number,
+    onWrite: () => Promise<void>,
+  ) => {
+    const { set } = installed.chrome.storage.session;
+    installed.chrome.storage.session.set = async (
+      items: Record<string, unknown>,
+    ) => {
+      await set(items);
+      const written = items["browserControlledTab"];
+      if (
+        typeof written === "object" &&
+        written !== null &&
+        "tabId" in written &&
+        written.tabId === tabId
+      ) {
+        await onWrite();
+      }
+    };
+  };
+
+  test("a new tab stopped after it became chat's hands control back", async () => {
+    const installed = installChatTabs();
+    const stop = new AbortController();
+    afterControlledTabWrite(installed, 7, async () => {
+      stop.abort();
+    });
+
+    expect(
+      await run(
+        { action: "open", newTab: true, url: PAGE_URL },
+        { signal: stop.signal },
+      ),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.cancelled });
+    expect(installed.log).toContain("remove:7");
+    expect(installed.session["browserControlledTab"]).toMatchObject({
+      snapshot: { revision: "revision-1" },
+      tabId: CONTROLLED_TAB_ID,
+    });
+    expect(installed.session["browserContainedTabs"]).toMatchObject({
+      chatTabIds: [RESULTS_TAB_ID],
+      controlledTabId: CONTROLLED_TAB_ID,
+    });
+  });
+
+  test("a stopped new tab never hands control back to a tab the user took", async () => {
+    const installed = installChatTabs();
+    const stop = new AbortController();
+    afterControlledTabWrite(installed, 7, async () => {
+      // The user types an address into the former tab while the new one
+      // is being prepared, and the command is stopped.
+      await releaseToUser(CONTROLLED_TAB_ID);
+      stop.abort();
+    });
+
+    expect(
+      await run(
+        { action: "open", newTab: true, url: PAGE_URL },
+        { signal: stop.signal },
+      ),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.cancelled });
+    expect(installed.log).toContain("remove:7");
+    // No tab is controlled; the user's tab stays confined, not chat's.
+    expect(installed.session["browserControlledTab"]).toBeUndefined();
+    expect(installed.session["browserContainedTabs"]).toMatchObject({
+      chatTabIds: [RESULTS_TAB_ID],
+      controlledTabId: null,
+      openedTabIds: [RESULTS_TAB_ID, CONTROLLED_TAB_ID],
+    });
+  });
+
+  test("a new tab Chrome refuses to navigate is closed and control handed back", async () => {
+    const installed = installChatTabs();
+    const { budget, events } = createBudget();
+    const { update } = installed.chrome.tabs;
+    installed.chrome.tabs.update = async (
+      tabId: number,
+      properties: { url?: string },
+    ) => {
+      if (tabId === 7 && properties.url !== undefined) {
+        throw new TypeError("Cannot navigate the tab.");
+      }
+      return await update(tabId, properties);
+    };
+
+    expect(
+      await run({ action: "open", newTab: true, url: PAGE_URL }, { budget }),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.navigationFailed });
+    expect(events).toEqual(["charge", "refund"]);
+    expect(installed.log).toContain("remove:7");
+    expect(installed.session["browserControlledTab"]).toMatchObject({
+      tabId: CONTROLLED_TAB_ID,
+    });
+    expect(installed.session["browserContainedTabs"]).toMatchObject({
+      chatTabIds: [RESULTS_TAB_ID],
+      controlledTabId: CONTROLLED_TAB_ID,
+      openedTabIds: [RESULTS_TAB_ID],
     });
   });
 

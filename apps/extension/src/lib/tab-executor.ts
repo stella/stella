@@ -1578,6 +1578,7 @@ export const adoptControlledTab = async (
 type OpenedControlledTab =
   | { status: "cancelled" }
   | { loaded: boolean; status: "navigated"; tabId: number }
+  | { status: "navigation-refused" }
   | { status: "over-limit" }
   | { status: "unavailable" };
 
@@ -1600,36 +1601,43 @@ const openControlledTab = async (
   if (tabId === undefined) {
     return { status: "unavailable" };
   }
-  const previousUserNavigated =
-    reused === null && (await readContainedTabs()).controlledUserNavigated;
-  // A tab created for this command and stopped before it navigated holds
-  // nothing; closing it hands control back to the tab chat had, if any, so
-  // no controlled tab is one chat has never read.
+  // Not yet chat's: the tab Chrome just created is confined as unknown, and
+  // nothing else changed.
+  const closeCreatedTab = async (): Promise<void> => {
+    await forgetContainedTab(tabId);
+    await chrome.tabs.remove(tabId).catch(() => undefined);
+  };
+  // A tab created for this command that did not navigate holds nothing;
+  // closing it hands control back to the tab chat had, but only while that
+  // tab is still chat's: one the user navigated or that closed meanwhile is
+  // not taken back, and no tab is left controlled. Either way no controlled
+  // tab is one chat has never read.
   const discardCreatedTab = async (): Promise<void> => {
     if (reused !== null) {
       return;
     }
-    if (existing === null) {
-      await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
-    } else {
-      await containControlledTab(existing.state.tabId, {
-        adopted: existing.state.adopted,
-        userNavigated: previousUserNavigated,
+    const restored =
+      existing === null ? null : await switchContainedTab(existing.state.tabId);
+    if (existing !== null && restored?.status === "switched") {
+      await writeControlledTabState({
+        ...existing.state,
+        adopted: restored.adopted,
       });
-      await writeControlledTabState(existing.state);
+    } else {
+      await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
     }
-    await forgetContainedTab(tabId);
-    await chrome.tabs.remove(tabId).catch(() => undefined);
+    await closeCreatedTab();
   };
   if (isStopped(signal)) {
-    await discardCreatedTab();
+    if (reused === null) {
+      await closeCreatedTab();
+    }
     return { status: "cancelled" };
   }
   // Checked again where the tab joins chat's: a tab a page opened since the
   // caller's check may have taken the last place.
   if ((await containControlledTab(tabId)) === "over-limit") {
-    await chrome.tabs.remove(tabId).catch(() => undefined);
-    await forgetContainedTab(tabId);
+    await closeCreatedTab();
     return { status: "over-limit" };
   }
   await writeControlledTabState({
@@ -1645,7 +1653,14 @@ const openControlledTab = async (
   }
   const navigation = createTabNavigationObserver(tabId);
   try {
-    await chrome.tabs.update(tabId, { active: true, url: url.href });
+    try {
+      await chrome.tabs.update(tabId, { active: true, url: url.href });
+    } catch {
+      // Chrome refused the navigation, so the page never loaded: a new tab
+      // is discarded as if stopped.
+      await discardCreatedTab();
+      return { status: "navigation-refused" };
+    }
     return {
       loaded: await navigation.waitForNavigation(signal),
       status: "navigated",
@@ -1802,6 +1817,13 @@ const runOpen = async (
   if (opened.status === "over-limit") {
     await budget.refund();
     return tabLimitReached();
+  }
+  if (opened.status === "navigation-refused") {
+    await budget.refund();
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.navigationFailed,
+      "Chrome refused to open this page in the tab; nothing was loaded.",
+    );
   }
   if (opened.status === "unavailable") {
     return browserControlError(

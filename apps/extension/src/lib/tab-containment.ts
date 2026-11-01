@@ -418,8 +418,6 @@ type ContainControlledTabOptions = {
    * but no longer chat's.
    */
   atLimit?: "drop-oldest" | "refuse";
-  /** Restores the flag of a controlled tab the user had navigated. */
-  userNavigated?: boolean;
 };
 
 type ControlledTabContainment = "contained" | "over-limit";
@@ -436,11 +434,7 @@ type ControlledTabContainment = "contained" | "over-limit";
  */
 export const containControlledTab = async (
   tabId: number,
-  {
-    adopted = false,
-    atLimit = "refuse",
-    userNavigated = false,
-  }: ContainControlledTabOptions = {},
+  { adopted = false, atLimit = "refuse" }: ContainControlledTabOptions = {},
 ): Promise<ControlledTabContainment> =>
   await updateContainedTabs(async (current, openTabIds) => {
     const userTabIds = isActive(current)
@@ -469,8 +463,8 @@ export const containControlledTab = async (
         chatTabIds: retainedChat.slice(Math.max(0, retainedChat.length - room)),
         controlledTabId: tabId,
         controlledUserNavigated: moved
-          ? userNavigated
-          : current.controlledUserNavigated || userNavigated,
+          ? false
+          : current.controlledUserNavigated,
         openedTabIds: retained.filter((opened) => opened !== tabId),
         userTabIds: userTabIds.filter(
           (userTabId) => userTabId !== tabId && !retained.includes(userTabId),
