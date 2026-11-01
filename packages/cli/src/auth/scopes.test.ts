@@ -55,6 +55,12 @@ describe("parseScopesFlag", () => {
 });
 
 describe("default login scopes", () => {
+  test("requests organization creation for a default login", () => {
+    expect(CLI_DEFAULT_RESOURCE_SCOPES).toContain("stella:organization_create");
+    expect(CLI_NON_DEFAULT_RESOURCE_SCOPES).not.toContain(
+      "stella:organization_create",
+    );
+  });
   test("every catalog scope is either requested by default or deliberately left out", () => {
     const classified = new Set<string>([
       ...CLI_DEFAULT_RESOURCE_SCOPES,
