@@ -165,7 +165,16 @@
     "preview": "Ouvrir l’aperçu",
     "previewDescription": "Ce fichier s’ouvre dans l’aperçu du système.",
     "unrendered": "Ce document ne peut pas être affiché ici, mais l’aperçu du système pourra peut-être l’ouvrir.",
-    "details": "Détails"
+    "details": "Détails",
+    "zoomOut": "Zoom arrière",
+    "zoomIn": "Zoom avant",
+    "zoomFit": "Ajuster à la largeur",
+    "fit": "Largeur",
+    "appearance": {
+      "system": "Apparence : automatique",
+      "light": "Apparence : claire",
+      "dark": "Apparence : sombre"
+    }
   },
   "signIn": {
     "beta": "Bêta",

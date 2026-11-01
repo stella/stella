@@ -165,7 +165,16 @@
     "preview": "Otwórz podgląd",
     "previewDescription": "Ten plik otworzy się w podglądzie systemowym.",
     "unrendered": "Tego dokumentu nie można tu wyświetlić, ale podgląd systemowy może go otworzyć.",
-    "details": "Szczegóły"
+    "details": "Szczegóły",
+    "zoomOut": "Pomniejsz",
+    "zoomIn": "Powiększ",
+    "zoomFit": "Dopasuj do szerokości",
+    "fit": "Szerokość",
+    "appearance": {
+      "system": "Wygląd: automatyczny",
+      "light": "Wygląd: jasny",
+      "dark": "Wygląd: ciemny"
+    }
   },
   "signIn": {
     "beta": "Beta",

@@ -165,7 +165,16 @@
     "preview": "Abrir pré-visualização",
     "previewDescription": "Este arquivo abre na pré-visualização do sistema.",
     "unrendered": "Este documento não pode ser exibido aqui, mas a pré-visualização do sistema talvez consiga abri-lo.",
-    "details": "Detalhes"
+    "details": "Detalhes",
+    "zoomOut": "Diminuir zoom",
+    "zoomIn": "Aumentar zoom",
+    "zoomFit": "Ajustar à largura",
+    "fit": "Largura",
+    "appearance": {
+      "system": "Aparência: automática",
+      "light": "Aparência: clara",
+      "dark": "Aparência: escura"
+    }
   },
   "signIn": {
     "beta": "Beta",
