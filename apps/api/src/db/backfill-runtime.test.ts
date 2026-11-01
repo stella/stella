@@ -67,7 +67,7 @@ test.each([
           if (statement.includes("to_regclass")) {
             return [{ installed: true }];
           }
-          if (statement.includes("pending_population_deltas")) {
+          if (statement.includes("AS pending")) {
             return [{ pending }];
           }
           if (statement.startsWith("SELECT cursor, batch")) {

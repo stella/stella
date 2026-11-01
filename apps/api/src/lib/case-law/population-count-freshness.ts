@@ -4,10 +4,11 @@ import * as v from "valibot";
 
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { boundedString } from "@/api/lib/search/response-text-bounds";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** A PostgreSQL timestamptz rendered as ISO 8601 text. */
-const foldedAtSchema = v.pipe(v.string(), v.maxLength(64));
+const foldedAtSchema = boundedString(64);
 
 /** A fold identifies the persisted snapshot; current also includes the complete pending window. */
 export const populationCountsFreshnessSchema = v.variant("status", [

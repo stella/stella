@@ -289,6 +289,7 @@ DECLARE
   seed public.case_law_population_seed_state;
   batch_cursor uuid;
   batch_count integer := 0;
+  candidate_count integer := 0;
   fold_done boolean;
 BEGIN
   IF batch_size IS NULL OR batch_size < 1 OR batch_size > 2048 THEN RAISE EXCEPTION 'Invalid population seed batch size'; END IF;
@@ -300,22 +301,42 @@ BEGIN
       IF seed.source_id IS NULL THEN seed.phase := 'fold'; END IF;
     END IF;
     IF seed.phase = 'scan' THEN
-      EXECUTE 'WITH batch AS MATERIALIZED (
-        SELECT d.* FROM public.case_law_decisions d WHERE d.source_id = $3 '
+      -- The only blocking wait, on one row with no other decision locked. A
+      -- writer that keeps this row busy is outlasted here, so no writer ever
+      -- waits behind a half-locked batch and no lock cycle can form with one.
+      EXECUTE 'SELECT d.id FROM public.case_law_decisions d WHERE d.source_id = $2 '
+        || CASE WHEN seed.cursor IS NULL THEN '' ELSE 'AND d.id > $1 ' END ||
+        'ORDER BY d.id LIMIT 1 FOR UPDATE OF d'
+      USING seed.cursor, seed.source_id;
+      -- Every later row is skipped rather than awaited, and the batch ends at
+      -- the first skipped row: the cursor never passes an unprojected decision.
+      EXECUTE 'WITH candidates AS MATERIALIZED (
+        SELECT d.id FROM public.case_law_decisions d WHERE d.source_id = $3 '
         || CASE WHEN seed.cursor IS NULL THEN '' ELSE 'AND d.id > $2 ' END ||
-        'ORDER BY d.id LIMIT $1 FOR UPDATE OF d
+        'ORDER BY d.id LIMIT $1
+      ), locked AS MATERIALIZED (
+        SELECT d.* FROM public.case_law_decisions d
+        WHERE d.id IN (SELECT id FROM candidates) FOR UPDATE OF d SKIP LOCKED
+      ), first_skipped AS (
+        SELECT c.id FROM candidates c
+        WHERE NOT EXISTS (SELECT 1 FROM locked l WHERE l.id = c.id)
+        ORDER BY c.id LIMIT 1
+      ), batch AS MATERIALIZED (
+        SELECT l.* FROM locked l
+        WHERE NOT EXISTS (SELECT 1 FROM first_skipped)
+          OR l.id < (SELECT id FROM first_skipped)
       ), projected AS (
         INSERT INTO public.case_law_population_projections (decision_id, source_id, country, buckets, court, created_at, updated_at, publication)
         SELECT b.id, b.source_id, b.country, public.case_law_population_buckets(b::public.case_law_decisions), b.court, b.created_at, b.updated_at,
           CASE WHEN public.case_law_statute_citation_is_published(b.metadata, b.redacted_at) THEN ''published'' ELSE ''unpublished'' END FROM batch b
         ON CONFLICT ON CONSTRAINT case_law_population_projections_pkey DO NOTHING
-      ) SELECT max(id::text)::uuid, count(*)::integer FROM batch'
-      INTO batch_cursor, batch_count USING batch_size, seed.cursor, seed.source_id;
-      IF batch_count = 0 THEN
+      ) SELECT (SELECT count(*)::integer FROM candidates), max(id::text)::uuid, count(*)::integer FROM batch'
+      INTO candidate_count, batch_cursor, batch_count USING batch_size, seed.cursor, seed.source_id;
+      IF candidate_count = 0 THEN
         SELECT id INTO seed.source_id FROM public.case_law_sources WHERE id > seed.source_id ORDER BY id LIMIT 1;
         seed.cursor := NULL;
         IF seed.source_id IS NULL THEN seed.phase := 'fold'; END IF;
-      ELSE
+      ELSIF batch_count > 0 THEN
         seed.cursor := batch_cursor;
       END IF;
     END IF;

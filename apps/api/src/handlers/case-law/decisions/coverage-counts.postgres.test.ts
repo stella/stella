@@ -448,6 +448,99 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
     });
   }, 30_000);
 
+  // timeout: a second PostgreSQL session holds a decision through a seed batch.
+  test("a seed batch stops before a busy decision and never passes it", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("Busy decision coverage seed proof requires DATABASE_URL");
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient({ max: 1 });
+      const { db: writer } = openClient({ max: 1 });
+      const sourceId = createSafeId<"caseLawSource">();
+      const decisionIds = [
+        createSafeId<"caseLawDecision">(),
+        createSafeId<"caseLawDecision">(),
+        createSafeId<"caseLawDecision">(),
+      ].toSorted();
+      const [firstId, busyId] = decisionIds;
+      if (firstId === undefined || busyId === undefined) {
+        return panic("Busy decision fixture needs its decisions");
+      }
+      await db.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey: `coverage-busy-${sourceId}`,
+        name: "Coverage busy decision fixture",
+      });
+      const projected = async () =>
+        (
+          await db.execute(
+            sql`SELECT decision_id FROM public.case_law_population_projections WHERE source_id = ${sourceId} ORDER BY decision_id`,
+          )
+        ).map((row) => row["decision_id"]);
+      try {
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`ALTER TABLE public.case_law_decisions DISABLE TRIGGER case_law_population_decision_write`,
+          );
+          await tx.insert(caseLawDecisions).values(
+            decisionIds.map((id, index) => ({
+              id,
+              sourceId,
+              caseNumber: `Busy ${String(index)}`,
+              court: "Busy court",
+              country: "CZE",
+              language: "cs",
+              fulltext: "Busy decision text",
+              decisionDate: "2020-01-01",
+            })),
+          );
+          await tx.execute(
+            sql`ALTER TABLE public.case_law_decisions ENABLE TRIGGER case_law_population_decision_write`,
+          );
+          await tx.execute(
+            sql`UPDATE public.case_law_population_seed_state SET phase = 'scan', source_id = ${sourceId}, cursor = NULL WHERE slot = 0`,
+          );
+        });
+        const release = Promise.withResolvers<undefined>();
+        const held = Promise.withResolvers<undefined>();
+        const holder = writer.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT id FROM public.case_law_decisions WHERE id = ${busyId} FOR UPDATE`,
+          );
+          held.resolve(undefined);
+          await release.promise;
+        });
+        await held.promise;
+        try {
+          const batch = await db.execute(
+            sql`SELECT * FROM public.seed_case_law_population_counts(2048)`,
+          );
+          expect(batch.at(0)?.["cursor"]).toBe(firstId);
+          expect(batch.at(0)?.["processed"]).toBe(1);
+          expect(await projected()).toEqual([firstId]);
+        } finally {
+          release.resolve(undefined);
+          await holder;
+        }
+        let done = false;
+        while (!done) {
+          // db-await-in-loop: finish bounded seed batches after the writer commits
+          const batch = await db.execute(
+            sql`SELECT * FROM public.seed_case_law_population_counts(2048)`,
+          );
+          done = batch.at(0)?.["done"] === true;
+        }
+        expect(await projected()).toEqual(decisionIds);
+        await assertFreshAggregation(db, [sourceId]);
+      } finally {
+        await db
+          .delete(caseLawDecisions)
+          .where(inArray(caseLawDecisions.id, decisionIds));
+        await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+      }
+    });
+  }, 30_000);
+
   // timeout: competing bulk writers exercise PostgreSQL row and aggregate-key locks.
   test("concurrent bulk writers preserve hot source and court buckets", async () => {
     const databaseUrl =

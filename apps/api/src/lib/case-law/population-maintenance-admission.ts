@@ -48,11 +48,12 @@ export const admitCaseLawPopulationMaintenance = async ({
     if (!installed["installed"]) {
       return { type: "not_installed" } as const;
     }
+    // Two index probes at any queue size. The fold drains oldest-first, so the
+    // identity span bounds the backlog from above; a gap only delays maintenance.
     const row = (
       await query(
-        `SELECT count(*)::integer AS pending FROM (
-          SELECT id FROM public.case_law_population_deltas ORDER BY id LIMIT $1
-        ) pending_population_deltas`,
+        `SELECT least(coalesce(max(id) - min(id) + 1, 0), $1::bigint)::integer AS pending
+        FROM public.case_law_population_deltas`,
         [CASE_LAW_POPULATION_MAINTENANCE_HIGH_WATER + 1],
       )
     ).at(0);

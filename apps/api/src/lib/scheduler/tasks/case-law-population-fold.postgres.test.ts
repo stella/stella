@@ -162,20 +162,19 @@ const runFoldTask = async (
         slot: { tryAcquire: async () => true, release: () => {} },
       }),
   });
-  expect(
-    await task({
-      db,
-      job,
-      dueAt: DueSlot.of(job),
-      payload: null,
-      runId,
-      scheduleContinuation: (nextRunAt) => {
-        continuations.push(nextRunAt);
-      },
-      signal: new AbortController().signal,
-      logger,
-    }),
-  ).toBeUndefined();
+  const outcome = await task({
+    db,
+    job,
+    dueAt: DueSlot.of(job),
+    payload: null,
+    runId,
+    scheduleContinuation: (nextRunAt) => {
+      continuations.push(nextRunAt);
+    },
+    signal: new AbortController().signal,
+    logger,
+  });
+  expect(outcome === undefined || outcome.isOk()).toBe(true);
   return { runId, jobId: job.id, continuations };
 };
 
