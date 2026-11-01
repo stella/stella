@@ -1,9 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, afterEach, beforeAll, beforeEach } from "bun:test";
 
-// Captured by the preload before asynchronous test modules install request fakes.
-export const testFetch = globalThis.fetch;
-
 type FetchInterception = { wrapper: typeof fetch; delegate: typeof fetch };
 let interception: FetchInterception | undefined;
 

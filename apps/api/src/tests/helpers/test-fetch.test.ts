@@ -15,7 +15,7 @@ import { asFetchMock } from "./test-tool-set";
 test("fetch fixtures restore every test and unwind nested suite defaults", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "api-fetch-fixture-"));
   const owner = path.join(import.meta.dirname, "test-fetch.ts");
-  const preload = path.join(import.meta.dirname, "../fetch-state-hooks.ts");
+  const preload = path.join(import.meta.dirname, "../fetch-global-guard.ts");
   const file = path.join(directory, "fixture.test.ts");
   try {
     writeFileSync(
