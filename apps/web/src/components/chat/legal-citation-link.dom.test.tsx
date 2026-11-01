@@ -732,7 +732,8 @@ for (const interactive of [false, true]) {
 // Tray chips the answer does not cite sit under the "Also consulted"
 // disclosure, out of the accessibility tree until a reader opens it.
 const openConsulted = async () => {
-  const [consultedLabel] = messages.chat.sourceChips.alsoConsulted.split(" (");
+  const { alsoConsulted } = messages.chat.sourceChips;
+  const consultedLabel = alsoConsulted.split(" (").at(0) ?? alsoConsulted;
   const trigger = await screen.findByRole("button", {
     name: new RegExp(`^${consultedLabel}`, "u"),
   });
