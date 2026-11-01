@@ -17,7 +17,8 @@ import type { McpToolLatencyBudgetKey } from "@/api/mcp/tool-latency-budgets";
  * or on a public corpus route the tools share, is declared here with the
  * tools and route classes that reach it, and must be shorter than each of
  * their budgets, unless the site clamps to the request's remaining budget
- * (`requestBoundedTimeoutMs`) or does not hold the request at all.
+ * (`requestBoundedTimeoutMs`, including the enclosing transaction deadline)
+ * or does not hold the request at all.
  *
  * The scan is the lint half: a new `timeoutMs`, `deadlineMs`,
  * `AbortSignal.timeout(...)` or statement timeout under these roots fails
@@ -55,8 +56,8 @@ type CensusEntry = {
       http?: readonly PublicCorpusRouteClass[];
       /**
        * `own`: the site's own budget must be shorter than every listed
-       * tool's. `request`: the site clamps to the remaining request budget
-       * with `requestBoundedTimeoutMs`, so it cannot outwait the tool.
+       * tool's. `request`: a timeout or enclosing transaction is bounded by
+       * `requestBoundedTimeoutMs`, so it cannot outwait the tool.
        */
       bound: "own" | "request";
       /** What the caller gets when it expires. */
@@ -270,18 +271,20 @@ const resolveBudgetMs = (
   if (depth > 8) {
     return undefined;
   }
+  // A request clamp can only shorten a positive timeout; its argument is
+  // still the upper bound the public HTTP route budget must cover.
+  const requestClamp = "requestBoundedTimeoutMs(";
+  if (expression.startsWith(requestClamp) && expression.endsWith(")")) {
+    const upperBound = resolveBudgetMs(
+      file,
+      expression.slice(requestClamp.length, -1),
+      depth + 1,
+    );
+    return upperBound !== undefined && upperBound > 0 ? upperBound : undefined;
+  }
   const statement = /^statement_timeout (\d+)(ms|s)$/u.exec(expression);
   if (statement !== null) {
     return Number(statement[1]) * (statement[2] === "s" ? 1000 : 1);
-  }
-  const minimum = /^Math\.min\((.*)\)$/u.exec(expression);
-  if (minimum !== null) {
-    const caps = (minimum[1] ?? "")
-      .split(",")
-      .map((operand) => resolveBudgetMs(file, operand.trim(), depth + 1))
-      .filter((value): value is number => value !== undefined);
-    // A known operand bounds the minimum even when the caller's cap is dynamic.
-    return caps.length === 0 ? undefined : Math.min(...caps);
   }
   const replaced = expression.replaceAll(
     /\b([A-Za-z_$][\w$]*)(?:\.([A-Za-z_$][\w$]*))?\b/gu,
@@ -429,6 +432,11 @@ const CENSUS: readonly CensusEntry[] = [
     why: "Opens the request latency scope itself, with the tool's own budget.",
   },
   {
+    site: "apps/api/src/mcp/tools.ts#budgetMs",
+    path: "off-request",
+    why: "Opens the public-read scope itself; transport waits inside it are declared at their own sites.",
+  },
+  {
     site: "apps/api/src/mcp/static-cli-metadata.ts#DOCUMENT_COMPARE_REQUEST_TIMEOUT_MS",
     path: "off-request",
     why: "The generated CLI's client transport deadline; the server does not wait on it.",
@@ -440,13 +448,13 @@ const CENSUS: readonly CensusEntry[] = [
   },
   // --- Public corpus handlers the tools share --------------------------------
   {
-    site: "apps/api/src/handlers/case-law/decisions/document-on-demand.ts#READ_BUDGET_MS",
+    site: "apps/api/src/handlers/case-law/decisions/document-on-demand.ts#requestBoundedTimeoutMs(READ_BUDGET_MS)",
     path: "request",
-    tools: ["read_case_law_decision"],
+    tools: ["fetch", "read_case_law_decision"],
     http: ["browse"],
-    bound: "own",
+    bound: "request",
     onExpiry: "degrades",
-    why: "Waits for a decision text the corpus does not hold yet; past it the decision answers without its text, marked pending.",
+    why: "Waits for pending decision text within the request's remaining budget; past it the decision answers without its text, marked pending.",
   },
   {
     site: "apps/api/src/handlers/case-law/decisions/document-on-demand-deps.ts#15_000",
@@ -513,11 +521,6 @@ const CENSUS: readonly CensusEntry[] = [
     onExpiry: "fails-fast",
     why: "The whole comparison run, inside the route's request deadline.",
   },
-  {
-    site: "apps/api/src/mcp/tools.ts#budgetMs",
-    path: "off-request",
-    why: "Opens the admitted public-read scope itself from the corpus class budget; it does not add a dependency wait.",
-  },
   // --- Corpus index client and public-law reads -------------------------------
   {
     site: "apps/api/src/lib/legal-search/corpus-index-client.ts#requestBoundedTimeoutMs(request.timeoutMs)",
@@ -549,16 +552,15 @@ const CENSUS: readonly CensusEntry[] = [
     tools: CORPUS_SEARCH_TOOLS,
     bound: "request",
     onExpiry: "fails-fast",
-    why: "Scored search applies the caller cap before the shared request clamp.",
+    why: "A scored corpus search with the caller's shorter timeout, clamped again to the request before transport.",
   },
   {
     site: "apps/api/src/lib/legal-search/corpus-index-client.ts#Math.min(timeoutMs, CORPUS_INDEX_AGGREGATION_TIMEOUT_MS)",
     path: "request",
     tools: ["case_law_coverage", ...CORPUS_SEARCH_TOOLS],
-    http: ["aggregate", "browse", "search"],
     bound: "request",
     onExpiry: "fails-fast",
-    why: "Facet requests apply the caller cap before the shared request clamp.",
+    why: "Facet counts with the caller's shorter timeout, clamped again to the request before transport.",
   },
   {
     site: "apps/api/src/lib/legal-search/corpus-index-client.ts#CORPUS_INDEX_SEARCH_TIMEOUT_MS",
@@ -618,15 +620,15 @@ const CENSUS: readonly CensusEntry[] = [
     http: ["browse", "search", "aggregate", "sitemap"],
     bound: "request",
     onExpiry: "fails-fast",
-    why: "The public-law statement guard; a transaction inside a tool call sets the shorter of it and what is left of the tool's budget, and ends at the deadline as a whole.",
+    why: "The read's statement cap remains independent; the enclosing transaction ends at the request's deadline as a whole.",
   },
   {
-    site: "apps/api/src/lib/public-law-read-db.ts#requestStatementTimeoutMs",
+    site: "apps/api/src/lib/public-law-read-db.ts#statementCapMs",
     path: "request",
     tools: PUBLIC_LAW_READ_TOOLS,
     bound: "request",
     onExpiry: "fails-fast",
-    why: "Where the statement guard is clamped to the route class and the request's remaining budget.",
+    why: "The route-owned statement cap, inside a transaction bounded by the request's remaining budget.",
   },
   {
     site: "apps/api/src/lib/public-law-read-db.ts#requestDeadlineMs",
@@ -635,6 +637,14 @@ const CENSUS: readonly CensusEntry[] = [
     bound: "request",
     onExpiry: "fails-fast",
     why: "The transaction-wide deadline: statement_timeout restarts per statement, so transaction_timeout ends the whole read at the request's deadline.",
+  },
+  {
+    site: "apps/api/src/lib/public-law-read-db.ts#requestBoundedTimeoutMs(0)",
+    path: "request",
+    tools: PUBLIC_LAW_READ_TOOLS,
+    bound: "request",
+    onExpiry: "fails-fast",
+    why: "Cancels pool acquisition when the enclosing request's remaining budget expires, before a transaction starts.",
   },
 ];
 
@@ -680,6 +690,18 @@ const waitsOverToolBudget = (entries: readonly CensusEntry[]): string[] =>
   });
 
 describe("request-path timeout census", () => {
+  test.each(["0", "-1", "request.timeoutMs"])(
+    "does not treat an unbounded request clamp as a finite HTTP bound: %s",
+    (argument) => {
+      expect(
+        resolveBudgetMs(
+          "apps/api/src/handlers/case-law/decisions/document-on-demand.ts",
+          `requestBoundedTimeoutMs(${argument})`,
+        ),
+      ).toBeUndefined();
+    },
+  );
+
   test("declares every timeout under the request-path roots", () => {
     expect(scanned.filter((site) => !declared.has(site))).toEqual([]);
   });

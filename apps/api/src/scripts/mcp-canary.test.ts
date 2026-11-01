@@ -4,7 +4,7 @@ import {
   isLegacyRequest,
   McpServer,
 } from "@modelcontextprotocol/server";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -46,6 +46,7 @@ import {
   runReviewAccountJourney,
   runStagingCredentialJourneys,
   summarize,
+  THIRD_PARTY_FETCHES_SKIP_REASON,
   TOOL_CALL_PROBES,
 } from "./mcp-canary";
 
@@ -427,6 +428,53 @@ const reviewFetcher = (
 };
 
 describe("restricted review-account journey", () => {
+  test("cleans up a successful write whose latency exceeds its budget", async () => {
+    const observed: { url: string; headers: Headers; body: string }[] = [];
+    const fetcher = reviewFetcher({ observed });
+    let elapsedMs = 0;
+    const clock = spyOn(performance, "now").mockImplementation(() => elapsedMs);
+    try {
+      const results = await runReviewAccountJourney(
+        {
+          baseUrl: REVIEW_BASE_URL,
+          configuredBaseUrl: REVIEW_BASE_URL,
+          frontendUrl: REVIEW_FRONTEND_URL,
+          password: REVIEW_PASSWORD,
+          mode: "full",
+        },
+        async (input, init) => {
+          const body = await readFakeRequestBody(
+            init.body,
+            input instanceof Request ? input : undefined,
+          );
+          const response = await fetcher(input, init);
+          if (body.includes('"name":"save_task"')) {
+            elapsedMs += 3000;
+          }
+          return response;
+        },
+      );
+      expect(elapsedMs).toBe(3000);
+      expect(
+        results.find(({ name }) => name === "restricted account: write"),
+      ).toMatchObject({
+        status: "failed",
+        detail: expect.stringContaining(
+          "save_task answered in 3000 ms, over its 2000 ms latency budget",
+        ),
+      });
+      expect(
+        observed.filter(({ body }) => body.includes('"name":"delete_task"')),
+      ).toHaveLength(1);
+      expect(results.at(-1)).toMatchObject({
+        name: "restricted account: cleanup",
+        status: "passed",
+      });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   test.each(["frontend", "api"] as const)(
     "completes OAuth across configured origins with the token endpoint on %s",
     async (tokenOrigin) => {
@@ -1680,6 +1728,40 @@ describe("OAuth client journeys", () => {
     });
   });
 
+  test("skipped third-party fetches report each known client and never reach its host", async () => {
+    const { fetcher, requests } = fakeOAuth();
+    const results = await runOAuthJourneys(
+      {
+        baseUrl: "https://api.example",
+        frontendUrl: "https://app.example",
+        mode: "full",
+        thirdPartyFetches: "skip",
+      },
+      fetcher,
+    );
+    expect(results.filter(({ status }) => status === "skipped")).toStrictEqual(
+      CANARY_CLIENT_IDS.map((clientId) => ({
+        name: `client metadata ${clientId}`,
+        status: "skipped",
+        detail: THIRD_PARTY_FETCHES_SKIP_REASON,
+      })),
+    );
+    expect(
+      requests.filter(({ url }) => url.origin !== "https://api.example"),
+    ).toStrictEqual([]);
+    const authorizedClients = new Set(
+      requests
+        .filter(({ url }) => url.pathname === "/oauth/authorize")
+        .map(({ url }) => url.searchParams.get("client_id")),
+    );
+    expect(authorizedClients).toStrictEqual(new Set(["dynamic-client"]));
+    expect(
+      results
+        .filter(({ status }) => status !== "skipped")
+        .every(({ status }) => status === "passed"),
+    ).toBe(true);
+  });
+
   test("reports unavailable client metadata once without probing authorize", async () => {
     const { fetcher: baseFetcher, requests } = fakeOAuth();
     const unavailableClient = CANARY_CLIENT_IDS[0];
@@ -2275,10 +2357,32 @@ describe("staging credential journeys", () => {
 
   test("runs MCP and desktop probes with short-lived credentials, then revokes the MCP key", async () => {
     const { requests, fetcher } = createStagingDeployment();
+    let activeRequests = 0;
+    let peakRequests = 0;
+    const serialFetcher: CanaryFetcher = async (input, init) => {
+      activeRequests += 1;
+      peakRequests = Math.max(peakRequests, activeRequests);
+      await Promise.resolve();
+      try {
+        return await fetcher(input, init);
+      } finally {
+        activeRequests -= 1;
+      }
+    };
     const results = await runStagingCredentialJourneys(
       { baseUrl: "https://api.example", smokeSecret: "smoke-secret" },
-      fetcher,
+      serialFetcher,
     );
+    expect(peakRequests).toBe(1);
+    const coverage = requests.find(({ body }) =>
+      body.includes('"name":"case_law_coverage"'),
+    );
+    expect(JSON.parse(coverage?.body ?? "{}")).toMatchObject({
+      params: { name: "case_law_coverage", arguments: {} },
+    });
+    expect(
+      Object.keys(JSON.parse(coverage?.body ?? "{}").params.arguments),
+    ).toEqual([]);
     expect(
       results
         .filter(

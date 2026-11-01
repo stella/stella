@@ -7,6 +7,7 @@ import { cents } from "@stll/money";
 
 import { BILLING_STATUS, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { AnonymizingMcpToolName } from "@/api/mcp/static-tool-definitions";
 import {
@@ -256,6 +257,8 @@ const buildContext = ({
     organizationId: toSafeId<"organization">(organizationId),
     recordAuditEvent: asTestRaw(mock(async () => undefined)),
     testDependencies: {
+      readWithdrawnCopies: async () =>
+        new WithdrawnCopyProjection([], "Withdrawn by publisher"),
       getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
       // The canary is about tenant text leaving the pipeline. `search` also
       // asks the public corpus, whose hits carry no tenant text at all, so
@@ -867,6 +870,7 @@ describe("MCP anonymization canary corpus", () => {
       const organizationNameSeed = mkSeed(tool, 3);
       const emailSeed = mkSeed(tool, 4);
       const phoneSeed = mkSeed(tool, 5);
+      const externalIdSeed = mkSeed(tool, 6);
       const tx = {
         query: {
           contacts: {
@@ -883,6 +887,8 @@ describe("MCP anonymization canary corpus", () => {
               organizationName: organizationNameSeed,
               emails: [{ label: "work", address: emailSeed }],
               phones: [{ label: "mobile", number: phoneSeed }],
+              externalSource: "address-book",
+              externalId: externalIdSeed,
             }),
           },
         },
@@ -903,11 +909,12 @@ describe("MCP anonymization canary corpus", () => {
         emailSeed,
         phoneSeed,
       ];
-      expectNoSeedLeak(result, seeds);
+      expectNoSeedLeak(result, [...seeds, externalIdSeed]);
       expectSeedsQueuedForAnonymization(seeds);
       expect(result.structuredContent).toMatchObject({
         dateOfBirth: null,
         nationalityCodes: [],
+        external: null,
       });
     },
   );

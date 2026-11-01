@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { readFailureBrand } from "@stll/errors";
 
@@ -16,23 +16,6 @@ const never = async <T>(): Promise<T> =>
   await Promise.withResolvers<T>().promise;
 
 describe("request latency budget", () => {
-  test("rounds a fractional remaining budget up for dependency timers", () => {
-    const clock = spyOn(performance, "now").mockReturnValue(1000.25);
-    try {
-      runWithinRequestLatencyBudget(
-        { label: "read_statute", budgetMs: 2000, startedAtMs: 0 },
-        () => {
-          expect(remainingRequestBudgetMs()).toBe(999.75);
-          expect(requestBoundedTimeoutMs(30_000)).toBe(1000);
-          expect(requestBoundedTimeoutMs(0)).toBe(1000);
-          expect(requestBoundedTimeoutMs(500)).toBe(500);
-        },
-      );
-    } finally {
-      clock.mockRestore();
-    }
-  });
-
   test("leaves a timeout alone outside a request scope", () => {
     expect(remainingRequestBudgetMs()).toBeUndefined();
     expect(requestBoundedTimeoutMs(30_000)).toBe(30_000);
@@ -104,9 +87,10 @@ describe("request budget expiry", () => {
     );
   });
 
-  test("honors the caller's attribution of a clamped timeout", () => {
-    // The caller owns evidence that distinguishes its timer from an
-    // explicit cancellation sharing the same dependency error code.
+  test("names a clamped timeout that surfaces just before the deadline", () => {
+    // The clamp floors to whole milliseconds, so the dependency can give up
+    // while a fraction of the budget is left: provenance, not the clock,
+    // makes it the budget's.
     runWithinRequestLatencyBudget(
       { label: "read_statute", budgetMs: 2000 },
       () => {

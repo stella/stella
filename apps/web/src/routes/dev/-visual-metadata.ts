@@ -62,6 +62,10 @@ export const visualRegistry = {
     layout: "plain",
   },
   "chat-link-icons": { label: "Chat link icons", layout: "plain" },
+  "case-law-text-availability": {
+    label: "Case-law text availability",
+    layout: "plain",
+  },
   "hungarian-decision": { label: "Hungarian decision", layout: "plain" },
   "reader-answers": { label: "Reader anchored answers", layout: "plain" },
   "reader-selection": { label: "Reader selection toolbar", layout: "plain" },

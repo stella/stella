@@ -1,5 +1,71 @@
 # @stll/cli
 
+## 6.3.0
+
+### Minor Changes
+
+- [#7624](https://github.com/stella/stella/pull/7624) [`43ac3de`](https://github.com/stella/stella/commit/43ac3dec8b3fec9aff8843eecbd8ffe5e16e138a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Run JSONL operations with `stella batch`, bounded concurrency, ordered results, local validation, and resumable success receipts. Forward idempotency keys for replay-capable capabilities and preserve uncertain write outcomes for reconciliation. Bulk capability ID flags accept comma-separated values or `@file` and respect endpoint chunk limits.
+
+- [#7635](https://github.com/stella/stella/pull/7635) [`c442a44`](https://github.com/stella/stella/commit/c442a44c7142c39a92ec639dadb29fc43dd43342) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Rename the save task inputs to `assignee` and `description`.
+
+### Patch Changes
+
+- [#7350](https://github.com/stella/stella/pull/7350) [`27375ef`](https://github.com/stella/stella/commit/27375ef28c854e8341c537d18e910ca68b17e883) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add transcription model metadata and a file-input dictation capability description.
+
+- [#5807](https://github.com/stella/stella/pull/5807) [`35f52af`](https://github.com/stella/stella/commit/35f52afe993eb7c2e4f1f1079896ab6cae06a975) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose import provenance fields and the batch contact import capability.
+
+- [#7586](https://github.com/stella/stella/pull/7586) [`2e4e528`](https://github.com/stella/stella/commit/2e4e5285900659c6cfd6da7650a55cc67eb9485e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `matters.members.list` lists a matter's members, with each user's id, name, email and image, to an access token with `stella:read`. Tasks take assignees with `stella:matters_write`.
+
+## 6.2.2
+
+### Patch Changes
+
+- [#7604](https://github.com/stella/stella/pull/7604) [`71cfcf3`](https://github.com/stella/stella/commit/71cfcf376f59bdabb1358ebace6692c8db6fe3e3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Resolve Slovak statute citations and look up acts by number.
+
+## 6.2.1
+
+### Patch Changes
+
+- [#7351](https://github.com/stella/stella/pull/7351) [`ed2a1a6`](https://github.com/stella/stella/commit/ed2a1a6c7d277f9c87034b3dd35b67042da9df05) Thanks [@jan-kubica](https://github.com/jan-kubica)! - matters.update accepts expectedClientId and refuses a client change when the matter client no longer matches it.
+
+## 6.2.0
+
+### Minor Changes
+
+- [#5582](https://github.com/stella/stella/pull/5582) [`26685b8`](https://github.com/stella/stella/commit/26685b8622393a3383c305c5cf5c1222b1f6d861) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add personal account export request, status, and authenticated download-link commands with explicit account-export OAuth consent.
+
+### Patch Changes
+
+- [#7148](https://github.com/stella/stella/pull/7148) [`2e7e0e7`](https://github.com/stella/stella/commit/2e7e0e700343a2cb1d8699972215690bb84d6507) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe disabled analysis generation and source restrictions with distinct availability codes.
+
+## 6.1.4
+
+### Patch Changes
+
+- [#7197](https://github.com/stella/stella/pull/7197) [`707df70`](https://github.com/stella/stella/commit/707df70b8b242cb3b77ede702c972ab5848c8f87) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Return publisher-withdrawal markers in matter-link results.
+
+## 6.1.3
+
+### Patch Changes
+
+- [#7373](https://github.com/stella/stella/pull/7373) [`a29ecf8`](https://github.com/stella/stella/commit/a29ecf87046217f6dfe2d2778271fffeb5c53be1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose other-court docket candidates and court mismatch results in case-law resolution.
+
+## 6.1.2
+
+### Patch Changes
+
+- [#7222](https://github.com/stella/stella/pull/7222) [`30ac91c`](https://github.com/stella/stella/commit/30ac91c66e02b341932af6b2eb33d3ab34c472fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe contact birth dates with one precision-aware rule in the generated MCP contract: a birth date cannot lie in the future or before 1900.
+
+- [#7355](https://github.com/stella/stella/pull/7355) [`23c50da`](https://github.com/stella/stella/commit/23c50da1f61fb0b8f5d2b1bfe030fa136d007c5e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Support rates per activity code and hour caps on billing arrangements.
+
+- [#7178](https://github.com/stella/stella/pull/7178) [`d86d490`](https://github.com/stella/stella/commit/d86d490c06a74395109041a7ab39581f55e3201a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `capability invoices payments-create`, `payments-list` and `payments-void` record, list and void payments on a finalized or sent invoice; recording payments that reach the total marks it paid, which replaces the `mark_paid` transition.
+
+- [#7210](https://github.com/stella/stella/pull/7210) [`797fa1c`](https://github.com/stella/stella/commit/797fa1ccd5ed168dff70835a9cdaac2668464613) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose distinct limiter store, admission configuration, organization state and lease refusal codes in the generated MCP contract and CLI exit mapping.
+
+- [#7349](https://github.com/stella/stella/pull/7349) [`8dc5ea6`](https://github.com/stella/stella/commit/8dc5ea6da463971430943471c2ad596294a05dc7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `capability matters vocabulary-get` to read a bounded vocabulary sample for a matter.
+
+- [#7296](https://github.com/stella/stella/pull/7296) [`a3b49ee`](https://github.com/stella/stella/commit/a3b49eebfc32c56bd8607a92dfbcb4722d96571c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - List item source and generation candidate locators accept character offsets, a PDF page digest and boxes, and refuse unknown fields.
+
 ## 6.1.1
 
 ### Patch Changes

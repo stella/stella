@@ -16,7 +16,7 @@ import { withTimeout } from "@/api/lib/with-timeout";
  * (`mcp/tool-latency-budgets.ts`). Inside it:
  *
  * - shared clients clamp their own timeouts with `requestBoundedTimeoutMs`
- *   (the corpus index client, the public-law statement timeout), so the
+ *   (the corpus index client, the public-law transaction deadline), so the
  *   request fails fast at its budget instead of waiting theirs out;
  * - an optional step runs through `runBoundedRequestStep` with a named
  *   sub-budget, and answers a typed degraded outcome the caller reports
@@ -67,15 +67,13 @@ export const remainingRequestBudgetMs = (): number | undefined => {
  * Never below one millisecond: the timers this feeds read zero as "no
  * deadline", which is the opposite of a spent budget. A non-positive
  * `timeoutMs` (no deadline of its own) is bounded by the request alone.
- * Round up to whole milliseconds so a clamped timer cannot fire before
- * the request's deadline.
  */
 export const requestBoundedTimeoutMs = (timeoutMs: number): number => {
   const remaining = remainingRequestBudgetMs();
   if (remaining === undefined) {
     return timeoutMs;
   }
-  const bounded = Math.max(1, Math.ceil(remaining));
+  const bounded = Math.max(1, Math.floor(remaining));
   return timeoutMs > 0 ? Math.min(timeoutMs, bounded) : bounded;
 };
 
@@ -88,9 +86,9 @@ export const requestBoundedTimeoutMs = (timeoutMs: number): number => {
  * cancelled statement, a session the server ended). Only the caller knows
  * whether the timeout that fired was the one the request's budget shortened
  * (`clampedTimeout`, recorded when it installed the timeout), so only then is
- * the failure the budget's. A shared cancellation code also needs deadline
- * evidence at the caller, since an explicit cancel can occur before expiry.
- * Any other failure keeps its own grade.
+ * the failure the budget's, even a hair before the deadline (the clamp floors
+ * to whole milliseconds). Any other failure, a timeout of its own or an
+ * explicit cancel among them, keeps its own grade.
  */
 export const requestBudgetExpiry = (
   cause: unknown,

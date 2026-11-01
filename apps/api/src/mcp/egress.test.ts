@@ -11,15 +11,18 @@ import {
 } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import { currentReadWork } from "@/api/lib/observability/request-work";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
 import type { AnonymizeTextFieldsInput } from "@/api/mcp/anonymization-core";
 import type { McpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
+import { windowAnonymizationCache } from "@/api/mcp/window-anonymization-cache";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import {
   createRewritingAnonymizeDependencies,
@@ -151,6 +154,71 @@ const parsePayload = (result: CallToolResult) =>
   }>(parseText(result));
 
 describe("finalizeMcpEgress", () => {
+  test("anonymized continuation windows reuse session fields across document scales", async () => {
+    windowAnonymizationCache.clear();
+    givenWorkspaceScopedTerm();
+    for (const scale of [1, 10]) {
+      const context = createContext();
+      context.request = new Request("https://example.test/mcp", {
+        headers: { authorization: `Bearer synthetic-session-${scale}` },
+      });
+      const source = `${WORKSPACE_TERM} body. `.repeat(1000 * scale);
+      const read = async (cursor?: string) =>
+        await runWithQueryCounter(async () => {
+          const payload = {
+            text: source,
+            charCount: source.length,
+            truncated: false,
+            nextCursor: ((): string | null => null)(),
+          };
+          const result = await finalizeMcpEgress({
+            context,
+            mode: "anonymized",
+            response: {
+              egress: "structured",
+              payload,
+              textFields: [
+                {
+                  workspaceId: "ws_2",
+                  value: source,
+                  apply: (text) => {
+                    payload.text = text;
+                  },
+                },
+              ],
+              window: {
+                surface: "mcp-anonymized",
+                cursor,
+                maxChars: 8000,
+                read: () => payload.text,
+                apply: (window) => {
+                  Object.assign(payload, window);
+                },
+              },
+            },
+          });
+          return { payload: parsePayload(result), work: currentReadWork() };
+        });
+      const before = anonymizeTextFieldsMock.mock.calls.length;
+      const first = await read();
+      expect(first.payload.nextCursor).toBeString();
+      const page = await read(first.payload.nextCursor ?? undefined);
+      expect(anonymizeTextFieldsMock.mock.calls.length - before).toBe(1);
+      expect(page.work?.cacheHits).toBe(1);
+      expect(page.payload.text).not.toContain(WORKSPACE_TERM);
+      // Policy is live on every request, including cache hits.
+      loadGazetteerByWorkspaceMock.mockImplementation(emptyCatalogsByWorkspace);
+      await read(first.payload.nextCursor ?? undefined);
+      expect(anonymizeTextFieldsMock.mock.calls.length - before).toBe(2);
+      givenWorkspaceScopedTerm();
+      context.request = new Request("https://example.test/mcp", {
+        headers: { authorization: `Bearer different-session-${scale}` },
+      });
+      await read(first.payload.nextCursor ?? undefined);
+      expect(anonymizeTextFieldsMock.mock.calls.length - before).toBe(3);
+    }
+  });
+
   afterAll(() => {
     mock.restore();
   });
@@ -430,6 +498,7 @@ describe("finalizeMcpEgress", () => {
               },
             ],
             window: {
+              surface: "mcp-anonymized",
               cursor: undefined,
               maxChars: 10,
               read: () => payload.text,
@@ -642,6 +711,7 @@ describe("finalizeMcpEgress", () => {
               },
             ],
             window: {
+              surface: "mcp-anonymized",
               cursor: undefined,
               maxChars: 10,
               read: () => payload.text,
