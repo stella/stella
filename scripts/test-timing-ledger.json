@@ -2675,17 +2675,7 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
-    "id": "no-unreasoned-timeout::apps/api/src/lib/document-deadline-scout-recovery.db.test.ts::<module>::beforeAll timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
     "id": "no-unreasoned-timeout::apps/api/src/lib/document-numbering-paths.integration.test.ts::<module>::setDefaultTimeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/api/src/lib/document-processing-reconciliation-feeds.db.test.ts::<module>::beforeAll timeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },

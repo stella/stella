@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/signals/resume-after-grant.ts",
+  "delta": 1,
+  "reason": "The committed grant wakes retained signals sources across matters the principal may access. The scoped settings transaction cannot write those matter rows; this named void owner door is confined to the operational grant facade, rechecks live membership/grant under the admission lock, and retains organization/principal SQL predicates. It exports neither a connection nor feature-derived data."
+}

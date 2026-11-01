@@ -17,6 +17,7 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import { declareFingerprintFields } from "@stll/errors";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import type { RequiredMigrationIndex } from "../lib/db/migration-history";
 import { isRecord } from "../lib/type-guards";
@@ -342,6 +343,95 @@ const policyExpressions = ({ using, withCheck }: PolicyDefinition): string =>
 
 const createPolicyText = (policy: PolicyDefinition): string =>
   `CREATE POLICY ${policyTarget(policy)} AS ${policy.as.toUpperCase()} FOR ${policy.for.toUpperCase()} TO ${quoteIdentifier(policy.role)}${policyExpressions(policy)}`;
+
+const policyDefinitionHash = (policy: PolicyDefinition): string => {
+  const definition = {
+    tableName: policy.tableName,
+    name: policy.name,
+    as: policy.as,
+    for: policy.for,
+    role: policy.role,
+    using: policy.using,
+    withCheck: policy.withCheck,
+  } satisfies Record<keyof PolicyDefinition, string | undefined>;
+  return sha256Hex(JSON.stringify(definition));
+};
+
+// PostgreSQL's parsed expression trees include casts and parentheses that a
+// schema renderer does not. Bind the installed catalog shape to its code
+// definition in the same transaction, then check both on every completion read.
+const POLICY_CATALOG_SIGNATURE_SQL = `SELECT oid, polrelid, polname,
+  md5(json_build_array(polcmd, polpermissive, polroles::text, polqual::text, polwithcheck::text)::text) AS signature
+  FROM pg_catalog.pg_policy`;
+
+export const installPolicy = (policy: PolicyDefinition): LockTakingStatement =>
+  lockTaking({
+    tableName: policy.tableName,
+    lockQueue: "blocks_writers",
+    text: `DO $online_ddl$ DECLARE installed_signature text; BEGIN
+      SET LOCAL lock_timeout = '1s';
+      ${dropPolicyText(policy, { ifExists: true })};
+      ${createPolicyText(policy)};
+      SELECT signature INTO STRICT installed_signature
+      FROM (${POLICY_CATALOG_SIGNATURE_SQL}) catalog
+      WHERE polrelid = ${quoteLiteral(`public.${quoteIdentifier(policy.tableName)}`)}::regclass
+        AND polname = ${quoteLiteral(policy.name)};
+      EXECUTE format(${quoteLiteral(`COMMENT ON POLICY ${policyTarget(policy)} IS %L`)}, ${quoteLiteral(policyDefinitionHash(policy))} || ':' || installed_signature);
+    END $online_ddl$`,
+  });
+
+/** Startup checks the complete fixed policy census in one catalog read. */
+export const readMissingPolicies = async (
+  connection: Pick<OnlineMigrationConnection, "query">,
+  policies: readonly PolicyDefinition[],
+): Promise<PolicyDefinition[]> => {
+  if (policies.length === 0) {
+    return [];
+  }
+  const expected = new Map(
+    policies.map((policy) => [`${policy.tableName}:${policy.name}`, policy]),
+  );
+  if (expected.size !== policies.length) {
+    return panic("Owner policy census contains duplicate targets");
+  }
+  const params = policies.flatMap((policy) => [
+    `public.${quoteIdentifier(policy.tableName)}`,
+    policy.name,
+    policyDefinitionHash(policy),
+  ]);
+  const values = policies
+    .map(
+      (_, index) =>
+        `($${index * 3 + 1}::text, $${index * 3 + 2}::text, $${index * 3 + 3}::text)`,
+    )
+    .join(",");
+  const rows = await connection.query(
+    `WITH expected(relation, name, definition) AS (VALUES ${values})
+     SELECT expected.name, relation.relname AS "tableName"
+     FROM expected
+     JOIN pg_catalog.pg_class relation ON relation.oid = to_regclass(expected.relation)
+     LEFT JOIN (${POLICY_CATALOG_SIGNATURE_SQL}) policy ON policy.polrelid = relation.oid AND policy.polname = expected.name
+     WHERE policy.oid IS NULL OR obj_description(policy.oid, 'pg_policy') IS DISTINCT FROM
+       expected.definition || ':' || policy.signature
+     UNION ALL
+     SELECT expected.name, trim(both '"' from substr(expected.relation, 8)) AS "tableName"
+     FROM expected WHERE to_regclass(expected.relation) IS NULL`,
+    params,
+  );
+  return rows.map((row) => {
+    if (
+      !isRecord(row) ||
+      typeof row["tableName"] !== "string" ||
+      typeof row["name"] !== "string"
+    ) {
+      return panic("Owner policy census returned an invalid catalog target");
+    }
+    return (
+      expected.get(`${row["tableName"]}:${row["name"]}`) ??
+      panic("Owner policy census returned an undeclared target")
+    );
+  });
+};
 
 const dropPolicyText = (
   { tableName, name }: Pick<PolicyDefinition, "tableName" | "name">,

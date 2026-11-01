@@ -1,0 +1,67 @@
+import { Result } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
+
+import { member } from "@/api/db/auth-schema";
+import { assertCallerOrg, proveOrgScope } from "@/api/db/org-scope";
+import { rootDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
+import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { isBackgroundFeatureEnabled } from "@/api/lib/feature-access/background";
+import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
+import { resumeScoutEmissionAfterGrant } from "@/api/lib/scheduler/tasks/scout-emission-recovery";
+import { resumeDocumentDeadlineScoutsAfterGrant } from "@/api/lib/scouts/document-deadline-recovery";
+
+type ResumeSignalsAfterGrantOptions = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+};
+
+type ResumeSignalsAfterGrantDependencies = {
+  database: { transaction: ScopedDb };
+};
+
+/** Rechecks the committed grant and resumes only sources accessible to its principal. */
+export const resumeSignalsAfterGrant = async (
+  { organizationId, userId }: ResumeSignalsAfterGrantOptions,
+  dependencies?: ResumeSignalsAfterGrantDependencies,
+): Promise<void> => {
+  const database = dependencies?.database ?? rootDb;
+  await withAggregateTransaction(database, async (tx) => {
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId,
+      featureId: "signals",
+    });
+    const scope = await proveOrgScope(tx, {
+      table: "member",
+      where: sql`${and(eq(member.organizationId, organizationId), eq(member.userId, userId))}`,
+    });
+    if (
+      Result.isError(scope) ||
+      Result.isError(assertCallerOrg(scope.value, organizationId))
+    ) {
+      return;
+    }
+    if (
+      !(await isBackgroundFeatureEnabled({
+        tx,
+        organizationId,
+        userId,
+        featureId: "signals",
+      }))
+    ) {
+      return;
+    }
+    await resumeDocumentDeadlineScoutsAfterGrant({
+      tx,
+      organizationId,
+      userId,
+    });
+    await resumeScoutEmissionAfterGrant({
+      tx,
+      organizationId,
+      userId,
+    });
+  });
+};

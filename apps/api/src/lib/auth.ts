@@ -294,11 +294,15 @@ import {
   featureAccessReadPlan,
 } from "@/api/lib/feature-access/snapshot";
 import {
+  workspaceEventDisposition,
+  workspaceEventProjection,
+} from "@/api/lib/flows/workspace-event-authorizer";
+import {
   AUTH_RATE_LIMITS,
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
-import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
+import { removeOrganizationMemberInTransaction } from "@/api/lib/member-offboarding/member-assignment-offboarding";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import {
@@ -362,7 +366,7 @@ import {
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
-import type { SseStreamBinding } from "@/api/lib/sse";
+import type { SseConnectionAuthorizers, SseStreamBinding } from "@/api/lib/sse";
 import { createSyntheticPrincipalAuthHooks } from "@/api/lib/synthetic-principal/auth-hooks";
 import {
   isSyntheticPrincipal,
@@ -3406,10 +3410,9 @@ export const resolveUserRealtimeAuthorization = async (
   return new Set(rows.map((row) => row.sessionId));
 };
 
-type WorkspaceRealtimeAudienceLookup = {
-  sessionIds: readonly string[];
-  workspaceId: SafeId<"workspace">;
-};
+type WorkspaceRealtimeAudienceLookup = Parameters<
+  SseConnectionAuthorizers["workspace"]
+>[0];
 
 /**
  * Resolve the current audience for one workspace event in a single bounded
@@ -3419,44 +3422,79 @@ type WorkspaceRealtimeAudienceLookup = {
  * RLS-scoped request of their own.
  */
 export const resolveWorkspaceRealtimeAudience = async (
-  { sessionIds, workspaceId }: WorkspaceRealtimeAudienceLookup,
+  { connections, workspaceId, event }: WorkspaceRealtimeAudienceLookup,
   db: MemberAuthorizationDb,
 ) => {
-  const uniqueSessionIds = [...new Set(sessionIds)];
-  if (uniqueSessionIds.length === 0) {
-    return new Set<string>();
-  }
+  const uniqueSessionIds = [
+    ...new Set(connections.map(({ sessionId }) => sessionId)),
+  ];
+  const rows =
+    uniqueSessionIds.length === 0
+      ? []
+      : await db
+          .select({
+            sessionId: authSession.id,
+            organizationId: workspaces.organizationId,
+            userId: member.userId,
+            ...workspaceEventProjection({
+              event,
+              organizationId: workspaces.organizationId,
+              workspaceId: workspaces.id,
+              userId: member.userId,
+            }),
+          })
+          .from(member)
+          .innerJoin(
+            authSession,
+            and(
+              eq(authSession.userId, member.userId),
+              inArray(authSession.id, uniqueSessionIds),
+              liveSessionPredicate(new Date(), authSession),
+            ),
+          )
+          .innerJoin(
+            workspaces,
+            and(
+              eq(workspaces.id, workspaceId),
+              eq(workspaces.organizationId, member.organizationId),
+              eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
+              memberReachesMatterSql(
+                {
+                  organizationId: member.organizationId,
+                  userId: member.userId,
+                },
+                workspaces.id,
+              ),
+            ),
+          )
+          .limit(uniqueSessionIds.length);
 
-  const rows = await db
-    .select({ sessionId: authSession.id })
-    .from(member)
-    .innerJoin(
-      authSession,
-      and(
-        eq(authSession.userId, member.userId),
-        inArray(authSession.id, uniqueSessionIds),
-        liveSessionPredicate(new Date(), authSession),
-      ),
-    )
-    .innerJoin(
-      workspaces,
-      and(
-        eq(workspaces.id, workspaceId),
-        eq(workspaces.organizationId, member.organizationId),
-        eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
-        memberReachesMatterSql(
-          { organizationId: member.organizationId, userId: member.userId },
-          workspaces.id,
+  return new Map(
+    rows
+      .filter((row) =>
+        connections.some(
+          (connection) =>
+            connection.sessionId === row.sessionId &&
+            connection.organizationId === row.organizationId &&
+            connection.userId === row.userId,
         ),
+      )
+      .map(
+        (row) =>
+          [
+            row.sessionId,
+            {
+              organizationId: brandPersistedOrganizationId(row.organizationId),
+              userId: brandPersistedUserId(row.userId),
+              delivery: workspaceEventDisposition(event, row),
+            },
+          ] as const,
       ),
-    )
-    .limit(uniqueSessionIds.length);
-
-  return new Set(rows.map((row) => row.sessionId));
+  );
 };
 
 /**
- * The event stream's connection authorizers, both on the owner connection for
+ * The event stream's authorizers use the owner connection for
  * the reasons given on each resolver.
  */
 export const realtimeAuthorizers = {

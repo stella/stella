@@ -29,6 +29,7 @@ import {
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   aiMemoryPolicies,
   CHAT_COMPACTION_MEMORY_ELIGIBILITIES,
@@ -329,6 +330,8 @@ export const chatThreads = p.pgTable(
       sql`${table.chatReasoningEffort} IS NULL OR (${table.chatModel} IS NOT NULL AND ${table.chatReasoningEffort} IN (${sql.join(REASONING_EFFORT_SQL_VALUES, sql`, `)}))`,
     ),
     ...chatThreadPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -736,6 +739,8 @@ export const chatTurns = p.pgTable(
         sql`${table.status} IN (${sql.join(CHAT_TURN_TIMING_ACTIVE_SQL_VALUES, sql`, `)})`,
       ),
     ...chatTurnPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -788,6 +793,8 @@ export const chatRunLogs = p.pgTable(
     // The owner policy serves the retention scheduler; application access is
     // pinned to the scoped organization transaction.
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -874,6 +881,8 @@ export const chatRunLogEntries = p.pgTable(
       withCheck: chatRunLogEntryOwner,
     }),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -957,6 +966,8 @@ export const fileChatThreads = p.pgTable(
     p
       .index("file_chat_threads_ef_field_id_idx")
       .on(table.workspaceId, table.fieldId),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -1002,6 +1013,8 @@ export const templateChatThreads = p.pgTable(
       })
       .onDelete("cascade"),
     ...templateChatThreadPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -1462,6 +1475,8 @@ export const aiMemories = p.pgTable(
     ),
     p.check("ai_memories_dedup_key_check", sql`dedup_key ~ '^[0-9a-f]{64}$'`),
     ...aiMemoryPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 

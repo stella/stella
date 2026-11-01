@@ -19,6 +19,7 @@ import { TASK_CLOSED_STATUSES } from "@stll/api-contract/entity-options";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { flowReviewTaskVisibilityCondition } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -95,6 +96,7 @@ const TASK_LIST_ENTITY_SELECTION = {
 // detail mode and `tasks.get` return the full task.
 const UNPROJECTED_TASK_LIST_COLUMNS = [
   "entityFeatureGate", // RLS state is internal to the gate.
+  "featureOwner", // Retained feature ownership is internal to visibility checks.
   // Tenant scope: the row names its matter through the joined workspace.
   "workspaceId",
   // Always "task" here, fixed by the query.
@@ -196,6 +198,10 @@ export const listTasksPage = async ({
       LIMITS.myTasksPageSizeMax,
     ),
   );
+  const reviewVisibility = flowReviewTaskVisibilityCondition({
+    organizationId,
+    userId,
+  });
   const rows = await safeDb((tx) =>
     tx
       .select({
@@ -221,6 +227,7 @@ export const listTasksPage = async ({
         and(
           inArray(entities.workspaceId, [...workspaceIds]),
           workTask(entities),
+          reviewVisibility,
           query.status === undefined
             ? undefined
             : eq(entities.status, query.status),

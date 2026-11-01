@@ -21,8 +21,13 @@ export const Route = createFileRoute("/_protected/inbox/")({
       to: "/inbox",
     }),
   },
-  beforeLoad: () => {
-    if (!import.meta.env.DEV && !isInboxPreviewEnabled()) {
+  beforeLoad: async ({ context }) => {
+    if (
+      !(await isInboxPreviewEnabled(context.queryClient, {
+        userId: context.user.id,
+        organizationId: context.user.activeOrganizationId,
+      }))
+    ) {
       throw redirect({ to: "/chat" });
     }
   },

@@ -20,12 +20,12 @@ import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { createCursorPage, iterateCursorPages } from "@/api/lib/pagination";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
-import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import {
   buildSearchPreviewPassages,
   buildSearchPreviewPassageValueRows,
 } from "@/api/lib/search/preview-passages";
 import { fileNameSearchText } from "@/api/lib/search/query";
+import { syncWorkspaceSearchActivity } from "@/api/lib/search/workspace-search-activity";
 
 type SearchDocumentRow = typeof searchDocuments.$inferInsert;
 type ExtractedContentSource = Pick<

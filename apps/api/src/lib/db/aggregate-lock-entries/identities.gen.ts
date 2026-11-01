@@ -41,6 +41,7 @@ import type { Identity as ReaderAnnotationIdentity } from "./readerAnnotation";
 import type { Identity as ReaderAnswerIdentity } from "./readerAnswer";
 import type { Identity as ReaderAnswerMessageIdentity } from "./readerAnswerMessage";
 import type { Identity as RequestReceiptIdentity } from "./requestReceipt";
+import type { Identity as ReviewResetRegistrationIdentity } from "./reviewResetRegistration";
 import type { Identity as RunIdentity } from "./run";
 import type { Identity as SampleCaseIdentity } from "./sampleCase";
 import type { Identity as SchedulerClaimIdentity } from "./schedulerClaim";
@@ -49,6 +50,7 @@ import type { Identity as SearchHistoryIdentity } from "./searchHistory";
 import type { Identity as SearchProjectionRepairIdentity } from "./searchProjectionRepair";
 import type { Identity as SignalIdentity } from "./signal";
 import type { Identity as SigningSessionIdentity } from "./signingSession";
+import type { Identity as UploadReceiptIdentity } from "./uploadReceipt";
 import type { Identity as WorkspaceIdentity } from "./workspace";
 
 export type AggregateIdentities = {
@@ -95,6 +97,7 @@ export type AggregateIdentities = {
   "readerAnswer": ReaderAnswerIdentity;
   "readerAnswerMessage": ReaderAnswerMessageIdentity;
   "requestReceipt": RequestReceiptIdentity;
+  "reviewResetRegistration": ReviewResetRegistrationIdentity;
   "run": RunIdentity;
   "sampleCase": SampleCaseIdentity;
   "schedulerClaim": SchedulerClaimIdentity;
@@ -103,5 +106,6 @@ export type AggregateIdentities = {
   "searchProjectionRepair": SearchProjectionRepairIdentity;
   "signal": SignalIdentity;
   "signingSession": SigningSessionIdentity;
+  "uploadReceipt": UploadReceiptIdentity;
   "workspace": WorkspaceIdentity;
 };

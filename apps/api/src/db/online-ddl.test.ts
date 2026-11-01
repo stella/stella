@@ -20,6 +20,7 @@ import {
   createUngatedTableGateForTests,
   dropIndexConcurrently,
   dropPolicy,
+  installPolicy,
   reindexIndexConcurrently,
   renameIndex,
   replacePolicy,
@@ -418,6 +419,20 @@ test("exhausted statement retries report the same deferred outcome as the gate",
 });
 
 describe("online ACCESS EXCLUSIVE statements", () => {
+  test("policy installation binds its catalog receipt and local lock budget to one table", async () => {
+    const statement = installPolicy(POLICY);
+    expect(statement.tableName).toBe(POLICY.tableName);
+    expect(statement.lockQueue).toBe("blocks_writers");
+    const text = await sqlOf(statement);
+    expect(text).toContain("SET LOCAL lock_timeout = '1s'");
+    expect(text).toContain('CREATE POLICY "probe_policy" ON "public"."probe"');
+    expect(text).toContain("COMMENT ON POLICY");
+    expect(text).toContain("polqual::text");
+    expect(text).toContain("polwithcheck::text");
+    expect(await sqlOf(installPolicy({ ...POLICY, using: "false" }))).not.toBe(
+      text,
+    );
+  });
   test("each runs atomically and declares its writer-blocking lock class", async () => {
     const created =
       'CREATE POLICY "probe_policy" ON "public"."probe" AS RESTRICTIVE FOR ALL TO "stella" USING (probe.gate = \'open\') WITH CHECK (probe.gate = \'open\')';

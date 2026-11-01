@@ -147,6 +147,7 @@ export const seedQueryPerf = async (
     },
     searchInput: {
       query,
+      userId,
       organizationId,
       workspaceIds: [bigWorkspaceId],
       limit: LIMITS.mcpSearchPageSizeDefault,

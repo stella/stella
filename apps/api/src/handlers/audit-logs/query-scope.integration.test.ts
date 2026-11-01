@@ -11,7 +11,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { auditLogs, workspaces } from "@/api/db/schema";
+import { auditLogs, entities, workspaces } from "@/api/db/schema";
 import { createMembershipSafeDb, createSafeDb } from "@/api/db/scoped";
 import {
   AUDIT_ACTION,
@@ -41,6 +41,7 @@ let safeDb: SafeDb;
 const seededWorkspaceIds: SafeId<"workspace">[] = [];
 
 const seededAuditLogIds: SafeId<"auditLog">[] = [];
+const seededEntityIds: SafeId<"entity">[] = [];
 
 let rowInWorkspaceA1: SafeId<"auditLog">;
 let rowInWorkspaceA2: SafeId<"auditLog">;
@@ -62,7 +63,18 @@ const seedAuditEntry = async ({
   workspaceId,
   userId,
 }: SeedAuditEntryOptions): Promise<SafeId<"auditLog">> => {
-  const resourceId = Bun.randomUUIDv7();
+  const resourceId = toSafeId<"entity">(Bun.randomUUIDv7());
+  if (workspaceId !== null) {
+    await testDb.insert(entities).values({
+      id: resourceId,
+      workspaceId,
+      kind: "document",
+      name: "Audit document",
+      featureOwner: "shared",
+    });
+    seededEntityIds.push(resourceId);
+  }
+  const auditResourceId = workspaceId === null ? organizationId : resourceId;
   const recorder = createBackgroundAuditRecorder({
     organizationId,
     workspaceId,
@@ -74,14 +86,17 @@ const seedAuditEntry = async ({
   });
   await recorder(asTestRaw<Transaction>(testDb), {
     action: AUDIT_ACTION.UPDATE,
-    resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-    resourceId,
+    resourceType:
+      workspaceId === null
+        ? AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS
+        : AUDIT_RESOURCE_TYPE.ENTITY,
+    resourceId: auditResourceId,
   });
 
   const written = await testDb
     .select({ id: auditLogs.id })
     .from(auditLogs)
-    .where(eq(auditLogs.resourceId, resourceId));
+    .where(eq(auditLogs.resourceId, auditResourceId));
   const id = written.at(0)?.id;
   if (id === undefined) {
     panic("audit fixture wrote no row");
@@ -134,6 +149,7 @@ afterAll(async () => {
   await testDb
     .delete(auditLogs)
     .where(inArray(auditLogs.id, seededAuditLogIds));
+  await testDb.delete(entities).where(inArray(entities.id, seededEntityIds));
   if (seededWorkspaceIds.length > 0) {
     await testDb
       .delete(workspaces)

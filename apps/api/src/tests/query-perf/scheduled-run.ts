@@ -11,12 +11,14 @@ import type { Verdict } from "@stll/db-load-gate/health";
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
+import { schedulerJobs } from "@/api/db/schema";
 import { setSharedQueryTimeouts } from "@/api/db/shared-pool-timeouts";
 import { createDatabase } from "@/api/db/sql-client";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resetLocalCaseLawConfigForTesting } from "@/api/lib/case-law/local-case-law-config";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { READ_COMMITTED_BEGIN } from "@/api/lib/db/read-committed-unit";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
@@ -29,6 +31,8 @@ import {
   createCaseLawProvisionStateBackfillTask,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import { createLegislationExpressionIdBackfill } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
+import { readRecoveryScanState } from "@/api/lib/scheduler/tasks/recovery-scan-cursor";
+import { RECOVERY_SCAN_IDENTITIES } from "@/api/lib/scheduler/tasks/recovery-scan-identity";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type {
   GatedTestClientScope,
@@ -460,17 +464,15 @@ export const QUERY_PERF_ADMISSION = {
   signals: [],
 } as const satisfies Verdict;
 
-/** Measure the registered task's actual statements without replaying its results. */
-export const measureScheduledJobRun = async ({
+/** Measures each statement before its real execution without replaying task results. */
+export const measureScheduledJobRunRaw = async ({
   database,
-  openClient,
   jobId,
   task: taskName,
   admission = QUERY_PERF_ADMISSION,
   now = new Date("2026-01-10T12:00:00Z"),
 }: {
   database: GatedTestDb;
-  openClient?: GatedTestClientScope["openClient"];
   jobId: string;
   task: string;
   /** The governor's verdict; a test passes a hold to prove the measurement notices one. */
@@ -482,24 +484,6 @@ export const measureScheduledJobRun = async ({
     panic(`No declared scheduler job ${jobId}`);
   if (job.task !== taskName) {
     return panic(`${jobId} runs ${job.task}, not ${taskName}`);
-  }
-  const readBudgetId =
-    typeof job.reads === "object"
-      ? job.reads.budget
-      : panic(`${jobId} has no measured read budget`);
-  if (
-    jobId === SCHEDULER_BACKFILL_IDS.provisionState ||
-    jobId === SCHEDULER_BACKFILL_IDS.expressionIds
-  ) {
-    if (openClient === undefined) {
-      return panic(`${jobId} measurement requires its dedicated connection`);
-    }
-    return await measureBackfillJobRun({
-      database,
-      openClient,
-      jobId,
-      task: taskName,
-    });
   }
   const task =
     createSchedulerTaskRegistry(
@@ -513,6 +497,42 @@ export const measureScheduledJobRun = async ({
           }),
       }),
     ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
+  const leaseToken = `query-perf-${createSafeId<"schedulerJobRun">()}`;
+  const persistedJob =
+    (
+      await database
+        .insert(schedulerJobs)
+        .values({
+          id: job.id,
+          task: job.task,
+          description: job.description,
+          schedule: job.schedule,
+          payload: "payload" in job ? job.payload : null,
+          enabled: true,
+          nextRunAt: now,
+          lockedAt: now,
+          lockedBy: leaseToken,
+          lockedUntil: new Date(now.getTime() + 60_000),
+        })
+        .onConflictDoUpdate({
+          target: schedulerJobs.id,
+          set: {
+            lockedAt: now,
+            lockedBy: leaseToken,
+            lockedUntil: new Date(now.getTime() + 60_000),
+          },
+        })
+        .returning()
+    ).at(0) ?? panic("Scheduled measurement requires its persisted job lease");
+  const execution = Object.values(RECOVERY_SCAN_IDENTITIES).some(
+    (identity) => identity.task === persistedJob.task,
+  )
+    ? ({
+        type: "recovery",
+        phase: readRecoveryScanState(persistedJob, persistedJob.payload).value
+          .phase,
+      } as const)
+    : ({ type: "task" } as const);
   // The search configuration is cached for 60 s, and the scheduled jobs run
   // minutes apart, so a production run reads it cold. Every measured run does
   // too, instead of depending on what an earlier run left in the cache.
@@ -520,49 +540,127 @@ export const measureScheduledJobRun = async ({
   resetLocalCaseLawConfigForTesting();
   const measured = await measureJobStatements({
     database,
-    run: async (db) =>
-      await task(
-        asTestRaw<SchedulerTaskContext>({
-          db,
-          job: { id: job.id, task: job.task },
-          payload: "payload" in job ? job.payload : null,
-          dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
-          runId: createSafeId<"schedulerJobRun">(),
-          signal: new AbortController().signal,
-          scheduleContinuation: noopTask,
-          logger: {
-            debug: noopTask,
-            error: noopTask,
-            info: noopTask,
-            warn: noopTask,
+    run: async (measuredDatabase) =>
+      await runWithQueryCounter(async (counter) => {
+        const outcome = await task(
+          asTestRaw<SchedulerTaskContext>({
+            db: measuredDatabase,
+            dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
+            job: persistedJob,
+            payload: persistedJob.payload,
+            runId: createSafeId<"schedulerJobRun">(),
+            signal: new AbortController().signal,
+            scheduleContinuation: noopTask,
+            logger: {
+              debug: noopTask,
+              error: noopTask,
+              info: noopTask,
+              warn: noopTask,
+            },
+          }),
+        );
+        return {
+          outcome,
+          statementCounts: {
+            statements: counter.count,
+            transactionRoundTrips: counter.transactions,
           },
-        }),
-      ),
+        };
+      }),
   });
-  const outcome = measured.value;
+  const outcome = measured.value.outcome;
   if (outcome !== undefined && !Result.isOk(outcome)) {
-    return panic(`${jobId} failed on the fixture: ${outcome.error.message}`);
+    panic(`${jobId} failed on the fixture: ${outcome.error.message}`);
   }
   if (measured.statements.length === 0) {
     return panic(`${jobId} issued no statement to measure`);
   }
-  const statements = measured.statements.map(({ query, plan }) => {
-    const statement = query.text.replaceAll(/\s+/gu, " ").slice(0, 160);
-    return {
-      metrics: metricsFromPlan(plan),
-      planViolations: analyzePlan({
-        document: plan,
-        owner: jobId,
-        ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[readBudgetId],
-        statement,
-        profileId: "corpus",
-      }),
-      statement,
-    };
-  });
+  const statements = measured.statements.map(({ query, plan }) => ({
+    metrics: metricsFromPlan(plan),
+    plan,
+    statement: query.text.replaceAll(/\s+/gu, " ").slice(0, 160),
+  }));
   return {
+    execution,
+    executedStatements: measured.executed,
+    statementCounts: measured.value.statementCounts,
     metrics: sumMetrics(statements.map(({ metrics }) => metrics)),
+    statements,
+  };
+};
+
+/** Applies the committed owner deadline and plan rules to a measured run. */
+export const measureScheduledJobRun = async (options: {
+  database: GatedTestDb;
+  jobId: string;
+  task: string;
+  /** The governor's verdict; a test passes a hold to prove the measurement notices one. */
+  admission?: Verdict;
+  now?: Date;
+}) => {
+  const job =
+    DECLARED_SCHEDULER_JOBS.find(({ id }) => id === options.jobId) ??
+    panic(`No declared scheduler job ${options.jobId}`);
+  if (job.task !== options.task) {
+    return panic(`${options.jobId} runs ${job.task}, not ${options.task}`);
+  }
+  const readBudgetId =
+    typeof job.reads === "object"
+      ? job.reads.budget
+      : panic(`${options.jobId} has no measured read budget`);
+  const run = await measureScheduledJobRunRaw(options);
+  const statements = run.statements.map(({ metrics, plan, statement }) => ({
+    metrics,
+    planViolations: analyzePlan({
+      document: plan,
+      owner: options.jobId,
+      ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[readBudgetId],
+      statement,
+      profileId: "corpus",
+    }),
+    statement,
+  }));
+  return {
+    budgetId: readBudgetId,
+    execution: run.execution,
+    executedStatements: run.executedStatements,
+    statementCounts: run.statementCounts,
+    metrics: run.metrics,
     planViolations: statements.flatMap(({ planViolations }) => planViolations),
     statements,
+  };
+};
+
+/**
+ * Measures one run of any declared job: backfills through their dedicated
+ * captured connection, every other task in the fixture transaction.
+ */
+export const measureDeclaredJobRun = async ({
+  openClient,
+  ...options
+}: Parameters<typeof measureScheduledJobRun>[0] & {
+  openClient?: GatedTestClientScope["openClient"];
+}) => {
+  if (
+    options.jobId === SCHEDULER_BACKFILL_IDS.provisionState ||
+    options.jobId === SCHEDULER_BACKFILL_IDS.expressionIds
+  ) {
+    if (openClient === undefined) {
+      return panic(
+        `${options.jobId} measurement requires its dedicated connection`,
+      );
+    }
+    return await measureBackfillJobRun({
+      database: options.database,
+      openClient,
+      jobId: options.jobId,
+      task: options.task,
+    });
+  }
+  const run = await measureScheduledJobRun(options);
+  return {
+    metrics: run.metrics,
+    planViolations: run.planViolations,
+    statements: run.statements,
   };
 };

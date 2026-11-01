@@ -11,7 +11,6 @@ import {
   desktopEditSessions,
   entities,
   entityVersions,
-  folioCollabRoomTokens,
   mcpOAuthState,
   mcpUserConnections,
   mcpWebHandoff,
@@ -24,7 +23,7 @@ import {
 } from "@/api/db/schema";
 import {
   memberCredentialRevocationTables,
-  removeOrganizationMemberWithAuthArtifacts,
+  revokeOrganizationMemberAuthArtifacts,
 } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -84,10 +83,6 @@ const snapshot = async (tx: Transaction) => ({
     .select()
     .from(pdfSigningSessions)
     .orderBy(pdfSigningSessions.id),
-  rooms: await tx
-    .select()
-    .from(folioCollabRoomTokens)
-    .orderBy(folioCollabRoomTokens.id),
   desktops: await tx
     .select()
     .from(desktopEditSessions)
@@ -100,7 +95,7 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("organization member auth artifacts (postgres)", () => {
-    test("commits scoped credential cleanup and preserves desktop checkpoints", async () => {
+    test("revokes scoped credentials while leaving membership owned by the canonical remover", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         const schema = `member_artifacts_${Bun.randomUUIDv7().replaceAll("-", "")}`;
@@ -302,16 +297,6 @@ if (!databaseUrl || !enabled) {
                 handoffExpiresAt: future,
                 tokenExpiresAt: future,
               });
-              await tx.insert(folioCollabRoomTokens).values({
-                id: createSafeId<"folioCollabRoomToken">(),
-                workspaceId: scope.workspaceId,
-                roomId: createSafeId<"folioCollabRoom">(),
-                userId: scope.userId,
-                tokenHash: hashDesktopEditSessionToken(Bun.randomUUIDv7()),
-                generation: 0,
-                permissions: { canEdit: true },
-                expiresAt: future,
-              });
               await tx.insert(desktopEditSessions).values({
                 id: scope.sessionId,
                 workspaceId: scope.workspaceId,
@@ -361,8 +346,7 @@ if (!databaseUrl || !enabled) {
           const interrupted = await Result.tryPromise({
             try: async () =>
               await transaction(async (tx) => {
-                await removeOrganizationMemberWithAuthArtifacts(tx, {
-                  memberId: target.memberId,
+                await revokeOrganizationMemberAuthArtifacts(tx, {
                   organizationId,
                   userId,
                 });
@@ -386,19 +370,16 @@ if (!databaseUrl || !enabled) {
             await tx.execute(sql`DROP TRIGGER reject_cleanup ON ${apikey}`);
           });
           await transaction(async (tx) => {
-            await removeOrganizationMemberWithAuthArtifacts(tx, {
-              memberId: target.memberId,
+            await revokeOrganizationMemberAuthArtifacts(tx, {
               organizationId,
               userId,
             });
           });
           const after = await transaction(snapshot);
           expect(after.members.some((row) => row.id === target.memberId)).toBe(
-            false,
+            true,
           );
-          expect(after.members).toEqual(
-            before.members.filter((row) => row.id !== target.memberId),
-          );
+          expect(after.members).toEqual(before.members);
           expect(before.entities).toHaveLength(cases.length);
           expect(before.versions).toHaveLength(cases.length * 2);
           expect(before.properties).toHaveLength(cases.length);
@@ -413,77 +394,15 @@ if (!databaseUrl || !enabled) {
                 row.organizationId !== organizationId || row.userId !== userId,
             ),
           );
-          expect(after.mcpConnections).toEqual(
-            before.mcpConnections.filter(
-              (row) =>
-                row.organizationId !== organizationId || row.userId !== userId,
-            ),
-          );
-          expect(after.mcpStates).toEqual(
-            before.mcpStates.filter(
-              (row) =>
-                row.organizationId !== organizationId || row.userId !== userId,
-            ),
-          );
+          expect(after.mcpConnections).toEqual(before.mcpConnections);
+          expect(after.mcpStates).toEqual(before.mcpStates);
           expect(after.sharepointConnections).toEqual(
-            before.sharepointConnections.filter(
-              (row) =>
-                row.organizationId !== organizationId || row.userId !== userId,
-            ),
+            before.sharepointConnections,
           );
-          expect(after.sharepointStates).toEqual(
-            before.sharepointStates.filter(
-              (row) =>
-                row.organizationId !== organizationId || row.userId !== userId,
-            ),
-          );
-          expect(after.handoffs).toEqual(
-            before.handoffs.filter(
-              (row) =>
-                row.workspaceId !== workspaceId || row.createdBy !== userId,
-            ),
-          );
-          expect(after.signing).toEqual(
-            before.signing.filter(
-              (row) =>
-                row.workspaceId !== workspaceId || row.createdBy !== userId,
-            ),
-          );
-          expect(after.rooms).toEqual(
-            before.rooms.filter(
-              (row) => row.workspaceId !== workspaceId || row.userId !== userId,
-            ),
-          );
-          expect(after.desktops).toHaveLength(before.desktops.length);
-          for (const row of before.desktops) {
-            const current = after.desktops.find(
-              (candidate) => candidate.id === row.id,
-            );
-            expect(current).toBeDefined();
-            if (!current) {
-              panic("Missing desktop fixture");
-            }
-            if (row.id !== target.sessionId) {
-              expect(current).toEqual(row);
-              continue;
-            }
-            expect(current.status).toBe("expired");
-            expect(current.closedAt).toBeInstanceOf(Date);
-            if (current.closedAt === null) {
-              panic("Missing desktop close time");
-            }
-            expect(current.tokenExpiresAt).toEqual(current.closedAt);
-            expect(current.tokenExpiresAt.getTime()).toBeLessThan(
-              future.getTime(),
-            );
-            expect({
-              ...current,
-              status: row.status,
-              closedAt: row.closedAt,
-              tokenExpiresAt: row.tokenExpiresAt,
-              updatedAt: row.updatedAt,
-            }).toEqual(row);
-          }
+          expect(after.sharepointStates).toEqual(before.sharepointStates);
+          expect(after.handoffs).toEqual(before.handoffs);
+          expect(after.signing).toEqual(before.signing);
+          expect(after.desktops).toEqual(before.desktops);
           expect(
             await transaction(
               async (tx) =>
@@ -497,7 +416,7 @@ if (!databaseUrl || !enabled) {
                   )
                 ).status,
             ),
-          ).toBe("missing");
+          ).toBe("authorized");
           for (const scope of cases.slice(1)) {
             expect(
               await transaction(
@@ -515,8 +434,7 @@ if (!databaseUrl || !enabled) {
             ).toBe("authorized");
           }
           await transaction(async (tx) => {
-            await removeOrganizationMemberWithAuthArtifacts(tx, {
-              memberId: target.memberId,
+            await revokeOrganizationMemberAuthArtifacts(tx, {
               organizationId,
               userId,
             });

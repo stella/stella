@@ -1,6 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { DISABLED_NAVIGATION_FEATURES } from "@/lib/workspaces/queries.test-fixtures";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
@@ -64,7 +65,7 @@ const renderPicker = () => {
       organizationId: ORGANIZATION_ID,
       userId: USER.id,
     }).queryKey,
-    { workspaces, features: { timeBilling: false } },
+    { workspaces, features: DISABLED_NAVIGATION_FEATURES },
   );
   render(
     <QueryClientProvider client={client}>

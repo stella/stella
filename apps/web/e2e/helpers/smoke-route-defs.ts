@@ -55,7 +55,9 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/knowledge/styles"),
   staticRoute("/knowledge/templates"),
   staticRoute("/knowledge/tools"),
-  staticRoute("/knowledge/workflows"),
+  staticRoute("/knowledge/workflows", {
+    expectation: { kind: "redirectsTo", to: "/knowledge" },
+  }),
   staticRoute("/settings", {
     expectation: { kind: "redirectsTo", to: "/settings/account/profile" },
   }),
@@ -84,7 +86,9 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   }),
   staticRoute("/admin/members"),
   staticRoute("/admin/usage"),
-  staticRoute("/inbox"),
+  staticRoute("/inbox", {
+    expectation: { kind: "redirectsTo", to: "/chat" },
+  }),
   staticRoute("/workspaces"),
   {
     template: "/chat/workspaces/$workspaceId/$threadId",
@@ -121,8 +125,10 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: (world) => `/workspaces/${world.workspace.id}/timesheets`,
   },
   {
+    // The seeded caller has no flow admission; the guard leaves before its loader.
     template: "/workspaces/$workspaceId/workflows",
     path: (world) => `/workspaces/${world.workspace.id}/workflows`,
+    expectation: { kind: "redirectsTo", to: "" },
   },
   {
     template: "/workspaces/$workspaceId/$viewId",

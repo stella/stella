@@ -17,11 +17,11 @@ import {
 import type { InvoiceStatus } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { INVOICE_TRANSITIONS } from "@/api/lib/billing/invoice-transition-spec";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
 import { outerColumnReference } from "@/api/lib/db/outer-column-reference";
 import { readBounded } from "@/api/lib/db/read-bounded";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transition } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -329,7 +329,7 @@ const moveInvoiceStatus = async (
   if (to === INVOICE_STATUS.PAID) {
     return await transition({
       tx,
-      spec: TRANSITIONS.invoices,
+      spec: INVOICE_TRANSITIONS,
       id: scope.invoiceId,
       options: {
         from: [INVOICE_STATUS.FINALIZED, INVOICE_STATUS.SENT],
@@ -348,7 +348,7 @@ const moveInvoiceStatus = async (
   if (to === INVOICE_STATUS.SENT) {
     return await transition({
       tx,
-      spec: TRANSITIONS.invoices,
+      spec: INVOICE_TRANSITIONS,
       id: scope.invoiceId,
       options: {
         from: [INVOICE_STATUS.PAID],
@@ -361,7 +361,7 @@ const moveInvoiceStatus = async (
   if (to === INVOICE_STATUS.FINALIZED) {
     return await transition({
       tx,
-      spec: TRANSITIONS.invoices,
+      spec: INVOICE_TRANSITIONS,
       id: scope.invoiceId,
       options: {
         from: [INVOICE_STATUS.PAID],

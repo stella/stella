@@ -4,11 +4,11 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## feature_enrolments · `featureEnrolments` · feature-enrolments.ts:15 · rls
+## feature_enrolments · `featureEnrolments` · feature-enrolments.ts:16 · rls
 
 ```text
-feature_enrolments.user_id          text                fk,not null       feature-enrolments.ts:18
-feature_enrolments.organization_id  safeOrganizationId  fk,not null       feature-enrolments.ts:22
-feature_enrolments.feature_id       text                not null          feature-enrolments.ts:25
-feature_enrolments.created_at       timestamptz         default,not null  feature-enrolments.ts:26
+feature_enrolments.user_id          text                fk,not null       feature-enrolments.ts:19
+feature_enrolments.organization_id  safeOrganizationId  fk,not null       feature-enrolments.ts:23
+feature_enrolments.feature_id       text                not null          feature-enrolments.ts:26
+feature_enrolments.created_at       timestamptz         default,not null  feature-enrolments.ts:27
 ```

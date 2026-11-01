@@ -91,6 +91,12 @@ test("rebuilds one bounded page and checkpoints after the projection", async () 
   expect(checkpointQuery.sql).toContain("SET payload = jsonb_build_object(");
   expect(checkpointQuery.sql).toContain("'cursor'");
   expect(checkpointQuery.params).toContain(entityId);
+  expect(checkpointQuery.sql).toContain("task =");
+  expect(checkpointQuery.params).toContain("search.repairSemanticTimestamps");
+  expect(checkpointQuery.params).toContain(
+    "search.repairSemanticTimestamps.v1",
+  );
+  expect(checkpointQuery.params).toContain("runner#lease-1");
   expect(upsertSearchDocumentMock).toHaveBeenCalledWith(entityId);
 });
 
@@ -129,7 +135,13 @@ test("checkpoints the last scanned row when a clean page needs no repair", async
     executeMock.mock.calls.at(1)?.at(0) ?? sql``,
   );
   expect(checkpointQuery.params).toContain(entityId);
-  expect(checkpointQuery.params).toContain("verify");
+  expect(checkpointQuery.sql).toContain("task =");
+  expect(checkpointQuery.params).toContain("search.repairSemanticTimestamps");
+  expect(checkpointQuery.params).toContain(
+    "search.repairSemanticTimestamps.v1",
+  );
+  expect(checkpointQuery.params).toContain("runner#lease-1");
+  expect(checkpointQuery.sql).toContain("'pass', 'verify'::text");
 });
 
 test("durably marks verification dirty before rebuilding a mismatch", async () => {
@@ -168,9 +180,10 @@ test("durably marks verification dirty before rebuilding a mismatch", async () =
     executeMock.mock.calls.at(1)?.at(0) ?? sql``,
   );
   expect(dirtyCheckpoint.sql).toContain("'dirty', true");
-  expect(dirtyCheckpoint.sql).toContain("'pass', $2::text");
-  expect(dirtyCheckpoint.sql).toContain("'passStartedAt', $3::text");
-  expect(dirtyCheckpoint.sql).toContain("'quietSince', $4::text");
+  expect(dirtyCheckpoint.sql).toContain("'pass', 'verify'::text");
+  expect(dirtyCheckpoint.sql).toContain("'cleanPasses', 0");
+  expect(dirtyCheckpoint.sql).toContain("'passStartedAt'");
+  expect(dirtyCheckpoint.sql).toContain("'quietSince'");
   expect(dirtyCheckpoint.params).toContain("2026-07-29T00:05:00.000Z");
   expect(upsertSearchDocumentMock).toHaveBeenCalledWith(entityId);
 });

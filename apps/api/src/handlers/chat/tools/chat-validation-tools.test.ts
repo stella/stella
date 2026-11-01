@@ -3,8 +3,10 @@ import { describe, expect, test } from "bun:test";
 
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { validateMessage } from "@/api/handlers/chat/chat-schema";
@@ -59,6 +61,8 @@ import {
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 import { offeredSkillCatalog } from "@/api/tests/helpers/offered-skills";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 type RunToolsProps = Parameters<typeof getChatTools>[0];
 
@@ -294,6 +298,7 @@ test("generated views follow general availability and explain deployment withhol
   const run =
     buildRunScenarios().at(0) ?? expect.unreachable("No chat scenario");
   for (const deploymentEnabled of [false, true]) {
+    testState.setConfig("FEATURE_GENERATED_VIEWS", deploymentEnabled);
     const decision = decideFeatureAccess({
       registry: FEATURE_REGISTRY,
       grants: {},

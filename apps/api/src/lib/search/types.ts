@@ -70,6 +70,7 @@ export const findExtractionFileField = (
 
 type SearchQueryBase = {
   query: string;
+  userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   kinds?: EntityKind[] | undefined;
   cursor?: string | undefined;
@@ -138,6 +139,7 @@ export type SearchResult = {
 
 export type ContentSearchQuery = {
   query: string;
+  userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   limit: number;
@@ -155,11 +157,6 @@ export type ContentSearchResult = {
   totalCount: number;
 };
 
-export type RemoveEntityOptions = {
-  entityId: SafeId<"entity">;
-  workspaceId: SafeId<"workspace">;
-};
-
 /** Tenant reads, bound to one request's scoped database handle. */
 export type SearchReader = {
   search: (query: SearchQuery) => Promise<SearchResult>;
@@ -169,7 +166,6 @@ export type SearchReader = {
 /** Index upkeep, run by trusted server code outside any request scope. */
 export type SearchMaintenance = {
   indexEntity: (entityId: SafeId<"entity">) => Promise<void>;
-  removeEntity: (options: RemoveEntityOptions) => Promise<void>;
   rebuildIndex: (orgId: SafeId<"organization">) => Promise<void>;
 };
 

@@ -15,6 +15,8 @@ export const MEMBER_RUN_ACTOR_RESOLVERS = [
 type MemberRunActorResolver = (typeof MEMBER_RUN_ACTOR_RESOLVERS)[number];
 
 type TaskAuthorityBase = {
+  /** Ownership of the scheduler row, distinct from the task's run authority. */
+  schedulerOwnership: "organization" | "platform";
   /** The module that implements the task the registry runs. */
   module: string;
   /** Why the task runs under this authority. */
@@ -51,12 +53,21 @@ const TASKS = "apps/api/src/lib/scheduler/tasks";
 
 const platform = (module: string, reason: string) =>
   ({
+    schedulerOwnership: "platform",
     authority: "org-automation",
     module: `${TASKS}/${module}`,
     reason,
   }) as const satisfies SchedulerTaskAuthorityEntry;
 
 export const SCHEDULER_TASK_AUTHORITY = {
+  "flows.recoverUploadTriggers": platform(
+    "upload-flow-trigger-recovery.ts",
+    "Replays committed upload receipts after live author admission.",
+  ),
+  "signals.recoverScoutEmission": platform(
+    "scout-emission-recovery.ts",
+    "Replays deferred scout sources only for live enrolled recipients.",
+  ),
   "caseLaw.reconcilePublisherRemovals": platform(
     "case-law-publisher-removals.ts",
     "Reconciles publisher removals in the public legal corpus.",
@@ -134,6 +145,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "Public legal corpus aggregates.",
   ),
   "chat.compactThreads": {
+    schedulerOwnership: "platform",
     authority: "member-run",
     module: `${TASKS}/chat-thread-compactor.ts`,
     runActor: {
@@ -196,6 +208,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "Hands stuck renditions back to the derivatives queue.",
   ),
   "flow.run": {
+    schedulerOwnership: "organization",
     authority: "member-run",
     module: `${TASKS}/flow-run.ts`,
     runActor: {
@@ -242,6 +255,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "Ages memories by their timestamps, recorded as a service.",
   ),
   "memory.extractor": {
+    schedulerOwnership: "platform",
     authority: "member-run",
     module: `${TASKS}/memory-extractor.ts`,
     runActor: {
@@ -288,12 +302,14 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "Reports overdue scheduler operator pauses.",
   ),
   "scheduler.dispatchBullMq": {
+    schedulerOwnership: "platform",
     authority: "unclassified",
     module: "apps/api/src/lib/scheduler/bullmq.ts",
     reason:
       "Forwards to whichever queue a stored job names; the code does not fix the target queue, so the authority depends on data.",
   },
   "scheduler.noop": {
+    schedulerOwnership: "platform",
     authority: "org-automation",
     module: "apps/api/src/lib/scheduler/registry.ts",
     reason: "Does nothing.",
@@ -331,3 +347,13 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "Data backfill from existing tasks, keeping only current members as assignees.",
   ),
 } as const satisfies SchedulerTaskAuthorityRegistry;
+
+export type SchedulerTaskWithOwnership<
+  Ownership extends TaskAuthorityBase["schedulerOwnership"],
+> = {
+  [
+    Task in keyof typeof SCHEDULER_TASK_AUTHORITY
+  ]: (typeof SCHEDULER_TASK_AUTHORITY)[Task]["schedulerOwnership"] extends Ownership
+    ? Task
+    : never;
+}[keyof typeof SCHEDULER_TASK_AUTHORITY];

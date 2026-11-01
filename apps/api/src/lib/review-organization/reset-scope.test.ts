@@ -4,14 +4,20 @@ import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
+import { FLOW_RESET_AUDITED_TABLES } from "@/api/lib/flows/reset-cleanup-owner";
 import { WORKSPACE_DELETION_RETAINED_TABLES } from "@/api/lib/organization-storage-teardown";
 import {
-  REVIEW_RESET_BILLING_TABLES,
   REVIEW_RESET_CLEARED_TABLES,
+  REVIEW_RESET_SWEEP,
+} from "@/api/lib/review-organization/reset-census";
+import {
+  planReviewResetGenericDeleteBatches,
+  REVIEW_RESET_BILLING_TABLES,
   REVIEW_RESET_KEPT_TABLES,
   REVIEW_RESET_MANUAL_TABLES,
   REVIEW_RESET_MATTER_TABLE,
 } from "@/api/lib/review-organization/reset-scope";
+import { SIGNAL_RESET_AUDITED_TABLES } from "@/api/lib/signals/reset-cleanup-owner";
 import { TABLE_POLICY_SETTINGS_BASELINE } from "@/api/tests/security/table-policy-settings-baseline";
 
 const isPgTable = (value: unknown): value is PgTable => is(value, PgTable);
@@ -30,6 +36,27 @@ const deleteOrder: readonly string[] = [
   ...REVIEW_RESET_CLEARED_TABLES,
 ];
 const cleared = new Set<string>(deleteOrder);
+
+const hasDeleteEffectPath = (from: string, to: string): boolean => {
+  const pending = [from];
+  const visited = new Set([from]);
+  while (pending.length > 0) {
+    const parent = pending.pop();
+    if (parent === undefined) {
+      continue;
+    }
+    for (const { child } of edges.filter((edge) => edge.parent === parent)) {
+      if (child === to) {
+        return true;
+      }
+      if (!visited.has(child)) {
+        visited.add(child);
+        pending.push(child);
+      }
+    }
+  }
+  return false;
+};
 
 const columnNames = (table: PgTable) =>
   new Set(getTableConfig(table).columns.map((column) => column.name));
@@ -76,6 +103,31 @@ const clearedClosure = () =>
 const matterClosure = () => cascadeClosure([REVIEW_RESET_MATTER_TABLE]);
 
 describe("review organization reset scope", () => {
+  test("every swept table has exactly one auditor and feature partitions match their owners", () => {
+    const audited = REVIEW_RESET_SWEEP.map(([table]) => table);
+    const allAudited = [...audited, ...REVIEW_RESET_MANUAL_TABLES];
+    expect(new Set(allAudited).size).toBe(allAudited.length);
+    expect(new Set(audited).size).toBe(REVIEW_RESET_SWEEP.length);
+    expect(audited.toSorted()).toEqual(REVIEW_RESET_CLEARED_TABLES.toSorted());
+    const flowTables = REVIEW_RESET_SWEEP.filter(
+      ([, auditor]) => auditor === "flows",
+    ).map(([table]) => table);
+    const signalTables = REVIEW_RESET_SWEEP.filter(
+      ([, auditor]) => auditor === "signals",
+    ).map(([table]) => table);
+    const genericTables = REVIEW_RESET_SWEEP.filter(
+      ([, auditor]) => auditor === "generic",
+    ).map(([table]) => table);
+    expect(flowTables.toSorted()).toEqual(
+      [...FLOW_RESET_AUDITED_TABLES].toSorted(),
+    );
+    expect(signalTables.toSorted()).toEqual(
+      [...SIGNAL_RESET_AUDITED_TABLES].toSorted(),
+    );
+    expect(genericTables.length + flowTables.length + signalTables.length).toBe(
+      REVIEW_RESET_SWEEP.length,
+    );
+  });
   test("every listed table exists and has exactly one decision", () => {
     const listed = [
       ...deleteOrder,
@@ -192,6 +244,42 @@ describe("review organization reset scope", () => {
     expect(
       blocking.map(({ child, parent }) => `${child} -> ${parent}`),
     ).toEqual([]);
+  });
+
+  test("generic deletion batches keep related tables in separate statements", () => {
+    const genericRuns: string[][] = [];
+    let run: string[] = [];
+    for (const [name, auditor] of REVIEW_RESET_SWEEP) {
+      if (auditor === "generic") {
+        run.push(name);
+        continue;
+      }
+      if (run.length > 0) {
+        genericRuns.push(run);
+        run = [];
+      }
+    }
+    if (run.length > 0) {
+      genericRuns.push(run);
+    }
+    const batches = genericRuns.flatMap(planReviewResetGenericDeleteBatches);
+    const genericNames = REVIEW_RESET_SWEEP.filter(
+      ([, auditor]) => auditor === "generic",
+    ).map(([name]) => name);
+    expect(batches.flat()).toEqual(genericNames);
+    expect(batches.length).toBeLessThan(genericNames.length);
+    expect(hasDeleteEffectPath("chat_turns", "chat_run_log_entries")).toBe(
+      true,
+    );
+
+    for (const batch of batches) {
+      for (const [index, name] of batch.entries()) {
+        for (const other of batch.slice(index + 1)) {
+          expect(hasDeleteEffectPath(name, other)).toBe(false);
+          expect(hasDeleteEffectPath(other, name)).toBe(false);
+        }
+      }
+    }
   });
 
   test("the delete order empties a restrictive child before its parent", () => {

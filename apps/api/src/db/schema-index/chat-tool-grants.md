@@ -4,17 +4,17 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## chat_tool_grants · `chatToolGrants` · chat-tool-grants.ts:32 · rls
+## chat_tool_grants · `chatToolGrants` · chat-tool-grants.ts:33 · rls
 
 A user's standing approval for an approval-gated chat tool.
 
 ```text
-chat_tool_grants.id                pUuid               pk,not null       chat-tool-grants.ts:35
-chat_tool_grants.organization_id   safeOrganizationId  fk,not null       chat-tool-grants.ts:36
-chat_tool_grants.user_id           text                fk,not null       chat-tool-grants.ts:39
-chat_tool_grants.scope             text                not null          chat-tool-grants.ts:43
-chat_tool_grants.chat_thread_id    safeUuid            fk,null           chat-tool-grants.ts:48  Conversation a `conversation` grant applies to; null for `always`.
-chat_tool_grants.tool_name         varchar             null              chat-tool-grants.ts:53  Built-in or skill tool the grant covers; null for a connector grant.
-chat_tool_grants.mcp_connector_id  safeUuid            fk,null           chat-tool-grants.ts:55  External MCP connector whose tools the grant covers.
-chat_tool_grants.created_at        timestamptz         default,not null  chat-tool-grants.ts:59
+chat_tool_grants.id                pUuid               pk,not null       chat-tool-grants.ts:36
+chat_tool_grants.organization_id   safeOrganizationId  fk,not null       chat-tool-grants.ts:37
+chat_tool_grants.user_id           text                fk,not null       chat-tool-grants.ts:40
+chat_tool_grants.scope             text                not null          chat-tool-grants.ts:44
+chat_tool_grants.chat_thread_id    safeUuid            fk,null           chat-tool-grants.ts:49  Conversation a `conversation` grant applies to; null for `always`.
+chat_tool_grants.tool_name         varchar             null              chat-tool-grants.ts:54  Built-in or skill tool the grant covers; null for a connector grant.
+chat_tool_grants.mcp_connector_id  safeUuid            fk,null           chat-tool-grants.ts:56  External MCP connector whose tools the grant covers.
+chat_tool_grants.created_at        timestamptz         default,not null  chat-tool-grants.ts:60
 ```

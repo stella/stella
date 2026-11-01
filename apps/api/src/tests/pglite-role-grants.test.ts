@@ -1,4 +1,5 @@
 import type { PGlite } from "@electric-sql/pglite";
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { getTableName, getViewName, isTable, isView } from "drizzle-orm";
 import { readdir } from "node:fs/promises";
@@ -15,11 +16,9 @@ import {
   deriveStellaTablePrivileges,
   migrationSqlWithoutLineComments,
   readCommittedMigrations,
+  SCOPED_OWNER_ROLE_NAMES,
 } from "@/api/tests/stella-table-privileges";
-import type {
-  MigrationSource,
-  TablePrivilege,
-} from "@/api/tests/stella-table-privileges";
+import type { MigrationSource } from "@/api/tests/stella-table-privileges";
 
 /**
  * The PGlite harness hand-maintains the role grants the committed migrations
@@ -40,12 +39,17 @@ const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 /**
  * Roles whose table privileges this pair check leaves to another one.
  * `stella`'s are derived from the migrations and compared on the harness
- * catalog below.
+ * catalog below. Policy-derived system grants have their own catalog check.
  */
 const WHOLESALE_ROLES = new Set(["stella", "public"]);
 
 /** The PGlite schema installer replays these migration-owned grants verbatim. */
 const MIGRATION_REPLAYED_ROLES = new Set(["stella_entity_gate"]);
+
+/** Scoped owner grants replay the migrations and are checked on the live catalog. */
+const CATALOG_VERIFIED_ROLES: ReadonlySet<string> = new Set(
+  SCOPED_OWNER_ROLE_NAMES,
+);
 
 /**
  * Column grants are compared for every role but `public`: the harness narrows
@@ -53,6 +57,11 @@ const MIGRATION_REPLAYED_ROLES = new Set(["stella_entity_gate"]);
  */
 const COLUMN_UNSCOPED_ROLES = new Set(["public"]);
 
+// A role-membership grant (`GRANT role TO CURRENT_USER WITH SET TRUE, ...`)
+// ends in a `WITH` option list; without it the lazy body would run on into
+// the next statement's grant and misread its verbs.
+const GRANT_STATEMENT =
+  /\bGRANT\b([\s\S]*?)\bTO\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)(?:\s+WITH\s+[^;]*)?\s*(?:;|$)/gu;
 const GRANT_OR_REVOKE_STATEMENT =
   /\b(GRANT|REVOKE)\b([^;]*?)\b(TO|FROM)\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:;|$)/gu;
 
@@ -130,6 +139,51 @@ const grantedPairs = (sqlText: string): Set<string> => {
     }
   }
   return pairs;
+};
+
+/** Literal table grants retain their verbs and resolve qualified table names. */
+const grantedTablePrivileges = (sqlText: string, targetRole: string) => {
+  const privileges = new Map<string, Set<string>>();
+  for (const match of sqlText.matchAll(GRANT_STATEMENT)) {
+    const [, body = "", rawRole = ""] = match;
+    if (unquote(rawRole) !== targetRole || NOT_A_TABLE_GRANT.test(body)) {
+      continue;
+    }
+    const objectClause = OBJECT_CLAUSE.exec(body);
+    if (objectClause === null) {
+      continue;
+    }
+    const objects = objectClause[1] ?? panic("Missing table grant objects");
+    const verbs = body
+      .slice(0, objectClause.index)
+      .replaceAll(COLUMN_PRIVILEGE, "")
+      .trim()
+      .split(",")
+      .map((verb) => verb.trim().toUpperCase())
+      .filter((verb) => verb.length > 0);
+    if (verbs.some((verb) => !/^[A-Z]+$/u.test(verb) || verb === "ALL")) {
+      panic("Catalog parity requires explicit table privilege verbs");
+    }
+    if (verbs.length === 0) {
+      continue;
+    }
+    for (const object of objects.split(",")) {
+      if (
+        !/^(?:public\.)?(?:"[a-zA-Z_][a-zA-Z0-9_]*"|[a-zA-Z_][a-zA-Z0-9_]*)$/u.test(
+          object.trim(),
+        )
+      ) {
+        panic("Catalog parity requires literal table grant targets");
+      }
+      const table = unquote(object.trim().replace(/^public\./u, ""));
+      const held = privileges.get(table) ?? new Set<string>();
+      for (const verb of verbs) {
+        held.add(verb);
+      }
+      privileges.set(table, held);
+    }
+  }
+  return privileges;
 };
 
 /**
@@ -221,6 +275,7 @@ describe("pglite role grants mirror the committed migrations", () => {
         return (
           !WHOLESALE_ROLES.has(role) &&
           !MIGRATION_REPLAYED_ROLES.has(role) &&
+          !CATALOG_VERIFIED_ROLES.has(role) &&
           availableSchemaRelationNames.has(table) &&
           !harnessPairs.has(pair)
         );
@@ -251,6 +306,7 @@ describe("pglite role grants mirror the committed migrations", () => {
       return (
         !COLUMN_UNSCOPED_ROLES.has(role) &&
         !MIGRATION_REPLAYED_ROLES.has(role) &&
+        !CATALOG_VERIFIED_ROLES.has(role) &&
         availableSchemaRelationNames.has(table)
       );
     };
@@ -330,7 +386,7 @@ describe("pglite role grants mirror the committed migrations", () => {
  * migration REVOKE the harness ignores and a harness GRANT the migrations
  * never made both fail here.
  */
-describe("pglite stella table privileges mirror the committed migrations", () => {
+describe("pglite catalog table privileges mirror the committed migrations", () => {
   let client: PGlite;
 
   beforeAll(async () => {
@@ -341,26 +397,33 @@ describe("pglite stella table privileges mirror the committed migrations", () =>
     await client.close();
   });
 
-  const harnessPrivileges = async (): Promise<Map<string, Set<string>>> => {
+  const harnessPrivileges = async (
+    role = "stella",
+  ): Promise<Map<string, Set<string>>> => {
     const relations = await client.query<{ relation: string }>(
       HARNESS_RELATIONS_SQL,
     );
     const granted = await client.query<{
       relation: string;
       privilege: string;
-    }>(`
+    }>(
+      `
       SELECT c.relname AS relation, acl.privilege_type AS privilege
       FROM pg_catalog.pg_class c
       JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
       CROSS JOIN LATERAL pg_catalog.aclexplode(c.relacl) acl
       WHERE n.nspname = 'public'
-        AND acl.grantee = 'stella'::regrole
-    `);
+        AND acl.grantee = $1::regrole
+    `,
+      [role],
+    );
     const privileges = new Map<string, Set<string>>(
       relations.rows.map(({ relation }) => [relation, new Set<string>()]),
     );
     for (const { relation, privilege } of granted.rows) {
-      privileges.get(relation)?.add(privilege);
+      const held = privileges.get(relation) ?? new Set<string>();
+      held.add(privilege);
+      privileges.set(relation, held);
     }
     return privileges;
   };
@@ -372,7 +435,7 @@ describe("pglite stella table privileges mirror the committed migrations", () =>
    */
   const privilegeDrift = (
     harness: ReadonlyMap<string, ReadonlySet<string>>,
-    migrations: ReadonlyMap<string, ReadonlySet<TablePrivilege>>,
+    migrations: ReadonlyMap<string, ReadonlySet<string>>,
   ): string[] => {
     const drift: string[] = [];
     const relations = new Set([...harness.keys(), ...migrations.keys()]);
@@ -418,6 +481,44 @@ describe("pglite stella table privileges mirror the committed migrations", () =>
       new Set(["SELECT", "INSERT", "UPDATE", "DELETE"]),
     );
   });
+
+  test.each(SCOPED_OWNER_ROLE_NAMES)(
+    "%s holds exactly its migration-owned privileges",
+    async (role) => {
+      const migrationSql = await readMigrationSql();
+      const expected = grantedTablePrivileges(migrationSql, role);
+      const actual = await harnessPrivileges(role);
+      expect(privilegeDrift(actual, expected)).toEqual([]);
+
+      const migrationColumns = [...grantedColumnPairs(migrationSql)]
+        .filter((pair) => pair.startsWith(`${role}:`))
+        .toSorted();
+      const actualColumns = await client.query<{
+        relation: string;
+        column_name: string;
+        privilege: string;
+      }>(
+        `
+      SELECT c.relname AS relation, a.attname AS column_name, acl.privilege_type AS privilege
+      FROM pg_catalog.pg_class c
+      JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+      JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid
+      CROSS JOIN LATERAL pg_catalog.aclexplode(a.attacl) acl
+      WHERE n.nspname = 'public' AND a.attnum > 0 AND NOT a.attisdropped
+        AND acl.grantee = $1::regrole
+      ORDER BY c.relname, a.attname, acl.privilege_type
+    `,
+        [role],
+      );
+      expect(expected.size + migrationColumns.length).toBeGreaterThan(0);
+      expect(
+        actualColumns.rows.map(
+          ({ relation, column_name, privilege }) =>
+            `${role}:${relation}:${column_name}:${privilege}`,
+        ),
+      ).toEqual(migrationColumns);
+    },
+  );
 
   test("the maintenance role has only its migration-owned column grants", async () => {
     const migrationColumns = [...grantedColumnPairs(await readMigrationSql())]
@@ -634,4 +735,16 @@ describe("stella table privilege derivation", () => {
       "00000000000000_case",
     ]);
   });
+});
+
+test("table privilege parity separates column lists from relation privileges", () => {
+  expect(
+    grantedTablePrivileges(
+      `
+    GRANT SELECT (id, organization_id), UPDATE (assignee_id, updated_at) ON TABLE public.correspondence TO fixture;
+    GRANT SELECT (id, task), DELETE ON TABLE public.scheduler_jobs TO fixture;
+  `,
+      "fixture",
+    ),
+  ).toEqual(new Map([["scheduler_jobs", new Set(["DELETE"])]]));
 });

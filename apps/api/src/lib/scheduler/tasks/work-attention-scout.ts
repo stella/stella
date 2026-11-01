@@ -1,14 +1,13 @@
 import { panic } from "better-result";
-import { and, eq } from "drizzle-orm";
 
 import { isUuid } from "@stll/uuid-codec";
 
-import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import { writePlatformSchedulerTaskState } from "@/api/lib/scheduler/upsert-job";
 import { runWorkAttentionScout } from "@/api/lib/scouts/work-attention";
 
 export const WORK_ATTENTION_SCOUT_TASK =
@@ -56,12 +55,13 @@ export const runWorkAttentionScoutTask: SchedulerTask = async ({
   });
 
   signal.throwIfAborted();
-  await db
-    .update(schedulerJobs)
-    .set({ payload: { cursor: outcome.nextCursor } })
-    .where(
-      and(eq(schedulerJobs.id, job.id), eq(schedulerJobs.lockedBy, leaseToken)),
-    );
+  await writePlatformSchedulerTaskState({
+    db,
+    jobId: job.id,
+    leaseToken,
+    state: { type: "checkpoint", payload: { cursor: outcome.nextCursor } },
+    task: WORK_ATTENTION_SCOUT_TASK,
+  });
 
   // audit: skip — an observation sweep over durable work state; the signals it
   // emits carry their own scout_runs census and signal_events trail.

@@ -37,6 +37,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FlowReviewDecision } from "@/api/lib/flows/flow-types";
 import {
+  admitTaskFlowAccess,
   decideGateForTask,
   gateDecisionForTaskStatus,
 } from "@/api/lib/flows/review-gate-task";
@@ -551,14 +552,23 @@ const applyTaskUpdate = async function* ({
 
   const txResult = yield* Result.await(
     abortableTx(safeDb, async (tx) => {
-      const admission = await rejectUnavailableTaskListInput(tx, body);
-      if (admission !== null) {
-        return { type: "refused" as const, error: admission };
+      const listAdmission = await rejectUnavailableTaskListInput(tx, body);
+      if (listAdmission !== null) {
+        return { type: "refused" as const, error: listAdmission };
       }
       // A closing status on the task a workflow review gate raised is the
       // gate's decision, whichever surface asks for it. Nothing is written
       // here and no task or obligation lock is taken before the run's locks,
       // including when this is part of an outer Kanban transaction.
+      const admission = await admitTaskFlowAccess(tx, {
+        access: "write",
+        workspaceId,
+        taskEntityId: body.taskId,
+        userId,
+      });
+      if (admission.isErr()) {
+        return { type: "refused" as const, error: admission.error };
+      }
       const gateDecision = await gateDecisionForTaskStatus(tx, {
         workspaceId,
         taskEntityId: body.taskId,

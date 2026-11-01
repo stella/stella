@@ -242,7 +242,10 @@ export const openChatThreadDomPage = async ({
   );
   queryClient.setQueryData(
     workspacesNavigationOptions({ organizationId, userId }).queryKey,
-    { workspaces: [], features: { timeBilling: false } },
+    {
+      workspaces: [],
+      features: { timeBilling: false, signals: false, flows: false },
+    },
   );
   if (routeHandoff !== undefined) {
     await startRouteHandoff({

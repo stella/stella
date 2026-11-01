@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import type {
+  BuiltRealtimeEvent,
   DesktopEditSessionRealtimeEvent,
   OrganizationRealtimeEvent,
   UserRealtimeEvent,
@@ -47,13 +48,26 @@ type SSEConnection = {
 };
 
 type WorkspaceConnectionAuthorizationLookup = {
-  sessionIds: readonly string[];
+  connections: readonly Pick<
+    SSEConnection,
+    "organizationId" | "sessionId" | "userId"
+  >[];
   workspaceId: SafeId<"workspace">;
+  event: WorkspaceRealtimeEvent;
+};
+
+type WorkspaceEventDelivery =
+  { type: "deliver"; event: WorkspaceRealtimeEvent } | { type: "hidden" };
+
+type WorkspaceConnectionAuthorization = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  delivery: WorkspaceEventDelivery;
 };
 
 type WorkspaceConnectionAuthorizer = (
   lookup: WorkspaceConnectionAuthorizationLookup,
-) => Promise<ReadonlySet<string>>;
+) => Promise<ReadonlyMap<string, WorkspaceConnectionAuthorization>>;
 
 /**
  * Whether one user still holds an active membership in the organization their
@@ -637,13 +651,16 @@ const broadcastLocal = async (
     return;
   }
 
-  const sessionIds = [
-    ...new Set(targets.map((connection) => connection.sessionId)),
-  ];
+  const boundConnections = targets.map((connection) => ({
+    organizationId: connection.organizationId,
+    sessionId: connection.sessionId,
+    userId: connection.userId,
+  }));
   // The raw failure is what the log names, so it is carried through
   // unwrapped; wrapping it would rename `error.type` in the sink.
   const reauthorized = await Result.tryPromise({
-    try: async () => await authorizer({ sessionIds, workspaceId }),
+    try: async () =>
+      await authorizer({ connections: boundConnections, workspaceId, event }),
     catch: (cause) => cause,
   });
   if (Result.isError(reauthorized)) {
@@ -658,19 +675,38 @@ const broadcastLocal = async (
     });
     return;
   }
-  const authorizedSessionIds = reauthorized.value;
-
-  const chunk = formatSSE(event);
-
+  const authorizations = reauthorized.value;
+  const chunks = new Map<WorkspaceRealtimeEvent, Uint8Array>();
   for (const conn of targets) {
     if (!set.has(conn)) {
       continue;
     }
-    if (!authorizedSessionIds.has(conn.sessionId)) {
+    const authorization = authorizations.get(conn.sessionId);
+    if (
+      authorization === undefined ||
+      authorization.organizationId !== conn.organizationId ||
+      authorization.userId !== conn.userId
+    ) {
       closeConnection(set, conn);
       continue;
     }
-    enqueueOrDrop({ chunk, connection: conn, set });
+    const { delivery } = authorization;
+    switch (delivery.type) {
+      case "hidden":
+        continue;
+      case "deliver": {
+        let chunk = chunks.get(delivery.event);
+        if (chunk === undefined) {
+          chunk = formatSSE(delivery.event);
+          chunks.set(delivery.event, chunk);
+        }
+        enqueueOrDrop({ chunk, connection: conn, set });
+        break;
+      }
+      default:
+        delivery satisfies never;
+        panic("Workspace event delivery requires a disposition");
+    }
   }
 
   if (set.size === 0 && connections.get(workspaceId) === set) {
@@ -1022,7 +1058,7 @@ export const broadcastToUser = (
  */
 export const broadcast = (
   workspaceId: SafeId<"workspace">,
-  event: WorkspaceRealtimeEvent,
+  builtEvent: BuiltRealtimeEvent,
   {
     publishWorkspace: publishWorkspaceOverride,
   }: {
@@ -1030,6 +1066,7 @@ export const broadcast = (
       SseBroadcastPublisher["publishWorkspaceEvent"] | undefined;
   } = {},
 ): void => {
+  const event = builtEvent.toJSON();
   // When this instance has no attached subscriber it never receives its
   // own published message back through the Redis loopback, so deliver
   // locally inline. This must not depend on the publisher's health: the
@@ -1051,7 +1088,7 @@ export const broadcast = (
 
   const publishWorkspace =
     publishWorkspaceOverride ?? activePublisher().publishWorkspaceEvent;
-  publishWorkspace(workspaceId, event, {
+  publishWorkspace(workspaceId, builtEvent, {
     originInstanceId: INSTANCE_ID,
     deliveredInline: deliveredLocally,
   }).catch((error: unknown) => {

@@ -6,7 +6,12 @@ import {
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
 
-import { workspaceInsertCheck } from "@/api/db/rls";
+import { RETAINED_ACTIVITY_FEATURE_OWNERS } from "@/api/db/feature-owner";
+import { retainedActivityOwnerCheck, workspaceInsertCheck } from "@/api/db/rls";
+import {
+  systemScopePolicies,
+  workspaceActivitySourcePolicies,
+} from "@/api/db/system-scope-policies";
 import {
   ACCOUNT_AUDIT_EVENT_TYPES,
   AUDIT_ACTION,
@@ -20,6 +25,11 @@ import {
   importProvenanceColumns,
   importProvenanceConstraints,
 } from "../import-provenance-columns";
+import { registeredReviewResetPolicies } from "../review-reset-policies";
+import {
+  FOLIO_COLLAB_TOKEN_OFFBOARDING_ROLE_NAME,
+  MEMBER_EXCHANGE_OFFBOARDING_ROLE_NAME,
+} from "../role-names";
 import {
   centsColumn,
   isNotNull,
@@ -128,6 +138,7 @@ export const contacts = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.check(
       "contacts_invoice_language_check",
       sql`${table.invoiceLanguage} IS NULL OR ${table.invoiceLanguage} IN (${sql.join(
@@ -186,6 +197,8 @@ export const contacts = p.pgTable(
       )})`,
     ),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -246,6 +259,8 @@ export const contactImportRequests = p.pgTable(
       sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`,
     ),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -291,6 +306,8 @@ export const contactExtractionUploads = p.pgTable(
       )`,
     ),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -329,6 +346,8 @@ export const contactRelationships = p.pgTable(
       sql`${table.personId} != ${table.relatedContactId}`,
     ),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -371,6 +390,17 @@ export const workspaces = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
+    p.pgPolicy("workspaces_member_exchange_offboarding_read", {
+      for: "select",
+      to: MEMBER_EXCHANGE_OFFBOARDING_ROLE_NAME,
+      using: sql`${table.organizationId} = nullif(current_setting('app.organization_id', true), '')
+        AND ${table.id} = ANY(coalesce(nullif(current_setting('app.workspace_ids', true), ''), '{}')::uuid[])`,
+    }),
+    ...workspaceActivitySourcePolicies({
+      organizationId: table.organizationId,
+      workspaceId: table.id,
+    }),
     p.index("workspaces_organization_id_idx").on(table.organizationId),
     ...importProvenanceConstraints("workspaces", table),
     p
@@ -392,6 +422,12 @@ export const workspaces = p.pgTable(
       for: "select",
       to: stella,
       using: workspaceIdCheck,
+    }),
+    p.pgPolicy("workspace_folio_collab_token_offboarding_read", {
+      for: "select",
+      to: FOLIO_COLLAB_TOKEN_OFFBOARDING_ROLE_NAME,
+      using: sql`${table.organizationId} = nullif(current_setting('app.organization_id', true), '')
+        AND ${table.id} = ANY(coalesce(nullif(current_setting('app.workspace_ids', true), ''), '{}')::uuid[])`,
     }),
     p.pgPolicy("workspace_insert", {
       for: "insert",
@@ -425,6 +461,7 @@ export const workspaceMembers = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p
       .uniqueIndex("workspace_members_workspace_user_uidx")
       .on(table.workspaceId, table.userId),
@@ -472,6 +509,8 @@ export const workspaceContacts = p.pgTable(
       .uniqueIndex("workspace_contacts_ws_contact_role_uidx")
       .on(table.workspaceId, table.contactId, table.role),
     ...wsOrganizationPolicies("workspace_contacts", { columns: table }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -608,9 +647,21 @@ export const auditLogs = p.pgTable(
     activityCategory: p.text("activity_category", {
       enum: AUDIT_ACTIVITY_CATEGORIES,
     }),
+    /** Deployment feature that owns this retained event, independent of live pointers. */
+    featureOwner: p
+      .text("feature_owner", { enum: RETAINED_ACTIVITY_FEATURE_OWNERS })
+      .notNull()
+      .default("unknown"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "audit_logs_feature_owner_check",
+      sql`${table.featureOwner} IN (${sql.join(
+        RETAINED_ACTIVITY_FEATURE_OWNERS.map((owner) => sql`${owner}`),
+        sql`, `,
+      )})`.inlineParams(),
+    ),
     p.check(
       "audit_logs_performer_type_check",
       sql`${table.performerType} in (${sql.join(AUDIT_PERFORMER_TYPE_SQL_VALUES, sql`, `)})`,
@@ -686,7 +737,7 @@ export const auditLogs = p.pgTable(
     p.pgPolicy("audit_logs_select", {
       for: "select",
       to: stella,
-      using: organizationCheck,
+      using: sql`${organizationCheck} AND ${retainedActivityOwnerCheck("audit_logs")}`,
     }),
     p.pgPolicy("audit_logs_insert", {
       for: "insert",

@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
+
+import { env } from "@/api/env";
 import type {
   FeatureAccessGrants,
   FeatureGrant,
@@ -7,6 +11,7 @@ import type {
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
+  hasFeatureAccess,
   isFeatureEnabled,
 } from "@/api/lib/feature-access/policy";
 import type { FeatureAccessDecision } from "@/api/lib/feature-access/policy";
@@ -15,6 +20,9 @@ import {
   GENERATED_VIEWS_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const registry = {
   "fixture-invitation": { enrolment: "invitation" },
@@ -301,4 +309,38 @@ test("unknown policy declarations are invariants while absent discovery decision
     false,
   );
   expect(isFeatureEnabled(snapshot, "unknown-feature", principal)).toBe(false);
+});
+
+test("caller proof remains distinct from a live deployment refusal", () => {
+  const principal = { organizationId: "org-a", userId: "user-a" };
+  const decision = decideFeatureAccess({
+    ...principal,
+    registry: FEATURE_REGISTRY,
+    grants: {},
+    featureId: "signals",
+    membership: true,
+    user: { email: "member@example.test", emailVerified: true },
+    enrolments: [{ ...principal, featureId: "signals" }],
+  });
+  const snapshot = createFeatureAccessSnapshot({
+    ...principal,
+    decisions: new Map([["signals", decision]]),
+  });
+  const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+  try {
+    for (const enabled of [false, true]) {
+      testState.setConfig("FEATURE_SIGNALS", enabled);
+      expect(hasFeatureAccess(snapshot, "signals", principal)).toBe(true);
+      expect(isFeatureEnabled(snapshot, "signals", principal)).toBe(enabled);
+      const foreignPrincipal = { ...principal, userId: "another-user" };
+      expect(hasFeatureAccess(snapshot, "signals", foreignPrincipal)).toBe(
+        false,
+      );
+      expect(isFeatureEnabled(snapshot, "signals", foreignPrincipal)).toBe(
+        false,
+      );
+    }
+  } finally {
+    restore();
+  }
 });

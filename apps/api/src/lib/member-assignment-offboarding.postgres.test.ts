@@ -56,7 +56,7 @@ import { completeRequestReceipt } from "@/api/lib/idempotency/request-receipts";
 import {
   removeOrganizationMemberInTransaction,
   tryLockMemberCleanupWorkspace,
-} from "@/api/lib/member-assignment-offboarding";
+} from "@/api/lib/member-offboarding/member-assignment-offboarding";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -1046,6 +1046,8 @@ if (!databaseUrl || !runPostgresTests) {
           checkpointFileId: createSafeId<"userFile">(),
           sessionTokenHash: "0".repeat(64),
           tokenExpiresAt: new Date(Date.now() + 3_600_000),
+          takeoverRequestedBy: leaver.userId,
+          takeoverRequestedAt: new Date(),
         });
         await db.insert(desktopEditHandoffs).values({
           id: handoffId,
@@ -1221,8 +1223,37 @@ if (!databaseUrl || !runPostgresTests) {
             .from(desktopEditSessions)
             .where(eq(desktopEditSessions.id, sessionId)),
         ).toEqual([{ status: "cancelled" }]);
-        // Credential revocation in the same transaction deletes the
-        // leaver's handoffs and signing sessions outright.
+        const exchangeAudits = await db
+          .select({
+            resourceId: auditLogs.resourceId,
+            resourceType: auditLogs.resourceType,
+            changes: auditLogs.changes,
+            metadata: auditLogs.metadata,
+          })
+          .from(auditLogs)
+          .where(eq(auditLogs.workspaceId, workspaceId));
+        expect(exchangeAudits).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              resourceId: sessionId,
+              resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+              changes: {
+                takeoverRequestedBy: { old: leaver.userId, new: null },
+              },
+            }),
+            expect.objectContaining({
+              resourceId: taskId,
+              resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+              metadata: expect.objectContaining({
+                cause: "membership_removed",
+                change: "desktop-handoff-expired",
+                handoffId,
+              }),
+            }),
+          ]),
+        );
+        // The canonical member owner deletes historical handoffs and signing
+        // sessions in its locked exchange-cleanup scope.
         expect(
           await db.$count(
             desktopEditHandoffs,

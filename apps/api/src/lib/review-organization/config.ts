@@ -1,6 +1,6 @@
+import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   emailAddressSchema,
@@ -65,9 +65,20 @@ export const reviewOrganizationConfigFrom = (
   };
 };
 
-/** The deployment's review identity, or null when it is not configured. */
-export const readReviewOrganizationConfig =
-  (): ReviewOrganizationConfig | null =>
-    // The environment module is read by key so this stays valid whichever
-    // keys the deployment declares; undeclared keys read as absent.
-    reviewOrganizationConfigFrom(env);
+export class ReviewOrganizationConfigurationMissing extends TaggedError(
+  "ReviewOrganizationConfigurationMissing",
+)<{ message: string }> {}
+
+/** Migration registration requires a valid configured identity. */
+export const requireReviewOrganizationConfig = (source: ConfigSource) => {
+  const config = reviewOrganizationConfigFrom(source);
+  if (config === null) {
+    return Result.err(
+      new ReviewOrganizationConfigurationMissing({
+        message:
+          "APP_REVIEW_ACCOUNT_EMAIL and APP_REVIEW_ORGANIZATION_ID must identify the review organization",
+      }),
+    );
+  }
+  return Result.ok(config);
+};

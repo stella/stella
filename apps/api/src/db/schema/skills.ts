@@ -1,3 +1,4 @@
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   agentSkillChildPolicies,
   agentSkillPolicies,
@@ -142,6 +143,8 @@ export const agentSkills = p.pgTable(
       .on(table.organizationId, table.command)
       .where(sql`command IS NOT NULL`),
     ...agentSkillPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -169,6 +172,8 @@ export const agentSkillResources = p.pgTable(
       .index("agent_skill_resources_org_skill_idx")
       .on(table.organizationId, table.skillId),
     ...agentSkillResourcePolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -207,6 +212,8 @@ export const agentSkillRevisions = p.pgTable(
       .index("agent_skill_revisions_org_skill_idx")
       .on(table.organizationId, table.skillId),
     ...agentSkillRevisionPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -307,6 +314,8 @@ export const agentSkillProposals = p.pgTable(
       })
       .onDelete("set null"),
     ...agentSkillChildPolicies("agent_skill_proposals", "agent_skill_proposal"),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -360,6 +369,8 @@ export const agentSkillComments = p.pgTable(
     p.index("agent_skill_comments_revision_idx").on(table.revisionId),
     p.index("agent_skill_comments_proposal_idx").on(table.proposalId),
     ...agentSkillChildPolicies("agent_skill_comments", "agent_skill_comment"),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
@@ -10,8 +11,14 @@ import {
 } from "@/api/lib/db/read-budgets";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
+import { RECOVERY_SCAN_IDENTITIES } from "@/api/lib/scheduler/tasks/recovery-scan-identity";
 import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-names";
 import {
+  RECOVERY_COHORTS,
+  RECOVERY_READ_SIZES,
+} from "@/api/tests/query-perf/recovery-measurement";
+import {
+  recoveryMeasurementRuns,
   SCHEDULED_JOB_MEASUREMENTS,
   scheduledJobMeasurementViolations,
 } from "@/api/tests/query-perf/registry";
@@ -80,6 +87,57 @@ describe("read budget declarations", () => {
     ).toEqual([]);
   });
 
+  test("recovery measurements cover every canonical owner, cohort, and corpus size", () => {
+    const recoveryMeasurements = Object.entries(
+      SCHEDULED_JOB_MEASUREMENTS,
+    ).filter(([, measurement]) => measurement.type === "recovery");
+    const recoveryOwners = Object.entries(RECOVERY_SCAN_IDENTITIES);
+    expect(recoveryMeasurements.map(([jobId]) => jobId).toSorted()).toEqual(
+      recoveryOwners.map(([, owner]) => owner.jobId).toSorted(),
+    );
+
+    for (const [jobId, measurement] of recoveryMeasurements) {
+      if (measurement.type !== "recovery") {
+        panic(`Expected recovery measurement for ${jobId}`);
+      }
+      const [ownerJob, ownerIdentity] =
+        recoveryOwners.find(([, identity]) => identity.jobId === jobId) ??
+        panic(`Missing recovery owner for ${jobId}`);
+      expect(measurement.task).toBe(ownerIdentity.task);
+      expect(measurement.scenarios.every(({ job }) => job === ownerJob)).toBe(
+        true,
+      );
+      expect(measurement.scenarios.map(({ cohort }) => cohort)).toEqual([
+        ...RECOVERY_COHORTS,
+      ]);
+    }
+
+    const actualCases = recoveryMeasurementRuns().map(
+      ({ jobId, task, scenario }) => [
+        jobId,
+        task,
+        scenario.job,
+        scenario.cohort,
+        scenario.rows,
+      ],
+    );
+    const expectedCases = recoveryOwners.flatMap(([job, owner]) =>
+      RECOVERY_COHORTS.flatMap((cohort) =>
+        RECOVERY_READ_SIZES.map((rows) => [
+          owner.jobId,
+          owner.task,
+          job,
+          cohort,
+          rows,
+        ]),
+      ),
+    );
+    expect(actualCases).toHaveLength(expectedCases.length);
+    for (const expectedCase of expectedCases) {
+      expect(actualCases).toContainEqual(expectedCase);
+    }
+  });
+
   test("a second job sharing a measured budget still needs its own measurement", () => {
     const freshness = DECLARED_SCHEDULER_JOBS.find(
       ({ id }) => id === "caseLaw.reportFreshness.fiveMinute",
@@ -104,6 +162,7 @@ describe("read budget declarations", () => {
       scheduledJobMeasurementViolations(DECLARED_SCHEDULER_JOBS, {
         ...SCHEDULED_JOB_MEASUREMENTS,
         "inboundMail.receive.minutely": {
+          type: "case-law",
           task: "inboundMail.receive",
           scenarios: [],
         },

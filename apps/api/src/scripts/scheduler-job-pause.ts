@@ -13,6 +13,10 @@ import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
+import {
+  type SchedulerJobOperatorPauseState,
+  writeSchedulerJobOperatorPause,
+} from "@/api/lib/scheduler/upsert-job";
 
 const MAX_PAUSE_MINUTES = 72 * 60;
 const MIN_REASON_LENGTH = 8;
@@ -287,23 +291,20 @@ export const runSchedulerJobPause = async (
     return rows;
   }
 
-  const rows = await db.execute<SchedulerJobPauseRow>(
+  const state: SchedulerJobOperatorPauseState =
     command.action === "pause"
-      ? sql`UPDATE scheduler_jobs
-          SET paused_by = ${command.actor},
-              pause_reason = ${command.reason},
-              paused_until = now() + ${command.durationMinutes} * interval '1 minute',
-              updated_at = now()
-          WHERE id = ${command.jobId}
-          RETURNING ${rowSelection}`
-      : sql`UPDATE scheduler_jobs
-          SET paused_by = ${command.actor},
-              pause_reason = ${command.reason},
-              paused_until = NULL,
-              updated_at = now()
-          WHERE id = ${command.jobId}
-          RETURNING ${rowSelection}`,
-  );
+      ? {
+          type: "pause",
+          actor: command.actor,
+          reason: command.reason,
+          durationMinutes: command.durationMinutes,
+        }
+      : { type: "resume", actor: command.actor, reason: command.reason };
+  const rows = await writeSchedulerJobOperatorPause({
+    db,
+    jobId: command.jobId,
+    state,
+  });
   const changed = rows.at(0);
   if (changed === undefined) {
     throw new SchedulerJobPauseError({

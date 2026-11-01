@@ -15,6 +15,8 @@ import {
 import {
   createOnlineTableGate,
   declaresOnlineBuild,
+  installPolicy,
+  readMissingPolicies,
   validateOnlineConstraints,
 } from "./online-ddl";
 import type { PolicyDefinition } from "./online-ddl";
@@ -500,6 +502,73 @@ const failBuildUnderWriter = async (
 };
 
 describe.skipIf(!enabled)("online lock-taking steps under contention", () => {
+  test("policy completion binds both its declared definition and live catalog shape", async () => {
+    await withScratch(async (scratch) => {
+      const tableName = "online_policy_completion";
+      const policy = {
+        tableName,
+        name: "scoped_owner",
+        as: "permissive",
+        for: "all",
+        role: "stella",
+        using:
+          "organization_id = nullif(current_setting('app.organization_id', true), '')",
+        withCheck:
+          "organization_id = nullif(current_setting('app.organization_id', true), '')",
+      } as const satisfies PolicyDefinition;
+      await scratch.owner.unsafe(
+        `CREATE TABLE public.${tableName} (organization_id text)`,
+      );
+      const tables = createOnlineTableGate({
+        connection: scratch.connection,
+        gate: healthyGate(scratch),
+        reserveObserver: scratch.reserveObserver,
+      });
+      const install = async (definition: PolicyDefinition) =>
+        await tables.run({
+          target: { tableName, name: definition.name },
+          kind: "index_build",
+          work: async (session) => {
+            await session.run(installPolicy(definition));
+          },
+        });
+      expect(await readMissingPolicies(scratch.connection, [policy])).toEqual([
+        policy,
+      ]);
+      expect(await install(policy)).toEqual({ type: "complete" });
+      expect(await readMissingPolicies(scratch.connection, [policy])).toEqual(
+        [],
+      );
+      await scratch.owner.unsafe(
+        `ALTER POLICY scoped_owner ON public.${tableName} USING (true)`,
+      );
+      expect(await readMissingPolicies(scratch.connection, [policy])).toEqual([
+        policy,
+      ]);
+      expect(await install(policy)).toEqual({ type: "complete" });
+      expect(await readMissingPolicies(scratch.connection, [policy])).toEqual(
+        [],
+      );
+      const replacement = { ...policy, withCheck: "false" };
+      expect(
+        await readMissingPolicies(scratch.connection, [replacement]),
+      ).toEqual([replacement]);
+      expect(await install(replacement)).toEqual({ type: "complete" });
+      expect(
+        await readMissingPolicies(scratch.connection, [replacement]),
+      ).toEqual([]);
+      expect(await readMissingPolicies(scratch.connection, [policy])).toEqual([
+        policy,
+      ]);
+      await scratch.owner.unsafe(
+        `COMMENT ON POLICY scoped_owner ON public.${tableName} IS NULL`,
+      );
+      expect(
+        await readMissingPolicies(scratch.connection, [replacement]),
+      ).toEqual([replacement]);
+    });
+  });
+
   test("every declared index builds, or repairs, under a writer by deferring", async () => {
     await withScratch(async (scratch) => {
       for (const index of ONLINE_MIGRATION_INDEXES) {

@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { REVIEW_DECISION } from "@stll/api-contract/review-decision";
 import type { ReviewDecision } from "@stll/api-contract/review-decision";
 
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import { REVIEW_SKIPPED_MAX } from "@/api/lib/document-review/contract";
 import type {
   ReviewParty,
@@ -34,6 +35,7 @@ import {
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   jsonb,
   organization,
@@ -147,6 +149,7 @@ export const documentReviewRuns = p.pgTable(
     finishedAt: timestamptz("finished_at"),
   },
   (table) => [
+    ...systemScopePolicies(table),
     // History read: newest runs for one document, keyset-paginated.
     p
       .index("document_review_runs_document_created_idx")
@@ -235,6 +238,8 @@ export const documentReviewRuns = p.pgTable(
     // discriminator, so a valid workspace pin must not authorize a row whose
     // organization_id came from anywhere else.
     ...wsOrganizationPolicies("document_review_runs", { columns: table }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -317,6 +322,7 @@ export const documentReviewFindings = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...systemScopePolicies(table, "read"),
     p
       .uniqueIndex("document_review_findings_run_position_uidx")
       .on(table.runId, table.positionId),
@@ -369,6 +375,8 @@ export const documentReviewFindings = p.pgTable(
       })
       .onDelete("cascade"),
     ...wsOrganizationPolicies("document_review_findings", { columns: table }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -497,6 +505,8 @@ export const documentReviewParties = p.pgTable(
     p
       .index("document_review_parties_ef_entity_id_idx")
       .on(table.workspaceId, table.entityId),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -573,5 +583,7 @@ export const documentReviewReferencePassages = p.pgTable(
     p
       .index("document_review_reference_passages_ef_entity_id_idx")
       .on(table.workspaceId, table.entityId),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

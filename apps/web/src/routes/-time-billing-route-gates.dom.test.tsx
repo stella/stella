@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
+import { SMOKE_ROUTE_DEFS } from "../../e2e/helpers/smoke-route-defs";
 import { listTimeBillingRoutes } from "../../e2e/helpers/time-billing-routes";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
@@ -75,6 +76,62 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
+for (const flowsEnabled of [false, true]) {
+  test(`the workflow route admits ${String(flowsEnabled)} and smoke follows its disabled destination`, async () => {
+    const { beforeLoad } = await readRouteAdmission(
+      "./_protected.workspaces/$workspaceId/workflows",
+    );
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    queryClient.setQueryData(workspacesNavigationOptions(CALLER).queryKey, {
+      workspaces: [],
+      features: { timeBilling: false, signals: false, flows: flowsEnabled },
+    });
+    const requestCount = requests.length;
+    try {
+      const outcome: unknown = await Promise.resolve()
+        .then(() =>
+          beforeLoad({
+            context: {
+              queryClient,
+              user: {
+                id: CALLER.userId,
+                activeOrganizationId: CALLER.organizationId,
+              },
+            },
+            params: { workspaceId: "matter-a" },
+          }),
+        )
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      if (flowsEnabled) {
+        expect(outcome).toBeNull();
+      } else {
+        expect(isRedirect(outcome)).toBe(true);
+        if (!isRedirect(outcome)) {
+          throw new TypeError("Workflow admission did not redirect", {
+            cause: outcome,
+          });
+        }
+        expect(outcome.options.to).toBe("/workspaces/$workspaceId");
+        expect(outcome.options.params).toMatchObject({
+          workspaceId: "matter-a",
+        });
+        const smoke = SMOKE_ROUTE_DEFS.find(
+          ({ template }) => template === "/workspaces/$workspaceId/workflows",
+        );
+        expect(smoke?.expectation).toEqual({ kind: "redirectsTo", to: "" });
+      }
+      expect(requests.slice(requestCount)).toEqual([]);
+    } finally {
+      queryClient.clear();
+    }
+  });
+}
+
 describe("server enrollment admission across dedicated billing routes", () => {
   const routes = listTimeBillingRoutes();
 
@@ -93,7 +150,7 @@ describe("server enrollment admission across dedicated billing routes", () => {
       });
       queryClient.setQueryData(workspacesNavigationOptions(CALLER).queryKey, {
         workspaces: [],
-        features: { timeBilling: false },
+        features: { timeBilling: false, signals: false, flows: false },
       });
       queryClient.setQueryData(roleOptions.queryKey, "owner");
       const requestCount = requests.length;

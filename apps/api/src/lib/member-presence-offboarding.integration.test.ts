@@ -10,7 +10,7 @@ import { desktopPresence } from "@/api/db/schema";
 import readEndpoint from "@/api/handlers/desktop-presence/read";
 import { reportDesktopPresence } from "@/api/handlers/desktop-presence/service";
 import { HttpStatusResponse } from "@/api/http/status";
-import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
+import { removeOrganizationMemberInTransaction } from "@/api/lib/member-offboarding/member-assignment-offboarding";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {

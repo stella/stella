@@ -8,6 +8,7 @@ import { panic, Result, UnhandledException } from "better-result";
 import { DrizzleQueryError, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
+import type { OrgScope, OrgScopeActor } from "@/api/db/org-scope";
 import {
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
@@ -26,6 +27,7 @@ import {
   DatabaseError,
   DatabaseRlsError,
 } from "@/api/lib/errors/tagged-errors";
+import { resolveFeatureAccessSnapshot } from "@/api/lib/feature-access/live-snapshot";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
   getPgDriverErrorCode,
@@ -35,6 +37,8 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 
 import { runUnderCorpusSchemaLane } from "./corpus-schema-lane";
+import { MEMBER_REMOVAL_SETTING } from "./member-removal-settings";
+import { SCOPED_TRANSACTION_ROLE_NAMES } from "./org-scope-role-names";
 import { resolveScopedFeatureIds } from "./scoped-feature-access";
 
 // Generic constraint accepts any drizzle instance (prod or
@@ -108,6 +112,7 @@ type SetScopedTransactionSettingsOptions = {
   userId: SafeId<"user"> | null;
   workspaceScope: WorkspaceScope;
   featureIds: readonly string[];
+  role?: keyof typeof SCOPED_TRANSACTION_ROLE_NAMES;
 };
 
 const workspaceIdsSetting = (workspaceScope: WorkspaceScope): string => {
@@ -119,14 +124,16 @@ const workspaceIdsSetting = (workspaceScope: WorkspaceScope): string => {
 };
 
 /** Install the application role and its tenant scope on an open transaction. */
-export const setScopedTransactionSettings = async ({
+const installScopedTransactionSettings = async ({
   tx,
   organizationId,
   userId,
   workspaceScope,
   featureIds,
+  role = "application",
 }: SetScopedTransactionSettingsOptions): Promise<void> => {
   const wsIds = workspaceIdsSetting(workspaceScope);
+  const scopedRole = SCOPED_TRANSACTION_ROLE_NAMES[role];
   if (userId === null) {
     // A service actor has no membership-derived authority. Resolve its
     // explicit workspace IDs against the tenant before changing the role.
@@ -144,7 +151,7 @@ export const setScopedTransactionSettings = async ({
 
   await tx.execute(
     sql`SELECT
-      set_config('role', '${sql.raw(stella.name)}', true),
+      set_config('role', ${scopedRole}, true),
       set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${userId === null ? sql`pg_catalog.current_setting('${sql.raw(SETTING_WORKSPACE_IDS)}', true)` : sql`${wsIds}`}, true),
       set_config('${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', ${workspaceScope.type}, true),
       set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', ${organizationId}, true),
@@ -153,25 +160,39 @@ export const setScopedTransactionSettings = async ({
   );
 };
 
+export const setScopedTransactionSettings = async (
+  options: Omit<SetScopedTransactionSettingsOptions, "role">,
+): Promise<void> =>
+  await installScopedTransactionSettings({ ...options, role: "application" });
+
 type ScopedWorkInTransactionOptions<T> = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
+  userId: SafeId<"user"> | null;
   workspaceScope: WorkspaceScope;
   fn: (tx: Transaction) => Promise<T>;
+  memberTarget?: { userId: SafeId<"user">; memberId: string };
+  role?: keyof typeof SCOPED_TRANSACTION_ROLE_NAMES;
 };
 
 /** Keep aggregate cleanup atomic while lending it the application role. */
-export const runScopedWorkInTransaction = async <T>({
-  tx,
-  organizationId,
-  userId,
-  workspaceScope,
-  fn,
-}: ScopedWorkInTransactionOptions<T>): Promise<T> => {
+const runScopedTransactionContext = async <T>(
+  {
+    tx,
+    organizationId,
+    userId,
+    workspaceScope,
+    fn,
+    role = "application",
+    memberTarget,
+  }: ScopedWorkInTransactionOptions<T>,
+  ownerFeatureIds?: readonly string[],
+): Promise<T> => {
   const [previous] = await tx
     .select({
-      role: sql<string>`current_user`,
+      role: sql<string>`current_setting('role')`,
+      removalUserId: sql<string>`coalesce(current_setting(${MEMBER_REMOVAL_SETTING.userId}, true), '')`,
+      removalMemberId: sql<string>`coalesce(current_setting(${MEMBER_REMOVAL_SETTING.memberId}, true), '')`,
       organizationId: sql<string>`coalesce(current_setting('app.organization_id', true), '')`,
       userId: sql<string>`coalesce(current_setting('app.user_id', true), '')`,
       workspaceIds: sql<string>`coalesce(current_setting('app.workspace_ids', true), '')`,
@@ -185,22 +206,32 @@ export const runScopedWorkInTransaction = async <T>({
   // A failed statement rolls back the savepoint and its settings together;
   // restoring on an aborted connection would hide the original error.
   const value = await withAggregateSavepoint(tx, async (scopedTx) => {
-    const featureIds = await resolveScopedFeatureIds({
-      tx: scopedTx,
-      organizationId,
-      userId,
-    });
-    await setScopedTransactionSettings({
+    const featureIds =
+      ownerFeatureIds === undefined
+        ? await resolveScopedFeatureIds({
+            tx: scopedTx,
+            organizationId,
+            userId,
+          })
+        : [...ownerFeatureIds];
+    await installScopedTransactionSettings({
       tx: scopedTx,
       organizationId,
       userId,
       workspaceScope,
       featureIds,
+      role,
     });
+    await scopedTx.execute(sql`SELECT
+      set_config(${MEMBER_REMOVAL_SETTING.userId}, ${memberTarget?.userId ?? ""}, true),
+      set_config(${MEMBER_REMOVAL_SETTING.memberId}, ${memberTarget?.memberId ?? ""}, true)
+    `);
     return await fn(scopedTx);
   });
   await tx.execute(sql`SELECT
     set_config('role', ${previous.role}, true),
+    set_config(${MEMBER_REMOVAL_SETTING.userId}, ${previous.removalUserId}, true),
+    set_config(${MEMBER_REMOVAL_SETTING.memberId}, ${previous.removalMemberId}, true),
     set_config('app.organization_id', ${previous.organizationId}, true),
     set_config('app.user_id', ${previous.userId}, true),
     set_config('app.workspace_ids', ${previous.workspaceIds}, true),
@@ -208,6 +239,119 @@ export const runScopedWorkInTransaction = async <T>({
     set_config('app.enabled_features', ${previous.featureIds}, true)
   `);
   return value;
+};
+
+/** Request-owned cleanup retains its authenticated application context. */
+export const runScopedWorkInTransaction = async <T>(
+  options: Omit<ScopedWorkInTransactionOptions<T>, "role">,
+): Promise<T> =>
+  await runScopedTransactionContext({ ...options, role: "application" });
+
+type ScopedOwnerWorkOptions<T> = {
+  tx: Transaction;
+  scope: OrgScope;
+  actor: OrgScopeActor;
+  fn: (tx: Transaction) => Promise<T>;
+};
+
+/** Owner work lends only the role and organization proved from its source. */
+export const runScopedOwnerWorkInTransaction = async <T>({
+  tx,
+  scope,
+  actor,
+  fn,
+}: ScopedOwnerWorkOptions<T>): Promise<T> => {
+  switch (actor.type) {
+    case "member-removal":
+    case "correspondence-offboarding":
+    case "folio-collab-token-offboarding":
+    case "member-exchange-offboarding":
+      return await runScopedTransactionContext(
+        {
+          tx,
+          organizationId: scope.organizationId,
+          userId: actor.userId,
+          workspaceScope: {
+            type: WORKSPACE_ACCESS_MODE.explicit,
+            workspaceIds: [...scope.workspaceIds],
+          },
+          role: actor.type,
+          memberTarget: { userId: actor.userId, memberId: actor.memberId },
+          fn,
+        },
+        [],
+      );
+    case "review-reset":
+      return await runScopedTransactionContext(
+        {
+          tx,
+          organizationId: scope.organizationId,
+          userId: actor.userId,
+          workspaceScope: {
+            type: WORKSPACE_ACCESS_MODE.explicit,
+            workspaceIds: [...scope.workspaceIds],
+          },
+          role: "review-reset",
+          fn,
+        },
+        [],
+      );
+    case "workspace-search-activity":
+      return await runScopedTransactionContext(
+        {
+          tx,
+          organizationId: scope.organizationId,
+          userId: null,
+          workspaceScope: {
+            type: WORKSPACE_ACCESS_MODE.explicit,
+            workspaceIds: [...scope.workspaceIds],
+          },
+          role: actor.type,
+          fn,
+        },
+        [],
+      );
+    case "system":
+      return await runScopedTransactionContext({
+        tx,
+        organizationId: scope.organizationId,
+        userId: null,
+        workspaceScope: {
+          type: WORKSPACE_ACCESS_MODE.explicit,
+          workspaceIds: [...scope.workspaceIds],
+        },
+        role: "system",
+        fn,
+      });
+    case "actor": {
+      // Owner admission reads live enrolments from the row-proven organization.
+      const snapshot = await resolveFeatureAccessSnapshot({
+        tx,
+        organizationId: scope.organizationId,
+        userId: actor.userId,
+      });
+      const featureIds = [...snapshot.decisions]
+        .filter(([, decision]) => decision.status === "enabled")
+        .map(([featureId]) => featureId);
+      return await runScopedTransactionContext(
+        {
+          tx,
+          organizationId: scope.organizationId,
+          userId: actor.userId,
+          workspaceScope: {
+            type: WORKSPACE_ACCESS_MODE.explicit,
+            workspaceIds: [...scope.workspaceIds],
+          },
+          role: "application",
+          fn,
+        },
+        featureIds,
+      );
+    }
+    default:
+      actor satisfies never;
+      return panic("Unknown scope actor");
+  }
 };
 
 export type CurrentMembershipScope = {

@@ -191,18 +191,25 @@ type ClearOrganizationCorrespondenceAssignmentsOptions = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  runAssignmentWork: (
+    fn: (tx: Transaction) => Promise<number>,
+  ) => Promise<number>;
 };
 
 export const clearOrganizationCorrespondenceAssignments = async ({
   tx,
   organizationId,
   userId,
+  runAssignmentWork,
 }: ClearOrganizationCorrespondenceAssignmentsOptions) => {
-  const clearedCount = await clearCorrespondenceAssignmentsForOffboarding({
-    tx,
-    userId,
-    scope: { type: "organization", organizationId },
-  });
+  const clearedCount = await runAssignmentWork(
+    async (scopedTx) =>
+      await clearCorrespondenceAssignmentsForOffboarding({
+        tx: scopedTx,
+        userId,
+        scope: { type: "organization", organizationId },
+      }),
+  );
   if (clearedCount === 0) {
     return;
   }

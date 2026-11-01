@@ -3,23 +3,42 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
 
-import { stella, WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import {
-  chatThreads,
-  CORRESPONDENCE_REVIEW_RESET_SETTING,
-  userFiles,
-  workspaces,
-} from "@/api/db/schema";
-import { runScopedWorkInTransaction } from "@/api/db/scoped";
+  GLOBAL_SCOPE_TABLES,
+  ORG_SCOPE_TABLES,
+} from "@/api/db/org-scope-registry";
+import type { Transaction } from "@/api/db/root";
+import { chatThreads, userFiles } from "@/api/db/schema";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { cleanupFlowDefinitions } from "@/api/lib/flows/reset-cleanup";
 import {
   WORKSPACE_DELETION_RETAINED_STAGES,
   WORKSPACE_DELETION_RETAINED_TABLES,
 } from "@/api/lib/organization-storage-teardown";
 import { inOrder } from "@/api/lib/review-organization/in-order";
+import {
+  REVIEW_RESET_SWEEP,
+  SIGNAL_RESET_AUDITOR,
+  SIGNAL_RESET_EVENT_TABLE,
+  SIGNAL_RESET_SCOUT_TABLE,
+  SIGNAL_RESET_SIGNAL_TABLE,
+} from "@/api/lib/review-organization/reset-census";
+import {
+  cleanupScoutRuns,
+  cleanupSignalEvents,
+  cleanupSignals,
+} from "@/api/lib/signals/reset-cleanup";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { RegisteredReviewReset } from "../../db/review-reset-owner";
+import { reviewResetAuditContext } from "./audit";
 
 /**
  * Organization-scoped tables the reset leaves in place, each with its reason.
@@ -29,6 +48,8 @@ import { isRecord } from "@/api/lib/type-guards";
  * `reset-scope.test.ts` fails when a table is in neither.
  */
 export const REVIEW_RESET_KEPT_TABLES = {
+  review_reset_organizations:
+    "Migration-owned registration survives the organization reset.",
   member: "Membership: the review account stays in its organization.",
   invitation: "Membership: invitations belong to the organization's roster.",
   audit_logs: "Audit trail: append-only, and it records the reset itself.",
@@ -84,121 +105,6 @@ export const REVIEW_RESET_KEPT_TABLES = {
 } as const satisfies Record<string, string>;
 
 /**
- * Organization-scoped tables the reset empties for the review organization,
- * by `organization_id`, in this order: a table that references another
- * without a cascade comes before it (`reset-scope.test.ts` checks the order
- * against the schema). Workspace-only tables go with their matter.
- */
-export const REVIEW_RESET_CLEARED_TABLES = [
-  "agent_skill_comments",
-  "agent_skill_proposals",
-  "agent_skill_resources",
-  "agent_skill_revisions",
-  "agent_skills",
-  "ai_memories",
-  "anonymization_allowlist_entries",
-  "anonymization_blacklist_entries",
-  "bilingual_translation_rows",
-  "bilingual_translation_runs",
-  "billing_arrangements",
-  "billing_codes",
-  "case_law_research_answers",
-  "case_law_research_columns",
-  "chat_run_log_entries",
-  "chat_run_logs",
-  "chat_secrets",
-  "chat_threads",
-  "chat_tool_grants",
-  "chat_turns",
-  "clause_categories",
-  "clause_variants",
-  "clause_versions",
-  "clauses",
-  "contact_extraction_uploads",
-  "contact_import_requests",
-  "contact_relationships",
-  "contact_search_document_preview_passages",
-  "contact_search_documents",
-  "contacts",
-  "correspondence",
-  "correspondence_allowed_sender_matters",
-  "correspondence_attachments",
-  "correspondence_drop_logs",
-  "correspondence_filers",
-  "desktop_presence",
-  "desktop_time_entry_batches",
-  "document_processing_runs",
-  "document_reference_counters",
-  "document_review_findings",
-  "document_review_parties",
-  "document_review_reference_passages",
-  "document_review_runs",
-  "document_translation_runs",
-  "document_translation_units",
-  "entity_version_ai_summaries",
-  "entity_views",
-  "extracted_content",
-  "extraction_runs",
-  "file_chat_threads",
-  "file_comparison_uploads",
-  "flow_definitions",
-  "legal_reader_annotations",
-  "legal_reader_answers",
-  "matter_counters",
-  "matter_inbound_addresses",
-  "notifications",
-  "number_series",
-  "number_series_allocations",
-  "number_series_counters",
-  "office_file_evidence",
-  "pending_uploads",
-  "playbook_definition_versions",
-  "playbook_definitions",
-  "rate_tables",
-  "request_idempotency_receipts",
-  "sanctions_contact_marks",
-  "sanctions_contact_matches",
-  "sanctions_contact_screenings",
-  "sanctions_screening_events",
-  "saved_searches",
-  "saved_time_narratives",
-  "scout_runs",
-  "search_document_preview_passages",
-  "search_documents",
-  "search_history_entries",
-  "search_history_tombstones",
-  "search_history_owners",
-  "search_projection_repair_queue",
-  "seller_profiles",
-  "signal_events",
-  "signals",
-  "style_sets",
-  "template_categories",
-  "template_chat_threads",
-  "template_clauses",
-  "template_fills",
-  "template_lookup_format_user_defaults",
-  "template_lookup_formats",
-  "template_persistence_requests",
-  "template_recipes",
-  "template_versions",
-  "templates",
-  "time_daily_targets",
-  "time_entry_suggestions",
-  "time_entry_timer_states",
-  "time_timer_confirmations",
-  "time_timers",
-  "vat_rates",
-  "workspace_contacts",
-  "workspace_search_document_preview_passages",
-  "workspace_search_documents",
-  "workspace_view_templates",
-  // Referenced without a cascade by tables above.
-  "correspondence_allowed_senders",
-  "document_types",
-] as const;
-
-/**
  * Matters leave through the authorized matter deletion before the sweep runs
  * (its own coverage test proves what goes with a matter); the sweep only runs
  * once none is left.
@@ -208,9 +114,93 @@ export const REVIEW_RESET_MATTER_TABLE = "workspaces";
 /** Tables without an organization column the sweep empties by hand first. */
 export const REVIEW_RESET_MANUAL_TABLES = ["user_files"] as const;
 
+const removedCount = (count: unknown): number => {
+  if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) {
+    panic("Reset sweep must return its non-negative deletion count");
+  }
+  return count;
+};
+
 const retainedTables: ReadonlySet<PgTable> = new Set(
   WORKSPACE_DELETION_RETAINED_TABLES,
 );
+
+type ReviewResetTableGraph = {
+  tablesByName: ReadonlyMap<string, PgTable>;
+  descendants: ReadonlyMap<PgTable, ReadonlySet<PgTable>>;
+};
+
+let reviewResetTableGraph: ReviewResetTableGraph | undefined;
+const getReviewResetTableGraph = (): ReviewResetTableGraph => {
+  if (reviewResetTableGraph !== undefined) {
+    return reviewResetTableGraph;
+  }
+  const tables = [
+    ...new Set([
+      ...Object.values(ORG_SCOPE_TABLES).map(({ table }) => table),
+      ...Object.values(GLOBAL_SCOPE_TABLES).map(({ table }) => table),
+    ]),
+  ];
+  const tablesByName = new Map(
+    tables.map((table) => [getTableConfig(table).name, table]),
+  );
+  const childrenByParent = new Map<PgTable, Set<PgTable>>();
+  for (const child of tables) {
+    for (const key of getTableConfig(child).foreignKeys) {
+      const parent = key.reference().foreignTable;
+      const children = childrenByParent.get(parent) ?? new Set<PgTable>();
+      children.add(child);
+      childrenByParent.set(parent, children);
+    }
+  }
+  const descendants = new Map<PgTable, ReadonlySet<PgTable>>();
+  for (const root of tables) {
+    const found = new Set<PgTable>();
+    const pending = [...(childrenByParent.get(root) ?? [])];
+    while (pending.length > 0) {
+      const table = pending.pop();
+      if (table === undefined || found.has(table) || table === root) {
+        continue;
+      }
+      found.add(table);
+      pending.push(...(childrenByParent.get(table) ?? []));
+    }
+    descendants.set(root, found);
+  }
+  reviewResetTableGraph = { tablesByName, descendants };
+  return reviewResetTableGraph;
+};
+
+/** Split related tables, including paths through tables outside the batch. */
+export const planReviewResetGenericDeleteBatches = (
+  names: readonly string[],
+): string[][] => {
+  const { tablesByName, descendants } = getReviewResetTableGraph();
+  const batches: string[][] = [];
+  let batch: string[] = [];
+  for (const name of names) {
+    const table =
+      tablesByName.get(name) ?? panic(`Unknown reset table ${name}`);
+    const conflicts = batch.some((previousName) => {
+      const previous =
+        tablesByName.get(previousName) ??
+        panic(`Unknown reset table ${previousName}`);
+      return (
+        descendants.get(previous)?.has(table) === true ||
+        descendants.get(table)?.has(previous) === true
+      );
+    });
+    if (conflicts) {
+      batches.push(batch);
+      batch = [];
+    }
+    batch.push(name);
+  }
+  if (batch.length > 0) {
+    batches.push(batch);
+  }
+  return batches;
+};
 
 const isBillingRoot = (table: PgTable) =>
   !getTableConfig(table).foreignKeys.some(
@@ -270,7 +260,7 @@ const removeOrganizationRows = async (
   return new Map(
     removals.map(({ name }) => [
       name,
-      isRecord(counts) && typeof counts[name] === "number" ? counts[name] : 0,
+      removedCount(isRecord(counts) ? counts[name] : undefined),
     ]),
   );
 };
@@ -278,121 +268,186 @@ const removeOrganizationRows = async (
 /**
  * Empty the review organization's billing records while its matters still
  * stand, so the authorized matter deletion that follows can take them: one
- * statement per stage. None of these tables forces row security on its owner
- * (`reset-scope.test.ts`). Returns the rows removed per table.
+ * statement per stage through the registered reset role and its organization
+ * policies. Returns the rows removed per table.
  */
 export const clearReviewOrganizationBilling = async (
   tx: Transaction,
   organizationId: SafeId<"organization">,
 ): Promise<Map<string, number>> => {
-  const removed = new Map<string, number>();
-  const cleared = await inOrder(REVIEW_RESET_BILLING_STAGES, async (stage) => {
-    for (const [name, rows] of await removeOrganizationRows(
-      tx,
-      organizationId,
-      stage,
-    )) {
-      removed.set(name, rows);
-    }
-    return Result.ok(undefined);
+  const owner = await RegisteredReviewReset.admit({
+    tx,
+    organizationId,
+    userId: null,
   });
-  cleared.unwrap("The billing stages report no errors");
-  return removed;
+  return await owner.run(async (scopedTx) => {
+    const removed = new Map<string, number>();
+    const cleared = await inOrder(
+      REVIEW_RESET_BILLING_STAGES,
+      async (stage) => {
+        for (const [name, rows] of await removeOrganizationRows(
+          scopedTx,
+          organizationId,
+          stage,
+        )) {
+          removed.set(name, rows);
+        }
+        return Result.ok(undefined);
+      },
+    );
+    cleared.unwrap("The billing stages report no errors");
+    return removed;
+  });
 };
 
 /**
  * Empty every cleared table for one organization, in the owner transaction
- * that already recorded the organization's storage erasure. Returns the rows
- * removed per table.
+ * that already recorded the organization's storage erasure. Returns generic
+ * table counts; feature owners record their own counts in the same transaction.
  */
-export const sweepReviewOrganization = async (
-  tx: Transaction,
-  organizationId: SafeId<"organization">,
-  userId: SafeId<"user">,
-): Promise<Map<string, number>> => {
-  // audit: skip - the reset sweep; the run's totals go to the system audit
-  const removed = new Map<string, number>();
-  // Chat attachments name no organization; their rows hold their threads
-  // (`user_files.thread_id` restricts), and the storage census already
-  // recorded their objects. The organization deletion removes them the same way.
-  const attachments = await tx
+type SweepReviewOrganizationOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  subject: SafeId<"schedulerJobRun">;
+  userId: SafeId<"user">;
+};
+
+type RemoveReviewAttachmentsOptions = {
+  tx: Transaction;
+  recordAuditEvent: AuditRecorder;
+  organizationId: SafeId<"organization">;
+};
+const removeReviewAttachments = async ({
+  tx: scopedTx,
+  recordAuditEvent,
+  organizationId,
+}: RemoveReviewAttachmentsOptions) => {
+  const attachments = await scopedTx
     .delete(userFiles)
     .where(
       inArray(
         userFiles.threadId,
-        tx
+        scopedTx
           .select({ id: chatThreads.id })
           .from(chatThreads)
           .where(eq(chatThreads.organizationId, organizationId)),
       ),
     )
     .returning({ id: userFiles.id });
-  removed.set("user_files", attachments.length);
-  await tx.execute(
-    sql`SELECT set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, ${organizationId}, true)`,
-  );
-  // One statement shares the catalog and workspace snapshot while saving a
-  // round trip in the reset's fixed statement budget.
-  const [census] = await tx
-    .select({
-      workspaceIds: sql<SafeId<"workspace">[]>`ARRAY(
-        SELECT ${workspaces.id}
-        FROM ${workspaces}
-        WHERE ${workspaces.organizationId} = ${organizationId}
-      )`,
-      applicationTableNames: sql<string[]>`ARRAY(
-        SELECT c.relname::text
-        FROM pg_catalog.pg_class c
-        INNER JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-        WHERE n.nspname = current_schema()
-          AND c.relforcerowsecurity
-          AND has_table_privilege(${stella.name}, c.oid, 'DELETE')
-          AND NOT EXISTS (
-            SELECT 1
-            FROM pg_catalog.pg_policy policy
-            WHERE policy.polrelid = c.oid
-              AND policy.polcmd IN ('*', 'd')
-              AND policy.polpermissive
-              AND 0 = ANY(policy.polroles)
-              AND strpos(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), 'CURRENT_USER') > 0
-              AND strpos(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), 'pg_get_userbyid') > 0
-          )
-      )`,
-    })
-    .from(sql`(SELECT 1) AS census`);
-  if (census === undefined) {
-    return panic("Reset table census returned no result");
+  if (attachments.length > 0) {
+    await recordAuditEvent(scopedTx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+      resourceId: organizationId,
+      metadata: {
+        change: "review-attachments-cleared",
+        deleted: attachments.length,
+      },
+    });
   }
-  const { applicationTableNames, workspaceIds } = census;
-  const applicationTables = new Set(applicationTableNames);
-  const swept = await inOrder(REVIEW_RESET_CLEARED_TABLES, async (name) => {
-    const clear = async (deleteTx: Transaction) => {
-      const rows = await removeOrganizationRows(deleteTx, organizationId, [
-        name,
-      ]);
-      removed.set(name, rows.get(name) ?? 0);
-    };
-    // Explicit owner cleanup policies cover user and feature-hidden rows.
-    // The remaining application policies use the entire organization matter set.
-    if (applicationTables.has(name)) {
-      await runScopedWorkInTransaction({
-        tx,
-        organizationId,
-        userId,
-        workspaceScope: {
-          type: WORKSPACE_ACCESS_MODE.explicit,
-          workspaceIds,
-        },
-        fn: clear,
-      });
-      return Result.ok(undefined);
-    }
-    await clear(tx);
-    return Result.ok(undefined);
+  return attachments;
+};
+
+export const sweepReviewOrganization = async ({
+  tx,
+  organizationId,
+  subject,
+  userId,
+}: SweepReviewOrganizationOptions): Promise<Map<string, number>> => {
+  // audit: skip - the reset sweep; the run's totals go to the system audit
+  const owner = await RegisteredReviewReset.admit({
+    tx,
+    organizationId,
+    userId,
   });
-  swept.unwrap("The sweep's table deletes report no errors");
-  await tx.execute(
-    sql`SELECT set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, '', true)`,
+  const removed = new Map<string, number>();
+  // Chat attachments name no organization; their rows hold their threads
+  // (`user_files.thread_id` restricts), and the storage census already
+  // recorded their objects. The organization deletion removes them the same way.
+  const events: Parameters<AuditRecorder>[1][] = [];
+  const recordAttachmentAuditEvent: AuditRecorder = async (_auditTx, event) => {
+    events.push(event);
+    await Promise.resolve();
+  };
+  const attachments = await owner.run(
+    async (scopedTx) =>
+      await removeReviewAttachments({
+        tx: scopedTx,
+        recordAuditEvent: recordAttachmentAuditEvent,
+        organizationId,
+      }),
   );
+  const recordAuditEvent = createBackgroundAuditRecorder(
+    reviewResetAuditContext({
+      organizationId,
+      userId,
+      workspaceId: null,
+      runId: subject,
+    }),
+  );
+  for (const event of events) {
+    await recordAuditEvent(tx, event);
+  }
+  const manualCounts = {
+    user_files: attachments.length,
+  } as const satisfies Record<
+    (typeof REVIEW_RESET_MANUAL_TABLES)[number],
+    number
+  >;
+  for (const [name, count] of Object.entries(manualCounts)) {
+    removed.set(name, count);
+  }
+  let genericTables: string[] = [];
+  const flushGenericTables = async () => {
+    if (genericTables.length === 0) {
+      return;
+    }
+    const names = genericTables;
+    genericTables = [];
+    await owner.run(async (deleteTx) => {
+      for (const batch of planReviewResetGenericDeleteBatches(names)) {
+        for (const [name, count] of await removeOrganizationRows(
+          deleteTx,
+          organizationId,
+          batch,
+        )) {
+          removed.set(name, count);
+        }
+      }
+    });
+  };
+  for (const [name, auditor] of REVIEW_RESET_SWEEP) {
+    if (auditor === "generic") {
+      genericTables.push(name);
+      continue;
+    }
+    // Preserve deletion order while lending one scope to each consecutive group.
+    await flushGenericTables();
+    switch (auditor) {
+      case "flows":
+        await cleanupFlowDefinitions({ tx, organizationId, subject });
+        break;
+      case SIGNAL_RESET_AUDITOR:
+        switch (name) {
+          case SIGNAL_RESET_SCOUT_TABLE:
+            await cleanupScoutRuns({ tx, organizationId, subject });
+            break;
+          case SIGNAL_RESET_EVENT_TABLE:
+            await cleanupSignalEvents({ tx, organizationId, subject });
+            break;
+          case SIGNAL_RESET_SIGNAL_TABLE:
+            await cleanupSignals({ tx, organizationId, subject });
+            break;
+          default:
+            name satisfies never;
+            panic("Unknown signal reset cleanup table");
+        }
+        break;
+      default:
+        auditor satisfies never;
+        panic("Unknown reset sweep auditor");
+    }
+  }
+  await flushGenericTables();
   return removed;
 };

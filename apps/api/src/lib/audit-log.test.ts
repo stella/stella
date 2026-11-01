@@ -18,6 +18,7 @@ const safeId = <T extends SafeIdType>(value: string) =>
 test("background audit groups batch tenant rows and preserve each group's provenance", async () => {
   const inserts: Record<string, unknown>[][] = [];
   const tx = asTestRaw<Transaction>({
+    select: () => ({ from: () => ({ where: async () => [] }) }),
     insert: () => ({
       values: async (rows: Record<string, unknown>[]) => {
         inserts.push(rows);
@@ -54,6 +55,7 @@ test("background audit groups batch tenant rows and preserve each group's proven
     expect(new Set(groupRows.map((row) => row["groupId"])).size).toBe(1);
     for (const row of groupRows) {
       expect(row).toMatchObject({
+        featureOwner: "unknown",
         organizationId: group.bindings.organizationId,
         workspaceId: `${group.bindings.organizationId}-matter`,
         performerId: "user-1",
@@ -94,6 +96,7 @@ describe("createBackgroundAuditRecorder", () => {
   test("stores bot provenance and keeps every event in one run group", async () => {
     let inserted: Record<string, unknown>[] = [];
     const tx = asTestRaw<Transaction>({
+      select: () => ({ from: () => ({ where: async () => [] }) }),
       insert: () => ({
         values: async (rows: Record<string, unknown>[]) => {
           inserted = rows;
@@ -161,6 +164,7 @@ describe("createBackgroundAuditRecorder", () => {
   test("stores the transport source for a directly acting user", async () => {
     let inserted: Record<string, unknown>[] = [];
     const tx = asTestRaw<Transaction>({
+      select: () => ({ from: () => ({ where: async () => [] }) }),
       insert: () => ({
         values: async (rows: Record<string, unknown>[]) => {
           inserted = rows;
@@ -197,6 +201,7 @@ describe("createBackgroundAuditRecorder", () => {
   test("infers flow run provenance from the audited resource", async () => {
     let inserted: Record<string, unknown>[] = [];
     const tx = asTestRaw<Transaction>({
+      select: () => ({ from: () => ({ where: async () => [] }) }),
       insert: () => ({
         values: async (rows: Record<string, unknown>[]) => {
           inserted = rows;
@@ -225,6 +230,7 @@ describe("createBackgroundAuditRecorder", () => {
   test("keeps explicit run provenance and categorizes playbook execution", async () => {
     let inserted: Record<string, unknown>[] = [];
     const tx = asTestRaw<Transaction>({
+      select: () => ({ from: () => ({ where: async () => [] }) }),
       insert: () => ({
         values: async (rows: Record<string, unknown>[]) => {
           inserted = rows;
@@ -257,6 +263,7 @@ describe("createBackgroundAuditRecorder", () => {
   test("categorizes correspondence as matter correspondence activity", async () => {
     let inserted: Record<string, unknown>[] = [];
     const tx = asTestRaw<Transaction>({
+      select: () => ({ from: () => ({ where: async () => [] }) }),
       insert: () => ({
         values: async (rows: Record<string, unknown>[]) => {
           inserted = rows;
@@ -289,6 +296,7 @@ describe("createBackgroundAuditRecorder", () => {
   test("categorizes deleted task entities from the persisted diff", async () => {
     let inserted: Record<string, unknown>[] = [];
     const tx = asTestRaw<Transaction>({
+      select: () => ({ from: () => ({ where: async () => [] }) }),
       insert: () => ({
         values: async (rows: Record<string, unknown>[]) => {
           inserted = rows;
@@ -323,6 +331,7 @@ describe("createBackgroundAuditRecorder", () => {
   test("categorizes task field edits from the owning entity kind", async () => {
     let inserted: Record<string, unknown>[] = [];
     const tx = asTestRaw<Transaction>({
+      select: () => ({ from: () => ({ where: async () => [] }) }),
       insert: () => ({
         values: async (rows: Record<string, unknown>[]) => {
           inserted = rows;
@@ -352,6 +361,7 @@ describe("createBackgroundAuditRecorder", () => {
   test("categorizes task version edits from the owning entity kind", async () => {
     let inserted: Record<string, unknown>[] = [];
     const tx = asTestRaw<Transaction>({
+      select: () => ({ from: () => ({ where: async () => [] }) }),
       insert: () => ({
         values: async (rows: Record<string, unknown>[]) => {
           inserted = rows;
@@ -403,6 +413,7 @@ describe("audit detail projection", () => {
     for (const recorder of recorders) {
       let inserted: Record<string, unknown>[] = [];
       const tx = asTestRaw<Transaction>({
+        select: () => ({ from: () => ({ where: async () => [] }) }),
         insert: () => ({
           values: async (rows: Record<string, unknown>[]) => {
             inserted = rows;
@@ -442,6 +453,7 @@ describe("audit detail projection", () => {
   test("chat message and file entries keep no change fields", async () => {
     let inserted: Record<string, unknown>[] = [];
     const tx = asTestRaw<Transaction>({
+      select: () => ({ from: () => ({ where: async () => [] }) }),
       insert: () => ({
         values: async (rows: Record<string, unknown>[]) => {
           inserted = rows;

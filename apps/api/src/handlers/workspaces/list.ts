@@ -16,6 +16,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
+import { flowReviewTaskVisibilityCondition } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { workTask } from "@/api/lib/tasks/work-task";
@@ -34,8 +35,12 @@ const config = {
 
 const readWorkspaces = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session }) {
+  async function* ({ safeDb, session, user: viewer }) {
     const organizationId = session.activeOrganizationId;
+    const entityVisibility = flowReviewTaskVisibilityCondition({
+      organizationId,
+      userId: viewer.id,
+    });
     const { result, entityAggregates, memberRows } = yield* Result.await(
       safeDb(async (tx) => {
         const workspaceRows = await readWorkspaceListRows({
@@ -72,10 +77,12 @@ const readWorkspaces = createSafeRootHandler(
               openTaskCount: sql<number>`count(*) filter (where ${openTaskCondition})::int`,
               nextDeadline: sql<
                 string | null
-              >`min(${entities.dueDate}) filter (where ${openTaskCondition})`,
+              >`min(${entities.dueDate}) filter (where ${openTaskCondition})`.mapWith(
+                entities.dueDate,
+              ),
             })
             .from(entities)
-            .where(inArray(entities.workspaceId, wsIds))
+            .where(and(inArray(entities.workspaceId, wsIds), entityVisibility))
             .groupBy(entities.workspaceId),
           tx
             .select({
@@ -100,6 +107,7 @@ const readWorkspaces = createSafeRootHandler(
               and(
                 eq(entities.workspaceId, workspaceMembers.workspaceId),
                 eq(entities.lastEditedBy, workspaceMembers.userId),
+                entityVisibility,
               ),
             )
             .where(inArray(workspaceMembers.workspaceId, wsIds))

@@ -16,8 +16,7 @@ const body = v.object({
   layout: v.union([tableLayout, verificationLayout]),
 });
 
-test("static conditional schemas project rendered inputs before public naming and compaction", () => {
-  let projections = 0;
+test("static conditional schemas retain all inputs before public naming and compaction", () => {
   const inputSchema = buildInputSchema({
     body,
     params: v.object({ workspaceId: v.string() }),
@@ -25,38 +24,16 @@ test("static conditional schemas project rendered inputs before public naming an
     featureAccess: {
       type: "conditional",
       featureId: "list-verification",
-      projectInputSchema: (schemas: AdvertisedSchemas) => {
-        projections += 1;
-        // The projection sees the route's own rendering, before any field is
-        // given its public name, as a part without a `$schema` dialect.
-        const { $schema: _dialect, ...rendered } = toRouteJsonSchema(body);
-        expect(schemas.body).toEqual(rendered);
-        expect(schemas.body).not.toHaveProperty("$schema");
-        const properties = schemas.body?.properties;
-        if (properties === undefined) {
-          throw new Error("Expected the rendered body's properties");
-        }
-        expect(properties["workspaceId"]).toBeDefined();
-        return {
-          body: {
-            ...schemas.body,
-            properties: {
-              ...properties,
-              layout: toRouteJsonSchema(tableLayout),
-            },
-          },
-          params: schemas.params,
-          query: schemas.query,
-        };
+      projectInputSchema: () => {
+        throw new Error("Static export requires the full conditional input");
       },
     },
   });
-  expect(projections).toBe(1);
   const serialized = JSON.stringify(inputSchema);
   expect(serialized).toContain('"matterId"');
   expect(serialized).not.toContain('"workspaceId"');
   expect(serialized).toContain('"table"');
-  expect(serialized).not.toContain('"avt"');
+  expect(serialized).toContain('"avt"');
   expect(serialized).toContain('"pageSize"');
   // The wire string is shown as the number it carries, not as its pattern.
   expect(JSON.stringify(inputSchema.query)).toContain('"number"');

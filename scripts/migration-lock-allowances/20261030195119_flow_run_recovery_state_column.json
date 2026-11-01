@@ -1,0 +1,3 @@
+{
+  "add-column": "A nullable or constant-default text column is a catalog-only addition without a table rewrite. This migration touches one table in one transaction with SET LOCAL lock_timeout = 1s and statement_timeout = 5s; the migrator owns bounded retries. All data work remains in registered online phases."
+}

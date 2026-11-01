@@ -29,6 +29,7 @@ import {
   SEVERITY_LABEL_KEY,
   VERDICT_LABEL_KEY,
 } from "@/features/inbox/signal-presentation";
+import { useNavigationFeatureEnabled } from "@/hooks/use-navigation-feature";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
@@ -36,12 +37,28 @@ import type { InboxSignal } from "@/lib/inbox/queries";
 import { inboxSignalOptions } from "@/lib/inbox/queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
+import { useFeatureEnrolment } from "@/queries/feature-enrolments";
 
 /** One inbox signal's evidence: the facts the card's claim rests on. */
 export const SignalInspectorView = ({
   onClose,
   tab,
 }: InspectorViewRenderProps<InboxSignalViewPayload>) => {
+  const signalsEnabled = useNavigationFeatureEnabled("signals");
+  const { feature } = useFeatureEnrolment("signals");
+  if (!signalsEnabled || feature?.enrolled !== true) {
+    return null;
+  }
+  return <SignalInspectorReader onClose={onClose} tab={tab} />;
+};
+
+const SignalInspectorReader = ({
+  onClose,
+  tab,
+}: Pick<
+  InspectorViewRenderProps<InboxSignalViewPayload>,
+  "onClose" | "tab"
+>) => {
   const t = useTranslations();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const {

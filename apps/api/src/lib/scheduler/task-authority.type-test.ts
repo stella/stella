@@ -4,6 +4,7 @@ import type {
 } from "@/api/lib/scheduler/task-authority";
 
 const automation = {
+  schedulerOwnership: "platform",
   authority: "org-automation",
   module: "apps/api/src/lib/scheduler/tasks/example.ts",
   reason: "Example.",
@@ -24,6 +25,7 @@ export const unknownTask = {
 // A member run must say whether it settles its member's access when it runs.
 // @ts-expect-error A member-run row declares its run actor (or null).
 export const memberRunWithoutActor: SchedulerTaskAuthorityEntry = {
+  schedulerOwnership: "platform",
   authority: "member-run",
   module: "apps/api/src/lib/scheduler/tasks/example.ts",
   reason: "Example.",
@@ -31,6 +33,7 @@ export const memberRunWithoutActor: SchedulerTaskAuthorityEntry = {
 
 // The resolver is one of the calls that settle a member's access.
 export const unknownResolver: SchedulerTaskAuthorityEntry = {
+  schedulerOwnership: "platform",
   authority: "member-run",
   module: "apps/api/src/lib/scheduler/tasks/example.ts",
   reason: "Example.",

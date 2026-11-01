@@ -22,6 +22,7 @@ import {
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { flowAuditVisibilityCondition } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -146,6 +147,10 @@ const readItemActivity = createSafeHandler(
           .where(
             and(
               eq(auditLogs.workspaceId, workspaceId),
+              flowAuditVisibilityCondition({
+                organizationId: session.activeOrganizationId,
+                userId: actor.id,
+              }),
               inArray(auditLogs.resourceType, [
                 AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
                 AUDIT_RESOURCE_TYPE.ENTITY,

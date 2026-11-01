@@ -3,7 +3,10 @@ import { TaggedError } from "better-result";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
-import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
+import type {
+  CreateEntityFromBufferDependencies,
+  EntityBufferPreflightDb,
+} from "@/api/lib/entities/create-from-buffer";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SampleMatter } from "@/api/lib/review-organization/sample-data";
 import { brandDerivedSampleId } from "@/api/lib/safe-id-boundaries";
@@ -29,6 +32,8 @@ export type ReviewSeedActor = {
   memberAuthority: AuthorizedMemberRole;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
+  /** RLS-scoped, read-only preflight handle; writes stay on `scopedDb`. */
+  preflightDb: EntityBufferPreflightDb;
   /** The recorder for one matter, or for organization-level rows (null). */
   recorderFor: (workspaceId: SafeId<"workspace"> | null) => AuditRecorder;
   /**

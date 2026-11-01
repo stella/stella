@@ -4,6 +4,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
+  featureAccess: { featureId: "flows", type: "required" },
   contract: "patch",
   description:
     "Read one flow definition: its name, description, steps, trigger, and " +

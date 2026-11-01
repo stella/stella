@@ -3,11 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { schedulerJobs } from "@/api/db/schema";
-import {
-  DECLARED_SCHEDULER_JOBS,
-  upsertSchedulerJob,
-} from "@/api/lib/scheduler/jobs";
+import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { acquireNextDueJob } from "@/api/lib/scheduler/runner";
+import { upsertSchedulerJob } from "@/api/lib/scheduler/upsert-job";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 import {
@@ -54,7 +52,7 @@ describe.skipIf(!runPostgresTests)(
           .delete(schedulerJobs)
           .where(eq(schedulerJobs.id, definition.id));
         try {
-          await upsertSchedulerJob(definition, db);
+          await upsertSchedulerJob({ ownership: "platform", definition, db });
           await db
             .update(schedulerJobs)
             .set({ nextRunAt: new Date(Date.now() - 60_000) })

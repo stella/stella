@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import type { Result } from "better-result";
 
 import { provisionHeadingLine } from "@stll/decision-reader/reader-outline";
-import { compareContent } from "@stll/folio-core";
 import type {
   FolioContentBlock,
   FolioContentComparisonError,
@@ -10,6 +9,7 @@ import type {
 } from "@stll/folio-core";
 import { diffWordSegments } from "@stll/folio-core/ai-edits";
 import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
+import { compareContent } from "@stll/folio-core/compare/content";
 import { resolveDocumentHeadingAnchor } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionPreviewBlocks } from "@stll/legal-ast/provision-preview";

@@ -10,6 +10,10 @@ import {
 } from "bun:test";
 import { inArray } from "drizzle-orm";
 
+import {
+  RESOURCE_TYPE,
+  resourceSetUpdatedRealtimeEvent,
+} from "@stll/api-contract";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { createTestState } from "@stll/test-state";
 
@@ -429,24 +433,45 @@ describe("resolveMemberAuthorization", () => {
 
 describe("resolveWorkspaceRealtimeAudience", () => {
   test("returns only live sessions whose users currently access the target workspace", async () => {
-    const candidates = [
-      liveOwnerSessionId,
-      expiredOwnerSessionId,
-      cappedOwnerSessionId,
-      liveMemberSessionId,
+    const connections = [
+      ...[liveOwnerSessionId, expiredOwnerSessionId, cappedOwnerSessionId].map(
+        (sessionId) => ({
+          sessionId,
+          organizationId: orgFull,
+          userId: ownerInFull,
+        }),
+      ),
+      {
+        sessionId: liveMemberSessionId,
+        organizationId: orgFull,
+        userId: memberInFull,
+      },
     ];
+    const event = resourceSetUpdatedRealtimeEvent(
+      RESOURCE_TYPE.ENTITY,
+    ).toJSON();
 
     const clientMatterAudience = await resolveWorkspaceRealtimeAudience(
-      { sessionIds: candidates, workspaceId: clientWorkspaceId },
+      { connections, workspaceId: clientWorkspaceId, event },
       testDb,
     );
     const personalMatterAudience = await resolveWorkspaceRealtimeAudience(
-      { sessionIds: candidates, workspaceId: memberPersonalWorkspaceId },
+      { connections, workspaceId: memberPersonalWorkspaceId, event },
       testDb,
     );
 
-    expect(clientMatterAudience).toEqual(new Set([liveOwnerSessionId]));
-    expect(personalMatterAudience).toEqual(new Set([liveMemberSessionId]));
+    expect([...clientMatterAudience.keys()]).toEqual([liveOwnerSessionId]);
+    expect(clientMatterAudience.get(liveOwnerSessionId)).toEqual({
+      organizationId: orgFull,
+      userId: ownerInFull,
+      delivery: { type: "deliver", event },
+    });
+    expect([...personalMatterAudience.keys()]).toEqual([liveMemberSessionId]);
+    expect(personalMatterAudience.get(liveMemberSessionId)).toEqual({
+      organizationId: orgFull,
+      userId: memberInFull,
+      delivery: { type: "deliver", event },
+    });
   });
 });
 

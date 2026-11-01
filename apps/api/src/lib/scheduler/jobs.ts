@@ -1,10 +1,8 @@
 import { panic } from "better-result";
-import { and, eq, gt, notInArray, or, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
-import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
@@ -21,13 +19,8 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { LEGISLATION_FACET_REFRESH_INTERVAL_MS } from "@/api/lib/legal-search/legislation-facet-refresh-interval";
 import { logger } from "@/api/lib/observability/logger";
-import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
+import { readReviewOrganizationConfig } from "@/api/lib/review-organization/read-config";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
-import {
-  REGISTERED_SCHEDULER_TASK_NAMES,
-  type RegisteredSchedulerTaskName,
-} from "@/api/lib/scheduler/registry";
-import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { SWEEP_ACTION_COSTS_TASK } from "@/api/lib/scheduler/tasks/action-cost-retention";
 import { BACKFILL_AGENT_CLIENT_STORAGE_TASK } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
 import { BACKFILL_HEARTBEAT_TASK } from "@/api/lib/scheduler/tasks/backfill-heartbeat";
@@ -72,6 +65,7 @@ import { MEMORY_CURATOR_TASK } from "@/api/lib/scheduler/tasks/memory-curator";
 import { MEMORY_EXTRACTOR_TASK } from "@/api/lib/scheduler/tasks/memory-extractor";
 import { RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK } from "@/api/lib/scheduler/tasks/organization-access-state-reconcile";
 import { RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK } from "@/api/lib/scheduler/tasks/organization-file-reservation-reconcile";
+import { RECOVERY_SCAN_IDENTITIES } from "@/api/lib/scheduler/tasks/recovery-scan-identity";
 import { SWEEP_REGISTRATIONS_TASK } from "@/api/lib/scheduler/tasks/registration-retention";
 import { RECONCILE_REPORT_EXPORTS_TASK } from "@/api/lib/scheduler/tasks/report-export-reconcile";
 import { SWEEP_REQUEST_RECEIPTS_TASK } from "@/api/lib/scheduler/tasks/request-receipt-retention";
@@ -80,6 +74,7 @@ import { DRAIN_SANCTIONS_MONITORING_TASK } from "@/api/lib/scheduler/tasks/sanct
 import { BACKFILL_SANCTIONS_MONITORING_TASK } from "@/api/lib/scheduler/tasks/sanctions-monitoring-backfill";
 import { REFRESH_SANCTIONS_SOURCES_TASK } from "@/api/lib/scheduler/tasks/sanctions-refresh";
 import { AUDIT_SCHEDULER_PAUSES_TASK } from "@/api/lib/scheduler/tasks/scheduler-pause-audit";
+import { RECOVER_SCOUT_EMISSION_TASK } from "@/api/lib/scheduler/tasks/scout-emission-recovery";
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
@@ -87,34 +82,17 @@ import { REFRESH_STATUTE_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/s
 import { RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK } from "@/api/lib/scheduler/tasks/style-set-package-cleanup-reconcile";
 import { PURGE_SYSTEM_AUDIT_RUNS_TASK } from "@/api/lib/scheduler/tasks/system-audit-retention";
 import { CLEAN_TEMPLATE_DELETION_OBJECTS_TASK } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
+import { RECOVER_UPLOAD_FLOW_TRIGGERS_TASK } from "@/api/lib/scheduler/tasks/upload-flow-trigger-recovery";
 import { WORK_ATTENTION_SCOUT_TASK } from "@/api/lib/scheduler/tasks/work-attention-scout";
 import { BACKFILL_WORK_OBLIGATIONS_TASK } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
-
-type SchedulerJobDefinition = {
-  id: string;
-  task: RegisteredSchedulerTaskName;
-  description: string;
-  schedule: SchedulerSchedule;
-  payload?: SchedulerPayload | null;
-  payloadUpdate?: "preserve" | "replace";
-  enabled?: boolean;
-  /**
-   * When a job's row is first created. `after-interval` (the default) waits
-   * one full interval; `on-registration` is due at once, for a job whose
-   * output readers depend on (a snapshot) and which must not leave a fresh
-   * deployment without it for a whole interval. Either way the runner's claim
-   * decides which replica runs it, so only one does.
-   */
-  firstRun?: "after-interval" | "on-registration";
-};
-
-/** The `nextRunAt` a job row is created with. */
-export const initialNextRunAt = (
-  { firstRun = "after-interval", schedule }: SchedulerJobDefinition,
-  now: Date,
-): Date =>
-  firstRun === "on-registration" ? now : computeNextRunAt(schedule, now);
+import {
+  boundPlatformSchedulerPauses,
+  registerOneShotSchedulerJob,
+  retireUnknownPlatformSchedulerJobs,
+  upsertSchedulerJob,
+} from "@/api/lib/scheduler/upsert-job";
+import type { SchedulerJobDefinition } from "@/api/lib/scheduler/upsert-job";
 
 /**
  * Ends every pause beyond the 72-hour maximum at the maximum and clears a
@@ -127,24 +105,8 @@ export const initialNextRunAt = (
 export const boundSchedulerPauses = async (
   db: SchedulerDb,
 ): Promise<string[]> => {
-  const negative = sql`'-infinity'::timestamptz`;
   // audit: skip — scheduler system state; each bounded job is logged below.
-  const changed = await db
-    .update(schedulerJobs)
-    .set({
-      pausedUntil: sql`CASE WHEN ${schedulerJobs.pausedUntil} = ${negative}
-        THEN NULL ELSE now() + interval '72 hours' END`,
-    })
-    .where(
-      or(
-        gt(schedulerJobs.pausedUntil, sql`now() + interval '72 hours'`),
-        eq(schedulerJobs.pausedUntil, negative),
-      ),
-    )
-    .returning({
-      id: schedulerJobs.id,
-      pausedUntil: schedulerJobs.pausedUntil,
-    });
+  const changed = await boundPlatformSchedulerPauses(db);
   const bounded = changed
     .filter(({ pausedUntil }) => pausedUntil !== null)
     .map(({ id }) => id);
@@ -157,64 +119,7 @@ export const boundSchedulerPauses = async (
 export const ensureSchedulerJob = async (
   definition: SchedulerJobDefinition,
 ): Promise<void> => {
-  await upsertSchedulerJob(definition, rootDb);
-};
-
-export const upsertSchedulerJob = async (
-  definition: SchedulerJobDefinition,
-  db: SchedulerDb,
-): Promise<void> => {
-  const {
-    description,
-    enabled = true,
-    id,
-    payload = null,
-    payloadUpdate = "replace",
-    schedule,
-    task,
-  } = definition;
-  const now = new Date();
-  const nextRunAt = computeNextRunAt(schedule, now);
-  const [existingJob] = await db
-    .select({
-      schedule: schedulerJobs.schedule,
-      task: schedulerJobs.task,
-    })
-    .from(schedulerJobs)
-    .where(eq(schedulerJobs.id, id))
-    .limit(1);
-  const shouldRefreshNextRunAt =
-    !existingJob ||
-    existingJob.task !== task ||
-    !sameSchedule(existingJob.schedule, schedule);
-
-  await db
-    .insert(schedulerJobs)
-    .values({
-      description,
-      enabled,
-      id,
-      nextRunAt: initialNextRunAt(definition, now),
-      payload,
-      schedule,
-      task,
-    })
-    .onConflictDoUpdate({
-      target: schedulerJobs.id,
-      set: {
-        description,
-        enabled,
-        ...(shouldRefreshNextRunAt && { nextRunAt }),
-        ...(payloadUpdate === "replace" && { payload }),
-        schedule,
-        task,
-      },
-    });
-};
-
-/** Drop one job's row, the counterpart of `ensureSchedulerJob`. */
-export const removeSchedulerJob = async (id: string): Promise<void> => {
-  await rootDb.delete(schedulerJobs).where(eq(schedulerJobs.id, id));
+  await upsertSchedulerJob({ ownership: "platform", definition, db: rootDb });
 };
 
 const ensureOneShotSchedulerJob = async ({
@@ -224,41 +129,17 @@ const ensureOneShotSchedulerJob = async ({
   schedule,
   task,
 }: Omit<SchedulerJobDefinition, "enabled">): Promise<void> => {
-  await rootDb
-    .insert(schedulerJobs)
-    .values({
+  await registerOneShotSchedulerJob({
+    db: rootDb,
+    definition: {
       description,
       enabled: true,
       id,
-      nextRunAt: computeNextRunAt(schedule),
       payload,
       schedule,
       task,
-    })
-    .onConflictDoNothing({ target: schedulerJobs.id });
-};
-
-const sameSchedule = (
-  left: SchedulerSchedule,
-  right: SchedulerSchedule,
-): boolean => {
-  if (left.type !== right.type) {
-    return false;
-  }
-
-  if (left.type === "interval" && right.type === "interval") {
-    return left.everyMs === right.everyMs;
-  }
-
-  if (left.type !== "daily" || right.type !== "daily") {
-    return false;
-  }
-
-  return (
-    left.hour === right.hour &&
-    left.minute === right.minute &&
-    left.timeZone === right.timeZone
-  );
+    },
+  });
 };
 
 /**
@@ -635,6 +516,22 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
+    description: "Recover deferred signal emissions for enrolled recipients",
+    id: RECOVERY_SCAN_IDENTITIES.scout.jobId,
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: RECOVER_SCOUT_EMISSION_TASK,
+    reads: { budget: "scheduled.signals.recoverScoutEmission" },
+  },
+  {
+    description: "Recover deferred upload flow triggers for enrolled authors",
+    id: RECOVERY_SCAN_IDENTITIES.upload.jobId,
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: RECOVER_UPLOAD_FLOW_TRIGGERS_TASK,
+    reads: { budget: "scheduled.flows.recoverUploadTriggers" },
+  },
+  {
     description: "Re-enqueue flow-run steps no queued job owns anymore",
     id: "flows.reconcileOrphanRuns.fiveMinute",
     mode: "recurring",
@@ -907,16 +804,7 @@ export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
   // One guarded update, so a concurrent change to a row's task or enabled
   // state cannot be overwritten from a stale read; only rows the update
   // actually changed are logged.
-  const retired = await rootDb
-    .update(schedulerJobs)
-    .set({ enabled: false })
-    .where(
-      and(
-        eq(schedulerJobs.enabled, true),
-        notInArray(schedulerJobs.task, [...REGISTERED_SCHEDULER_TASK_NAMES]),
-      ),
-    )
-    .returning({ id: schedulerJobs.id, task: schedulerJobs.task });
+  const retired = await retireUnknownPlatformSchedulerJobs(rootDb);
   for (const { id, task } of retired) {
     logger.warn("scheduler.job_retired", { jobId: id, task });
   }

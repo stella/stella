@@ -88,6 +88,30 @@ export const readConstraintCompletion = async ({
   if (backfillName === undefined) {
     return { type: "incomplete", reason };
   }
+  return await readBackfillCheckpointCompletion({
+    connection,
+    backfillName,
+    repairName,
+    reason,
+  });
+};
+
+type BackfillCheckpointCompletionOptions = {
+  connection: Pick<OnlineMigrationConnection, "query">;
+  backfillName: string;
+  repairName: string;
+  reason: string;
+};
+
+/** A durable phase checkpoint distinguishes resumable work from an unattempted phase. */
+export const readBackfillCheckpointCompletion = async ({
+  connection,
+  backfillName,
+  repairName,
+  reason,
+}: BackfillCheckpointCompletionOptions): Promise<
+  Exclude<OnlineRepairCompletion, { type: "complete" }>
+> => {
   const checkpoint = (
     await connection.query(
       "SELECT cursor, batch FROM public.database_backfill_states WHERE name = $1",

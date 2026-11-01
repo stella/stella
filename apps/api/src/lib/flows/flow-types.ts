@@ -34,6 +34,27 @@ export type {
 
 // -- Domain constants --
 
+/** Outlasts both step attempts, their timeout and retry backoff. */
+export const FLOW_STEP_LEASE_MS = 15 * 60 * 1000;
+
+export const FLOW_RUN_RECOVERY_STATES = [
+  "actor-removed",
+  "completion-notice-pending",
+] as const;
+
+export const FLOW_UPLOAD_TRIGGER_INTENT_STATUSES = [
+  "pending",
+  "awaiting_grant",
+  "skipped",
+] as const;
+export const FLOW_UPLOAD_TRIGGER_SKIP_REASONS = [
+  "definition_disabled",
+  "actor_missing",
+  "trigger_no_longer_matches",
+] as const;
+export type FlowUploadTriggerSkipReason =
+  (typeof FLOW_UPLOAD_TRIGGER_SKIP_REASONS)[number];
+
 /** Upper bound on steps per definition (also enforced in valibot). */
 export const MAX_FLOW_STEPS = 20;
 
@@ -137,7 +158,8 @@ true satisfies [MissingFlowTriggerType, ExtraFlowTriggerType] extends [
 /** What actually initiated a given run (recorded on the run row). */
 export type FlowTriggerSource =
   | { type: "manual"; userId: string }
-  | { type: "schedule" }
+  // Persisted runs created before due-slot replay protection have no identity.
+  | { type: "schedule"; dueSlot?: string }
   | { type: "file-upload"; entityId: string };
 
 type MissingFlowTriggerSourceType = Exclude<

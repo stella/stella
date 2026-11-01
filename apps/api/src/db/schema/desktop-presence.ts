@@ -1,4 +1,7 @@
-import { reviewResetOwnerPolicies } from "../review-reset-policies";
+import {
+  registeredReviewResetPolicies,
+  reviewResetOwnerPolicies,
+} from "../review-reset-policies";
 import {
   organization,
   p,
@@ -36,5 +39,7 @@ export const desktopPresence = p.pgTable(
       .on(table.userId, table.organizationId, table.lastSeenAt.desc()),
     p.check("desktop_presence_protocol_check", sql`${table.protocol} >= 0`),
     ...userOrganizationPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

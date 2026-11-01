@@ -5,6 +5,8 @@ import type {
 import { DESKTOP_HANDOFF_FAILURE_REASONS } from "@stll/api-contract/desktop-handoff";
 import type { DocumentTranslationSourceLanguageCode } from "@stll/api-contract/document-translation";
 
+import { ENTITY_FEATURE_OWNERS } from "@/api/db/feature-owner";
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import { DESKTOP_EDIT_FILE_TYPES } from "@/api/lib/desktop-edit-file-types";
 import {
   FOLIO_COLLAB_CHECKPOINT_MAX_BYTES,
@@ -23,6 +25,9 @@ import {
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
+import { memberExchangeOffboardingPolicies } from "../member-exchange-policies";
+import { registeredReviewResetPolicies } from "../review-reset-policies";
+import { FOLIO_COLLAB_TOKEN_OFFBOARDING_ROLE_NAME } from "../role-names";
 import {
   deletionCleanupConstraints,
   deletionCleanupRetryColumns,
@@ -85,6 +90,11 @@ export const entities = p.pgTable(
   "entities",
   {
     ...entityFeatureGateColumns(),
+    /** Owner assigned by the creating operation before any activity is recorded. */
+    featureOwner: p
+      .text("feature_owner", { enum: ENTITY_FEATURE_OWNERS })
+      .notNull()
+      .default("shared"),
     id: pUuid<"entity">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -149,6 +159,7 @@ export const entities = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.index("entities_workspace_id_idx").on(table.workspaceId),
     p
       .index("entities_ws_created_at_id_idx")
@@ -196,6 +207,13 @@ export const entities = p.pgTable(
       .on(table.workspaceId, table.dueDate)
       .where(isNotNull(table.dueDate)),
     ...entityFeatureGateChecks(table),
+    p.check(
+      "entities_feature_owner_check",
+      sql`${table.featureOwner} IN (${sql.join(
+        ENTITY_FEATURE_OWNERS.map((owner) => sql`${owner}`),
+        sql`, `,
+      )})`.inlineParams(),
+    ),
     p.check(
       "entities_list_item_type_task_only",
       sql`${table.listItemType} IS NULL OR (${table.kind} = 'task' AND ${table.listItemType} IN (${sql.join(LIST_ITEM_TYPE_SQL_VALUES, sql`, `)}))`,
@@ -327,6 +345,7 @@ export const taskAssignees = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...entityFeatureGateChecks(table),
     p.index("task_assignees_workspace_id_idx").on(table.workspaceId),
     p.index("task_assignees_entity_id_idx").on(table.entityId),
@@ -447,6 +466,7 @@ export const entityVersions = p.pgTable(
     deletedBy: p.text("deleted_by"),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("entity_versions_id_entity_ws_uidx")
@@ -538,6 +558,8 @@ export const entityVersionAiSummaries = p.pgTable(
         [table.entityId, { target: "entities", kind: "owned-content" }],
       ]),
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -609,6 +631,7 @@ export const desktopEditSessions = p.pgTable(
     ),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...entityFeatureGateChecks(table),
     p.index("desktop_edit_sessions_workspace_id_idx").on(table.workspaceId),
     p.index("desktop_edit_sessions_entity_id_idx").on(table.entityId),
@@ -717,6 +740,8 @@ export const desktopEditHandoffs = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...systemScopePolicies(table),
+    ...memberExchangeOffboardingPolicies(table),
     ...entityFeatureGateChecks(table),
     p.check(
       "desktop_edit_handoffs_failure_check",
@@ -992,6 +1017,42 @@ export const folioCollabRoomTokens = p.pgTable(
       "folio_collab_room_tokens_generation_check",
       sql`${table.generation} >= 0`,
     ),
+    p.pgPolicy("folio_collab_room_tokens_member_offboarding_select", {
+      for: "select",
+      to: FOLIO_COLLAB_TOKEN_OFFBOARDING_ROLE_NAME,
+      using: sql`${table.sourceSessionId} IS NULL
+        AND ${table.userId} = nullif(current_setting('app.member_removal_user_id', true), '')
+        AND ${table.workspaceId} = ANY(coalesce(nullif(current_setting('app.workspace_ids', true), ''), '{}')::uuid[])
+        AND EXISTS (
+          SELECT 1 FROM public.workspaces w
+          WHERE w.id = ${table.workspaceId}
+            AND w.organization_id = nullif(current_setting('app.organization_id', true), '')
+        )
+        AND EXISTS (
+          SELECT 1 FROM public.member m
+          WHERE m.id = nullif(current_setting('app.member_removal_member_id', true), '')
+            AND m.organization_id = nullif(current_setting('app.organization_id', true), '')
+            AND m.user_id = nullif(current_setting('app.member_removal_user_id', true), '')
+        )`,
+    }),
+    p.pgPolicy("folio_collab_room_tokens_member_offboarding_delete", {
+      for: "delete",
+      to: FOLIO_COLLAB_TOKEN_OFFBOARDING_ROLE_NAME,
+      using: sql`${table.sourceSessionId} IS NULL
+        AND ${table.userId} = nullif(current_setting('app.member_removal_user_id', true), '')
+        AND ${table.workspaceId} = ANY(coalesce(nullif(current_setting('app.workspace_ids', true), ''), '{}')::uuid[])
+        AND EXISTS (
+          SELECT 1 FROM public.workspaces w
+          WHERE w.id = ${table.workspaceId}
+            AND w.organization_id = nullif(current_setting('app.organization_id', true), '')
+        )
+        AND EXISTS (
+          SELECT 1 FROM public.member m
+          WHERE m.id = nullif(current_setting('app.member_removal_member_id', true), '')
+            AND m.organization_id = nullif(current_setting('app.organization_id', true), '')
+            AND m.user_id = nullif(current_setting('app.member_removal_user_id', true), '')
+        )`,
+    }),
     ...wsPolicies({
       columns: table,
       references: new Map([
@@ -1327,6 +1388,8 @@ export const pendingUploads = p.pgTable(
       })
       .onDelete("cascade"),
     ...wsOrganizationPolicies("pending_uploads", { columns: table }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -1515,6 +1578,7 @@ export const fields = p.pgTable(
     attempt: p.smallint("attempt"),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("fields_property_id_entity_version_id_key")

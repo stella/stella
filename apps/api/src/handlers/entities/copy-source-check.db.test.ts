@@ -17,7 +17,7 @@ import {
   timeEntries,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -225,6 +225,12 @@ const seed = async (folder: boolean) => {
         route:
           "/v1/entities/:workspaceId/copy-to-workspace" satisfies ApiRoutePath,
         safeDb,
+        scopedDb: createScopedDb(
+          db,
+          [sourceWorkspaceId, targetWorkspaceId],
+          organizationId,
+          userId,
+        ),
         recordAuditEvent: noAudit,
         createAuditRecorder: () => noAudit,
         getWorkspaceAccess: async () => ({

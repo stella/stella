@@ -8,6 +8,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
+import { writeSearchSemanticTimestampsState } from "@/api/lib/scheduler/upsert-job";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 
 export const REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK =
@@ -167,18 +168,17 @@ export const repairSearchSemanticTimestamps = async ({
       // Old application instances can still write reindex time during a
       // rolling deployment. Persist a quiet-window start, then require two
       // complete clean passes before disabling this one-shot repair.
-      await db.execute(sql`
-        UPDATE scheduler_jobs
-        SET payload = jsonb_build_object(
-          'pass', ${REPAIR_PASS.verify}::text,
-          'dirty', false,
-          'cleanPasses', 0,
-          'passStartedAt', ${nowIso}::text,
-          'quietSince', ${nowIso}::text
-        )
-        WHERE id = ${jobId}
-          AND locked_by = ${leaseToken}
-      `);
+      await writeSearchSemanticTimestampsState({
+        db,
+        jobId,
+        leaseToken,
+        state: {
+          type: "restart-verification",
+          cleanPasses: 0,
+          passStartedAt: nowIso,
+          quietSince: nowIso,
+        },
+      });
       return { status: "restart" };
     }
 
@@ -197,29 +197,28 @@ export const repairSearchSemanticTimestamps = async ({
       cleanPasses < REQUIRED_CLEAN_VERIFICATION_PASSES ||
       !passStartedAfterQuiet
     ) {
-      await db.execute(sql`
-        UPDATE scheduler_jobs
-        SET payload = jsonb_build_object(
-          'pass', ${REPAIR_PASS.verify}::text,
-          'dirty', false,
-          'cleanPasses', ${cleanPasses}::int,
-          'passStartedAt', ${nowIso}::text,
-          'quietSince', ${quietSince}::text
-        )
-        WHERE id = ${jobId}
-          AND locked_by = ${leaseToken}
-      `);
+      await writeSearchSemanticTimestampsState({
+        db,
+        jobId,
+        leaseToken,
+        state: {
+          type: "restart-verification",
+          cleanPasses,
+          passStartedAt: nowIso,
+          quietSince,
+        },
+      });
       return { status: "restart" };
     }
 
     // audit: skip — this only disables a versioned repair of a derived search
     // projection; scheduler_job_runs is the durable operator trail.
-    await db.execute(sql`
-      UPDATE scheduler_jobs
-      SET enabled = false
-      WHERE id = ${jobId}
-        AND locked_by = ${leaseToken}
-    `);
+    await writeSearchSemanticTimestampsState({
+      db,
+      jobId,
+      leaseToken,
+      state: { type: "complete" },
+    });
     return { status: "complete" };
   }
 
@@ -241,19 +240,17 @@ export const repairSearchSemanticTimestamps = async ({
 
     // Mark the pass dirty before external projection work. A crash can replay
     // the page, but cannot lose the quiet-window reset.
-    await db.execute(sql`
-      UPDATE scheduler_jobs
-      SET payload = jsonb_build_object(
-        'cursor', ${state.cursor}::text,
-        'pass', ${REPAIR_PASS.verify}::text,
-        'dirty', true,
-        'cleanPasses', 0,
-        'passStartedAt', ${state.passStartedAt}::text,
-        'quietSince', ${nowIso}::text
-      )
-      WHERE id = ${jobId}
-        AND locked_by = ${leaseToken}
-    `);
+    await writeSearchSemanticTimestampsState({
+      db,
+      jobId,
+      leaseToken,
+      state: {
+        type: "dirty-verification",
+        cursor: state.cursor,
+        passStartedAt: state.passStartedAt,
+        quietSince: nowIso,
+      },
+    });
   }
 
   let nextReindexIndex = 0;
@@ -303,31 +300,28 @@ export const repairSearchSemanticTimestamps = async ({
   }
 
   if (state.pass === REPAIR_PASS.verify) {
-    await db.execute(sql`
-      UPDATE scheduler_jobs
-      SET payload = jsonb_build_object(
-        'cursor', ${last.entityId}::text,
-        'pass', ${REPAIR_PASS.verify}::text,
-        'dirty', ${verificationDirty}::boolean,
-        'cleanPasses', ${verificationDirty ? 0 : state.cleanPasses}::int,
-        'passStartedAt', ${state.passStartedAt}::text,
-        'quietSince', ${quietSince}::text
-      )
-      WHERE id = ${jobId}
-        AND locked_by = ${leaseToken}
-    `);
+    await writeSearchSemanticTimestampsState({
+      db,
+      jobId,
+      leaseToken,
+      state: {
+        type: "checkpoint-verification",
+        cursor: last.entityId,
+        dirty: verificationDirty,
+        cleanPasses: verificationDirty ? 0 : state.cleanPasses,
+        passStartedAt: state.passStartedAt,
+        quietSince,
+      },
+    });
   } else {
     // Checkpoint last: a replay after the projection update but before this
     // write safely finds no mismatch and advances again.
-    await db.execute(sql`
-      UPDATE scheduler_jobs
-      SET payload = jsonb_build_object(
-        'cursor', ${last.entityId}::text,
-        'pass', ${REPAIR_PASS.repair}::text
-      )
-      WHERE id = ${jobId}
-        AND locked_by = ${leaseToken}
-    `);
+    await writeSearchSemanticTimestampsState({
+      db,
+      jobId,
+      leaseToken,
+      state: { type: "checkpoint-repair", cursor: last.entityId },
+    });
   }
 
   return {

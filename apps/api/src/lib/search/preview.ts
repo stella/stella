@@ -8,6 +8,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { normalizeSearchableChatMessageContent } from "@/api/lib/search/chat-search-text";
@@ -502,6 +503,7 @@ export const buildSearchPreviewQuery = ({
         WHERE sd.entity_id = ${resultId}
           AND sd.kind = ${type}
           AND sd.organization_id = ${organizationId}
+          AND ${flowOwnedEntityVisibilitySql({ organizationId, userId, entityId: sql`sd.entity_id`, workspaceId: sql`sd.workspace_id` })}
           ${previewTextFilter(sql`sd.tsv`, tsQuery)}
           ${searchDocumentsAccessSql({
             ...workspaceScope,

@@ -42,13 +42,13 @@ import {
 } from "@/api/db/shared-pool-timeouts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
+import { CASE_LAW_REPLAY_BATCH_TRANSITIONS } from "@/api/lib/case-law/replay-batch-transitions";
 import {
   buildCaseLawReplayCompactionQuery,
   lockCaseLawDecisionRows,
   lockCaseLawReplayBatch,
   lockCaseLawReplayPendingBatch,
 } from "@/api/lib/db/aggregate-lock";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionLifecycle } from "@/api/lib/db/transitions";
 import { escapeLike } from "@/api/lib/escape-like";
 import { recordReplayMaintenanceAuditEvent } from "@/api/lib/legal-search/case-law-replay-audit";
@@ -966,7 +966,7 @@ const readmitReplayBatch = async (
   if (previous.readmissions >= BACKGROUND_REPLAY_LIMITS.maxRowReadmissions) {
     const transition = await transitionLifecycle({
       tx,
-      spec: TRANSITIONS.caseLawReplayBatches,
+      spec: CASE_LAW_REPLAY_BATCH_TRANSITIONS,
       id,
       moves: {
         status: { from: ["completed", "superseded"], to: "retry-terminal" },
@@ -1013,7 +1013,7 @@ const readmitReplayBatch = async (
   const readmissions = previous.readmissions + 1;
   const transition = await transitionLifecycle({
     tx,
-    spec: TRANSITIONS.caseLawReplayBatches,
+    spec: CASE_LAW_REPLAY_BATCH_TRANSITIONS,
     id,
     moves: {
       status: { from: ["completed", "superseded"], to: "reserved" },
@@ -1544,7 +1544,7 @@ const recordFailure = async (
       // The database stamp wins over retry exhaustion, including the last attempt.
       const transition = await transitionLifecycle({
         tx,
-        spec: TRANSITIONS.caseLawReplayBatches,
+        spec: CASE_LAW_REPLAY_BATCH_TRANSITIONS,
         id: batch.id,
         moves: {
           status: { from: ["reserved"], to: "completed" },

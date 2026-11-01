@@ -1,10 +1,13 @@
 import { DESKTOP_HANDOFF_FAILURE_REASONS } from "@stll/api-contract/desktop-handoff";
 
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
+
 import {
   entityFeatureGateChecks,
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
+import { memberExchangeOffboardingPolicies } from "../member-exchange-policies";
 import {
   jsonb,
   p,
@@ -181,6 +184,8 @@ export const pdfSigningSessions = p.pgTable(
     closedAt: timestamptz("closed_at"),
   },
   (table) => [
+    ...systemScopePolicies(table),
+    ...memberExchangeOffboardingPolicies(table),
     ...entityFeatureGateChecks(table),
     p.index("pdf_signing_sessions_workspace_id_idx").on(table.workspaceId),
     p.index("pdf_signing_sessions_entity_id_idx").on(table.entityId),

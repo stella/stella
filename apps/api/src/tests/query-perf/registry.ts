@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { compareCodeUnit } from "@stll/collation";
 
 import type {
@@ -9,6 +11,10 @@ import type { CorpusReadBudgetSeed } from "./corpus-seed";
 import corpusStatements from "./corpus-statement-entries/registry.gen";
 import type { ScheduledJobMeasurement } from "./measurement-definition";
 import readBudgetProfiles from "./profile-entries/registry.gen";
+import {
+  RECOVERY_READ_SIZES,
+  type RecoveryScenario,
+} from "./recovery-measurement";
 import scheduledJobMeasurements from "./scheduled-job-entries/registry.gen";
 import type { seedQueryPerf } from "./seed";
 import tenantStatements from "./tenant-statement-entries/registry.gen";
@@ -40,6 +46,35 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
 export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
   Record<string, ScheduledJobMeasurement>
 > = scheduledJobMeasurements;
+
+export type RecoveryMeasurementRun = {
+  jobId: string;
+  task: string;
+  scenario: RecoveryScenario;
+};
+
+export const recoveryMeasurementRuns = (): RecoveryMeasurementRun[] =>
+  Object.entries(SCHEDULED_JOB_MEASUREMENTS).flatMap(([jobId, measurement]) => {
+    switch (measurement.type) {
+      case "case-law":
+      case "request-receipts":
+        return [];
+      case "recovery":
+        return measurement.scenarios.flatMap((scenario) =>
+          RECOVERY_READ_SIZES.map((rows) => ({
+            jobId,
+            task: measurement.task,
+            scenario: { ...scenario, rows } satisfies RecoveryScenario,
+          })),
+        );
+      default: {
+        const unexpected: never = measurement;
+        return panic(
+          `Unknown scheduled measurement kind ${String(unexpected)}`,
+        );
+      }
+    }
+  });
 
 type DeclaredJobReads = {
   id: string;

@@ -23,6 +23,7 @@ const AGENDA_TASK_COLUMNS = {
 
 const UNPROJECTED_AGENDA_COLUMNS = [
   "entityFeatureGate", // RLS state is internal to the gate.
+  "featureOwner", // Retained feature ownership is internal to visibility checks.
   "workspaceId", // Already supplied by the authorized route.
   "kind", // The query fixes the kind to tasks.
   "listItemType", // Only filters agenda rows; never returned.

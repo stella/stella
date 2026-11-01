@@ -13,7 +13,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -32,16 +32,19 @@ import {
   createFileKey,
   createOcrSearchablePdfKey,
 } from "@/api/lib/files/utils";
+import {
+  admitFlowReviewTaskDeletion,
+  FLOW_TASK_FEATURE_ACCESS,
+} from "@/api/lib/flows/review-gate-task";
 import { collectFolioCollabStoredRoomFiles } from "@/api/lib/folio-collab-rooms";
 import { LIMITS } from "@/api/lib/limits";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   forEachOcrDerivativePage,
   ocrDerivativeCursorFilter,
   ocrDerivativePageOrder,
 } from "@/api/lib/ocr-derivative-pages";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { getSearchMaintenance } from "@/api/lib/search/provider";
+import { syncWorkspaceSearchActivity } from "@/api/lib/search/workspace-search-activity";
 
 import { selectCanonicalFileContents } from "./delete-file-snapshot";
 
@@ -56,6 +59,7 @@ const deleteEntitiesBodySchema = v.object({
 type DeleteEntitiesBodySchema = v.InferOutput<typeof deleteEntitiesBodySchema>;
 
 export type DeleteEntitiesHandlerProps = {
+  userId: SafeId<"user">;
   enqueueCleanup?: (
     requestId: SafeId<"entityDeletionCleanupRequest">,
   ) => Promise<void>;
@@ -70,6 +74,7 @@ export const deleteEntitiesHandler = async function* ({
   enqueueCleanup = enqueueEntityDeletionCleanup,
   safeDb,
   organizationId,
+  userId,
   workspaceId,
   recordAuditEvent,
   body,
@@ -124,6 +129,7 @@ export const deleteEntitiesHandler = async function* ({
       const lockedEntities = await tx
         .select({
           currentVersionId: entities.currentVersionId,
+          featureOwner: entities.featureOwner,
           id: entities.id,
           readOnly: entities.readOnly,
         })
@@ -147,6 +153,15 @@ export const deleteEntitiesHandler = async function* ({
         };
       }
 
+      const admission = await admitFlowReviewTaskDeletion(tx, {
+        workspaceId,
+        taskEntityIds: body.entityIds,
+        userId,
+      });
+      if (admission.isErr()) {
+        return { status: "rejected" as const, error: admission.error };
+      }
+
       const removalState = await validateEntityRemovalState({
         tx,
         workspaceId,
@@ -160,6 +175,10 @@ export const deleteEntitiesHandler = async function* ({
           error: removalState.error,
         };
       }
+
+      const featureOwnerByEntityId = new Map(
+        lockedEntities.map(({ id, featureOwner }) => [id, featureOwner]),
+      );
 
       const entityVersionIds = tx
         .select({ id: entityVersions.id })
@@ -286,6 +305,8 @@ export const deleteEntitiesHandler = async function* ({
         .set({ lastActivityAt: new Date() })
         .where(eq(workspaces.id, workspaceId));
 
+      await syncWorkspaceSearchActivity(workspaceId, tx);
+
       await recordAuditEvent(
         tx,
         deleted.map((entity) => {
@@ -294,6 +315,7 @@ export const deleteEntitiesHandler = async function* ({
             action: AUDIT_ACTION.DELETE,
             resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
             resourceId: entity.id,
+            featureOwner: featureOwnerByEntityId.get(entity.id) ?? "unknown",
             changes: {
               deleted: {
                 old: {
@@ -317,14 +339,12 @@ export const deleteEntitiesHandler = async function* ({
       return {
         status: "deleted" as const,
         cleanupRequestIds,
-        entities: deleted,
       };
     }),
   );
   if (txOutcome.status === "rejected") {
     return Result.err(txOutcome.error);
   }
-  const deletedEntities = txOutcome.entities;
   // Accelerate only a bounded prefix. The requests are already committed and
   // the reconciler claims every `pending` row on its own schedule, so a
   // deletion that produced many pages must not fan out an unbounded number of
@@ -334,18 +354,6 @@ export const deleteEntitiesHandler = async function* ({
     enqueueCleanup,
     requestIds: txOutcome.cleanupRequestIds,
   });
-
-  // Explicit removal for non-PG providers (CASCADE handles PG)
-  const provider = getSearchMaintenance();
-  for (const entity of deletedEntities) {
-    provider
-      .removeEntity({ entityId: entity.id, workspaceId })
-      .catch(
-        createErrorCapture(
-          handlerErrorContext("deleteEntitiesHandler.rejection"),
-        ),
-      );
-  }
 
   return Result.ok({});
 };
@@ -359,6 +367,7 @@ const config = {
     "entities.versions.delete this is a real delete, not a tombstone.",
   permissions: { entity: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   realtime: entityFileRealtimeUpdates,
   mcp: { type: "tool", name: "delete_document" },
   body: deleteEntitiesBodySchema,
@@ -366,10 +375,18 @@ const config = {
 
 const deleteEntities = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    body,
+    recordAuditEvent,
+    user,
+  }) {
     return yield* deleteEntitiesHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
+      userId: user.id,
       workspaceId,
       recordAuditEvent,
       body,

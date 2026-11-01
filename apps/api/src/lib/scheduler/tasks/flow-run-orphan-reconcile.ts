@@ -1,17 +1,12 @@
 import { Temporal } from "@stll/time";
 
 import { reconcileOrphanedFlowRuns } from "@/api/lib/flows/flow-run-worker";
+import { FLOW_STEP_LEASE_MS } from "@/api/lib/flows/flow-types";
+import { repairFlowScheduleTriggers } from "@/api/lib/flows/sync-flow-schedule-trigger";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const RECONCILE_FLOW_RUN_ORPHANS_TASK =
   "flows.reconcileOrphanRuns" as const;
-
-/**
- * How long a `pending`/`running` run may sit before its step job counts as
- * lost. It has to outlast one step's legitimate worst case: the 4-minute
- * per-job timeout, both BullMQ attempts, and the backoff between them.
- */
-const STALL_WINDOW_MS = 15 * 60 * 1000;
 
 /**
  * Re-enqueue flow-run steps no queued job owns anymore.
@@ -32,13 +27,15 @@ export const reconcileFlowRunOrphans: SchedulerTask = async ({
     return;
   }
 
+  await repairFlowScheduleTriggers({ database: db, signal });
+
   // audit: skip — re-drives derived queue state; scheduler_job_runs is the
   // durable execution trail.
   await reconcileOrphanedFlowRuns(
     {
       signal,
       stalledBefore: new Date(
-        Temporal.Now.instant().epochMilliseconds - STALL_WINDOW_MS,
+        Temporal.Now.instant().epochMilliseconds - FLOW_STEP_LEASE_MS,
       ),
     },
     { database: db },

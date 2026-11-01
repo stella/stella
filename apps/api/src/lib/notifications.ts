@@ -1,23 +1,25 @@
 import { panic } from "better-result";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { newNotificationRealtimeEvent } from "@stll/api-contract";
 import { isMobilePushKind } from "@stll/api-contract/mobile-push";
 import type {
-  NOTIFICATION_KIND,
   NotificationEntityType,
   NotificationKind,
   NotificationMetadataByKind,
 } from "@stll/api-contract/notifications";
+import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { member as organizationMember, user } from "@/api/db/auth-schema";
+import type { EntityFeatureOwner } from "@/api/db/feature-owner";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import { notifications, workspaceMembers } from "@/api/db/schema";
+import { entities, notifications, workspaceMembers } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { normalizeEmail } from "@/api/lib/email/normalized-email";
+import { activityFeatureOwnerVisibilitySql } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { schedulePushDeliveries } from "@/api/lib/push/push-delivery-queue";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -89,6 +91,17 @@ type NotificationEntityRefByKind = TotalEntityRefMap<{
     workspaceId: null;
   };
 }>;
+
+const NOTIFICATION_OWNER_BY_KIND = {
+  [NOTIFICATION_KIND.MENTION]: "entity",
+  [NOTIFICATION_KIND.TASK_ASSIGNED]: "entity",
+  [NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED]: "shared",
+  [NOTIFICATION_KIND.REPORT_EXPORT_FAILED]: "shared",
+  [NOTIFICATION_KIND.FLOW_RUN_COMPLETED]: "flows",
+  [NOTIFICATION_KIND.FLOW_RUN_FAILED]: "flows",
+  [NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL]: "flows",
+  [NOTIFICATION_KIND.ANNOUNCEMENT]: "shared",
+} as const satisfies Record<NotificationKind, "entity" | EntityFeatureOwner>;
 
 /**
  * One notification to file. The kind fixes both the metadata shape (exactly
@@ -177,19 +190,82 @@ const insertNotifications = async (
 
   const inserted: NotificationInsertRow[] = [];
   for (const batch of chunkItems(values, NOTIFICATION_INSERT_BATCH_SIZE)) {
-    const batchRows = await writeBatch(
-      async (tx) =>
-        await tx
-          .insert(notifications)
-          .values(batch)
-          .onConflictDoNothing()
-          .returning({
-            id: notifications.id,
-            kind: notifications.kind,
-            userId: notifications.userId,
-            organizationId: notifications.organizationId,
+    const batchRows = await writeBatch(async (tx) => {
+      const linkedEntityIds = batch.flatMap((row) =>
+        NOTIFICATION_OWNER_BY_KIND[row.kind] === "entity" &&
+        row.entityId !== null
+          ? [row.entityId]
+          : [],
+      );
+      const entityOwners = new Map<string, EntityFeatureOwner>();
+      if (linkedEntityIds.length > 0) {
+        const linked = await tx
+          .select({
+            entityId: entities.id,
+            workspaceId: entities.workspaceId,
+            featureOwner: entities.featureOwner,
+          })
+          .from(entities)
+          .where(inArray(sql`${entities.id}::text`, linkedEntityIds));
+        for (const { entityId, workspaceId, featureOwner } of linked) {
+          entityOwners.set(`${workspaceId}:${entityId}`, featureOwner);
+        }
+      }
+      const insertedRows = await tx
+        .insert(notifications)
+        .values(
+          batch.map((row) => {
+            const owner = NOTIFICATION_OWNER_BY_KIND[row.kind];
+            switch (owner) {
+              case "shared":
+              case "flows":
+                return {
+                  ...row,
+                  featureOwner: owner,
+                } satisfies typeof notifications.$inferInsert;
+              case "entity":
+                return {
+                  ...row,
+                  featureOwner:
+                    entityOwners.get(
+                      `${row.workspaceId ?? ""}:${row.entityId ?? ""}`,
+                    ) ?? "unknown",
+                } satisfies typeof notifications.$inferInsert;
+              default:
+                owner satisfies never;
+                return panic("Notification ownership requires a disposition");
+            }
           }),
-    );
+        )
+        .onConflictDoNothing()
+        .returning({ id: notifications.id });
+      if (insertedRows.length === 0) {
+        return [];
+      }
+      // Admission applies to the recipient, including cross-user fan-out.
+      return await tx
+        .select({
+          id: notifications.id,
+          kind: notifications.kind,
+          userId: notifications.userId,
+          organizationId: notifications.organizationId,
+        })
+        .from(notifications)
+        .where(
+          and(
+            inArray(
+              notifications.id,
+              insertedRows.map(({ id }) => id),
+            ),
+            activityFeatureOwnerVisibilitySql({
+              featureOwner: notifications.featureOwner,
+              organizationId: notifications.organizationId,
+              workspaceId: notifications.workspaceId,
+              userId: notifications.userId,
+            }),
+          ),
+        );
+    });
     inserted.push(...batchRows);
   }
 

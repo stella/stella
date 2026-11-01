@@ -15,6 +15,11 @@ export default {
     names: ["hostedUsageWebhookEvents"],
     allowed: [
       {
+        path: "apps/api/src/db/org-scope-registry.ts",
+        reason:
+          "Static row ownership and key metadata only; no data queries or mutations.",
+      },
+      {
         path: "apps/api/src/db/entity-feature-gate-repair.ts",
         reason:
           "Full-schema policy introspection: renders the entity feature policies the online cutover installs; reads no rows.",

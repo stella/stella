@@ -4,6 +4,10 @@ import {
 } from "@stll/api-contract/notifications";
 import type { NotificationMetadataValue } from "@stll/api-contract/notifications";
 
+import { RETAINED_ACTIVITY_FEATURE_OWNERS } from "@/api/db/feature-owner";
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
+
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   jsonb,
   notificationPolicies,
@@ -71,12 +75,25 @@ export const notifications = p.pgTable(
     metadata: jsonb().$type<NotificationMetadataValue>().notNull(),
     entityType: p.text("entity_type", { enum: NOTIFICATION_ENTITY_TYPES }),
     entityId: p.text("entity_id"),
+    /** Deployment feature that owns this retained notification. */
+    featureOwner: p
+      .text("feature_owner", { enum: RETAINED_ACTIVITY_FEATURE_OWNERS })
+      .notNull()
+      .default("unknown"),
     idempotencyKey: p.text("idempotency_key").notNull(),
     /** NULL means unread. There is no `is_read` mirror to drift from this. */
     readAt: timestamptz("read_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "notifications_feature_owner_check",
+      sql`${table.featureOwner} IN (${sql.join(
+        RETAINED_ACTIVITY_FEATURE_OWNERS.map((owner) => sql`${owner}`),
+        sql`, `,
+      )})`.inlineParams(),
+    ),
+    ...systemScopePolicies(table),
     p
       .uniqueIndex("notifications_user_idempotency_uidx")
       .on(table.userId, table.idempotencyKey),
@@ -105,5 +122,7 @@ export const notifications = p.pgTable(
       sql`(${table.entityType} IS NULL) = (${table.entityId} IS NULL)`,
     ),
     ...notificationPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

@@ -89,7 +89,6 @@ const reconciliationDependencies = (
   ({
     broadcastWorkspaceResourceUpdated: () => undefined,
     database: asTestRaw<typeof rootDb>(db),
-    enqueueDocumentDeadlineScout: async () => undefined,
     enqueueDocumentProcessingRun,
     indexEntity: async () => undefined,
     now: () => Date.now(),

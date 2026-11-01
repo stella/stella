@@ -1,4 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import * as v from "valibot";
 
 import type {
@@ -30,6 +31,8 @@ const UNPROJECTED_NOTIFICATION_COLUMNS = [
   "organizationId",
   // Producer-only dedup key for replay-safe inserts; never read back.
   "idempotencyKey",
+  // Server-side admission marker; clients receive only admitted rows.
+  "featureOwner",
 ] as const satisfies readonly (keyof NotificationRow)[];
 
 export const notificationParamsSchema = v.object({
@@ -110,7 +113,12 @@ export const readUnreadCount = async (
   {
     organizationId,
     userId,
-  }: { organizationId: SafeId<"organization">; userId: SafeId<"user"> },
+    visibility,
+  }: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+    visibility: SQL | undefined;
+  },
 ) =>
   await safeDb(
     async (tx) =>
@@ -120,6 +128,7 @@ export const readUnreadCount = async (
           eq(notifications.userId, userId),
           eq(notifications.organizationId, organizationId),
           isNull(notifications.readAt),
+          visibility,
         ),
       ),
   );

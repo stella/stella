@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
@@ -7,6 +8,8 @@ import {
   loadCurrentExtractedContents,
   loadCurrentExtractedSources,
 } from "@/api/lib/document-content-provenance";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -459,6 +462,7 @@ const searchMatterKnowledge = async ({
     context.testDependencies?.getSearchReader ?? getSearchReader
   )(context.scopedDb).search({
     query,
+    userId: context.userId,
     organizationId: context.organizationId,
     workspaceIds: context.accessibleWorkspaceIds,
     limit: normalizeTenantPageLimit(DEFAULT_COMPAT_SEARCH_LIMIT),
@@ -621,6 +625,13 @@ const handleCompatFetchTool: McpToolHandler<
     async (tx, workspaceIds) =>
       await loadCurrentExtractedContents(tx, {
         entityIds: [entityId],
+        entityVisibility: ({ id, workspaceId }) =>
+          flowOwnedEntityVisibilitySql({
+            organizationId: context.organizationId,
+            userId: context.userId,
+            entityId: sql`${id}`,
+            workspaceId: sql`${workspaceId}`,
+          }),
         organizationId: context.organizationId,
         workspaceIds,
       }),
@@ -665,8 +676,16 @@ const handleCompatFetchTool: McpToolHandler<
       safeDb: context.safeDb,
       workspaceId: workspaceAccess,
       entityId,
+      userId: context.userId,
     }),
   );
+
+  if (entityResult.isErr()) {
+    const error = entityResult.error;
+    return HandlerError.is(error) && error.status === 404
+      ? notFoundResult("Document not found or not accessible")
+      : internalFailureResult(error, "mcp.compatFetch.entity");
+  }
 
   let url = buildMatterUrl(fetchPayload.workspaceId);
   if (Result.isOk(entityResult)) {

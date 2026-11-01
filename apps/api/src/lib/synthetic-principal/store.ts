@@ -19,13 +19,13 @@ import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-co
 import { createSafeId } from "@/api/lib/branded-types";
 import { readAccountProfileForExport } from "@/api/lib/db/account-row";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
-import { SYNTHETIC_SESSION_CONTROL_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transition } from "@/api/lib/db/transitions";
 import { logger } from "@/api/lib/observability/logger";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import { SYNTHETIC_SESSION_CONTROL_TRANSITIONS } from "@/api/lib/synthetic-principal/transitions";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 

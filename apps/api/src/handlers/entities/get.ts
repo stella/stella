@@ -12,6 +12,10 @@ import {
   selectCurrentExtractedContent,
 } from "@/api/lib/document-content-provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  admitTaskFlowAccess,
+  FLOW_TASK_FEATURE_ACCESS,
+} from "@/api/lib/flows/review-gate-task";
 import { LIMITS } from "@/api/lib/limits";
 
 const readEntityByIdParamsSchema = workspaceParams({
@@ -22,12 +26,14 @@ type ReadEntityByIdHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
+  userId: SafeId<"user">;
 };
 
 export const readEntityByIdHandler = async function* ({
   safeDb,
   workspaceId,
   entityId,
+  userId,
 }: ReadEntityByIdHandlerProps) {
   // Read the entity, its current version, and that version's fields in ONE
   // query via the `currentVersion` relation. Reading currentVersionId here and
@@ -40,6 +46,15 @@ export const readEntityByIdHandler = async function* ({
   // content.
   const read = yield* Result.await(
     safeDb(async (tx) => {
+      const admission = await admitTaskFlowAccess(tx, {
+        access: "read",
+        workspaceId,
+        taskEntityId: entityId,
+        userId,
+      });
+      if (admission.isErr()) {
+        return admission;
+      }
       const entity = await tx.query.entities.findFirst({
         where: {
           id: { eq: entityId },
@@ -100,10 +115,10 @@ export const readEntityByIdHandler = async function* ({
               orderBy: { createdAt: "desc", id: "desc" },
             })
           : null;
-      return { entity, pendingExtractionRun };
+      return Result.ok({ entity, pendingExtractionRun });
     }),
   );
-  const { entity, pendingExtractionRun } = read;
+  const { entity, pendingExtractionRun } = yield* read;
 
   if (!entity) {
     return Result.err(
@@ -172,6 +187,7 @@ const config = {
     "entities.versions.list for the version list.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   mcp: { type: "tool", name: "read_document" },
   access: "read",
   params: readEntityByIdParamsSchema,
@@ -179,11 +195,12 @@ const config = {
 
 const readEntityById = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params }) {
+  async function* ({ safeDb, workspaceId, params, user }) {
     const entityResult = yield* readEntityByIdHandler({
       safeDb,
       workspaceId,
       entityId: params.entityId,
+      userId: user.id,
     });
     if (entityResult.status === "error") {
       return entityResult;

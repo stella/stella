@@ -396,7 +396,55 @@ const rootFromOptions = (options: unknown): string =>
 
 type Mutation = { node: Ranged; target: string };
 
+/** The canonical lender awaits its callback within the same transaction. */
+const lendsAuditScopeToParent = (
+  context: RuleContext,
+  node: unknown,
+): boolean => {
+  if (!isAstNode(node) || !isAstNode(node.parent)) {
+    return false;
+  }
+  const property = node.parent;
+  if (
+    property.type !== "Property" ||
+    property.value !== node ||
+    keyName(property.key) !== "fn"
+  ) {
+    return false;
+  }
+  const options = property.parent;
+  if (!isAstNode(options) || options.type !== "ObjectExpression") {
+    return false;
+  }
+  const call = options.parent;
+  if (
+    !isAstNode(call) ||
+    call.type !== "CallExpression" ||
+    !Array.isArray(call.arguments) ||
+    call.arguments.length !== 1 ||
+    call.arguments.at(0) !== options
+  ) {
+    return false;
+  }
+  if (
+    !isImportedFrom({
+      context,
+      node: invokedCallee(call),
+      modules: ["apps/api/src/db/org-scope"],
+      names: new Set(["withOrgScope"]),
+    })
+  ) {
+    return false;
+  }
+  const consumer = call.parent;
+  return (
+    isAstNode(consumer) &&
+    (consumer.type === "AwaitExpression" || consumer.type === "ReturnStatement")
+  );
+};
+
 type FunctionScope = {
+  lendsToParent: boolean;
   owner: string;
   mutationNodes: Mutation[];
   hasAuditCall: boolean;
@@ -453,6 +501,80 @@ const hasCallSkipDirective = ({
         end < range[0] && CALL_DIRECTIVE_GAP.test(source.slice(end, range[0])),
     )
   );
+};
+
+const RECOVERY_BOOKKEEPING_OWNER_PREFIX =
+  "apps/api/src/lib/db/recovery-bookkeeping/";
+
+const importsRecoveryBookkeeping = (
+  node: unknown,
+  relative: string,
+): boolean => {
+  if (!isAstNode(node) || !Array.isArray(node.body)) {
+    return false;
+  }
+  return node.body.some((statement) => {
+    if (
+      !isAstNode(statement) ||
+      statement.type !== "ImportDeclaration" ||
+      statement.importKind === "type" ||
+      !isAstNode(statement.source) ||
+      typeof statement.source.value !== "string"
+    ) {
+      return false;
+    }
+    const specifier = statement.source.value;
+    const target = specifier.startsWith("@/api/")
+      ? `apps/api/src/${specifier.slice("@/api/".length)}`
+      : path.posix.normalize(
+          path.posix.join(path.posix.dirname(relative), specifier),
+        );
+    return target.startsWith(RECOVERY_BOOKKEEPING_OWNER_PREFIX);
+  });
+};
+
+type BookkeepingDirectiveOptions = {
+  node: unknown;
+  relative: string;
+  count: number;
+};
+const bookkeepingDirectiveMessage = ({
+  node,
+  relative,
+  count,
+}: BookkeepingDirectiveOptions) => {
+  if (count === 0) {
+    return undefined;
+  }
+  if (relative.startsWith(RECOVERY_BOOKKEEPING_OWNER_PREFIX)) {
+    return count > 1 ? "bookkeepingOwnerDirectives" : undefined;
+  }
+  return importsRecoveryBookkeeping(node, relative)
+    ? "bookkeepingConsumerDirective"
+    : undefined;
+};
+
+const justifiedSkipDirectiveRanges = (node: unknown): Range[] => {
+  if (!isAstNode(node)) {
+    return [];
+  }
+  const comments: unknown = "comments" in node ? node.comments : null;
+  if (!Array.isArray(comments)) {
+    return [];
+  }
+  const ranges: Range[] = [];
+  for (const comment of comments) {
+    const range = isAstNode(comment) ? asRange(comment.range) : null;
+    if (
+      range !== null &&
+      isAstNode(comment) &&
+      typeof comment.value === "string" &&
+      isJustifiedSkipDirective(comment.value)
+    ) {
+      ranges.push(range);
+    }
+  }
+  return ranges;
 };
 
 type ReportOwnerArgs = {
@@ -529,6 +651,10 @@ const AUDIT_RULE_SCHEMA = [
 ] as const satisfies RuleOptionsSchema;
 
 const AUDIT_RULE_MESSAGES = {
+  bookkeepingConsumerDirective:
+    "A recovery-bookkeeping consumer cannot carry an audit skip directive; move bookkeeping into its closed owner.",
+  bookkeepingOwnerDirectives:
+    "A recovery bookkeeping owner has at most one audit skip directive for its closed operation set.",
   missingAudit:
     "This function writes to the database (insert / update / " +
     "delete, or a raw write through execute) but does not call an " +
@@ -603,6 +729,7 @@ export const createAuditOnMutationPlugin = (
               parentScope.childBodyRanges.push(childRange);
             }
             scopes.push({
+              lendsToParent: lendsAuditScopeToParent(context, node),
               owner: ownerName(node),
               mutationNodes: [],
               hasAuditCall: false,
@@ -619,6 +746,11 @@ export const createAuditOnMutationPlugin = (
               scope.hasAuditCall ||
               hasBodySkipDirective(scope, skipDirectiveRanges)
             ) {
+              return;
+            }
+            const parent = currentScope();
+            if (scope.lendsToParent && parent !== null) {
+              parent.mutationNodes.push(...scope.mutationNodes);
               return;
             }
             if (isBudgeted()) {
@@ -704,23 +836,14 @@ export const createAuditOnMutationPlugin = (
                     : [],
                 ),
               );
-              const comments: unknown =
-                "comments" in node ? node.comments : null;
-              if (!Array.isArray(comments)) {
-                return;
-              }
-              for (const comment of comments) {
-                const range = isAstNode(comment)
-                  ? asRange(comment.range)
-                  : null;
-                if (
-                  range !== null &&
-                  isAstNode(comment) &&
-                  typeof comment.value === "string" &&
-                  isJustifiedSkipDirective(comment.value)
-                ) {
-                  skipDirectiveRanges.push(range);
-                }
+              skipDirectiveRanges.push(...justifiedSkipDirectiveRanges(node));
+              const messageId = bookkeepingDirectiveMessage({
+                node,
+                relative,
+                count: skipDirectiveRanges.length,
+              });
+              if (messageId !== undefined) {
+                context.report({ node, messageId });
               }
             },
             FunctionDeclaration: pushScope,

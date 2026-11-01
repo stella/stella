@@ -17,7 +17,6 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
-import { SANCTIONS_MONITORING_BACKFILL_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   defineScopedTransitions,
   transitionBatch,
@@ -32,6 +31,7 @@ import {
 import { SANCTIONS_MARK_LEASE_MS } from "@/api/lib/lists/sanctions/monitoring-drain";
 import { lockSanctionsMonitoring } from "@/api/lib/lists/sanctions/monitoring-lock";
 import { prepareMonitoringContacts } from "@/api/lib/lists/sanctions/monitoring-screen";
+import { SANCTIONS_MONITORING_BACKFILL_TRANSITIONS } from "@/api/lib/lists/sanctions/monitoring-transition-specs";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
 import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";

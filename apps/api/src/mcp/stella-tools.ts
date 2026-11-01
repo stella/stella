@@ -1682,6 +1682,7 @@ const handleSearchAcrossMattersTool: TypedMcpToolHandler<
     context.testDependencies?.getSearchReader ?? getSearchReader
   )(context.scopedDb).search({
     query,
+    userId: context.userId,
     organizationId: context.organizationId,
     workspaceIds: context.accessibleWorkspaceIds,
     limit,

@@ -18,6 +18,8 @@ import { createSha256, sha256Hex } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 import { DAY_IN_MS } from "@stll/time";
 
+import { withOrgScope } from "@/api/db/org-scope";
+import type { OrgScope } from "@/api/db/org-scope";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { requestIdempotencyReceipts as receipts } from "@/api/db/schema";
@@ -30,6 +32,7 @@ import { isHttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  lockRequestReceiptPrincipalRows,
   withAggregateLock,
   withAggregateSavepoint,
   withSkipLockedBatch,
@@ -592,3 +595,48 @@ export const sweepExpiredRequestReceipts = async ({
       group.length < candidates.length,
   };
 };
+
+type ClearMemberRequestReceiptsOptions = {
+  tx: Transaction;
+  scope: OrgScope;
+  userId: SafeId<"user">;
+};
+
+/** Clear this user's organization receipts under the request owner's RLS context. */
+export const clearMemberRequestReceipts = async ({
+  tx,
+  scope,
+  userId,
+}: ClearMemberRequestReceiptsOptions): Promise<
+  { type: "cleared" } | { type: "busy" }
+> =>
+  await withOrgScope({
+    tx,
+    scope,
+    actor: { type: "actor", userId },
+    fn: async (scopedTx) => {
+      const locked = await lockRequestReceiptPrincipalRows({
+        tx: scopedTx,
+        organizationId: scope.organizationId,
+        userId,
+      });
+      if (locked.status === "busy") {
+        return { type: "busy" };
+      }
+      if (locked.rows.length === 0) {
+        return { type: "cleared" };
+      }
+      // audit: skip - the enclosing membership removal records its lifecycle audit in this transaction.
+      await scopedTx.delete(receipts).where(
+        and(
+          eq(receipts.organizationId, scope.organizationId),
+          eq(receipts.userId, userId),
+          inArray(
+            receipts.id,
+            locked.rows.map(({ id }) => id),
+          ),
+        ),
+      );
+      return { type: "cleared" };
+    },
+  });

@@ -11,12 +11,12 @@ import {
   caseLawDecisions,
   caseLawIndexJobs,
   caseLawSearchDocuments,
-  schedulerJobs,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import { writePlatformSchedulerTaskState } from "@/api/lib/scheduler/upsert-job";
 
 export const BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK =
   "caseLaw.backfillRedactionTombstones" as const;
@@ -88,15 +88,13 @@ export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
     if (!lastDecisionId) {
       // audit: skip — disables a versioned one-shot repair; scheduler job runs
       // retain the operator trail.
-      await tx
-        .update(schedulerJobs)
-        .set({ enabled: false })
-        .where(
-          and(
-            eq(schedulerJobs.id, job.id),
-            eq(schedulerJobs.lockedBy, leaseToken),
-          ),
-        );
+      await writePlatformSchedulerTaskState({
+        db: tx,
+        jobId: job.id,
+        leaseToken,
+        state: { type: "retire" },
+        task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+      });
       return { status: "complete" as const, repaired: 0 };
     }
 
@@ -204,15 +202,13 @@ export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
 
     // Checkpoint last: replaying the same page is idempotent, while advancing
     // first could permanently skip a failed tombstone update.
-    await tx
-      .update(schedulerJobs)
-      .set({ payload: { cursor: lastDecisionId } })
-      .where(
-        and(
-          eq(schedulerJobs.id, job.id),
-          eq(schedulerJobs.lockedBy, leaseToken),
-        ),
-      );
+    await writePlatformSchedulerTaskState({
+      db: tx,
+      jobId: job.id,
+      leaseToken,
+      state: { type: "checkpoint", payload: { cursor: lastDecisionId } },
+      task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+    });
     return { status: "progress" as const, repaired: repaired.length };
   });
 

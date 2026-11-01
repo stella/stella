@@ -143,6 +143,9 @@ describe("correspondence offboarding", () => {
           tx: asTestRaw<Transaction>(tx),
           organizationId: ids.orgA,
           userId: ids.userA1,
+          runAssignmentWork: async (
+            fn: (workTx: Transaction) => Promise<number>,
+          ) => await fn(asTestRaw<Transaction>(tx)),
         };
         await clearOrganizationCorrespondenceAssignments(options);
         expect(
@@ -1048,6 +1051,8 @@ describe("correspondence offboarding", () => {
             }
             case "organization":
               await clearOrganizationCorrespondenceAssignments({
+                runAssignmentWork: async (fn) =>
+                  await fn(asTestRaw<Transaction>(tx)),
                 tx: asTestRaw<Transaction>(tx),
                 organizationId: ids.orgA,
                 userId: ids.userA1,

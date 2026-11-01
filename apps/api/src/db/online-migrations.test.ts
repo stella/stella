@@ -49,6 +49,7 @@ import {
   ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
   onlineUniqueIndexDefinition,
 } from "./online-unique-indexes";
+import { RETAINED_ACTIVITY_OWNER_BACKFILL } from "./retained-activity-owner-backfill";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
 const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
@@ -2235,7 +2236,18 @@ const createHarness = ({
       backfillStates.set(params.at(0), { cursor: params.at(1), batch });
       return [];
     }
-    return [backfillStates.get(params.at(0))];
+    const name = params.at(0);
+    const checkpoint = backfillStates.get(name);
+    if (checkpoint !== undefined) {
+      return [checkpoint];
+    }
+    const retainedActivityPrefix = `${RETAINED_ACTIVITY_OWNER_BACKFILL.name}:`;
+    if (typeof name === "string" && name.startsWith(retainedActivityPrefix)) {
+      return [
+        { cursor: "complete", batch: { holdUntil: null, heldSince: null } },
+      ];
+    }
+    return [undefined];
   };
 
   const queryIndexArtifacts = (params: readonly unknown[]) => {
@@ -2336,6 +2348,19 @@ const createHarness = ({
           statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
           if (query.includes("FROM drizzle.__drizzle_migrations")) {
             return [{ name: newestAppliedMigration }];
+          }
+          if (
+            query.startsWith(
+              "SELECT organization_id FROM public.review_reset_organizations WHERE organization_id = $1",
+            )
+          ) {
+            const organizationId = params.at(0);
+            if (typeof organizationId !== "string" || params.length !== 1) {
+              throw new TypeError(
+                "Expected review reset registration parameters",
+              );
+            }
+            return [{ organization_id: organizationId }];
           }
           if (
             query.includes('AS "uniquePresent"') &&
@@ -2458,6 +2483,15 @@ const createHarness = ({
                 resourcesMatch: true,
               },
             ];
+          }
+          if (
+            query.includes(
+              "WITH expected(relation, name, definition) AS (VALUES",
+            ) &&
+            query.includes("JOIN pg_catalog.pg_class relation") &&
+            query.includes("policy.oid IS NULL")
+          ) {
+            return [];
           }
           // Its resource seed and its client walk: nothing stored yet, and no
           // registration to link, so both converge on the first pass.

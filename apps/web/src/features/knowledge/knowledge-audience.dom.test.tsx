@@ -473,9 +473,12 @@ describe("Knowledge for every visitor, on one live client", () => {
     session = "anonymous";
     requests.length = 0;
     const { queryClient, view } = createApp();
-    await testing.waitFor(() =>
-      view.getByText("Catalogue nondisclosure agreement"),
-    );
+    await testing.act(async () => {
+      await testing.waitFor(() =>
+        view.getByText("Catalogue nondisclosure agreement"),
+      );
+      await sleep(50);
+    });
 
     expect(requests.filter(({ path }) => !isPublicRequest(path))).toEqual([]);
     expect(
@@ -565,11 +568,12 @@ describe("Knowledge for every visitor, on one live client", () => {
         respond();
       }
       await refetchForA;
-      await sleep(20);
     });
-    expect(
-      cachedKeys(queryClient).filter((key) => key.includes("org-a")),
-    ).toEqual([]);
+    await testing.waitFor(() => {
+      expect(
+        cachedKeys(queryClient).filter((key) => key.includes("org-a")),
+      ).toEqual([]);
+    });
     expect(view.queryByText("Alpha lease")).toBeNull();
 
     // Back to the page A was on, and a preload of it: still no member read.
@@ -594,9 +598,11 @@ describe("Knowledge for every visitor, on one live client", () => {
     });
     await testing.waitFor(() => view.getByText("Bravo lease"), MEMBER_WAIT);
     expect(view.queryByText("Alpha lease")).toBeNull();
-    expect(
-      cachedKeys(queryClient).filter((key) => key.includes("org-a")),
-    ).toEqual([]);
+    await testing.waitFor(() => {
+      expect(
+        cachedKeys(queryClient).filter((key) => key.includes("org-a")),
+      ).toEqual([]);
+    });
     view.unmount();
   });
 
@@ -616,9 +622,11 @@ describe("Knowledge for every visitor, on one live client", () => {
     await testing.waitFor(() => view.getByText("Bravo lease"), MEMBER_WAIT);
 
     expect(view.queryByText("Alpha lease")).toBeNull();
-    expect(
-      cachedKeys(queryClient).filter((key) => key.includes("org-a")),
-    ).toEqual([]);
+    await testing.waitFor(() => {
+      expect(
+        cachedKeys(queryClient).filter((key) => key.includes("org-a")),
+      ).toEqual([]);
+    });
     view.unmount();
   });
 });

@@ -4,6 +4,7 @@ const DEPLOY_TASK = {
   api: "api",
   documentProcessing: "document-processing",
   caseLawReplay: "case-law-replay",
+  migrate: "migrate",
 } as const;
 
 export type DeployTask = (typeof DEPLOY_TASK)[keyof typeof DEPLOY_TASK];
@@ -14,9 +15,15 @@ export const DEPLOY_TASK_ADDRESSES = {
     "module.ecs.aws_ecs_task_definition.document_processing",
   [DEPLOY_TASK.caseLawReplay]:
     "module.ecs.aws_ecs_task_definition.case_law_replay",
+  [DEPLOY_TASK.migrate]: "module.ecs.aws_ecs_task_definition.migrate",
 } as const satisfies Record<DeployTask, string>;
 
-const ALL_TASKS = Object.values(DEPLOY_TASK);
+// Runtime tasks load the application environment; migrate stays database-only.
+const ALL_TASKS = [
+  DEPLOY_TASK.api,
+  DEPLOY_TASK.documentProcessing,
+  DEPLOY_TASK.caseLawReplay,
+] as const;
 
 type DeployEnvEntry = {
   readonly name: string;
@@ -32,6 +39,20 @@ type DeployEnvEntry = {
 };
 
 export const DEPLOY_ENV_CONTRACT: readonly DeployEnvEntry[] = [
+  {
+    name: "APP_REVIEW_ORGANIZATION_ID",
+    tasks: [DEPLOY_TASK.migrate],
+    kind: "environment",
+    reason:
+      "Migration bootstrap needs the configured review organization identity.",
+  },
+  {
+    name: "APP_REVIEW_ACCOUNT_EMAIL",
+    tasks: [DEPLOY_TASK.migrate],
+    kind: "environment",
+    reason:
+      "Migration bootstrap proves the configured review account identity.",
+  },
   {
     name: "DEPLOY_ENVIRONMENT",
     tasks: ALL_TASKS,

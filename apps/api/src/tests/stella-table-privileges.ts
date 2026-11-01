@@ -1,5 +1,9 @@
+import { panic } from "better-result";
 import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
+
+import { parseMigrationStatements } from "../../../../scripts/check-migration-safety";
+import { ORG_SCOPE_ROLE_NAMES } from "../db/org-scope-role-names";
 
 /**
  * The table-level privileges the request role `stella` holds once every
@@ -406,4 +410,52 @@ export const stellaTablePrivilegeStatements = (
       ? [`GRANT ${granted.join(", ")} ON TABLE ${quoted} TO ${STELLA_ROLE}`]
       : []),
   ];
+};
+
+export const SCOPED_OWNER_ROLE_NAMES = Object.values(ORG_SCOPE_ROLE_NAMES);
+
+/** Replay the scoped owners' literal authority, including column grants. */
+export const scopedOwnerRoleStatements = (
+  migrations: readonly MigrationSource[],
+) => {
+  const roles: ReadonlySet<string> = new Set(SCOPED_OWNER_ROLE_NAMES);
+  const created = new Set<string>();
+  const definitions: string[] = [];
+  const grants: string[] = [];
+  for (const migration of migrations) {
+    for (const statement of parseMigrationStatements(migration.sql)) {
+      const raw = statement.raw.trim();
+      const role = /^CREATE\s+ROLE\s+"?([a-z_][a-z0-9_]*)"?/iu.exec(raw)?.at(1);
+      if (role !== undefined && roles.has(role)) {
+        if (created.has(role)) {
+          return panic(`Duplicate scoped role declaration: ${role}`);
+        }
+        created.add(role);
+        definitions.push(raw);
+        continue;
+      }
+      if (!/^(?:GRANT|REVOKE)\b/iu.test(raw)) {
+        continue;
+      }
+      const target = /\b(?:TO|FROM)\s+"?([a-z_][a-z0-9_]*)"?\s*(?:;|$)/iu
+        .exec(raw)
+        ?.at(1);
+      const membership =
+        /^GRANT\s+"?([a-z_][a-z0-9_]*)"?\s+TO\s+CURRENT_USER\b/iu
+          .exec(raw)
+          ?.at(1);
+      if (
+        (target !== undefined && roles.has(target)) ||
+        (membership !== undefined && roles.has(membership))
+      ) {
+        grants.push(raw);
+      }
+    }
+  }
+  for (const role of roles) {
+    if (!created.has(role)) {
+      return panic(`Missing migration-owned scoped role: ${role}`);
+    }
+  }
+  return { definitions, grants };
 };

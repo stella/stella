@@ -17,8 +17,7 @@ import {
   withAggregateRowQuery,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
-import { transition } from "@/api/lib/db/transitions";
+import { defineTransitions, transition } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createCursorPage,
@@ -27,6 +26,19 @@ import {
   isUuidPaginationCursorPart,
   type Page,
 } from "@/api/lib/pagination";
+
+// A failed attempt retries until its budget is spent; a ready archive expires.
+export const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
+  accountExports,
+  {
+    requested: ["processing", "failed"],
+    processing: ["ready", "requested", "failed"],
+    ready: ["expired"],
+    failed: [],
+    expired: [],
+  },
+  { terminal: ["failed", "expired"] },
+);
 
 export type AccountExportRow = typeof accountExports.$inferSelect;
 export type AccountExportDb = Pick<typeof rootDb, "transaction">;
@@ -163,7 +175,7 @@ const expireReadyAccountExport = async (
 ): Promise<boolean> => {
   const moved = await transition({
     tx,
-    spec: TRANSITIONS.accountExports,
+    spec: ACCOUNT_EXPORT_TRANSITIONS,
     id: row.id,
     options: { from: ["ready"], to: "expired", set: RELEASED_ATTEMPT },
     recordTransitionAuditEvent: recordAccountExportTransition(
@@ -349,7 +361,7 @@ export const claimAccountExport = async (
     if (locked.row.attemptCount >= ACCOUNT_EXPORT_LIMITS.attempts) {
       const exhausted = await transition({
         tx,
-        spec: TRANSITIONS.accountExports,
+        spec: ACCOUNT_EXPORT_TRANSITIONS,
         id,
         options: { from: [source], to: "failed", set: RELEASED_ATTEMPT },
         recordTransitionAuditEvent: executionStateOnly,
@@ -365,7 +377,7 @@ export const claimAccountExport = async (
     // transition owner permits without a graph edge.
     const claimed = await transition({
       tx,
-      spec: TRANSITIONS.accountExports,
+      spec: ACCOUNT_EXPORT_TRANSITIONS,
       id,
       options: {
         from: [source],
@@ -416,7 +428,7 @@ export const completeAccountExport = async ({
     }
     const moved = await transition({
       tx,
-      spec: TRANSITIONS.accountExports,
+      spec: ACCOUNT_EXPORT_TRANSITIONS,
       id: claim.id,
       options: {
         from: ["processing"],
@@ -451,7 +463,7 @@ export const failAccountExport = async (
     const exhausted = locked.row.attemptCount >= ACCOUNT_EXPORT_LIMITS.attempts;
     const moved = await transition({
       tx,
-      spec: TRANSITIONS.accountExports,
+      spec: ACCOUNT_EXPORT_TRANSITIONS,
       id: claim.id,
       options: exhausted
         ? { from: ["processing"], to: "failed", set: RELEASED_ATTEMPT }

@@ -99,6 +99,7 @@ const runMove = async ({
   await Result.gen(async function* () {
     return yield* moveEntityHandler({
       workspaceId,
+      userId: mintAuthProviderId<"user">(),
       body,
       safeDb: safeDbFromScoped(
         async (run) =>

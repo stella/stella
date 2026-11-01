@@ -40,6 +40,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { flowAuditVisibilityCondition } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
@@ -274,6 +275,10 @@ const chatSignalFilters = (scope: SuggestionReadScope) =>
 const auditSignalFilters = (scope: SuggestionReadScope) =>
   and(
     eq(auditLogs.organizationId, scope.organizationId),
+    flowAuditVisibilityCondition({
+      organizationId: scope.organizationId,
+      userId: scope.userId,
+    }),
     inArray(auditLogs.workspaceId, scope.workspaceIds),
     eq(auditLogs.userId, scope.userId),
     eq(auditLogs.performerType, "user"),

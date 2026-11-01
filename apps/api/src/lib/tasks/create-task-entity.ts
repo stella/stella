@@ -129,6 +129,7 @@ export type CreateTaskEntityHandlerProps = SafeDbOrTx & {
   recordAuditEvent: AuditRecorder;
   body: v.InferOutput<typeof createTaskBodySchema>;
   entityId?: SafeId<"entity">;
+  featureOwner?: typeof entities.$inferInsert.featureOwner;
   features?: TaskDeploymentFeatures;
   workObligationSource?: CreateTaskWorkObligationSource;
   fileNotifications?: FileTaskAssignedNotifications;
@@ -143,6 +144,7 @@ export const createTaskEntityHandler = async function* ({
     recordAuditEvent,
     body,
     entityId: requestedEntityId,
+    featureOwner = "shared",
     features = deployedTaskFeatures(),
     workObligationSource,
     fileNotifications = fileTaskAssignedNotifications,
@@ -367,6 +369,7 @@ export const createTaskEntityHandler = async function* ({
       const entityId = requestedEntityId ?? createSafeId<"entity">();
       await tx.insert(entities).values({
         id: entityId,
+        featureOwner,
         workspaceId,
         kind: "task",
         listItemType,

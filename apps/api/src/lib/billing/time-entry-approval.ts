@@ -21,8 +21,8 @@ import {
   guardRunningTimeEntries,
   timeEntryIsRunning,
 } from "@/api/lib/billing/time-entry-running";
+import { TIME_ENTRY_TRANSITIONS } from "@/api/lib/billing/time-entry-transition-spec";
 import type { SafeId } from "@/api/lib/branded-types";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
@@ -319,7 +319,7 @@ export const approveTimeEntryBatch = async ({
     if (approved.length > 0) {
       await transitionBatch({
         tx,
-        spec: TRANSITIONS.timeEntries,
+        spec: TIME_ENTRY_TRANSITIONS,
         ids: approved.map(({ id }) => id),
         options: {
           from: TIME_ENTRY_REVIEW_TRANSITIONS.approve.from,
@@ -444,7 +444,7 @@ export const returnTimeEntryBatch = async ({
     if (changed.length > 0) {
       await transitionBatch({
         tx,
-        spec: TRANSITIONS.timeEntries,
+        spec: TIME_ENTRY_TRANSITIONS,
         ids: changed.map(({ id }) => id),
         options: {
           from: RETURN_WRITE_FROM,

@@ -1,4 +1,5 @@
 import { envApiServerSchema } from "../env-schema";
+import { REVIEW_ORGANIZATION_TEST_ENVIRONMENT } from "./fixtures/review-organization-environment";
 import { configureTestDatabaseEnvironment } from "./test-database-environment";
 
 // Preserve configured providers while preventing inherited credentials from
@@ -22,6 +23,13 @@ for (const name of Object.keys(envApiServerSchema)) {
   if (isModelCredential && value !== undefined && value !== "") {
     process.env[name] = providerCredentialPlaceholder;
   }
+}
+
+// Both in-process migration tests and child migrators use this fixture pair.
+for (const [name, value] of Object.entries(
+  REVIEW_ORGANIZATION_TEST_ENVIRONMENT,
+)) {
+  process.env[name] ??= value;
 }
 
 // Postgres fixtures are non-RDS: resolve telemetry before any env owner loads.

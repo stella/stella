@@ -23,6 +23,14 @@ globalThis.fetch = Object.assign(
     if (url.pathname.endsWith("/copy-to-workspace")) {
       return await transferResponse();
     }
+    if (url.pathname.endsWith("/transfer-eligibility")) {
+      return Response.json({
+        transfers: ["first-item", "second-item"].map((entityId) => ({
+          entityId,
+          access: "available",
+        })),
+      });
+    }
     if (url.pathname.endsWith("/folders")) {
       return Response.json({ items: [], nextCursor: null });
     }
@@ -153,6 +161,15 @@ test("the mounted move dialog localizes deferred refusals for complete and parti
           view.getByRole("button", {
             name: messages.workspaces.copyToMatter.moveOption,
           }),
+        );
+        await waitFor(() =>
+          expect(
+            view
+              .getByRole("button", {
+                name: messages.workspaces.copyToMatter.moveButton,
+              })
+              .hasAttribute("disabled"),
+          ).toBe(false),
         );
         fireEvent.click(
           view.getByRole("button", {

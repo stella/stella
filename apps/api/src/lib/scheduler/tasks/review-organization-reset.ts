@@ -2,8 +2,8 @@ import { Result } from "better-result";
 
 import type { Transaction } from "@/api/db/root";
 import type { RlsDatabase } from "@/api/db/scoped";
-import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
+import { readReviewOrganizationConfig } from "@/api/lib/review-organization/read-config";
 import {
   resetReviewOrganization,
   REVIEW_RESET_REFUSAL,

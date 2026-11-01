@@ -13,7 +13,10 @@ import {
   type ReaderAnswerUsage,
 } from "@stll/api-contract/reader-answers";
 
-import { reviewResetOwnerPolicies } from "../review-reset-policies";
+import {
+  registeredReviewResetPolicies,
+  reviewResetOwnerPolicies,
+} from "../review-reset-policies";
 import {
   authoredNotePolicies,
   jsonb,
@@ -110,6 +113,8 @@ export const legalReaderAnswers = p.pgTable(
     ...authoredNotePolicies(),
     // The review reset clears every author's threads; messages go by cascade.
     ...reviewResetOwnerPolicies("legal_reader_answers"),
+
+    ...registeredReviewResetPolicies(t.organizationId),
   ],
 );
 

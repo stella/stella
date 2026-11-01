@@ -45,14 +45,14 @@ import type {
   FolioAgentToolInputByName,
   FolioToolCallResultFor,
 } from "@stll/folio-agents/tool-contract";
-import {
-  getFolioDocumentOperationIssues,
-  getFolioDocumentOperationReceipts,
-} from "@stll/folio-core";
 import type {
   FolioDocumentOperationBatch,
   FolioDocumentOperationResult,
 } from "@stll/folio-core";
+import {
+  getFolioDocumentOperationIssues,
+  getFolioDocumentOperationReceipts,
+} from "@stll/folio-core/document-operations";
 import type {
   AISuggestionPreset,
   DocxEditorRef,

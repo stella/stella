@@ -67,6 +67,8 @@ import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import type { WorkspaceDeletionDependencies } from "@/api/lib/workspace-deletion";
 
+import { reviewResetAuditContext } from "./audit";
+
 export const REVIEW_RESET_REFUSAL = {
   unconfigured: "unconfigured",
   demoOrganization: "demo-organization",
@@ -336,7 +338,7 @@ export type ReviewResetOptions = {
   /** Application-role connection the review account's own writes run on. */
   rlsDatabase?: RlsDatabase<Transaction> | undefined;
   /** The scheduler run, stamped on every audit row the reset writes. */
-  runId: string;
+  runId: SafeId<"schedulerJobRun">;
   signal: AbortSignal;
   dependencies?: ReviewResetDependencies | undefined;
 };
@@ -354,6 +356,7 @@ type ResetScope = {
   recorderFor: (workspaceId: SafeId<"workspace"> | null) => AuditRecorder;
   /** The recorder for organization-level rows. */
   recordOrganizationAuditEvent: AuditRecorder;
+  subject: SafeId<"schedulerJobRun">;
   dependencies: ReviewResetDependencies;
 };
 
@@ -652,11 +655,12 @@ const sweepRemainingRows = async (
           organizationId,
           tx,
         });
-        const removed = await sweepReviewOrganization(
+        const removed = await sweepReviewOrganization({
           tx,
           organizationId,
-          scope.target.userId,
-        );
+          subject: scope.subject,
+          userId: scope.target.userId,
+        });
         return { removed, requestIds: teardown.requestIds };
       }),
     catch: (cause) => cause,
@@ -709,24 +713,10 @@ export const resetReviewOrganization = async ({
   const recorderFor = (
     workspaceId: SafeId<"workspace"> | null,
   ): AuditRecorder =>
-    createBackgroundAuditRecorder({
-      organizationId,
-      workspaceId,
-      userId,
-      execution: {
-        performer: {
-          type: "service",
-          id: "review-organization-reset",
-          name: "Review organization reset",
-        },
-        trigger: {
-          type: "schedule",
-          ownerUserId: userId,
-          source: "scheduler",
-          sourceId: runId,
-        },
-      },
-    });
+    createBackgroundAuditRecorder(
+      reviewResetAuditContext({ organizationId, workspaceId, userId, runId }),
+    );
+
   const fence = createMembershipFence(
     target.value,
     dependencies.afterFenceCheck,
@@ -747,6 +737,7 @@ export const resetReviewOrganization = async ({
     recorderFor,
     recordOrganizationAuditEvent: recorderFor(null),
     dependencies,
+    subject: runId,
   };
 
   await dependencies.afterTargetResolved?.();
@@ -811,6 +802,12 @@ export const resetReviewOrganization = async ({
       scopedDb: createRootMembershipScopedDb(
         { organizationId, userId },
         fencedDatabase,
+      ),
+      // Property discovery is a side-effect-free RLS read. Keep the owner
+      // membership fence on reservation and every authoritative write.
+      preflightDb: createRootMembershipScopedDb(
+        { organizationId, userId },
+        rlsDatabase,
       ),
       recorderFor,
       cancelled: seedCancellation(signal),

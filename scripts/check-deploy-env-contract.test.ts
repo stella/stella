@@ -7,6 +7,13 @@ import {
 import { checkDeployEnvContract } from "./check-deploy-env-contract";
 import { ENV_CATALOG, ENV_OWNER, ENV_REQUIREMENT } from "./env-catalog";
 
+const ENVIRONMENTS = ["staging", "production"] as const;
+const MIGRATE_TASK_ADDRESS = "module.ecs.aws_ecs_task_definition.migrate";
+const REVIEW_IDENTITY_NAMES = [
+  "APP_REVIEW_ORGANIZATION_ID",
+  "APP_REVIEW_ACCOUNT_EMAIL",
+] as const;
+
 const fixture = () => {
   const tasks = () =>
     Object.fromEntries(
@@ -91,21 +98,107 @@ describe("deployment setting contract", () => {
     ]);
   });
 
-  test("absent task addresses refuse instead of skipping the task", async () => {
+  test("the migration task has its exact deployment address and no duplicate address", () => {
+    expect(DEPLOY_TASK_ADDRESSES).toHaveProperty(
+      "migrate",
+      MIGRATE_TASK_ADDRESS,
+    );
+    expect(new Set(Object.values(DEPLOY_TASK_ADDRESSES)).size).toBe(
+      Object.keys(DEPLOY_TASK_ADDRESSES).length,
+    );
+  });
+
+  test.each(REVIEW_IDENTITY_NAMES)(
+    "%s is required only by migration bootstrap",
+    (name) => {
+      const entries = DEPLOY_ENV_CONTRACT.filter(
+        (entry) => entry.name === name,
+      );
+      expect(entries).toHaveLength(1);
+      expect(entries.at(0)).toMatchObject({
+        tasks: ["migrate"],
+        kind: "environment",
+      });
+      expect(entries.at(0)?.readinessField).toBeUndefined();
+    },
+  );
+
+  for (const environment of ENVIRONMENTS) {
+    for (const name of REVIEW_IDENTITY_NAMES) {
+      test(`${environment} migrate refuses missing ${name}`, async () => {
+        const value = fixture();
+        // Supply the candidate task explicitly so an unregistered task cannot
+        // make this regression pass by omitting it from the derived fixture.
+        value.environments[environment][MIGRATE_TASK_ADDRESS] = {
+          environment: REVIEW_IDENTITY_NAMES.filter(
+            (candidate) => candidate !== name,
+          ),
+          secrets: [],
+        };
+        expect(await run(value)).toEqual({
+          exitCode: 1,
+          lines: [`${environment} migrate ${name} expected environment`],
+        });
+      });
+
+      test(`${environment} migrate refuses ${name} in secrets`, async () => {
+        const value = fixture();
+        value.environments[environment][MIGRATE_TASK_ADDRESS] = {
+          environment: REVIEW_IDENTITY_NAMES.filter(
+            (candidate) => candidate !== name,
+          ),
+          secrets: [name],
+        };
+        expect(await run(value)).toEqual({
+          exitCode: 1,
+          lines: [`${environment} migrate ${name} expected environment`],
+        });
+      });
+    }
+
+    for (const [task, address] of Object.entries(DEPLOY_TASK_ADDRESSES)) {
+      test(`${environment} refuses an absent ${task} task address`, async () => {
+        const value = fixture();
+        value.environments[environment] = Object.fromEntries(
+          Object.entries(value.environments[environment]).filter(
+            ([candidate]) => candidate !== address,
+          ),
+        );
+        const result = await run(value);
+        expect(result.exitCode).toBe(1);
+        expect(result.lines).toContain(
+          `${environment} ${task} task-address expected ${address}`,
+        );
+        for (const { name, tasks, kind } of DEPLOY_ENV_CONTRACT) {
+          if (tasks.some((required) => required === task)) {
+            expect(result.lines).toContain(
+              `${environment} ${task} ${name} expected ${kind}`,
+            );
+          }
+        }
+      });
+    }
+  }
+
+  test("migration bootstrap needs no application-only names and API review settings remain optional", async () => {
     const value = fixture();
-    value.environments.production = Object.fromEntries(
-      Object.entries(value.environments.production).filter(
-        ([address]) => address !== DEPLOY_TASK_ADDRESSES.api,
-      ),
-    );
-    const result = await run(value);
-    expect(result.exitCode).toBe(1);
-    expect(result.lines).toContain(
-      `production api task-address expected ${DEPLOY_TASK_ADDRESSES.api}`,
-    );
-    expect(result.lines).toContain(
-      "production api DEPLOY_ENVIRONMENT expected environment",
-    );
+    for (const environment of ENVIRONMENTS) {
+      value.environments[environment][MIGRATE_TASK_ADDRESS] = {
+        environment: [...REVIEW_IDENTITY_NAMES],
+        secrets: [],
+      };
+      const api = value.environments[environment][DEPLOY_TASK_ADDRESSES.api];
+      if (api === undefined) {
+        throw new Error("Fixture must include the API task");
+      }
+      api.environment = api.environment.filter(
+        (name) => !REVIEW_IDENTITY_NAMES.some((identity) => identity === name),
+      );
+      api.secrets = api.secrets.filter(
+        (name) => !REVIEW_IDENTITY_NAMES.some((identity) => identity === name),
+      );
+    }
+    expect((await run(value)).exitCode).toBe(0);
   });
 
   for (const value of [{ ...fixture(), version: 2 }, { version: 1 }, null]) {

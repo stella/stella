@@ -5,6 +5,7 @@ import {
   type ChatToolGrantScope,
 } from "@stll/api-contract/chat-tool-grants";
 
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import { chatThreads } from "./chat";
 import {
   chatToolGrantPolicies,
@@ -89,5 +90,7 @@ export const chatToolGrants = p.pgTable(
       sql`(${table.toolName} IS NULL) <> (${table.mcpConnectorId} IS NULL)`,
     ),
     ...chatToolGrantPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

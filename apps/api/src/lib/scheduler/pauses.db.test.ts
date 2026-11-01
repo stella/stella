@@ -8,11 +8,12 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
-import { DECLARED_SCHEDULER_JOBS, upsertSchedulerJob } from "./jobs";
+import { DECLARED_SCHEDULER_JOBS } from "./jobs";
 import { acquireNextDueJob, runJob } from "./runner";
 import { createCaseLawProvisionStateBackfillTask } from "./tasks/case-law-provision-state-backfill";
 import { createLegislationExpressionIdBackfill } from "./tasks/legislation-expression-id-backfill";
 import type { SchedulerTask } from "./types";
+import { upsertSchedulerJob } from "./upsert-job";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -39,15 +40,16 @@ const withJob = async (exercise: (fixture: Fixture) => Promise<void>) => {
       DECLARED_SCHEDULER_JOBS.at(0) ??
       panic("Scheduler declarations must not be empty");
     try {
-      await upsertSchedulerJob(
-        {
+      await upsertSchedulerJob({
+        ownership: "platform",
+        definition: {
           description: definition.description,
           id: jobId,
           schedule: definition.schedule,
           task: definition.task,
         },
         db,
-      );
+      });
       const [created] = await db
         .select()
         .from(schedulerJobs)
@@ -200,7 +202,7 @@ if (!databaseUrl || !runPostgresTests) {
         expect(ids.length).toBeGreaterThan(0);
         try {
           for (const definition of definitions) {
-            await upsertSchedulerJob(definition, db);
+            await upsertSchedulerJob({ ownership: "platform", definition, db });
           }
           const inserted = await db
             .select()
@@ -227,7 +229,11 @@ if (!databaseUrl || !runPostgresTests) {
             .where(inArray(schedulerJobs.id, ids));
           for (const enabled of [false, true, false]) {
             for (const definition of definitions) {
-              await upsertSchedulerJob({ ...definition, enabled }, db);
+              await upsertSchedulerJob({
+                ownership: "platform",
+                definition: { ...definition, enabled },
+                db,
+              });
             }
             const rebooted = await db
               .select()

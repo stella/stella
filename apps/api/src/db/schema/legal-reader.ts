@@ -11,7 +11,10 @@ import {
   READER_ANNOTATION_VISIBILITIES,
 } from "@stll/api-contract/legal-reader-annotations";
 
-import { reviewResetOwnerPolicies } from "../review-reset-policies";
+import {
+  registeredReviewResetPolicies,
+  reviewResetOwnerPolicies,
+} from "../review-reset-policies";
 import {
   SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID,
   SETTING_ACCOUNT_EXPORT_USER_ID,
@@ -328,5 +331,7 @@ export const legalReaderAnnotations = p.pgTable(
       for: "delete",
       using: sql`${tableOwnerCheck} AND pg_catalog.pg_trigger_depth() > 0 AND entity_id IS NOT NULL`,
     }),
+
+    ...registeredReviewResetPolicies(t.organizationId),
   ],
 );

@@ -21,6 +21,89 @@ import {
 } from "./aggregate-lock";
 
 describe("blocking aggregate order regressions", () => {
+  test("review reset registration locks its organization identity with key share", async () => {
+    const fixture = aggregateFences();
+    const { tx, statements } = aggregateRecorder();
+    expect(
+      await withAggregateLock({ ...fixture.reviewResetRegistration, tx }),
+    ).toEqual({ status: "locked" });
+    expect(statements).toHaveLength(1);
+    expect(statements.at(0)?.sql).toContain(
+      'FROM "public"."review_reset_organizations"',
+    );
+    expect(statements.at(0)?.sql).toContain('"organization_id" = $1');
+    expect(statements.at(0)?.sql).toContain("FOR KEY SHARE");
+    expect(statements.at(0)?.params).toEqual([fixture.organization.id]);
+  });
+
+  test("review reset registration follows organization and precedes matter locks", async () => {
+    const fixture = aggregateFences();
+    const ordered = aggregateRecorder();
+    await withAggregateLock({ ...fixture.organization, tx: ordered.tx });
+    await withAggregateLock({
+      ...fixture.reviewResetRegistration,
+      tx: ordered.tx,
+    });
+    await withAggregateLock({ ...fixture.workspace, tx: ordered.tx });
+    expect(ordered.statements).toHaveLength(3);
+    const descending = aggregateRecorder();
+    await withAggregateLock({ ...fixture.workspace, tx: descending.tx });
+    expect(
+      await rejectionOf(
+        withAggregateLock({
+          ...fixture.reviewResetRegistration,
+          tx: descending.tx,
+        }),
+      ),
+    ).toMatchObject({ message: "Aggregate lock rank inversion" });
+    expect(descending.statements).toHaveLength(1);
+  });
+
+  test("recovery receipts lock their complete registered identity", async () => {
+    const fixture = aggregateFences();
+    const receipt = fixture.uploadReceipt.id;
+    const cases = [
+      {
+        lock: fixture.uploadReceipt,
+        table: "flow_upload_trigger_intents",
+        columns: ["definition_id", "entity_id", "organization_id"],
+        values: [
+          receipt.definitionId,
+          receipt.entityId,
+          receipt.organizationId,
+        ],
+      },
+      {
+        lock: {
+          aggregate: "scoutCensus",
+          id: {
+            type: "receipt",
+            organizationId: receipt.organizationId,
+            sourceKind: "document-review",
+            sourceId: receipt.entityId,
+          },
+          mode: "update",
+        },
+        table: "pending_scout_emissions",
+        columns: ["organization_id", "source_kind", "source_id"],
+        values: [receipt.organizationId, "document-review", receipt.entityId],
+      },
+    ] as const;
+    for (const { lock, table, columns, values } of cases) {
+      const { tx, statements } = aggregateRecorder();
+      expect(await withAggregateLock({ ...lock, tx })).toEqual({
+        status: "locked",
+      });
+      const statement = statements.at(0);
+      expect(statement?.sql).toContain(`FROM "public"."${table}"`);
+      for (const column of columns) {
+        expect(statement?.sql).toContain(`"${column}" = $`);
+      }
+      expect(statement?.params).toEqual([...values]);
+      expect(statement?.sql).toContain("FOR UPDATE");
+    }
+  });
+
   test("chat revision locks scope the thread to its principal and the message to its thread", async () => {
     const fixture = aggregateFences();
     const { tx, statements } = aggregateRecorder();

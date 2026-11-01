@@ -1,5 +1,8 @@
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
+
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   bytea,
   organization,
@@ -58,6 +61,7 @@ export const searchHistoryEntries = p.pgTable(
     useCount: p.integer("use_count").notNull().default(1),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p
       .uniqueIndex("search_history_entries_owner_lookup_idx")
       .on(table.organizationId, table.userId, table.kind, table.lookupKey),
@@ -108,6 +112,8 @@ export const searchHistoryEntries = p.pgTable(
       using: tableOwner,
       withCheck: tableOwner,
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -127,6 +133,7 @@ export const searchHistoryOwners = p.pgTable(
     tombstoneCutoffAt: timestamptz("tombstone_cutoff_at"),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.primaryKey({ columns: [table.organizationId, table.userId] }),
     ...userOrganizationPolicies(),
     p.pgPolicy("search_history_owners_owner", {
@@ -135,6 +142,8 @@ export const searchHistoryOwners = p.pgTable(
       using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_owners'::regclass)`,
       withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_owners'::regclass)`,
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -154,6 +163,7 @@ export const searchHistoryTombstones = p.pgTable(
     deletedAt: timestamptz("deleted_at").notNull(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     p.primaryKey({
       name: "search_history_tombstones_pk",
       columns: [
@@ -196,5 +206,7 @@ export const searchHistoryTombstones = p.pgTable(
       using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_tombstones'::regclass)`,
       withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.search_history_tombstones'::regclass)`,
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

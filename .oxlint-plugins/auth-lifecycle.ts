@@ -32,7 +32,8 @@ const HELPER_MODULE = "apps/api/src/lib/auth-artifacts";
 const OFFBOARDING_HELPER: ReadonlySet<string> = new Set([
   "removeOrganizationMemberInTransaction",
 ]);
-const OFFBOARDING_MODULE = "apps/api/src/lib/member-assignment-offboarding";
+const OFFBOARDING_MODULE =
+  "apps/api/src/lib/member-offboarding/member-assignment-offboarding";
 const HELPER_FILE = "apps/api/src/lib/auth-artifacts.ts";
 const AUTH_SCHEMA_MODULE = "apps/api/src/db/auth-schema";
 const AUTH_ARTIFACT_TABLES: ReadonlySet<string> = new Set([

@@ -8,9 +8,9 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import { createTestState } from "@stll/test-state";
 
 import { member } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import type { workspaceViews } from "@/api/db/schema";
 import {
   auditLogs,
@@ -67,6 +67,7 @@ import {
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
 
+const testState = createTestState({ file: import.meta.path, config: env });
 beforeEach(() => {
   consumeRateLimitMock.mockReset();
   loadOrgSettingsMock.mockClear();
@@ -97,9 +98,10 @@ const consumeRateLimitMock = mock(async () => ({
 const disabledFeatures = new Set<string>();
 const { handleMcpToolCall, listMcpTools } = await import("@/api/mcp/tools");
 const {
+  conditionalCapabilityInputs,
   featureOmittedCapabilityIds,
-  mapHandlerResult,
   loadCapabilityEndpoint,
+  mapHandlerResult,
 } = await import("@/api/mcp/capability-tools");
 const { UPLOAD_PURPOSE_GATE_BY_CAPABILITY } =
   await import("@/api/mcp/upload-purpose-gate");
@@ -429,32 +431,35 @@ describe("list verification access grants across MCP tools", () => {
   beforeEach(() => {
     previousGrants = env.API_FEATURE_ACCESS_GRANTS;
     previousDeploymentFlag = env.FEATURE_LEGAL_LISTS;
-    env.API_FEATURE_ACCESS_GRANTS = {};
-    env.FEATURE_LEGAL_LISTS = true;
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
+    testState.setConfig("FEATURE_LEGAL_LISTS", true);
   });
 
   afterEach(() => {
-    env.API_FEATURE_ACCESS_GRANTS = previousGrants;
-    env.FEATURE_LEGAL_LISTS = previousDeploymentFlag;
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", previousGrants);
+    testState.setConfig("FEATURE_LEGAL_LISTS", previousDeploymentFlag);
   });
 
   const grantCurrentMember = () => {
-    env.API_FEATURE_ACCESS_GRANTS = Object.fromEntries(
-      [
-        ...featurePrerequisiteClosure(
-          FEATURE_REGISTRY,
-          LIST_VERIFICATION_FEATURE_ID,
-        ),
-      ].map((id) => [
-        id,
+    testState.setConfig(
+      "API_FEATURE_ACCESS_GRANTS",
+      Object.fromEntries(
         [
-          {
-            type: "member" as const,
-            organizationId: "org_1",
-            email: "standard@example.test",
-          },
-        ],
-      ]),
+          ...featurePrerequisiteClosure(
+            FEATURE_REGISTRY,
+            LIST_VERIFICATION_FEATURE_ID,
+          ),
+        ].map((id) => [
+          id,
+          [
+            {
+              type: "member" as const,
+              organizationId: "org_1",
+              email: "standard@example.test",
+            },
+          ],
+        ]),
+      ),
     );
   };
 
@@ -740,6 +745,8 @@ describe("list verification access grants across MCP tools", () => {
       expect(hiddenNativeSurface).not.toContain(id);
     }
     let projectedLayouts = 0;
+    const enabledConditionalInputs = await conditionalCapabilityInputs(granted);
+    const hiddenConditionalInputs = await conditionalCapabilityInputs(denied);
     for (const { id } of capabilityCatalog.filter(
       (entry) =>
         "featureId" in entry &&
@@ -766,6 +773,11 @@ describe("list verification access grants across MCP tools", () => {
       }
       expect(hiddenSchema).not.toContain('"avt"');
       expect(hidden.isError).not.toBe(true);
+      expect(enabledConditionalInputs[id]).toBeUndefined();
+      expect(hiddenConditionalInputs[id]).toBeDefined();
+      const callerInput = JSON.stringify(hiddenConditionalInputs[id]);
+      expect(callerInput).not.toContain('"avt"');
+      expect(callerInput).not.toContain('"workspaceId"');
     }
     expect(projectedLayouts).toBeGreaterThan(0);
     const enabledResources = await listMcpResources("default", {
@@ -845,7 +857,7 @@ describe("list verification access grants across MCP tools", () => {
             ],
       );
     }
-    env.API_FEATURE_ACCESS_GRANTS = {};
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
     const denied = await handleCapabilityCall({
       context: verificationContext({ viewRows: [view] }).context,
       args: { capability: "views.list", input: { params: { matterId } } },
@@ -914,7 +926,10 @@ describe("list verification access grants across MCP tools", () => {
       });
       expect(
         parseToolPayload<{ valid: boolean; capability: string }>(result),
-      ).toEqual({ valid: true, capability });
+      ).toEqual({
+        valid: true,
+        capability,
+      });
     }
     expect(fixture.resourceLookups()).toBeGreaterThan(0);
     expect(fixture.mutations()).toBe(0);
@@ -1460,7 +1475,10 @@ describe("documents.compare capability contract", () => {
     for (const result of results) {
       expect(
         parseToolPayload<{ valid: boolean; capability: string }>(result),
-      ).toEqual({ valid: true, capability: "documents.compare" });
+      ).toEqual({
+        valid: true,
+        capability: "documents.compare",
+      });
     }
   });
 
@@ -1717,6 +1735,68 @@ describe("list_capabilities", () => {
 
 // --- describe_capability -----------------------------------------------------
 
+const enabledCatalogContext = () => {
+  for (const definition of Object.values(FEATURE_REGISTRY)) {
+    if ("deploymentFeature" in definition) {
+      testState.setConfig(definition.deploymentFeature, true);
+    }
+  }
+  const context = createContext({
+    credential: { type: "oauth_client", clientId: "client" },
+    grantedScopes: [
+      ...MCP_OAUTH_SCOPES,
+      ...capabilityCatalog.flatMap((entry) =>
+        entry.accountScope === undefined ? [] : [entry.accountScope],
+      ),
+    ],
+  });
+  const grants = Object.fromEntries(
+    Object.keys(FEATURE_REGISTRY).map((featureId) => [
+      featureId,
+      [
+        {
+          type: "organization" as const,
+          organizationId: context.organizationId,
+        },
+      ],
+    ]),
+  );
+  const enrolments = Object.keys(FEATURE_REGISTRY).map((featureId) => ({
+    featureId,
+    organizationId: context.organizationId,
+    userId: context.userId,
+  }));
+  const enabled = {
+    ...context,
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: context.organizationId,
+      userId: context.userId,
+      decisions: new Map(
+        Object.keys(FEATURE_REGISTRY).map((featureId) => [
+          featureId,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants,
+            featureId,
+            organizationId: context.organizationId,
+            userId: context.userId,
+            user: { email: "standard@example.test", emailVerified: true },
+            membership: true,
+            enrolments,
+          }),
+        ]),
+      ),
+    }),
+  };
+  for (const featureId of Object.keys(FEATURE_REGISTRY)) {
+    expect(
+      isFeatureEnabled(enabled.featureAccessSnapshot, featureId, enabled),
+      featureId,
+    ).toBe(true);
+  }
+  return enabled;
+};
+
 describe("describe_capability", () => {
   test("returns metadata and the live input schema", async () => {
     const result = await call("describe_capability", {
@@ -1755,20 +1835,7 @@ describe("describe_capability", () => {
     // The catalog (and the CLI generated from it) is the reference spelling.
     const { expandSchemaDefs } =
       await import("../../../../packages/cli/src/expand-schema-defs.ts");
-    // The default context leaves conditional features off, the state the
-    // catalog is exported in; a capability its caller may not reach is hidden
-    // by describe, and only a feature-required one may be.
-    const baseContext = createContext();
-    const context = {
-      ...baseContext,
-      credential: { type: "oauth_client", clientId: "catalog-schema-probe" },
-      grantedScopes: [
-        ...baseContext.grantedScopes,
-        ...capabilityCatalog.flatMap((entry) =>
-          entry.accountScope === undefined ? [] : [entry.accountScope],
-        ),
-      ],
-    } satisfies AuthorizedMcpRequestContext;
+    const context = enabledCatalogContext();
     const drift: string[] = [];
     for (const entry of capabilityCatalog) {
       if (entry.inputSchema === undefined) {
@@ -2440,23 +2507,38 @@ describe("handlerCtx capability authorization lifetime", () => {
       request: new Request("http://localhost/mcp"),
       workspaceId: toSafeId<"workspace">("ws_1"),
     });
-    const tx = asTestRaw<Transaction>({
-      insert: () => ({
-        values: async (rows: Record<string, unknown>[]) => {
-          inserted = rows;
-        },
-      }),
-    });
+    const { scopedDb } = createScopedDbMock(
+      {
+        insert: () => ({
+          values: async (rows: Record<string, unknown>[]) => {
+            inserted = rows;
+          },
+        }),
+      },
+      {
+        entityAuditOwners: [
+          {
+            id: toSafeId<"entity">("entity-1"),
+            workspaceId: toSafeId<"workspace">("ws_2"),
+            featureOwner: "shared",
+          },
+        ],
+      },
+    );
 
-    await handlerCtx.createAuditRecorder({
-      workspaceId: toSafeId<"workspace">("ws_2"),
-    })(tx, {
-      action: "create",
-      resourceId: "entity-1",
-      resourceType: "entity",
-    });
+    await scopedDb(
+      async (tx) =>
+        await handlerCtx.createAuditRecorder({
+          workspaceId: toSafeId<"workspace">("ws_2"),
+        })(tx, {
+          action: "create",
+          resourceId: "entity-1",
+          resourceType: "entity",
+        }),
+    );
 
     expect(inserted[0]).toMatchObject({
+      featureOwner: "shared",
       performerId: "agent-1",
       performerType: "agent",
       triggerSource: "mcp",
@@ -2964,7 +3046,10 @@ describe("capability executor validate_only permission preflight", () => {
     });
     expect(
       parseToolPayload<{ valid: boolean; capability: string }>(result),
-    ).toEqual({ valid: true, capability: "case-law.ingestion.get" });
+    ).toEqual({
+      valid: true,
+      capability: "case-law.ingestion.get",
+    });
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
 });
@@ -3694,7 +3779,10 @@ describe("capability executor enforces the advertised input schema", () => {
     for (const result of results) {
       expect(
         parseToolPayload<{ valid: boolean; capability: string }>(result),
-      ).toEqual({ valid: true, capability: CAPABILITY });
+      ).toEqual({
+        valid: true,
+        capability: CAPABILITY,
+      });
     }
   });
 });
@@ -4321,60 +4409,8 @@ for (const grants of [
 }
 
 describe("capability executor access isolation", () => {
-  const enabledContext = () => {
-    const context = createContext({
-      credential: { type: "oauth_client", clientId: "client" },
-      grantedScopes: [...MCP_OAUTH_SCOPES],
-    });
-    const grants = Object.fromEntries(
-      Object.keys(FEATURE_REGISTRY).map((featureId) => [
-        featureId,
-        [
-          {
-            type: "organization" as const,
-            organizationId: context.organizationId,
-          },
-        ],
-      ]),
-    );
-    const enrolments = Object.keys(FEATURE_REGISTRY).map((featureId) => ({
-      featureId,
-      organizationId: context.organizationId,
-      userId: context.userId,
-    }));
-    const enabled = {
-      ...context,
-      featureAccessSnapshot: createFeatureAccessSnapshot({
-        organizationId: context.organizationId,
-        userId: context.userId,
-        decisions: new Map(
-          Object.keys(FEATURE_REGISTRY).map((featureId) => [
-            featureId,
-            decideFeatureAccess({
-              registry: FEATURE_REGISTRY,
-              grants,
-              featureId,
-              organizationId: context.organizationId,
-              userId: context.userId,
-              user: { email: "standard@example.test", emailVerified: true },
-              membership: true,
-              enrolments,
-            }),
-          ]),
-        ),
-      }),
-    };
-    for (const featureId of Object.keys(FEATURE_REGISTRY)) {
-      expect(
-        isFeatureEnabled(enabled.featureAccessSnapshot, featureId, enabled),
-        featureId,
-      ).toBe(true);
-    }
-    return enabled;
-  };
-
   test("every catalog capability is refused by the opposite executor before dispatch", async () => {
-    const context = enabledContext();
+    const context = enabledCatalogContext();
     const classes = new Set<string>();
     for (const entry of capabilityCatalog) {
       classes.add(entry.access);

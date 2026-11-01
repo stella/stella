@@ -14,7 +14,7 @@ import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import { buildMcpContextFromChat } from "./mcp-chat-context";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
@@ -334,9 +334,7 @@ describe("runRegistryReadTool", () => {
         searchDocuments: { findFirst: async () => undefined },
       },
     };
-    return asTestRaw<ScopedDb>(
-      async (run: (transaction: unknown) => unknown) => await run(tx),
-    );
+    return createScopedDbMock(tx, { flowTaskGates: [] }).scopedDb;
   };
 
   const FIELD_UUID = "37286c24-6145-572e-ad27-15a1d4454d59";

@@ -31,6 +31,7 @@ import {
   invoicePolicies,
   timeEntryPolicies,
 } from "@/api/db/rls";
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -38,7 +39,10 @@ import {
   importProvenanceColumns,
   importProvenanceConstraints,
 } from "../import-provenance-columns";
-import { reviewResetOwnerPolicies } from "../review-reset-policies";
+import {
+  registeredReviewResetPolicies,
+  reviewResetOwnerPolicies,
+} from "../review-reset-policies";
 import { BILLING_ARRANGEMENT_MODES } from "./billing-arrangements";
 import {
   centsColumn,
@@ -113,6 +117,8 @@ export const timeDailyTargets = p.pgTable(
       using: DAILY_TARGET_ACCESS,
       withCheck: DAILY_TARGET_ACCESS,
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -218,6 +224,7 @@ export const timeEntries = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
+    ...systemScopePolicies(table),
     ...importProvenanceConstraints("time_entries", table),
     ...entityFeaturePolicies(
       table,
@@ -334,6 +341,8 @@ export const timeEntries = p.pgTable(
       )}))`,
     ),
     ...timeEntryPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -419,7 +428,9 @@ export const timeTimers = p.pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     workspaceId: safeWorkspaceId("workspace_id").references(
       () => workspaces.id,
-      { onDelete: "set null" },
+      {
+        onDelete: "set null",
+      },
     ),
     description: p.text("description"),
     legacyTimeEntryId: safeUuid<"timeEntry">("legacy_time_entry_id").references(
@@ -487,6 +498,8 @@ export const timeTimers = p.pgTable(
       using: TIME_TIMER_CURRENT_MEMBER_CHECK,
       withCheck: TIME_TIMER_CURRENT_MEMBER_CHECK,
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -503,7 +516,9 @@ export const timeTimerConfirmations = p.pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     timeEntryId: safeUuid<"timeEntry">("time_entry_id").references(
       () => timeEntries.id,
-      { onDelete: "set null" },
+      {
+        onDelete: "set null",
+      },
     ),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
@@ -524,6 +539,8 @@ export const timeTimerConfirmations = p.pgTable(
       to: stella,
       withCheck: TIME_TIMER_CONFIRMATION_ADMIN_INSERT_CHECK,
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -558,6 +575,8 @@ export const savedTimeNarratives = p.pgTable(
       sql`length(${table.narrative}) between 1 and 10000`,
     ),
     ...userOrganizationPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -589,7 +608,9 @@ export const timeEntrySuggestions = p.pgTable(
       .notNull(),
     timeEntryId: safeUuid<"timeEntry">("time_entry_id").references(
       () => timeEntries.id,
-      { onDelete: "set null" },
+      {
+        onDelete: "set null",
+      },
     ),
     evidence: p.jsonb().$type<TimeEntrySuggestionEvidence[]>(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
@@ -617,6 +638,8 @@ export const timeEntrySuggestions = p.pgTable(
       sql`${table.status} <> 'accepted' OR ${table.timeEntryId} IS NOT NULL OR ${table.evidence} IS NOT NULL`,
     ),
     ...wsOrganizationUserPolicies("time_entry_suggestions"),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -654,6 +677,8 @@ export const billingCodes = p.pgTable(
       .uniqueIndex("billing_codes_ws_type_code_uidx")
       .on(table.workspaceId, table.type, table.code),
     ...wsOrganizationPolicies("billing_codes", { columns: table }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -711,6 +736,8 @@ export const sellerProfiles = p.pgTable(
     ),
     ...reviewResetOwnerPolicies("seller_profiles"),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -779,6 +806,8 @@ export const numberSeries = p.pgTable(
     ),
     ...reviewResetOwnerPolicies("number_series"),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -806,6 +835,8 @@ export const numberSeriesCounters = p.pgTable(
     ),
     ...reviewResetOwnerPolicies("number_series_counters"),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -839,6 +870,8 @@ export const numberSeriesAllocations = p.pgTable(
     ),
     ...reviewResetOwnerPolicies("number_series_allocations"),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -872,6 +905,8 @@ export const rateTables = p.pgTable(
       .on(table.workspaceId, table.isDefault),
     p.index("rate_tables_ws_client_idx").on(table.workspaceId, table.clientId),
     ...wsOrganizationPolicies("rate_tables", { columns: table }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -892,7 +927,9 @@ export const rateEntries = p.pgTable(
     // Optional activity qualifier; user and role targets remain mutually exclusive.
     activityCodeId: safeUuid<"billingCode">("activity_code_id").references(
       () => billingCodes.id,
-      { onDelete: "no action" },
+      {
+        onDelete: "no action",
+      },
     ),
     hourlyRate: centsColumn("hourly_rate").notNull(),
     effectiveFrom: p.date("effective_from").notNull(),
@@ -993,6 +1030,8 @@ export const expenses = p.pgTable(
         [table.matterId, { target: "entities", kind: "context" }],
       ]),
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -1159,6 +1198,8 @@ export const invoices = p.pgTable(
       .on(table.workspaceId, table.invoiceNumber),
     ...invoicePolicies(table),
     ...reviewResetOwnerPolicies("invoices"),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -1237,7 +1278,9 @@ export const invoiceLines = p.pgTable(
     // ledger it may be deleted, and the voided document keeps the line.
     timeEntryId: safeUuid<"timeEntry">("time_entry_id").references(
       () => timeEntries.id,
-      { onDelete: "set null" },
+      {
+        onDelete: "set null",
+      },
     ),
     expenseId: safeUuid<"expense">("expense_id").references(() => expenses.id, {
       onDelete: "set null",
@@ -1451,6 +1494,8 @@ export const vatRates = p.pgTable(
     ),
     ...reviewResetOwnerPolicies("vat_rates"),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -1537,6 +1582,8 @@ export const timeEntryTimerStates = p.pgTable(
       using: TIMER_SIGNAL_WRITER_CHECK,
       withCheck: sql`(${TIMER_SIGNAL_WRITER_CHECK} AND ${TIMER_SIGNAL_TRUTH_CHECK})`,
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -1580,5 +1627,7 @@ export const desktopTimeEntryBatches = p.pgTable(
     ),
     ...userOrganizationPolicies(),
     ...reviewResetOwnerPolicies("desktop_time_entry_batches"),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

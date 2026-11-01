@@ -65,6 +65,7 @@ test("a running turn rejoins when its page mounts after the runtime was created"
   const RUN_ID = "run-rejoin";
   let joins = 0;
   const joined = Promise.withResolvers<undefined>();
+  const replayed = Promise.withResolvers<undefined>();
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : input.toString();
@@ -74,6 +75,17 @@ test("a running turn rejoins when its page mounts after the runtime was created"
         return new Response(
           [
             { type: "RUN_STARTED", runId: RUN_ID, threadId: "thread-rejoin" },
+            {
+              type: "TEXT_MESSAGE_START",
+              messageId: "partial",
+              role: "assistant",
+            },
+            {
+              type: "TEXT_MESSAGE_CONTENT",
+              messageId: "partial",
+              delta: "Drafting answer",
+            },
+            { type: "TEXT_MESSAGE_END", messageId: "partial" },
             { type: "RUN_FINISHED", runId: RUN_ID, threadId: "thread-rejoin" },
           ]
             .map((event, id) => `id: ${id}\ndata: ${JSON.stringify(event)}\n\n`)
@@ -92,14 +104,30 @@ test("a running turn rejoins when its page mounts after the runtime was created"
   const page = openLoadedTurn();
   // Hydration subscribes well after the loader built the runtime.
   await sleep(50);
-  const unsubscribe = page.runtime.subscribe(() => undefined);
+  const unsubscribe = page.runtime.subscribe(() => {
+    if (
+      page.runtime
+        .getSnapshot()
+        .messages.at(-1)
+        ?.parts.some(
+          (part) => part.type === "text" && part.content === "Drafting answer",
+        )
+    ) {
+      replayed.resolve(undefined);
+    }
+  });
   const deadline = Promise.withResolvers<undefined>();
   const deadlineTimer = setTimeout(() => {
     deadline.resolve(undefined);
   }, 2000);
   try {
     await Promise.race([joined.promise, deadline.promise]);
+    await Promise.race([replayed.promise, deadline.promise]);
     expect(joins).toBe(1);
+    expect(page.runtime.getSnapshot().messages).toHaveLength(1);
+    expect(page.runtime.getSnapshot().messages.at(0)?.parts).toEqual([
+      { type: "text", content: "Drafting answer" },
+    ]);
     expect(page.errors).toEqual([]);
   } finally {
     clearTimeout(deadlineTimer);
@@ -122,6 +150,25 @@ test("a missing running turn refreshes settled history once after its loader pro
   const page = openLoadedTurn();
   await awaitProbe(page.runtime);
   expect(probes).toBe(1);
+  expect(page.reloads()).toBe(1);
+  expect(page.errors).toEqual([]);
+  expect(page.runtime.getSnapshot().turnAbandoned).toBe(true);
+});
+
+test("a turn completed between history loading and the resume probe refreshes without joining", async () => {
+  const requests: string[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      requests.push(url);
+      return Response.json({ type: "transcript", turnId: "turn-rejoin" });
+    },
+    { preconnect: () => undefined },
+  );
+  const page = openLoadedTurn();
+  await awaitProbe(page.runtime);
+  expect(requests).toHaveLength(1);
+  expect(requests.at(0)).toContain("/resume");
   expect(page.reloads()).toBe(1);
   expect(page.errors).toEqual([]);
   expect(page.runtime.getSnapshot().turnAbandoned).toBe(true);

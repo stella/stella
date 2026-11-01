@@ -3,6 +3,7 @@ import {
   beforeEach,
   describe,
   expect,
+  expectTypeOf,
   type Mock,
   mock,
   spyOn,
@@ -10,8 +11,15 @@ import {
 } from "bun:test";
 
 import {
+  type BuiltRealtimeEvent,
+  flowRunUpdateRealtimeEvent,
+  REALTIME_EVENT_TYPE,
+  RESOURCE_DELETION_OWNERSHIP,
   RESOURCE_TYPE,
+  resourceDeletedChange,
   resourceRef,
+  resourcesChangedRealtimeEvent,
+  resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
@@ -201,7 +209,7 @@ const userId = toSafeId<"user">("user_1");
 const sessionId = "session_1";
 const publishWorkspaceEventMock = async (
   targetWorkspaceId: SafeId<"workspace">,
-  event: WorkspaceRealtimeEvent,
+  event: BuiltRealtimeEvent,
   options: {
     deliveredInline?: boolean | undefined;
     originInstanceId?: string | undefined;
@@ -232,10 +240,26 @@ const testPublisher: SseBroadcastPublisher = {
   publishWorkspaceEvent: publishWorkspaceEventMock,
 };
 const authorizeAllWorkspaceConnections = async ({
-  sessionIds,
-}: {
-  sessionIds: readonly string[];
-}) => new Set(sessionIds);
+  connections,
+  event,
+}: Parameters<Parameters<typeof startSse>[0]["workspace"]>[0]) =>
+  new Map(
+    connections.map(
+      ({
+        sessionId: connectionSessionId,
+        organizationId: connectionOrganizationId,
+        userId: connectionUserId,
+      }) =>
+        [
+          connectionSessionId,
+          {
+            organizationId: connectionOrganizationId,
+            userId: connectionUserId,
+            delivery: { type: "deliver", event },
+          },
+        ] as const,
+    ),
+  );
 const authorizeAllUserConnections = async ({
   sessionIds,
 }: {
@@ -268,7 +292,7 @@ const subscribeToWorkspace = (
     userId: subscribingUserId,
     workspaceId,
   });
-const testEvent = (marker: string): WorkspaceRealtimeEvent =>
+const testEvent = (marker: string) =>
   resourceUpdatedRealtimeEvent(
     resourceRef({
       type: RESOURCE_TYPE.ENTITY,
@@ -277,7 +301,7 @@ const testEvent = (marker: string): WorkspaceRealtimeEvent =>
   );
 const broadcastTestEvent = (
   targetWorkspaceId: SafeId<"workspace">,
-  event: WorkspaceRealtimeEvent,
+  event: BuiltRealtimeEvent,
 ): void => {
   broadcast(targetWorkspaceId, event, {
     publishWorkspace: publishWorkspaceEventMock,
@@ -538,6 +562,186 @@ describe("broadcast: local delivery without an attached subscriber", () => {
   });
 });
 
+describe("recipient feature delivery", () => {
+  test.each(["redis", "local"] as const)(
+    "%s: each recipient receives the authorized batch payload",
+    async (transport) => {
+      stopSse();
+      await settlePendingWork();
+      const otherUserId = toSafeId<"user">("batch-filtered-user");
+      const ordinaryChange = resourceUpdatedChange(
+        resourceRef({
+          type: RESOURCE_TYPE.ENTITY,
+          id: toSafeId<"entity">("ordinary-batch-entity"),
+        }),
+      );
+      const hiddenChange = resourceDeletedChange({
+        resource: resourceRef({
+          type: RESOURCE_TYPE.WORKSPACE_VIEW,
+          id: toSafeId<"workspaceView">("restricted-batch-entity"),
+        }),
+        deletionOwnership: RESOURCE_DELETION_OWNERSHIP.ORDINARY,
+      });
+      const fullBatch = resourcesChangedRealtimeEvent([
+        ordinaryChange,
+        hiddenChange,
+      ]);
+      const filteredBatch = resourcesChangedRealtimeEvent([ordinaryChange]);
+      startSse(
+        {
+          sessions: holdAllSessions,
+          user: authorizeAllUserConnections,
+          workspace: async ({ connections }) =>
+            new Map(
+              connections.map(
+                ({
+                  sessionId: recipientSessionId,
+                  organizationId: recipientOrganizationId,
+                  userId: recipientUserId,
+                }) => {
+                  const authorizedEvent =
+                    recipientUserId === userId
+                      ? fullBatch.toJSON()
+                      : filteredBatch.toJSON();
+                  return [
+                    recipientSessionId,
+                    {
+                      organizationId: recipientOrganizationId,
+                      userId: recipientUserId,
+                      delivery:
+                        recipientUserId === userId ||
+                        recipientUserId === otherUserId
+                          ? { type: "deliver", event: authorizedEvent }
+                          : { type: "hidden" },
+                    },
+                  ] as const;
+                },
+              ),
+            ),
+        },
+        {
+          createClient: createRedisClientMock,
+          publisher: testPublisher,
+        },
+      );
+      await settlePendingWork();
+      if (transport === "local") {
+        stopSse();
+        await settlePendingWork();
+      }
+      const first = new AbortController();
+      const second = new AbortController();
+      const reader = subscribeToWorkspace(first.signal).getReader();
+      const filteredReader = subscribeToWorkspace(
+        second.signal,
+        otherUserId,
+      ).getReader();
+      try {
+        broadcastTestEvent(workspaceId, fullBatch);
+        const fullText = new TextDecoder().decode((await reader.read()).value);
+        const filteredText = new TextDecoder().decode(
+          (await filteredReader.read()).value,
+        );
+        expect(fullText).toContain(JSON.stringify(fullBatch));
+        expect(filteredText).toContain(JSON.stringify(filteredBatch));
+        expect(filteredText).not.toContain("restricted-batch-entity");
+      } finally {
+        first.abort();
+        second.abort();
+        stopSse();
+        await settlePendingWork();
+      }
+    },
+  );
+
+  test.each(["redis", "local"] as const)(
+    "%s: revoked flow admission retains the stream for other events and re-grant",
+    async (transport) => {
+      stopSse();
+      await settlePendingWork();
+      const admitted = new Set([userId]);
+      startSse(
+        {
+          sessions: holdAllSessions,
+          user: authorizeAllUserConnections,
+          workspace: async ({ connections, event }) =>
+            new Map(
+              connections.map(
+                ({
+                  sessionId: recipientSessionId,
+                  organizationId: recipientOrganizationId,
+                  userId: recipientUserId,
+                }) =>
+                  [
+                    recipientSessionId,
+                    {
+                      organizationId: recipientOrganizationId,
+                      userId: recipientUserId,
+                      delivery:
+                        event.type === REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE &&
+                        !admitted.has(recipientUserId)
+                          ? { type: "hidden" }
+                          : { type: "deliver", event },
+                    },
+                  ] as const,
+              ),
+            ),
+        },
+        {
+          createClient: createRedisClientMock,
+          publisher: testPublisher,
+        },
+      );
+      await settlePendingWork();
+      if (transport === "local") {
+        stopSse();
+        await settlePendingWork();
+      }
+      const controller = new AbortController();
+      const deniedController = new AbortController();
+      const reader = subscribeToWorkspace(controller.signal).getReader();
+      const deniedReader = subscribeToWorkspace(
+        deniedController.signal,
+        toSafeId<"user">("flow-denied-user"),
+      ).getReader();
+      const flowEvent = flowRunUpdateRealtimeEvent({
+        runId: "flow-progress",
+        status: "running",
+        currentStepIndex: 0,
+        steps: [],
+      });
+      broadcastTestEvent(workspaceId, flowEvent);
+      broadcastTestEvent(workspaceId, testEvent("ordinary-after-flow"));
+      expect(new TextDecoder().decode((await reader.read()).value)).toContain(
+        "flow-progress",
+      );
+      expect(new TextDecoder().decode((await reader.read()).value)).toContain(
+        "ordinary-after-flow",
+      );
+      expect(
+        new TextDecoder().decode((await deniedReader.read()).value),
+      ).toContain("ordinary-after-flow");
+
+      admitted.clear();
+      broadcastTestEvent(workspaceId, flowEvent);
+      broadcastTestEvent(workspaceId, testEvent("ordinary-after-revoke"));
+      expect(new TextDecoder().decode((await reader.read()).value)).toContain(
+        "ordinary-after-revoke",
+      );
+      await settlePendingWork();
+      admitted.add(userId);
+      broadcastTestEvent(workspaceId, flowEvent);
+      expect(new TextDecoder().decode((await reader.read()).value)).toContain(
+        "flow-progress",
+      );
+      controller.abort();
+      deniedController.abort();
+      stopSse();
+      await settlePendingWork();
+    },
+  );
+});
+
 describe("workspace access revocation", () => {
   test("reauthorizes current access when a revocation message was missed", async () => {
     const retainedUserId = toSafeId<"user">("user_2");
@@ -545,12 +749,14 @@ describe("workspace access revocation", () => {
       {
         sessions: holdAllSessions,
         user: authorizeAllUserConnections,
-        workspace: async ({ sessionIds }) =>
-          new Set(
-            sessionIds.filter(
-              (candidate) => candidate === `session-${retainedUserId}`,
+        workspace: async (lookup) =>
+          await authorizeAllWorkspaceConnections({
+            ...lookup,
+            connections: lookup.connections.filter(
+              ({ sessionId: candidateSessionId }) =>
+                candidateSessionId === `session-${retainedUserId}`,
             ),
-          ),
+          }),
       },
       {
         createClient: createRedisClientMock,
@@ -658,7 +864,7 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     const publish = mock(
       async (
         _workspaceId: SafeId<"workspace">,
-        _event: WorkspaceRealtimeEvent,
+        _event: Parameters<SseBroadcastPublisher["publishWorkspaceEvent"]>[1],
         _options: Parameters<SseBroadcastPublisher["publishWorkspaceEvent"]>[2],
       ) => await pendingPublish.promise,
     );
@@ -729,12 +935,12 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
       {
         sessions: holdAllSessions,
         user: authorizeAllUserConnections,
-        workspace: async ({ sessionIds }) => {
+        workspace: async (lookup) => {
           authorizationCalls += 1;
           if (authorizationCalls === 1) {
             await firstAuthorization.promise;
           }
-          return new Set(sessionIds);
+          return await authorizeAllWorkspaceConnections(lookup);
         },
       },
       {
@@ -1101,4 +1307,21 @@ describe("startSse: subscriber attach retry", () => {
     stopSse();
     await settlePendingWork();
   });
+});
+
+test("workspace broadcast rejects wire events and public producer projections", () => {
+  type ForgedDeletion = Extract<
+    WorkspaceRealtimeEvent,
+    {
+      type: typeof REALTIME_EVENT_TYPE.RESOURCE_DELETED;
+    }
+  >;
+  expectTypeOf<
+    ForgedDeletion extends Parameters<typeof broadcast>[1] ? true : false
+  >().toEqualTypeOf<false>();
+  const event = testEvent("built-proof");
+  type PublicProjection = Pick<typeof event, keyof typeof event>;
+  expectTypeOf<
+    PublicProjection extends Parameters<typeof broadcast>[1] ? true : false
+  >().toEqualTypeOf<false>();
 });

@@ -1,6 +1,7 @@
 import {
-  type ResourceChange,
+  type ResourceChangeInput,
   resourceDeletedRealtimeEvent,
+  type ResourceDeletion,
   type ResourceRef,
   resourcesChangedRealtimeEvent,
   resourceSetUpdatedRealtimeEvent,
@@ -26,14 +27,14 @@ export const broadcastWorkspaceResourceUpdated = (
 
 export const broadcastWorkspaceResourceDeleted = (
   workspaceId: SafeId<"workspace">,
-  resource: ResourceRef,
+  deletion: ResourceDeletion,
 ): void => {
-  broadcast(workspaceId, resourceDeletedRealtimeEvent(resource));
+  broadcast(workspaceId, resourceDeletedRealtimeEvent(deletion));
 };
 
 export const broadcastWorkspaceResourceChanges = (
   workspaceId: SafeId<"workspace">,
-  changes: readonly ResourceChange[],
+  changes: readonly ResourceChangeInput[],
 ): void => {
   broadcast(workspaceId, resourcesChangedRealtimeEvent(changes));
 };
@@ -53,6 +54,6 @@ export const broadcastOrganizationResourceSetUpdated = (
 ): void => {
   broadcastToOrganization(
     organizationId,
-    resourceSetUpdatedRealtimeEvent(resourceType),
+    resourceSetUpdatedRealtimeEvent(resourceType).toJSON(),
   );
 };

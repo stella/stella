@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import {
   FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION,
   parseFolioDocumentOperationBatch,
-} from "@stll/folio-core";
+} from "@stll/folio-core/document-operations";
 import type { FolioAIEditOperation } from "@stll/folio-react";
 
 /** Validate one opaque persisted operation with Folio's shared contract. */

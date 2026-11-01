@@ -15,6 +15,7 @@ import type {
   BilingualRunErrorCode,
 } from "@/api/lib/bilingual/contract";
 
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   jsonb,
   organization,
@@ -131,6 +132,8 @@ export const bilingualTranslationRuns = p.pgTable(
       })
       .onDelete("cascade"),
     ...wsOrganizationPolicies("bilingual_translation_runs", { columns: table }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -225,5 +228,7 @@ export const bilingualTranslationRows = p.pgTable(
       })
       .onDelete("cascade"),
     ...wsOrganizationPolicies("bilingual_translation_rows", { columns: table }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

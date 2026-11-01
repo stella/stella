@@ -192,6 +192,7 @@ export type CapabilityFlagSpec = FlagSpec & {
  */
 export type CapabilityLeafSpec = {
   feature?: string;
+  featureAccess?: "conditional";
   featureId?: string;
   commandPath: readonly string[];
   capabilityId: string;

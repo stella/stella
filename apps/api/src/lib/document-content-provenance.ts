@@ -1,4 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { documentProcessingRuns } from "@/api/db/schema";
@@ -194,6 +195,9 @@ export const selectCurrentExtractedContent = <
 };
 
 type LoadCurrentExtractedContentsOptions = {
+  entityVisibility?: (
+    entity: Pick<typeof entities, "id" | "workspaceId">,
+  ) => SQL;
   entityIds: SafeId<"entity">[];
   organizationId: SafeId<"organization">;
   workspaceIds: AuthorizedWorkspaceIds;
@@ -209,6 +213,7 @@ const resolveCurrentExtractedRowsFromDatabase = async (
     entityIds,
     organizationId,
     workspaceIds,
+    entityVisibility,
   }: Omit<LoadCurrentExtractedContentsOptions, "workspaceIds"> & {
     workspaceIds: readonly SafeId<"workspace">[] | null;
   },
@@ -238,6 +243,10 @@ const resolveCurrentExtractedRowsFromDatabase = async (
     },
     with: {
       entity: {
+        where:
+          entityVisibility === undefined
+            ? undefined
+            : { RAW: entityVisibility },
         columns: { name: true, workspaceId: true },
         with: {
           workspace: { columns: { status: true } },

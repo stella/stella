@@ -31,6 +31,7 @@ import {
   entityVersions,
   expenses,
   extractedContent,
+  featureEnrolments,
   fields,
   fileChatThreads,
   invoices,
@@ -63,6 +64,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeIdType } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import {
+  FLOWS_FEATURE_ID,
+  SIGNALS_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { createUserFileKey } from "@/api/lib/file-key";
 import { cents } from "@/api/lib/money";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
@@ -293,21 +298,25 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       id: ids.userA1,
       name: "User A1",
       email: `${ids.userA1}@test.local`,
+      emailVerified: true,
     },
     {
       id: ids.userA2,
       name: "User A2",
       email: `${ids.userA2}@test.local`,
+      emailVerified: true,
     },
     {
       id: ids.userB1,
       name: "User B1",
       email: `${ids.userB1}@test.local`,
+      emailVerified: true,
     },
     {
       id: ids.userAdmin,
       name: "Admin",
       email: `${ids.userAdmin}@test.local`,
+      emailVerified: true,
     },
   ]);
 
@@ -396,6 +405,24 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       displayName: "Contact B2",
     },
   ]);
+
+  // Shared actors exercise the admitted surfaces; opt-out fixtures use isolated principals.
+  await db.insert(featureEnrolments).values(
+    [
+      { organizationId: ids.orgA, userId: ids.userA1 },
+      { organizationId: ids.orgA, userId: ids.userA2 },
+      { organizationId: ids.orgA, userId: ids.userAdmin },
+      { organizationId: ids.orgB, userId: ids.userA1 },
+      { organizationId: ids.orgB, userId: ids.userB1 },
+    ].flatMap((principal) =>
+      (
+        [SIGNALS_FEATURE_ID, FLOWS_FEATURE_ID] satisfies [
+          typeof SIGNALS_FEATURE_ID,
+          typeof FLOWS_FEATURE_ID,
+        ]
+      ).map((featureId) => ({ ...principal, featureId })),
+    ),
+  );
 
   await db.insert(workspaces).values([
     {

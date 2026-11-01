@@ -34,6 +34,7 @@ import {
 } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { flowAuditVisibilityCondition } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { createCursorPage } from "@/api/lib/pagination";
@@ -122,14 +123,17 @@ export type ReadAuditLogsQuery = v.InferOutput<typeof readAuditLogsQuerySchema>;
  */
 export const toAuditLogConditions = ({
   organizationId,
+  userId,
   filter,
 }: {
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user"> | null;
   filter: AuditLogFilter;
 }): SQL[] => {
   const conditions: SQL[] = [
     eq(auditLogs.organizationId, organizationId),
     sql`(${auditLogs.workspaceId} IS NULL OR ${workspaceCheck})`,
+    flowAuditVisibilityCondition({ organizationId, userId }),
   ];
 
   if (filter.workspaceId) {
@@ -256,7 +260,11 @@ export const queryAuditLogPage = async function* ({
     query.limit ?? LIMITS.auditLogPageSizeDefault,
   );
 
-  const conditions = toAuditLogConditions({ organizationId, filter: query });
+  const conditions = toAuditLogConditions({
+    organizationId,
+    userId,
+    filter: query,
+  });
 
   const rows = yield* Result.await(
     safeDb(async (tx) => {

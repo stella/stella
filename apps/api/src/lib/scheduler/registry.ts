@@ -1,5 +1,6 @@
 import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
+import { FLOW_RUN_TASK } from "@/api/lib/scheduler/flow-schedule-identity";
 import {
   SWEEP_ACTION_COSTS_TASK,
   sweepActionCostRecords,
@@ -118,10 +119,7 @@ import {
   REPAIR_FILE_DERIVATIVES_TASK,
   repairFileDerivatives,
 } from "@/api/lib/scheduler/tasks/file-derivative-repair";
-import {
-  FLOW_RUN_TASK,
-  runScheduledFlow,
-} from "@/api/lib/scheduler/tasks/flow-run";
+import { runScheduledFlow } from "@/api/lib/scheduler/tasks/flow-run";
 import {
   RECONCILE_FLOW_RUN_ORPHANS_TASK,
   reconcileFlowRunOrphans,
@@ -199,6 +197,10 @@ import {
   auditSchedulerPauses,
 } from "@/api/lib/scheduler/tasks/scheduler-pause-audit";
 import {
+  RECOVER_SCOUT_EMISSION_TASK,
+  recoverScoutEmission,
+} from "@/api/lib/scheduler/tasks/scout-emission-recovery";
+import {
   REPAIR_CHAT_SEARCH_INDEX_TASK,
   repairChatSearchIndex,
 } from "@/api/lib/scheduler/tasks/search-chat-index";
@@ -227,6 +229,10 @@ import {
   cleanTemplateDeletionObjects,
 } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
 import {
+  RECOVER_UPLOAD_FLOW_TRIGGERS_TASK,
+  recoverUploadFlowTriggers,
+} from "@/api/lib/scheduler/tasks/upload-flow-trigger-recovery";
+import {
   runWorkAttentionScoutTask,
   WORK_ATTENTION_SCOUT_TASK,
 } from "@/api/lib/scheduler/tasks/work-attention-scout";
@@ -245,6 +251,8 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [RECOVER_SCOUT_EMISSION_TASK]: recoverScoutEmission,
+  [RECOVER_UPLOAD_FLOW_TRIGGERS_TASK]: recoverUploadFlowTriggers,
   [SWEEP_REQUEST_RECEIPTS_TASK]: sweepRequestReceipts,
   [RECONCILE_PUBLISHER_REMOVALS_TASK]: reconcilePublisherRemovalsTask,
   [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,

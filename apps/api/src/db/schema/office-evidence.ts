@@ -13,6 +13,7 @@ import {
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   bytea,
   organization,
@@ -177,5 +178,7 @@ export const officeFileEvidence = p.pgTable(
         [table.fieldId, { target: "fields", kind: "owned-content" }],
       ]),
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

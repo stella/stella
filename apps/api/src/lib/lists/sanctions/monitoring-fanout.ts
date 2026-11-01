@@ -10,7 +10,6 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
-import { SANCTIONS_EDITION_FANOUT_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   permitsLifecycleMove,
   transitionLifecycleBatch,
@@ -18,6 +17,7 @@ import {
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import type { SanctionsSourceFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { resetMonitoringBackfills } from "@/api/lib/lists/sanctions/monitoring-backfill";
+import { SANCTIONS_EDITION_FANOUT_TRANSITIONS } from "@/api/lib/lists/sanctions/monitoring-transition-specs";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";

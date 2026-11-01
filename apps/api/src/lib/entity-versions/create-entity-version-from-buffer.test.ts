@@ -189,7 +189,7 @@ const dependencies = {
   createRootScopedDb: () =>
     asTestRaw<ReturnType<typeof createRootScopedDb>>(mock()),
   broadcast: (workspaceId, event) => {
-    void broadcastMock(workspaceId, event);
+    void broadcastMock(workspaceId, event.toJSON());
   },
 } satisfies CreateEntityVersionFromBufferDependencies;
 const baseInput = {
@@ -387,6 +387,7 @@ describe("createEntityVersionFromBuffer", () => {
     expect(processExtractionMock).toHaveBeenCalledWith("entity_1", {
       filePropertyId: "property_1",
     });
+    expect(broadcastMock).toHaveBeenCalledTimes(1);
     // The search repair mark commits with the version; the flush runs after.
     expect(enqueueSearchRepairsMock).toHaveBeenCalledWith(expect.anything(), [
       "entity_1",

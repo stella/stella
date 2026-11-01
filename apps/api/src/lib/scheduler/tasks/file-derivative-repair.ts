@@ -5,13 +5,7 @@ import * as v from "valibot";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
-import {
-  entities,
-  entityVersions,
-  fields,
-  schedulerJobs,
-  workspaces,
-} from "@/api/db/schema";
+import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { DERIVATIVE_FAILURE_REASON } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -35,6 +29,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
+import { writePlatformSchedulerTaskState } from "@/api/lib/scheduler/upsert-job";
 
 export const REPAIR_FILE_DERIVATIVES_TASK = "files.repairDerivatives" as const;
 
@@ -349,12 +344,13 @@ const persistCursor = async ({
   leaseToken: string;
   nextCursor: SafeId<"field"> | null;
 }): Promise<void> => {
-  await db
-    .update(schedulerJobs)
-    .set({ payload: { cursor: nextCursor } })
-    .where(
-      and(eq(schedulerJobs.id, jobId), eq(schedulerJobs.lockedBy, leaseToken)),
-    );
+  await writePlatformSchedulerTaskState({
+    db,
+    jobId,
+    leaseToken,
+    state: { type: "checkpoint", payload: { cursor: nextCursor } },
+    task: REPAIR_FILE_DERIVATIVES_TASK,
+  });
 };
 
 /**

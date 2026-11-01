@@ -609,6 +609,9 @@ export const deriveCapabilityLeaf = (
     spec: {
       commandPath,
       capabilityId: entry.id,
+      ...(entry.featureAccess === "conditional"
+        ? { featureAccess: entry.featureAccess }
+        : {}),
       ...(entry.feature === undefined ? {} : { feature: entry.feature }),
       ...(entry.featureId === undefined || entry.featureAccess !== "required"
         ? {}

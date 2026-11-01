@@ -4,19 +4,19 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## file_comparison_uploads · `fileComparisonUploads` · file-comparisons.ts:59 · rls
+## file_comparison_uploads · `fileComparisonUploads` · file-comparisons.ts:60 · rls
 
 Short-lived objects for redlining two DOCX files that stella does not store: the two staged inputs and the redline the comparison writes.
 
 ```text
-file_comparison_uploads.id               pUuid               pk,not null       file-comparisons.ts:62
-file_comparison_uploads.organization_id  safeOrganizationId  fk,not null       file-comparisons.ts:63
-file_comparison_uploads.user_id          text                fk,not null       file-comparisons.ts:64
-file_comparison_uploads.kind             text                not null          file-comparisons.ts:65
-file_comparison_uploads.declared_name    varchar             not null          file-comparisons.ts:66
-file_comparison_uploads.declared_size    bigint              not null          file-comparisons.ts:67
-file_comparison_uploads.declared_sha256  varchar             null              file-comparisons.ts:69  hex, and only for an input: the server writes the redline's bytes.
-file_comparison_uploads.status           text                default,not null  file-comparisons.ts:70
-file_comparison_uploads.expires_at       timestamptz         not null          file-comparisons.ts:74
-file_comparison_uploads.created_at       timestamptz         default,not null  file-comparisons.ts:75
+file_comparison_uploads.id               pUuid               pk,not null       file-comparisons.ts:63
+file_comparison_uploads.organization_id  safeOrganizationId  fk,not null       file-comparisons.ts:64
+file_comparison_uploads.user_id          text                fk,not null       file-comparisons.ts:65
+file_comparison_uploads.kind             text                not null          file-comparisons.ts:66
+file_comparison_uploads.declared_name    varchar             not null          file-comparisons.ts:67
+file_comparison_uploads.declared_size    bigint              not null          file-comparisons.ts:68
+file_comparison_uploads.declared_sha256  varchar             null              file-comparisons.ts:70  hex, and only for an input: the server writes the redline's bytes.
+file_comparison_uploads.status           text                default,not null  file-comparisons.ts:71
+file_comparison_uploads.expires_at       timestamptz         not null          file-comparisons.ts:75
+file_comparison_uploads.created_at       timestamptz         default,not null  file-comparisons.ts:76
 ```

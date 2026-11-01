@@ -1,18 +1,26 @@
 import { panic } from "better-result";
 
+import type { CapabilityCatalogEntry } from "./generate-capability-tree.js";
 import type { RouteNode } from "./route-types.js";
 
 /** Enabled identities from this invocation's authenticated tools/list. */
 export type CallerFeatureAccess = {
   capabilities: readonly string[];
   tools: readonly string[];
+  conditionalInputs?: Readonly<
+    Record<string, CapabilityCatalogEntry["inputSchema"]>
+  >;
 };
 
 export const hasFeatureCommands = (tree: RouteNode): boolean => {
   switch (tree.kind) {
     case "leaf":
-    case "capability-leaf":
       return tree.spec.featureId !== undefined;
+    case "capability-leaf":
+      return (
+        tree.spec.featureId !== undefined ||
+        tree.spec.featureAccess === "conditional"
+      );
     case "route":
       return Object.values(tree.children).some(hasFeatureCommands);
     default: {
@@ -41,6 +49,13 @@ export const projectFeatureCommands = ({
           ? node
           : null;
       case "capability-leaf":
+        if (node.spec.featureAccess === "conditional") {
+          return capabilities.has(node.spec.capabilityId) ||
+            featureAccess?.conditionalInputs?.[node.spec.capabilityId] !==
+              undefined
+            ? node
+            : null;
+        }
         return node.spec.featureId === undefined ||
           capabilities.has(node.spec.capabilityId)
           ? node

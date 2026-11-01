@@ -25,6 +25,7 @@ import {
 } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
 import { toSafeId } from "@/lib/safe-id";
+import { loadAuthContext } from "@/routes/-auth-context";
 import { routePresentation } from "@/routes/-route-presentation";
 import { FlowEditor } from "@/routes/knowledge/-components/flow-editor";
 import type { FlowExampleKey } from "@/routes/knowledge/-components/flow-examples";
@@ -48,8 +49,22 @@ export const Route = createFileRoute("/knowledge/workflows")({
       to: "/knowledge/workflows",
     }),
   },
-  beforeLoad: () => {
-    if (!workflowsRouteAvailable()) {
+  beforeLoad: async ({ context }) => {
+    const auth =
+      context.user === undefined
+        ? await loadAuthContext(context.queryClient)
+        : null;
+    const userId = context.user?.id ?? auth?.session?.userId;
+    const organizationId =
+      context.user?.activeOrganizationId ?? auth?.session?.activeOrganizationId;
+    if (
+      !userId ||
+      !organizationId ||
+      !(await workflowsRouteAvailable(context.queryClient, {
+        userId,
+        organizationId,
+      }))
+    ) {
       throw redirect({ to: "/knowledge" });
     }
   },

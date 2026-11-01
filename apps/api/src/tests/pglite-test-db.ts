@@ -72,6 +72,7 @@ import {
 import {
   deriveStellaTablePrivileges,
   readCommittedMigrations,
+  scopedOwnerRoleStatements,
   stellaTablePrivilegeStatements,
 } from "@/api/tests/stella-table-privileges";
 
@@ -743,6 +744,21 @@ const applyStellaTablePrivileges = async (client: PGlite): Promise<void> => {
   await client.exec(statements.join(";\n"));
 };
 
+const applySystemTablePrivileges = async (client: PGlite): Promise<void> => {
+  const { grants } = scopedOwnerRoleStatements(readCommittedMigrations());
+  for (const statement of grants) {
+    await client.exec(statement);
+  }
+  for (const table of [
+    schema.pendingScoutEmissions,
+    schema.flowUploadTriggerIntents,
+  ]) {
+    await client.exec(
+      `ALTER TABLE ${quoteSqlIdentifier(getTableName(table))} FORCE ROW LEVEL SECURITY`,
+    );
+  }
+};
+
 const installTestPublicLawViews = async (
   db: Pick<ReturnType<typeof drizzle>, "execute">,
 ): Promise<void> => {
@@ -806,6 +822,10 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   const pushSchemaDb = drizzle({ client });
 
   await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
+  for (const statement of scopedOwnerRoleStatements(readCommittedMigrations())
+    .definitions) {
+    await db.execute(sql.raw(statement));
+  }
   await db.execute(
     sql.raw(
       "CREATE ROLE stella_entity_gate NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION",
@@ -875,6 +895,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteTreeParentGuards(db);
 
   await applyStellaTablePrivileges(client);
+  await applySystemTablePrivileges(client);
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));
   }

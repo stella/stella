@@ -47,6 +47,7 @@ let testDb: TestDatabase;
 let ids: TestIds;
 
 const seededAuditLogIds: SafeId<"auditLog">[] = [];
+const seededEntityIds: SafeId<"entity">[] = [];
 
 let activityInOwnMatter: SafeId<"auditLog">;
 let agentActivityInOwnMatter: SafeId<"auditLog">;
@@ -75,6 +76,18 @@ const seedActivity = async ({
   workspaceId,
   userId,
 }: SeedActivityOptions): Promise<SafeId<"auditLog">> => {
+  const entityId = toSafeId<"entity">(resourceId);
+  await testDb
+    .insert(entities)
+    .values({
+      id: entityId,
+      workspaceId,
+      kind: "document",
+      name: "Activity document",
+      featureOwner: "shared",
+    })
+    .onConflictDoNothing();
+  seededEntityIds.push(entityId);
   const recorder = createBackgroundAuditRecorder({
     organizationId,
     workspaceId,
@@ -91,6 +104,9 @@ const seedActivity = async ({
     ...(changes && { changes }),
   });
 
+  if (action === AUDIT_ACTION.DELETE) {
+    await testDb.delete(entities).where(eq(entities.id, entityId));
+  }
   const written = await testDb
     .select({ id: auditLogs.id })
     .from(auditLogs)
@@ -106,7 +122,15 @@ const seedActivity = async ({
 };
 
 const seedFormulaAgentActivity = async (): Promise<SafeId<"auditLog">> => {
-  const resourceId = Bun.randomUUIDv7();
+  const resourceId = toSafeId<"entity">(Bun.randomUUIDv7());
+  await testDb.insert(entities).values({
+    id: resourceId,
+    workspaceId: ids.wsA1,
+    kind: "document",
+    name: "Activity document",
+    featureOwner: "shared",
+  });
+  seededEntityIds.push(resourceId);
   const recorder = createBackgroundAuditRecorder({
     organizationId: ids.orgA,
     workspaceId: ids.wsA1,
@@ -190,6 +214,7 @@ afterAll(async () => {
   await testDb
     .delete(auditLogs)
     .where(inArray(auditLogs.id, seededAuditLogIds));
+  await testDb.delete(entities).where(inArray(entities.id, seededEntityIds));
   await releaseRlsFixture();
 });
 

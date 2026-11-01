@@ -3,16 +3,14 @@ import { describe, expect, test } from "bun:test";
 
 import { DAY_IN_MS } from "@stll/time";
 
-import {
-  DECLARED_SCHEDULER_JOBS,
-  initialNextRunAt,
-} from "@/api/lib/scheduler/jobs";
+import { FLOW_RUN_TASK } from "@/api/lib/scheduler/flow-schedule-identity";
+import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { REGISTERED_SCHEDULER_TASK_NAMES } from "@/api/lib/scheduler/registry";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import { REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK } from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
-import { FLOW_RUN_TASK } from "@/api/lib/scheduler/tasks/flow-run";
 import { REFRESH_LEGISLATION_FACETS_TASK } from "@/api/lib/scheduler/tasks/legislation-facet-refresh";
 import { PURGE_SYSTEM_AUDIT_RUNS_TASK } from "@/api/lib/scheduler/tasks/system-audit-retention";
+import { initialNextRunAt } from "@/api/lib/scheduler/upsert-job";
 
 /**
  * A scheduled job that never runs emits nothing: no error, no log, no metric.

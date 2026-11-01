@@ -20,6 +20,7 @@ import {
   OWNER_REQUIRED_ERROR_CODE,
 } from "@/api/lib/membership-role-invariants";
 import { cents } from "@/api/lib/money";
+import { getPgErrorCode } from "@/api/lib/pg-error";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
@@ -185,6 +186,227 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("membership role invariants (postgres)", () => {
+    test("the member-removal role deletes only its locked target without SELECT", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const organizationId = mintAuthProviderId<"organization">();
+        const otherOrganizationId = mintAuthProviderId<"organization">();
+        const finalOwnerOrganizationId = mintAuthProviderId<"organization">();
+        const targetUserId = mintAuthProviderId<"user">();
+        const siblingUserId = mintAuthProviderId<"user">();
+        const finalOwnerUserId = mintAuthProviderId<"user">();
+        const targetMemberId = Bun.randomUUIDv7();
+        const siblingMemberId = Bun.randomUUIDv7();
+        const otherOrganizationMemberId = Bun.randomUUIDv7();
+        const finalOwnerMemberId = Bun.randomUUIDv7();
+
+        try {
+          await db.insert(user).values([
+            {
+              id: targetUserId,
+              name: "Removal target",
+              email: `${targetUserId.toLowerCase()}@member-removal.test`,
+            },
+            {
+              id: siblingUserId,
+              name: "Organization member",
+              email: `${siblingUserId.toLowerCase()}@member-removal.test`,
+            },
+            {
+              id: finalOwnerUserId,
+              name: "Final owner",
+              email: `${finalOwnerUserId.toLowerCase()}@member-removal.test`,
+            },
+          ]);
+          await db.insert(organization).values([
+            {
+              id: organizationId,
+              name: "Removal role target",
+              slug: organizationId,
+              createdAt: new Date(),
+            },
+            {
+              id: otherOrganizationId,
+              name: "Other organization",
+              slug: otherOrganizationId,
+              createdAt: new Date(),
+            },
+            {
+              id: finalOwnerOrganizationId,
+              name: "Final owner organization",
+              slug: finalOwnerOrganizationId,
+              createdAt: new Date(),
+            },
+          ]);
+          await Promise.all(
+            [organizationId, otherOrganizationId, finalOwnerOrganizationId].map(
+              async (id) =>
+                await recordNewOrganizationAccessState(db, {
+                  organizationId: id,
+                  now: new Date(),
+                }),
+            ),
+          );
+          await db.insert(member).values([
+            {
+              id: targetMemberId,
+              organizationId,
+              userId: targetUserId,
+              role: "member",
+              createdAt: new Date(),
+            },
+            {
+              id: siblingMemberId,
+              organizationId,
+              userId: siblingUserId,
+              role: "owner",
+              createdAt: new Date(),
+            },
+            {
+              id: otherOrganizationMemberId,
+              organizationId: otherOrganizationId,
+              userId: targetUserId,
+              role: "member",
+              createdAt: new Date(),
+            },
+            {
+              id: finalOwnerMemberId,
+              organizationId: finalOwnerOrganizationId,
+              userId: finalOwnerUserId,
+              role: "owner",
+              createdAt: new Date(),
+            },
+          ]);
+
+          const stellaDelete = await db
+            .transaction(async (tx) => {
+              await tx.execute(sql`
+                SELECT
+                  set_config('app.organization_id', ${organizationId}, true),
+                  set_config('app.member_removal_user_id', ${targetUserId}, true),
+                  set_config('app.member_removal_member_id', ${targetMemberId}, true)
+              `);
+              await tx.execute(sql`SET LOCAL ROLE stella`);
+              await tx.execute(sql`DELETE FROM public.member`);
+            })
+            .then(
+              () => ({ status: "committed" as const }),
+              (error: unknown) => ({ status: "refused" as const, error }),
+            );
+          expect(stellaDelete.status).toBe("refused");
+          if (stellaDelete.status === "refused") {
+            expect(getPgErrorCode(stellaDelete.error)).toBe("42501");
+          }
+
+          const memberSelect = await db
+            .transaction(async (tx) => {
+              await tx.execute(sql`SET LOCAL ROLE stella_member_removal`);
+              await tx.execute(sql`SELECT id FROM public.member`);
+            })
+            .then(
+              () => ({ status: "committed" as const }),
+              (error: unknown) => ({ status: "refused" as const, error }),
+            );
+          expect(memberSelect.status).toBe("refused");
+          if (memberSelect.status === "refused") {
+            expect(getPgErrorCode(memberSelect.error)).toBe("42501");
+          }
+
+          const memberUpdate = await db
+            .transaction(async (tx) => {
+              await tx.execute(sql`SET LOCAL ROLE stella_member_removal`);
+              await tx.execute(sql`UPDATE public.member SET role = 'member'`);
+            })
+            .then(
+              () => ({ status: "committed" as const }),
+              (error: unknown) => ({ status: "refused" as const, error }),
+            );
+          expect(memberUpdate.status).toBe("refused");
+          if (memberUpdate.status === "refused") {
+            expect(getPgErrorCode(memberUpdate.error)).toBe("42501");
+          }
+
+          const deleteForLockedTarget = async (target: {
+            organizationId: SafeId<"organization">;
+            userId: SafeId<"user">;
+            memberId: string;
+          }) =>
+            await db.transaction(async (tx) => {
+              await tx.execute(sql`
+                SELECT
+                  set_config('app.organization_id', ${target.organizationId}, true),
+                  set_config('app.member_removal_user_id', ${target.userId}, true),
+                  set_config('app.member_removal_member_id', ${target.memberId}, true)
+              `);
+              await tx.execute(sql`SET LOCAL ROLE stella_member_removal`);
+              await tx.execute(sql`DELETE FROM public.member`);
+            });
+
+          await deleteForLockedTarget({
+            organizationId,
+            userId: targetUserId,
+            memberId: targetMemberId,
+          });
+          expect(
+            await db
+              .select({ id: member.id })
+              .from(member)
+              .where(
+                inArray(member.id, [
+                  targetMemberId,
+                  siblingMemberId,
+                  otherOrganizationMemberId,
+                ]),
+              )
+              .orderBy(member.id),
+          ).toEqual(
+            [otherOrganizationMemberId, siblingMemberId]
+              .toSorted()
+              .map((id) => ({ id })),
+          );
+
+          const lastOwnerDelete = await deleteForLockedTarget({
+            organizationId: finalOwnerOrganizationId,
+            userId: finalOwnerUserId,
+            memberId: finalOwnerMemberId,
+          }).then(
+            () => ({ status: "committed" as const }),
+            (error: unknown) => ({
+              status: "refused" as const,
+              error: mapMembershipInvariantError(error),
+            }),
+          );
+          expect(lastOwnerDelete).toMatchObject({
+            status: "refused",
+            error: {
+              body: { code: OWNER_REQUIRED_ERROR_CODE },
+            },
+          });
+          expect(
+            await db
+              .select({ id: member.id })
+              .from(member)
+              .where(eq(member.id, finalOwnerMemberId)),
+          ).toEqual([{ id: finalOwnerMemberId }]);
+        } finally {
+          await db
+            .delete(organization)
+            .where(
+              inArray(organization.id, [
+                organizationId,
+                otherOrganizationId,
+                finalOwnerOrganizationId,
+              ]),
+            );
+          await db
+            .delete(user)
+            .where(
+              inArray(user.id, [targetUserId, siblingUserId, finalOwnerUserId]),
+            );
+        }
+      });
+    });
+
     const schedules = [
       ["remove", "remove"],
       ["demote", "demote"],

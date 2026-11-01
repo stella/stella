@@ -9,6 +9,7 @@ import {
   aiUnavailableResponse,
 } from "@/__fixtures__/ai-availability";
 import type { WebApiRoutes } from "@/lib/api";
+import { DISABLED_NAVIGATION_FEATURES } from "@/lib/workspaces/queries.test-fixtures";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
@@ -270,7 +271,7 @@ const createClient = () => {
       organizationId: user.activeOrganizationId,
       userId: user.id,
     }).queryKey,
-    { workspaces: [], features: { timeBilling: false } },
+    { workspaces: [], features: DISABLED_NAVIGATION_FEATURES },
   );
   return client;
 };

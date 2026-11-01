@@ -75,7 +75,10 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
-import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
+import {
+  maybeStartUploadTriggeredFlows,
+  recordUploadTriggeredFlowIntents,
+} from "@/api/lib/flows/upload-trigger-recording";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -1194,6 +1197,14 @@ export const uploadEntityHandler = async function* ({
           .where(eq(workspaces.id, workspaceId));
 
         await requestNativeExtractionRun({ entityId, tx });
+        if (uploadTriggeredFlowPolicy(origin) === "start") {
+          await recordUploadTriggeredFlowIntents(tx, {
+            entityId,
+            workspaceId,
+            organizationId,
+            fileName: resolvedName.value,
+          });
+        }
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,

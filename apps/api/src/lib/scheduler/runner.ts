@@ -1,16 +1,5 @@
 import { Err, panic } from "better-result";
-import {
-  and,
-  asc,
-  eq,
-  inArray,
-  isNull,
-  lte,
-  notInArray,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { Temporal } from "@stll/time";
@@ -19,6 +8,7 @@ import { rootDb } from "@/api/db/root";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   ConfigurationError,
   SchedulerJobTimeoutError,
@@ -34,6 +24,11 @@ import type {
   SchedulerJob,
   SchedulerTaskRegistry,
 } from "@/api/lib/scheduler/types";
+import {
+  claimPlatformSchedulerJob,
+  finishPlatformSchedulerJob,
+  renewPlatformSchedulerJobLease,
+} from "@/api/lib/scheduler/upsert-job";
 
 const DEFAULT_POLL_INTERVAL_MS = 60_000;
 const DEFAULT_LEASE_MS = 30 * 60_000;
@@ -339,75 +334,15 @@ export const acquireNextDueJob = async ({
     return null;
   }
 
-  const eligibilityTime = now
-    ? sql`${new Date(now())}::timestamptz`
-    : sql`now()`;
-  return await db.transaction(async (tx) => {
-    const [candidate] = await tx
-      .select()
-      .from(schedulerJobs)
-      .where(
-        and(
-          dueJobPredicate(runnableTasks, eligibilityTime),
-          excludeJobIds.length > 0
-            ? notInArray(schedulerJobs.id, [...excludeJobIds])
-            : undefined,
-        ),
-      )
-      .orderBy(asc(schedulerJobs.nextRunAt), asc(schedulerJobs.id))
-      .limit(1)
-      .for("update", { skipLocked: true });
-    if (!candidate) {
-      return null;
-    }
-
-    const leaseToken = acquireLeaseToken(runnerId);
-    const [job] = await tx
-      .update(schedulerJobs)
-      .set({
-        pausedUntil: null,
-        lockedAt: sql`now()`,
-        lockedBy: leaseToken,
-        lockedUntil: leaseExpiry(leaseMs),
-      })
-      .where(
-        and(
-          eq(schedulerJobs.id, candidate.id),
-          dueJobPredicate(runnableTasks, eligibilityTime),
-        ),
-      )
-      .returning();
-
-    return job ?? panic("Locked scheduler job disappeared before lease update");
+  return await claimPlatformSchedulerJob({
+    db,
+    runnableTasks,
+    excludeJobIds,
+    eligibilityAt: now ? new Date(now()) : null,
+    leaseToken: acquireLeaseToken(runnerId),
+    leaseMs,
   });
 };
-
-// A row whose task this build has no handler for is not claimable work: running
-// it can only raise `ConfigurationError`, and the failure would still consume
-// the row's schedule slot by advancing `nextRunAt`, delaying the replica that
-// can run it. Registration retires such rows, but only at startup, so a build
-// that declares a new task leaves every older replica able to claim it until
-// they stop; the claim itself has to hold the line.
-//
-// Lease times are read and written on the database clock, so replicas whose
-// clocks disagree still agree on when a lease expires.
-const dueJobPredicate = (runnableTasks: string[], eligibilityTime: SQL) =>
-  and(
-    inArray(schedulerJobs.task, runnableTasks),
-    eq(schedulerJobs.enabled, true),
-    lte(schedulerJobs.nextRunAt, sql`${eligibilityTime}::timestamptz`),
-    or(
-      isNull(schedulerJobs.pausedUntil),
-      lte(schedulerJobs.pausedUntil, sql`${eligibilityTime}::timestamptz`),
-    ),
-    or(
-      isNull(schedulerJobs.lockedUntil),
-      lte(schedulerJobs.lockedUntil, sql`now()`),
-    ),
-  );
-
-const leaseExpiry = (leaseMs: number) =>
-  sql`now() + ${leaseMs}::integer * interval '1 millisecond'`;
 
 const defaultHeartbeatIntervalMs = (leaseMs: number): number =>
   Math.max(DEFAULT_POLL_INTERVAL_MS, Math.floor(leaseMs / 3));
@@ -470,21 +405,12 @@ export const startLeaseHeartbeat = ({
     }
 
     const attemptStartedAt = performance.now();
-    const renewed = await db
-      .update(schedulerJobs)
-      .set({ lockedUntil: leaseExpiry(leaseMs) })
-      .where(
-        and(
-          eq(schedulerJobs.id, jobId),
-          eq(schedulerJobs.lockedBy, leaseToken),
-          eq(schedulerJobs.enabled, true),
-          or(
-            isNull(schedulerJobs.pausedUntil),
-            lte(schedulerJobs.pausedUntil, sql`now()`),
-          ),
-        ),
-      )
-      .returning({ id: schedulerJobs.id });
+    const renewed = await renewPlatformSchedulerJobLease({
+      db,
+      jobId,
+      leaseToken,
+      leaseMs,
+    });
 
     // A renewal still in flight when the run completed matches no row because
     // the completion released the lease, not because another runner took it.
@@ -978,7 +904,16 @@ type CompleteRunOptions = {
   leaseToken: string;
   runId: SafeId<"schedulerJobRun">;
   runValues: PgUpdateSetSource<typeof schedulerJobRuns>;
-  jobValues: PgUpdateSetSource<typeof schedulerJobs>;
+  jobState:
+    | { type: "success"; startedAt: Date; finishedAt: Date; nextRunAt: Date }
+    | {
+        type: "failure";
+        startedAt: Date;
+        finishedAt: Date;
+        nextRunAt: Date;
+        error: string;
+      }
+    | { type: "skip" };
 };
 
 // A run terminates exactly once. Every completion path (success, skipped,
@@ -996,12 +931,12 @@ type CompleteRunOptions = {
 const completeRun = async ({
   db,
   jobId,
-  jobValues,
+  jobState,
   leaseToken,
   runId,
   runValues,
 }: CompleteRunOptions): Promise<void> => {
-  await db.transaction(async (tx) => {
+  await withAggregateTransaction(db, async (tx) => {
     const [updatedRun] = await tx
       .update(schedulerJobRuns)
       .set(runValues)
@@ -1017,15 +952,12 @@ const completeRun = async ({
       return;
     }
 
-    await tx
-      .update(schedulerJobs)
-      .set(jobValues)
-      .where(
-        and(
-          eq(schedulerJobs.id, jobId),
-          eq(schedulerJobs.lockedBy, leaseToken),
-        ),
-      );
+    await finishPlatformSchedulerJob({
+      db: tx,
+      jobId,
+      leaseToken,
+      state: jobState,
+    });
   });
 };
 
@@ -1042,13 +974,10 @@ export const finishRunSuccess = async ({
   await completeRun({
     db,
     jobId: job.id,
-    jobValues: {
-      lastError: null,
-      lastRunAt: startedAt,
-      lastSuccessAt: finishedAt,
-      lockedAt: null,
-      lockedBy: null,
-      lockedUntil: null,
+    jobState: {
+      type: "success",
+      startedAt,
+      finishedAt,
       nextRunAt: nextRunAt ?? computeNextRunAt(job.schedule, finishedAt),
     },
     leaseToken,
@@ -1084,11 +1013,7 @@ export const finishRunSkipped = async ({
   await completeRun({
     db,
     jobId: job.id,
-    jobValues: {
-      lockedAt: null,
-      lockedBy: null,
-      lockedUntil: null,
-    },
+    jobState: { type: "skip" },
     leaseToken,
     runId,
     runValues: {
@@ -1118,14 +1043,12 @@ export const finishRunFailure = async ({
   await completeRun({
     db,
     jobId: job.id,
-    jobValues: {
-      lastError: sanitizedError,
-      lastFailureAt: finishedAt,
-      lastRunAt: startedAt,
-      lockedAt: null,
-      lockedBy: null,
-      lockedUntil: null,
+    jobState: {
+      type: "failure",
+      startedAt,
+      finishedAt,
       nextRunAt: computeNextRunAt(job.schedule, finishedAt),
+      error: sanitizedError,
     },
     leaseToken,
     runId,

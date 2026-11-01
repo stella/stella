@@ -44,6 +44,21 @@ const readPreloadedCredentials = (
 };
 
 describe("API test preload credentials", () => {
+  test("supplies the disposable migration review identity without replacing configured fixtures", () => {
+    const names = ["APP_REVIEW_ACCOUNT_EMAIL", "APP_REVIEW_ORGANIZATION_ID"];
+    expect(readPreloadedCredentials({}, names)).toEqual([
+      ["APP_REVIEW_ACCOUNT_EMAIL", "review-migration@example.test"],
+      ["APP_REVIEW_ORGANIZATION_ID", "review-migration-fixture"],
+    ]);
+    const configured = {
+      APP_REVIEW_ACCOUNT_EMAIL: "review-configured@example.test",
+      APP_REVIEW_ORGANIZATION_ID: "review-configured-fixture",
+    };
+    expect(readPreloadedCredentials(configured, names)).toEqual(
+      Object.entries(configured),
+    );
+  });
+
   test("preserves every configured request budget", () => {
     const budgets = Object.fromEntries(
       Object.entries(v.parse(v.object(rateLimitBudgetEnvSchema), {})).map(

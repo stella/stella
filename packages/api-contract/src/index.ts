@@ -492,12 +492,20 @@ export {
   REALTIME_CHANNEL_EVENT_TYPES,
   REALTIME_EVENT_TYPE,
   RESOURCE_CHANGE_TYPE,
+  RESOURCE_DELETION_OWNERSHIP,
   resourceDeletedChange,
+  flowRunUpdateRealtimeEvent,
+  workflowExtractionPreviewRealtimeEvent,
   resourceDeletedRealtimeEvent,
   resourceSetUpdatedRealtimeEvent,
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
   resourcesChangedRealtimeEvent,
+} from "./realtime-events";
+export type {
+  BuiltRealtimeEvent,
+  ResourceChangeInput,
+  ResourceDeletion,
 } from "./realtime-events";
 export { encodeRfc3986Component } from "./rfc3986";
 export {

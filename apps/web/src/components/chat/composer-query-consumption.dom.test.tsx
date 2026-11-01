@@ -284,7 +284,7 @@ test("the context search retains a failed empty refresh notice instead of no res
   });
   client.setQueryData(options.queryKey, {
     workspaces: [],
-    features: { timeBilling: false },
+    features: { timeBilling: false, signals: false, flows: false },
   });
   const ui = mount(
     client,
@@ -369,7 +369,7 @@ for (const { failingRead, failure, withHealthy = true } of [
       workspacesNavigationOptions({ organizationId, userId: user.id }).queryKey,
       {
         workspaces: [],
-        features: { timeBilling: false },
+        features: { timeBilling: false, signals: false, flows: false },
       },
     );
     let unavailable = true;

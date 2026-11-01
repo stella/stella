@@ -41,7 +41,7 @@ const config = {
 
 const readOverviewActivityActors = createSafeHandler(
   config,
-  async function* ({ query, safeDb, session, workspaceId }) {
+  async function* ({ query, safeDb, session, workspaceId, user }) {
     const search = query.search?.trim() ?? "";
     const afterActorId = query.cursor
       ? decodeActorCursor(query.cursor, search)
@@ -60,6 +60,7 @@ const readOverviewActivityActors = createSafeHandler(
         afterActorId,
         limit,
         organizationId: session.activeOrganizationId,
+        userId: user.id,
         safeDb,
         search,
         workspaceId,

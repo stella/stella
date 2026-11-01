@@ -4,6 +4,8 @@ import getFlowDefinition from "@/api/handlers/flows/get";
 import listFlowDefinitions from "@/api/handlers/flows/list";
 import updateFlowDefinition from "@/api/handlers/flows/update";
 import { routes } from "@/api/http/route";
+import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 /** Org-scoped flow definition CRUD (the "Workflows" recipes). */
 export const flowsRoute = routes(
@@ -15,5 +17,11 @@ export const flowsRoute = routes(
       DELETE: deleteFlowDefinition,
     },
   },
-  { prefix: "/flows" },
+  {
+    prefix: "/flows",
+    middleware: [
+      deploymentFeatureGate("FEATURE_FLOWS"),
+      featureAccessGate("flows"),
+    ],
+  },
 );

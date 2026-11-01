@@ -59,6 +59,11 @@ export default {
     names: ["requestIdempotencyReceipts"],
     allowed: [
       {
+        path: "apps/api/src/db/org-scope-registry.ts",
+        reason:
+          "org-scope registry needs the table identity for scope/reset classification; no row authority",
+      },
+      {
         path: "apps/api/src/db/entity-feature-gate-repair.ts",
         reason:
           "Schema metadata enumeration only; no receipt rows read or written.",
@@ -69,9 +74,9 @@ export default {
           "Declares the receipt lifecycle graph for the transition owner.",
       },
       {
-        path: "apps/api/src/lib/member-assignment-offboarding.ts",
+        path: "apps/api/src/lib/member-offboarding/member-assignment-offboarding-census.ts",
         reason:
-          "Deletes the departing organization member's receipts in the membership-removal transaction and declares the cleanup disposition.",
+          "Declares the member cleanup disposition from schema metadata; receipt row cleanup stays with the request owner.",
       },
       {
         path: "apps/api/src/lib/db/aggregate-lock.ts",

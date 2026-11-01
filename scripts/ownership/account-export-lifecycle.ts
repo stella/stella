@@ -17,6 +17,11 @@ export default {
     names: ["accountExports"],
     allowed: [
       {
+        path: "apps/api/src/db/org-scope-registry.ts",
+        reason:
+          "Classifies the account-owned export table using schema metadata only.",
+      },
+      {
         path: "apps/api/src/lib/account-export/store.postgres.test.ts",
         reason:
           "Exercises migrated lifecycle transitions and generic account isolation.",

@@ -1,5 +1,4 @@
 import { panic, Result } from "better-result";
-import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
@@ -10,16 +9,17 @@ import {
   countPreviousAgentClientValues,
   runAgentClientCredentialBatch,
 } from "@/api/agent-auth/credential-storage";
-import { schedulerJobs } from "@/api/db/schema";
 import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import { completeAgentClientStorageJob } from "@/api/lib/scheduler/upsert-job";
 
 export const BACKFILL_AGENT_CLIENT_STORAGE_TASK =
   "agentClients.backfillStorage" as const;
@@ -75,24 +75,14 @@ export const backfillAgentClientStorage: SchedulerTask = async ({
   }
   const remainingCount = await countPreviousAgentClientValues(db);
   if (!Result.isError(batch) && remainingCount === 0) {
-    await db.transaction(async (tx) => {
+    await withAggregateTransaction(db, async (tx) => {
       await setSharedStatementTimeout(tx, AGENT_CLIENT_STATEMENT_BUDGET_MS);
       await setSharedLockTimeout(tx, AGENT_CLIENT_LOCK_BUDGET_MS);
-      await tx
-        .update(schedulerJobs)
-        .set({
-          enabled: false,
-          payload: sql`coalesce(${schedulerJobs.payload}, '{}'::jsonb) || '{"completed":true}'::jsonb`,
-        })
-        .where(
-          and(
-            eq(schedulerJobs.id, job.id),
-            eq(schedulerJobs.task, BACKFILL_AGENT_CLIENT_STORAGE_TASK),
-            payload === null
-              ? isNull(schedulerJobs.payload)
-              : eq(schedulerJobs.payload, payload),
-          ),
-        );
+      await completeAgentClientStorageJob({
+        db: tx,
+        expectedPayload: payload,
+        jobId: job.id,
+      });
     });
   }
   logger.info(

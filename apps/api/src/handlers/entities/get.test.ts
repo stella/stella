@@ -1,9 +1,22 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
+
+import { env } from "@/api/env";
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
+import readFieldFile from "@/api/handlers/entities/read-field-file";
 import { toSafeId } from "@/api/lib/branded-types";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const findFirstMock = mock();
 const processingRunFindFirstMock = mock();
@@ -33,8 +46,96 @@ describe("readEntityByIdHandler", () => {
     });
   });
 
+  for (const linked of [false, true]) {
+    for (const deploymentEnabled of [false, true]) {
+      for (const enrolled of [false, true]) {
+        test(`retained entity visibility: linked=${String(linked)} flag=${String(deploymentEnabled)} grant=${String(enrolled)}`, async () => {
+          const organizationId = toSafeId<"organization">("org_entity_access");
+          const userId = toSafeId<"user">("reader_entity_access");
+          const previous = env.FEATURE_FLOWS;
+          const restore = setRuntimeModeForTesting({
+            mode: RUNTIME_MODE.strict,
+          });
+          testState.setConfig("FEATURE_FLOWS", deploymentEnabled);
+          try {
+            const fieldRead = mock(async () => null);
+            const { safeDb, scopedDb } = createScopedDbMock(
+              {
+                query: {
+                  entities: { findFirst: findFirstMock },
+                  fields: { findFirst: fieldRead },
+                },
+              },
+              {
+                flowTaskGates: linked
+                  ? [
+                      {
+                        runId: toSafeId("run_1"),
+                        status: "awaiting_review",
+                        organizationId,
+                      },
+                    ]
+                  : [],
+                featureAccess: {
+                  identity: {
+                    email: "reader@example.test",
+                    emailVerified: true,
+                  },
+                  enrolments: enrolled
+                    ? [{ featureId: "flows", organizationId, userId }]
+                    : [],
+                },
+              },
+            );
+            const result = await Result.gen(() =>
+              readEntityByIdHandler({
+                safeDb,
+                userId,
+                workspaceId: toSafeId("ws_1"),
+                entityId: toSafeId("entity_1"),
+              }),
+            );
+            const visible = !linked || (deploymentEnabled && enrolled);
+            expect(result.isOk()).toBe(visible);
+            expect(findFirstMock).toHaveBeenCalledTimes(visible ? 1 : 0);
+            if (result.isErr()) {
+              expect(result.error).toMatchObject({
+                status: 404,
+                message: "Not found",
+              });
+              const file = await readFieldFile.handler(
+                asTestRaw<Parameters<typeof readFieldFile.handler>[0]>({
+                  safeDb,
+                  scopedDb,
+                  memberRole: sessionMemberRole("owner"),
+                  workspaceId: toSafeId("ws_1"),
+                  user: { id: userId },
+                  session: { activeOrganizationId: organizationId },
+                  params: {
+                    entityId: toSafeId("entity_1"),
+                    fieldId: toSafeId("field_1"),
+                  },
+                  request: new Request(
+                    "https://example.test/entities/field-file",
+                  ),
+                  route: "/entities/:entityId/field-file",
+                }),
+              );
+              expect(file).toMatchObject({ code: 404 });
+              expect(fieldRead).not.toHaveBeenCalled();
+            }
+          } finally {
+            testState.setConfig("FEATURE_FLOWS", previous);
+            restore();
+          }
+        });
+      }
+    }
+  }
+
   test("loads extraction provenance with the bounded current fields", async () => {
     const { safeDb } = createScopedDbMock({
+      select: () => createSelectQueryMock([]),
       query: {
         documentProcessingRuns: { findFirst: processingRunFindFirstMock },
         entities: { findFirst: findFirstMock },
@@ -46,6 +147,7 @@ describe("readEntityByIdHandler", () => {
         safeDb,
         workspaceId: toSafeId("ws_1"),
         entityId: toSafeId("entity_1"),
+        userId: toSafeId("reader_1"),
       }),
     );
 
@@ -123,6 +225,7 @@ describe("readEntityByIdHandler", () => {
       versions: [{ id: "entity_version_1" }],
     });
     const { safeDb } = createScopedDbMock({
+      select: () => createSelectQueryMock([]),
       query: {
         documentProcessingRuns: { findFirst: processingRunFindFirstMock },
         entities: { findFirst: findFirstMock },
@@ -134,6 +237,7 @@ describe("readEntityByIdHandler", () => {
         safeDb,
         workspaceId: toSafeId("ws_1"),
         entityId: toSafeId("entity_1"),
+        userId: toSafeId("reader_1"),
       }),
     );
 
@@ -178,6 +282,7 @@ describe("readEntityByIdHandler", () => {
       versions: [{ id: "entity_version_1" }],
     });
     const { safeDb } = createScopedDbMock({
+      select: () => createSelectQueryMock([]),
       query: {
         documentProcessingRuns: { findFirst: processingRunFindFirstMock },
         entities: { findFirst: findFirstMock },
@@ -189,6 +294,7 @@ describe("readEntityByIdHandler", () => {
         safeDb,
         workspaceId: toSafeId("ws_1"),
         entityId: toSafeId("entity_1"),
+        userId: toSafeId("reader_1"),
       }),
     );
 
@@ -231,6 +337,7 @@ describe("readEntityByIdHandler", () => {
       versions: [{ id: "entity_version_2" }],
     });
     const { safeDb } = createScopedDbMock({
+      select: () => createSelectQueryMock([]),
       query: {
         documentProcessingRuns: { findFirst: processingRunFindFirstMock },
         entities: { findFirst: findFirstMock },
@@ -242,6 +349,7 @@ describe("readEntityByIdHandler", () => {
         safeDb,
         workspaceId: toSafeId("ws_1"),
         entityId: toSafeId("entity_1"),
+        userId: toSafeId("reader_1"),
       }),
     );
 
@@ -283,6 +391,7 @@ describe("readEntityByIdHandler", () => {
       versions: [{ id: "entity_version_1" }],
     });
     const { safeDb } = createScopedDbMock({
+      select: () => createSelectQueryMock([]),
       query: {
         documentProcessingRuns: { findFirst: processingRunFindFirstMock },
         entities: { findFirst: findFirstMock },
@@ -294,6 +403,7 @@ describe("readEntityByIdHandler", () => {
         safeDb,
         workspaceId: toSafeId("ws_1"),
         entityId: toSafeId("entity_1"),
+        userId: toSafeId("reader_1"),
       }),
     );
 
@@ -353,6 +463,7 @@ describe("readEntityByIdHandler", () => {
         safeDb,
         workspaceId: toSafeId("ws_1"),
         entityId: toSafeId("entity_1"),
+        userId: toSafeId("reader_1"),
       }),
     );
 

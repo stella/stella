@@ -101,6 +101,7 @@ import type { RemovalCheckpoint } from "@/api/lib/legal-search/removal-reconcili
 import { documentFetchParked } from "@/api/lib/legal-search/sk-document-parking-sql";
 import { pendingDeferredDocumentSql } from "@/api/lib/legal-search/sk-document-pending-sql";
 
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   caseLawAnalysisReaderDecisionPolicies,
   caseLawAnalysisReaderPolicies,
@@ -3371,6 +3372,8 @@ export const caseLawResearchColumns = p.pgTable(
       sql`(jsonb_typeof(${t.content}) = 'object' AND ${t.content}->'version' = '1'::jsonb AND ${t.content}->>'type' IN (${sql.join(CASE_LAW_RESEARCH_ANSWER_TYPE_SQL_VALUES, sql`, `)})) IS TRUE`,
     ),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(t.organizationId),
   ],
 );
 
@@ -3440,6 +3443,8 @@ export const caseLawResearchAnswers = p.pgTable(
       sql`(${t.state} = 'answered') = (${t.answer} IS NOT NULL)`,
     ),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(t.organizationId),
   ],
 );
 

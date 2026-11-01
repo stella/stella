@@ -85,7 +85,7 @@ let intentStatuses: string[] = [];
 const createEntityFromBufferDependencies = {
   broadcastWorkspaceResourceUpdated: (workspaceId, resource) => {
     broadcastWorkspaceResourceUpdated(workspaceId, resource, (id, event) => {
-      broadcastMock(id, event);
+      broadcastMock(id, event.toJSON());
     });
   },
   enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
@@ -427,6 +427,7 @@ describe("createEntityFromBuffer", () => {
     expect(enqueueImageThumbnailOrMarkFailedMock).toHaveBeenCalledWith(
       expect.objectContaining({ encrypted: true }),
     );
+    expect(broadcastMock).toHaveBeenCalledTimes(1);
     expect(broadcastMock).toHaveBeenCalledWith(workspaceId, {
       type: "resource.updated",
       resource: { type: "entity", id: expect.any(String) },

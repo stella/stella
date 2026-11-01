@@ -1,0 +1,4 @@
+{
+  "add-constraint": "The feature-owner CHECK is installed NOT VALID without scanning existing rows, then validated after the five registered checkpointed online phases. One table per migration transaction, with 1s lock_timeout and 5s statement_timeout, bounds catalog acquisition.",
+  "add-column": "A nullable or constant-default text column is a catalog-only addition without a table rewrite. This migration touches one table in one transaction with SET LOCAL lock_timeout = 1s and statement_timeout = 5s; the migrator owns bounded retries. All data work remains in registered online phases."
+}

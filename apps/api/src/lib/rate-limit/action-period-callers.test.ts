@@ -94,8 +94,10 @@ describe("period identity coverage", () => {
                 propertyName(property) === "scope" &&
                 stringValue(property.value) === "independent",
             );
-            const hasPeriodIdentity = properties.some(
-              (property) => propertyName(property) === "periodIdentity",
+            const hasPeriodIdentity = options.properties.some(
+              (property) =>
+                property.type === "Property" &&
+                propertyName(property) === "periodIdentity",
             );
             const isBackgroundJob = properties.some(
               (property) =>

@@ -59,6 +59,11 @@ export const aggregateFences = () => {
       id: organizationId,
       mode: "update",
     },
+    reviewResetRegistration: {
+      aggregate: "reviewResetRegistration",
+      id: organizationId,
+      mode: "key share",
+    },
     organizationObjectIntent: {
       aggregate: "organizationObjectIntent",
       id: organizationId,
@@ -77,6 +82,11 @@ export const aggregateFences = () => {
       mode: "update",
     },
     definitionCap: { aggregate: "definitionCap", id: { definitionId } },
+    uploadReceipt: {
+      aggregate: "uploadReceipt",
+      id: { definitionId, entityId: createSafeId<"entity">(), organizationId },
+      mode: "update",
+    },
     definition: {
       aggregate: "definition",
       id: { id: definitionId, organizationId },

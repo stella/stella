@@ -107,3 +107,15 @@ test("every system actor id has the shape the database accepts", () => {
     expect(new Set(counts).size).toBe(counts.length);
   }
 });
+
+test("orphan schedule cleanup records its platform operation and row count", () => {
+  const row = systemAuditRow("system:flow-schedule-orphan-cleanup", {
+    subject: RUN_ID,
+    counts: { schedulerJobs: 2 },
+  });
+  expect(row).toMatchObject({
+    actor: "system:flow-schedule-orphan-cleanup",
+    subject: RUN_ID,
+    counts: { schedulerJobs: 2 },
+  });
+});

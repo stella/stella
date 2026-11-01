@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import type { FileKey } from "@/api/lib/file-key";
 
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import { chatThreads } from "./chat";
 import {
   jsonb,
@@ -59,6 +60,10 @@ export const userFiles = p.pgTable(
     p.index("user_files_user_hash_idx").on(table.userId, table.sha256Hex),
     p.index("user_files_s3_key_idx").on(table.s3Key),
     ...userFilePolicies(),
+
+    ...registeredReviewResetPolicies(
+      sql`(SELECT reset_thread.organization_id FROM public.chat_threads reset_thread WHERE reset_thread.id = ${table.threadId})`,
+    ),
   ],
 );
 
@@ -125,6 +130,8 @@ export const workspaceViewTemplates = p.pgTable(
       .index("workspace_view_templates_user_created_idx")
       .on(table.organizationId, table.userId, table.createdAt),
     ...workspaceViewTemplatePolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 

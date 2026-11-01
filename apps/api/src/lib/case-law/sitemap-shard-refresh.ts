@@ -24,6 +24,7 @@ import {
 import { envBase } from "@/api/env-base";
 import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { SITEMAP_DRAIN_TRANSITIONS } from "@/api/lib/case-law/sitemap-drain-transitions";
 import {
   decisionBucketSqlFor,
   SITEMAP_ALL_BUCKET,
@@ -41,7 +42,6 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedBatch } from "@/api/lib/db/transitions";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -629,7 +629,7 @@ const drainMonth = async (
       } else {
         const changed = await transitionScopedBatch({
           tx,
-          spec: TRANSITIONS.caseLawSitemapDrainProgress,
+          spec: SITEMAP_DRAIN_TRANSITIONS,
           identities: [target],
           options: {
             from: ["awaiting_visibility"],
@@ -694,7 +694,7 @@ const drainMonth = async (
     if (retirement.retired < candidatesRead) {
       const changed = await transitionScopedBatch({
         tx,
-        spec: TRANSITIONS.caseLawSitemapDrainProgress,
+        spec: SITEMAP_DRAIN_TRANSITIONS,
         identities: [target],
         options: {
           from: ["draining"],

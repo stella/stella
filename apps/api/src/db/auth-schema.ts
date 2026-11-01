@@ -5,6 +5,7 @@ import {
   check,
   index,
   integer,
+  pgPolicy,
   pgTable,
   text,
   uniqueIndex,
@@ -20,11 +21,22 @@ import {
   authUserPolicies,
   denyStellaAccessPolicies,
 } from "@/api/db/rls";
+import {
+  systemScopePolicies,
+  systemUserReadPolicies,
+} from "@/api/db/system-scope-policies";
 import { ACCOUNT_EMAIL_UNDELIVERABLE_REASONS } from "@/api/lib/email/deliverability-contract";
 import {
   SYNTHETIC_PRINCIPAL,
   SYNTHETIC_SESSION_PREFIX,
 } from "@/api/lib/synthetic-principal/constants";
+
+import { MEMBER_REMOVAL_SETTING } from "./member-removal-settings";
+import {
+  FOLIO_COLLAB_TOKEN_OFFBOARDING_ROLE_NAME,
+  MEMBER_EXCHANGE_OFFBOARDING_ROLE_NAME,
+  MEMBER_REMOVAL_ROLE_NAME,
+} from "./role-names";
 
 export const user = pgTable(
   "user",
@@ -78,6 +90,7 @@ export const user = pgTable(
       sql`(${table.emailUndeliverableAddress} IS NULL AND ${table.emailUndeliverableReason} IS NULL AND ${table.emailUndeliverableAt} IS NULL) OR (${table.emailUndeliverableAddress} IS NOT NULL AND ${table.emailUndeliverableAt} IS NOT NULL AND ${table.emailUndeliverableReason} IS NOT NULL AND ${inArray(table.emailUndeliverableReason, ACCOUNT_EMAIL_UNDELIVERABLE_REASONS)})`,
     ),
     ...authUserPolicies(),
+    ...systemUserReadPolicies(),
   ],
 );
 
@@ -286,6 +299,7 @@ export const organization = pgTable(
     metadata: text("metadata"),
   },
   (table) => [
+    ...systemScopePolicies(table, "read"),
     uniqueIndex("organization_slug_uidx").on(table.slug),
     check(
       "organization_monitoring_slug_check",
@@ -310,6 +324,7 @@ export const member = pgTable(
     createdAt: timestamptz("created_at").notNull(),
   },
   (table) => [
+    ...systemScopePolicies(table, "read"),
     index("member_organizationId_idx").on(table.organizationId),
     check(
       "member_single_product_role",
@@ -328,6 +343,27 @@ export const member = pgTable(
       table.userId,
     ),
     ...authMemberPolicies(),
+    pgPolicy("member_removal_target", {
+      for: "delete",
+      to: MEMBER_REMOVAL_ROLE_NAME,
+      using: sql`${table.organizationId} = nullif(current_setting('app.organization_id', true), '')
+        AND ${table.userId} = nullif(current_setting(${sql.raw(`'${MEMBER_REMOVAL_SETTING.userId}'`)}, true), '')
+        AND ${table.id} = nullif(current_setting(${sql.raw(`'${MEMBER_REMOVAL_SETTING.memberId}'`)}, true), '')`,
+    }),
+    pgPolicy("member_exchange_offboarding_target", {
+      for: "select",
+      to: MEMBER_EXCHANGE_OFFBOARDING_ROLE_NAME,
+      using: sql`${table.organizationId} = nullif(current_setting('app.organization_id', true), '')
+        AND ${table.userId} = nullif(current_setting(${sql.raw(`'${MEMBER_REMOVAL_SETTING.userId}'`)}, true), '')
+        AND ${table.id} = nullif(current_setting(${sql.raw(`'${MEMBER_REMOVAL_SETTING.memberId}'`)}, true), '')`,
+    }),
+    pgPolicy("member_folio_collab_token_offboarding_read", {
+      for: "select",
+      to: FOLIO_COLLAB_TOKEN_OFFBOARDING_ROLE_NAME,
+      using: sql`${table.organizationId} = nullif(current_setting('app.organization_id', true), '')
+        AND ${table.userId} = nullif(current_setting(${sql.raw(`'${MEMBER_REMOVAL_SETTING.userId}'`)}, true), '')
+        AND ${table.id} = nullif(current_setting(${sql.raw(`'${MEMBER_REMOVAL_SETTING.memberId}'`)}, true), '')`,
+    }),
   ],
 );
 
@@ -348,6 +384,7 @@ export const invitation = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
   },
   (table) => [
+    ...systemScopePolicies(table),
     index("invitation_organizationId_idx").on(table.organizationId),
     check(
       "invitation_single_product_role",

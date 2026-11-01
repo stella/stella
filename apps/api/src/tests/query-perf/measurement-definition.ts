@@ -5,6 +5,7 @@ import type { ReadBudgetId } from "@/api/lib/db/read-budgets";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 import type { seedSitemapReadBudget, ServedCaseLaw } from "./corpus-seed";
+import type { RecoveryScenario } from "./recovery-measurement";
 import type { RequestReceiptScenario } from "./request-receipt-seed";
 
 export type TenantStatementMeasurement = {
@@ -20,9 +21,10 @@ export type CorpusStatementMeasurement = {
   expectedRows: number;
   ownerDeadlineMs: number | undefined;
 };
-export type ScheduledJobScenario =
-  { type: "case-law"; served: ServedCaseLaw } | RequestReceiptScenario;
-export type ScheduledJobMeasurement = {
+type CaseLawScenario = { type: "case-law"; served: ServedCaseLaw };
+export type ScheduledJobScenario = CaseLawScenario | RequestReceiptScenario;
+type CaseLawScheduledJobMeasurement = {
+  type: "case-law";
   prepare?: typeof seedSitemapReadBudget;
   /**
    * Whether the run did the job's work, read before `prepare` restores the
@@ -32,7 +34,28 @@ export type ScheduledJobMeasurement = {
   executed?: (database: GatedTestDb) => Promise<boolean>;
   task: string;
   scenarios: readonly {
-    size: ScheduledJobScenario;
-    double?: ScheduledJobScenario;
+    size: CaseLawScenario;
+    double?: CaseLawScenario;
   }[];
 };
+type RequestReceiptScheduledJobMeasurement = {
+  type: "request-receipts";
+  task: string;
+  scenarios: readonly {
+    size: RequestReceiptScenario;
+    double?: RequestReceiptScenario;
+  }[];
+};
+type RecoveryScheduledJobMeasurement = {
+  type: "recovery";
+  task: string;
+  scenarios: readonly Omit<RecoveryScenario, "rows">[];
+};
+/**
+ * Every budgeted job is keyed by its registered ID and carries its task.
+ * Measurement kind selects the corpus owner that runs its scenarios.
+ */
+export type ScheduledJobMeasurement =
+  | CaseLawScheduledJobMeasurement
+  | RequestReceiptScheduledJobMeasurement
+  | RecoveryScheduledJobMeasurement;

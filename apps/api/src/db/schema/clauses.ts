@@ -1,3 +1,4 @@
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   isNotNull,
   jsonb,
@@ -44,6 +45,8 @@ export const clauseCategories = p.pgTable(
       .index("clause_categories_org_parent_idx")
       .on(table.organizationId, table.parentId),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -86,6 +89,8 @@ export const clauses = p.pgTable(
     p.index("clauses_search_vector_gin_idx").using("gin", table.searchVector),
     p.unique("clauses_id_org_unq").on(table.id, table.organizationId),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -111,6 +116,8 @@ export const clauseVariants = p.pgTable(
       .onDelete("cascade"),
     p.index("clause_variants_organization_id_idx").on(table.organizationId),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -136,6 +143,8 @@ export const clauseVersions = p.pgTable(
       .onDelete("cascade"),
     p.index("clause_versions_organization_id_idx").on(table.organizationId),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -167,6 +176,8 @@ export const templateRecipes = p.pgTable(
       .index("template_recipes_organization_id_name_idx")
       .on(table.organizationId, table.name),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -214,6 +225,8 @@ export const templateClauses = p.pgTable(
       .onDelete("cascade"),
     p.index("template_clauses_organization_id_idx").on(table.organizationId),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -257,6 +270,8 @@ export const templateFills = p.pgTable(
       .index("template_fills_org_template_idx")
       .on(table.organizationId, table.templateId),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 

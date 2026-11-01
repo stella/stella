@@ -3,6 +3,7 @@ import { BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK } from "@/api/lib/scheduler/ta
 import type { ScheduledJobMeasurement } from "../measurement-definition";
 
 export default {
+  type: "case-law",
   task: BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
   scenarios: [],
 } as const satisfies ScheduledJobMeasurement;

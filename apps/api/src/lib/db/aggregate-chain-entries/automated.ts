@@ -5,4 +5,5 @@ export default [
   "schedulerClaim",
   "definitionCap",
   "definition",
+  "uploadReceipt",
 ] as const satisfies readonly AggregateName[];

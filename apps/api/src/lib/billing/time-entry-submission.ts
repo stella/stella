@@ -35,9 +35,9 @@ import {
   guardRunningTimeEntries,
   timeEntryIsRunning,
 } from "@/api/lib/billing/time-entry-running";
+import { TIME_ENTRY_TRANSITIONS } from "@/api/lib/billing/time-entry-transition-spec";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -260,7 +260,7 @@ const writeMoves = async (
       ? []
       : await transitionBatch({
           tx,
-          spec: TRANSITIONS.timeEntries,
+          spec: TIME_ENTRY_TRANSITIONS,
           ids: toSubmit.map(({ id }) => id),
           options: {
             from: [BILLING_STATUS.DRAFT],
@@ -278,7 +278,7 @@ const writeMoves = async (
       ? []
       : await transitionBatch({
           tx,
-          spec: TRANSITIONS.timeEntries,
+          spec: TIME_ENTRY_TRANSITIONS,
           ids: toApprove.map(({ id }) => id),
           options: {
             from: [BILLING_STATUS.DRAFT],

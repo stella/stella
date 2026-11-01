@@ -1,6 +1,7 @@
 import { TaggedError } from "better-result";
 
 import {
+  type BuiltRealtimeEvent,
   type DesktopEditSessionRealtimeEvent,
   type OrganizationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
@@ -261,13 +262,13 @@ export const createSseBroadcastPublisher = ({
     },
     publishWorkspaceEvent: async (
       workspaceId: SafeId<"workspace">,
-      event: WorkspaceRealtimeEvent,
+      event: BuiltRealtimeEvent,
       options: PublishOptions = {},
     ): Promise<void> => {
       await publishRedisPayload({
         scope: "workspace",
         id: workspaceId,
-        event,
+        event: event.toJSON(),
         originInstanceId: options.originInstanceId,
         deliveredInline: options.deliveredInline,
       });

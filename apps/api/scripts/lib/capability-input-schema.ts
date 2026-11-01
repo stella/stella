@@ -38,12 +38,7 @@ const inputPart = (value: unknown): GenericSchema | undefined => {
     : panic("Capability input schemas must be valibot schemas");
 };
 
-/**
- * The catalog carries the same rendering `describe_capability` advertises
- * (wire strings shown as the values they carry), projected for a conditional
- * feature the way an agent without it sees the capability, so the CLI's
- * generated flags and the MCP surface read one contract.
- */
+/** Render the full declared contract once; apply conditional access during live discovery. */
 const staticInputSchemas = (
   config: Record<string, unknown>,
 ): AdvertisedSchemas => {
@@ -61,10 +56,10 @@ const staticInputSchemas = (
       "Conditional feature access requires an input schema projection",
     );
   }
-  return requirement.projectInputSchema(schemas);
+  return schemas;
 };
 
-/** A capability's input parts as the catalog stores them: rendered, with public field names. */
+/** The catalog keeps every conditional input; live discovery projects the caller's available branches. */
 export const buildInputSchema = (
   config: Record<string, unknown>,
 ): CapabilityInputSchema => {

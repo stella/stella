@@ -40,6 +40,7 @@ import {
   playbookDefinitions,
   rateEntries,
   rateTables,
+  reviewResetOrganizations,
   savedSearches,
   systemAuditRuns,
   templates,
@@ -203,6 +204,10 @@ const actorFor = (
     { organizationId, userId },
     rlsDatabase(),
   ),
+  preflightDb: createRootMembershipScopedDb(
+    { organizationId, userId },
+    rlsDatabase(),
+  ),
   cancelled: () => undefined,
   recorderFor: (workspaceId) =>
     createBackgroundAuditRecorder({
@@ -294,6 +299,9 @@ beforeAll(async () => {
   const otherUserId = await insertUser(OTHER_EMAIL);
   const demoUserId = await insertUser(DEMO_EMAIL);
   const reviewOrgId = await insertOrganization("Review", [reviewUserId]);
+  await testDb
+    .insert(reviewResetOrganizations)
+    .values({ organizationId: reviewOrgId });
   const sharedOrgId = await insertOrganization("Shared", [
     reviewUserId,
     otherUserId,
@@ -350,8 +358,14 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  fakeS3.stop();
-  await releaseTestDb();
+  try {
+    await testDb
+      .delete(reviewResetOrganizations)
+      .where(eq(reviewResetOrganizations.organizationId, fixture.reviewOrgId));
+  } finally {
+    fakeS3.stop();
+    await releaseTestDb();
+  }
 });
 
 describe("review organization configuration", () => {
@@ -381,7 +395,7 @@ describe("review organization reset refusals", () => {
       config: target,
       db: ownerDb(),
       rlsDatabase: rlsDatabase(),
-      runId: Bun.randomUUIDv7(),
+      runId: createSafeId<"schedulerJobRun">(),
       signal: new AbortController().signal,
       dependencies: resetDependencies,
     });
@@ -564,12 +578,17 @@ describe("review organization sender reset", () => {
               );
               expect(executedRows(removed)).toEqual([{ n: 1 }]);
             } else {
-              const removed = await sweepReviewOrganization(
-                asTestRaw<Transaction>(tx),
-                fixture.reviewOrgId,
-                fixture.reviewUserId,
-              );
+              await tx.execute(sql`RESET ROLE`);
+              const removed = await sweepReviewOrganization({
+                tx: asTestRaw<Transaction>(tx),
+                organizationId: fixture.reviewOrgId,
+                subject: createSafeId<"schedulerJobRun">(),
+                userId: fixture.reviewUserId,
+              });
               expect(removed.get("correspondence_allowed_senders")).toBe(1);
+              await tx.execute(
+                sql`SET LOCAL ROLE correspondence_reset_owner_probe`,
+              );
             }
             expect(await senders()).toEqual([{ id: foreignSenderId }]);
             const context = await tx.execute(
@@ -596,7 +615,7 @@ describe("review organization seed and reset", () => {
       config: config(fixture.reviewOrgId),
       db: ownerDb(),
       rlsDatabase: rlsDatabase(),
-      runId: Bun.randomUUIDv7(),
+      runId: createSafeId<"schedulerJobRun">(),
       signal: new AbortController().signal,
       dependencies: resetDependencies,
     });
@@ -684,7 +703,7 @@ describe("review organization seed and reset", () => {
         config: config(fixture.reviewOrgId),
         db: ownerDb(),
         rlsDatabase: rlsDatabase(),
-        runId: Bun.randomUUIDv7(),
+        runId: createSafeId<"schedulerJobRun">(),
         signal: new AbortController().signal,
         dependencies: {
           ...resetDependencies,
@@ -741,7 +760,7 @@ describe("review organization seed and reset", () => {
             config: config(fixture.reviewOrgId),
             db: ownerDb(),
             rlsDatabase: rlsDatabase(),
-            runId: Bun.randomUUIDv7(),
+            runId: createSafeId<"schedulerJobRun">(),
             signal: controller.signal,
             dependencies: {
               ...resetDependencies,
@@ -833,7 +852,7 @@ describe("review organization seed and reset", () => {
       config: config(fixture.reviewOrgId),
       db: ownerDb(),
       rlsDatabase: rlsDatabase(),
-      runId: Bun.randomUUIDv7(),
+      runId: createSafeId<"schedulerJobRun">(),
       signal: controller.signal,
       dependencies: {
         ...resetDependencies,
@@ -874,7 +893,7 @@ describe("review organization seed and reset", () => {
         config: config(fixture.reviewOrgId),
         db: ownerDb(),
         rlsDatabase: rlsDatabase(),
-        runId: Bun.randomUUIDv7(),
+        runId: createSafeId<"schedulerJobRun">(),
         signal: new AbortController().signal,
         dependencies: {
           ...resetDependencies,
@@ -1038,7 +1057,7 @@ describe("review organization seed and reset", () => {
       config: config(fixture.reviewOrgId),
       db: ownerDb(),
       rlsDatabase: rlsDatabase(),
-      runId: Bun.randomUUIDv7(),
+      runId: createSafeId<"schedulerJobRun">(),
       signal: new AbortController().signal,
       dependencies: resetDependencies,
     });

@@ -21,8 +21,8 @@ import {
   caseLawIndexJobs,
   CORPUS_INDEX_JOB_SUCCEEDED_CHECKS,
   legislationIndexJobs,
-  schedulerJobs,
 } from "@/api/db/schema";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusIndexProjectionSubject } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
@@ -30,6 +30,7 @@ import type {
   SchedulerTask,
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
+import { writePlatformSchedulerTaskState } from "@/api/lib/scheduler/upsert-job";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -354,14 +355,9 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
   const leaseToken =
     job.lockedBy ??
     panic("Corpus index-job detail backfill requires a scheduler lease");
-  const leaseFence = and(
-    eq(schedulerJobs.id, job.id),
-    eq(schedulerJobs.lockedBy, leaseToken),
-  );
-
   const page = await Result.tryPromise({
     try: async () =>
-      await db.transaction(async (tx) => {
+      await withAggregateTransaction(db, async (tx) => {
         await setTransactionBudget(tx, {
           lockTimeout: BATCH_LOCK_TIMEOUT_MS,
           statementTimeout: BATCH_STATEMENT_TIMEOUT_MS,
@@ -378,10 +374,16 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
           // Checkpoint last: replaying a page moves nothing a second time,
           // while advancing first could step over rows the update did not
           // reach.
-          await tx
-            .update(schedulerJobs)
-            .set({ payload: { cursor: nextCursor, family } })
-            .where(leaseFence);
+          await writePlatformSchedulerTaskState({
+            db: tx,
+            jobId: job.id,
+            leaseToken,
+            state: {
+              type: "checkpoint",
+              payload: { cursor: nextCursor, family },
+            },
+            task: BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK,
+          });
           return { family, movedCount, status: "progress" as const };
         }
 
@@ -389,10 +391,16 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
         if (following === null) {
           return { family, movedCount, status: "swept" as const };
         }
-        await tx
-          .update(schedulerJobs)
-          .set({ payload: { cursor: null, family: following } })
-          .where(leaseFence);
+        await writePlatformSchedulerTaskState({
+          db: tx,
+          jobId: job.id,
+          leaseToken,
+          state: {
+            type: "checkpoint",
+            payload: { cursor: null, family: following },
+          },
+          task: BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK,
+        });
         return { family, movedCount, status: "progress" as const };
       }),
     catch: (cause) =>
@@ -441,15 +449,18 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
           signal,
         },
         async ({ db: dedicatedDb }) =>
-          await dedicatedDb.transaction(async (tx) => {
+          await withAggregateTransaction(dedicatedDb, async (tx) => {
             await validateCorpusIndexJobChecksTx(tx);
             signal.throwIfAborted();
             // audit: skip — retires a versioned one-shot repair; scheduler job
             // runs retain the operator trail.
-            await tx
-              .update(schedulerJobs)
-              .set({ enabled: false })
-              .where(leaseFence);
+            await writePlatformSchedulerTaskState({
+              db: tx,
+              jobId: job.id,
+              leaseToken,
+              state: { type: "retire" },
+              task: BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK,
+            });
             signal.throwIfAborted();
           }),
       ),

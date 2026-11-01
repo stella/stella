@@ -68,6 +68,7 @@ import {
 } from "@/api/mcp/error-codes";
 import type { McpValidationIssue } from "@/api/mcp/error-codes";
 import {
+  isMcpDescriptorFeatureAdmitted,
   isMcpDescriptorFeatureEnabled,
   resolveMcpDescriptorFeatureId,
 } from "@/api/mcp/feature-access";
@@ -974,14 +975,14 @@ const contextFeatureEnabled = (
     isCapabilityFeatureEnabled
   )(feature);
 
-const capabilityFeatureEnabled = (
+const capabilityFeatureAdmitted = (
   entry: CatalogEntry,
   context: McpRequestContext,
 ) =>
   (entry.accountScope === undefined ||
     hasAccountCapabilityAuthority(context, entry.accountScope)) &&
   (entry.featureAccess === "conditional" ||
-    isMcpDescriptorFeatureEnabled({
+    isMcpDescriptorFeatureAdmitted({
       context,
       kind: "capabilities",
       id: entry.id,
@@ -994,7 +995,7 @@ export const accessibleFeatureCapabilityIds = async (
   (await getCatalog())
     .filter(
       (entry) =>
-        capabilityFeatureEnabled(entry, context) &&
+        capabilityFeatureAdmitted(entry, context) &&
         resolveMcpDescriptorFeatureId({
           context,
           kind: "capabilities",
@@ -1010,6 +1011,51 @@ export const accessibleFeatureCapabilityIds = async (
         contextFeatureEnabled(entry.feature, context),
     )
     .map((entry) => entry.id);
+
+/** Current conditional inputs are invocation metadata, never a shared catalog. */
+export const conditionalCapabilityInputs = async (
+  context: McpRequestContext,
+) => {
+  const entries = (await getCatalog()).filter(
+    (entry) =>
+      entry.featureAccess === "conditional" &&
+      contextFeatureEnabled(entry.feature, context) &&
+      !isMcpDescriptorFeatureEnabled({
+        context,
+        kind: "capabilities",
+        id: entry.id,
+        featureId: entry.featureId,
+      }),
+  );
+  const schemas = await Promise.all(
+    entries.map(async (entry) => {
+      const endpoint = await loadCapabilityEndpoint(entry.id);
+      if (endpoint?.config.featureAccess?.type !== "conditional") {
+        return panic(
+          "Conditional capability requires its live input projection",
+        );
+      }
+      const projected = endpoint.config.featureAccess.projectInputSchema(
+        advertisedSchemas(endpoint.config),
+      );
+      return [
+        entry.id,
+        {
+          ...(projected.body === undefined
+            ? {}
+            : { body: withPublicFieldNames(projected.body) }),
+          ...(projected.params === undefined
+            ? {}
+            : { params: withPublicFieldNames(projected.params) }),
+          ...(projected.query === undefined
+            ? {}
+            : { query: withPublicFieldNames(projected.query) }),
+        },
+      ] as const;
+    }),
+  );
+  return Object.fromEntries(schemas);
+};
 
 /**
  * Catalog capability ids gated off in this deployment, sorted: the ids
@@ -1027,7 +1073,7 @@ export const featureOmittedCapabilityIds = async (
     .filter(
       (entry) =>
         !isFeatureEnabled(entry.feature) &&
-        isMcpDescriptorFeatureEnabled({
+        isMcpDescriptorFeatureAdmitted({
           context,
           kind: "capabilities",
           id: entry.id,
@@ -1078,7 +1124,7 @@ const listCapabilitiesHandler: McpToolHandler<
   const matching = (await getCatalog()).filter(
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
-      capabilityFeatureEnabled(entry, context) &&
+      capabilityFeatureAdmitted(entry, context) &&
       (confirmable || !requiresCapabilityConfirmation(entry)) &&
       (domain === undefined || capabilityDomain(entry.id) === domain) &&
       (access === "all" || entry.access === access),
@@ -1261,7 +1307,7 @@ const hintForUnknownId = async (
     (await getCatalog())
       .filter(
         (entry) =>
-          capabilityFeatureEnabled(entry, context) &&
+          capabilityFeatureAdmitted(entry, context) &&
           contextFeatureEnabled(entry.feature, context),
       )
       .map((entry) => entry.id),
@@ -1355,7 +1401,7 @@ const describeCapabilityHandler: McpToolHandler<
   }
 
   // Caller-hidden entries share the unknown-id contract, including hints.
-  if (!capabilityFeatureEnabled(entry, context)) {
+  if (!capabilityFeatureAdmitted(entry, context)) {
     return notFoundWithHint(id, context);
   }
   if (!contextFeatureEnabled(entry.feature, context)) {
@@ -1871,7 +1917,8 @@ export const invokedCapabilityConsumesServices = async ({
   if (
     entry === undefined ||
     entry.access !== access ||
-    !capabilityFeatureEnabled(entry, context)
+    !capabilityFeatureAdmitted(entry, context) ||
+    !contextFeatureEnabled(entry.feature, context)
   ) {
     return Result.ok(false);
   }
@@ -1935,7 +1982,7 @@ const invokeCapabilityHandler = async ({
   }
 
   // 2. Caller admission precedes deployment availability for discovery parity.
-  if (!capabilityFeatureEnabled(entry, context)) {
+  if (!capabilityFeatureAdmitted(entry, context)) {
     return notFoundWithHint(id, context);
   }
   if (!contextFeatureEnabled(entry.feature, context)) {

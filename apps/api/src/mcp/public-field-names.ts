@@ -108,10 +108,15 @@ export const withPublicFieldNames = (node: unknown): unknown => {
   if (!isPlainRecord(node)) {
     return node;
   }
-  const rename = (name: string): string =>
-    Object.hasOwn(PUBLIC_FIELD_NAME, name)
-      ? (PUBLIC_FIELD_NAME[name] ?? name)
-      : name;
+  const rename = (name: string): string => {
+    if (!Object.hasOwn(PUBLIC_FIELD_NAME, name)) {
+      return name;
+    }
+    return (
+      PUBLIC_FIELD_NAME[name] ??
+      panic("Public field name is absent from its registry")
+    );
+  };
   const projected = new Map(Object.entries(node));
 
   for (const keyword of SCHEMA_NODE_KEYWORDS) {

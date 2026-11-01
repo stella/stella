@@ -21,6 +21,7 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { FLOW_RUN_TRANSITIONS_V1 } from "@/api/lib/db/flow-run-transition-spec";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
 import {
@@ -254,7 +255,7 @@ if (!databaseUrl || !enabled) {
               await start.promise;
               return await transition({
                 tx,
-                spec: TRANSITIONS.flowRuns,
+                spec: FLOW_RUN_TRANSITIONS_V1,
                 id: fixture.runId,
                 options: { from: ["pending"], to: "running" },
                 recordTransitionAuditEvent: async (auditTx, row) =>
@@ -308,7 +309,7 @@ if (!databaseUrl || !enabled) {
                 ?.status,
             ).toBe(status);
             if (
-              TRANSITIONS.flowRuns.terminal.some(
+              FLOW_RUN_TRANSITIONS_V1.terminal.some(
                 (terminal) => terminal === status,
               )
             ) {
@@ -430,7 +431,11 @@ if (!databaseUrl || !enabled) {
               definitionSnapshot: { name: "Transition", steps: [] },
               triggerSource: { type: "manual", userId: fixture.userId },
             });
-            const expected = permitsTransition(TRANSITIONS.flowRuns, from, to);
+            const expected = permitsTransition(
+              FLOW_RUN_TRANSITIONS_V1,
+              from,
+              to,
+            );
             const raw = await Result.tryPromise(() =>
               db
                 .update(flowRuns)
@@ -468,7 +473,7 @@ if (!databaseUrl || !enabled) {
                   async (tx) =>
                     await transition({
                       tx,
-                      spec: TRANSITIONS.flowRuns,
+                      spec: FLOW_RUN_TRANSITIONS_V1,
                       id: ownerId,
                       // @ts-expect-error arbitrary external pairs exercise runtime validation too
                       options: move,

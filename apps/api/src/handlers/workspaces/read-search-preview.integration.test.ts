@@ -1,19 +1,26 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { panic } from "better-result";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
+
 import type { ScopedDb } from "@/api/db/safe-db";
-import { entities, entityVersions, fields } from "@/api/db/schema";
+import {
+  entities,
+  entityVersions,
+  fields,
+  flowRuns,
+  flowRunSteps,
+} from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -23,13 +30,16 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import { readSearchPreviewHandler } from "./read-search-preview.query";
+import readSearchPreview from "./search-preview/get";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 let testDb: TestDatabase;
 let ids: TestIds;
 let scopedDb: ScopedDb;
 const seededIds: ReturnType<typeof createSafeId<"entity">>[] = [];
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -215,6 +225,8 @@ describe("matter search preview", () => {
       .where(eq(entities.id, recentDocumentId));
 
     const result = await readSearchPreviewHandler({
+      organizationId: ids.orgA,
+      userId: ids.userA1,
       scopedDb,
       workspaceId: ids.wsA1,
     });
@@ -259,5 +271,90 @@ describe("matter search preview", () => {
     expect(
       result.recentDocuments.some(({ id }) => id === otherMatterDocumentId),
     ).toBe(false);
+  });
+
+  test("the safe handler carries its session principal into linked review visibility", async () => {
+    const reviewTaskId = entityId();
+    const ordinaryTaskId = entityId();
+    const runId = createSafeId<"flowRun">();
+    const previousFlag = env.FEATURE_FLOWS;
+    const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    testState.setConfig("FEATURE_FLOWS", true);
+    try {
+      await testDb.insert(entities).values([
+        {
+          id: reviewTaskId,
+          workspaceId: ids.wsA1,
+          kind: "task",
+          featureOwner: "flows",
+          name: "Review preview",
+          dueDate: "2999-01-01",
+          status: "open",
+        },
+        {
+          id: ordinaryTaskId,
+          workspaceId: ids.wsA1,
+          kind: "task",
+          name: "Ordinary preview",
+          dueDate: "2999-01-02",
+          status: "open",
+        },
+      ]);
+      await testDb.insert(flowRuns).values({
+        id: runId,
+        workspaceId: ids.wsA1,
+        status: "awaiting_review",
+        triggerSource: { type: "manual", userId: ids.userA1 },
+        definitionSnapshot: {
+          name: "Preview flow",
+          steps: [
+            { kind: "review-gate", name: "Review", instructions: "Review" },
+          ],
+        },
+      });
+      await testDb.insert(flowRunSteps).values({
+        id: createSafeId<"flowRunStep">(),
+        runId,
+        workspaceId: ids.wsA1,
+        index: 0,
+        kind: "review-gate",
+        status: "awaiting_review",
+        reviewTaskEntityId: reviewTaskId,
+      });
+      const readThroughHandler = async () => {
+        const response = await readSearchPreview.handler(
+          asTestRaw<Parameters<typeof readSearchPreview.handler>[0]>({
+            request: new Request(
+              `https://api.example.test/v1/workspaces/${ids.wsA1}/search-preview`,
+            ),
+            route:
+              "/v1/workspaces/:workspaceId/search-preview" satisfies ApiRoutePath,
+            memberRole: sessionMemberRole("owner"),
+            scopedDb,
+            workspaceId: ids.wsA1,
+            session: { activeOrganizationId: ids.orgA },
+            user: { id: ids.userA1 },
+          }),
+        );
+        if (!("upcomingAgenda" in response)) {
+          return panic(
+            "Search preview safe handler returned an error response",
+          );
+        }
+        return response.upcomingAgenda.map(({ id }) => id);
+      };
+      // The RLS fixture grants flows to the standard actor. This exercises
+      // the actual transport adapter, not merely its query helper signature.
+      expect(await readThroughHandler()).toContain(reviewTaskId);
+      expect(await readThroughHandler()).toContain(ordinaryTaskId);
+      testState.setConfig("FEATURE_FLOWS", false);
+      const hidden = await readThroughHandler();
+      expect(hidden).not.toContain(reviewTaskId);
+      expect(hidden).toContain(ordinaryTaskId);
+    } finally {
+      testState.setConfig("FEATURE_FLOWS", previousFlag);
+      restoreMode();
+      await testDb.delete(flowRuns).where(eq(flowRuns.id, runId));
+    }
   });
 });

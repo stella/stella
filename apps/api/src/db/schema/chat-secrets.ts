@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import { chatSecretPolicies } from "@/api/db/rls";
 
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import { chatThreads } from "./chat";
 import {
   bytea,
@@ -75,5 +76,7 @@ export const chatSecrets = p.pgTable.withRLS(
       sql`${table.decision} = 'declined' OR ${table.targetConnectionId} IS NOT NULL`,
     ),
     ...chatSecretPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

@@ -1,6 +1,6 @@
 import { userOrganizationPolicies } from "@/api/db/rls";
 
-import { reviewResetOwnerPolicies } from "../review-reset-policies";
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   jsonb,
   organization,
@@ -64,7 +64,7 @@ export const requestIdempotencyReceipts = p.pgTable.withRLS(
       OR (${table.state} = 'completed' AND ${table.responseCode} IS NOT NULL AND ${table.completedAt} IS NOT NULL)`,
     ),
     ...userOrganizationPolicies(),
-    ...reviewResetOwnerPolicies("request_idempotency_receipts"),
+    ...registeredReviewResetPolicies(table.organizationId),
     // Retention reads candidates globally and deletes through user scopes.
     p.pgPolicy("retention_owner_select", {
       for: "select",

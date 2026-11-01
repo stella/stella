@@ -150,6 +150,7 @@ describe("addWorkspaceMember", () => {
           new: ["user_invitee"],
         },
       },
+      featureOwner: "shared",
       groupId: expect.any(String),
       metadata: {
         forwardedFor: null,

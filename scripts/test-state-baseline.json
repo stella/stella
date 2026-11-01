@@ -184,11 +184,6 @@
     "owner": "guards",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/handlers/time-billing-feature-access.test.ts": {
-    "count": 4,
-    "owner": "pricing",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/handlers/usage/create-hosted-setup.postgres.test.ts": {
     "count": 8,
     "owner": "pricing",
@@ -349,21 +344,6 @@
     "owner": "guards",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/lib/flows/flow-run-worker.integration.test.ts": {
-    "count": 4,
-    "owner": "guards",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
-  "apps/api/src/lib/flows/review-gate-task-state.postgres.test.ts": {
-    "count": 4,
-    "owner": "database",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
-  "apps/api/src/lib/flows/start-flow-run.admission.test.ts": {
-    "count": 2,
-    "owner": "guards",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/lib/folio-collab-rooms.test.ts": {
     "count": 2,
     "owner": "guards",
@@ -489,11 +469,6 @@
     "owner": "ai",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/mcp/capability-tools.test.ts": {
-    "count": 6,
-    "owner": "guards",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/mcp/compat-corpus.test.ts": {
     "count": 2,
     "owner": "case-law",
@@ -531,11 +506,6 @@
   },
   "apps/api/src/mcp/search-index-unavailable.test.ts": {
     "count": 2,
-    "owner": "guards",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
-  "apps/api/src/mcp/server.test.ts": {
-    "count": 6,
     "owner": "guards",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },

@@ -1,3 +1,4 @@
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import {
   SANCTIONS_MATCH_STATES,
   SANCTIONS_MONITORING_EVENT_TYPES,
@@ -6,7 +7,10 @@ import {
 } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 import type { SanctionsPossibleMatch } from "@/api/lib/lists/sanctions/screening-service";
 
-import { reviewResetOwnerCheck } from "../review-reset-policies";
+import {
+  registeredReviewResetPolicies,
+  reviewResetOwnerCheck,
+} from "../review-reset-policies";
 import {
   globalCaseLawPolicies,
   organization,
@@ -86,6 +90,10 @@ export const sanctionsContactMarks = p.pgTable(
       })
       .onDelete("cascade"),
     ...monitoringPolicies("sanctions_contact_marks"),
+    // Contact writes under the system role fire the mark upsert triggers.
+    ...systemScopePolicies(table),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -248,6 +256,8 @@ export const sanctionsContactScreenings = p.pgTable(
       sql`${table.status} <> 'incomplete' OR ${table.editionId} IS NOT NULL`,
     ),
     ...monitoringPolicies("sanctions_contact_screenings"),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -326,6 +336,8 @@ export const sanctionsContactMatches = p.pgTable(
         table.sourceEntryId,
       ),
     ...monitoringPolicies("sanctions_contact_matches"),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -397,5 +409,7 @@ export const sanctionsScreeningEvents = p.pgTable(
       to: "public",
       using: reviewResetOwnerCheck("sanctions_screening_events"),
     }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

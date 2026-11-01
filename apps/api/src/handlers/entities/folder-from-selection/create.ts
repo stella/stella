@@ -22,13 +22,24 @@ import { resolveSiblingNameForInsert } from "@/api/lib/entities/sibling-name-ins
 import { validateParentIdForInsert } from "@/api/lib/entities/validate-parent-id";
 import { insertEntityBatch } from "@/api/lib/entity-versions/insert-entity-batch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  admitEntityTransferAccess,
+  FLOW_TASK_FEATURE_ACCESS,
+} from "@/api/lib/flows/review-gate-task";
 import { LIMITS } from "@/api/lib/limits";
-import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { syncWorkspaceSearchActivity } from "@/api/lib/search/workspace-search-activity";
 import { checkEntityCreateCapacityForInsert } from "@/api/lib/uploads/entity-create";
 
 import { DESCENDANT_MOVE_MESSAGE, moveEntities } from "../move";
+
+const searchSyncFailure = failureSink({
+  event: "entities.folder_from_selection_search_sync_failed",
+  expected: [],
+});
 
 const createFolderFromSelectionBodySchema = v.object({
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
@@ -75,7 +86,16 @@ export const createFolderFromSelectionHandler = async function* ({
   const entityIds = [...new Set(body.entityIds)];
 
   const attempt = await resultTx(safeDb, async (tx) => {
-    // The tree lock comes before any row lock, as in a single move.
+    const admission = await admitEntityTransferAccess(tx, {
+      workspaceId,
+      entityIds,
+      userId,
+      access: "write",
+    });
+    if (admission.isErr()) {
+      return Result.err(admission.error);
+    }
+    // Admission precedes the tree fence; the shared move owner reuses it.
     await lockTree(tx, { tree: "entities", scopeId: workspaceId });
 
     const capacity = await checkEntityCreateCapacityForInsert({
@@ -148,6 +168,7 @@ export const createFolderFromSelectionHandler = async function* ({
 
     const moved = await moveEntities({
       tx,
+      userId,
       workspaceId,
       entityIds,
       parentId: folderId,
@@ -171,7 +192,14 @@ export const createFolderFromSelectionHandler = async function* ({
     "folder-from-selection.flush-search-repairs",
   );
   detached(
-    syncSearchActivity(workspaceId),
+    safeDb(async (tx) => await syncSearchActivity(workspaceId, tx)).then(
+      (result) => {
+        if (result.isErr()) {
+          observeFailure(result.error, { sink: searchSyncFailure });
+        }
+        return result;
+      },
+    ),
     "folder-from-selection.sync-search-activity",
   );
 
@@ -180,6 +208,7 @@ export const createFolderFromSelectionHandler = async function* ({
 
 const config = {
   contract: "patch",
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   idempotency: { type: "replay" },
   description:
     "Create a folder and move the given documents, folders, or tasks into " +

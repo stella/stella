@@ -7,7 +7,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -21,10 +21,20 @@ import {
   treeParentCycleError,
 } from "@/api/lib/db/tree-parent-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  admitEntityTransferAccess,
+  FLOW_TASK_FEATURE_ACCESS,
+} from "@/api/lib/flows/review-gate-task";
 import { LIMITS } from "@/api/lib/limits";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
-import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { syncWorkspaceSearchActivity } from "@/api/lib/search/workspace-search-activity";
 import { isRecord } from "@/api/lib/type-guards";
+
+const searchRepairFailure = failureSink({
+  event: "entities.move_search_repair_failed",
+  expected: [],
+});
 
 const moveEntityBodySchema = v.object({
   entityId: resourceIdSchema("entity"),
@@ -38,6 +48,7 @@ export const DESCENDANT_MOVE_MESSAGE =
 
 export type MoveEntityHandlerProps = {
   safeDb: SafeDb;
+  userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
   body: MoveEntityBodySchema;
@@ -175,6 +186,7 @@ const lockMoves = async ({
 };
 
 type MoveEntitiesOptions = LockMovesOptions & {
+  userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
 };
 
@@ -186,9 +198,19 @@ type MoveEntitiesOptions = LockMovesOptions & {
  */
 export const moveEntities = async ({
   recordAuditEvent,
+  userId,
   ...options
 }: MoveEntitiesOptions): Promise<Result<LockedMove[], HandlerError>> => {
   const { tx, workspaceId, entityIds, parentId } = options;
+  const admission = await admitEntityTransferAccess(tx, {
+    workspaceId,
+    entityIds,
+    userId,
+    access: "write",
+  });
+  if (admission.isErr()) {
+    return admission;
+  }
   // Serialize ancestry decisions before taking any entity locks. Disjoint
   // source/target row pairs can still join into a cycle across two moves;
   // the `entities_parent_acyclic` trigger holds the rule for any writer
@@ -230,6 +252,7 @@ export const moveEntities = async ({
 
 export const moveEntityHandler = async function* ({
   safeDb,
+  userId,
   workspaceId,
   recordAuditEvent,
   body,
@@ -238,6 +261,7 @@ export const moveEntityHandler = async function* ({
   const attempt = await safeDb(async (tx) => {
     const reparented = await moveEntities({
       tx,
+      userId,
       workspaceId,
       entityIds: [body.entityId],
       parentId: body.parentId,
@@ -255,10 +279,18 @@ export const moveEntityHandler = async function* ({
   const moved = yield* attempt;
   yield* moved;
 
-  syncSearchActivity(workspaceId).catch(
-    createErrorCapture(
-      handlerErrorContext("moveEntityHandler.syncSearchActivity"),
-    ),
+  detached(
+    Result.tryPromise(
+      async () =>
+        await safeDb(async (tx) => await syncSearchActivity(workspaceId, tx)),
+    ).then((searchAttempt) => {
+      const result = searchAttempt.andThen((value) => value);
+      if (result.isErr()) {
+        observeFailure(result.error, { sink: searchRepairFailure });
+      }
+      return result;
+    }),
+    "entities-move.search-repair",
   );
 
   return Result.ok({});
@@ -346,6 +378,7 @@ const config = {
     "or into one of its own descendants, and a read-only entity is refused.",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   realtime: entityRealtimeUpdates,
   mcp: { type: "covered", by: "save_document" },
   body: moveEntityBodySchema,
@@ -353,9 +386,10 @@ const config = {
 
 const moveEntity = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent, user }) {
     return yield* moveEntityHandler({
       safeDb,
+      userId: user.id,
       workspaceId,
       recordAuditEvent,
       body,

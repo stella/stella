@@ -7,6 +7,7 @@ import {
   RESOURCE_CHANGE_TYPE,
   RESOURCE_TYPE,
   type ResourceChange,
+  type ResourceRef,
   type ResourceType,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
@@ -277,33 +278,40 @@ const getResourceTypeInvalidationActions = (
   return actions;
 };
 
-const getResourceChangeQueryActions = (
-  change: ResourceChange,
-  workspaceId: string,
-): WorkspaceRealtimeQueryAction[] => {
+type ResourceQueryChange = {
+  resource: ResourceRef;
+  changeType: ResourceChange["change"];
+  workspaceId: string;
+};
+
+const getResourceChangeQueryActions = ({
+  resource,
+  changeType,
+  workspaceId,
+}: ResourceQueryChange): WorkspaceRealtimeQueryAction[] => {
   const actions = getResourceTypeInvalidationActions(
-    change.resource.type,
+    resource.type,
     workspaceId,
   );
   if (
-    change.resource.type === RESOURCE_TYPE.ENTITY &&
-    change.change === RESOURCE_CHANGE_TYPE.DELETED
+    resource.type === RESOURCE_TYPE.ENTITY &&
+    changeType === RESOURCE_CHANGE_TYPE.DELETED
   ) {
     actions.unshift({
       type: WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX,
-      queryKey: entitiesKeys.detail(workspaceId, change.resource.id),
+      queryKey: entitiesKeys.detail(workspaceId, resource.id),
     });
   }
 
-  if (change.resource.type !== RESOURCE_TYPE.FIELD) {
+  if (resource.type !== RESOURCE_TYPE.FIELD) {
     return actions;
   }
 
   const fileActionType =
-    change.change === RESOURCE_CHANGE_TYPE.DELETED
+    changeType === RESOURCE_CHANGE_TYPE.DELETED
       ? WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX
       : WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE;
-  const fieldKey = { workspaceId, fieldId: change.resource.id };
+  const fieldKey = { workspaceId, fieldId: resource.id };
   actions.push(
     {
       type: fileActionType,
@@ -378,28 +386,25 @@ export const getWorkspaceRealtimeQueryActions = (
 ): WorkspaceRealtimeQueryAction[] => {
   switch (event.type) {
     case REALTIME_EVENT_TYPE.RESOURCE_UPDATED:
-      return getResourceChangeQueryActions(
-        {
-          change: RESOURCE_CHANGE_TYPE.UPDATED,
-          resource: event.resource,
-        },
+      return getResourceChangeQueryActions({
+        changeType: RESOURCE_CHANGE_TYPE.UPDATED,
+        resource: event.resource,
         workspaceId,
-      );
+      });
     case REALTIME_EVENT_TYPE.RESOURCE_DELETED:
-      return getResourceChangeQueryActions(
-        {
-          change: RESOURCE_CHANGE_TYPE.DELETED,
-          resource: event.resource,
-        },
+      return getResourceChangeQueryActions({
+        changeType: RESOURCE_CHANGE_TYPE.DELETED,
+        resource: event.resource,
         workspaceId,
-      );
+      });
     case REALTIME_EVENT_TYPE.RESOURCES_CHANGED: {
       const actions: WorkspaceRealtimeQueryAction[] = [];
       for (const change of event.changes) {
-        for (const action of getResourceChangeQueryActions(
-          change,
+        for (const action of getResourceChangeQueryActions({
+          resource: change.resource,
+          changeType: change.change,
           workspaceId,
-        )) {
+        })) {
           actions.push(action);
         }
       }

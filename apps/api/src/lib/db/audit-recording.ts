@@ -1,16 +1,20 @@
 import { panic } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { ORGANIZATION_EVALUATION_LIMIT } from "@stll/api-contract/organization-create";
 
+import type {
+  EntityFeatureOwner,
+  RetainedActivityFeatureOwner,
+} from "@/api/db/feature-owner";
 import { SETTING_USER_ID } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import type {
   AUDIT_ACTIVITY_CATEGORIES,
   SearchHistoryKind,
 } from "@/api/db/schema";
-import { accountAuditLogs, auditLogs } from "@/api/db/schema";
+import { accountAuditLogs, auditLogs, entities } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
@@ -57,6 +61,125 @@ type AuditMetadata = Record<string, unknown>;
 
 export type AuditActivityCategory = (typeof AUDIT_ACTIVITY_CATEGORIES)[number];
 
+type AuditOwnerResolver =
+  | { type: "shared" }
+  | { type: "flows" }
+  | { type: "entity"; resolve: (event: AuditEvent) => string | null };
+
+const sharedOwner = { type: "shared" } as const;
+
+const metadataEntityId = (event: AuditEvent): string | null => {
+  const entityId = event.metadata?.["entityId"];
+  if (typeof entityId === "string") {
+    return entityId;
+  }
+  const changes = auditEventChanges(event);
+  const created = changes?.["created"]?.new;
+  if (
+    typeof created === "object" &&
+    created !== null &&
+    "entityId" in created
+  ) {
+    return typeof created.entityId === "string" ? created.entityId : null;
+  }
+  const deleted = changes?.["deleted"]?.old;
+  if (
+    typeof deleted === "object" &&
+    deleted !== null &&
+    "entityId" in deleted
+  ) {
+    return typeof deleted.entityId === "string" ? deleted.entityId : null;
+  }
+  return null;
+};
+
+/** Every audit kind declares whether it has an owning entity or feature. */
+const AUDIT_OWNER_BY_RESOURCE_TYPE = {
+  mcp_web_handoff: sharedOwner,
+  service_oauth_client: sharedOwner,
+  legal_resolve: sharedOwner,
+  audit_log: sharedOwner,
+  agent_skill: sharedOwner,
+  agent_skill_comment: sharedOwner,
+  agent_skill_proposal: sharedOwner,
+  ai_memory: sharedOwner,
+  announcement: sharedOwner,
+  billing_code: sharedOwner,
+  case_law_matter_link: sharedOwner,
+  case_law_decision_annotation: sharedOwner,
+  case_law_reader_answer: sharedOwner,
+  case_law_research_column: sharedOwner,
+  chat_file: sharedOwner,
+  chat_message: sharedOwner,
+  chat_thread: sharedOwner,
+  chat_tool_execution: sharedOwner,
+  chat_tool_grant: sharedOwner,
+  clause: sharedOwner,
+  clause_category: sharedOwner,
+  clause_template_link: sharedOwner,
+  clause_variant: sharedOwner,
+  contact: sharedOwner,
+  contact_directory: sharedOwner,
+  correspondence: sharedOwner,
+  document_annotation: { type: "entity", resolve: metadataEntityId },
+  document_type: sharedOwner,
+  usage_allocation: sharedOwner,
+  usage_entitlement: sharedOwner,
+  usage_event: sharedOwner,
+  usage_provider_event: sharedOwner,
+  desktop_edit_session: sharedOwner,
+  bilingual_translation_run: sharedOwner,
+  document_translation_run: sharedOwner,
+  document_review_run: sharedOwner,
+  entity: { type: "entity", resolve: (event) => event.resourceId },
+  entity_version: { type: "entity", resolve: metadataEntityId },
+  expense: sharedOwner,
+  feedback_report: sharedOwner,
+  field: { type: "entity", resolve: metadataEntityId },
+  file_comparison: sharedOwner,
+  flow_definition: { type: "flows" },
+  flow_run: { type: "flows" },
+  folio_collab_room: sharedOwner,
+  signal: sharedOwner,
+  invoice: sharedOwner,
+  personal_api_key: sharedOwner,
+  machine_api_key: sharedOwner,
+  legal_list: sharedOwner,
+  legal_list_generation: sharedOwner,
+  legal_list_item: sharedOwner,
+  legal_list_verification: sharedOwner,
+  mcp_connection: sharedOwner,
+  mcp_gateway_tool: sharedOwner,
+  organization_access_state: sharedOwner,
+  organization_settings: sharedOwner,
+  pdf_signing_session: sharedOwner,
+  playbook: sharedOwner,
+  property: sharedOwner,
+  rate_entry: sharedOwner,
+  report_export: sharedOwner,
+  rate_table: sharedOwner,
+  saved_search: sharedOwner,
+  search_history: sharedOwner,
+  seller_profile: sharedOwner,
+  saved_time_narrative: sharedOwner,
+  vat_rate: sharedOwner,
+  number_series: sharedOwner,
+  statute_annotation: sharedOwner,
+  style_set: sharedOwner,
+  template: sharedOwner,
+  template_lookup_format: sharedOwner,
+  time_entry: sharedOwner,
+  time_daily_target: sharedOwner,
+  time_timer: sharedOwner,
+  user_file: sharedOwner,
+  view: sharedOwner,
+  view_template: sharedOwner,
+  workspace: sharedOwner,
+  workspace_contact: sharedOwner,
+  workspace_member: sharedOwner,
+  work_obligation: { type: "entity", resolve: (event) => event.resourceId },
+} as const satisfies Record<AuditResourceType, AuditOwnerResolver>;
+
 export type AuditExecutionContext = {
   performer:
     | { type: "user"; id: SafeId<"user"> }
@@ -99,6 +222,8 @@ export type AuditExecutionContext = {
 type AuditEventFields = {
   action: AuditAction;
   resourceId: string;
+  /** Server snapshot captured before a destructive mutation. */
+  featureOwner?: RetainedActivityFeatureOwner;
   // Merged onto the base request metadata (IP, UA, forwardedFor).
   // Use for non-diff context (download s3Key, fileName, etc.).
   metadata?: AuditMetadata;
@@ -454,33 +579,113 @@ export const recordAuditGroups = async ({
     );
     return;
   }
+  const entityOwners = new Map<string, EntityFeatureOwner>();
+  for (const { bindings, events } of groups) {
+    const entityIdsByWorkspace = new Map<SafeId<"workspace">, string[]>();
+    for (const event of events) {
+      const workspaceId =
+        event.workspaceId === undefined
+          ? bindings.workspaceId
+          : event.workspaceId;
+      const owner = AUDIT_OWNER_BY_RESOURCE_TYPE[event.resourceType];
+      if (
+        workspaceId === null ||
+        owner.type !== "entity" ||
+        event.featureOwner !== undefined
+      ) {
+        continue;
+      }
+      const entityId = owner.resolve(event);
+      if (entityId === null) {
+        continue;
+      }
+      const ids = entityIdsByWorkspace.get(workspaceId);
+      if (ids) {
+        ids.push(entityId);
+      } else {
+        entityIdsByWorkspace.set(workspaceId, [entityId]);
+      }
+    }
+    if (entityIdsByWorkspace.size === 0) {
+      continue;
+    }
+    const linked = await tx
+      .select({
+        entityId: entities.id,
+        workspaceId: entities.workspaceId,
+        featureOwner: entities.featureOwner,
+      })
+      .from(entities)
+      .where(
+        or(
+          ...[...entityIdsByWorkspace].map(([workspaceId, entityIds]) =>
+            and(
+              eq(entities.workspaceId, workspaceId),
+              inArray(sql`${entities.id}::text`, entityIds),
+            ),
+          ),
+        ),
+      );
+    for (const { entityId, workspaceId, featureOwner } of linked) {
+      entityOwners.set(`${workspaceId}:${entityId}`, featureOwner);
+    }
+  }
+
   const rows = groups.flatMap(({ bindings, events }) => {
     const groupId = Bun.randomUUIDv7();
     const execution = executionColumns(bindings.execution, bindings.userId);
-    return events.map((event) => ({
-      action: event.action,
-      changes: auditChangesForResource(event.resourceType, event.changes),
-      metadata:
-        requestMetadata === undefined
-          ? (auditMetadataForResource(event.resourceType, event.metadata) ??
-            null)
-          : {
-              ...requestMetadata,
-              ...auditMetadataForResource(event.resourceType, event.metadata),
-            },
-      organizationId: bindings.organizationId,
-      resourceId: event.resourceId,
-      resourceType: event.resourceType,
-      userId: bindings.userId,
-      workspaceId:
+    return events.map((event) => {
+      const owner = AUDIT_OWNER_BY_RESOURCE_TYPE[event.resourceType];
+      const owningEntityId =
+        owner.type === "entity" ? owner.resolve(event) : null;
+      const workspaceId =
         event.workspaceId === undefined
           ? bindings.workspaceId
-          : event.workspaceId,
-      ...execution,
-      activityCategory: activityCategoryForEvent(event),
-      groupId,
-      runId: runIdForEvent(event, execution),
-    }));
+          : event.workspaceId;
+      const featureOwner = ((): RetainedActivityFeatureOwner => {
+        if (event.featureOwner !== undefined) {
+          return event.featureOwner;
+        }
+        switch (owner.type) {
+          case "flows":
+            return "flows";
+          case "shared":
+            return "shared";
+          case "entity":
+            if (owningEntityId === null || workspaceId === null) {
+              return "unknown";
+            }
+            return (
+              entityOwners.get(`${workspaceId}:${owningEntityId}`) ?? "unknown"
+            );
+          default:
+            owner satisfies never;
+            return panic("Audit ownership requires a disposition");
+        }
+      })();
+      return {
+        action: event.action,
+        changes: auditChangesForResource(event.resourceType, event.changes),
+        metadata:
+          requestMetadata === undefined
+            ? (auditMetadataForResource(event.resourceType, event.metadata) ??
+              null)
+            : {
+                ...requestMetadata,
+                ...auditMetadataForResource(event.resourceType, event.metadata),
+              },
+        organizationId: bindings.organizationId,
+        resourceId: event.resourceId,
+        resourceType: event.resourceType,
+        userId: bindings.userId,
+        workspaceId,
+        featureOwner,
+        ...execution,
+        activityCategory: activityCategoryForEvent(event),
+        groupId,
+        runId: runIdForEvent(event, execution),
+      };
+    });
   });
   if (rows.length === 0) {
     return;

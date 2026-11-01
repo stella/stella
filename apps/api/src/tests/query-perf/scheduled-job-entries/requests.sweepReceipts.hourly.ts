@@ -3,6 +3,7 @@ import { SWEEP_REQUEST_RECEIPTS_TASK } from "@/api/lib/scheduler/tasks/request-r
 import type { ScheduledJobMeasurement } from "../measurement-definition";
 
 export default {
+  type: "request-receipts",
   task: SWEEP_REQUEST_RECEIPTS_TASK,
   scenarios: (["expired", "quiet", "mixed"] as const).map((cohort) => ({
     size: { type: "request-receipts", rows: 60_000, cohort },

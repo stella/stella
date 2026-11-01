@@ -4,14 +4,14 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## saved_searches · `savedSearches` · saved-searches.ts:14 · rls
+## saved_searches · `savedSearches` · saved-searches.ts:15 · rls
 
 ```text
-saved_searches.id               pUuid               pk,not null       saved-searches.ts:17
-saved_searches.organization_id  safeOrganizationId  fk,not null       saved-searches.ts:18
-saved_searches.user_id          text                fk,not null       saved-searches.ts:21
-saved_searches.name             varchar             not null          saved-searches.ts:25
-saved_searches.criteria         jsonb               not null          saved-searches.ts:26
-saved_searches.created_at       timestamptz         default,not null  saved-searches.ts:27
-saved_searches.updated_at       timestamptz         default,not null  saved-searches.ts:28
+saved_searches.id               pUuid               pk,not null       saved-searches.ts:18
+saved_searches.organization_id  safeOrganizationId  fk,not null       saved-searches.ts:19
+saved_searches.user_id          text                fk,not null       saved-searches.ts:22
+saved_searches.name             varchar             not null          saved-searches.ts:26
+saved_searches.criteria         jsonb               not null          saved-searches.ts:27
+saved_searches.created_at       timestamptz         default,not null  saved-searches.ts:28
+saved_searches.updated_at       timestamptz         default,not null  saved-searches.ts:29
 ```

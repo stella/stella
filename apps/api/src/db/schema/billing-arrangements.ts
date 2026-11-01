@@ -1,4 +1,7 @@
-import { reviewResetOwnerPolicies } from "../review-reset-policies";
+import {
+  registeredReviewResetPolicies,
+  reviewResetOwnerPolicies,
+} from "../review-reset-policies";
 import {
   centsColumn,
   organization,
@@ -98,5 +101,7 @@ export const billingArrangements = p.pgTable(
     ),
     ...reviewResetOwnerPolicies("billing_arrangements"),
     ...wsOrganizationPolicies("billing_arrangements", { columns: table }),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

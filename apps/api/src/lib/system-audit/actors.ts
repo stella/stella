@@ -12,6 +12,7 @@
 
 /** Each run actor with the counts one of its runs reports. */
 export const SYSTEM_RUN_ACTOR_COUNTS = {
+  "system:flow-schedule-orphan-cleanup": ["schedulerJobs"],
   "system:monitoring-session-revoke": [
     "revokedControls",
     "deletedSessions",
@@ -67,6 +68,12 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "applied",
     "blocked",
     "failed",
+  ],
+  "system:review-reset-flows-cleanup": ["flowDefinitions"],
+  "system:review-reset-signal-cleanup": [
+    "scoutRuns",
+    "signalEvents",
+    "signalsRemoved",
   ],
   "system:review-organization-reset": [
     "deletedMatters",

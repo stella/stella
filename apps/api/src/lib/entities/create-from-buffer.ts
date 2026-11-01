@@ -76,8 +76,15 @@ const cleanupSettlementFailure = failureSink({
   expected: [],
 });
 
+/** Property discovery exposes relational reads without transaction mutation methods. */
+export type EntityBufferPreflightDb = <T>(
+  read: (tx: Pick<Transaction, "query">) => Promise<T>,
+) => Promise<T>;
+
 type CreateEntityFromBufferInput = {
   scopedDb: ScopedDb;
+  /** A real RLS-scoped reader for the pre-upload property check. */
+  preflightDb?: EntityBufferPreflightDb | undefined;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user"> | null;
@@ -98,6 +105,8 @@ type CreateEntityFromBufferInput = {
         sourceWorkspaceId: SafeId<"workspace">;
       }
     | undefined;
+  /** Authorize the effect before acquiring entity resource locks. */
+  beforeCreate?: ((tx: Transaction) => Promise<void>) | undefined;
   afterCreate?:
     | ((tx: Transaction, result: CreateEntityFromBufferValue) => Promise<void>)
     | undefined;
@@ -168,6 +177,7 @@ export type CreateEntityFromBufferResult = Result<
  */
 export const createEntityFromBuffer = async ({
   scopedDb,
+  preflightDb = scopedDb,
   organizationId,
   workspaceId,
   userId,
@@ -179,6 +189,7 @@ export const createEntityFromBuffer = async ({
   parentId,
   scanWarnings,
   provenance,
+  beforeCreate,
   afterCreate,
   dependencies = defaultCreateEntityFromBufferDependencies,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
@@ -211,7 +222,7 @@ export const createEntityFromBuffer = async ({
 
   // Check for file property before uploading to avoid
   // orphaned S3 files if the property doesn't exist.
-  const wsProperties = await scopedDb((tx) =>
+  const wsProperties = await preflightDb((tx) =>
     tx.query.properties.findMany({
       columns: { id: true, content: true },
       where: { workspaceId: { eq: workspaceId } },
@@ -380,6 +391,7 @@ export const createEntityFromBuffer = async ({
     const transactionState = { durableReferencePrepared: false };
     try {
       await scopedDb(async (tx) => {
+        await beforeCreate?.(tx);
         // See `lockWorkspacesForEntityCap` for the canonical lock
         // order every entity-creating path follows (issue #1139).
         const workspaceStatus = await lockWorkspaceForEntityCreate(

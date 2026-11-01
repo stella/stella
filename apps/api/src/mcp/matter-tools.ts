@@ -93,7 +93,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import type { FlowRunCompletionNotice } from "@/api/lib/flows/flow-run-actor";
 import { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-completion-notice";
-import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
+import {
+  admitTaskFlowAccess,
+  decideGateForTask,
+} from "@/api/lib/flows/review-gate-task";
+import { flowRelatedTaskVisibilityConditions } from "@/api/lib/flows/visibility";
 import { externalRefSchema } from "@/api/lib/imports/external-ref";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -1617,6 +1621,11 @@ const readTaskDetail = async ({
   taskId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
 }) => {
+  const visibility = flowRelatedTaskVisibilityConditions({
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
+  const linkVisibility = visibility.link;
   const linkColumns = {
     id: true,
     linkType: true,
@@ -1634,7 +1643,11 @@ const readTaskDetail = async ({
   const { assigneeRows, linksAsSource, linksAsTarget, taskRow } =
     await context.scopedDb(async (tx) => {
       const task = await tx.query.entities.findFirst({
-        where: { id: { eq: taskId }, workspaceId: { eq: workspaceId } },
+        where: {
+          id: { eq: taskId },
+          workspaceId: { eq: workspaceId },
+          RAW: visibility.entity,
+        },
         columns: {
           id: true,
           name: true,
@@ -1662,6 +1675,7 @@ const readTaskDetail = async ({
         where: {
           workspaceId: { eq: workspaceId },
           sourceEntityId: { eq: taskId },
+          RAW: linkVisibility,
         },
         columns: linkColumns,
         with: linkWith,
@@ -1672,6 +1686,7 @@ const readTaskDetail = async ({
         where: {
           workspaceId: { eq: workspaceId },
           targetEntityId: { eq: taskId },
+          RAW: linkVisibility,
         },
         columns: linkColumns,
         with: linkWith,
@@ -1724,11 +1739,30 @@ const handleListTasksTool: TypedMcpToolHandler<
     ) {
       return errorResult("task_id does not belong to matter_id");
     }
-    const { taskRow, assigneeRows, linkRows } = await readTaskDetail({
+    const admission = await context.safeDb(
+      async (tx) =>
+        await admitTaskFlowAccess(tx, {
+          access: "read",
+          workspaceId: owner.workspaceId,
+          taskEntityId: taskId,
+          userId: context.userId,
+        }),
+    );
+    if (admission.isErr()) {
+      return internalFailureResult(
+        admission.error,
+        "mcp.handleListTasksTool.admission_error",
+      );
+    }
+    if (admission.value.isErr()) {
+      return notFoundResult("Not found");
+    }
+    const detail = await readTaskDetail({
       context,
       taskId,
       workspaceId: owner.workspaceId,
     });
+    const { taskRow, assigneeRows, linkRows } = detail;
     if (!taskRow) {
       return notFoundResult("Not found");
     }
@@ -2532,6 +2566,7 @@ const handleDeleteTaskTool: TypedMcpToolHandler<
   }
   const deleted = await Result.gen(() =>
     deleteEntitiesHandler({
+      userId: context.userId,
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       workspaceId,

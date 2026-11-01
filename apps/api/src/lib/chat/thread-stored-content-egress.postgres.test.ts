@@ -32,7 +32,7 @@ import {
   withChatStoredContentEgressSessionLock,
 } from "@/api/lib/db/aggregate-lock";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
-import { tryLockAccountMemberCleanup } from "@/api/lib/member-assignment-offboarding";
+import { tryLockAccountMemberCleanup } from "@/api/lib/member-offboarding/member-assignment-offboarding";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";

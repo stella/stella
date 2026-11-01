@@ -1,6 +1,6 @@
+import { panic } from "better-result";
 import {
   afterAll,
-  beforeAll,
   describe,
   expect,
   mock,
@@ -10,7 +10,9 @@ import {
 } from "bun:test";
 
 import {
+  type BuiltRealtimeEvent,
   type DesktopEditSessionRealtimeEvent,
+  flowRunUpdateRealtimeEvent,
   newNotificationRealtimeEvent,
   type OrganizationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
@@ -22,17 +24,28 @@ import {
   type RealtimeChannel,
   RESOURCE_TYPE,
   resourceDeletedRealtimeEvent,
+  type ResourceDeletion,
   resourceRef,
   resourcesChangedRealtimeEvent,
   resourceSetUpdatedRealtimeEvent,
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
   type UserRealtimeEvent,
+  workflowExtractionPreviewRealtimeEvent,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
-import { workspaceMembers, workspaces } from "@/api/db/schema";
+import {
+  featureEnrolments,
+  flowRuns,
+  flowRunSteps,
+  properties,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
+import { env } from "@/api/env";
 import { desktopEditSessionEventsHandler } from "@/api/handlers/entities/desktop-edit-session-events";
 import { realtimeAuthorizers } from "@/api/lib/auth";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
@@ -45,6 +58,9 @@ import {
   desktopEditSessionCloseSignal,
   isDesktopEditSessionCloseSignal,
 } from "@/api/lib/desktop-edit-session-notifications";
+import { resolveSiblingName } from "@/api/lib/entities/sibling-name";
+import { insertEntityBatch } from "@/api/lib/entity-versions/insert-entity-batch";
+import { classifyEntityResourceDeletions } from "@/api/lib/flows/visibility";
 import {
   broadcast,
   broadcastSessionEvent,
@@ -61,6 +77,7 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // What one live-update publish costs as its audience grows. Every event kind a
@@ -75,18 +92,34 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 // the audience (another organization, another user, another session) receive
 // nothing, and excluding them adds no statement.
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 setDefaultTimeout(120_000);
 
 const LARGE_AUDIENCE = 50;
 
 // ── Census ────────────────────────────────────────────────
 
-type ChannelEvent = {
+type ChannelPayload = {
   organization: OrganizationRealtimeEvent;
   session: DesktopEditSessionRealtimeEvent;
   user: UserRealtimeEvent;
   workspace: WorkspaceRealtimeEvent;
 };
+
+type ChannelEvent = {
+  [C in RealtimeChannel]: C extends "workspace"
+    ? BuiltRealtimeEvent
+    : ChannelPayload[C];
+};
+
+const eventPayload = (event: ChannelEvent[RealtimeChannel]) =>
+  "toJSON" in event ? event.toJSON() : event;
+
+let entityDeletion: ResourceDeletion | undefined;
+const workflowVersionId = createSafeId<"entityVersion">();
+const workflowPropertyId = createSafeId<"property">();
+const workflowRunId = createSafeId<"flowRun">();
 
 const entity = resourceRef({
   type: RESOURCE_TYPE.ENTITY,
@@ -98,56 +131,55 @@ const entity = resourceRef({
  * new kind has its case here. There is no opt-out list: every kind, the
  * session close signal included, is measured.
  */
-const FANOUT_CASES: { [C in RealtimeChannel]: readonly ChannelEvent[C][] } = {
-  workspace: [
-    resourceUpdatedRealtimeEvent(entity),
-    resourceDeletedRealtimeEvent(entity),
-    resourcesChangedRealtimeEvent([resourceUpdatedChange(entity)]),
-    resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY),
-    {
-      type: REALTIME_EVENT_TYPE.WORKFLOW_EXTRACTION_PREVIEW,
-      data: {
-        entityId: "entity-1",
-        entityVersionId: "entity-version-1",
-        propertyId: "property-1",
+const fanoutCasesByChannel = () =>
+  ({
+    workspace: [
+      resourceUpdatedRealtimeEvent(entity),
+      resourceDeletedRealtimeEvent(
+        entityDeletion ?? panic("Fan-out entity deletion was not classified"),
+      ),
+      resourcesChangedRealtimeEvent([resourceUpdatedChange(entity)]),
+      resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY),
+      workflowExtractionPreviewRealtimeEvent({
+        entityId: entity.id,
+        entityVersionId: workflowVersionId,
+        propertyId: workflowPropertyId,
         answer: "Draft answer",
         status: "streaming",
-      },
-    },
-    {
-      type: REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE,
-      data: {
-        runId: "run-1",
+      }),
+      flowRunUpdateRealtimeEvent({
+        runId: workflowRunId,
         status: "running",
         currentStepIndex: 0,
         steps: [{ index: 0, status: "running" }],
+      }),
+    ],
+    organization: [
+      resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY).toJSON(),
+    ],
+    user: [newNotificationRealtimeEvent()],
+    session: [
+      {
+        type: REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED,
+        data: {
+          requestedBy: "Another user",
+          requestedAt: "2026-01-01T00:00:00.000Z",
+        },
       },
-    },
-  ],
-  organization: [resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY)],
-  user: [newNotificationRealtimeEvent()],
-  session: [
-    {
-      type: REALTIME_EVENT_TYPE.TAKEOVER_REQUESTED,
-      data: {
-        requestedBy: "Another user",
-        requestedAt: "2026-01-01T00:00:00.000Z",
+      {
+        type: REALTIME_EVENT_TYPE.SESSION_TAKEN_OVER,
+        data: { message: "Taken over" },
       },
-    },
-    {
-      type: REALTIME_EVENT_TYPE.SESSION_TAKEN_OVER,
-      data: { message: "Taken over" },
-    },
-    {
-      type: REALTIME_EVENT_TYPE.SESSION_CLOSED,
-      data: { reason: "expired" },
-    },
-    desktopEditSessionCloseSignal(),
-  ],
-};
+      {
+        type: REALTIME_EVENT_TYPE.SESSION_CLOSED,
+        data: { reason: "expired" },
+      },
+      desktopEditSessionCloseSignal(),
+    ],
+  }) satisfies { [C in RealtimeChannel]: readonly ChannelEvent[C][] };
 
 const CHANNEL_PARSERS: {
-  [C in RealtimeChannel]: (input: unknown) => ChannelEvent[C] | null;
+  [C in RealtimeChannel]: (input: unknown) => ChannelPayload[C] | null;
 } = {
   organization: parseOrganizationRealtimeEvent,
   session: parseDesktopEditSessionRealtimeEvent,
@@ -156,14 +188,14 @@ const CHANNEL_PARSERS: {
 };
 
 const CHANNELS = Object.keys(REALTIME_CHANNEL_EVENT_TYPES).filter(
-  (channel): channel is RealtimeChannel => channel in FANOUT_CASES,
+  (channel): channel is RealtimeChannel => channel in CHANNEL_PARSERS,
 );
 
 const sorted = (values: Iterable<string>): string[] => [...values].toSorted();
 
 describe("live-update fan-out census", () => {
   test("covers exactly the channels the contract declares", () => {
-    expect(sorted(Object.keys(FANOUT_CASES))).toEqual(
+    expect(sorted(Object.keys(fanoutCasesByChannel()))).toEqual(
       sorted(Object.keys(REALTIME_CHANNEL_EVENT_TYPES)),
     );
   });
@@ -179,8 +211,8 @@ describe("live-update fan-out census", () => {
     "every %s event kind has exactly one fan-out case",
     (channel) => {
       const events: readonly ChannelEvent[RealtimeChannel][] =
-        FANOUT_CASES[channel];
-      const cased = events.map((event) => event.type);
+        fanoutCasesByChannel()[channel];
+      const cased = events.map((event) => eventPayload(event).type);
 
       expect(new Set(cased).size).toBe(cased.length);
       expect(sorted(cased)).toEqual(
@@ -193,8 +225,9 @@ describe("live-update fan-out census", () => {
     "every %s fan-out case is an event its channel accepts",
     (channel) => {
       const parse: (input: unknown) => unknown = CHANNEL_PARSERS[channel];
-      for (const event of FANOUT_CASES[channel]) {
-        expect(parse(event)).toEqual(event);
+      for (const event of fanoutCasesByChannel()[channel]) {
+        const payload = eventPayload(event);
+        expect(parse(payload)).toEqual(payload);
       }
     },
   );
@@ -322,13 +355,24 @@ const seedAudience = async (size: number): Promise<Audience> => {
       userId,
     })),
   );
+  await testDb.insert(featureEnrolments).values(
+    userIds.map(
+      (userId) =>
+        ({
+          organizationId,
+          userId,
+          featureId: "flows",
+        }) satisfies typeof featureEnrolments.$inferInsert,
+    ),
+  );
   return { organizationId, userIds, workspaceId };
 };
 
 let audience: Audience;
 let otherOrganization: Audience;
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
+  testState.setConfig("FEATURE_FLOWS", true);
   testDb = await initAgentAuthTestDb({ logger: queryCountLogger });
   startSse(realtimeAuthorizers, {
     createClient: createFakeSubscriber,
@@ -336,6 +380,92 @@ beforeAll(async () => {
   });
   audience = await seedAudience(LARGE_AUDIENCE);
   otherOrganization = await seedAudience(LARGE_AUDIENCE);
+  const workflowUserId =
+    audience.userIds.at(0) ??
+    panic("Workflow fan-out fixture requires a recipient");
+  // Persist source identities and classify deletion before measured publishing.
+  const classification = await withOrgScopedFixture({
+    database: testDb,
+    workspaceId: audience.workspaceId,
+    actor: { type: "actor", userId: workflowUserId },
+    fn: async (tx) => {
+      await tx.insert(properties).values({
+        id: workflowPropertyId,
+        workspaceId: audience.workspaceId,
+        name: "Fan-out extraction",
+        content: { version: 1, type: "text" },
+        tool: { version: 1, type: "manual-input" },
+        status: "fresh",
+      });
+      await insertEntityBatch({
+        tx,
+        entityRows: [
+          {
+            id: entity.id,
+            workspaceId: audience.workspaceId,
+            name: resolveSiblingName({
+              name: "Fan-out event entity",
+              kind: "document",
+              siblingNames: new Set(),
+            }),
+            kind: "document",
+            featureOwner: "shared",
+            createdBy: workflowUserId,
+          },
+        ],
+        versionRows: [
+          {
+            id: workflowVersionId,
+            workspaceId: audience.workspaceId,
+            entityId: entity.id,
+            versionNumber: 1,
+            stamp: null,
+            createdBy: workflowUserId,
+          },
+        ],
+        stampOrigin: "issued",
+        currentVersions: [
+          { entityId: entity.id, versionId: workflowVersionId },
+        ],
+        fieldRows: [],
+      });
+      await tx.insert(flowRuns).values({
+        id: workflowRunId,
+        workspaceId: audience.workspaceId,
+        definitionSnapshot: {
+          name: "Fan-out workflow",
+          steps: [
+            {
+              kind: "review-gate",
+              name: "Review",
+              instructions: "Review the document.",
+            },
+          ],
+        },
+        triggerSource: { type: "manual", userId: workflowUserId },
+        inputEntityIds: [entity.id],
+        status: "running",
+        currentStepIndex: 0,
+        startedAt: new Date(),
+      });
+      await tx.insert(flowRunSteps).values({
+        id: createSafeId<"flowRunStep">(),
+        workspaceId: audience.workspaceId,
+        runId: workflowRunId,
+        index: 0,
+        kind: "review-gate",
+        status: "running",
+        startedAt: new Date(),
+      });
+      return await classifyEntityResourceDeletions(tx, {
+        workspaceId: audience.workspaceId,
+        entityIds: [entity.id],
+      });
+    },
+  });
+  entityDeletion =
+    classification.deletions.at(0) ??
+    panic("Fan-out entity deletion classification is missing");
   // Measure the path production runs: an attached subscriber, so every
   // publish comes back through the Redis loopback rather than inline.
   expect(subscriberCallbacks.size).toBe(1);
@@ -648,11 +778,26 @@ const measurePublish = async <C extends RealtimeChannel>({
   }
 };
 
-const fanoutCases = CHANNELS.flatMap((channel) => {
+const fanoutCases = CHANNELS.flatMap((channel) =>
+  REALTIME_CHANNEL_EVENT_TYPES[channel].map((eventType) => ({
+    channel,
+    eventType,
+  })),
+);
+
+type FanoutCaseOptions = {
+  channel: RealtimeChannel;
+  eventType: string;
+};
+
+const fanoutEvent = ({ channel, eventType }: FanoutCaseOptions) => {
   const events: readonly ChannelEvent[RealtimeChannel][] =
-    FANOUT_CASES[channel];
-  return events.map((event) => ({ channel, event }));
-});
+    fanoutCasesByChannel()[channel];
+  const event = events.find(
+    (candidate) => eventPayload(candidate).type === eventType,
+  );
+  return event ?? panic(`Missing ${channel} fan-out case ${eventType}`);
+};
 
 /**
  * One publish went out to Redis once, and reached each entitled stream as
@@ -683,54 +828,59 @@ const expectDeliveredOnce = ({
 };
 
 describe("one live-update publish costs the same for 1 and for 50 subscribers", () => {
-  test.each(fanoutCases)("$channel $event.type", async ({ channel, event }) => {
-    const harness = harnessFor(channel);
-    const delivery = harness.delivery(event);
-    const single = await measurePublish({
-      channel,
-      event,
-      shape: {
-        entitled: 1,
-        excluded: false,
-      },
-    });
-    const many = await measurePublish({
-      channel,
-      event,
-      shape: {
-        entitled: LARGE_AUDIENCE,
-        excluded: false,
-      },
-    });
+  test.each(fanoutCases)(
+    "$channel $eventType",
+    async ({ channel, eventType }) => {
+      const event = fanoutEvent({ channel, eventType });
+      const harness = harnessFor(channel);
+      const delivery = harness.delivery(event);
+      const single = await measurePublish({
+        channel,
+        event,
+        shape: {
+          entitled: 1,
+          excluded: false,
+        },
+      });
+      const many = await measurePublish({
+        channel,
+        event,
+        shape: {
+          entitled: LARGE_AUDIENCE,
+          excluded: false,
+        },
+      });
 
-    expect(single.statements).toBe(harness.statementsPerPublish);
-    expect(many.statements).toBe(single.statements);
-    expectDeliveredOnce({ measurement: single, delivery, audienceSize: 1 });
-    expectDeliveredOnce({
-      measurement: many,
-      delivery,
-      audienceSize: LARGE_AUDIENCE,
-    });
-    const frameBytes = single.frames.map((frame) => frame.byteLength);
-    expect(frameBytes.every((bytes) => bytes > 0)).toBe(true);
-    if (delivery === "closed") {
-      expect(single.frames).toEqual([]);
-      expect(many.frames).toEqual([]);
-    } else {
-      const frameByteLength = frameBytes.at(0);
-      expect(frameByteLength).toBeDefined();
-      if (frameByteLength === undefined) {
-        throw new Error("Expected the single subscriber to receive a frame");
+      expect(single.statements).toBe(harness.statementsPerPublish);
+      expect(many.statements).toBe(single.statements);
+      expectDeliveredOnce({ measurement: single, delivery, audienceSize: 1 });
+      expectDeliveredOnce({
+        measurement: many,
+        delivery,
+        audienceSize: LARGE_AUDIENCE,
+      });
+      const frameBytes = single.frames.map((frame) => frame.byteLength);
+      expect(frameBytes.every((bytes) => bytes > 0)).toBe(true);
+      if (delivery === "closed") {
+        expect(single.frames).toEqual([]);
+        expect(many.frames).toEqual([]);
+      } else {
+        const frameByteLength = frameBytes.at(0);
+        expect(frameByteLength).toBeDefined();
+        if (frameByteLength === undefined) {
+          throw new Error("Expected the single subscriber to receive a frame");
+        }
+        expect(many.frames.map((frame) => frame.byteLength)).toEqual(
+          many.frames.map(() => frameByteLength),
+        );
       }
-      expect(many.frames.map((frame) => frame.byteLength)).toEqual(
-        many.frames.map(() => frameByteLength),
-      );
-    }
-  });
+    },
+  );
 
   test.each(fanoutCases)(
-    "$channel $event.type reaches no one outside its audience, at no extra statement",
-    async ({ channel, event }) => {
+    "$channel $eventType reaches no one outside its audience, at no extra statement",
+    async ({ channel, eventType }) => {
+      const event = fanoutEvent({ channel, eventType });
       const harness = harnessFor(channel);
       const measurement = await measurePublish({
         channel,

@@ -58,6 +58,7 @@ type SearchFacetsBody = v.InferOutput<typeof searchFacetsBodySchema>;
 type SearchFacetsHandlerProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   accessibleWorkspaceIds: SafeId<"workspace">[];
   body: SearchFacetsBody;
 };
@@ -65,6 +66,7 @@ type SearchFacetsHandlerProps = {
 export const searchFacetsHandler = async ({
   scopedDb,
   organizationId,
+  userId,
   accessibleWorkspaceIds,
   body,
 }: SearchFacetsHandlerProps) => {
@@ -93,6 +95,7 @@ export const searchFacetsHandler = async ({
       search: body.search,
       query: body.query,
       organizationId,
+      userId,
       accessibleWorkspaceIds,
       selectedWorkspaceIds: resolved.ids,
       types,

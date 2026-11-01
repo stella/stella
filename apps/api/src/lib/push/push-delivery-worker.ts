@@ -10,6 +10,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
+import { flowNotificationVisibilityCondition } from "@/api/lib/flows/visibility";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -228,13 +229,18 @@ const createDeliveryDeps = (
   // Read under the recipient's membership as it stands now: the same row
   // security that decides what their inbox shows decides whether they are
   // alerted, so a matter they lost since the notification was filed sends
-  // nothing.
+  // nothing. Feature-owned notifications alert only while their reader is
+  // admitted, exactly as the inbox lists them.
   readAsRecipient: async (recipient, notificationId) =>
     await createRootMembershipScopedDb(recipient)(async (tx) => {
       const unread = and(
         eq(notifications.userId, recipient.userId),
         eq(notifications.organizationId, recipient.organizationId),
         isNull(notifications.readAt),
+        flowNotificationVisibilityCondition({
+          organizationId: recipient.organizationId,
+          userId: recipient.userId,
+        }),
       );
       const [row] = await tx
         .select({

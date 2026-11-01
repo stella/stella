@@ -24,8 +24,9 @@ import {
   resolveMemberDevOrganization,
 } from "@/api/lib/dev-seed-session-store";
 import { defineEndpoint } from "@/api/lib/endpoints";
+import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
-import { getSearchMaintenance } from "@/api/lib/search/provider";
+import { getSearchMaintenance } from "@/api/lib/search/pg-fts-maintenance";
 
 import {
   type FirmKnowledgeJob,
@@ -304,11 +305,19 @@ const cleanOrganization = defineEndpoint.member(
   },
 );
 
-const rebuildSearch = defineEndpoint.member({}, async ({ session }) => {
-  await getSearchMaintenance().rebuildIndex(session.activeOrganizationId);
-  await rebuildSupplementalSearchIndex(session.activeOrganizationId);
-  return { ok: true };
-});
+const rebuildSearch = defineEndpoint.member(
+  {},
+  async ({ session, scopedDb }) => {
+    await scopedDb(
+      async (tx) =>
+        await getSearchMaintenance(tx, upsertSearchDocument).rebuildIndex(
+          session.activeOrganizationId,
+        ),
+    );
+    await rebuildSupplementalSearchIndex(session.activeOrganizationId);
+    return { ok: true };
+  },
+);
 
 const clearCache = defineEndpoint.member({}, () => {
   rmSync(VITE_CACHE_DIR, { recursive: true, force: true });

@@ -202,6 +202,7 @@ const seedDocuments = async ({
       }
       const created = await createEntityFromBuffer({
         scopedDb: actor.scopedDb,
+        preflightDb: actor.preflightDb,
         organizationId: actor.organizationId,
         workspaceId,
         userId: actor.userId,

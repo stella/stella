@@ -68,7 +68,10 @@ import {
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
 import { createFileKey } from "@/api/lib/files/utils";
-import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
+import {
+  maybeStartUploadTriggeredFlows,
+  recordUploadTriggeredFlowIntents,
+} from "@/api/lib/flows/upload-trigger-recording";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
@@ -653,6 +656,12 @@ export const finalizeEntityCreate = async function* ({
       // Durable extraction request, committed with the file it reads. The
       // post-promote call below only accelerates the queue handoff.
       await requestNativeExtractionRun({ entityId, tx });
+      await recordUploadTriggeredFlowIntents(tx, {
+        entityId,
+        workspaceId,
+        organizationId,
+        fileName: renamed.value,
+      });
       await enqueueEntitySearchRepairs(tx, [entityId]);
 
       await recordAuditEvent(tx, {

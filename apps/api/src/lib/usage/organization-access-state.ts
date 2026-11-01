@@ -33,7 +33,6 @@ import {
   lockOrganizationSettingsWrites,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   transitionScopedBatch,
   transitionScopedCount,
@@ -50,6 +49,7 @@ import {
   resolveOrganizationAccess,
 } from "@/api/lib/usage/organization-access";
 import { readOrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
+import { ORGANIZATION_ACCESS_STATE_TRANSITIONS } from "@/api/lib/usage/organization-access-state-transitions";
 
 /**
  * Whether an organization without its own AI config may run on the instance
@@ -197,7 +197,7 @@ export const recordNewOrganizationAccessState = async (
   }
   await transitionScopedCount({
     tx: db,
-    spec: TRANSITIONS.organizationAccessStates,
+    spec: ORGANIZATION_ACCESS_STATE_TRANSITIONS,
     where:
       and(
         eq(organizationAccessStates.organizationId, organizationId),
@@ -279,7 +279,7 @@ export const endOrganizationEvaluation = async (
 ): Promise<boolean> => {
   const ended = await transitionScopedBatch({
     tx: db,
-    spec: TRANSITIONS.organizationAccessStates,
+    spec: ORGANIZATION_ACCESS_STATE_TRANSITIONS,
     identities: [{ organizationId }],
     options: {
       from: [ORGANIZATION_ACCESS_STATE.evaluationPeriod],
@@ -411,7 +411,7 @@ export const moveKeylessOrganizationsToFree = async (
 
   const moved = await transitionScopedBatch({
     tx: db,
-    spec: TRANSITIONS.organizationAccessStates,
+    spec: ORGANIZATION_ACCESS_STATE_TRANSITIONS,
     identities: candidates.map(({ id }) => ({ organizationId: id })),
     options: {
       from: [ORGANIZATION_ACCESS_STATE.selfManagedKeys],

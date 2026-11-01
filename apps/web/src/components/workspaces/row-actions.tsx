@@ -166,6 +166,7 @@ import {
 import { useUploadVersion } from "@/lib/workspaces/mutations/use-upload-version";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { useTransferEligibility } from "@/lib/workspaces/queries/transfer-eligibility";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
 import { workflowActionsDisabled } from "@/lib/workspaces/queries/workspace.logic";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
@@ -400,6 +401,10 @@ export const RowActions = ({
   const retryCell = useRetryCell(toSafeId<"workspace">(workspaceId));
   const canCreateEntity = usePermissions({ entity: ["create"] });
   const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [duplicateIntent, setDuplicateIntent] = useState<"idle" | "active">(
+    "idle",
+  );
   const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(
     null,
   );
@@ -422,6 +427,11 @@ export const RowActions = ({
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
   const bulkTargets = isBulk ? selectedEntities : [entity];
+  const transferAvailable = useTransferEligibility({
+    workspaceId,
+    entityIds: bulkTargets.map(({ entityId }) => entityId),
+    enabled: (open ?? menuOpen) || duplicateIntent === "active",
+  });
   const menuSubject = resolveRowMenuSubject({
     cellPropertyId: cellMetadataTarget?.propertyId ?? null,
     fields: entity.fields,
@@ -507,6 +517,9 @@ export const RowActions = ({
     workspaceId,
   });
   const openCopyToMatterDialog = () => {
+    if (!transferAvailable) {
+      return;
+    }
     setCopyToMatterEntities(
       toCopyToMatterEntities(bulkTargets, getAncestorIds),
     );
@@ -547,8 +560,6 @@ export const RowActions = ({
     workspaceId,
   });
 
-  const hasPdfConversion =
-    file !== null && file.pdfFileId !== null && file.mimeType !== PDF_MIME_TYPE;
   const exportableOcrSources = getExportableOcrSources({
     ocrSource,
     ocrSources,
@@ -563,7 +574,8 @@ export const RowActions = ({
           canScrub: canDownloadScrubbed(file),
           currentVersionReference: entity.currentVersionReference,
           encrypted: file.encrypted,
-          hasPdfConversion,
+          hasPdfConversion:
+            file.pdfFileId !== null && file.mimeType !== PDF_MIME_TYPE,
           mimeType: file.mimeType,
         });
 
@@ -914,7 +926,7 @@ export const RowActions = ({
   };
 
   const handleDuplicate = async () => {
-    if (isDuplicating) {
+    if (isDuplicating || !transferAvailable) {
       return;
     }
 
@@ -1113,8 +1125,16 @@ export const RowActions = ({
   ].some((action) => action !== undefined && action !== null);
 
   return (
-    <Menu onOpenChange={onOpenChange} open={open}>
+    <Menu
+      onOpenChange={(nextOpen) => {
+        setMenuOpen(nextOpen);
+        onOpenChange?.(nextOpen);
+      }}
+      open={open}
+    >
       <RowDuplicatePrimaryAction
+        onIntent={() => setDuplicateIntent("active")}
+        transferAvailable={transferAvailable}
         label={t("common.duplicate")}
         onDuplicate={handleDuplicate}
         pending={isDuplicating}
@@ -1278,6 +1298,7 @@ export const RowActions = ({
           sections,
           "file-operations",
           <RowFileOperationsMenu
+            transferAvailable={transferAvailable}
             downloadRenditions={downloadRenditions}
             exportableOcrSources={exportableOcrSources}
             hasAnyFile={hasAnyFile}
@@ -1331,6 +1352,8 @@ export const RowActions = ({
 };
 
 type RowDuplicatePrimaryActionProps = {
+  onIntent: () => void;
+  transferAvailable: boolean;
   label: string;
   onDuplicate: () => Promise<void>;
   pending: boolean;
@@ -1338,6 +1361,8 @@ type RowDuplicatePrimaryActionProps = {
 };
 
 const RowDuplicatePrimaryAction = ({
+  onIntent,
+  transferAvailable,
   label,
   onDuplicate,
   pending,
@@ -1349,8 +1374,11 @@ const RowDuplicatePrimaryAction = ({
 
   return (
     <Button
+      aria-label={label}
       className="opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
-      disabled={pending}
+      disabled={pending || !transferAvailable}
+      onPointerEnter={onIntent}
+      onFocus={onIntent}
       onClick={(event) => {
         event.stopPropagation();
         detached(onDuplicate(), "row-actions.duplicate-primary");
@@ -1769,6 +1797,7 @@ const RowCellOcrExportMenuActions = ({
 };
 
 type RowFileOperationsMenuProps = {
+  transferAvailable: boolean;
   duplicatePending: boolean;
   downloadRenditions: readonly DownloadRendition[];
   exportableOcrSources: readonly OcrSource[];
@@ -1783,6 +1812,7 @@ type RowFileOperationsMenuProps = {
 };
 
 const RowFileOperationsMenu = ({
+  transferAvailable,
   duplicatePending,
   downloadRenditions,
   exportableOcrSources,
@@ -1878,13 +1908,13 @@ const RowFileOperationsMenu = ({
         </MenuItem>
       )}
       <MenuItem
-        disabled={duplicatePending}
+        disabled={duplicatePending || !transferAvailable}
         onClick={() => detached(onDuplicate(), "row-actions.duplicate")}
       >
         <DuplicateIcon />
         {duplicatePending ? t("common.duplicating") : t("common.duplicate")}
       </MenuItem>
-      <MenuItem onClick={onCopyToMatter}>
+      <MenuItem disabled={!transferAvailable} onClick={onCopyToMatter}>
         <FolderSyncIcon />
         {t("workspaces.copyToMatter.menuItem")}
       </MenuItem>

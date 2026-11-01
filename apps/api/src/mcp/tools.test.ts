@@ -8580,6 +8580,7 @@ describe("OpenAI-compatible MCP tools", () => {
       limit: 10,
       organizationId: toSafeId<"organization">("org_1"),
       query: "share purchase",
+      userId: context.userId,
       workspaceIds: [
         toSafeId<"workspace">(WORKSPACE_ID),
         toSafeId<"workspace">(WORKSPACE_ID_3),
@@ -10626,51 +10627,54 @@ describe("OpenAI-compatible MCP tools", () => {
   };
 
   const createVersionHistoryScopedDb = (rows: VersionHistoryRow[]) =>
-    createScopedDbMock({
-      query: {
-        entities: {
-          findFirst: async () => ({
-            createdAt: new Date("2025-12-01T00:00:00.000Z"),
-            kind: "document",
-            name: "Secret Doc for John Smith",
-            updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-            workspaceId: WORKSPACE_ID,
-            extractedContent: null,
-            currentVersion: {
-              createdAt: new Date("2026-01-01T00:00:00.000Z"),
-              id: "ver_current",
-              fields: [],
-            },
-            versions: [{ id: "ver_current" }],
-          }),
+    createScopedDbMock(
+      {
+        query: {
+          entities: {
+            findFirst: async () => ({
+              createdAt: new Date("2025-12-01T00:00:00.000Z"),
+              kind: "document",
+              name: "Secret Doc for John Smith",
+              updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+              workspaceId: WORKSPACE_ID,
+              extractedContent: null,
+              currentVersion: {
+                createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                id: "ver_current",
+                fields: [],
+              },
+              versions: [{ id: "ver_current" }],
+            }),
+          },
+          documentProcessingRuns: { findMany: async () => [] },
+          entityVersions: {
+            findFirst: async () => ({ id: "ver_current" }),
+          },
+          extractedContent: { findFirst: async () => null },
+          fields: {
+            findMany: async () => [],
+          },
+          organizationSettings: {
+            findFirst: async () => ({ documentProcessingMode: "off" }),
+          },
+          searchDocuments: {
+            findFirst: async () => ({
+              updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+            }),
+          },
         },
-        documentProcessingRuns: { findMany: async () => [] },
-        entityVersions: {
-          findFirst: async () => ({ id: "ver_current" }),
-        },
-        extractedContent: { findFirst: async () => null },
-        fields: {
-          findMany: async () => [],
-        },
-        organizationSettings: {
-          findFirst: async () => ({ documentProcessingMode: "off" }),
-        },
-        searchDocuments: {
-          findFirst: async () => ({
-            updatedAt: new Date("2026-01-02T00:00:00.000Z"),
-          }),
+        select: () => {
+          const selectBuilder = {
+            from: () => selectBuilder,
+            where: () => selectBuilder,
+            orderBy: () => selectBuilder,
+            limit: () => rows,
+          };
+          return selectBuilder;
         },
       },
-      select: () => {
-        const selectBuilder = {
-          from: () => selectBuilder,
-          where: () => selectBuilder,
-          orderBy: () => selectBuilder,
-          limit: () => rows,
-        };
-        return selectBuilder;
-      },
-    }).scopedDb;
+      { flowTaskGates: [] },
+    ).scopedDb;
 
   test("read_document anonymizes version-history labels and descriptions", async () => {
     anonymizeTextFieldsMock.mockResolvedValue(
@@ -11546,6 +11550,38 @@ describe("OpenAI-compatible MCP tools", () => {
         expect(toolNames).toContain("list_time_entries");
         expect(toolNames).toContain("save_time_entry");
         expect(toolNames).toContain("delete_time_entry");
+      },
+    );
+  });
+
+  test("native billing deployment refusal precedes descriptor admission", async () => {
+    await withBillingFlags(
+      { featureTimeBilling: false, featureUsage: true, localDevOpen: false },
+      async () => {
+        const recordAuditEvent = createRecordAuditEventMock();
+        const result = await handleMcpToolCall({
+          args: {
+            matter_id: WORKSPACE_ID,
+            entity_id: "00000000-0000-4000-8000-0000000e0001",
+            date_worked: "2026-02-01",
+            timezone_id: "Europe/Prague",
+            duration_minutes: 60,
+            rate_at_entry: 25_000,
+            currency: "EUR",
+            narrative: "Call with client",
+          },
+          context: createContext({ recordAuditEvent }),
+          toolName: "save_time_entry",
+        });
+
+        expectErrorEnvelope(result, {
+          code: "feature_disabled",
+          message: "This feature is not enabled on this deployment",
+          hint: featureDisabledHint("FEATURE_TIME_BILLING"),
+        });
+        // The gate short-circuits before the backing handler runs, so no audit
+        // row is written by guessing the tool name.
+        expect(recordAuditEvent).not.toHaveBeenCalled();
       },
     );
   });

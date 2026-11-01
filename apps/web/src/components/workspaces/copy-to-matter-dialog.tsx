@@ -36,6 +36,7 @@ import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { useTransferEligibility } from "@/lib/workspaces/queries/transfer-eligibility";
 
 type CopyToMatterDialogProps = {
   open: boolean;
@@ -89,11 +90,16 @@ export const CopyToMatterDialog = ({
   }, [open, initialTargetWorkspaceId]);
 
   const transferEntities = getCopyToMatterRootEntities(entities);
+  const transferAvailable = useTransferEligibility({
+    workspaceId: sourceWorkspaceId,
+    entityIds: transferEntities.map(({ entityId }) => entityId),
+    enabled: open,
+  });
   const singleEntity =
     transferEntities.length === 1 ? transferEntities.at(0) : undefined;
 
   const handleSubmit = async () => {
-    if (!target) {
+    if (!target || !transferAvailable) {
       return;
     }
 
@@ -284,7 +290,7 @@ export const CopyToMatterDialog = ({
             {t("common.cancel")}
           </Button>
           <Button
-            disabled={!target || isSubmitting}
+            disabled={!target || isSubmitting || !transferAvailable}
             onClick={() => {
               detached(handleSubmit(), "copy-to-matter-dialog.submit");
             }}

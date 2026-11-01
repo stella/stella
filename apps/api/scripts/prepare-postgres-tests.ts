@@ -3,6 +3,8 @@ import path from "node:path";
 
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
+import { REVIEW_ORGANIZATION_TEST_ENVIRONMENT } from "../src/tests/fixtures/review-organization-environment";
+
 const apiRoot = path.resolve(import.meta.dir, "..");
 
 export class PostgresTestMigrationError extends TaggedError(
@@ -19,6 +21,7 @@ export const preparePostgresTests = async (): Promise<void> => {
     cmd: [process.execPath, "run", "src/db/migrate.ts"],
     cwd: apiRoot,
     env: {
+      ...REVIEW_ORGANIZATION_TEST_ENVIRONMENT,
       ...process.env,
       // Postgres test databases are disposable and have no RDS load signal.
       DB_LOAD_GATE_EBS_SIGNAL:

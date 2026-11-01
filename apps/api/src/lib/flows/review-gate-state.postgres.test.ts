@@ -49,6 +49,7 @@ if (!databaseUrl || !runPostgresTests) {
                     // release at UPDATE instead, after all stale reads have
                     // finished; a nonlocking mutation must fail this matrix.
                     if (
+                      query.includes("pg_advisory_xact_lock(") ||
                       query.includes("for update") ||
                       /^update "flow_(runs|run_steps)"/u.test(query)
                     ) {

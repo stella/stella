@@ -10,6 +10,8 @@ import { entityFeaturePolicies } from "./entity-feature-policies";
 import { INGESTION_ROLE_NAME } from "./role-names";
 
 export const stella = p.pgRole("stella").existing();
+export const SYSTEM_RLS_ROLE_NAME = "stella_system";
+export const stellaSystem = p.pgRole(SYSTEM_RLS_ROLE_NAME).existing();
 
 // Narrow write role used only by the case-law ingestion daemon.
 // Bootstrapped in 20260516000000_case_law_ingestion_role.
@@ -757,11 +759,42 @@ export const userOrganizationPolicies = () => [
   }),
 ];
 
+/** Persisted owners retain admission after their source entity is deleted. */
+export const retainedActivityOwnerCheck = (
+  table: "audit_logs" | "notifications",
+) => {
+  const relation = sql.identifier(table);
+  const scopeCheck =
+    table === "audit_logs"
+      ? sql`((${relation}.workspace_id IS NULL AND ${relation}.resource_type = 'flow_definition') OR ${workspaceAccessCheck(sql`${relation}.workspace_id`)})`
+      : sql`${relation}.workspace_id IS NOT NULL AND ${workspaceAccessCheck(sql`${relation}.workspace_id`)}`;
+  // sql-perf-allow: bounded by one retained row and indexed principal and authorized-workspace lookups
+  return sql`(
+    ${relation}.feature_owner = 'shared' OR (
+      ${relation}.feature_owner = 'flows'
+      AND (${scopeCheck})
+      AND EXISTS (
+        SELECT 1 FROM member AS activity_member
+        JOIN "user" AS activity_user ON activity_user.id = activity_member.user_id
+        JOIN feature_enrolments AS activity_enrolment
+          ON activity_enrolment.organization_id = activity_member.organization_id
+          AND activity_enrolment.user_id = activity_member.user_id
+          AND activity_enrolment.feature_id = 'flows'
+        WHERE activity_member.organization_id = ${relation}.organization_id
+          AND activity_member.user_id = current_setting('app.user_id', true)
+          AND activity_user.email_verified = true
+          AND activity_user.deleted_at IS NULL
+      )
+    )
+  )`;
+};
+
 // A notification that points into a matter is visible, and can be marked
 // read, only while the recipient can still access that matter. Rows with no
 // matter pointer keep the plain recipient and organization pins.
 const notificationVisibleCheck = sql`(
   ${userOrganizationCheck} AND (workspace_id IS NULL OR ${workspaceCheck})
+  AND ${retainedActivityOwnerCheck("notifications")}
 )`;
 
 export const notificationPolicies = () => [

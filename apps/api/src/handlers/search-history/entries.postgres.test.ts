@@ -32,7 +32,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { keyedContentLookupKey } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
-import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
+import { removeOrganizationMemberInTransaction } from "@/api/lib/member-offboarding/member-assignment-offboarding";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";

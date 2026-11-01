@@ -17,6 +17,7 @@ import {
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   bytea,
   jsonb,
@@ -104,6 +105,8 @@ export const matterCounters = p.pgTable(
       .uniqueIndex("matter_counters_org_scope_uidx")
       .on(table.organizationId, table.scopeKey),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -173,6 +176,8 @@ export const documentReferenceCounters = p.pgTable(
       .on(table.organizationId, table.reference),
     p.index("document_reference_counters_workspace_idx").on(table.workspaceId),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -486,6 +491,8 @@ export const anonymizationAllowlistEntries = p.pgTable(
       .on(table.entityId, sql`lower(${table.canonical})`)
       .where(sql`${table.entityId} is not null`),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );
 
@@ -550,5 +557,7 @@ export const anonymizationBlacklistEntries = p.pgTable(
       .on(table.workspaceId, sql`lower(${table.canonical})`)
       .where(sql`${table.workspaceId} is not null`),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

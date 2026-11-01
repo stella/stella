@@ -33,12 +33,13 @@ import entry31 from "./rateTableWorkspace";
 import entry32 from "./readerAnnotation";
 import entry33 from "./readerAnswer";
 import entry34 from "./requestReceipt";
-import entry35 from "./sampleCase";
-import entry36 from "./scoutRun";
-import entry37 from "./searchHistory";
-import entry38 from "./searchProjectionRepair";
-import entry39 from "./signal";
-import entry40 from "./signingSession";
+import entry35 from "./reviewReset";
+import entry36 from "./sampleCase";
+import entry37 from "./scoutRun";
+import entry38 from "./searchHistory";
+import entry39 from "./searchProjectionRepair";
+import entry40 from "./signal";
+import entry41 from "./signingSession";
 
 export default {
   "accountDeletionRequest": entry0,
@@ -76,10 +77,11 @@ export default {
   "readerAnnotation": entry32,
   "readerAnswer": entry33,
   "requestReceipt": entry34,
-  "sampleCase": entry35,
-  "scoutRun": entry36,
-  "searchHistory": entry37,
-  "searchProjectionRepair": entry38,
-  "signal": entry39,
-  "signingSession": entry40,
+  "reviewReset": entry35,
+  "sampleCase": entry36,
+  "scoutRun": entry37,
+  "searchHistory": entry38,
+  "searchProjectionRepair": entry39,
+  "signal": entry40,
+  "signingSession": entry41,
 } as const;

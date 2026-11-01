@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 
+import { registeredReviewResetPolicies } from "../review-reset-policies";
 import {
   organization,
   orgPolicies,
@@ -51,5 +52,7 @@ export const styleSets = p.pgTable(
       sql`starts_with(${table.s3Key}, ${table.organizationId} || '/')`,
     ),
     ...orgPolicies(),
+
+    ...registeredReviewResetPolicies(table.organizationId),
   ],
 );

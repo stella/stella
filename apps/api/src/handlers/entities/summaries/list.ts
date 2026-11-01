@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
@@ -12,6 +12,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -39,6 +40,8 @@ const readEntitySummariesQuerySchema = v.object({
 type ReadEntitySummariesHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   cursor: string | undefined;
   limit: number;
 };
@@ -61,6 +64,8 @@ const parseSummaryCursor = (cursor: string | undefined) => {
 const readEntitySummariesHandler = async function* ({
   safeDb,
   workspaceId,
+  organizationId,
+  userId,
   cursor,
   limit: requestedLimit,
 }: ReadEntitySummariesHandlerProps) {
@@ -81,6 +86,12 @@ const readEntitySummariesHandler = async function* ({
   const whereClause = and(
     eq(entities.workspaceId, workspaceId),
     cursorCondition,
+    flowOwnedEntityVisibilitySql({
+      organizationId,
+      userId,
+      entityId: sql`${entities.id}`,
+      workspaceId: sql`${entities.workspaceId}`,
+    }),
   );
 
   const rows = yield* await safeDb((tx) =>
@@ -127,10 +138,12 @@ const config = {
 
 const readEntitySummaries = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, query }) {
+  async function* ({ safeDb, workspaceId, query, session, user }) {
     return yield* readEntitySummariesHandler({
       safeDb,
       workspaceId,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
       cursor: query.cursor,
       limit: query.limit ?? LIMITS.entitySummariesPageSize,
     });

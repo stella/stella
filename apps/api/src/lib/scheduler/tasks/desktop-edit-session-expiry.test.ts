@@ -104,7 +104,11 @@ describe("publishDesktopEditSessionExpiryNotifications", () => {
           published.push({ scope: "session", id: sessionId, event });
         },
         publishWorkspaceEvent: async (workspaceId, event) => {
-          published.push({ scope: "workspace", id: workspaceId, event });
+          published.push({
+            scope: "workspace",
+            id: workspaceId,
+            event: event.toJSON(),
+          });
         },
       },
       sessions: [

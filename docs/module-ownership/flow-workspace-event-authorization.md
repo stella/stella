@@ -1,0 +1,7 @@
+# Authorizing flow workspace event recipients
+
+Generated from `scripts/ownership/flow-workspace-event-authorization.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                         | Owner                                                  | Enforcement                                                               | Summary                                                                                                                                                                                                                |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flow-workspace-event-authorization` — Authorizing flow workspace event recipients | `apps/api/src/lib/flows/workspace-event-authorizer.ts` | import `@/api/lib/flows/workspace-event-authorizer` (plus 1 allowed file) | Projects live source ownership and recipient feature admission into the session audience query. Event visibility follows the persisted entity read policy; deleted entities retain their transactional classification. |

@@ -7,6 +7,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
+  featureAccess: { featureId: "flows", type: "required" },
   contract: "patch",
   description:
     "List flow runs in a matter, including lifecycle state and pagination metadata.",

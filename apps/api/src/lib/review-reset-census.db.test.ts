@@ -4,9 +4,12 @@ import { sql } from "drizzle-orm";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import {
+  REVIEW_RESET_CLEARED_TABLES,
+  REVIEW_RESET_SWEEP,
+} from "@/api/lib/review-organization/reset-census";
+import {
   clearReviewOrganizationBilling,
   REVIEW_RESET_BILLING_TABLES,
-  REVIEW_RESET_CLEARED_TABLES,
   sweepReviewOrganization,
 } from "@/api/lib/review-organization/reset-scope";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -45,6 +48,7 @@ describe.skipIf(!enabled)("review reset policy census", () => {
       const schema = `reset_census_${suffix}`;
       const owner = `reset_owner_${suffix}`;
       const organizationId = mintAuthProviderId<"organization">();
+      const subject = createSafeId<"schedulerJobRun">();
       const reviewerId = mintAuthProviderId<"user">();
       const formerUserId = mintAuthProviderId<"user">();
       const workspaceIds = [
@@ -90,17 +94,50 @@ describe.skipIf(!enabled)("review reset policy census", () => {
       const columns = await client<{ table: string; name: string }[]>`
         SELECT table_name AS table, column_name AS name FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = ANY(${`{${[...RESET_TABLES, "workspaces"].join(",")}}`})`;
+      const systemPrivileges = await client<
+        { table: string; privilege: string }[]
+      >`
+        SELECT relation.relname AS table, grants.privilege_type AS privilege
+        FROM pg_class relation
+        JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+        CROSS JOIN LATERAL aclexplode(relation.relacl) grants
+        JOIN pg_roles grantee ON grantee.oid = grants.grantee
+        WHERE namespace.nspname = 'public' AND grantee.rolname = 'stella_system'
+          AND relation.relname = ANY(${`{${RESET_TABLES.join(",")}}`})`;
+      const rowIds = new Map(
+        RESET_TABLES.map((table) => [
+          table,
+          new Map(
+            workspaceIds.map((workspaceId) => [
+              workspaceId,
+              Bun.randomUUIDv7(),
+            ]),
+          ),
+        ]),
+      );
+      const ownershipColumns = new Set([
+        "id",
+        "organization_id",
+        "workspace_id",
+        "user_id",
+        "created_by",
+        "owner_user_id",
+        "actor_user_id",
+        "signal_id",
+      ]);
       const forced = await client<
         { name: string }[]
       >`SELECT relname AS name FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relforcerowsecurity`;
       const forcedNames = new Set(forced.map(({ name }) => name));
       await client.unsafe(`CREATE SCHEMA ${schema}; CREATE ROLE ${owner} NOLOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT;
         GRANT ${owner} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE;
-        GRANT stella TO ${owner} WITH INHERIT FALSE, SET TRUE;
-        GRANT USAGE, CREATE ON SCHEMA ${schema} TO ${owner}; GRANT USAGE ON SCHEMA ${schema} TO stella;
+        GRANT stella, stella_system TO ${owner} WITH INHERIT FALSE, SET TRUE;
+        GRANT USAGE, CREATE ON SCHEMA ${schema} TO ${owner}; GRANT USAGE ON SCHEMA ${schema} TO stella, stella_system;
         SET search_path TO ${schema}, public`);
       try {
-        await client.unsafe(`CREATE TABLE workspaces (LIKE public.workspaces);
+        await client.unsafe(`CREATE TABLE system_audit_runs (LIKE public.system_audit_runs INCLUDING ALL);
+          ALTER TABLE system_audit_runs OWNER TO ${owner};
+          CREATE TABLE workspaces (LIKE public.workspaces);
           CREATE TABLE member (organization_id text, user_id text, role text);
           GRANT SELECT ON workspaces, member TO stella;
           CREATE TABLE user_files (id uuid, thread_id uuid);
@@ -121,6 +158,14 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           await client.unsafe(
             `CREATE TABLE ${table} (LIKE public.${table}); ALTER TABLE ${table} OWNER TO ${owner}; GRANT SELECT, INSERT, UPDATE, DELETE ON ${table} TO stella`,
           );
+          const privileges = systemPrivileges
+            .filter((grant) => grant.table === name)
+            .map((grant) => grant.privilege);
+          if (privileges.length > 0) {
+            await client.unsafe(
+              `GRANT ${privileges.join(", ")} ON ${table} TO stella_system`,
+            );
+          }
           const tableColumns = columns
             .filter((column) => column.table === name)
             .map(({ name: column }) => column);
@@ -128,15 +173,33 @@ describe.skipIf(!enabled)("review reset policy census", () => {
             tableColumns
               .map(
                 (column) =>
-                  `ALTER TABLE ${table} ALTER COLUMN ${identifier(column)} DROP NOT NULL, ALTER COLUMN ${identifier(column)} DROP DEFAULT`,
+                  `ALTER TABLE ${table} ALTER COLUMN ${identifier(column)} ${ownershipColumns.has(column) ? "DROP DEFAULT" : `DROP NOT NULL, ALTER COLUMN ${identifier(column)} DROP DEFAULT`}`,
               )
               .join("; "),
           );
           for (const policy of policies.filter(
             (candidate) => candidate.table === name,
           )) {
+            // Keep the shipped owner predicate pointed at the cloned relation.
+            const usingExpression = policy.using
+              ?.replaceAll(
+                `'public.${name}'::regclass`,
+                () => `'${schema}.${name}'::regclass`,
+              )
+              .replaceAll(
+                `'${name}'::regclass`,
+                () => `'${schema}.${name}'::regclass`,
+              );
+            if (policy.name.startsWith("review_reset_owner_")) {
+              expect(policy.using).toContain("pg_get_userbyid");
+              expect(usingExpression).toContain(
+                `'${schema}.${name}'::regclass`,
+              );
+            }
             const using =
-              policy.using === null ? "" : ` USING (${policy.using})`;
+              usingExpression === undefined
+                ? ""
+                : ` USING (${usingExpression})`;
             const check =
               policy.check === null ? "" : ` WITH CHECK (${policy.check})`;
             await client.unsafe(
@@ -154,6 +217,8 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           const seedColumns = [
             "organization_id",
             ...[
+              "id",
+              "signal_id",
               "user_id",
               "created_by",
               "owner_user_id",
@@ -165,6 +230,16 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           for (const workspaceId of workspaceIds) {
             const values = seedColumns.map((column) => {
               switch (column) {
+                case "id":
+                  return (
+                    rowIds.get(name)?.get(workspaceId) ??
+                    panic("Census row identity required")
+                  );
+                case "signal_id":
+                  return (
+                    rowIds.get("signals")?.get(workspaceId) ??
+                    panic("Census signal parent required")
+                  );
                 case "organization_id":
                   return organizationId;
                 case "workspace_id":
@@ -193,23 +268,63 @@ describe.skipIf(!enabled)("review reset policy census", () => {
             organizationId,
           );
           expect([...billing.keys()]).toEqual([...REVIEW_RESET_BILLING_TABLES]);
-          const removed = await sweepReviewOrganization(
+          const removed = await sweepReviewOrganization({
             tx,
             organizationId,
-            reviewerId,
-          );
+            userId: reviewerId,
+            subject,
+          });
           expect(
             [...removed.keys()].filter((name) => name !== "user_files"),
-          ).toEqual([...REVIEW_RESET_CLEARED_TABLES]);
+          ).toEqual(
+            REVIEW_RESET_SWEEP.filter(
+              ([, auditor]) => auditor === "generic",
+            ).map(([name]) => name),
+          );
           return new Map([...billing, ...removed]);
         });
+        const audits = await census.unsafe<
+          { actor: string; counts: Record<string, number> }[]
+        >(
+          `SELECT actor, counts FROM ${schema}.system_audit_runs WHERE subject = $1`,
+          [subject],
+        );
+        expect(audits).toHaveLength(4);
+        expect(audits).toEqual(
+          expect.arrayContaining([
+            {
+              actor: "system:review-reset-flows-cleanup",
+              counts: { flowDefinitions: 2 },
+            },
+            {
+              actor: "system:review-reset-signal-cleanup",
+              counts: { scoutRuns: 2, signalEvents: 0, signalsRemoved: 0 },
+            },
+            {
+              actor: "system:review-reset-signal-cleanup",
+              counts: { scoutRuns: 0, signalEvents: 2, signalsRemoved: 0 },
+            },
+            {
+              actor: "system:review-reset-signal-cleanup",
+              counts: { scoutRuns: 0, signalEvents: 0, signalsRemoved: 2 },
+            },
+          ]),
+        );
         // A different connection, outside the scoped owner, counts every row.
         for (const name of RESET_TABLES) {
           const rows = await census.unsafe<{ organization_id: string }[]>(
             `SELECT organization_id FROM ${schema}.${identifier(name)}`,
           );
           expect([...rows], name).toEqual([]);
-          expect(swept.get(name), name).toBe(2);
+          const auditor = REVIEW_RESET_SWEEP.find(
+            ([table]) => table === name,
+          )?.[1];
+          expect(swept.get(name), name).toBe(
+            auditor === "generic" ||
+              REVIEW_RESET_BILLING_TABLES.some((table) => table === name)
+              ? 2
+              : undefined,
+          );
         }
       } finally {
         await client.unsafe(

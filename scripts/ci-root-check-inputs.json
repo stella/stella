@@ -326,6 +326,7 @@
     ],
     "Schema introspection invariants": [
       "@stll/api",
+      "@stll/sha256",
       "scripts/**",
       ".oxlint-plugins/**",
       "@stll/api-contract"

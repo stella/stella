@@ -243,7 +243,6 @@ const searchReplayPhase = (
   createDocumentProcessingReconciliationPhases({
     database: asTestRaw<typeof rootDb>(db),
     broadcastWorkspaceResourceUpdated: () => undefined,
-    enqueueDocumentDeadlineScout: async () => undefined,
     enqueueDocumentProcessingRun: async () => undefined,
     indexEntity,
     now: () => Date.now(),

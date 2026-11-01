@@ -8,6 +8,7 @@ import {
 import type { ScheduledJobMeasurement } from "../measurement-definition";
 
 export default {
+  type: "case-law",
   task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
   prepare: seedSitemapReadBudget,
   executed: sitemapRefreshRetiredChanges,

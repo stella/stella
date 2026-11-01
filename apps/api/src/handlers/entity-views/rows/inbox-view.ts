@@ -7,10 +7,12 @@ import { SIGNAL_VIEW } from "@stll/api-contract/signals";
 import type { SignalView } from "@stll/api-contract/signals";
 
 import { entities, signals } from "@/api/db/schema";
+import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { EntityQueryScope } from "@/api/lib/entities/query-scope";
 import { signalListConditions } from "@/api/lib/signals/read";
 import { workTask } from "@/api/lib/tasks/work-task";
+import { isRecord } from "@/api/lib/type-guards";
 
 const isTask = workTask(entities);
 const isClosedTask =
@@ -76,3 +78,20 @@ export const inboxSignalCondition = ({
     }
   }
 };
+
+export const SIGNAL_INBOX_FEATURE_ACCESS = {
+  featureId: "signals",
+  type: "conditional",
+  decision: "when-used",
+  usesFeature: ({ body }) => isRecord(body) && body["inboxView"] !== undefined,
+  projectInputSchema: (schemas) => {
+    if (
+      schemas.body?.type !== "object" ||
+      schemas.body.properties === undefined
+    ) {
+      return schemas;
+    }
+    const { inboxView: _hidden, ...properties } = schemas.body.properties;
+    return { ...schemas, body: { ...schemas.body, properties } };
+  },
+} as const satisfies FeatureAccessRequirement;

@@ -42,6 +42,7 @@ import requestDesktopEditTakeover from "@/api/handlers/entities/request-desktop-
 import checkStamp from "@/api/handlers/entities/stamps/check";
 import readEntitySummariesCount from "@/api/handlers/entities/summaries/count";
 import readEntitySummaries from "@/api/handlers/entities/summaries/list";
+import readTransferEligibility from "@/api/handlers/entities/transfer-eligibility/get";
 import uploadEntity, {
   uploadGeneratedDocument,
 } from "@/api/handlers/entities/upload";
@@ -107,6 +108,7 @@ const entities = routes({
   "/folders": { GET: listFolders },
   "/files": { GET: listFiles },
   "/move": { PATCH: moveEntity },
+  "/transfer-eligibility": { POST: readTransferEligibility },
   "/folder-from-selection": { POST: createFolderFromSelection },
   "/rename": { PATCH: renameEntity },
   "/duplicate": { POST: duplicateEntity },

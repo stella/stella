@@ -1,3 +1,31 @@
+export const RECONCILE_BATCH_SIZE = 100;
+
+/**
+ * What one reconciliation phase reports for one tick. `count` is the
+ * effect the phase had (runs created, rows recovered, deliveries
+ * attempted); `hasMore` is the phase's own answer to "was there more than
+ * I could take this tick". The two are independent: a phase can scan a
+ * full page and act on none of it, so `count` can never stand in for
+ * saturation.
+ */
+export type ReconciliationPhaseResult = {
+  count: number;
+  hasMore: boolean;
+};
+
+/**
+ * A capped selection that came back full stopped at the cap, not at the
+ * end of the backlog. Every phase computes this from the rows it selected,
+ * beside the `.limit()` that capped them.
+ */
+export const cappedSelectionHasMore = ({
+  limit,
+  selected,
+}: {
+  limit: number;
+  selected: number;
+}): boolean => selected >= limit;
+
 /**
  * What the latest finished tick said about itself, for a caller that has
  * to explain a hold rather than decide one: which phases reported work

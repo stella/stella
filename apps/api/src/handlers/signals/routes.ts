@@ -7,6 +7,8 @@ import listSignals from "@/api/handlers/signals/list";
 import createRequest from "@/api/handlers/signals/requests/create";
 import snoozeSignal from "@/api/handlers/signals/snoozes/create";
 import { routes } from "@/api/http/route";
+import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
 export const signalsRoute = routes(
   {
@@ -19,5 +21,11 @@ export const signalsRoute = routes(
     "/:signalId/assignments": { POST: assignSignal },
     "/:signalId/acceptances": { POST: acceptSignal },
   },
-  { prefix: "/signals" },
+  {
+    prefix: "/signals",
+    middleware: [
+      deploymentFeatureGate("FEATURE_SIGNALS"),
+      featureAccessGate("signals"),
+    ],
+  },
 );

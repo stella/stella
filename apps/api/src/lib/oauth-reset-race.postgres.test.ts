@@ -21,9 +21,9 @@ import { rootDb } from "@/api/db/root";
 import { getAuth } from "@/api/lib/auth";
 import {
   CredentialIssuanceFence,
-  removeOrganizationMemberWithAuthArtifacts,
   revokeAllUserDurableCredentials,
 } from "@/api/lib/auth-artifacts";
+import { removeOrganizationMemberInTransaction } from "@/api/lib/member-offboarding/member-assignment-offboarding";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -108,7 +108,7 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
           .delete(oauthClient)
           .where(eq(oauthClient.clientId, client.clientId)),
     );
-    return { browser, client, organizationId };
+    return { browser, client, organizationId, coOwnerId };
   };
 
   const resetAccess = async (userId: string) =>
@@ -172,7 +172,7 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     });
 
     test("a refresh that rotated before a member removal cannot issue its successor", async () => {
-      const { browser, client, organizationId } = await fixture();
+      const { browser, client, organizationId, coOwnerId } = await fixture();
       const grant = await grantOAuthClient(browser, client);
       const userId = brandPersistedUserId(browser.userId);
       let removed = false;
@@ -193,7 +193,8 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
                   eq(member.organizationId, organizationId),
                 ),
               );
-            await removeOrganizationMemberWithAuthArtifacts(tx, {
+            await removeOrganizationMemberInTransaction(tx, {
+              actorUserId: brandPersistedUserId(coOwnerId),
               memberId:
                 membership?.id ?? panic("The fixture member must exist"),
               organizationId,
@@ -219,7 +220,7 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     test("a member removal waits for a held issuance and then deletes its token", async () => {
       const databaseUrl =
         process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
-      const { browser, client, organizationId } = await fixture();
+      const { browser, client, organizationId, coOwnerId } = await fixture();
       await grantOAuthClient(browser, client);
       const userId = brandPersistedUserId(browser.userId);
       const [issued] = await rootDb
@@ -274,7 +275,8 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
           expect(fence).not.toBeNull();
           removal = removalDb.transaction(
             async (removalTx) =>
-              await removeOrganizationMemberWithAuthArtifacts(removalTx, {
+              await removeOrganizationMemberInTransaction(removalTx, {
+                actorUserId: brandPersistedUserId(coOwnerId),
                 memberId,
                 organizationId,
                 userId,
