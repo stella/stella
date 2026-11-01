@@ -1,4 +1,4 @@
-import { stripInvisibleFormatting } from "@stll/text-normalize/invisible-formatting";
+import { stripInvisibleFormatting } from "@stll/text-normalize";
 
 const ASCII_FILENAME_RE = /^[\u0020-\u007E]+$/u;
 const FALLBACK_FILENAME = "attachment";

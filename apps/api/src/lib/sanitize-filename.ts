@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { stripInvisibleFormatting } from "@stll/text-normalize/invisible-formatting";
+import { stripInvisibleFormatting } from "@stll/text-normalize";
 
 /**
  * Branded type for filenames that have been sanitized.

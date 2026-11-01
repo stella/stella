@@ -108,7 +108,12 @@ test("stores, audits and returns the name without format characters", async () =
   expect(result.value.name).toBe("renamed.md");
   expect(entity?.name).toBe("renamed.md");
   expect(file?.content).toMatchObject({ fileName: "renamed.md" });
-  expect(JSON.stringify(audit.mock.calls)).not.toContain("\u202E");
+  expect(audit).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({
+      changes: { name: { old: "previous.md", new: "renamed.md" } },
+    }),
+  );
 });
 
 test("returns the same file metadata it commits without replacing field identity", async () => {

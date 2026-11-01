@@ -1,4 +1,4 @@
-import { stripInvisibleFormatting } from "@stll/text-normalize/invisible-formatting";
+import { stripInvisibleFormatting } from "@stll/text-normalize";
 
 /**
  * Type-narrowing `.includes()` that avoids
