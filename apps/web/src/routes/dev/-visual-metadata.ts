@@ -72,6 +72,7 @@ export const visualRegistry = {
     label: "Chat statute citations",
     layout: "plain",
   },
+  "chat-answer-footer": { label: "Chat answer footer", layout: "plain" },
   "chat-link-icons": { label: "Chat link icons", layout: "plain" },
   "case-law-text-availability": {
     label: "Case-law text availability",

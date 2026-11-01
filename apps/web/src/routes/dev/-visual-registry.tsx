@@ -140,6 +140,20 @@ const visualLoaders = {
       };
     },
   },
+  "chat-answer-footer": {
+    load: async () => {
+      const [{ ChatCitationsPlayground }, { CHAT_ANSWER_FOOTER_CASSETTE }] =
+        await Promise.all([
+          import("./-components/chat-citations-playground"),
+          import("./-components/chat-answer-footer-cassette"),
+        ]);
+      return {
+        default: () => (
+          <ChatCitationsPlayground cassette={CHAT_ANSWER_FOOTER_CASSETTE} />
+        ),
+      };
+    },
+  },
   "chat-link-icons": {
     load: async () => {
       const { ChatLinkIconsPlayground } =
