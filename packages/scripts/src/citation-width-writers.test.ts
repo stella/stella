@@ -2,6 +2,11 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import {
+  REPLAY_WRITE_MODULE,
+  replayPlanners,
+  replayPlanValues,
+} from "./replay-plan-values";
 import { type Node, parseSource, walk } from "./syntax-tree";
 
 const apiRoot = path.resolve(import.meta.dir, "../../../apps/api");
@@ -196,12 +201,10 @@ const writtenFields = (node: Node): string[] | null => {
   });
 };
 
-const REPLAY_WRITE_MODULE = "@/api/lib/case-law/replay-write";
-
 const discoverWriters = (file: string, text: string): Writer[] => {
   const source = parseSource(file, text);
   const aliases = new Map([...tables].map((name) => [name, name]));
-  const replayPlanners = new Set<string>();
+  const planners = replayPlanners(source.program);
   for (const statement of source.program.body) {
     if (statement.type !== "ImportDeclaration") {
       continue;
@@ -214,55 +217,8 @@ const discoverWriters = (file: string, text: string): Writer[] => {
       if (imported && tables.has(imported)) {
         aliases.set(binding.local.name, imported);
       }
-      if (
-        imported === "replayWrite" &&
-        statement.source.value === REPLAY_WRITE_MODULE
-      ) {
-        replayPlanners.add(binding.local.name);
-      }
     }
   }
-  // `.set(write.set)` writes the values its `replayWrite` plan was given:
-  // read those, from the nearest enclosing declaration of the plan.
-  const replayValues = (
-    payload: Node,
-    ancestors: readonly Node[],
-  ): Node | null => {
-    if (
-      payload.type !== "MemberExpression" ||
-      payload.computed ||
-      payload.object.type !== "Identifier" ||
-      propertyName(payload.property) !== "set"
-    ) {
-      return null;
-    }
-    const plan = payload.object.name;
-    for (const scope of ancestors.toReversed()) {
-      if (scope.type !== "BlockStatement" && scope.type !== "Program") {
-        continue;
-      }
-      for (const statement of scope.body) {
-        if (statement.type !== "VariableDeclaration") {
-          continue;
-        }
-        for (const declarator of statement.declarations) {
-          if (
-            declarator.id.type !== "Identifier" ||
-            declarator.id.name !== plan
-          ) {
-            continue;
-          }
-          const init = declarator.init;
-          return init?.type === "CallExpression" &&
-            init.callee.type === "Identifier" &&
-            replayPlanners.has(init.callee.name)
-            ? (init.arguments.at(1) ?? null)
-            : null;
-        }
-      }
-    }
-    return null;
-  };
   const tableOf = (expression: Node): string | null => {
     if (
       expression.type !== "CallExpression" ||
@@ -338,7 +294,9 @@ const discoverWriters = (file: string, text: string): Writer[] => {
             .at(0);
         }
         if (payload) {
-          const values = replayValues(payload, [...ancestors, node]) ?? payload;
+          const values =
+            replayPlanValues(payload, [...ancestors, node], planners) ??
+            payload;
           const written = writtenFields(values);
           if (name === "values" || written === null || written.length > 0) {
             add(`orm-${name}-${table}`, text.slice(values.start, values.end));
