@@ -1842,7 +1842,6 @@ export const MatterActivityList = ({
           if (item.type === "entity") {
             return (
               <SidebarEntityRow
-                activeOrganizationId={activeOrganizationId}
                 entityId={item.id}
                 entityKind={item.entityKind}
                 onDelete={(opener) => {
@@ -1856,7 +1855,6 @@ export const MatterActivityList = ({
                   detached(openEntity(item), "app-sidebar.open-entity")
                 }
                 workspaceId={workspaceId}
-                userId={userId}
               >
                 {content}
               </SidebarEntityRow>
