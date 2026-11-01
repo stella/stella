@@ -289,7 +289,8 @@ const LeadingRow = ({
     <li className="flex flex-col" ref={rowRef}>
       <Button
         aria-expanded={open}
-        className="-mx-2 w-auto items-start whitespace-normal"
+        className="-mx-2 w-auto items-start"
+        layout="wrap"
         onClick={() => setOpen(!open)}
         size="row"
         variant="ghost"
