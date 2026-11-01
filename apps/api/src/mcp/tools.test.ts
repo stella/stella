@@ -1515,7 +1515,7 @@ describe("OpenAI-compatible MCP tools", () => {
         queries: {
           type: "array",
           description:
-            "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total.",
+            "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, paged without a total.",
           items: { type: "string", minLength: 1, maxLength: 500 },
           minItems: 1,
           maxItems: 5,
@@ -1576,7 +1576,7 @@ describe("OpenAI-compatible MCP tools", () => {
           minLength: 1,
           maxLength: 256,
           description:
-            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
+            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total.',
         },
         has_legal_sentence: {
           type: "boolean",
@@ -1711,6 +1711,19 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(
       (await getMcpToolDefinition("search_case_law", createContext()))?.scope,
     ).toBe("stella:search");
+  });
+
+  test("serves the curated search tools on stella:search alone", async () => {
+    for (const name of ["search", "search_across_matters"]) {
+      expect((await getMcpToolDefinition(name, createContext()))?.scope).toBe(
+        "stella:search",
+      );
+    }
+    const toolNames = (
+      await listMcpTools(createContext(), "default", ["stella:search"])
+    ).map((tool) => tool.name);
+    expect(toolNames).toContain("search");
+    expect(toolNames).toContain("search_across_matters");
   });
 
   test("delete_task is a matter write and confirm-gated like the other deletes", async () => {
@@ -5986,10 +5999,9 @@ describe("OpenAI-compatible MCP tools", () => {
       },
     );
 
-    test("a provision cited too widely for one search says so once per call, with its count", async () => {
+    test("a provision cited too widely for one search says so once per call without counting every citation", async () => {
       readCaseLawProvisionScopeMock.mockResolvedValue({
         type: "broad",
-        citingDecisions: 4037,
       });
       const result = await handleMcpToolCall({
         args: {
@@ -6006,14 +6018,13 @@ describe("OpenAI-compatible MCP tools", () => {
       for (const [{ body }] of searchDecisionsHandlerMock.mock.calls) {
         expect(body.provisionScope).toEqual({
           type: "broad",
-          citingDecisions: 4037,
         });
       }
       const warnings = searchWarnings(result).filter(
         ({ code }) => code === "provision_cited_widely",
       );
       expect(warnings).toHaveLength(1);
-      expect(warnings[0]?.message).toContain("4037");
+      expect(warnings[0]?.message).toContain("citation links");
       expect(warnings[0]?.message).toContain("§ 2910 OZ");
       expect(warnings[0]?.hint).toContain("subsection");
     });
@@ -6035,14 +6046,14 @@ describe("OpenAI-compatible MCP tools", () => {
       ).toBe(false);
     });
 
-    test("a provision without queries lists its citing decisions, with an exact total", async () => {
+    test("a provision without queries lists its citing decisions without an exact total", async () => {
       const listCursor = encodePaginationCursor(["list", 21, "next"]);
       listCaseLawProvisionDecisionsMock.mockResolvedValue({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: null,
         hits: [],
         nextCursor: "next-page",
-        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 21),
+        total: { type: "not_counted" },
         queryUsed: "",
         warnings: [],
       });
@@ -6075,7 +6086,7 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       });
       expect(parseToolPayload(result)).toMatchObject({
-        total: { type: "exact", count: 21 },
+        total: { type: "not_counted" },
         nextCursor: "next-page",
         searches: [{ query: "§ 316 odst. 2 ZP" }],
       });

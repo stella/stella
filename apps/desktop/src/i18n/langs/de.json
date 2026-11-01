@@ -508,6 +508,22 @@
     "billingDraftsWithdrawPending": "stella AI ist auf diesem Computer aus. Ihr Widerruf wird an stella gesendet, sobald es erreichbar ist.",
     "billingDraftsUnavailable": "Die Einstellungen für Entwürfe mit stella AI können gerade nicht geladen werden."
   },
+  "dictation": {
+    "title": "Diktieren",
+    "description": "Halten Sie {shortcut} gedrückt und sprechen Sie. Der Text erscheint in der App, die Sie gerade verwenden. Die Sprache wird auf diesem Computer umgewandelt und nicht gespeichert.",
+    "modelNeeded": "Das Sprachmodell läuft auf diesem Computer.",
+    "download": "Herunterladen ({size} MB)",
+    "downloading": "Sprachmodell wird geladen: {percent} %",
+    "downloadFailed": "Das Sprachmodell konnte nicht geladen werden.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
+    "shortcutTaken": "Eine andere App verwendet {shortcut}.",
+    "failure": {
+      "accessibility": "Erlauben Sie den Zugriff auf die Bedienungshilfen, damit stella in andere Apps schreiben kann.",
+      "microphone": "stella kann Ihr Mikrofon nicht hören. Prüfen Sie den Mikrofonzugriff in den Systemeinstellungen.",
+      "modelMissing": "Laden Sie zuerst das Sprachmodell herunter.",
+      "transcription": "Die Umwandlung ist fehlgeschlagen. Versuchen Sie es erneut."
+    }
+  },
   "shortcut": {
     "title": "Tastenkürzel für die Zwischenablage",
     "description": "Öffnet den Verlauf der Zwischenablage aus jeder App.",
@@ -627,7 +643,6 @@
     "guideAllowed": "stella desktop ist erlaubt",
     "never": {
       "screenRecording": "Bildschirmaufnahme",
-      "microphone": "Mikrofon",
       "camera": "Kamera",
       "keystrokes": "Tastatureingaben",
       "fullDiskAccess": "Festplattenvollzugriff",

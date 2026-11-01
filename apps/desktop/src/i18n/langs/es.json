@@ -508,6 +508,22 @@
     "billingDraftsWithdrawPending": "stella AI está desactivado en este ordenador. Tu retirada se enviará a stella en cuanto esté disponible.",
     "billingDraftsUnavailable": "Ahora no se pueden cargar los ajustes de las propuestas de stella AI."
   },
+  "dictation": {
+    "title": "Dictado",
+    "description": "Mantén pulsado {shortcut} y habla. El texto aparece en la aplicación que estás usando. La voz se transcribe en este ordenador y no se guarda.",
+    "modelNeeded": "El modelo de voz se ejecuta en este ordenador.",
+    "download": "Descargar ({size} MB)",
+    "downloading": "Descargando el modelo de voz: {percent} %",
+    "downloadFailed": "No se pudo descargar el modelo de voz.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
+    "shortcutTaken": "Otra aplicación está usando {shortcut}.",
+    "failure": {
+      "accessibility": "Permite el acceso a Accesibilidad para que stella pueda escribir en otras aplicaciones.",
+      "microphone": "stella no oye tu micrófono. Comprueba el acceso al micrófono en Ajustes del Sistema.",
+      "modelMissing": "Descarga primero el modelo de voz.",
+      "transcription": "La transcripción ha fallado. Inténtalo de nuevo."
+    }
+  },
   "shortcut": {
     "title": "Atajo del portapapeles",
     "description": "Abre el historial del portapapeles desde cualquier aplicación.",
@@ -627,7 +643,6 @@
     "guideAllowed": "stella desktop tiene permiso",
     "never": {
       "screenRecording": "Grabación de pantalla",
-      "microphone": "Micrófono",
       "camera": "Cámara",
       "keystrokes": "Pulsaciones de teclas",
       "fullDiskAccess": "Acceso total al disco",

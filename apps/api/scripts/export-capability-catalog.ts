@@ -213,6 +213,12 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // billing write bucket rather than the read scope its resolution tool used.
   rates: "stella:billing_write",
   "saved-time-narratives": "stella:billing_write",
+  // `search.results.list`: results across the matters a caller can open, a
+  // read-only domain at the read scope. It is not the curated `search` tool,
+  // which reads matter knowledge on its own at `stella:search`. Chat results
+  // also need `stella:chat`, applied per result type in the handler
+  // (`GLOBAL_SEARCH_RESULT_TYPE_SCOPE`).
+  search: "stella:read",
   "search-history": "stella:knowledge_write",
   // Report export creates workspace artifacts (entities / template records), so
   // it stays on the workspace write bucket. Unlike chat (which got its own

@@ -2,7 +2,13 @@ import { panic } from "better-result";
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { isEntityKind, RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import {
+  ENTITY_KINDS,
+  GLOBAL_SEARCH_RESULT_TYPES,
+  isEntityKind,
+  RESOURCE_TYPE,
+  resourceRef,
+} from "@stll/api-contract";
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import {
   GLOBAL_SEARCH_CHAT_COVERAGE,
@@ -71,6 +77,7 @@ import {
   buildSearchTsQuery,
 } from "@/api/lib/search/query";
 import { globalSearchIdentity } from "@/api/lib/search/resource-search";
+import { permittedSearchResultTypes } from "@/api/lib/search/result-type-scopes";
 import { searchTitleTierSql } from "@/api/lib/search/search-ranking";
 import { typedPgArray } from "@/api/lib/search/sql";
 import type {
@@ -174,6 +181,12 @@ export type GlobalSearchQuery = {
   /** User-selected subset to filter by; empty means no extra filter. */
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
   types: readonly GlobalSearchResultType[];
+  /**
+   * The caller's access-token scopes, or `undefined` for a browser session.
+   * A result type the scopes do not reach is neither searched nor counted,
+   * whatever `types` asks for (`permittedSearchResultTypes`).
+   */
+  grantedScopes: readonly string[] | undefined;
   editedByUserIds: readonly string[];
   mimeTypes: readonly string[];
   updatedFrom?: string | undefined;
@@ -267,18 +280,41 @@ const toHeadline = (value: unknown): string | null => {
   return text === null ? null : escapeAndHighlight(text);
 };
 
-const selectedTypes = (types: readonly GlobalSearchResultType[]) =>
-  new Set<GlobalSearchResultType>(types);
+/**
+ * The result types one search reads. `searched` is what the caller asked for
+ * (every type when it asked for none), kept to the types it is `permitted`;
+ * `narrowed` says whether that falls short of every type.
+ */
+type ResultTypeSelection = {
+  readonly searched: ReadonlySet<GlobalSearchResultType>;
+  readonly permitted: ReadonlySet<GlobalSearchResultType>;
+  readonly narrowed: boolean;
+};
+
+const selectedTypes = (
+  types: readonly GlobalSearchResultType[],
+  permittedTypes: readonly GlobalSearchResultType[],
+): ResultTypeSelection => {
+  const permitted = new Set(permittedTypes);
+  const requested: readonly GlobalSearchResultType[] =
+    types.length === 0 ? GLOBAL_SEARCH_RESULT_TYPES : types;
+  return {
+    searched: new Set(requested.filter((type) => permitted.has(type))),
+    permitted,
+    narrowed:
+      types.length > 0 || permitted.size < GLOBAL_SEARCH_RESULT_TYPES.length,
+  };
+};
 
 const shouldSearchType = (
-  selected: ReadonlySet<GlobalSearchResultType>,
+  selected: ResultTypeSelection,
   type: GlobalSearchResultType,
-) => selected.size === 0 || selected.has(type);
+) => selected.searched.has(type);
 
 const NATIVE_PREVIEW_MIME_TYPES = [PDF_MIME_TYPE, DOCX_MIME_TYPE] as const;
 
-const hasSelectedEntityType = (selected: ReadonlySet<GlobalSearchResultType>) =>
-  selected.size === 0 || [...selected].some(isEntityKind);
+const hasSelectedEntityType = (selected: ResultTypeSelection) =>
+  [...selected.searched].some(isEntityKind);
 
 const fileFieldJoin = (mimeTypes: readonly string[]) => {
   const mimeFilter =
@@ -557,6 +593,7 @@ const toMimeTypeFacetMap = (
 type FilterFragmentInput = {
   query: string;
   types: readonly GlobalSearchResultType[];
+  permittedTypes: readonly GlobalSearchResultType[];
   editedByUserIds: readonly string[];
   mimeTypes: readonly string[];
   updatedFrom?: string | undefined;
@@ -573,12 +610,13 @@ type FilterFragmentInput = {
 const buildSearchFilterFragments = ({
   query,
   types,
+  permittedTypes,
   editedByUserIds,
   mimeTypes,
   updatedFrom,
   updatedTo,
 }: FilterFragmentInput) => {
-  const selected = selectedTypes(types);
+  const selected = selectedTypes(types, permittedTypes);
   const hasEditorFilter = editedByUserIds.length > 0;
   const hasMimeTypeFilter = mimeTypes.length > 0;
   const hasSearchQuery = query.trim().length > 0;
@@ -597,7 +635,8 @@ const buildSearchFilterFragments = ({
           fractionalSecondDigits: 3,
         });
 
-  const entityTypes = [...selected].filter(isEntityKind);
+  const entityTypes = [...selected.searched].filter(isEntityKind);
+  const permittedEntityTypes = [...selected.permitted].filter(isEntityKind);
   const entityEditorFilter = sqlWhen(
     hasEditorFilter,
     () =>
@@ -692,13 +731,19 @@ const buildSearchFilterFragments = ({
       ? sql`tier DESC, score DESC, ${id} DESC`
       : sql`${updatedAt} DESC, ${id} DESC`;
   const entityTypeFilter = sqlWhen(
-    selected.size > 0,
+    selected.narrowed,
     () => sql`AND sd.kind = ANY(${typedPgArray(entityTypes, "text")})`,
   );
+  // The type facet counts every kind the caller may see, so a text search can
+  // offer the kinds it did not select; a kind outside the grant is never counted.
+  const permittedEntityTypeFilter = sqlWhen(
+    permittedEntityTypes.length < ENTITY_KINDS.length,
+    () => sql`AND sd.kind = ANY(${typedPgArray(permittedEntityTypes, "text")})`,
+  );
   const entityTypeFacetFilter =
-    selected.size > 0 && !hasSearchQuery && normalizedUpdatedFrom === undefined
+    selected.narrowed && !hasSearchQuery && normalizedUpdatedFrom === undefined
       ? entityTypeFilter
-      : sql``;
+      : permittedEntityTypeFilter;
 
   return {
     selected,
@@ -737,6 +782,7 @@ const readGlobalSearch = async (
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
     types,
+    grantedScopes,
     editedByUserIds,
     mimeTypes,
     updatedFrom,
@@ -811,6 +857,7 @@ const readGlobalSearch = async (
   } = buildSearchFilterFragments({
     query,
     types,
+    permittedTypes: permittedSearchResultTypes(grantedScopes),
     editedByUserIds,
     mimeTypes,
     updatedFrom,
@@ -1169,6 +1216,7 @@ const readGlobalSearch = async (
   ): boolean =>
     isFirstPage &&
     !restrictToEntities &&
+    selected.permitted.has(type) &&
     !shouldSearchType(selected, type) &&
     hasAlternativeFacetPredicate;
 
@@ -1473,6 +1521,7 @@ export const globalCaseLawHitsStatement = ({
     updatedFrom,
     updatedTo,
     types: ["case-law"],
+    permittedTypes: ["case-law"],
     editedByUserIds: [],
     mimeTypes: [],
   });
@@ -1592,6 +1641,8 @@ export type GlobalFacetSearchQuery = {
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
   types: readonly GlobalSearchResultType[];
+  /** As on `GlobalSearchQuery`: the result types the buckets may count. */
+  grantedScopes: readonly string[] | undefined;
   editedByUserIds: readonly string[];
   mimeTypes: readonly string[];
   updatedFrom?: string | undefined;
@@ -1617,6 +1668,7 @@ const readGlobalFacet = async (
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
     types,
+    grantedScopes,
     editedByUserIds,
     mimeTypes,
     updatedFrom,
@@ -1638,6 +1690,7 @@ const readGlobalFacet = async (
   } = buildSearchFilterFragments({
     query,
     types,
+    permittedTypes: permittedSearchResultTypes(grantedScopes),
     editedByUserIds,
     mimeTypes,
     updatedFrom,
