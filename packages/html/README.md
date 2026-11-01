@@ -4,7 +4,7 @@ String HTML and XML loading for tree-based consumers. HTML uses parse5 with
 its htmlparser2 tree adapter; XML uses `cheerio/slim` directly. This keeps
 Cheerio's byte decoders and HTTP client out of the server bundle.
 
-Import `load` from `@stll/html`; import Cheerio types from `@stll/html/selection` and DOM node types and predicates from `@stll/html/nodes`.
+Import `load` and the Cheerio types from `@stll/html`, and DOM node types and predicates from `@stll/html/nodes`.
 Document mode is the default. Pass `false` as the third argument for fragments.
 The loader preserves parse5 serialization and context-aware parsing of inserted
 HTML through the per-document Cheerio hooks. XML options retain slim's parser

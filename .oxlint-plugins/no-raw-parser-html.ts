@@ -24,9 +24,9 @@ const OWNERS = [
   "apps/api/src/lib/legal-search/parsers/visible-html-text.ts",
 ];
 const CHEERIO_TYPES = new Set(["Cheerio", "CheerioAPI"]);
-// Parsers load documents through @stll/html and take types from @stll/html/selection.
+// Parsers load documents and take Cheerio types through @stll/html.
 const HTML_LOAD_SOURCE = "@stll/html";
-const HTML_IMPORT_SOURCES = new Set([HTML_LOAD_SOURCE, "@stll/html/selection"]);
+const HTML_IMPORT_SOURCES = new Set([HTML_LOAD_SOURCE]);
 const SELECTION_METHODS = new Set([
   "add",
   "addBack",

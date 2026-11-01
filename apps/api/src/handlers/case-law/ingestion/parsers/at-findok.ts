@@ -4,8 +4,8 @@ import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-fiel
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 /** Parse Findok's decision XML envelope and embedded publisher XHTML. */
 import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
-import type * as cheerio from "@stll/html/selection";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 

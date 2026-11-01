@@ -13,7 +13,7 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { classifyFailure } from "@stll/errors";
 import { load } from "@stll/html";
-import type { CheerioAPI } from "@stll/html/selection";
+import type { CheerioAPI } from "@stll/html";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";

@@ -5,8 +5,8 @@
 import { panic, Result } from "better-result";
 import { Buffer } from "node:buffer";
 
+import type * as cheerio from "@stll/html";
 import type { AnyNode } from "@stll/html/nodes";
-import type * as cheerio from "@stll/html/selection";
 import {
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifier,

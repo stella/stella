@@ -41,6 +41,7 @@ import {
   parseDecimalToken,
   parseIntegerToken,
 } from "@stll/agent-input/numeric-token";
+import type { CheerioAPI } from "@stll/html";
 import {
   type AnyNode,
   createElement,
@@ -49,7 +50,6 @@ import {
   isTag,
   isText,
 } from "@stll/html/nodes";
-import type { CheerioAPI } from "@stll/html/selection";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {

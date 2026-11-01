@@ -28,7 +28,6 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/load.ts",
-    "./selection": "./src/selection.ts",
     "./nodes": "./src/nodes.ts",
     "./bounded": "./src/bounded.ts",
     "./email": "./src/email.ts"

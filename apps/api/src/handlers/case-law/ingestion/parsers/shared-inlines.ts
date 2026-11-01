@@ -47,8 +47,8 @@
  * keeps a thin local alias over one core.
  */
 
+import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
-import type * as cheerio from "@stll/html/selection";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { plainTextOf } from "@stll/legal-ast/document-ast";

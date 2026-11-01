@@ -12,6 +12,7 @@
 
 import { panic } from "better-result";
 
+import type * as cheerio from "@stll/html";
 import {
   type AnyNode,
   createText,
@@ -22,7 +23,6 @@ import {
   isText,
   type ParentNode,
 } from "@stll/html/nodes";
-import type * as cheerio from "@stll/html/selection";
 // parser-output-unchanged: imports the document AST from its package owner
 import {
   type Block,

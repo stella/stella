@@ -9,7 +9,6 @@ import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket
 // parser-output-unchanged: [pl-tk] Case-page parsing is reused within each assembly; stored fields, HTML and AST output are unchanged.
 // parser-output-unchanged: [pl-tk] The bench builder is typed to printed names only; the judges it emits are unchanged.
 import { load } from "@stll/html";
-import type { AnyNode } from "@stll/html/nodes";
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
  *
@@ -51,7 +50,8 @@ import type { AnyNode } from "@stll/html/nodes";
  * are the keys a SAOS row and a row from this portal share when they describe
  * the same ruling, stored as `rulingKeys` on the rows of both.
  */
-import type * as cheerio from "@stll/html/selection";
+import type * as cheerio from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";

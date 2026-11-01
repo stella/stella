@@ -7,7 +7,7 @@ import { adapter } from "parse5-htmlparser2-tree-adapter";
 
 import type { CheerioAPI, CheerioOptions } from "./selection";
 
-export type { CheerioAPI } from "./selection";
+export type { Cheerio, CheerioAPI, CheerioOptions } from "./selection";
 
 export const htmlTreeAdapter = adapter;
 

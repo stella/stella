@@ -8,8 +8,8 @@ import type {
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import type { AnyNode } from "@stll/html/nodes";
-import type * as cheerio from "@stll/html/selection";
 /**
  * Czech Constitutional Court (Ustavni soud) HTML parser.
  *

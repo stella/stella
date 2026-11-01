@@ -14,8 +14,8 @@
  * the portal files no text for them.
  */
 import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import { type AnyNode, isCDATA, isTag, isText } from "@stll/html/nodes";
-import type * as cheerio from "@stll/html/selection";
 
 import {
   RETENTION_PROJECTION_FAILURE,

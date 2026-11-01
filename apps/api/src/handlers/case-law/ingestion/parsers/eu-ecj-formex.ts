@@ -16,8 +16,8 @@
  */
 
 import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import type { AnyNode } from "@stll/html/nodes";
-import type * as cheerio from "@stll/html/selection";
 
 type FormexHeading = {
   /** Formex nesting depth, clamped to the AST's 1–3 heading levels. */

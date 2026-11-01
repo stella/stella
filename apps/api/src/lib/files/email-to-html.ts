@@ -30,13 +30,13 @@ import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import type { Cheerio } from "@stll/html";
 import {
   loadEmailDocument,
   serializeEmailNode,
   serializeEmailPreviewMarkup,
 } from "@stll/html/email";
 import { type Element, isTag, isText } from "@stll/html/nodes";
-import type { Cheerio } from "@stll/html/selection";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";

@@ -27,8 +27,8 @@
  */
 
 import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import type { Element } from "@stll/html/nodes";
-import type * as cheerio from "@stll/html/selection";
 
 /** The three scopes a branch notice states facts at. */
 const ECJ_NOTICE_SCOPE = {

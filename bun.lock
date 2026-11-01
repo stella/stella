@@ -1433,6 +1433,7 @@
     },
     "packages/sha256": {
       "name": "@stll/sha256",
+      "version": "0.0.0",
       "dependencies": {
         "@noble/hashes": "2.4.0",
       },

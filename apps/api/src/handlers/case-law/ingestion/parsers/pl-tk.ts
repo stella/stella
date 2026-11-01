@@ -19,8 +19,8 @@
 import { panic } from "better-result";
 
 import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
-import type * as cheerio from "@stll/html/selection";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,

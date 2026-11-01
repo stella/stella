@@ -30,6 +30,7 @@ import { panic } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import {
   type AnyNode,
   cloneNode,
@@ -40,7 +41,6 @@ import {
   isTag,
   isText,
 } from "@stll/html/nodes";
-import type * as cheerio from "@stll/html/selection";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: imports byte-identical HTML stripping from its pure parser module instead of adapter I/O utilities.
 import type {

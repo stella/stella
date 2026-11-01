@@ -30,8 +30,8 @@ import { panic } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import { type AnyNode, isTag, isText } from "@stll/html/nodes";
-import type * as cheerio from "@stll/html/selection";
 import { COURT_PARAGRAPH_NUMBERING_LIMITS } from "@stll/legal-ast/court-paragraph-numbers";
 import {
   hasInlineChildren,

@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import type { AnyNode } from "@stll/html/nodes";
-import type * as cheerio from "@stll/html/selection";
 import { assertProperty } from "@stll/property-testing";
 
 import {

@@ -12,6 +12,7 @@
  */
 
 import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import {
   type AnyNode,
   createElement,
@@ -19,7 +20,6 @@ import {
   isTag,
   isText,
 } from "@stll/html/nodes";
-import type * as cheerio from "@stll/html/selection";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_NAME_RE as SIGNATURE_RE,

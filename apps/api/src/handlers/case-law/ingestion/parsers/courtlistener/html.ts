@@ -14,6 +14,7 @@
 import { panic } from "better-result";
 
 import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import {
   type Element,
   hasChildren,
@@ -21,7 +22,6 @@ import {
   isText,
   type ParentNode,
 } from "@stll/html/nodes";
-import type * as cheerio from "@stll/html/selection";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";

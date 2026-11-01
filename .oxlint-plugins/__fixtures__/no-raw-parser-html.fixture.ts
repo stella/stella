@@ -1,4 +1,4 @@
-import type { Cheerio, CheerioAPI } from "@stll/html/selection";
+import type { Cheerio, CheerioAPI } from "@stll/html";
 import type { AnyNode } from "@stll/html/nodes";
 
 import { load } from "@stll/html";

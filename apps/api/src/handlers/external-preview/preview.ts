@@ -3,8 +3,8 @@ import * as v from "valibot";
 
 import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
 import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import type { Element } from "@stll/html/nodes";
-import type * as cheerio from "@stll/html/selection";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
