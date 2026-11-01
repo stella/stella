@@ -1,6 +1,9 @@
-import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
+import { useStore } from "zustand";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -30,6 +33,7 @@ import {
 } from "@stll/ui/menu";
 import { cn } from "@stll/ui/utils";
 
+import { CreateOrganizationDialog } from "@/components/create-organization-dialog";
 import { DevSidebarGroup } from "@/components/dev-sidebar-group";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
@@ -56,8 +60,13 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
+import {
+  getOrganizationCreationOwner,
+  organizationCreationView,
+} from "@/lib/organization/creation-state";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { queryView } from "@/lib/query-view.logic";
+import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
 
 const CHANGELOG_URL = "https://stll.app/changelog";
@@ -78,6 +87,15 @@ type SidebarUserMenuProps = {
  * stays identical on both surfaces. */
 export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
   const t = useTranslations();
+  const [createOpen, setCreateOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const creationOwner = getOrganizationCreationOwner(
+    queryClient,
+    toSafeId(user.id),
+  );
+  const creationState = useStore(creationOwner.state);
+  const createdOrganization =
+    organizationCreationView(creationState).organization;
   const navigate = useNavigate();
   const signOut = useSignOut();
   const sidebarLayout = useSidebarLayout();
@@ -164,10 +182,18 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
         </Tooltip>
         <MenuPopup align="end" className="w-56" side="top" sideOffset={8}>
           <OrganizationMenuSection
+            onCreate={() => setCreateOpen(true)}
             activeOrganizationId={user.activeOrganizationId}
             role={role}
             userId={user.id}
           />
+          {createdOrganization !== null && (
+            <MenuItem onClick={() => setCreateOpen(true)}>
+              <BuildingIcon />
+              {t("organization.switchOrganization")}
+              <BidiText as="span">{createdOrganization.name}</BidiText>
+            </MenuItem>
+          )}
           <MenuItem
             onClick={() => {
               detached(
@@ -276,11 +302,19 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
           </MenuItem>
         </MenuPopup>
       </Menu>
+      {createOpen && (
+        <CreateOrganizationDialog
+          open
+          onOpenChange={setCreateOpen}
+          userId={user.id}
+        />
+      )}
     </SidebarMenuItem>
   );
 };
 
 type OrganizationMenuSectionProps = {
+  onCreate: () => void;
   activeOrganizationId: string;
   role: Role | undefined;
   userId: string;
@@ -293,6 +327,7 @@ type OrganizationMenuSectionProps = {
  * sidebar reads the active organization and the switchable ones from one cache
  * entry, and therefore one `organization/list` request per route. */
 const OrganizationMenuSection = ({
+  onCreate,
   activeOrganizationId,
   role,
   userId,
@@ -353,6 +388,10 @@ const OrganizationMenuSection = ({
             <OrganizationRoleBadge role={role} />
           </MenuGroupLabel>
         </MenuGroup>
+        <MenuItem onClick={onCreate}>
+          <BuildingIcon />
+          {t("organization.newOrganization")}
+        </MenuItem>
         <MenuSeparator />
       </>
     );
@@ -395,6 +434,10 @@ const OrganizationMenuSection = ({
           </MenuGroup>
         </MenuSubPopup>
       </MenuSub>
+      <MenuItem onClick={onCreate}>
+        <BuildingIcon />
+        {t("organization.newOrganization")}
+      </MenuItem>
       <MenuSeparator />
     </>
   );

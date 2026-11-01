@@ -74,7 +74,8 @@
       "none": "Bez datuma",
       "today": "Šodien",
       "tomorrow": "Rīt",
-      "nextWeek": "Pēc nedēļas"
+      "nextWeek": "Pēc nedēļas",
+      "pick": "Izvēlēties datumu"
     },
     "due": {
       "overdue": "Nokavēti",

@@ -2391,7 +2391,6 @@
     "unverifiedCitationHint": "Ezt az idézetet nem sikerült a forrásdokumentumhoz párosítani.",
     "uploadFiles": "Fájlok feltöltése",
     "urlIdentifier": "Azonosító (slug)",
-    "urlIdentifierPlaceholder": "szervezetem",
     "user": "Felhasználó",
     "value": "Érték",
     "vatId": "Áfaazonosító",
@@ -2442,6 +2441,7 @@
     "scopeMemoryWrite": "Az asszisztens emlékeinek létrehozása és módosítása",
     "scopeOfflineAccess": "A bejelentkezés fenntartása ismételt jóváhagyás nélkül",
     "scopeOnboarding": "A szervezet praxisának joghatóságainak beállítása",
+    "scopeOrganizationCreate": "Új szervezetek létrehozása, amelyeknek Ön lesz a tulajdonosa",
     "scopeProfile": "Hozzáférés a profiladataihoz",
     "scopeRead": "A dokumentumok, ügyek és kapcsolatok olvasása",
     "scopeReadAnonymized": "A dokumentumok és ügyek anonimizált változatainak olvasása",
@@ -2968,7 +2968,6 @@
     "failedToVerifyOtp": "Nem sikerült ellenőrizni a kódot",
     "matterNotFound": "Ügy nem található",
     "partyAlreadyExists": "A kontakt már rendelkezik ezzel a szereppel az ügyben",
-    "slugAlreadyTaken": "Ez a slug már foglalt",
     "uploadFailed": "Feltöltés sikertelen"
   },
   "feedback": {
@@ -4721,6 +4720,13 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Alapértelmezett beállítások használatban"
     },
+    "creationEvaluationLimitReached": "Már mind a {limit} szervezeti próbaidőszakot felhasználta. Egy szervezet törlése nem tesz újra elérhetővé próbaidőszakot. Használjon meglévő szervezetet, vagy forduljon az ügyfélszolgálathoz fizetős hozzáférésért.",
+    "creationInvalidName": "Adjon meg egy érvényes szervezetnevet (legfeljebb {maxLength} karakter).",
+    "creationNotAllowed": "Ezzel a fiókkal nem hozhatók létre szervezetek.",
+    "creationOutcomeUnknown": "Előfordulhat, hogy a kérés létrehozott egy szervezetet. Próbálja újra az eredmény ellenőrzéséhez.",
+    "creationRateLimited": "Az utóbbi időben túl sok szervezet jött létre. Próbálja újra később.",
+    "creationRefused": "Nem sikerült létrehozni a szervezetet. Ellenőrizze az adatokat, és próbálja újra.",
+    "creationSlugConflict": "Ez a szervezeti cím már használatban van. Válasszon másik nevet vagy címet.",
     "invitations": {
       "cancelInvitation": "Meghívó visszavonása",
       "emailAddressLabel": "E-mail cím",
@@ -4735,6 +4741,7 @@
       "statuses": {
         "accepted": "Elfogadva",
         "canceled": "Visszavonva",
+        "expired": "Lejárt",
         "pending": "Függőben",
         "rejected": "Elutasítva"
       }
@@ -4768,6 +4775,8 @@
       "typeEmailToConfirm": "A megerősítéshez írja be ezt: {email}",
       "updateRole": "Szerepkör frissítése"
     },
+    "newOrganization": "Új szervezet",
+    "newOrganizationDescription": "Hozzon létre egy szervezetet, amelynek Ön lesz a tulajdonosa.",
     "roles": {
       "admin": "Adminisztrátor",
       "descriptions": {
@@ -4783,6 +4792,9 @@
       "owner": "Tulajdonos"
     },
     "settingsDescription": "Szervezet nevének és slugjának szerkesztése",
+    "startOver": "Újrakezdés",
+    "startOverDescription": "Előfordulhat, hogy az eredeti kérés már létrehozott egy szervezetet. Az újrakezdés előtt ellenőrizze a szervezeteit; egy új kérés újabb szervezetet hozhat létre.",
+    "startOverTitle": "Új létrehozási kérést indít?",
     "switchOrganization": "Szervezet váltása"
   },
   "publicTools": {
@@ -5378,6 +5390,7 @@
         "title": "Memóriakinyerés",
         "toggleLabel": "Memóriabejegyzések javaslata a csevegési előzmények alapján, a háttérben"
       },
+      "pastInvitations": "Korábbi meghívók",
       "pendingInvitations": "Függőben lévő meghívók",
       "practiceJurisdictions": "Joghatóságok",
       "practiceJurisdictionsDescription": "Válassza ki az Önre vonatkozó joghatóságokat.",
@@ -6215,8 +6228,7 @@
   "validation": {
     "invalidEmail": "Adjon meg egy érvényes e-mail-címet.",
     "organizationNameRequired": "A szervezet neve kötelező",
-    "slugFormat": "A slug csak kisbetűket, számokat és kötőjeleket tartalmazhat",
-    "slugRequired": "A slug kötelező"
+    "slugFormat": "A slug csak kisbetűket, számokat és kötőjeleket tartalmazhat"
   },
   "verify": {
     "history": "{history, select, refiled {Nyomtatáskor a(z) <bdi>{reference}</bdi> hivatkozási szám szerepelt rajta; a dokumentum most a(z) <bdi>{currentReference}</bdi> szám alatt szerepel a(z) <bdi>{matterName}</bdi> ügyben.} superseded {Ez a hivatkozási szám a(z) {version, number}. verzióra mutat; a jelenlegi verzió a(z) {currentVersion, number}.} other {Nyomtatáskor a(z) <bdi>{reference}</bdi> hivatkozási szám szerepelt rajta; a dokumentum most a(z) <bdi>{currentReference}</bdi> szám alatt szerepel a(z) <bdi>{matterName}</bdi> ügyben. Ez a hivatkozási szám a(z) {version, number}. verzióra mutat; a jelenlegi verzió a(z) {currentVersion, number}.}}",
