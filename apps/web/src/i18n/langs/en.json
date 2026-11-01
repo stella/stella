@@ -6392,6 +6392,7 @@
       "downloadSearchablePdf": "Searchable PDF",
       "downloadWithComments": "Download with comments",
       "emptyFile": "The file is empty.",
+      "fileTooLarge": "The file is larger than {limit, number} MB.",
       "includeReferenceNumber": "Include reference number",
       "itemLimitReached": "This matter has reached its item limit.",
       "maxEntitiesReached": "Maximum number of items reached",

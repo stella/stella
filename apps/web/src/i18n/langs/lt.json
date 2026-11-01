@@ -6392,6 +6392,7 @@
       "downloadSearchablePdf": "PDF su paieškos tekstu",
       "downloadWithComments": "Atsisiųsti su komentarais",
       "emptyFile": "Failas tuščias.",
+      "fileTooLarge": "Failas didesnis nei {limit, number} MB.",
       "includeReferenceNumber": "Įtraukti nuorodos numerį",
       "itemLimitReached": "Šioje byloje pasiektas elementų limitas.",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",

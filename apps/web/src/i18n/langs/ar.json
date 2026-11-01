@@ -6392,6 +6392,7 @@
       "downloadSearchablePdf": "ملف PDF قابل للبحث",
       "downloadWithComments": "تنزيل مع التعليقات",
       "emptyFile": "الملف فارغ.",
+      "fileTooLarge": "الملف أكبر من {limit, number} ميغابايت.",
       "includeReferenceNumber": "تضمين الرقم المرجعي",
       "itemLimitReached": "بلغ هذا الملف القانوني حد العناصر.",
       "maxEntitiesReached": "تم بلوغ الحد الأقصى لعدد العناصر",
