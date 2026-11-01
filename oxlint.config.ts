@@ -567,6 +567,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-global-testing-library-screen",
     "bun-test-hygiene/no-unmanaged-database-client",
     "bun-test-hygiene/no-forced-database-drop",
+    "bun-test-hygiene/require-fetch-after-all",
     "bun-test-hygiene/no-wait-for-under-fake-timers",
     "bun-test-hygiene/require-module-mock-reset",
   ]),
@@ -2426,6 +2427,7 @@ const config = defineConfig({
         "bun-test-hygiene/no-identical-title": "error",
         "bun-test-hygiene/no-promise-matchers": "error",
         "bun-test-hygiene/no-forced-database-drop": "error",
+        "bun-test-hygiene/require-fetch-after-all": "error",
         "bun-test-hygiene/no-wait-for-under-fake-timers": "error",
         "bun-test-hygiene/require-module-mock-reset": "error",
         "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
@@ -3114,7 +3116,10 @@ const config = defineConfig({
       // The desktop shell runs in the system WebView of its minimum macOS
       // version, which predates `Array#toSorted` and `Array#toReversed`; sort
       // or reverse a fresh array there (apps/desktop/tests/webview-baseline).
-      files: ["apps/desktop/src/**/*.{ts,tsx}"],
+      files: [
+        "apps/desktop/src/**/*.{ts,tsx}",
+        "packages/ui/src/calendar/day-calendar.logic.ts",
+      ],
       rules: {
         "unicorn/no-array-sort": "off",
         "unicorn/no-array-reverse": "off",
