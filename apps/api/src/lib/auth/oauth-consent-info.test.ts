@@ -1,10 +1,21 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { mobileClientMetadataUrl } from "@stll/api-contract/mobile-client";
-
 import {
+  buildMobileClientMetadataDocument,
+  mobileClientMetadataUrl,
+} from "@stll/api-contract/mobile-client";
+import {
+  buildCliClientMetadataDocument,
+  cliClientMetadataUrl,
+} from "@stll/cli/client-metadata-document";
+
+import type { FIRST_PARTY_OAUTH_CLIENTS } from "@/api/lib/auth/oauth-consent-info";
+import {
+  findFirstPartyOAuthClient,
   getOAuthConsentInfo,
   getVerifiedOAuthOrigins,
+  isFirstPartyRedirectAllowed,
 } from "@/api/lib/auth/oauth-consent-info";
 
 const origins = getVerifiedOAuthOrigins([
@@ -29,10 +40,14 @@ const consentClientOf = (client: Partial<ConsentInfoClient>) =>
 const redirectClient = (redirectUris: string[], name = "Example connector") =>
   consentClientOf({ redirectUris, name });
 
-const documentClient = (clientId: string) =>
+const documentClient = (
+  clientId: string,
+  redirectUris = ["http://127.0.0.1/callback"],
+) =>
   consentClientOf({
     clientId,
-    redirectUris: ["http://127.0.0.1/callback"],
+    name: "Example connector",
+    redirectUris,
     clientDiscoveryId: "cimd",
   });
 
@@ -40,6 +55,40 @@ const CLAUDE_CALLBACK = "https://claude.ai/api/mcp/auth_callback";
 const CLAUDE_HOSTED_DOCUMENT =
   "https://claude.ai/oauth/mcp-oauth-client-metadata";
 const MOBILE_DOCUMENT = mobileClientMetadataUrl("https://stella.example") ?? "";
+const CLI_DOCUMENT = cliClientMetadataUrl("https://stella.example") ?? "";
+const CONNECTOR_DOCUMENT =
+  "https://stella.example/v1/mcp/oauth/client-metadata.json";
+const CONNECTOR_CALLBACK = "https://stella.example/v1/mcp/oauth/callback";
+
+/** Each first-party client's id and the redirects its document lists. */
+const FIRST_PARTY_DOCUMENTS = {
+  cli: {
+    clientId: CLI_DOCUMENT,
+    redirectUris: [
+      ...buildCliClientMetadataDocument(CLI_DOCUMENT).redirect_uris,
+    ],
+    brand: "stella_cli",
+  },
+  mobile: {
+    clientId: MOBILE_DOCUMENT,
+    redirectUris: [
+      ...buildMobileClientMetadataDocument(MOBILE_DOCUMENT).redirect_uris,
+    ],
+    brand: "stella_ios",
+  },
+  mcp_connector: {
+    clientId: CONNECTOR_DOCUMENT,
+    redirectUris: [CONNECTOR_CALLBACK],
+    brand: "stella",
+  },
+} satisfies Record<
+  keyof typeof FIRST_PARTY_OAUTH_CLIENTS,
+  {
+    clientId: string;
+    redirectUris: string[];
+    brand: (typeof FIRST_PARTY_OAUTH_CLIENTS)[keyof typeof FIRST_PARTY_OAUTH_CLIENTS]["brand"];
+  }
+>;
 
 describe("OAuth consent app details", () => {
   test("uses registered redirect destinations", () => {
@@ -84,14 +133,68 @@ describe("OAuth consent app details", () => {
     ]);
   });
 
-  test("recognizes configured origins and keeps loopback apps unverified", () => {
-    expect(redirectClient(["https://stella.example/callback"])).toEqual({
-      type: "verified",
-      brand: "stella",
-    });
-    expect(redirectClient(["http://localhost:3000/callback"]).type).toBe(
-      "unverified",
-    );
+  test("each first-party client is verified as stella by its fixed client id", () => {
+    for (const [client, { clientId, redirectUris, brand }] of Object.entries(
+      FIRST_PARTY_DOCUMENTS,
+    )) {
+      expect(clientId, client).toStartWith("https://stella.example/");
+      expect(documentClient(clientId, redirectUris), client).toEqual({
+        type: "verified",
+        brand,
+      });
+    }
+  });
+
+  // The lookup must key on the fixed client id alone: were it to match the
+  // registered name or a first-party redirect shape, these would verify.
+  test("a registered client is never first-party, whatever its name or redirects", () => {
+    for (const name of ["stella-cli", "stella", "stella mobile"]) {
+      for (const redirectUris of [
+        ["http://127.0.0.1/callback"],
+        ["http://127.0.0.1:43123/callback"],
+        ["http://localhost/callback"],
+        [CONNECTOR_CALLBACK],
+        ["https://stella.example/callback"],
+        ["app.stll:/oauth/callback"],
+        ...Object.values(FIRST_PARTY_DOCUMENTS).map(
+          (document) => document.redirectUris,
+        ),
+      ]) {
+        expect(redirectClient(redirectUris, name), name).toEqual({
+          type: "unverified",
+          name,
+        });
+      }
+    }
+    for (const { clientId, redirectUris } of Object.values(
+      FIRST_PARTY_DOCUMENTS,
+    )) {
+      expect(
+        consentClientOf({
+          clientId,
+          name: "stella-cli",
+          redirectUris,
+          clientDiscoveryId: null,
+        }),
+      ).toEqual({ type: "unverified", name: "stella-cli" });
+    }
+  });
+
+  test("a first-party client holding a redirect outside its shape is unverified", () => {
+    for (const [clientId, redirectUri] of [
+      [CLI_DOCUMENT, "https://connector.example/callback"],
+      [CLI_DOCUMENT, "http://127.0.0.1/other"],
+      [CLI_DOCUMENT, "http://connector.example/callback"],
+      [MOBILE_DOCUMENT, "com.example.app:/oauth/callback"],
+      [MOBILE_DOCUMENT, "http://127.0.0.1/callback"],
+      [CONNECTOR_DOCUMENT, "https://connector.example/v1/mcp/oauth/callback"],
+      [CONNECTOR_DOCUMENT, "https://stella.example/callback"],
+    ] as const) {
+      expect(
+        documentClient(clientId, [redirectUri]),
+        `${clientId} ${redirectUri}`,
+      ).toEqual({ type: "unverified", name: "Example connector" });
+    }
   });
 
   test("includes the discovered app identity", () => {
@@ -183,7 +286,6 @@ describe("OAuth consent app details", () => {
       CLAUDE_CALLBACK,
       "https://chatgpt.com/connector/oauth/abc123",
       "https://global.consent.azure-apim.net/redirect/abc123",
-      "https://stella.example/callback",
     ]) {
       expect(redirectClient([documented]).type).not.toBe("unverified");
       for (const redirectUris of [
@@ -216,7 +318,6 @@ describe("OAuth consent app details", () => {
       [CLAUDE_CALLBACK, "claude"],
       ["https://chatgpt.com/connector_platform_oauth_redirect", "chatgpt"],
       ["https://chatgpt.com/connector/oauth/abc123", "chatgpt"],
-      ["https://stella.example/callback", "stella"],
     ] as const) {
       expect(redirectClient([redirectUri])).toEqual({
         type: "verified",
@@ -228,12 +329,6 @@ describe("OAuth consent app details", () => {
       ["https://claude.ai/oauth/claude-code-client-metadata", "claude_code"],
       ["https://chatgpt.com/oauth/client.json", "chatgpt"],
       ["https://chatgpt.com/oauth/codex/client.json", "codex"],
-      ["https://stella.example/oauth/cli.json", "stella"],
-      [MOBILE_DOCUMENT, "stella_ios"],
-      [
-        "https://stella.example/v1/mcp/oauth/cli-client-metadata.json",
-        "stella_cli",
-      ],
     ] as const) {
       expect(documentClient(clientId), clientId).toEqual({
         type: "verified",
@@ -242,30 +337,64 @@ describe("OAuth consent app details", () => {
     }
   });
 
-  test("only the mobile client's own document names the iOS app", () => {
-    expect(MOBILE_DOCUMENT).toStartWith("https://stella.example/");
+  test("a first-party client is matched by its exact document URL only", () => {
     for (const clientId of [
       `${MOBILE_DOCUMENT}?v=1`,
       `${MOBILE_DOCUMENT}/`,
       MOBILE_DOCUMENT.replace(".json", ".json.bak"),
+      CLI_DOCUMENT.toUpperCase(),
+      "https://stella.example/oauth/cli.json",
+      "https://stella.example/v1/mcp/oauth/other-client-metadata.json",
+      MOBILE_DOCUMENT.replace(
+        "https://stella.example",
+        "https://other.example",
+      ),
+      CLI_DOCUMENT.replace("https://", "https://user@"),
+      // A configured origin that is not https never publishes first-party documents.
+      `http://localhost:3000${new URL(CLI_DOCUMENT).pathname}`,
     ]) {
-      expect(documentClient(clientId), clientId).toEqual({
-        type: "verified",
-        brand: "stella",
-      });
+      expect(findFirstPartyOAuthClient(clientId, origins), clientId).toBe(
+        undefined,
+      );
+      expect(documentClient(clientId).type, clientId).toBe("unverified");
     }
-    expect(redirectClient([MOBILE_DOCUMENT])).toEqual({
-      type: "verified",
-      brand: "stella",
-    });
-    expect(
-      documentClient(
-        MOBILE_DOCUMENT.replace(
-          "https://stella.example",
-          "https://other.example",
-        ),
-      ).type,
-    ).toBe("unverified");
+  });
+
+  test("a first-party redirect matches its client's shape", () => {
+    const firstParty = (clientId: string) =>
+      findFirstPartyOAuthClient(clientId, origins) ??
+      panic(`${clientId} must resolve as a first-party client`);
+    const cli = firstParty(CLI_DOCUMENT);
+    const mobile = firstParty(MOBILE_DOCUMENT);
+    const connector = firstParty(CONNECTOR_DOCUMENT);
+    for (const [match, redirectUri, allowed] of [
+      // Loopback: any port, the exact path, http only.
+      [cli, "http://127.0.0.1/callback", true],
+      [cli, "http://127.0.0.1:43123/callback", true],
+      [cli, "http://localhost:51001/callback", true],
+      [cli, "http://[::1]:51001/callback", true],
+      [cli, "https://127.0.0.1/callback", false],
+      [cli, "http://127.0.0.1:43123/callback/", false],
+      [cli, "http://127.0.0.1:43123/other", false],
+      [cli, "http://127.0.0.1:43123/callback?next=1", false],
+      [cli, "http://user@127.0.0.1:43123/callback", false],
+      [cli, "http://127.0.0.2/callback", false],
+      [cli, "http://localhost.example/callback", false],
+      [cli, "not a url", false],
+      // Private-use schemes, exactly as listed.
+      [mobile, "app.stll:/oauth/callback", true],
+      [mobile, "app.stll.preview:/oauth/callback", true],
+      [mobile, "app.stll:/oauth/callback/", false],
+      [mobile, "app.stll.evil:/oauth/callback", false],
+      // The callback on the origin publishing the document.
+      [connector, CONNECTOR_CALLBACK, true],
+      [connector, "https://stella.example/v1/mcp/oauth/callback?x=1", false],
+      [connector, "https://other.example/v1/mcp/oauth/callback", false],
+    ] as const) {
+      expect(isFirstPartyRedirectAllowed(match, redirectUri), redirectUri).toBe(
+        allowed,
+      );
+    }
   });
 
   test("a metadata document is verified only at its documented URL", () => {

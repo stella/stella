@@ -25,6 +25,12 @@ import {
   type PreCutGate,
   preCutGates,
 } from "./prepare-maintenance-release-gates";
+import {
+  parseReleaseManifest,
+  type ReleaseManifest,
+  selectPromotedReleaseBelow,
+  serializeReleaseManifest,
+} from "./promoted-release-policy";
 import { heavyVerdict } from "./release-heavy-verdict";
 
 // Computed filesystem reads retain these repository Markdown inputs.
@@ -404,27 +410,18 @@ export const parseMaintenanceReleaseOptions = (
 // A `null` value records a stable tag that was built but never promoted; the
 // landing changelog omits it. Preserved as written: a maintenance release
 // after an unpromoted one must not turn that record into a publication date.
-const readReleaseDates = (rootDir: string): Record<string, string | null> => {
-  const parsed: unknown = JSON.parse(
-    readFileSync(nodePath.join(rootDir, RELEASE_DATES_PATH), "utf-8"),
+export const readReleaseManifest = (rootDir: string): ReleaseManifest => {
+  const parsed = parseReleaseManifest(
+    JSON.parse(
+      readFileSync(nodePath.join(rootDir, RELEASE_DATES_PATH), "utf-8"),
+    ),
   );
-  if (
-    !isRecord(parsed) ||
-    Object.values(parsed).some(
-      (value) => typeof value !== "string" && value !== null,
-    )
-  ) {
+  if (parsed.status === "invalid") {
     throw new MaintenanceReleaseError(
-      `${RELEASE_DATES_PATH} must be an object of string or null values`,
+      `${RELEASE_DATES_PATH}: ${parsed.message}`,
     );
   }
-  const releaseDates: Record<string, string | null> = {};
-  for (const [key, value] of Object.entries(parsed)) {
-    if (typeof value === "string" || value === null) {
-      releaseDates[key] = value;
-    }
-  }
-  return releaseDates;
+  return parsed.manifest;
 };
 
 const atomicWriteFile: ReleaseFileWriter = (path, contents) => {
@@ -496,6 +493,40 @@ const runChangesetVersion = (rootDir: string) => {
   }
 };
 
+export type ReleaseDates = Record<string, string | null>;
+
+/**
+ * The release publication manifest as the release PR will carry it: every
+ * recorded entry stays as written (a null is a release that was never
+ * promoted, even when GitHub later shows a published release for it), the
+ * previous final takes GitHub's verdict (a time when promoted, null when
+ * not), and a never-tagged previous version records nothing. The cut writes
+ * this and checks npm against it, so the cut and the tag see the same
+ * promotions.
+ */
+export const projectReleaseDates = ({
+  dates,
+  previousRelease,
+  previousTag,
+}: {
+  dates: ReleaseDates;
+  previousRelease: PreviousRelease;
+  previousTag: string;
+}): ReleaseDates => {
+  const projected: ReleaseDates = { ...dates };
+  switch (previousRelease.kind) {
+    case "published":
+      return { ...projected, [previousTag]: previousRelease.publishedAt };
+    case "unpromoted":
+      return { ...projected, [previousTag]: null };
+    case "superseded":
+      return projected;
+    default:
+      previousRelease satisfies never;
+      return panic("Unhandled previous release");
+  }
+};
+
 export const prepareMaintenanceReleaseFiles = ({
   previousFinalVersion,
   previousRelease,
@@ -547,14 +578,12 @@ export const prepareMaintenanceReleaseFiles = ({
   }
 
   const releaseDatesPath = nodePath.join(rootDir, RELEASE_DATES_PATH);
-  const releaseDates = readReleaseDates(rootDir);
-  if (
-    previousRelease.kind !== "superseded" &&
-    releaseDates[previousTag] !== null
-  ) {
-    releaseDates[previousTag] =
-      previousRelease.kind === "published" ? previousRelease.publishedAt : null;
-  }
+  const recordedManifest = readReleaseManifest(rootDir);
+  const releaseDates = projectReleaseDates({
+    dates: recordedManifest.releases,
+    previousRelease,
+    previousTag,
+  });
   const changesets = readPendingChangesets(rootDir);
   const emptyChangesetPath = nodePath.join(
     rootDir,
@@ -591,7 +620,13 @@ export const prepareMaintenanceReleaseFiles = ({
       if (supersededChangelog !== null) {
         rmSync(absolutePreviousChangelogPath);
       }
-      writeFile(releaseDatesPath, `${JSON.stringify(releaseDates, null, 2)}\n`);
+      writeFile(
+        releaseDatesPath,
+        serializeReleaseManifest({
+          note: recordedManifest.note,
+          releases: releaseDates,
+        }),
+      );
       writeFile(versionPath, `${next.value}\n`);
       return {
         changelogPath,
@@ -1495,6 +1530,8 @@ export type CutGateOutcome =
 export type CutGateContext = {
   readonly baseSha: string;
   readonly previousFinalTag: string;
+  /** The publication manifest as the release PR will carry it. */
+  readonly releaseDates: ReleaseDates;
   readonly rootDir: string;
   readonly write: (text: string) => void;
 };
@@ -1506,8 +1543,10 @@ export type CutGateRunner = (
 ) => Promise<CutGateOutcome>;
 
 /**
- * Runs the tag's guards on the base tree. The cut checks npm at its resolved
- * final tag; the RC checks the preceding final from its candidate. The caller's
+ * Runs the tag's guards on the base tree. The cut checks npm at the newest
+ * promoted final below the release it cuts, chosen from the manifest the
+ * release PR will carry (GitHub's verdict on the previous final included); the
+ * RC checks the same release from its candidate. The caller's
  * environment forwards an explicit waiver
  * (WAIVE_DEPENDENCY_AUDIT=true with WAIVER_REASON) reaches the dependency
  * audit exactly as the tag's waiver inputs do.
@@ -1522,15 +1561,27 @@ export const runCutGate: CutGateRunner = async (gate, context) => {
     case "command":
       command = gate.check.command;
       break;
-    case "npm-publish-lag":
-      // The cut has no candidate yet: check the final it will increment.
+    case "npm-publish-lag": {
+      // The cut has no candidate yet. The reference is the newest promoted
+      // final below the release it will cut, chosen from the manifest the
+      // release PR will carry (GitHub's verdict on the previous final
+      // included), so the tag later checks the same release.
+      const reference = selectPromotedReleaseBelow(
+        context.releaseDates,
+        nextPatchVersion(parseStableVersion(context.previousFinalTag.slice(1)))
+          .value,
+      );
+      if (reference.status !== "resolved") {
+        return { passed: false, detail: reference.message };
+      }
       command = [
         "bun",
         "scripts/check-npm-publish-lag.ts",
         "--ref",
-        context.previousFinalTag,
+        reference.ref,
       ];
       break;
+    }
     default:
       gate.check satisfies never;
       return panic("Unhandled maintenance release gate");
@@ -1582,13 +1633,14 @@ const postCutNote = (): string =>
 export const assertPreCutGates = async ({
   allowUnprovenMain,
   context,
+  gates = preCutGates(MAINTENANCE_CUT_GATES),
   runGate,
 }: {
   allowUnprovenMain: boolean;
   context: CutGateContext;
+  gates?: readonly PreCutGate[];
   runGate: CutGateRunner;
 }): Promise<void> => {
-  const gates = preCutGates(MAINTENANCE_CUT_GATES);
   const failures: string[] = [];
   for (const gate of gates) {
     // One at a time: each gate prints its own output.
@@ -1658,11 +1710,21 @@ export const cutMaintenanceRelease = async (
   const current = parseStableVersion(effects.latestFinalVersion());
   const previousFinalTag = `v${current.value}`;
   const baseSha = effects.resolveHeadSha();
+  // GitHub's verdict on the previous final, read before any gate: the npm
+  // gate checks against the manifest the release PR will carry, which the
+  // preparation writes.
+  const previousRelease = await effects.readPreviousRelease(previousFinalTag);
+  const recordedDates = readReleaseManifest(rootDir).releases;
   await assertPreCutGates({
     allowUnprovenMain: options.allowUnprovenMain,
     context: {
       baseSha,
       previousFinalTag,
+      releaseDates: projectReleaseDates({
+        dates: recordedDates,
+        previousRelease,
+        previousTag: previousFinalTag,
+      }),
       rootDir,
       write: effects.write,
     },
@@ -1672,7 +1734,6 @@ export const cutMaintenanceRelease = async (
   if (queueHistoryWarning !== null) {
     effects.write(`${queueHistoryWarning}\n`);
   }
-  const previousRelease = await effects.readPreviousRelease(previousFinalTag);
   const next = nextPatchVersion(current);
   // Read before the preparation consumes them: the changelog and marketing
   // checks below run after it, and a failure there must restore the version
@@ -1723,11 +1784,26 @@ export const cutMaintenanceRelease = async (
   );
 };
 
-const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
+/** Resolve the last final tag for a checked-out snapshot, including rehearsals. */
+export const readLatestFinalVersion = (rootDir: string): string => {
+  const tags = spawnOutput([
+    "git",
+    "-C",
+    rootDir,
+    "tag",
+    "--list",
+    "v*",
+    "--sort=-creatordate",
+  ]);
+  const latest = newestFinalTag(tags?.split("\n") ?? []);
+  if (!latest) {
+    throw new MaintenanceReleaseError("No final release tag exists");
+  }
+  return latest.slice(1);
+};
+
+export const productionCutGateEffects = (rootDir: string) => ({
   rootDir,
-  assertCleanWorktree: () => {
-    assertCleanWorktree(rootDir);
-  },
   resolveHeadSha: () => resolveHeadSha(rootDir),
   latestFinalVersion: () => {
     run(["git", "fetch", "origin", "main", "--tags"]);
@@ -1738,18 +1814,18 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
         "Cut releases from the fetched main commit",
       );
     }
-    const tags = spawnOutput([
-      "git",
-      "tag",
-      "--list",
-      "v*",
-      "--sort=-creatordate",
-    ]);
-    const latest = newestFinalTag(tags?.split("\n") ?? []);
-    if (!latest) {
-      throw new MaintenanceReleaseError("No final release tag exists");
-    }
-    return latest.slice(1);
+    return readLatestFinalVersion(rootDir);
+  },
+  runGate: runCutGate,
+  write: (text: string) => {
+    process.stdout.write(text);
+  },
+});
+
+const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
+  ...productionCutGateEffects(rootDir),
+  assertCleanWorktree: () => {
+    assertCleanWorktree(rootDir);
   },
   assertNoOpenRelease: () => {
     const listing = spawnOutput([
@@ -1810,7 +1886,6 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
       `Release v${version}.`,
     ]);
   },
-  runGate: runCutGate,
   queueHistoryWarning: (baseSha) =>
     releaseQueueHistoryWarning(() => ({ baseSha })),
   readPreviousRelease,
@@ -1819,9 +1894,6 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
   checkPreparedRelease: (version) => {
     run(["bash", "scripts/check-release-changelog.sh", "--version", version]);
     run(["bun", "run", "marketing:provenance", "--strict"]);
-  },
-  write: (text) => {
-    process.stdout.write(text);
   },
 });
 

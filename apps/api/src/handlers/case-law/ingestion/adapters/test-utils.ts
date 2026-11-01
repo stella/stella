@@ -29,7 +29,7 @@
 import type {
   SourceAdapter,
   SourceReconciliation,
-} from "@/api/handlers/case-law/ingestion/adapter";
+} from "@/api/lib/legal-search/ingestion-types";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 

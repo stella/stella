@@ -1,13 +1,24 @@
 import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
+import { assertProperty } from "@stll/property-testing";
+
+import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { createSafeId } from "@/api/lib/branded-types";
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@/api/lib/legal-search/ingestion-constants";
+import {
+  STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   IngestionResult,
   StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
-import { createSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/legal-search/ingestion-types";
 import { openRawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
 import { parsePendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
 import { captureSkDocumentRaw } from "@/api/lib/legal-search/sk-document-raw";
@@ -112,6 +123,10 @@ describe("SK courts stored document replay", () => {
         panic("Stored document must parse");
       }
       expect(first.result).toMatchObject(expected);
+      expect(first.result.parserVersion).toBe(
+        PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+      );
+      expect(first.result.documentAst.blocks.length).toBeGreaterThan(0);
       expect(first.result.sourceRaw).toBe(envelope);
       expect(first.result.caseNumber).toBe(decision.caseNumber);
       const second = await replay({
@@ -122,14 +137,15 @@ describe("SK courts stored document replay", () => {
     }
   });
 
-  test("a stored envelope without a document object replays from its stored listing", async () => {
+  test("a stored envelope without a captured PDF has a typed metadata-only outcome", async () => {
     const decision = await skCourtsFixture().buildDecision();
     const raw = decision.sourceRaw ?? panic("Fixture envelope missing");
     rejectPublisherReads();
     const result = await replay(storedInput(decision, raw));
     expect(result).toMatchObject({
-      type: "parsed",
-      result: { caseNumber: decision.caseNumber },
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
     });
     const legacy = encodeSourceRawEnvelope({
       legacy: JSON.stringify({
@@ -140,8 +156,112 @@ describe("SK courts stored document replay", () => {
       }),
     });
     expect(await replay(storedInput(decision, legacy))).toMatchObject({
-      type: "parsed",
-      result: { caseNumber: decision.caseNumber },
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
     });
+  });
+
+  test("SK courts never advances the document parser without captured layout", async () => {
+    const decision = await skCourtsFixture().buildDecision();
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    page.drawText("First paragraph of", { x: 72, y: 720, size: 12 });
+    page.drawText("the judgment.", { x: 72, y: 706, size: 12 });
+    page.drawText("Second paragraph of", { x: 72, y: 668, size: 12 });
+    page.drawText("the judgment.", { x: 72, y: 654, size: 12 });
+    const bytes = await pdf.save();
+    const emptyPdf = PDF.create();
+    emptyPdf.addPage({ size: "letter" });
+    const emptyBytes = await emptyPdf.save();
+    const parts =
+      decodeSourceRawEnvelope(decision.sourceRaw ?? "") ??
+      panic("Fixture envelope missing");
+    const legacy = JSON.stringify({
+      listItem: JSON.parse(parts["listing"] ?? "null"),
+      detail: JSON.parse(parts["detail"] ?? "null"),
+    });
+    await assertProperty(
+      "SK courts never advances the document parser without captured layout",
+      fc.asyncProperty(
+        fc.boolean(),
+        fc.constantFrom(
+          "captured",
+          "missing-object",
+          "uncaptured",
+          "empty-document",
+        ),
+        async (useLegacy, captureState) => {
+          const raw = useLegacy ? legacy : (decision.sourceRaw ?? "");
+          const memory = memorySkDocumentRawStorage();
+          const capture = (
+            await captureSkDocumentRaw({
+              sourceId: createSafeId<"caseLawSource">(),
+              decisionId: createSafeId<"caseLawDecision">(),
+              window: openRawSourceWriteWindow(),
+              storedKey: null,
+              storedContentType: null,
+              inlineRaw: raw,
+              bytes: captureState === "empty-document" ? emptyBytes : bytes,
+              signal: new AbortController().signal,
+              storage: memory.storage,
+              beforeRemoteEffect: async <T>(effect: () => Promise<T>) =>
+                await effect(),
+            })
+          ).unwrap("Fixture capture must succeed");
+          const envelope =
+            captureState === "uncaptured"
+              ? raw
+              : new TextDecoder().decode(
+                  memory.objects.get(capture.sourceRawS3Key),
+                );
+          rejectPublisherReads();
+          const outcome = await replay({
+            ...storedInput(decision, envelope),
+            contentType:
+              captureState === "uncaptured" && useLegacy
+                ? "application/json"
+                : SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+            readObject: async (key: string) =>
+              Result.ok(
+                captureState === "captured" || captureState === "empty-document"
+                  ? (memory.objects.get(key) ?? null)
+                  : null,
+              ),
+          });
+          if (captureState === "empty-document") {
+            expect(outcome).toMatchObject({
+              type: "rejected",
+              rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+            });
+            expect(outcome).not.toHaveProperty("result");
+            return;
+          }
+          if (captureState !== "captured") {
+            expect(outcome).toMatchObject({
+              type: "rejected",
+              rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+              status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+            });
+            expect(outcome).not.toHaveProperty("result");
+            return;
+          }
+          expect(outcome.type).toBe("parsed");
+          if (outcome.type !== "parsed") {
+            panic("Captured PDF must rebuild layout");
+          }
+          expect(outcome.result.parserVersion).toBe(
+            PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+          );
+          expect(outcome.result.fulltext).toContain(
+            "First paragraph of the judgment.\n\nSecond paragraph of the judgment.",
+          );
+          expect(
+            outcome.result.documentAst.blocks.length,
+          ).toBeGreaterThanOrEqual(2);
+        },
+      ),
+      { numRuns: 24 },
+    );
   });
 });

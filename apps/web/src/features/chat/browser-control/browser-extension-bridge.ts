@@ -7,11 +7,13 @@ import {
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
-  type BrowserClientCapability,
+  BROWSER_EXTENSION_STATUS,
   type BrowserControlCommand,
   type BrowserControlErrorCode,
   type BrowserControlResult,
+  type BrowserExtensionCapability,
   type BrowserExtensionRequest,
+  type BrowserExtensionStatus,
   type BrowserObservedTab,
   isReadOnlyBrowserCommand,
   parseBrowserControlCommand,
@@ -24,6 +26,33 @@ import { resetBrowserApproval } from "./browser-approval-mode";
 import type { BrowserCommandRun } from "./browser-tool-execution";
 
 const RESPONSE_TIMEOUT_MS = 45_000;
+export const BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS = 1000;
+const BROWSER_EXTENSION_STATES = {
+  checking: {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: BROWSER_EXTENSION_STATUS.checking,
+  },
+  connected: {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: "connected",
+  },
+  "needs-site-access": {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: "needs-site-access",
+  },
+  "not-installed": {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: "not-installed",
+  },
+  "not-paired": {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: "not-paired",
+  },
+  "unsupported-browser": {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: "unsupported-browser",
+  },
+} satisfies Record<BrowserExtensionStatus, BrowserExtensionCapability>;
 
 type PendingRequest = {
   command: BrowserControlCommand;
@@ -41,6 +70,8 @@ type ExtensionIdentity = {
 
 type BrowserExtensionBridgeRuntime = {
   allSitesGranted: boolean;
+  announcementDeadline: ReturnType<typeof setTimeout> | null;
+  announced: boolean;
   controllerId: string | null;
   /** Unset until the extension first reports; the first report changes nothing. */
   identity: ExtensionIdentity | null;
@@ -63,6 +94,8 @@ const notifyConnectionListeners = (): void => {
 const getBridgeRuntime = (): BrowserExtensionBridgeRuntime => {
   bridgeRuntime ??= {
     allSitesGranted: false,
+    announcementDeadline: null,
+    announced: false,
     controllerId: null,
     identity: null,
     mountCount: 0,
@@ -146,6 +179,11 @@ const handleMessage = ({ data, origin, source }: MessageEvent): void => {
 
   const runtime = getBridgeRuntime();
   if (response.type === "pong") {
+    runtime.announced = true;
+    if (runtime.announcementDeadline !== null) {
+      clearTimeout(runtime.announcementDeadline);
+      runtime.announcementDeadline = null;
+    }
     runtime.allSitesGranted = response.allSitesGranted;
     runtime.controllerId = response.controllerId;
     notifyConnectionListeners();
@@ -190,6 +228,10 @@ export const mountBrowserExtensionBridge = (): (() => void) => {
     window.addEventListener("focus", handleWindowFocus);
     window.addEventListener("message", handleMessage);
     ping();
+    runtime.announcementDeadline = setTimeout(() => {
+      runtime.announcementDeadline = null;
+      notifyConnectionListeners();
+    }, BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
   }
 
   return () => {
@@ -199,6 +241,9 @@ export const mountBrowserExtensionBridge = (): (() => void) => {
     }
     window.removeEventListener("focus", handleWindowFocus);
     window.removeEventListener("message", handleMessage);
+    if (runtime.announcementDeadline !== null) {
+      clearTimeout(runtime.announcementDeadline);
+    }
     runtime.allSitesGranted = false;
     runtime.controllerId = null;
     for (const pending of runtime.pendingRequests.values()) {
@@ -230,31 +275,77 @@ export class BrowserBridgeUnmountedError extends TaggedError(
 export const isBrowserExtensionBridgeMounted = (): boolean =>
   bridgeRuntime !== null && bridgeRuntime.mountCount > 0;
 
-export const getBrowserClientCapability = ():
-  BrowserClientCapability | undefined =>
-  bridgeRuntime?.allSitesGranted && bridgeRuntime.controllerId
-    ? { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION }
-    : undefined;
+type BrowserExtensionNavigator = {
+  userAgent: string;
+  userAgentData?: { brands: readonly { brand: string }[]; mobile?: boolean };
+};
 
-const isBrowserClientConnected = (): boolean =>
-  getBrowserClientCapability() !== undefined;
+export const supportsBrowserExtension = (
+  browser: BrowserExtensionNavigator | undefined,
+): boolean => {
+  if (
+    !browser ||
+    /Android|Firefox|FxiOS|CriOS|iPhone|iPad|iPod/u.test(browser.userAgent) ||
+    browser.userAgentData?.mobile === true
+  ) {
+    return false;
+  }
+  if (browser.userAgentData) {
+    return browser.userAgentData.brands.some(
+      ({ brand }) => brand === "Chromium" || brand === "Google Chrome",
+    );
+  }
+  return /Chrome|Chromium/u.test(browser.userAgent);
+};
 
-const subscribeBrowserClientConnection = (listener: () => void) => {
+/**
+ * The single live state of the extension for this stella tab. Unsupported means
+ * the browser cannot run the Chrome extension; checking lasts until the first
+ * announcement or deadline; not-installed follows one missed
+ * announcement deadline; access and pairing are reported by the extension;
+ * connected means this tab owns a controller and can execute commands.
+ */
+export const getBrowserExtensionState = (): BrowserExtensionCapability => {
+  const runtime = bridgeRuntime;
+  if (
+    !supportsBrowserExtension(
+      typeof navigator === "undefined" ? undefined : navigator,
+    )
+  ) {
+    return BROWSER_EXTENSION_STATES[
+      BROWSER_EXTENSION_STATUS.unsupportedBrowser
+    ];
+  }
+  if (
+    runtime === null ||
+    (!runtime.announced && runtime.announcementDeadline === null)
+  ) {
+    return BROWSER_EXTENSION_STATES[BROWSER_EXTENSION_STATUS.notInstalled];
+  }
+  if (!runtime.announced) {
+    return BROWSER_EXTENSION_STATES[BROWSER_EXTENSION_STATUS.checking];
+  }
+  if (!runtime.allSitesGranted) {
+    return BROWSER_EXTENSION_STATES[BROWSER_EXTENSION_STATUS.needsSiteAccess];
+  }
+  if (runtime.controllerId === null) {
+    return BROWSER_EXTENSION_STATES[BROWSER_EXTENSION_STATUS.notPaired];
+  }
+  return BROWSER_EXTENSION_STATES[BROWSER_EXTENSION_STATUS.connected];
+};
+
+const subscribeBrowserExtensionConnection = (listener: () => void) => {
   connectionEvents.addEventListener(connectionChangedEvent.type, listener);
   return () => {
     connectionEvents.removeEventListener(connectionChangedEvent.type, listener);
   };
 };
 
-/**
- * Whether the next send carries a browser client, so the chat registers the
- * browser tool. Re-renders when the extension answers or the bridge unmounts.
- */
-export const useBrowserClientConnected = (): boolean =>
+export const useBrowserExtensionState = (): BrowserExtensionCapability =>
   useSyncExternalStore(
-    subscribeBrowserClientConnection,
-    isBrowserClientConnected,
-    () => false,
+    subscribeBrowserExtensionConnection,
+    getBrowserExtensionState,
+    () => BROWSER_EXTENSION_STATES[BROWSER_EXTENSION_STATUS.unsupportedBrowser],
   );
 
 /** Stops the controller's queued or running command of `turnId` in the extension. */

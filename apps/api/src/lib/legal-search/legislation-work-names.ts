@@ -3,8 +3,10 @@ import { panic } from "better-result";
 import { and, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { readStatuteQueryScope } from "@stll/api-contract/statute-query-capability";
 import {
+  parseStatuteQuery,
   readStatuteQueryReferences,
   type StatuteQueryReference,
 } from "@stll/api-contract/statute-query-intent";
@@ -495,15 +497,31 @@ export const citedKeysQuery = (
     .limit(CITED_KEY_LIMIT);
 
 /**
- * Act identities the query names in its jurisdiction. Without a jurisdiction,
- * or in one with no act grammar, there are none and only titles are matched.
+ * Act identities the query names in its jurisdiction. An unscoped act number
+ * addresses every admitted jurisdiction whose grammar accepts its collection;
+ * aliases and prose still need a jurisdiction to give them meaning.
  */
 const statuteQueryReferences = (
   query: string,
   country: string | undefined,
 ): StatuteQueryReference[] => {
   if (country === undefined) {
-    return [];
+    return PUBLIC_LEGISLATION_COUNTRIES.flatMap((candidate) => {
+      const scope = readStatuteQueryScope(candidate.toLowerCase());
+      switch (scope.type) {
+        case "supported": {
+          const intent = parseStatuteQuery(scope.country, query);
+          return intent.type === "act" && intent.label === null
+            ? readStatuteQueryReferences(scope.country, query)
+            : [];
+        }
+        case "unsupported":
+          return [];
+        default:
+          scope satisfies never;
+          return panic("Unhandled statute query scope");
+      }
+    });
   }
   const scope = readStatuteQueryScope(country.toLowerCase());
   switch (scope.type) {

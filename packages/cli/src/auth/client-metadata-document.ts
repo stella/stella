@@ -9,6 +9,8 @@ import {
   LOOPBACK_REDIRECT_URI,
 } from "./constants.js";
 
+export { LOOPBACK_REDIRECT_PATH };
+
 /** Where the document is published, relative to the issuer's origin. */
 export const CLI_CLIENT_METADATA_PATH =
   "/v1/mcp/oauth/cli-client-metadata.json" as const;
@@ -43,8 +45,7 @@ export const CLI_LOOPBACK_CLIENT_METADATA = {
 /**
  * The CLI's `client_id` for an authorization server: the document URL on the
  * issuer's origin. Undefined when the issuer is not https, since a metadata
- * document `client_id` must be an https URL (local servers keep registering
- * a client instead).
+ * document `client_id` must be an https URL.
  */
 export const cliClientMetadataUrl = (issuer: string): string | undefined => {
   const url = URL.parse(issuer);
