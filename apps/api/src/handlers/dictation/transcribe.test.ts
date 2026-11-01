@@ -532,6 +532,8 @@ describe("dictation operation request matrix", () => {
     }
     expect(result.error).toMatchObject({
       code: "transcription_model_unavailable",
+      message: "This transcription model is not available in your region",
+      hint: "Transcription is not offered in your organization's region yet.",
     });
     expect(f.requests).toEqual([]);
     expect(f.counts()).toEqual({ credentials: 0, preflights: 0 });

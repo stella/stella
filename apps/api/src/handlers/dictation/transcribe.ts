@@ -241,10 +241,10 @@ export const executeDictation = async (
       }
     }
     const residency = ctx.managedAIResidency;
+    const regionalDefault =
+      residency === null ? undefined : defaultTranscriptionModelId(residency);
     const modelId =
-      residency === null
-        ? undefined
-        : (body.modelId ?? defaultTranscriptionModelId(residency));
+      residency === null ? undefined : (body.modelId ?? regionalDefault);
     if (
       residency === null ||
       modelId === undefined ||
@@ -259,8 +259,9 @@ export const executeDictation = async (
               body.modelId === undefined
                 ? "No transcription model is available in your region"
                 : "This transcription model is not available in your region",
+            // Leaving the model out helps only where the region has a default.
             hint:
-              body.modelId === undefined
+              regionalDefault === undefined
                 ? "Transcription is not offered in your organization's region yet."
                 : "Choose a transcription model available in your region, or leave the model out.",
           }),
