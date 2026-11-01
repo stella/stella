@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -22,10 +23,17 @@ import {
   recordSlice,
 } from "@/api/handlers/case-law/ingestion/listing-census";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
-import { placeSupplementTx } from "@/api/handlers/case-law/ingestion/pipeline/supplement-placement";
+import {
+  placeSupplementTx,
+  supplementContent,
+} from "@/api/handlers/case-law/ingestion/pipeline/supplement-placement";
 import { setSourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import { replaceDecisionJudges } from "@/api/handlers/case-law/judges/decision-judges";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
 import {
   replayRawWrite,
   replayWrite,
@@ -36,6 +44,8 @@ import { recordCorpusPackRefsTx } from "@/api/lib/legal-search/case-law-corpus-u
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
+import type { DecisionSupplement } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -116,7 +126,7 @@ if (!databaseUrl || !enabled) {
     test("requires Postgres", () => expect(enabled).toBe(false)));
 } else {
   test("case-law child diffs match replacement and retain equal physical rows", async () => {
-    await fixture(async (db, sourceId, decisionId) => {
+    await fixture(async (db, _sourceId, decisionId) => {
       const judges = async () =>
         await db
           .select()
@@ -280,29 +290,31 @@ if (!databaseUrl || !enabled) {
           ),
         ),
       ).toEqual(beforeListing);
+      const document = {
+        ...plainTextIngestionResult({
+          caseNumber: "1 As 1/2026",
+          sourceDocumentId: "supplement",
+          court: "Test court",
+          country: "CZE",
+          language: "cs",
+          decisionDate: "2026-01-01",
+          decisionType: "judgment",
+          fulltext: "Odůvodnění",
+          metadata: {},
+          textFields: absentDecisionTextFields(
+            TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+          ),
+          rawHash: "a".repeat(64),
+          documentAst: EMPTY_AST,
+        }),
+        sourceDocumentId: "supplement",
+      };
       const supplement = {
         kind: DECISION_SUPPLEMENT_KIND.REASONS,
-        target: {
-          court: "Test court",
-          caseNumber: "1 As 1/2026",
-          language: "cs",
-          decisionTypes: ["judgment"],
-        },
-      } satisfies Parameters<typeof placeSupplementTx>[1]["supplement"];
-      const content = {
-        kind: supplement.kind,
-        caseNumber: "1 As 1/2026",
-        court: "Test court",
-        language: "cs",
-        latestDecisionDate: null,
-        judgmentDecisionTypes: ["judgment"],
-        fulltext: "Odůvodnění",
-        documentAst: EMPTY_AST,
-        sourceHash: "a".repeat(64),
-        sourceUrl: null,
-        documentUrl: null,
-        metadata: {},
-      };
+        target: { decisionTypes: ["judgment"] },
+        document,
+      } satisfies DecisionSupplement;
+      const content = supplementContent(supplement, document);
       const placement = {
         key: {
           sourceId,
@@ -369,7 +381,7 @@ if (!databaseUrl || !enabled) {
   });
 
   test("converted child triggers retain update and foreign-key enforcement", async () => {
-    await fixture(async (db, sourceId, decisionId) => {
+    await fixture(async (db, _sourceId, decisionId) => {
       const triggers = executedRows(
         await db.execute(sql`
         SELECT relation.relname AS relation, procedure.proname AS function, trigger.tgisinternal AS internal
@@ -727,11 +739,14 @@ if (!databaseUrl || !enabled) {
   test("complete raw replay statements skip equal rows and retain caller predicates", async () => {
     await fixture(async (db, sourceId, decisionId) => {
       const read = async () =>
-        executedRows(
-          await db.execute(
-            sql`SELECT metadata, xmin::text AS version FROM ${caseLawDecisions} WHERE id=${decisionId}`,
+        v.parse(
+          v.tuple([v.object({ metadata: v.unknown(), version: v.string() })]),
+          executedRows(
+            await db.execute(
+              sql`SELECT metadata, xmin::text AS version FROM ${caseLawDecisions} WHERE id=${decisionId}`,
+            ),
           ),
-        ).at(0) ?? panic("Raw replay fixture missing");
+        )[0];
       const initial = await read();
       const equal = replayRawWrite({
         table: caseLawDecisions,
@@ -747,7 +762,7 @@ if (!databaseUrl || !enabled) {
       ).toEqual([]);
       expect(await read()).toEqual(initial);
       await assertProperty(
-        "case-law.raw-replay-statement.fixed-point",
+        "complete raw replay statements skip equal rows and retain caller predicates",
         fc.asyncProperty(
           fc.record({ label: fc.string(), count: fc.integer() }),
           async (metadata) => {
