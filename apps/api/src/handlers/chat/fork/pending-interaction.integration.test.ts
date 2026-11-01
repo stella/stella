@@ -18,7 +18,6 @@ import {
   createApprovalHarness,
   pendingApprovalCallOf,
 } from "@/api/tests/helpers/chat-approval-harness";
-import type { ChatHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { findUnownedPendingInteractions } from "@/api/tests/helpers/chat-thread-invariants";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -41,7 +40,6 @@ let ids: TestIds;
 let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 const seededThreadIds: SafeId<"chatThread">[] = [];
-const openHarnesses: ChatHarness[] = [];
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -54,10 +52,6 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Each harness restores what the previous one installed: undo in reverse.
-  for (const harness of openHarnesses.toReversed()) {
-    await harness.close();
-  }
   if (seededThreadIds.length > 0) {
     await testDb
       .delete(chatThreads)
@@ -69,312 +63,327 @@ afterAll(async () => {
 describe("forking a thread at a pending approval", () => {
   test("the fork carries no answerable approval, and the approved tool runs once, on the source thread", async () => {
     const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
-    openHarnesses.push(harness);
-    const {
-      approveContext,
-      executions,
-      lastAssistant,
-      script,
-      send,
-      sendContext,
-    } = harness;
-    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
-    seededThreadIds.push(threadId);
-    const firstRunId = `run-${Bun.randomUUIDv7()}`;
+    try {
+      const {
+        approveContext,
+        executions,
+        lastAssistant,
+        script,
+        send,
+        sendContext,
+      } = harness;
+      const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+      seededThreadIds.push(threadId);
+      const firstRunId = `run-${Bun.randomUUIDv7()}`;
 
-    script(threadId, [
-      {
-        arguments: approvalToolArguments("NDA"),
-        toolName: APPROVAL_TOOL_NAME,
-        type: "tool-call",
-      },
-    ]);
-    expect(
-      await send(
-        sendContext({
-          message: {
-            id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
-            parts: [{ content: "Delete the NDA", type: "text" }],
-            role: "user",
-          },
-          runId: firstRunId,
-          threadId,
+      script(threadId, [
+        {
+          arguments: approvalToolArguments("NDA"),
+          toolName: APPROVAL_TOOL_NAME,
+          type: "tool-call",
+        },
+      ]);
+      expect(
+        await send(
+          sendContext({
+            message: {
+              id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+              parts: [{ content: "Delete the NDA", type: "text" }],
+              role: "user",
+            },
+            runId: firstRunId,
+            threadId,
+          }),
+        ),
+      ).toEqual({ status: "streamed" });
+
+      const pending = await lastAssistant(threadId);
+      const pendingCall = pendingApprovalCallOf(pending.parts);
+      // The fixture must reach the fault: the source thread's answer is a live
+      // approval owned by its awaiting turn.
+      expect(pendingCall.state).toBe("approval-requested");
+      expect(
+        await findUnownedPendingInteractions({ db: testDb, threadId }),
+      ).toEqual([]);
+
+      const forkThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+      seededThreadIds.push(forkThreadId);
+      const forked = await createForkThread({
+        indexChatThread: async () => undefined,
+      }).handler(
+        asTestRaw<
+          Parameters<ReturnType<typeof createForkThread>["handler"]>[0]
+        >({
+          body: { newThreadId: forkThreadId, upToMessageId: pending.id },
+          getWorkspaceAccess: async () => null,
+          memberRole: sessionMemberRole("owner"),
+          params: { threadId },
+          query: {},
+          recordAuditEvent: async () => undefined,
+          request: new Request("http://localhost/v1/chat/threads/fork"),
+          route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
+          safeDb,
+          session: { activeOrganizationId: ids.orgA },
+          user: { id: ids.userA1 },
         }),
-      ),
-    ).toEqual({ status: "streamed" });
+      );
+      expect(forked).toMatchObject({ threadId: forkThreadId });
 
-    const pending = await lastAssistant(threadId);
-    const pendingCall = pendingApprovalCallOf(pending.parts);
-    // The fixture must reach the fault: the source thread's answer is a live
-    // approval owned by its awaiting turn.
-    expect(pendingCall.state).toBe("approval-requested");
-    expect(
-      await findUnownedPendingInteractions({ db: testDb, threadId }),
-    ).toEqual([]);
+      expect(
+        await findUnownedPendingInteractions({
+          db: testDb,
+          threadId: forkThreadId,
+        }),
+      ).toEqual([]);
 
-    const forkThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
-    seededThreadIds.push(forkThreadId);
-    const forked = await createForkThread({
-      indexChatThread: async () => undefined,
-    }).handler(
-      asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
-        body: { newThreadId: forkThreadId, upToMessageId: pending.id },
-        getWorkspaceAccess: async () => null,
-        memberRole: sessionMemberRole("owner"),
-        params: { threadId },
-        query: {},
-        recordAuditEvent: async () => undefined,
-        request: new Request("http://localhost/v1/chat/threads/fork"),
-        route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
-        safeDb,
-        session: { activeOrganizationId: ids.orgA },
-        user: { id: ids.userA1 },
-      }),
-    );
-    expect(forked).toMatchObject({ threadId: forkThreadId });
+      // Approve on the source thread: the loop executes the tool, then answers.
+      script(threadId, [
+        { finishReason: "stop", text: "Deleted.", type: "text" },
+      ]);
+      expect(
+        await send(
+          approveContext({
+            call: pendingCall,
+            interruptedRunId: firstRunId,
+            messageId: pending.id,
+            parts: pending.parts,
+            threadId,
+          }),
+        ),
+      ).toEqual({ status: "streamed" });
+      expect(executions).toEqual(["NDA"]);
 
-    expect(
-      await findUnownedPendingInteractions({
-        db: testDb,
-        threadId: forkThreadId,
-      }),
-    ).toEqual([]);
-
-    // Approve on the source thread: the loop executes the tool, then answers.
-    script(threadId, [
-      { finishReason: "stop", text: "Deleted.", type: "text" },
-    ]);
-    expect(
-      await send(
+      // The same approval, answered on the fork, is not a resumable interaction.
+      const forkAnswer = await lastAssistant(forkThreadId);
+      script(forkThreadId, [
+        { finishReason: "stop", text: "Deleted again.", type: "text" },
+      ]);
+      const forkResult = await send(
         approveContext({
           call: pendingCall,
           interruptedRunId: firstRunId,
-          messageId: pending.id,
+          messageId: forkAnswer.id,
           parts: pending.parts,
-          threadId,
+          threadId: forkThreadId,
         }),
-      ),
-    ).toEqual({ status: "streamed" });
-    expect(executions).toEqual(["NDA"]);
-
-    // The same approval, answered on the fork, is not a resumable interaction.
-    const forkAnswer = await lastAssistant(forkThreadId);
-    script(forkThreadId, [
-      { finishReason: "stop", text: "Deleted again.", type: "text" },
-    ]);
-    const forkResult = await send(
-      approveContext({
-        call: pendingCall,
-        interruptedRunId: firstRunId,
-        messageId: forkAnswer.id,
-        parts: pending.parts,
-        threadId: forkThreadId,
-      }),
-    );
-    expect({ executions, fork: forkResult.status }).toEqual({
-      executions: ["NDA"],
-      fork: "rejected",
-    });
+      );
+      expect({ executions, fork: forkResult.status }).toEqual({
+        executions: ["NDA"],
+        fork: "rejected",
+      });
+    } finally {
+      await harness.close();
+    }
   });
 });
 
 describe("forking a thread whose approved call lost its result", () => {
   test("the fork holds the call as unfinished and never runs it", async () => {
     const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
-    openHarnesses.push(harness);
-    const { executions, lastAssistant, script, send, sendContext } = harness;
-    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
-    seededThreadIds.push(threadId);
+    try {
+      const { executions, lastAssistant, script, send, sendContext } = harness;
+      const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+      seededThreadIds.push(threadId);
 
-    script(threadId, [
-      {
-        arguments: approvalToolArguments("NDA"),
-        toolName: APPROVAL_TOOL_NAME,
-        type: "tool-call",
-      },
-    ]);
-    expect(
-      await send(
-        sendContext({
-          message: {
-            id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
-            parts: [{ content: "Delete the NDA", type: "text" }],
-            role: "user",
-          },
-          runId: `run-${Bun.randomUUIDv7()}`,
-          threadId,
+      script(threadId, [
+        {
+          arguments: approvalToolArguments("NDA"),
+          toolName: APPROVAL_TOOL_NAME,
+          type: "tool-call",
+        },
+      ]);
+      expect(
+        await send(
+          sendContext({
+            message: {
+              id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+              parts: [{ content: "Delete the NDA", type: "text" }],
+              role: "user",
+            },
+            runId: `run-${Bun.randomUUIDv7()}`,
+            threadId,
+          }),
+        ),
+      ).toEqual({ status: "streamed" });
+      const pending = await lastAssistant(threadId);
+      const pendingCall = pendingApprovalCallOf(pending.parts);
+
+      // The stored shape a run leaves when its process dies after the approved
+      // call ran and before the result was saved. No production path writes it
+      // on purpose, so it is written directly.
+      const [stored] = await testDb
+        .select({ content: chatMessages.content })
+        .from(chatMessages)
+        .where(eq(chatMessages.id, pending.id));
+      const content = stored?.content;
+      if (content === undefined) {
+        throw new Error("Expected stored message content");
+      }
+      const data: unknown[] = [...content.data];
+      const callIndex = data.findIndex(
+        (part) => isRecord(part) && part["id"] === pendingCall.id,
+      );
+      const storedCall = data[callIndex];
+      if (!isRecord(storedCall)) {
+        throw new Error("Expected the stored approval call");
+      }
+      data[callIndex] = {
+        ...storedCall,
+        approval: { ...pendingCall.approval, approved: true },
+        state: "approval-responded",
+      };
+      await testDb
+        .update(chatMessages)
+        .set({
+          content: asTestRaw<PersistedChatMessageContent>({ ...content, data }),
+        })
+        .where(eq(chatMessages.id, pending.id));
+
+      const forkThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+      seededThreadIds.push(forkThreadId);
+      const forked = await createForkThread({
+        indexChatThread: async () => undefined,
+      }).handler(
+        asTestRaw<
+          Parameters<ReturnType<typeof createForkThread>["handler"]>[0]
+        >({
+          body: { newThreadId: forkThreadId, upToMessageId: pending.id },
+          getWorkspaceAccess: async () => null,
+          memberRole: sessionMemberRole("owner"),
+          params: { threadId },
+          query: {},
+          recordAuditEvent: async () => undefined,
+          request: new Request("http://localhost/v1/chat/threads/fork"),
+          route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
+          safeDb,
+          session: { activeOrganizationId: ids.orgA },
+          user: { id: ids.userA1 },
         }),
-      ),
-    ).toEqual({ status: "streamed" });
-    const pending = await lastAssistant(threadId);
-    const pendingCall = pendingApprovalCallOf(pending.parts);
+      );
+      expect(forked).toMatchObject({ threadId: forkThreadId });
+      const forkedAnswer = await lastAssistant(forkThreadId);
+      expect({
+        call: forkedAnswer.parts.find(
+          (part) => part.type === "tool-call" && part.id === pendingCall.id,
+        ),
+        outcome: forkedAnswer.metadata?.turnOutcome,
+      }).toMatchObject({
+        call: {
+          output: { error: UNFINISHED_APPROVED_CALL_ERROR },
+          state: "error",
+        },
+        // Nothing is left to answer, and no turn owns the fork's copy.
+        outcome: { reason: "superseded", type: "cancelled" },
+      });
 
-    // The stored shape a run leaves when its process dies after the approved
-    // call ran and before the result was saved. No production path writes it
-    // on purpose, so it is written directly.
-    const [stored] = await testDb
-      .select({ content: chatMessages.content })
-      .from(chatMessages)
-      .where(eq(chatMessages.id, pending.id));
-    const content = stored?.content;
-    if (content === undefined) {
-      throw new Error("Expected stored message content");
+      script(forkThreadId, [
+        { finishReason: "stop", text: "Anything else?", type: "text" },
+      ]);
+      expect(
+        await send(
+          sendContext({
+            message: {
+              id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+              parts: [{ content: "Thanks", type: "text" }],
+              role: "user",
+            },
+            runId: `run-${Bun.randomUUIDv7()}`,
+            threadId: forkThreadId,
+          }),
+        ),
+      ).toEqual({ status: "streamed" });
+      expect(executions).toEqual([]);
+    } finally {
+      await harness.close();
     }
-    const data: unknown[] = [...content.data];
-    const callIndex = data.findIndex(
-      (part) => isRecord(part) && part["id"] === pendingCall.id,
-    );
-    const storedCall = data[callIndex];
-    if (!isRecord(storedCall)) {
-      throw new Error("Expected the stored approval call");
-    }
-    data[callIndex] = {
-      ...storedCall,
-      approval: { ...pendingCall.approval, approved: true },
-      state: "approval-responded",
-    };
-    await testDb
-      .update(chatMessages)
-      .set({
-        content: asTestRaw<PersistedChatMessageContent>({ ...content, data }),
-      })
-      .where(eq(chatMessages.id, pending.id));
-
-    const forkThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
-    seededThreadIds.push(forkThreadId);
-    const forked = await createForkThread({
-      indexChatThread: async () => undefined,
-    }).handler(
-      asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
-        body: { newThreadId: forkThreadId, upToMessageId: pending.id },
-        getWorkspaceAccess: async () => null,
-        memberRole: sessionMemberRole("owner"),
-        params: { threadId },
-        query: {},
-        recordAuditEvent: async () => undefined,
-        request: new Request("http://localhost/v1/chat/threads/fork"),
-        route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
-        safeDb,
-        session: { activeOrganizationId: ids.orgA },
-        user: { id: ids.userA1 },
-      }),
-    );
-    expect(forked).toMatchObject({ threadId: forkThreadId });
-    const forkedAnswer = await lastAssistant(forkThreadId);
-    expect({
-      call: forkedAnswer.parts.find(
-        (part) => part.type === "tool-call" && part.id === pendingCall.id,
-      ),
-      outcome: forkedAnswer.metadata?.turnOutcome,
-    }).toMatchObject({
-      call: {
-        output: { error: UNFINISHED_APPROVED_CALL_ERROR },
-        state: "error",
-      },
-      // Nothing is left to answer, and no turn owns the fork's copy.
-      outcome: { reason: "superseded", type: "cancelled" },
-    });
-
-    script(forkThreadId, [
-      { finishReason: "stop", text: "Anything else?", type: "text" },
-    ]);
-    expect(
-      await send(
-        sendContext({
-          message: {
-            id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
-            parts: [{ content: "Thanks", type: "text" }],
-            role: "user",
-          },
-          runId: `run-${Bun.randomUUIDv7()}`,
-          threadId: forkThreadId,
-        }),
-      ),
-    ).toEqual({ status: "streamed" });
-    expect(executions).toEqual([]);
   });
 });
 
 describe("forking a thread at a pending ask-user card", () => {
   test("a message sent on the fork runs the model", async () => {
     const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
-    openHarnesses.push(harness);
-    const { lastAssistant, script, send, sendContext } = harness;
-    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
-    seededThreadIds.push(threadId);
+    try {
+      const { lastAssistant, script, send, sendContext } = harness;
+      const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+      seededThreadIds.push(threadId);
 
-    script(threadId, [
-      {
-        arguments: JSON.stringify({
-          analysis: "The draft depends on the side the user represents.",
-          questions: [{ question: "Which side?", reason: "It decides it." }],
-        }),
-        toolName: ASK_USER_TOOL_NAME,
-        type: "tool-call",
-      },
-    ]);
-    expect(
-      await send(
-        sendContext({
-          message: {
-            id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
-            parts: [{ content: "Draft the NDA", type: "text" }],
-            role: "user",
-          },
-          runId: `run-${Bun.randomUUIDv7()}`,
-          threadId,
-        }),
-      ),
-    ).toEqual({ status: "streamed" });
-    const pending = await lastAssistant(threadId);
+      script(threadId, [
+        {
+          arguments: JSON.stringify({
+            analysis: "The draft depends on the side the user represents.",
+            questions: [{ question: "Which side?", reason: "It decides it." }],
+          }),
+          toolName: ASK_USER_TOOL_NAME,
+          type: "tool-call",
+        },
+      ]);
+      expect(
+        await send(
+          sendContext({
+            message: {
+              id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+              parts: [{ content: "Draft the NDA", type: "text" }],
+              role: "user",
+            },
+            runId: `run-${Bun.randomUUIDv7()}`,
+            threadId,
+          }),
+        ),
+      ).toEqual({ status: "streamed" });
+      const pending = await lastAssistant(threadId);
 
-    const forkThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
-    seededThreadIds.push(forkThreadId);
-    const forked = await createForkThread({
-      indexChatThread: async () => undefined,
-    }).handler(
-      asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
-        body: { newThreadId: forkThreadId, upToMessageId: pending.id },
-        getWorkspaceAccess: async () => null,
-        memberRole: sessionMemberRole("owner"),
-        params: { threadId },
-        query: {},
-        recordAuditEvent: async () => undefined,
-        request: new Request("http://localhost/v1/chat/threads/fork"),
-        route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
-        safeDb,
-        session: { activeOrganizationId: ids.orgA },
-        user: { id: ids.userA1 },
-      }),
-    );
-    expect(forked).toMatchObject({ threadId: forkThreadId });
-    // The fixture must reach the fault: the fork keeps the card's call closed
-    // as an error with no result, which the engine would ask about again.
-    expect(
-      (await lastAssistant(forkThreadId)).parts.map(({ type }) => type),
-    ).toEqual(["tool-call"]);
-    expect((await lastAssistant(forkThreadId)).parts).toMatchObject([
-      { name: ASK_USER_TOOL_NAME, state: "error", type: "tool-call" },
-    ]);
-
-    script(forkThreadId, [
-      { finishReason: "stop", text: "Here is the draft.", type: "text" },
-    ]);
-    expect(
-      await send(
-        sendContext({
-          message: {
-            id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
-            parts: [{ content: "Seller side, go ahead", type: "text" }],
-            role: "user",
-          },
-          runId: `run-${Bun.randomUUIDv7()}`,
-          threadId: forkThreadId,
+      const forkThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+      seededThreadIds.push(forkThreadId);
+      const forked = await createForkThread({
+        indexChatThread: async () => undefined,
+      }).handler(
+        asTestRaw<
+          Parameters<ReturnType<typeof createForkThread>["handler"]>[0]
+        >({
+          body: { newThreadId: forkThreadId, upToMessageId: pending.id },
+          getWorkspaceAccess: async () => null,
+          memberRole: sessionMemberRole("owner"),
+          params: { threadId },
+          query: {},
+          recordAuditEvent: async () => undefined,
+          request: new Request("http://localhost/v1/chat/threads/fork"),
+          route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
+          safeDb,
+          session: { activeOrganizationId: ids.orgA },
+          user: { id: ids.userA1 },
         }),
-      ),
-    ).toEqual({ status: "streamed" });
-    expect((await lastAssistant(forkThreadId)).parts).toMatchObject([
-      { content: "Here is the draft.", type: "text" },
-    ]);
+      );
+      expect(forked).toMatchObject({ threadId: forkThreadId });
+      // The fixture must reach the fault: the fork keeps the card's call closed
+      // as an error with no result, which the engine would ask about again.
+      expect(
+        (await lastAssistant(forkThreadId)).parts.map(({ type }) => type),
+      ).toEqual(["tool-call"]);
+      expect((await lastAssistant(forkThreadId)).parts).toMatchObject([
+        { name: ASK_USER_TOOL_NAME, state: "error", type: "tool-call" },
+      ]);
+
+      script(forkThreadId, [
+        { finishReason: "stop", text: "Here is the draft.", type: "text" },
+      ]);
+      expect(
+        await send(
+          sendContext({
+            message: {
+              id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+              parts: [{ content: "Seller side, go ahead", type: "text" }],
+              role: "user",
+            },
+            runId: `run-${Bun.randomUUIDv7()}`,
+            threadId: forkThreadId,
+          }),
+        ),
+      ).toEqual({ status: "streamed" });
+      expect((await lastAssistant(forkThreadId)).parts).toMatchObject([
+        { content: "Here is the draft.", type: "text" },
+      ]);
+    } finally {
+      await harness.close();
+    }
   });
 });

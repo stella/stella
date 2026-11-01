@@ -75,8 +75,8 @@
   "allowWebsiteAccess": {
     "message": "السماح بالوصول إلى المواقع"
   },
-  "connectTab": {
-    "message": "اتصال علامة تبويب stella هذه"
+  "connectStella": {
+    "message": "اتصال stella"
   },
   "adoptTab": {
     "message": "استخدام علامة التبويب هذه مع stella"
@@ -97,9 +97,9 @@
     "message": "جارٍ التحقق من الاتصال…"
   },
   "statusConnectedElsewhere": {
-    "message": "علامة تبويب أخرى في stella متصلة"
+    "message": "stella متصلة على عنوان آخر"
   },
-  "connectTabInstead": {
-    "message": "الاتصال بعلامة تبويب stella هذه بدلاً منها"
+  "connectStellaInstead": {
+    "message": "اتصال stella هنا بدلاً من ذلك"
   }
 }

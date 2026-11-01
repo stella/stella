@@ -1,5 +1,6 @@
 import type * as React from "react";
 
+import { withoutDirectionalControls } from "../components/bidi-text";
 import { cn } from "../lib/utils";
 import {
   PROPERTY_ROW_GRID,
@@ -191,7 +192,7 @@ export const InspectorTitle = ({
     dir="auto"
     {...props}
   >
-    {children}
+    {withoutDirectionalControls(children)}
   </h2>
 );
 
