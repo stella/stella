@@ -9,6 +9,8 @@ import type {
 } from "@/components/inspector/pdf-sign-action";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
+import type { PageOrganizerOperationOwner } from "./page-organizer-upload.logic";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
 const { cleanup, fireEvent, render, screen } =
@@ -21,6 +23,8 @@ const { ActionCapabilitiesProvider } =
 const { resolveActionCapabilities } =
   await import("@/lib/organization/feature-access/action-capabilities.logic");
 const { PageOrganizerSignAction } = await import("./page-organizer-sign");
+const { createPageOrganizerOperationOwner } =
+  await import("./page-organizer-upload.logic");
 const en = (await import("@/i18n/langs/en.json")).default;
 
 afterEach(cleanup);
@@ -40,6 +44,7 @@ const savedVersion = {
   ...openVersion,
   fieldId: "b0123344-5566-7788-9900-aabbccddeeff",
 } satisfies PdfSignTarget;
+let operationOwnerForFlow: PageOrganizerOperationOwner | null = null;
 
 /**
  * The sign flow with stella desktop ready: `start` places the stamp on the
@@ -69,6 +74,14 @@ const readyFlow = (events: string[], pending: Promise<void>[]) =>
         })(),
       );
     },
+    transferToSigning: (request, target, reveal) => {
+      if (!operationOwnerForFlow?.isCurrent(request)) {
+        return false;
+      }
+      events.push(`sign ${target.fieldId}`);
+      reveal?.();
+      return true;
+    },
     requiredDialog: {
       action: "sign-pdf",
       onClose: () => undefined,
@@ -84,6 +97,10 @@ type MountOptions = {
 };
 
 const mount = ({ isDirty, saved }: MountOptions) => {
+  const operationOwner = createPageOrganizerOperationOwner();
+  let buttonRequest: Parameters<typeof operationOwner.isCurrent>[0] | null =
+    null;
+  operationOwnerForFlow = operationOwner;
   const events: string[] = [];
   const pending: Promise<void>[] = [];
   render(
@@ -100,12 +117,20 @@ const mount = ({ isDirty, saved }: MountOptions) => {
           })}
         >
           <PageOrganizerSignAction
+            beginRequest={(operation) => {
+              const request = operationOwner.beginRequest(operation);
+              buttonRequest = request;
+              return request;
+            }}
             closeEditor={() => {
               events.push("close editor");
             }}
             disabled={false}
             isDirty={isDirty}
-            saveVersion={async () => {
+            operation={operationOwner.operation}
+            saveVersion={async (request) => {
+              expect(request === buttonRequest).toBe(true);
+              expect(operationOwner.isCurrent(request)).toBe(true);
               events.push("save");
               return await Promise.resolve(saved);
             }}
@@ -115,7 +140,7 @@ const mount = ({ isDirty, saved }: MountOptions) => {
       </IntlProvider>
     </QueryClientProvider>,
   );
-  return { events, pending };
+  return { events, operationOwner, pending };
 };
 
 test("with unsaved page edits, signing saves a version first and signs that version", async () => {
@@ -124,7 +149,11 @@ test("with unsaved page edits, signing saves a version first and signs that vers
   fireEvent.click(screen.getByRole("button", { name: SIGN_LABEL }));
   await Promise.all(pending);
 
-  expect(events).toEqual(["save", `sign ${savedVersion.fieldId}`]);
+  expect(events).toEqual([
+    "save",
+    `sign ${savedVersion.fieldId}`,
+    "close editor",
+  ]);
 });
 
 test("with no page edits, signing places the stamp on the open version in the viewer", () => {
@@ -139,6 +168,19 @@ test("a save that does not produce a version signs nothing", async () => {
   const { events, pending } = mount({ isDirty: true, saved: null });
 
   fireEvent.click(screen.getByRole("button", { name: SIGN_LABEL }));
+  await Promise.all(pending);
+
+  expect(events).toEqual(["save"]);
+});
+
+test("a dismissed organizer cannot hand a completed save to signing", async () => {
+  const { events, operationOwner, pending } = mount({
+    isDirty: true,
+    saved: savedVersion,
+  });
+
+  fireEvent.click(screen.getByRole("button", { name: SIGN_LABEL }));
+  operationOwner.revoke();
   await Promise.all(pending);
 
   expect(events).toEqual(["save"]);

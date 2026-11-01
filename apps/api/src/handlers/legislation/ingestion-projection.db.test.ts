@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -18,10 +19,7 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import {
-  type CorpusWriteOutcome,
-  planCorpusDocumentWrite,
-} from "@/api/lib/legal-search/corpus-storage";
+import { planCorpusDocumentWrite } from "@/api/lib/legal-search/corpus-storage";
 import type { LegislationDocumentInput } from "@/api/lib/legal-search/legislation-ingestion-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -36,10 +34,10 @@ const corpusWrite: LegislationCorpusDependencies["write"] = async (input) => {
   const plan = planCorpusDocumentWrite(input);
   switch (plan.type) {
     case "put":
-      return await Promise.resolve({ type: "written", written: plan.written });
+      return Result.ok({ type: "written", written: plan.written });
     case "skipped-empty":
     case "skipped-unchanged":
-      return await Promise.resolve(plan);
+      return Result.ok(plan);
     default:
       return plan satisfies never;
   }
@@ -153,7 +151,7 @@ test("a failed corpus refresh advances erase state and a retry restores upsert",
 
   const failingCorpus = {
     ...corpus,
-    write: async (): Promise<CorpusWriteOutcome> =>
+    write: async () =>
       await Promise.reject(new Error("object storage unavailable")),
   } satisfies LegislationCorpusDependencies;
   const changed = {
@@ -521,8 +519,8 @@ test("refresh sequences keep database metadata and corpus text on one revision",
             throw new Error("sequence corpus write failed");
           }
           const outcome = await corpusWrite(writeInput);
-          if (outcome.written) {
-            objects.set(outcome.written.textKey, writeInput.text);
+          if (Result.isOk(outcome) && outcome.value.written) {
+            objects.set(outcome.value.written.textKey, writeInput.text);
           }
           return outcome;
         },

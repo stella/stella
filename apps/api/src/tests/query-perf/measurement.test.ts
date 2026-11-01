@@ -9,6 +9,7 @@ import {
   metricsFromPlan,
   scaleViolations,
   shapeViolations,
+  sharedBlockSampleProblem,
   summarize,
   sumMetrics,
 } from "./measurement";
@@ -42,6 +43,30 @@ test("a sequential scan on a large table fails while a declared small table pass
       statement: "select * from legislation_sources",
     }),
   ).toEqual([]);
+});
+
+test("a health-signal scan of pg_database passes while another catalog still counts as large", () => {
+  expect(
+    analyzePlan({
+      document: plan({
+        "Node Type": "Seq Scan",
+        "Relation Name": "pg_database",
+      }),
+      owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
+      profileId: "small",
+      statement: "select datname from pg_database",
+    }),
+  ).toEqual([]);
+  expect(
+    analyzePlan({
+      document: plan({ "Node Type": "Seq Scan", "Relation Name": "pg_class" }),
+      owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
+      profileId: "small",
+      statement: "select relname from pg_class",
+    }).map(({ kind }) => kind),
+  ).toEqual(["large-scan"]);
 });
 
 test("a lossy bitmap heap scan fails even without rows removed by recheck", () => {
@@ -314,6 +339,26 @@ test("median supports odd and even samples and rejects malformed measurements", 
   expect(() => metricsFromPlan({ Plan: {}, "Execution Time": 1 })).toThrow(
     "lacks finite execution time",
   );
+});
+
+test("shared-block sample failures name the owner and every sample", () => {
+  const samples = [
+    { sharedBlocks: 142, executionTimeMs: 1 },
+    { sharedBlocks: 158, executionTimeMs: 2 },
+    { sharedBlocks: 159, executionTimeMs: 3 },
+    { sharedBlocks: 173, executionTimeMs: 4 },
+  ];
+  expect(
+    sharedBlockSampleProblem("scheduled.caseLaw.refreshCoverage", samples),
+  ).toBe(
+    "scheduled.caseLaw.refreshCoverage produced non-deterministic shared-block samples: 142, 158, 159, 173",
+  );
+  expect(
+    sharedBlockSampleProblem(
+      "stable",
+      samples.map((sample) => ({ ...sample, sharedBlocks: 142 })),
+    ),
+  ).toBeUndefined();
 });
 
 test("scheduled runs retain execution time and reject a slow statement within the page budget", () => {
