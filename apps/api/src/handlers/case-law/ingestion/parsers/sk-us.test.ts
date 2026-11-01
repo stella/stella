@@ -641,7 +641,8 @@ describe("the plain spaces of a file that sets its word gaps as no-break spaces"
       )
       .join("\n")
       .replaceAll(NBSP, " ");
-    expect(text).toContain("1. Ústavný súd preskúmal sťažnosť a dospel");
+    // Every one of the thirty sentences keeps the gap, the one set plain too.
+    expect(text.match(/súd preskúmal sťažnosť/gu)?.length).toBe(30);
     expect(text).not.toContain("súdpreskúmal");
     // The file still reads as one that sets its gaps as no-break spaces.
     expect(text).toContain("zrušuje");
