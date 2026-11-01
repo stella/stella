@@ -193,9 +193,8 @@ export const resolveInvoicePrefillContext = (
 ) => {
   const matter = matters.get(workspaceId);
   const buyer =
-    matter?.clientName === null || matter?.clientName === undefined
-      ? EMPTY_BUYER_SNAPSHOT
-      : buyerSnapshotFromContact({
+    matter !== undefined && matter.clientName !== null
+      ? buyerSnapshotFromContact({
           displayName: matter.clientName,
           registrationNumber: matter.registrationNumber,
           taxId: matter.taxId,
@@ -203,7 +202,8 @@ export const resolveInvoicePrefillContext = (
           vatPayer: matter.vatPayer,
           billingAddress: matter.billingAddress,
           addresses: matter.addresses,
-        });
+        })
+      : EMPTY_BUYER_SNAPSHOT;
   let sellerSource: "requested" | "default" | "none" | "not_found" = "none";
   if (seller) {
     sellerSource = sellerProfileId === undefined ? "default" : "requested";
