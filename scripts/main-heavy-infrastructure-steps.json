@@ -505,6 +505,7 @@
       "Login to GitHub Container Registry",
       "Pull the promoted release's API image",
       "Rehearse the upgrade from the promoted release at scale",
+      "Remove workflow tooling",
       "Resolve the promoted release",
       "Setup Bun"
     ],
