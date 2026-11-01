@@ -158,6 +158,7 @@ import { knowledgeSections } from "@/lib/knowledge/navigation";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
+import type { fetchWorkspaceNavigationPage } from "@/lib/memory-api";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { isPublicLawEnabled } from "@/lib/public-law-launch";
@@ -940,6 +941,9 @@ type MatterExpansion =
  * accept this type so `MatterIcon` always has a color.
  */
 type MatterIdentity = {
+  status: Awaited<
+    ReturnType<typeof fetchWorkspaceNavigationPage>
+  >["workspaces"][number]["status"];
   defaultViewId?: string | null;
   id: string;
   name: string;
@@ -1382,6 +1386,7 @@ export const MatterItem = ({
       name: ws.name,
       color: ws.color,
       client: ws.client ?? null,
+      isArchived: ws.status === "archived",
     },
     { onRename: startRename, onDeleted: () => onDeleted(ws.id) },
   );

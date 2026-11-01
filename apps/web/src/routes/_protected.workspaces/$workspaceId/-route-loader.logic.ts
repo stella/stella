@@ -1,18 +1,19 @@
 type LoadWorkspaceRouteQueriesOptions<TWorkspace> = {
   loadWorkspace: () => Promise<TWorkspace>;
+  shouldStartPrefetches: (workspace: TWorkspace) => boolean;
   startPrefetches: readonly (() => void)[];
 };
 
-// Start every independent request in the same loader turn. Awaiting the
-// breadcrumb query first turns otherwise parallel matter data into a network
-// waterfall on every cold navigation.
 export const loadWorkspaceRouteQueries = async <TWorkspace>({
   loadWorkspace,
+  shouldStartPrefetches,
   startPrefetches,
 }: LoadWorkspaceRouteQueriesOptions<TWorkspace>): Promise<TWorkspace> => {
-  const workspace = loadWorkspace();
-  for (const startPrefetch of startPrefetches) {
-    startPrefetch();
+  const workspace = await loadWorkspace();
+  if (shouldStartPrefetches(workspace)) {
+    for (const startPrefetch of startPrefetches) {
+      startPrefetch();
+    }
   }
-  return await workspace;
+  return workspace;
 };

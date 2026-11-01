@@ -43,6 +43,7 @@ import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repai
 import { buildDefaultViewRows } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 import { createWorkspaceInTransaction } from "@/api/lib/workspaces/create-workspace-row";
+import { workspaceCreationCapacity } from "@/api/lib/workspaces/creation-capacity";
 import { nextAvailableMatterName } from "@/api/lib/workspaces/matter-name";
 
 // A request without `clientId` creates a personal matter (initially
@@ -151,7 +152,7 @@ export const createWorkspaceHandler = async function* ({
           }),
         ]);
 
-      const activeCount = countResult.at(0)?.total ?? 0;
+      const workspaceCount = countResult.at(0)?.total ?? 0;
 
       if (body.clientId !== undefined && !client) {
         return Result.err(
@@ -182,7 +183,7 @@ export const createWorkspaceHandler = async function* ({
         ]),
       );
 
-      if (activeCount >= LIMITS.workspacesCount) {
+      if (!workspaceCreationCapacity(workspaceCount).canCreate) {
         return Result.err(
           new HandlerError({
             status: 400,
