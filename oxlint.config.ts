@@ -3370,8 +3370,9 @@ const config = defineConfig({
       // Product copy only. Tests, fixtures and generated catalogues are not
       // copy a reader sees, and neither is text written for a model, an
       // operator or a parser: the API's prompts, tool descriptions, agent
-      // references and ingestion, the CLI and its agent skill, court-text
-      // parsers, repository scripts and the web app's dev-only diagnostics.
+      // references and ingestion, the CLI and its agent skill, court-text and
+      // registry parsers, agent input normalisation, repository scripts and
+      // the web app's dev-only diagnostics.
       files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
       excludeFiles: [
         "**/*.{test,spec}.{ts,tsx}",
@@ -3386,7 +3387,9 @@ const config = defineConfig({
         "apps/web/src/routes/dev/**",
         "apps/web/src/runtime.ts",
         "apps/web/src/components/render-storm-canary.tsx",
+        "packages/agent-input/**",
         "packages/api-contract/**",
+        "packages/business-registries/**",
         "packages/cli/**",
         "packages/decision-reader/**",
         "packages/legal-atlas/**",
