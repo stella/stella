@@ -20,10 +20,94 @@ describe("Textarea limits", () => {
     );
 
     expect(markup).toContain(
-      "max-h-[calc(var(--textarea-max-rows)*1lh+--spacing(3))]",
+      "max-h-[calc(var(--textarea-max-rows)*1lh+var(--textarea-pt)+var(--textarea-pb))]",
     );
     expect(markup).toContain("--textarea-max-rows:6");
   });
+
+  // The cap adds the padding the field actually has, which depends on its
+  // size, on whether it is inline, and on whether a count sits under it.
+  test.each([
+    {
+      inline: false,
+      showCount: false,
+      size: "sm",
+      top: "calc(--spacing(1)-1px)",
+      bottom: "calc(--spacing(1)-1px)",
+    },
+    {
+      inline: false,
+      showCount: false,
+      size: "default",
+      top: "calc(--spacing(1.5)-1px)",
+      bottom: "calc(--spacing(1.5)-1px)",
+    },
+    {
+      inline: false,
+      showCount: false,
+      size: "lg",
+      top: "calc(--spacing(2)-1px)",
+      bottom: "calc(--spacing(2)-1px)",
+    },
+    {
+      inline: false,
+      showCount: true,
+      size: "sm",
+      top: "calc(--spacing(1)-1px)",
+      bottom: "--spacing(6)",
+    },
+    {
+      inline: false,
+      showCount: true,
+      size: "lg",
+      top: "calc(--spacing(2)-1px)",
+      bottom: "--spacing(6)",
+    },
+    {
+      inline: true,
+      showCount: false,
+      size: "default",
+      top: "0px",
+      bottom: "0px",
+    },
+    {
+      inline: true,
+      showCount: true,
+      size: "default",
+      top: "0px",
+      bottom: "--spacing(6)",
+    },
+  ] as const)(
+    "the cap reserves the padding of $size inline=$inline count=$showCount",
+    ({ inline, showCount, size, top, bottom }) => {
+      const markup = renderToStaticMarkup(
+        <Textarea
+          aria-label="Title"
+          inline={inline}
+          maxLength={80}
+          maxRows={1}
+          showCount={showCount}
+          size={size}
+        />,
+      );
+      const field = /<textarea[^>]*>/u.exec(markup)?.[0] ?? "";
+      const classes = /class="(?<classes>[^"]*)"/u
+        .exec(field)
+        ?.groups?.["classes"]?.split(" ");
+
+      expect(classes).toContain("pt-(--textarea-pt)");
+      expect(classes).toContain("pb-(--textarea-pb)");
+      expect(classes).toContain(`[--textarea-pt:${top}]`);
+      expect(classes).toContain(`[--textarea-pb:${bottom}]`);
+      // One value per variable, so the cap and the padding agree.
+      expect(
+        classes?.filter((name) => name.startsWith("[--textarea-pb:")),
+      ).toHaveLength(1);
+      expect(
+        classes?.filter((name) => name.startsWith("[--textarea-pt:")),
+      ).toHaveLength(1);
+    },
+  );
 
   test("a small maxRows is not overruled by the floor height", () => {
     const markup = renderToStaticMarkup(

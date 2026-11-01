@@ -105,9 +105,12 @@ const Textarea = ({
           <textarea
             className={cn(
               inline
-                ? cn(INLINE_FIELD_CLASS_NAME, "resize-none")
+                ? cn(
+                    INLINE_FIELD_CLASS_NAME,
+                    "resize-none [--textarea-pb:0px] [--textarea-pt:0px]",
+                  )
                 : cn(
-                    "w-full rounded-[inherit] px-[calc(--spacing(3)-1px)] py-[calc(--spacing(1.5)-1px)] outline-none",
+                    "w-full rounded-[inherit] px-[calc(--spacing(3)-1px)] outline-none",
                     TEXTAREA_SIZE_CLASS_NAMES[controlSize],
                     // A floor for a field that grows; a fixed field's
                     // height is its rows'.
@@ -117,12 +120,17 @@ const Textarea = ({
               fieldSizing === "content"
                 ? "field-sizing-content"
                 : "field-sizing-fixed resize-none",
-              // One line is `1lh`; the block padding is added on top so the
-              // last allowed line is not cut. The floor height gives way, as
-              // `min-height` would otherwise win over a smaller cap.
+              // The block padding is set once, as variables, and both the
+              // padding and the row cap read them, so they cannot drift.
+              "pt-(--textarea-pt) pb-(--textarea-pb)",
+              // The count sits in the bottom padding.
+              counted && "[--textarea-pb:--spacing(6)]",
+              // One line is `1lh`; the field's own block padding is added on
+              // top so the last allowed line is not cut. The floor height
+              // gives way, as `min-height` would otherwise win over a
+              // smaller cap.
               maxRows !== undefined &&
-                "max-h-[calc(var(--textarea-max-rows)*1lh+--spacing(3))] min-h-0 max-sm:min-h-0",
-              counted && "pb-6",
+                "max-h-[calc(var(--textarea-max-rows)*1lh+var(--textarea-pt)+var(--textarea-pb))] min-h-0 max-sm:min-h-0",
             )}
             data-slot="textarea"
             {...mergeProps(defaultProps, props, { onChange: handleChange })}
@@ -145,12 +153,15 @@ const Textarea = ({
   );
 };
 
+/** Each size's block padding, as the variables the padding and cap read. */
 const TEXTAREA_SIZE_CLASS_NAMES = {
   [CONTROL_SIZE.sm]:
-    "px-[calc(--spacing(2.5)-1px)] py-[calc(--spacing(1)-1px)]",
-  [CONTROL_SIZE.default]: undefined,
-  [CONTROL_SIZE.lg]: "py-[calc(--spacing(2)-1px)]",
-} as const satisfies Record<ControlSize, string | undefined>;
+    "px-[calc(--spacing(2.5)-1px)] [--textarea-pb:calc(--spacing(1)-1px)] [--textarea-pt:calc(--spacing(1)-1px)]",
+  [CONTROL_SIZE.default]:
+    "[--textarea-pb:calc(--spacing(1.5)-1px)] [--textarea-pt:calc(--spacing(1.5)-1px)]",
+  [CONTROL_SIZE.lg]:
+    "[--textarea-pb:calc(--spacing(2)-1px)] [--textarea-pt:calc(--spacing(2)-1px)]",
+} as const satisfies Record<ControlSize, string>;
 
 const TEXTAREA_FLOOR_CLASS_NAMES = {
   [CONTROL_SIZE.sm]: "min-h-16.5 max-sm:min-h-19.5",
