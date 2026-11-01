@@ -3,13 +3,16 @@ import * as cheerio from "cheerio";
 
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
-import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
+import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import {
   compareTextFidelity,
   isRisElement,
   readRisContent,
   risTextFidelity,
 } from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);
 
 const FIXTURES = [
   "at-ris-bks-gesperrt",
