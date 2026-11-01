@@ -40,6 +40,7 @@ const createItem = (id: string): MatterActivityItem => ({
     type: "user",
   },
   changedFields: [],
+  detail: { type: "none" },
   runId: null,
   target: {
     color: null,
@@ -123,3 +124,36 @@ test("a document batch lists each document without its event id", async () => {
   expect(body).not.toContain(EVENT_ID);
   expect(body).not.toContain(OTHER_EVENT_ID);
 });
+
+test.each([
+  [
+    { change: "deleted", type: "version", versionNumber: 3 },
+    "Deleted version 3 of",
+  ],
+  [
+    { change: "added", type: "version", versionNumber: 4 },
+    "Added version 4 of",
+  ],
+  [
+    { change: "added", linkedName: "Lease.pdf", type: "taskLink" },
+    "Linked \u2068Lease.pdf\u2069 to",
+  ],
+  [
+    { change: "removed", linkedName: "Lease.pdf", type: "taskLink" },
+    "Unlinked \u2068Lease.pdf\u2069 from",
+  ],
+  [
+    { change: "removed", linkedName: null, type: "taskLink" },
+    "Unlinked an item from",
+  ],
+] satisfies [MatterActivityItem["detail"], string][])(
+  "a row states what happened to its target: %j",
+  async (detail, sentence) => {
+    await renderSheet({
+      id: "group-3",
+      items: [{ ...createItem(EVENT_ID), detail }],
+      type: "single",
+    });
+    expect(document.body.textContent).toContain(sentence);
+  },
+);

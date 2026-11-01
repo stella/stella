@@ -71,6 +71,14 @@
 //   `beforeEach` (never at module scope) and an enclosing `afterEach` must call
 //   `mock.restore()`: restoring a spy detaches it for the rest of the file.
 //
+// require-fetch-after-all
+//   A globalThis.fetch assignment in beforeAll must have another assignment
+//   in afterAll at the same describe or file scope. Bun 1.4.4 exposes no
+//   describe-scope completion hook to a preload, so the static pairing keeps
+//   sibling describes from inheriting a replacement as their baseline. The
+//   rule checks direct assignments only; it does not prove which value is
+//   restored.
+//
 // no-wait-for-under-fake-timers
 //   Testing Library's retrying queries advance Jest's fake clock by their poll
 //   interval. A test whose assertion becomes true through asynchronous work can
@@ -99,7 +107,12 @@ import type { AstNode, FilenameContext, ScopeContext } from "./utils.ts";
 const BUN_TEST_MODULE = "bun:test";
 const EXPECT_EXPORT = "expect";
 const MODULE_MOCK_EXPORTS = new Set(["mock", "spyOn"]);
-const FILE_HOOK_EXPORTS = new Set(["beforeEach", "afterEach"]);
+const FILE_HOOK_EXPORTS = new Set([
+  "beforeAll",
+  "beforeEach",
+  "afterEach",
+  "afterAll",
+]);
 const MOCK_DEFAULT_METHODS = new Set([
   "mockImplementation",
   "mockReturnValue",
@@ -977,6 +990,19 @@ const closesSharedDatabaseClient = (
   );
 };
 
+const isGlobalFetchAssignment = (node: AstNode): boolean => {
+  const target = unwrapExpression(node.left);
+  if (
+    !isAstNode(target) ||
+    target.type !== "MemberExpression" ||
+    memberPropertyName(target) !== "fetch"
+  ) {
+    return false;
+  }
+  const object = unwrapExpression(target.object);
+  return isIdentifierReference(object) && object.name === "globalThis";
+};
+
 const callbackArgument = (node: AstNode) => {
   const args = Array.isArray(node.arguments) ? node.arguments : [];
   return args.find(
@@ -1045,6 +1071,53 @@ const timerFrameworkExport = (context: ScopeContext, callee: unknown) => {
 export default eslintCompatPlugin({
   meta: { name: "bun-test-hygiene" },
   rules: {
+    "require-fetch-after-all": {
+      meta: {
+        type: "problem",
+        messages: {
+          missingRestore:
+            "A beforeAll replacement of globalThis.fetch must be restored by an afterAll in the same describe block (or at file scope for a top-level hook).",
+        },
+      },
+      createOnce(context) {
+        const replacements: { node: AstNode; scope: unknown }[] = [];
+        const restoredScopes = new Set<unknown>();
+        return {
+          before() {
+            replacements.length = 0;
+            restoredScopes.clear();
+            // Both `globalThis.fetch` and `globalThis["fetch"]` reach the
+            // assignment check; the prefilter only skips files naming neither.
+            return (
+              mentionsBunTest(context.sourceCode.text) &&
+              context.sourceCode.text.includes("globalThis") &&
+              context.sourceCode.text.includes("fetch")
+            );
+          },
+          AssignmentExpression(node) {
+            if (!isAstNode(node) || !isGlobalFetchAssignment(node)) {
+              return;
+            }
+            const hook = enclosingHook(context, node);
+            if (hook?.exportName === "beforeAll") {
+              replacements.push({ node, scope: hook.scope });
+            } else if (hook?.exportName === "afterAll") {
+              restoredScopes.add(hook.scope);
+            }
+          },
+          "Program:exit"() {
+            for (const replacement of replacements) {
+              if (!restoredScopes.has(replacement.scope)) {
+                context.report({
+                  node: replacement.node,
+                  messageId: "missingRestore",
+                });
+              }
+            }
+          },
+        };
+      },
+    },
     "no-wait-for-under-fake-timers": {
       meta: {
         type: "problem",

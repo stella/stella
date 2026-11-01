@@ -22,6 +22,7 @@
         "better-result": "catalog:",
         "bun-types": "catalog:",
         "cheerio": "^1.2.0",
+        "drizzle-kit": "catalog:",
         "drizzle-orm": "catalog:",
         "eslint": "catalog:",
         "fast-check": "catalog:",
@@ -693,7 +694,7 @@
     },
     "packages/agent-input": {
       "name": "@stll/agent-input",
-      "version": "0.2.2",
+      "version": "0.3.0",
       "dependencies": {
         "@stll/country-codes": "workspace:^",
         "@stll/fuzzy-search": "catalog:",
@@ -798,7 +799,7 @@
     },
     "packages/auth-model": {
       "name": "@stll/auth-model",
-      "version": "0.3.0",
+      "version": "0.5.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "better-auth": "catalog:",
@@ -870,7 +871,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.3.0",
+      "version": "0.3.2",
       "dependencies": {
         "@ag-ui/core": "1.0.3",
         "@stll/ai-catalog": "workspace:^",
@@ -920,7 +921,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "6.3.0",
+      "version": "6.5.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1219,7 +1220,7 @@
     },
     "packages/mcp-kit": {
       "name": "@stll/mcp-kit",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "dependencies": {
         "@stll/agent-input": "workspace:^",
         "better-result": "catalog:",
@@ -1583,7 +1584,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.60.0",
+      "version": "0.62.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1682,7 +1683,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.15.2",
+      "version": "0.15.4",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
