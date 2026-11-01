@@ -26,6 +26,14 @@ const {
 } = await import("@/components/inspector/pane-width-storage");
 const { deviceStorage } = await import("@/lib/account/browser-storage");
 
+const { inspectorStateEntry, inspectorMinimizedEntry } =
+  await import("@/components/inspector/inspector-storage-keys");
+const { writePersistedState, removePersistedState } =
+  await import("@/lib/persisted-state/registry");
+const { ProtectedPendingSkeleton } =
+  await import("@/routes/-protected-pending-skeleton");
+const pendingScope = { organizationId: "pending-org", userId: "pending-user" };
+
 const storage = deviceStorage("local");
 
 type Surface = Parameters<typeof migrateInspectorPaneWidth>[0];
@@ -61,6 +69,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  removePersistedState(inspectorStateEntry, pendingScope).unwrap();
+  removePersistedState(inspectorMinimizedEntry, pendingScope).unwrap();
 });
 
 afterAll(async () => {
@@ -195,4 +205,40 @@ test("safe-mode StrictMode mounting preserves the saved width until a user resiz
     version: 1,
     value: INSPECTOR_PANE_DEFAULT_WIDTH + INSPECTOR_PANE_KEYBOARD_STEP,
   });
+});
+
+test("the member loading frame reserves the saved inspector before tabs mount", () => {
+  storage.setItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY, "320");
+  writePersistedState(inspectorStateEntry, pendingScope, {
+    tabs: [
+      {
+        type: "chat",
+        id: "00000000-0000-4000-8000-000000000001",
+        label: "Chat",
+        contextMatterIds: [],
+      },
+    ],
+    groups: [],
+    groupAssignments: {},
+    activeId: "00000000-0000-4000-8000-000000000001",
+    collapsedGroupIds: [],
+  }).unwrap();
+  writePersistedState(inspectorMinimizedEntry, pendingScope, false).unwrap();
+  const { container, rerender } = render(
+    <ProtectedPendingSkeleton inspectorScope={pendingScope} />,
+  );
+  const dockWidth = () =>
+    container
+      .querySelector('[data-slot="inspector-pending-dock"]')
+      ?.getAttribute("style");
+  expect(dockWidth()).toBe("width: 320px;");
+  rerender(
+    <ProtectedPendingSkeleton
+      inspectorScope={{ ...pendingScope, userId: "another-user" }}
+    />,
+  );
+  expect(dockWidth()).toBeNull();
+  writePersistedState(inspectorMinimizedEntry, pendingScope, true).unwrap();
+  rerender(<ProtectedPendingSkeleton inspectorScope={pendingScope} />);
+  expect(dockWidth()).toBeNull();
 });
