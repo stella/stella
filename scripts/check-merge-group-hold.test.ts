@@ -50,12 +50,14 @@ const fixture = (numbers: number[], held: number[] = []) => {
     variables,
     calls,
     group,
-    run: (eventName = "merge_group", holdVariables: unknown = variables) =>
+    // A rest parameter keeps an explicit `undefined` distinct from "use the
+    // fixture variables", which a default parameter would conflate.
+    run: (eventName = "merge_group", ...override: [unknown?]) =>
       checkMergeGroupHold({
         eventName,
         group,
         repository: "stella/stella",
-        holdVariables,
+        holdVariables: override.length > 0 ? override[0] : variables,
         readApi: (endpoint) => {
           calls.push(endpoint);
           if (endpoint.includes("/compare/")) {
