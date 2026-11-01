@@ -1455,10 +1455,12 @@
           "click": "Klõpsa",
           "fill": "Sisesta tekst",
           "open": "Ava veebisait",
+          "openNewTab": "Ava veebisait uuel vahekaardil",
           "pressKey": "Vajuta klahvi",
           "select": "Vali suvand",
           "snapshot": "Loe lehte",
-          "snapshotContinue": "Jätka lehe lugemist"
+          "snapshotContinue": "Jätka lehe lugemist",
+          "switchTab": "Lülitu vahekaardile"
         },
         "askAgain": "Küsi uuesti",
         "autoApproveReads": "Kinnita lehtede lugemine automaatselt",

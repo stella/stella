@@ -1087,7 +1087,9 @@ const browserActionTranslationKey = (command: BrowserControlCommand) => {
     case BROWSER_CONTROL_ACTION.goBack:
       return "common.goBack";
     case BROWSER_CONTROL_ACTION.open:
-      return "chat.approval.browser.actions.open";
+      return command.newTab === true
+        ? "chat.approval.browser.actions.openNewTab"
+        : "chat.approval.browser.actions.open";
     case BROWSER_CONTROL_ACTION.pressKey:
       return "chat.approval.browser.actions.pressKey";
     case BROWSER_CONTROL_ACTION.select:
@@ -1096,6 +1098,8 @@ const browserActionTranslationKey = (command: BrowserControlCommand) => {
       return (command.textOffset ?? 0) > 0
         ? "chat.approval.browser.actions.snapshotContinue"
         : "chat.approval.browser.actions.snapshot";
+    case BROWSER_CONTROL_ACTION.switchTab:
+      return "chat.approval.browser.actions.switchTab";
     default:
       command satisfies never;
       return panic("Unhandled browser-control action");

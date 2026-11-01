@@ -1455,10 +1455,12 @@
           "click": "Klicken",
           "fill": "Text eingeben",
           "open": "Website öffnen",
+          "openNewTab": "Website in neuem Tab öffnen",
           "pressKey": "Taste drücken",
           "select": "Option auswählen",
           "snapshot": "Seite lesen",
-          "snapshotContinue": "Seite weiterlesen"
+          "snapshotContinue": "Seite weiterlesen",
+          "switchTab": "Zum Tab wechseln"
         },
         "askAgain": "Wieder nachfragen",
         "autoApproveReads": "Seitenlesen automatisch genehmigen",

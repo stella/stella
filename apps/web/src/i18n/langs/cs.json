@@ -1455,10 +1455,12 @@
           "click": "Kliknout",
           "fill": "Zadat text",
           "open": "Otevřít web",
+          "openNewTab": "Otevřít web na nové kartě",
           "pressKey": "Stisknout klávesu",
           "select": "Vybrat možnost",
           "snapshot": "Přečíst stránku",
-          "snapshotContinue": "Pokračovat ve čtení stránky"
+          "snapshotContinue": "Pokračovat ve čtení stránky",
+          "switchTab": "Přepnout na kartu"
         },
         "askAgain": "Znovu se ptát",
         "autoApproveReads": "Automaticky schvalovat čtení stránek",
