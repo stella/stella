@@ -116,11 +116,17 @@ type KbdNavigator = Pick<Navigator, "platform"> & {
   userAgentData?: { platform?: string | undefined } | undefined;
 };
 
-function detectKbdPlatform(): KbdPlatform {
-  const nav: KbdNavigator = navigator;
-  const name = nav.userAgentData?.platform ?? nav.platform;
+/**
+ * The platform a navigator reports. A browser that has `userAgentData` may
+ * leave its `platform` empty, so an empty name falls back to
+ * `navigator.platform` as a missing one does.
+ */
+function kbdPlatformOf(nav: KbdNavigator): KbdPlatform {
+  const name = nav.userAgentData?.platform || nav.platform;
   return APPLE_PLATFORM_PATTERN.test(name) ? "apple" : "other";
 }
+
+const detectKbdPlatform = (): KbdPlatform => kbdPlatformOf(navigator);
 
 const subscribeToNothing = () => () => undefined;
 
@@ -133,5 +139,5 @@ function useKbdPlatform(): KbdPlatform {
   );
 }
 
-export { Kbd, formatKeys, useKbdPlatform };
-export type { KbdKey, KbdNamedKey, KbdPlatform, KbdProps };
+export { Kbd, formatKeys, kbdPlatformOf, useKbdPlatform };
+export type { KbdKey, KbdNamedKey, KbdNavigator, KbdPlatform, KbdProps };

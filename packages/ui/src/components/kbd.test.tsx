@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
-import { formatKeys, Kbd } from "./kbd";
+import { formatKeys, Kbd, kbdPlatformOf } from "./kbd";
 
 describe("Kbd", () => {
   test("spells a combination per platform", () => {
@@ -11,6 +11,26 @@ describe("Kbd", () => {
     expect(formatKeys(["mod", "shift", "P"], "apple")).toBe("⌘⇧P");
     expect(formatKeys(["mod", "shift", "P"], "other")).toBe("Ctrl+Shift+P");
     expect(formatKeys(["escape"], "apple")).toBe("Esc");
+  });
+
+  test("reads the platform from userAgentData, else navigator.platform", () => {
+    expect(
+      kbdPlatformOf({
+        platform: "Win32",
+        userAgentData: { platform: "macOS" },
+      }),
+    ).toBe("apple");
+    expect(kbdPlatformOf({ platform: "MacIntel" })).toBe("apple");
+    // An empty userAgentData platform is no answer.
+    expect(
+      kbdPlatformOf({ platform: "MacIntel", userAgentData: { platform: "" } }),
+    ).toBe("apple");
+    expect(
+      kbdPlatformOf({
+        platform: "Linux x86_64",
+        userAgentData: { platform: "" },
+      }),
+    ).toBe("other");
   });
 
   test("renders the non-Apple spelling on the server, so hydration agrees", () => {
