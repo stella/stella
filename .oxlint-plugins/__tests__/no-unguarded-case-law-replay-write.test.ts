@@ -144,6 +144,43 @@ describe.serial(RULE, () => {
           "{value}`);",
       ),
     ).toEqual([2]);
+    expect(
+      await lint(
+        'import { sql } from "drizzle-orm";\nawait tx.execute(sql.raw("UPDATE rows SET value = 1"));',
+      ),
+    ).toEqual([2]);
+    expect(
+      await lint(
+        'import { sql } from "drizzle-orm";\nconst statement = sql.raw("UPDATE rows SET value = 1");\nawait tx.execute(statement);',
+      ),
+    ).toEqual([3]);
+    expect(
+      await lint(
+        'import {replayRawWrite} from "@/api/lib/case-law/replay-write"; import {sql} from "drizzle-orm";\nawait replayRawWrite({table:rows,values:{value},predicate:sql`true`,operation:{kind:"update"},ctes:[{name:"x",query:sql.raw("UPDATE rows SET value=1")}]}).execute({kind:"drizzle",connection:tx});',
+      ),
+    ).toEqual([2]);
+  });
+  test("a saved update builder must still carry the plan's predicate", async () => {
+    expect(
+      await lint(
+        `${imports}const write = plan(rows, { value });\nconst update = tx.update(rows);\nawait update.set(write.set).where(eq(rows.id,id));`,
+      ),
+    ).toEqual([4]);
+    expect(
+      await lint(
+        `${imports}const update = tx.update(rows);\nawait update.set({ value });`,
+      ),
+    ).toEqual([3]);
+    expect(
+      await lint(
+        `${imports}const write = plan(rows, { value });\nconst update = tx.update(rows);\nawait update.set(write.set).where(and(eq(rows.id,id),write.setWhere));`,
+      ),
+    ).toEqual([]);
+  });
+  test("a predicate typed as optional may only fall back to a panic", async () => {
+    const guarded = `${imports}import { panic } from "better-result";\nconst write = plan(rows,{value});\nawait tx.insert(rows).values(input).onConflictDoUpdate({target:rows.id,set:write.set,setWhere:and(write.setWhere,eq(rows.id,id)) ?? `;
+    expect(await lint(`${guarded}panic("missing")});`)).toEqual([]);
+    expect(await lint(`${guarded}sql\`true\`});`)).toEqual([4]);
   });
   test("raw templates cannot substitute for a complete owner statement", async () => {
     const rawImports =

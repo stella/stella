@@ -84,12 +84,29 @@ const rawQuery = (
   if (
     expression.type === "CallExpression" &&
     isAstNode(expression.callee) &&
-    memberPropertyName(expression.callee) === "sqlToQuery" &&
+    ["sqlToQuery", "raw"].includes(
+      memberPropertyName(expression.callee) ?? "",
+    ) &&
     Array.isArray(expression.arguments)
   ) {
     return rawQuery(context, expression.arguments.at(0), seen);
   }
   return expression;
+};
+
+const rawText = (context: ReplayContext, query: AstNode | null) =>
+  writeSqlText(context, query) ?? staticStringValue(query);
+
+/** The text of a `sql.raw(...)` call, which bypasses the tagged template. */
+const rawCallText = (context: ReplayContext, value: unknown) => {
+  const expression = unwrapExpression(value);
+  return isAstNode(expression) &&
+    expression.type === "CallExpression" &&
+    isAstNode(expression.callee) &&
+    memberPropertyName(expression.callee) === "raw" &&
+    Array.isArray(expression.arguments)
+    ? rawText(context, rawQuery(context, expression.arguments.at(0)))
+    : null;
 };
 
 const hasGuardedPredicate = (
@@ -107,6 +124,20 @@ const hasGuardedPredicate = (
     planBinding(context, expression.object) === binding
   ) {
     return true;
+  }
+  if (expression.type === "LogicalExpression" && expression.operator === "??") {
+    // `and(...)` is typed as possibly undefined; a fallback that panics keeps
+    // the guarded predicate the only one that can reach the statement.
+    const fallback = unwrapExpression(expression.right);
+    const panicked =
+      isAstNode(fallback) && fallback.type === "CallExpression"
+        ? resolveImportedExpressionForEnforcement(context, fallback.callee)
+        : null;
+    return (
+      panicked?.source === "better-result" &&
+      panicked.imported === "panic" &&
+      hasGuardedPredicate(context, expression.left, binding)
+    );
   }
   if (
     expression.type !== "CallExpression" ||
@@ -142,11 +173,9 @@ const containsRawMutation = (
   }
   seen.add(expression);
   if (
-    (expression.type === "TaggedTemplateExpression" ||
-      (expression.type === "CallExpression" &&
-        isAstNode(expression.callee) &&
-        memberPropertyName(expression.callee) === "raw")) &&
-    rawWriteCandidate(writeSqlText(context, expression))
+    (expression.type === "TaggedTemplateExpression" &&
+      rawWriteCandidate(writeSqlText(context, expression))) ||
+    rawWriteCandidate(rawCallText(context, value))
   ) {
     return true;
   }
@@ -167,9 +196,7 @@ const handleRawWrite = (
   const argument = Array.isArray(node.arguments)
     ? node.arguments.at(0)
     : undefined;
-  const query = rawQuery(context, argument);
-  const text = writeSqlText(context, query) ?? staticStringValue(query);
-  if (rawWriteCandidate(text)) {
+  if (rawWriteCandidate(rawText(context, rawQuery(context, argument)))) {
     report(node);
   }
 };
@@ -225,7 +252,14 @@ const handleDrizzleUpdate = ({
   const argumentsList = Array.isArray(node.arguments) ? node.arguments : [];
   const argument = unwrapExpression(argumentsList.at(0));
   if (method === "set") {
-    const update = unwrapExpression(callee.object);
+    const receiver = unwrapExpression(callee.object);
+    const variable = isIdentifierReference(receiver)
+      ? resolveVariable(context, receiver)
+      : null;
+    const update =
+      variable === null
+        ? receiver
+        : unwrapExpression(stableInitializer(variable));
     if (
       !isAstNode(update) ||
       update.type !== "CallExpression" ||
