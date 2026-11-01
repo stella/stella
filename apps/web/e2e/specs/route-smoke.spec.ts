@@ -16,7 +16,6 @@ import {
   inspectorStorageBaseKey,
   ownerStorageKey,
 } from "@stll/api-contract/browser-storage";
-
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
 
