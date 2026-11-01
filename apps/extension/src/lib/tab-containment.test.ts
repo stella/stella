@@ -1,14 +1,18 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { BROWSER_CONTROL_LIMITS } from "@stll/api-contract/browser-control";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { sortCommittedNavigation, sortNavigationTarget } from "./opened-tabs";
 import {
+  chatTabsAtLimit,
   containControlledTab,
   exclusiveOwners,
   forgetContainedTab,
   readContainedTabs,
   readTabOwner,
+  releaseContainedTabs,
+  switchContainedTab,
 } from "./tab-containment";
 
 type Rule = { condition: { excludedTabIds?: number[]; tabIds?: number[] } };
@@ -195,6 +199,74 @@ describe("controlled tab containment", () => {
     // A tab the earlier one opens is confined as well.
     await sortNavigationTarget({ sourceTabId: 2, tabId: 13, url: "" });
     expect(await readTabOwner(13)).toBe("opened");
+  });
+
+  test("control moves only to one of chat's tabs, and the old one stays chat's", async () => {
+    const { session, state } = await startControl();
+    await sortNavigationTarget({ sourceTabId: CONTROLLED, tabId: 5, url: "" });
+    // Tab 1 is the user's, tab 6 has no known owner.
+    for (const tabId of [1, 6]) {
+      expect(await switchContainedTab(tabId)).toBe("refused");
+    }
+    expect(session["browserContainedTabs"]).toMatchObject({
+      controlledTabId: CONTROLLED,
+      openedTabIds: [5],
+    });
+
+    expect(await switchContainedTab(5)).toBe("switched");
+    expect(session["browserContainedTabs"]).toEqual({
+      controlledTabId: 5,
+      openedTabIds: [CONTROLLED],
+      userTabIds: [1, 2],
+    });
+    expect(confines(state.rules, CONTROLLED)).toBe(true);
+    expect(confines(state.rules, 5)).toBe(true);
+    expect(await switchContainedTab(5)).toBe("switched");
+  });
+
+  test("nothing is switched to while control is off", async () => {
+    installFakeChrome();
+    expect(await switchContainedTab(2)).toBe("refused");
+    expect(await readTabOwner(2)).toBe("inactive");
+  });
+
+  test("chat keeps no more tabs than the limit, the controlled one included", async () => {
+    const { removed } = await startControl();
+    const limit = BROWSER_CONTROL_LIMITS.tabs;
+    for (let tabId = 10; tabId < 10 + limit - 1; tabId += 1) {
+      await sortNavigationTarget({ sourceTabId: CONTROLLED, tabId, url: "" });
+    }
+    const contained = await readContainedTabs();
+    expect(contained.openedTabIds).toHaveLength(limit - 1);
+    expect(chatTabsAtLimit(contained)).toBe(true);
+
+    // One more page-opened tab is closed at once.
+    await sortNavigationTarget({ sourceTabId: CONTROLLED, tabId: 30, url: "" });
+    expect(removed).toEqual([30]);
+    expect(chatTabsAtLimit(await readContainedTabs())).toBe(true);
+  });
+
+  test("control ending gives every one of chat's tabs back to the user", async () => {
+    const { state } = await startControl();
+    await sortNavigationTarget({ sourceTabId: CONTROLLED, tabId: 5, url: "" });
+    await containControlledTab(4);
+    await switchContainedTab(5);
+
+    await releaseContainedTabs();
+    expect(state.rules).toEqual([]);
+    for (const tabId of [CONTROLLED, 4, 5]) {
+      expect(await readTabOwner(tabId)).toBe("inactive");
+    }
+  });
+
+  test("closing the controlled tab keeps chat's other tabs confined", async () => {
+    const { state } = await startControl();
+    await sortNavigationTarget({ sourceTabId: CONTROLLED, tabId: 5, url: "" });
+    await forgetContainedTab(CONTROLLED);
+
+    expect(await readTabOwner(5)).toBe("opened");
+    expect(confines(state.rules, 5)).toBe(true);
+    expect(await switchContainedTab(5)).toBe("switched");
   });
 
   test("nothing is confined once the last contained tab closes", async () => {

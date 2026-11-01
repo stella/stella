@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-export const BROWSER_CONTROL_PROTOCOL_VERSION = 5 as const;
+export const BROWSER_CONTROL_PROTOCOL_VERSION = 6 as const;
 export const BROWSER_CONTROL_TOOL_NAME = "use-browser" as const;
 
 /**
@@ -29,6 +29,7 @@ export const BROWSER_CONTROL_ACTION = {
   pressKey: "press-key",
   select: "select",
   snapshot: "snapshot",
+  switchTab: "switch-tab",
 } as const;
 
 export const BROWSER_CONTROL_TARGET_METADATA = {
@@ -65,6 +66,12 @@ export const BROWSER_CONTROL_LIMITS = {
   revisionIdChars: 128,
   requestIdChars: 128,
   selectValueChars: 2000,
+  /**
+   * Tabs chat keeps at once, the controlled one included, and the most a
+   * snapshot lists. A page-opened tab beyond it is closed, and `open` with
+   * `newTab` is refused.
+   */
+  tabs: 8,
   /** Commands other than `snapshot` one extension connection may run. */
   sessionActions: 400,
   /** `open` and `go-back` commands one extension connection may run. */
@@ -197,6 +204,8 @@ const targetSchema = v.strictObject({
 
 const openActionSchema = v.strictObject({
   action: v.literal(BROWSER_CONTROL_ACTION.open),
+  /** Open the page in a new tab chat controls from now on; the current one stays chat's. */
+  newTab: v.optional(v.boolean()),
   url: urlSchema,
 });
 
@@ -247,6 +256,17 @@ const goBackActionSchema = v.strictObject({
   action: v.literal(BROWSER_CONTROL_ACTION.goBack),
 });
 
+/**
+ * Makes another of chat's tabs, as the latest snapshot's `tabs` lists them,
+ * the controlled tab. `url` is the address the list showed; the tab must
+ * still be on its origin.
+ */
+const switchTabActionSchema = v.strictObject({
+  action: v.literal(BROWSER_CONTROL_ACTION.switchTab),
+  tabId: tabIdSchema,
+  url: urlSchema,
+});
+
 export const browserControlCommandSchema = v.variant("action", [
   openActionSchema,
   snapshotActionSchema,
@@ -255,6 +275,7 @@ export const browserControlCommandSchema = v.variant("action", [
   selectActionSchema,
   pressKeyActionSchema,
   goBackActionSchema,
+  switchTabActionSchema,
 ]);
 
 export type BrowserControlCommand = v.InferOutput<
@@ -284,6 +305,16 @@ export type BrowserControlElement = v.InferOutput<
   typeof browserControlElementSchema
 >;
 
+/** One of chat's tabs; `active` marks the one the snapshot was read from. */
+const browserControlTabSchema = v.strictObject({
+  active: v.boolean(),
+  tabId: tabIdSchema,
+  title: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.titleChars)),
+  url: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.urlChars)),
+});
+
+export type BrowserControlTab = v.InferOutput<typeof browserControlTabSchema>;
+
 const browserControlSnapshotSchema = v.strictObject({
   contentTrust: v.literal(BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent),
   elements: v.pipe(
@@ -298,6 +329,11 @@ const browserControlSnapshotSchema = v.strictObject({
   textTotalChars: v.pipe(v.number(), v.integer(), v.minValue(0)),
   /** The Chrome tab the snapshot was read from. */
   tabId: tabIdSchema,
+  /** Chat's tabs, the active one first; `switch-tab` moves control to another. */
+  tabs: v.pipe(
+    v.array(browserControlTabSchema),
+    v.maxLength(BROWSER_CONTROL_LIMITS.tabs),
+  ),
   title: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.titleChars)),
   url: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.urlChars)),
 });
@@ -334,6 +370,8 @@ export const BROWSER_CONTROL_ERROR_CODE = {
   /** The controlled tab changed since the page was last read; take a snapshot first. */
   tabChanged: "tab-changed",
   tabClosed: "tab-closed",
+  /** `open` with `newTab` while chat already has the most tabs it may keep. */
+  tabLimitReached: "tab-limit-reached",
   timedOut: "timed-out",
   unsupportedPage: "unsupported-page",
 } as const;
@@ -485,7 +523,9 @@ export const isReadOnlyBrowserCommand = (
       return true;
     // History can hold pages the user never approved, and `popstate`
     // handlers can change page state, so going back is a navigation.
+    // Switching tabs moves chat to a page the user approves first.
     case BROWSER_CONTROL_ACTION.goBack:
+    case BROWSER_CONTROL_ACTION.switchTab:
     case BROWSER_CONTROL_ACTION.click:
     case BROWSER_CONTROL_ACTION.fill:
     case BROWSER_CONTROL_ACTION.open:

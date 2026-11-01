@@ -13,6 +13,7 @@ import {
   type BrowserControlElementCommand,
   type BrowserControlErrorCode,
   type BrowserControlResult,
+  type BrowserControlTab,
   type BrowserObservedTab,
   ELEMENT_REFERENCE_SHADOW_SEGMENT,
   parseBrowserControlResult,
@@ -33,7 +34,15 @@ import {
 import { frameSnapshotSchema, mergeFrameSnapshots } from "./snapshot-merge";
 import { readStellaTabs } from "./stella-tabs";
 import { BROWSER_CONTROLLED_TAB_STORAGE_KEY } from "./storage-keys";
-import { containControlledTab, forgetContainedTab } from "./tab-containment";
+import {
+  chatTabsAtLimit,
+  containControlledTab,
+  containedTabIds,
+  forgetContainedTab,
+  readContainedTabs,
+  readTabOwner,
+  switchContainedTab,
+} from "./tab-containment";
 
 const NAVIGATION_TIMEOUT_MS = 15_000;
 const PAGE_SETTLE_MS = 250;
@@ -1340,6 +1349,38 @@ const injectDomAction = async (
   };
 };
 
+/**
+ * Chat's tabs for a snapshot, the one just read first with the title and URL
+ * that read returned; the others, newest first, as Chrome reports them. A
+ * tab on a page chat may not operate (an error page, another scheme) is left
+ * out, since chat could not switch to it.
+ */
+const listChatTabs = async (
+  active: BrowserControlTab,
+): Promise<BrowserControlTab[]> => {
+  const others = containedTabIds(await readContainedTabs())
+    .filter((tabId) => tabId !== active.tabId)
+    .toReversed();
+  const tabs = await Promise.all(
+    others.map(async (tabId): Promise<BrowserControlTab | null> => {
+      const tab = await chrome.tabs.get(tabId).catch(() => null);
+      if (tab?.url === undefined || parseControllableUrl(tab.url) === null) {
+        return null;
+      }
+      return {
+        active: false,
+        tabId,
+        title: (tab.title ?? "").slice(0, BROWSER_CONTROL_LIMITS.titleChars),
+        url: tab.url.slice(0, BROWSER_CONTROL_LIMITS.urlChars),
+      };
+    }),
+  );
+  return [active, ...tabs.filter((tab) => tab !== null)].slice(
+    0,
+    BROWSER_CONTROL_LIMITS.tabs,
+  );
+};
+
 type ReadSnapshotOptions = {
   controllerId: string;
   tabId: number;
@@ -1402,6 +1443,12 @@ const readSnapshot = async ({
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
       revision: crypto.randomUUID(),
       tabId,
+      tabs: await listChatTabs({
+        active: true,
+        tabId,
+        title: merged.title,
+        url: merged.url,
+      }),
       ...merged,
     },
     status: "success",
@@ -1527,30 +1574,39 @@ type OpenedControlledTab =
   | { status: "unavailable" };
 
 /**
- * Points the controlled tab at an approved URL. A new tab starts at
- * `about:blank` so the containment rules are in place before it requests
- * anything.
+ * Points the controlled tab, or with `newTab` a tab created for it, at an
+ * approved URL. A new tab starts at `about:blank` so the containment rules
+ * are in place before it requests anything; the tab controlled until then
+ * stays contained beside it as one of chat's tabs.
  */
 const openControlledTab = async (
   controllerId: string,
   url: URL,
-  signal: AbortSignal,
+  { newTab, signal }: { newTab: boolean; signal: AbortSignal },
 ): Promise<OpenedControlledTab> => {
   const existing = await readControlledTab(controllerId);
+  const reused = newTab ? null : existing;
   const tabId =
-    existing?.tab.id ??
+    reused?.tab.id ??
     (await chrome.tabs.create({ active: true, url: "about:blank" })).id;
   if (tabId === undefined) {
     return { status: "unavailable" };
   }
   // A tab created for this command and stopped before it navigated holds
-  // nothing; closing it leaves no controlled tab chat has never read.
+  // nothing; closing it hands control back to the tab chat had, if any, so
+  // no controlled tab is one chat has never read.
   const discardCreatedTab = async (): Promise<void> => {
+    if (reused !== null) {
+      return;
+    }
     if (existing === null) {
       await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
-      await forgetContainedTab(tabId);
-      await chrome.tabs.remove(tabId).catch(() => undefined);
+    } else {
+      await containControlledTab(existing.state.tabId);
+      await writeControlledTabState(existing.state);
     }
+    await forgetContainedTab(tabId);
+    await chrome.tabs.remove(tabId).catch(() => undefined);
   };
   if (isStopped(signal)) {
     await discardCreatedTab();
@@ -1558,9 +1614,9 @@ const openControlledTab = async (
   }
   await containControlledTab(tabId);
   await writeControlledTabState({
-    adopted: existing?.state.adopted ?? false,
+    adopted: reused?.state.adopted ?? false,
     controllerId,
-    settled: existing?.state.settled ?? null,
+    settled: reused?.state.settled ?? null,
     snapshot: null,
     tabId,
   });
@@ -1658,8 +1714,10 @@ const readCommandIdentity = async (
   observedTab: BrowserObservedTab | null,
 ) => {
   const tabId = controlledTab?.tab.id;
+  // Only these move the controlled tab away from the page it shows.
   const isNavigation =
-    command.action === BROWSER_CONTROL_ACTION.open ||
+    (command.action === BROWSER_CONTROL_ACTION.open &&
+      command.newTab !== true) ||
     command.action === BROWSER_CONTROL_ACTION.goBack;
   return checkCommandIdentity({
     command,
@@ -1698,12 +1756,22 @@ const runOpen = async (
       "Only public HTTPS pages without embedded credentials can be opened; stella itself and intranet, loopback and private addresses are refused.",
     );
   }
+  const newTab = command.newTab === true;
+  if (newTab && chatTabsAtLimit(await readContainedTabs())) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.tabLimitReached,
+      `Chat already has ${BROWSER_CONTROL_LIMITS.tabs} tabs open, the most it may keep. Switch to one of them with switch-tab, or open the page in the current tab without newTab.`,
+    );
+  }
   const overBudget = await budget.charge();
   if (overBudget !== null) {
     return budgetExceeded(overBudget);
   }
   progress.dispatched = true;
-  const opened = await openControlledTab(controllerId, requested, signal);
+  const opened = await openControlledTab(controllerId, requested, {
+    newTab,
+    signal,
+  });
   if (opened.status === "cancelled") {
     await budget.refund();
     return cancelled();
@@ -1763,6 +1831,93 @@ const runGoBack = async (
   } finally {
     navigation.dispose();
   }
+};
+
+const NOT_A_CHAT_TAB =
+  "That tab is not one of chat's tabs. Switch only to a tab listed in the latest snapshot's tabs, or open the page.";
+
+/**
+ * Hands control to another of chat's tabs: one chat controlled before, or
+ * one a page chat operated opened. A stella tab, a tab of the user's and a
+ * tab of unknown owner are refused. The tab must still be on the origin the
+ * user approved, both before control moves and in the page then read.
+ */
+const runSwitchTab = async (
+  command: Extract<
+    BrowserControlCommand,
+    { action: typeof BROWSER_CONTROL_ACTION.switchTab }
+  >,
+  { budget, controllerId, signal }: CommandRun,
+): Promise<BrowserControlResult> => {
+  const { tabId } = command;
+  const [owner, stellaTabs] = await Promise.all([
+    readTabOwner(tabId),
+    readStellaTabs(),
+  ]);
+  if ((owner !== "controlled" && owner !== "opened") || stellaTabs.has(tabId)) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.tabChanged,
+      NOT_A_CHAT_TAB,
+    );
+  }
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
+  if (tab === null) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.tabClosed,
+      "That tab was closed. Switch to another of chat's tabs or open the page.",
+    );
+  }
+  const approved = parseControllableUrl(command.url);
+  const current = tab.url === undefined ? null : parseControllableUrl(tab.url);
+  if (approved === null || current === null) {
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.unsupportedPage,
+      UNSUPPORTED_PAGE_MESSAGE,
+    );
+  }
+  const leftApprovedOrigin = (): BrowserControlResult =>
+    browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.tabChanged,
+      `That tab no longer shows ${approved.origin} and was not read. Switch to it again with its current address from a new snapshot's tabs.`,
+    );
+  if (current.origin !== approved.origin) {
+    return leftApprovedOrigin();
+  }
+  const overBudget = await budget.charge();
+  if (overBudget !== null) {
+    return budgetExceeded(overBudget);
+  }
+  if (isStopped(signal)) {
+    await budget.refund();
+    return cancelled();
+  }
+  if ((await switchContainedTab(tabId)) === "refused") {
+    await budget.refund();
+    return browserControlError(
+      BROWSER_CONTROL_ERROR_CODE.tabChanged,
+      NOT_A_CHAT_TAB,
+    );
+  }
+  const previous = await readControlledTabState();
+  if (previous?.controllerId !== controllerId || previous.tabId !== tabId) {
+    await writeControlledTabState({
+      adopted: false,
+      controllerId,
+      settled: null,
+      snapshot: null,
+      tabId,
+    });
+  }
+  // The user sees the tab chat now operates, as with `open`.
+  await chrome.tabs.update(tabId, { active: true }).catch(() => undefined);
+  const result = await readSnapshot({ controllerId, tabId, textOffset: 0 });
+  if (
+    result.status === "success" &&
+    parseControllableUrl(result.snapshot.url)?.origin !== approved.origin
+  ) {
+    return leftApprovedOrigin();
+  }
+  return result;
 };
 
 const runElementAction = async (
@@ -1848,10 +2003,13 @@ const runBrowserCommand = async (
     if (command.action === BROWSER_CONTROL_ACTION.open) {
       return await runOpen(command, run);
     }
+    if (command.action === BROWSER_CONTROL_ACTION.switchTab) {
+      return await runSwitchTab(command, run);
+    }
     if (!controlledTab) {
       return browserControlError(
         BROWSER_CONTROL_ERROR_CODE.noControlledTab,
-        "Open a page with stella before using this action.",
+        "No tab is under chat's control. Open a page, or switch to one of chat's tabs listed in the latest snapshot.",
       );
     }
     const tabId = controlledTab.tab.id;

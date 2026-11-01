@@ -3047,6 +3047,14 @@ describe("approved client tool with an output schema", () => {
       elements: [],
       revision: "revision-1",
       tabId: 1,
+      tabs: [
+        {
+          active: true,
+          tabId: 1,
+          title: "Example Domain",
+          url: "https://example.com/",
+        },
+      ],
       text: "Example Domain",
       textOffset: 0,
       textTotalChars: 14,

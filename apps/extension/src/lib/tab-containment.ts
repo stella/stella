@@ -1,3 +1,5 @@
+import { BROWSER_CONTROL_LIMITS } from "@stll/api-contract/browser-control";
+
 import { NON_PUBLIC_SECURE_URL_PATTERNS } from "./origin-policy";
 import { BROWSER_CONTAINED_TABS_STORAGE_KEY } from "./storage-keys";
 import { STELLA_HOSTNAMES } from "./trusted-origin";
@@ -26,10 +28,11 @@ export const CONTROLLED_TAB_RULE_IDS = [
 ];
 
 /**
- * Tabs a page opened from a contained tab stay contained until they close
- * or control ends. Beyond this many, a page-opened tab is closed at once.
+ * Chat's tabs (the controlled one, and those contained beside it) stay
+ * contained until they close or control ends. Beyond this many, a
+ * page-opened tab is closed at once and chat may not open another.
  */
-const OPENED_TAB_LIMIT = 8;
+const OPENED_TAB_LIMIT = BROWSER_CONTROL_LIMITS.tabs;
 
 const DOCUMENT_RESOURCE_TYPES = ["main_frame", "sub_frame"] as const;
 
@@ -382,6 +385,43 @@ export const containControlledTab = async (tabId: number): Promise<void> => {
   });
 };
 
+/** Whether chat already has as many tabs as it may keep. */
+export const chatTabsAtLimit = (
+  containment: Pick<ContainedTabs, "controlledTabId" | "openedTabIds">,
+): boolean => containedTabIds(containment).length >= OPENED_TAB_LIMIT;
+
+type ChatTabSwitch = "refused" | "switched";
+
+/**
+ * Makes one of chat's tabs the controlled one; the tab controlled until now
+ * stays contained beside it. Any other tab (the user's, an unknown one, or
+ * any while nothing is contained) is refused in the same step that would
+ * move control, so a tab that changed owner meanwhile is never taken.
+ */
+export const switchContainedTab = async (
+  tabId: number,
+): Promise<ChatTabSwitch> =>
+  await updateContainedTabs((current) => {
+    if (current.controlledTabId === tabId) {
+      return { next: current, result: "switched" };
+    }
+    if (!current.openedTabIds.includes(tabId)) {
+      return { next: current, result: "refused" };
+    }
+    const previous = current.controlledTabId;
+    return {
+      next: {
+        controlledTabId: tabId,
+        openedTabIds: [
+          ...current.openedTabIds.filter((opened) => opened !== tabId),
+          ...(previous === null ? [] : [previous]),
+        ],
+        userTabIds: current.userTabIds,
+      },
+      result: "switched",
+    };
+  });
+
 type TabOwner = "controlled" | "inactive" | "opened" | "unknown" | "user";
 
 /** Who a tab belongs to now; `inactive` when nothing is contained. */
@@ -418,7 +458,7 @@ export const containOpenedTab = async (
     if (contained.includes(tabId)) {
       return { next: current, result: "contained" };
     }
-    if (limited && current.openedTabIds.length >= OPENED_TAB_LIMIT) {
+    if (limited && contained.length >= OPENED_TAB_LIMIT) {
       return { next: current, result: "over-limit" };
     }
     return {

@@ -17,6 +17,14 @@ const success = {
     elements: [],
     revision: "revision-1",
     tabId: 7,
+    tabs: [
+      {
+        active: true,
+        tabId: 7,
+        title: "Example",
+        url: "https://example.com/",
+      },
+    ],
     text: "Ready",
     textOffset: 0,
     textTotalChars: 5,
