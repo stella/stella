@@ -20,6 +20,7 @@
     "./search-history-title": "./src/search-history-title.ts",
     "./public-crawl-rules": "./src/public-crawl-rules.ts",
     "./provider-setup": "./src/provider-setup.ts",
+    "./organization-create": "./src/organization-create.ts",
     "./organization-ai-availability": "./src/organization-ai-availability.ts",
     "./currency-code": "./src/currency-code.ts",
     "./billing": "./src/billing.ts",
