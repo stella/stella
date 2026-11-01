@@ -5,7 +5,10 @@ import path from "node:path";
 import type { CentsAmount } from "@stll/money";
 
 import type { PreparedSend } from "@/api/handlers/invoices/sends/create";
-import type { AmountDue } from "@/api/lib/billing/invoice-payments";
+import type {
+  AmountDue,
+  InvoiceSettlement,
+} from "@/api/lib/billing/invoice-payments";
 import type {
   invoiceDocumentRenderOptions,
   renderInvoiceDocumentPdf,
@@ -14,6 +17,7 @@ import type {
   RenderInvoicePdfOptions,
   requestsPayment,
 } from "@/api/lib/billing/invoice-pdf/render-helpers";
+import type { invoiceSettledOn } from "@/api/lib/billing/invoice-settlement-date";
 
 const apiRoot = path.resolve(import.meta.dir, "../../..");
 
@@ -42,13 +46,32 @@ const CLIENT_PAYMENT_RENDERERS = {
     "lays the template data out",
 } as const;
 
+/**
+ * Modules that reach a payment entry point without asking a client to pay
+ * the amount still due, each with the reason it is exempt.
+ */
+const REVIEWED_EXEMPTIONS = {
+  // ISDOC, Peppol and UBL files are the issued tax document itself: their
+  // payable amount and payment means are the invoice's own terms, as issued.
+  // A credit note is its own document that names the invoice, and the
+  // recipient's system nets the two, so the original's file never changes
+  // after a credit note (EN 16931 BT-115 nets prepayments made at issue, not
+  // later corrections).
+  "src/handlers/invoice-links/e-invoice.ts":
+    "builds the link's e-invoice file, the issued document as issued",
+  "src/handlers/invoices/export.ts":
+    "builds member export files; their paid date comes from the settlement",
+  "src/lib/billing/invoice-payments.ts":
+    "owns the amount due; its refusal hint states it to the member recording a payment",
+} as const;
+
 const RENDERER_CALL =
-  /\b(?:renderInvoiceDocumentPdf|invoiceDocumentRenderOptions|buildInvoiceTemplateData|buildInvoicePaymentPayload|requestsPayment|invoiceAmountDue|renderInvoiceWithTypst)\(/u;
+  /\b(?:renderInvoiceDocumentPdf|invoiceDocumentRenderOptions|buildInvoiceTemplateData|buildInvoicePaymentPayload|buildPayBySquarePayload|buildCzechQrPaymentPayload|buildPolishQrPaymentPayload|requestsPayment|invoiceAmountDue|renderInvoiceWithTypst|buildInvoiceExportFile|toExportRecords)\(|@stll\/invoicing\/pay-by-square|\(\s*(?:[\w.]+\.)?outstandingAmount\s*[,)]/u;
 const NOT_PRODUCT_SOURCE =
   /(?:\.test\.tsx?$|\.test-helpers\.ts$|type-test\.ts$|\/fixtures\.ts$|^src\/tests\/)/u;
 
 describe("client-facing payment requests", () => {
-  test("every module that requests a payment from a client is reviewed here", () => {
+  test("every module that requests a payment from a client, or is exempt, is reviewed here", () => {
     const callers = [
       ...new Bun.Glob("src/**/*.{ts,tsx}").scanSync({ cwd: apiRoot }),
     ]
@@ -57,7 +80,12 @@ describe("client-facing payment requests", () => {
         RENDERER_CALL.test(readFileSync(path.join(apiRoot, file), "utf-8")),
       )
       .toSorted();
-    expect(callers).toEqual(Object.keys(CLIENT_PAYMENT_RENDERERS).toSorted());
+    expect(callers).toEqual(
+      [
+        ...Object.keys(CLIENT_PAYMENT_RENDERERS),
+        ...Object.keys(REVIEWED_EXEMPTIONS),
+      ].toSorted(),
+    );
   });
 
   test("each renderer takes the amount due, not a plain amount", () => {
@@ -77,5 +105,9 @@ describe("client-facing payment requests", () => {
     // A document total or any other plain amount is not an amount due.
     expectTypeOf<CentsAmount>().not.toExtend<AmountDue>();
     expectTypeOf<number>().not.toExtend<AmountDue>();
+    // An export's paid date is read from the settlement, never from a status.
+    expectTypeOf<
+      Parameters<typeof invoiceSettledOn>[0]["settlement"]
+    >().toEqualTypeOf<InvoiceSettlement>();
   });
 });
