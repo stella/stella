@@ -128,9 +128,7 @@ const widenDateOnlyBound = (bound: string, edge: "start" | "end"): string =>
 const listAuditLogArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
-      matter_id: v.optional(
-        uuidInputSchema("Only entries scoped to this matter."),
-      ),
+      matter_id: v.optional(uuidInputSchema("Matter ID")),
       action: v.optional(
         v.pipe(v.string(), v.minLength(1), v.description("Audit action")),
       ),
@@ -150,9 +148,7 @@ const listAuditLogArgsSchema = nullAsAbsent(
       performer: v.optional(
         v.pipe(
           v.picklist(Object.values(AUDIT_PERFORMER_FILTER)),
-          v.description(
-            "people (members and their agents) or automations (services)",
-          ),
+          v.description("Members and their agents, or services"),
         ),
       ),
       from: v.optional(
@@ -181,7 +177,7 @@ const listAuditLogArgsSchema = nullAsAbsent(
         ),
       ),
       cursor: cursorInput({
-        description: "Next-page cursor from list_audit_log",
+        description: "Next-page cursor",
       }),
     }),
     v.forward(
@@ -206,8 +202,7 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   },
   description:
     "Read organization audits newest first. Change detail is null unless " +
-    'changesStatus is "visible". Filter and paginate with the fields below. ' +
-    "Requires audit-log access.",
+    'changesStatus is "visible". Requires audit-log access.',
   inputSchema: listAuditLogArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "partial_check"],
