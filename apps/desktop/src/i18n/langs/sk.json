@@ -531,6 +531,22 @@
     "aiStructureMoveAccept": "Presunúť",
     "aiFlagSplit": "Rozdeliť záznam"
   },
+  "dictation": {
+    "title": "Diktovanie",
+    "description": "Podržte {shortcut} a hovorte. Text sa zobrazí v aplikácii, ktorú práve používate. Reč sa prevádza na tomto počítači a neukladá sa.",
+    "modelNeeded": "Rečový model beží na tomto počítači.",
+    "download": "Stiahnuť ({size} MB)",
+    "downloading": "Sťahovanie rečového modelu: {percent} %",
+    "downloadFailed": "Rečový model sa nepodarilo stiahnuť.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
+    "shortcutTaken": "Skratku {shortcut} používa iná aplikácia.",
+    "failure": {
+      "accessibility": "Povoľte prístup Prístupnosť, aby stella mohla písať do iných aplikácií.",
+      "microphone": "stella nepočuje váš mikrofón. Skontrolujte prístup k mikrofónu v Systémových nastaveniach.",
+      "modelMissing": "Najprv stiahnite rečový model.",
+      "transcription": "Prevod zlyhal. Skúste to znova."
+    }
+  },
   "shortcut": {
     "title": "Skratka schránky",
     "description": "Otvorí históriu schránky z ľubovoľnej aplikácie.",
@@ -650,7 +666,6 @@
     "guideAllowed": "stella desktop má povolenie",
     "never": {
       "screenRecording": "Záznam obrazovky",
-      "microphone": "Mikrofón",
       "camera": "Kamera",
       "keystrokes": "Stlačenia klávesov",
       "fullDiskAccess": "Úplný prístup k disku",

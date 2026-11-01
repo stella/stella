@@ -531,6 +531,22 @@
     "aiStructureMoveAccept": "Przenieś",
     "aiFlagSplit": "Podziel wpis"
   },
+  "dictation": {
+    "title": "Dyktowanie",
+    "description": "Przytrzymaj {shortcut} i mów. Tekst pojawi się w aplikacji, której używasz. Mowa jest przetwarzana na tym komputerze i nie jest zapisywana.",
+    "modelNeeded": "Model mowy działa na tym komputerze.",
+    "download": "Pobierz ({size} MB)",
+    "downloading": "Pobieranie modelu mowy: {percent}%",
+    "downloadFailed": "Nie udało się pobrać modelu mowy.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
+    "shortcutTaken": "Skrótu {shortcut} używa inna aplikacja.",
+    "failure": {
+      "accessibility": "Zezwól na dostęp do funkcji Dostępność, aby stella mogła pisać w innych aplikacjach.",
+      "microphone": "stella nie słyszy mikrofonu. Sprawdź dostęp do mikrofonu w Ustawieniach systemowych.",
+      "modelMissing": "Najpierw pobierz model mowy.",
+      "transcription": "Transkrypcja nie powiodła się. Spróbuj ponownie."
+    }
+  },
   "shortcut": {
     "title": "Skrót schowka",
     "description": "Otwiera historię schowka z dowolnej aplikacji.",
@@ -650,7 +666,6 @@
     "guideAllowed": "stella desktop ma uprawnienie",
     "never": {
       "screenRecording": "Nagrywanie ekranu",
-      "microphone": "Mikrofon",
       "camera": "Kamera",
       "keystrokes": "Naciśnięcia klawiszy",
       "fullDiskAccess": "Pełny dostęp do dysku",

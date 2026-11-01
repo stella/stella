@@ -531,6 +531,22 @@
     "aiStructureMoveAccept": "نقل",
     "aiFlagSplit": "تقسيم الإدخال"
   },
+  "dictation": {
+    "title": "الإملاء",
+    "description": "اضغط باستمرار على {shortcut} وتحدث. يظهر النص في التطبيق الذي تستخدمه. يتم تحويل الكلام إلى نص على هذا الكمبيوتر ولا يتم تخزينه.",
+    "modelNeeded": "يعمل نموذج الكلام على هذا الكمبيوتر.",
+    "download": "تنزيل ({size} ميغابايت)",
+    "downloading": "جارٍ تنزيل نموذج الكلام: {percent}%",
+    "downloadFailed": "تعذّر تنزيل نموذج الكلام.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
+    "shortcutTaken": "يستخدم تطبيق آخر {shortcut}.",
+    "failure": {
+      "accessibility": "اسمح بالوصول إلى إمكانية الوصول حتى تتمكن stella من الكتابة في التطبيقات الأخرى.",
+      "microphone": "تعذّر على stella سماع الميكروفون. تحقق من الوصول إلى الميكروفون في إعدادات النظام.",
+      "modelMissing": "نزّل نموذج الكلام أولاً.",
+      "transcription": "فشل التحويل إلى نص. حاول مرة أخرى."
+    }
+  },
   "shortcut": {
     "title": "اختصار الحافظة",
     "description": "يفتح سجل الحافظة من أي تطبيق.",
@@ -650,7 +666,6 @@
     "guideAllowed": "stella desktop مسموح له",
     "never": {
       "screenRecording": "تسجيل الشاشة",
-      "microphone": "الميكروفون",
       "camera": "الكاميرا",
       "keystrokes": "ضغطات المفاتيح",
       "fullDiskAccess": "الوصول الكامل إلى القرص",

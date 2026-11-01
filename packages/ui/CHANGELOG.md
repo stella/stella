@@ -1,5 +1,29 @@
 # @stll/ui
 
+## 0.62.0
+
+### Minor Changes
+
+- [#7422](https://github.com/stella/stella/pull/7422) [`1a9cfef`](https://github.com/stella/stella/commit/1a9cfefef3dffb7d7dd7b719b274a3a17038a7d3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/ui/collapsible` (`Collapsible`, `CollapsibleTrigger`, `CollapsiblePanel`) for a single disclosure, with the accordion's height motion and closed content kept findable by find-in-page. `Accordion` now keeps closed panels as `hidden="until-found"` by default (pass `hiddenUntilFound={false}` to unmount them), and `AccordionTrigger` gains a `trailing` slot for status text before its chevron.
+
+- [#7417](https://github.com/stella/stella/pull/7417) [`2d19088`](https://github.com/stella/stella/commit/2d19088ff7e50ef7c05626cb0acea99d833ee040) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Table gains `density="compact"` for small reading tables: cells at text leading with no side padding, wrapping values, rows that do not highlight, and a row header that reads as the row's first cell. SearchField's clear button is unavailable while the field is disabled.
+
+- [#7434](https://github.com/stella/stella/pull/7434) [`d9f4906`](https://github.com/stella/stella/commit/d9f49066d72b5e611e7ab38b3d041a87bb252d28) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/ui/toggle` (a Button that stays pressed) and `@stll/ui/toggle-group` (a segmented tray of toggles for filter tabs, view modes and density, with the chosen item raised). `SegmentedIconToggle` is now an icon `ToggleGroup` with the same API. `Switch` takes `size` (`sm` | `default`), and `SwitchField` is a setting row (label, optional description, switch) whose whole row flips the switch.
+
+### Patch Changes
+
+- [#7774](https://github.com/stella/stella/pull/7774) [`adf1c80`](https://github.com/stella/stella/commit/adf1c80ebf26167d25ca898c5a84ab2ec7f3f7df) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `BidiText`, `IdentityText` and `InspectorTitle` render text without directional controls, and `stripDirectionalControls` is exported for text that leaves the page.
+
+- [#7765](https://github.com/stella/stella/pull/7765) [`8c6d81b`](https://github.com/stella/stella/commit/8c6d81bce91505c9adb7a4ce110e59ca9f14d995) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A button no longer grows past its container. A one-line text label is cut with an ellipsis, and the button keeps its whole text as its accessible name; `layout="wrap"` keeps a label on several lines instead.
+
+- [#7778](https://github.com/stella/stella/pull/7778) [`9a630f2`](https://github.com/stella/stella/commit/9a630f22434730827a062f801da6dba99c1ff470) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `FacetBar` exposes its chips as a tab list with the active facet selected.
+
+- [#7435](https://github.com/stella/stella/pull/7435) [`d606df6`](https://github.com/stella/stella/commit/d606df66432d07b47ffac383ef63489f7a3d881f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Form` documents how browser validation and server `errors` reach a field's `FieldError` (and why validation stays on submit), and exports a `FormErrors` type for the server error map.
+
+- [#7775](https://github.com/stella/stella/pull/7775) [`18d7fab`](https://github.com/stella/stella/commit/18d7fabf3c8b36d91f3520e327a4ebae17f5cee0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `TabsList` scrolls its active tab back into view when the strip is narrowed after mount.
+
+- [#7690](https://github.com/stella/stella/pull/7690) [`e88b3ff`](https://github.com/stella/stella/commit/e88b3fff72fa8bcf7c81a66c54b58c425ab1fee7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use built-ins supported by the desktop's minimum WebView for calendar sorting and inline reordering.
+
 ## 0.61.0
 
 ### Minor Changes

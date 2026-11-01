@@ -333,7 +333,8 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
-    description: "Release queued native extraction runs to their worker",
+    description:
+      "Release queued native extraction runs and extract small uploads here",
     id: "documentProcessing.dispatchNativeExtraction.twoMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 2 * 60 * 1000 },

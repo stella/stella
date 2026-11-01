@@ -555,6 +555,12 @@ describe("native time billing admission", () => {
             false,
             404,
           ],
+          // A withdrawal padded past the gate's bound is not read while off.
+          [
+            `${JSON.stringify({ type: "withdraw_consent" })}${" ".repeat(64)}`,
+            true,
+            404,
+          ],
           ["{not json", false, 404],
           ["", false, 404],
         ] as const) {

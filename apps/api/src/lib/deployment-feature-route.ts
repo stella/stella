@@ -1,4 +1,5 @@
 import { HTTP_FAILURE, HttpFailureError } from "@/api/http/errors";
+import { reframeBoundedRequest } from "@/api/http/request-body";
 import type { Middleware } from "@/api/http/route";
 import {
   type DeploymentFeatureFlag,
@@ -45,15 +46,24 @@ export const deploymentFeatureGateFlag = (
 
 const exceptionGatedFlags = new WeakMap<Middleware, DeploymentFeatureFlag>();
 
+/** The one request a gated route still admits while its flag is off. */
+export type DeploymentFeatureException = {
+  /** The largest body the exception can have; a larger one is not read. */
+  maxBytes: number;
+  /** Whether the body is exactly the admitted request. */
+  admits: (body: string) => boolean;
+};
+
 /**
  * A deployment gate with one exception the request proves by its own body:
- * while the flag is off, a request `admits` accepts still reaches the route,
- * and every other one, a malformed one included, answers as an absent route.
- * `admits` reads a copy of the request, so the route still reads the body.
+ * while the flag is off, a request the exception admits still reaches the
+ * route, and every other one, a malformed or oversized one included, answers
+ * as an absent route. The body is read once, bounded, and the route receives
+ * a request framed from the same bytes.
  */
 export const deploymentFeatureGateExcept = (
   flag: DeploymentFeatureFlag,
-  admits: (request: Request) => Promise<boolean>,
+  exception: DeploymentFeatureException,
   {
     isEnabled = () => isDeploymentFeatureEnabled(flag),
   }: {
@@ -62,10 +72,30 @@ export const deploymentFeatureGateExcept = (
   } = {},
 ): Middleware => {
   const gate: Middleware = async (ctx, inner) => {
-    if (!isEnabled() && !(await admits(ctx.request.clone()))) {
+    if (isEnabled()) {
+      return await inner();
+    }
+    const bounded = await reframeBoundedRequest(
+      ctx.request,
+      exception.maxBytes,
+    );
+    if (bounded.isErr()) {
       throw new HttpFailureError(HTTP_FAILURE.notFound);
     }
-    return await inner();
+    const { request } = bounded.value;
+    const bytes = new Uint8Array(await request.arrayBuffer());
+    if (!exception.admits(new TextDecoder().decode(bytes))) {
+      throw new HttpFailureError(HTTP_FAILURE.notFound);
+    }
+    return await inner({
+      ...ctx,
+      request: new Request(request.url, {
+        body: bytes,
+        headers: request.headers,
+        method: request.method,
+        signal: request.signal,
+      }),
+    });
   };
   exceptionGatedFlags.set(gate, flag);
   return gate;

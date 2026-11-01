@@ -32,6 +32,7 @@ import {
   timestampCasTokenText,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
+import type { DeploymentFeatureException } from "@/api/lib/deployment-feature-route";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
@@ -363,20 +364,19 @@ export const createDesktopBillingDraftSettingsUpdateEndpoint = (
     },
   );
 
-// A withdrawal is `{"type":"withdraw_consent"}`; a body much longer than
-// that is something else and is not parsed.
-const WITHDRAWAL_BODY_MAX_LENGTH = 64;
-
-/** Whether a request body is exactly a consent withdrawal. */
-export const isConsentWithdrawalRequest = async (request: Request) => {
-  const text = await request.text();
-  if (text.length > WITHDRAWAL_BODY_MAX_LENGTH) {
-    return false;
-  }
-  const parsed = Result.try((): unknown => JSON.parse(text));
-  return (
-    parsed.isOk() && v.is(desktopBillingDraftWithdrawalSchema, parsed.value)
-  );
+/**
+ * The one settings change that reaches the route while the deployment is off:
+ * a body that is exactly `{"type":"withdraw_consent"}`. A body much longer
+ * than that is something else and is not read.
+ */
+export const consentWithdrawalException: DeploymentFeatureException = {
+  maxBytes: 64,
+  admits: (body) => {
+    const parsed = Result.try((): unknown => JSON.parse(body));
+    return (
+      parsed.isOk() && v.is(desktopBillingDraftWithdrawalSchema, parsed.value)
+    );
+  },
 };
 
 export const readBillingDraftSettings =

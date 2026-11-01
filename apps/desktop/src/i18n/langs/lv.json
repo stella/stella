@@ -531,6 +531,22 @@
     "aiStructureMoveAccept": "Pārvietot",
     "aiFlagSplit": "Sadalīt ierakstu"
   },
+  "dictation": {
+    "title": "Diktēšana",
+    "description": "Turiet {shortcut} un runājiet. Teksts parādās lietotnē, kuru izmantojat. Runa tiek pārveidota šajā datorā un netiek saglabāta.",
+    "modelNeeded": "Runas modelis darbojas šajā datorā.",
+    "download": "Lejupielādēt ({size} MB)",
+    "downloading": "Lejupielādē runas modeli: {percent}%",
+    "downloadFailed": "Runas modeli neizdevās lejupielādēt.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
+    "shortcutTaken": "{shortcut} izmanto cita lietotne.",
+    "failure": {
+      "accessibility": "Atļaujiet piekļuvi pieejamībai, lai stella varētu rakstīt citās lietotnēs.",
+      "microphone": "stella nedzird jūsu mikrofonu. Pārbaudiet piekļuvi mikrofonam sistēmas iestatījumos.",
+      "modelMissing": "Vispirms lejupielādējiet runas modeli.",
+      "transcription": "Pārveide neizdevās. Mēģiniet vēlreiz."
+    }
+  },
   "shortcut": {
     "title": "Starpliktuves īsinājumtaustiņš",
     "description": "Atver starpliktuves vēsturi no jebkuras lietotnes.",
@@ -650,7 +666,6 @@
     "guideAllowed": "stella desktop ir atļauts",
     "never": {
       "screenRecording": "Ekrāna ierakstīšana",
-      "microphone": "Mikrofons",
       "camera": "Kamera",
       "keystrokes": "Taustiņsitieni",
       "fullDiskAccess": "Pilna piekļuve diskam",
