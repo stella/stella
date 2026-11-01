@@ -43,7 +43,6 @@ import {
   resourceMutation,
   resourceQueryOptions,
 } from "@/lib/workspace-realtime";
-import { applyResourceQueryActions } from "@/lib/workspace-realtime.test-fixtures";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 import {
@@ -60,6 +59,7 @@ import {
   timeEntriesKeys,
   timeEntriesOptions,
 } from "@/lib/workspaces/queries/time-entries";
+import { applyResourceQueryActions } from "@/testing/resource-query-actions.test-fixtures";
 
 const WORKSPACE_ID = "workspace-rename";
 const OTHER_WORKSPACE_ID = "workspace-other";

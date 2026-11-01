@@ -1,6 +1,6 @@
 import { toKebabCase } from "@better-auth/core/utils/string";
 import { panic } from "better-result";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 
@@ -1739,20 +1739,15 @@ export const generateMutationQueryCensus = (root: string) => {
   };
 };
 
+// The census is derived on demand (the invalidation guard builds it in
+// memory); this prints it for inspection and is never committed.
 if (import.meta.main) {
-  const args = process.argv.slice(2);
-  if (args.length > 1 || (args.length === 1 && args.at(0) !== "--write")) {
-    process.stderr.write(
-      "Usage: bun scripts/mutation-query-census.ts [--write]\n",
-    );
+  if (process.argv.length > 2) {
+    process.stderr.write("Usage: bun scripts/mutation-query-census.ts\n");
     process.exit(1);
   }
   const root = path.resolve(import.meta.dir, "..");
-  const census = generateMutationQueryCensus(root);
-  const json = `${JSON.stringify(census, null, 2)}\n`;
-  if (args.at(0) === "--write") {
-    writeFileSync(path.join(root, "scripts/mutation-query-census.json"), json);
-  } else {
-    process.stdout.write(json);
-  }
+  process.stdout.write(
+    `${JSON.stringify(generateMutationQueryCensus(root), null, 2)}\n`,
+  );
 }

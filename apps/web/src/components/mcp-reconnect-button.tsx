@@ -67,13 +67,16 @@ export const McpReconnectButton = ({
     }
   });
   const queryClient = useQueryClient();
+  // Built outside useMutation so the connection start's result types the
+  // mutation instead of being inferred back from useMutation's own generics.
+  const reconnectMutationFn = resourceMutation({
+    mutation: "connectMcpServer",
+    queryClient,
+    scope: { type: "organization" },
+    mutationFn: async () => await mcpConnectorConnection.start(slug),
+  });
   const reconnect = useMutation({
-    mutationFn: resourceMutation({
-      mutation: "connectMcpServer",
-      queryClient,
-      scope: { type: "organization" },
-      mutationFn: async () => await mcpConnectorConnection.start(slug),
-    }),
+    mutationFn: reconnectMutationFn,
     onSuccess: (data) => {
       switch (data.type) {
         case "oauth2":

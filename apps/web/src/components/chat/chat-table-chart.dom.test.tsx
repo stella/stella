@@ -24,7 +24,7 @@ const { ChatTableChart } = await import("./chat-table-chart");
 const { getWorkspaceReconnectQueryActions } =
   await import("@/lib/workspace-realtime");
 const { applyResourceQueryActions } =
-  await import("@/lib/workspace-realtime.test-fixtures");
+  await import("@/testing/resource-query-actions.test-fixtures");
 
 afterEach(async () => {
   await act(async () => cleanup());

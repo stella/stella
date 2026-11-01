@@ -238,12 +238,18 @@ export const RESOURCE_MUTATION_CONTRACTS = {
 
 type ResourceMutationName = keyof typeof RESOURCE_MUTATION_CONTRACTS;
 
-/** The variable naming the one entity a contract changes, if it names one. */
+/**
+ * The variable naming the one entity a contract changes, if it names one.
+ * Distributes over a union of contracts, so a write that may be any of them
+ * carries every variable one of them names.
+ */
 type ChangedEntityVariable<TMutation extends ResourceMutationName> =
-  (typeof RESOURCE_MUTATION_CONTRACTS)[TMutation] extends {
-    changedEntity: infer TName extends string;
-  }
-    ? TName
+  TMutation extends ResourceMutationName
+    ? (typeof RESOURCE_MUTATION_CONTRACTS)[TMutation] extends {
+        changedEntity: infer TName extends string;
+      }
+      ? TName
+      : never
     : never;
 
 type OrganizationResourceMutationName = {
@@ -325,16 +331,15 @@ const workspaceMutationScope = (
   mutation: ResourceMutationName,
   variables: unknown,
 ): ResourceMutationScope => {
-  const contract: { changedEntity?: string } =
-    RESOURCE_MUTATION_CONTRACTS[mutation];
+  const contract = RESOURCE_MUTATION_CONTRACTS[mutation];
   const workspaceId = stringVariable(variables, "workspaceId");
-  return contract.changedEntity === undefined
-    ? { type: "workspace", workspaceId }
-    : {
+  return "changedEntity" in contract
+    ? {
         type: "workspace",
         workspaceId,
         changedEntityId: stringVariable(variables, contract.changedEntity),
-      };
+      }
+    : { type: "workspace", workspaceId };
 };
 
 /**
@@ -358,8 +363,9 @@ export function resourceMutation<
 ): (variables: TVariables) => Promise<TData>;
 export function resourceMutation<
   TMutation extends OrganizationResourceMutationName,
-  TVariables,
   TData,
+  // A write that takes no variables is invoked with none.
+  TVariables = void,
 >(
   options: ResourceMutationOptions<TMutation, TVariables, TData> & {
     scope: { type: "organization" };
