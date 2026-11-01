@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/db/migration-runner.ts",
+    "from": "0d651bda270af10866783d5f6e36490898c8916e6e23dc18befa4af50485e706",
+    "to": "21acaeb917d61bb9faf3d85bcaed9099760b3ff6ed6a221f96c66ab1f07db5f5",
+    "reason": "The existing preflight transaction uses a per-attempt lock timeout instead of a fixed timeout. Same transaction boundary and ledger table lock, with no additional acquisition."
+  }
+]

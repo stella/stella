@@ -45,6 +45,7 @@ type DraggableHeaderCellProps<TRow extends TableRowData> = {
   expandedColumnId: string | null;
   onToggleSelectAll: () => void;
   selectAllState: SelectAllState;
+  selectAllLabel?: string | undefined;
   /** Replaces the column's own header content, e.g. a section's add-column trigger. */
   headerTrigger?: ReactNode;
 };
@@ -56,6 +57,7 @@ export const DraggableHeaderCell = <TRow extends TableRowData>({
   expandedColumnId,
   onToggleSelectAll,
   selectAllState,
+  selectAllLabel,
   headerTrigger,
 }: DraggableHeaderCellProps<TRow>) => {
   const headerRef = useRef<HTMLDivElement>(null);
@@ -147,7 +149,11 @@ export const DraggableHeaderCell = <TRow extends TableRowData>({
     // numbers alone, so there is nothing for a select-all to act on.
     headerContent =
       header.table.options.enableRowSelection === false ? null : (
-        <SelectAllHeader onToggle={onToggleSelectAll} state={selectAllState} />
+        <SelectAllHeader
+          label={selectAllLabel}
+          onToggle={onToggleSelectAll}
+          state={selectAllState}
+        />
       );
   } else if (!header.isPlaceholder) {
     headerContent = flexRender(
@@ -217,17 +223,19 @@ export const DraggableHeaderCell = <TRow extends TableRowData>({
 };
 
 type SelectAllHeaderProps = {
+  label?: string | undefined;
   state: SelectAllState;
   onToggle: () => void;
 };
 
-const SelectAllHeader = ({ state, onToggle }: SelectAllHeaderProps) => {
+const SelectAllHeader = ({ label, state, onToggle }: SelectAllHeaderProps) => {
   const ariaChecked = state.indeterminate ? "mixed" : state.checked;
 
   return (
     <div className="flex items-center justify-center">
       <button
         aria-checked={ariaChecked}
+        aria-label={label}
         className={cn(
           "ring-ring focus-visible:ring-offset-background inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] border shadow-xs/5 outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
           (state.checked || state.indeterminate) &&

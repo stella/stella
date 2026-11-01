@@ -25,7 +25,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
-import { cn } from "@stll/ui/utils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@stll/ui/table";
 
 import { majorUnitInput } from "@/components/billing/amount-input.logic";
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
@@ -140,62 +147,55 @@ export const InvoicePaymentsSection = ({
         </p>
       ) : (
         <ScrollArea>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-muted-foreground border-b text-start">
-                <th className="px-4 py-2 font-medium">
-                  {t("billing.invoices.payments.paidOn")}
-                </th>
-                <th className="px-4 py-2 font-medium">
-                  {t("billing.invoices.payments.method")}
-                </th>
-                <th className="px-4 py-2 font-medium">
-                  {t("common.reference")}
-                </th>
-                <th className="px-4 py-2 text-end font-medium">
-                  {t("billing.amount")}
-                </th>
-                {canUpdate && <th className="w-10 px-4 py-2" />}
-              </tr>
-            </thead>
-            <tbody>
+          <Table inset="card" scroll="parent">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("billing.invoices.payments.paidOn")}</TableHead>
+                <TableHead>{t("billing.invoices.payments.method")}</TableHead>
+                <TableHead>{t("common.reference")}</TableHead>
+                <TableHead align="end">{t("billing.amount")}</TableHead>
+                {canUpdate && <TableHead className="w-10" />}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {invoice.payments.map((payment) => {
                 const voided = payment.voidedAt !== null;
                 return (
-                  <tr
-                    className={cn(
-                      "border-b last:border-0",
-                      voided && "text-muted-foreground",
-                    )}
+                  <TableRow
                     key={payment.id}
+                    tone={voided ? "muted" : "default"}
                   >
-                    <td className="px-4 py-2 tabular-nums">
+                    <TableCell align="start" numeric>
                       {format.dateTime(
                         plainDateEpoch(payment.paidOn),
                         MEDIUM_DATE,
                       )}
-                    </td>
-                    <td className="px-4 py-2">
+                    </TableCell>
+                    <TableCell>
                       {t(`billing.invoices.payments.methods.${payment.method}`)}
                       {voided && (
                         <span className="ms-2 text-xs">
                           {t("billing.invoices.payments.voided")}
                         </span>
                       )}
-                    </td>
-                    <td className="max-w-xs truncate px-4 py-2" dir="auto">
+                    </TableCell>
+                    <TableCell className="max-w-xs" dir="auto" truncate>
                       {payment.reference ?? ""}
-                    </td>
-                    <td
-                      className={cn(
-                        "px-4 py-2 text-end tabular-nums",
-                        voided && "line-through",
+                    </TableCell>
+                    <TableCell align="end" numeric>
+                      {voided ? (
+                        <s>
+                          {formatCurrencyAmount(
+                            payment.amount,
+                            invoice.currency,
+                          )}
+                        </s>
+                      ) : (
+                        formatCurrencyAmount(payment.amount, invoice.currency)
                       )}
-                    >
-                      {formatCurrencyAmount(payment.amount, invoice.currency)}
-                    </td>
+                    </TableCell>
                     {canUpdate && (
-                      <td className="px-4 py-2">
+                      <TableCell>
                         {!voided && (
                           <ConfirmAction
                             description={t(
@@ -213,13 +213,13 @@ export const InvoicePaymentsSection = ({
                             </Button>
                           </ConfirmAction>
                         )}
-                      </td>
+                      </TableCell>
                     )}
-                  </tr>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </ScrollArea>
       )}
     </section>

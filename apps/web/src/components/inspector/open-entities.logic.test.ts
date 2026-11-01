@@ -4,7 +4,11 @@ import type { InspectorOpenTarget } from "@/components/inspector/inspector-store
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 
-import { planInspectorOpen } from "./open-entities.logic";
+import {
+  definedFields,
+  planInspectorOpen,
+  toRequestedFileTab,
+} from "./open-entities.logic";
 
 const WORKSPACE_ID = "workspace-1";
 
@@ -110,6 +114,36 @@ const targetsOf = (
     anchor: entities[0] ?? entity("none", "document", {}),
     workspaceId,
   })?.targets ?? [];
+
+describe("toRequestedFileTab", () => {
+  const requested = (subject: WorkspaceEntity) =>
+    toRequestedFileTab({
+      entityId: subject.entityId,
+      fields: definedFields(subject),
+      label: "Label",
+      workspaceId: WORKSPACE_ID,
+    });
+
+  test("gives a file no viewer renders a tab of its own", () => {
+    expect(
+      requested(
+        entity(
+          "drawing",
+          "document",
+          fileFields({
+            entityId: "drawing",
+            fileName: "drawing.svg",
+            mimeType: "image/svg+xml",
+          }),
+        ),
+      ),
+    ).toMatchObject({ id: "field-drawing", fileName: "drawing.svg" });
+  });
+
+  test("has no tab for an entity that holds no file", () => {
+    expect(requested(entity("empty", "document"))).toBeNull();
+  });
+});
 
 describe("projecting a selection onto inspector tabs", () => {
   test("keeps the caller's order so the tab strip matches the selection", () => {
