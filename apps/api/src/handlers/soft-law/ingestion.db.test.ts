@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { load } from "cheerio";
 import { and, eq, sql } from "drizzle-orm";
 import fc from "fast-check";
 import { readFile } from "node:fs/promises";
@@ -44,6 +45,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 import { createBfdiAdapter } from "./adapters/bfdi";
+import { uoouSkAdapter } from "./adapters/uoou-sk";
 import { parseWp29Archive, wp29Adapter } from "./adapters/wp29";
 import { runSoftLawIngestion } from "./ingestion";
 
@@ -118,6 +120,34 @@ const adapter = (entries: readonly SoftLawEntry[], content = "original") =>
     },
     sourceSurfaces: { surfaces: {} },
   }) as const satisfies SoftLawSourceAdapter;
+type FixtureResponses = ReadonlyMap<
+  string,
+  { bytes: Uint8Array; contentType: string }
+>;
+const fixtureRequest =
+  (responses: FixtureResponses): typeof fetchWithTimeout =>
+  async (url) => {
+    let requestUrl: string;
+    if (typeof url === "string") {
+      requestUrl = url;
+    } else if (url instanceof URL) {
+      requestUrl = url.href;
+    } else {
+      requestUrl = url.url;
+    }
+    const response =
+      responses.get(requestUrl) ??
+      panic("Unexpected publisher fixture request");
+    return new Response(Buffer.from(response.bytes), {
+      headers: { "content-type": response.contentType },
+    });
+  };
+const adapterFixture = async (name: string) =>
+  gunzipSync(
+    await readFile(
+      new URL(`adapters/__fixtures__/${name}.gz`, import.meta.url),
+    ),
+  );
 
 type TestRunOptions = {
   request?: typeof fetchWithTimeout;
@@ -277,30 +307,11 @@ if (!databaseUrl || !enabled) {
           [documentUrl, "bfdi-recommendation.pdf", "application/pdf"],
         ] as const) {
           responses.set(url, {
-            bytes: gunzipSync(
-              await readFile(
-                new URL(`adapters/__fixtures__/${name}.gz`, import.meta.url),
-              ),
-            ),
+            bytes: await adapterFixture(name),
             contentType,
           });
         }
-        const request: typeof fetchWithTimeout = async (url) => {
-          let requestUrl: string;
-          if (typeof url === "string") {
-            requestUrl = url;
-          } else if (url instanceof URL) {
-            requestUrl = url.href;
-          } else {
-            requestUrl = url.url;
-          }
-          const response =
-            responses.get(requestUrl) ??
-            panic("Unexpected BfDI fixture request");
-          return new Response(Buffer.from(response.bytes), {
-            headers: { "content-type": response.contentType },
-          });
-        };
+        const request = fixtureRequest(responses);
         expect(await run(sourceAdapter, { request })).toEqual({
           status: "complete",
         });
@@ -332,6 +343,76 @@ if (!databaseUrl || !enabled) {
           "detail",
           "document",
         ]);
+        for (const part of raw) {
+          const provenance =
+            part.provenance ?? panic("Missing persisted provenance");
+          const response =
+            responses.get(provenance.url) ??
+            panic("Unexpected persisted source URL");
+          expect(provenance.sha256).toBe(sha256Hex(response.bytes));
+        }
+      }));
+
+    test("ÚOOÚ SR replay converges on one annual-report expression with index and document provenance", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const origin = "https://dataprotection.gov.sk";
+        const indexUrl = `${origin}/sk/urad/o-nas/vyrocne-spravy/`;
+        const documentUrl = `${origin}/files/annual-reports/uoou_sprava-stave-ochrany-osobnych-udajov_2025.pdf`;
+        // One row keeps the run to the one report captured as a fixture.
+        const $ = load(
+          (await adapterFixture("uoou-sk-annual-reports.html")).toString(
+            "utf-8",
+          ),
+        );
+        $("main article table.tabulkaStandard tbody tr").slice(1).remove();
+        const responses = new Map([
+          [
+            indexUrl,
+            {
+              bytes: new TextEncoder().encode($.html()),
+              contentType: "text/html;charset=utf-8",
+            },
+          ],
+          [
+            documentUrl,
+            {
+              bytes: await adapterFixture("uoou-sk-annual-report-2025.pdf"),
+              contentType: "application/pdf;charset=UTF-8",
+            },
+          ],
+        ]);
+        const request = fixtureRequest(responses);
+        expect(await run(uoouSkAdapter, { request })).toEqual({
+          status: "complete",
+        });
+        expect(await run(uoouSkAdapter, { request })).toEqual({
+          status: "complete",
+        });
+        const documents = await db
+          .select({
+            id: softLawDocuments.id,
+            authority: softLawDocuments.authority,
+            kind: softLawDocuments.kind,
+          })
+          .from(softLawDocuments)
+          .where(eq(softLawDocuments.sourceId, sourceId))
+          .limit(2);
+        expect(documents).toHaveLength(1);
+        expect(documents.at(0)).toMatchObject({
+          authority: "sk-uoou",
+          kind: "annual_report",
+        });
+        const documentId =
+          documents.at(0)?.id ?? panic("Missing ÚOOÚ SR fixture expression");
+        const versions = await db
+          .select({ rawObjects: softLawDocumentVersions.rawObjects })
+          .from(softLawDocumentVersions)
+          .where(eq(softLawDocumentVersions.documentId, documentId))
+          .limit(2);
+        expect(versions).toHaveLength(1);
+        const raw =
+          versions.at(0)?.rawObjects ?? panic("Missing ÚOOÚ SR fixture raw");
+        expect(raw.map((part) => part.role)).toEqual(["index", "document"]);
         for (const part of raw) {
           const provenance =
             part.provenance ?? panic("Missing persisted provenance");

@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/handlers/audit-logs/resource-resolvers.ts",
+  "delta": 1,
+  "reason": "Resolving resource names for one activity-log page reads once per resource kind present on that page, each read batched over all of that kind's ids. The loop is bounded by the fixed set of resource kinds, not by the number of rows."
+}

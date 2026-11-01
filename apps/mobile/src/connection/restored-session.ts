@@ -10,6 +10,7 @@ import { createAccessTokenSource } from "@/connection/session";
 import type {
   AccessToken,
   AccessTokenSource,
+  SessionGeneration,
   StoredSession,
 } from "@/connection/session";
 
@@ -18,16 +19,25 @@ import type {
  * that cannot be read (the device locked during a background launch) starts
  * signed out; signing in writes a fresh session over whatever was there.
  */
+const restoredGeneration = deviceSessionStore.generation();
 const restoredSession: Promise<StoredSession | undefined> = Result.tryPromise(
-  async () => await deviceSessionStore.read(),
+  async () => await deviceSessionStore.read(restoredGeneration),
 ).then((read) => (Result.isOk(read) ? read.value : undefined));
 
-export const sourceFor = (
-  session: StoredSession,
-  initialAccess: AccessToken | undefined,
-): AccessTokenSource =>
+type SourceOptions = {
+  readonly session: StoredSession;
+  readonly initialAccess: AccessToken | undefined;
+  readonly generation: SessionGeneration;
+};
+
+export const sourceFor = ({
+  session,
+  initialAccess,
+  generation,
+}: SourceOptions): AccessTokenSource =>
   createAccessTokenSource({
     fetch,
+    generation,
     initialAccess,
     now: epochMilliseconds,
     session,
@@ -41,5 +51,11 @@ export const sourceFor = (
  */
 export const restoredSource: Promise<AccessTokenSource | undefined> =
   restoredSession.then((session) =>
-    session === undefined ? undefined : sourceFor(session, undefined),
+    session === undefined
+      ? undefined
+      : sourceFor({
+          session,
+          initialAccess: undefined,
+          generation: restoredGeneration,
+        }),
   );

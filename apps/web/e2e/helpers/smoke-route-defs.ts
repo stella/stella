@@ -163,6 +163,7 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: (world) => `/workspaces/${world.workspace.id}/invoices/new`,
   },
   staticRoute("/time/approvals"),
+  staticRoute("/time/report"),
 ];
 
 /** The validated scale fixture grants lists to both measured organizations. */

@@ -127,6 +127,7 @@ import {
 import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
+import { externalRefFromColumns } from "@/api/lib/imports/external-ref";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
@@ -218,6 +219,7 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
+  caseLawSearchTimeoutResult,
   countryInputSchema,
   countryNormalization,
   cursorInput,
@@ -814,7 +816,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.nonEmpty(),
         v.maxLength(LIMITS.caseLawProvisionFilterMaxLength),
         v.description(
-          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
+          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total.',
         ),
       ),
     ),
@@ -2279,6 +2281,10 @@ const readCaseLawSearchAnswer = (
   answer: Parameters<typeof isSearchCaseLawSuccess>[0],
   cursor: string | undefined,
 ): CaseLawSearchAnswer => {
+  const timeout = caseLawSearchTimeoutResult(answer);
+  if (timeout !== null) {
+    return { type: "failed", result: timeout };
+  }
   if (isSearchIndexUnavailable(answer)) {
     return { type: "failed", result: searchIndexUnavailableResult(answer) };
   }
@@ -2659,7 +2665,7 @@ type SearchProvisionArgRead =
 /**
  * The provision argument, resolved and, for a search with queries, its
  * citing set read once for every phrasing. A set too wide for one search to
- * filter by is said in a warning on each phrasing, with its exact size.
+ * filter by is said in a warning on each phrasing, without enumerating every citation.
  */
 const readSearchProvision = async ({
   args,
@@ -2716,7 +2722,6 @@ const readSearchProvision = async ({
         ? [
             provisionCitedWidelyWarning({
               provision: text,
-              citingDecisions: provisionScope.citingDecisions,
             }),
           ]
         : [],
@@ -4039,6 +4044,7 @@ const handleReadContactTool: TypedMcpToolHandler<
     phones: arrayOrEmpty(contact.phones),
     dateOfBirth: dateOfBirthFromColumns(contact),
     nationalityCodes: contact.nationalityCodes,
+    external: externalRefFromColumns(contact),
   });
 
   const textFields = runTextFieldSpecs(
@@ -4052,6 +4058,8 @@ const handleReadContactTool: TypedMcpToolHandler<
     redactInAnonymized: () => {
       payload.dateOfBirth = null;
       payload.nationalityCodes = [];
+      // A source-system id can embed names or file numbers.
+      payload.external = null;
     },
   });
 };
@@ -4153,6 +4161,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
             sources: entry.sources.map((source) => ({
               adapterKey: source.adapterKey,
               name: source.name,
+              edition: source.edition,
               lastSyncAt: source.lastSyncAt,
               decisionYearFrom: source.decisionYearFrom,
               decisionYearTo: source.decisionYearTo,
@@ -4174,6 +4183,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
             sources: entry.sources.map((source) => ({
               adapterKey: source.adapterKey,
               name: source.name,
+              edition: source.edition,
               lastSyncAt: source.lastSyncAt,
               decisionYearFrom: source.decisionYearFrom,
               decisionYearTo: source.decisionYearTo,
