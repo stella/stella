@@ -946,6 +946,7 @@
     "desktopUnavailable": "Ühendage või uuendage stella desktopi.",
     "featureUnavailable": "See funktsioon pole saadaval.",
     "ocrUnavailable": "OCR pole saadaval.",
+    "openSettings": "Ava seaded",
     "translationMissing": "Tõlketeenus pole seadistatud."
   },
   "caseLaw": {
@@ -4771,6 +4772,7 @@
     "creationRefused": "Organisatsiooni ei saanud luua. Kontrolli andmeid ja proovi uuesti.",
     "creationSlugConflict": "See organisatsiooni aadress on juba kasutusel. Vali teine nimi või aadress.",
     "invitations": {
+      "cancelConfirmDescription": "Aadressile {email} saadetud kutse link lakkab töötamast. Selle inimese uuesti kutsumiseks saatke uus kutse.",
       "cancelInvitation": "Tühista kutse",
       "emailAddressLabel": "E-posti aadress",
       "emailAddressPlaceholder": "kasutaja@example.com",
@@ -4778,6 +4780,7 @@
       "inviteMember": "Kutsu liige",
       "inviteMemberDescription": "Saatke kutse oma organisatsiooniga liitumiseks",
       "invited": "Kutsutud",
+      "keepInvitation": "Jäta kutse alles",
       "noInvitationsFound": "Kutseid ei leitud",
       "resendInvitation": "Saada kutse uuesti",
       "sendInvitation": "Saada kutse",
@@ -6340,6 +6343,7 @@
     },
     "createNewWorkspace": "Loo uus toimik",
     "defaultName": "Pealkirjata",
+    "deleteFromMatter": "Kustuta toimikust…",
     "deleteItem": "Kustuta element",
     "deleteItems": "Kustuta {count, plural, one {# element} other {# elementi}}",
     "deleteItemsDescription": "Kas soovite kindlasti kustutada {count, plural, one {# elemendi} other {# elementi}}? Seda toimingut ei saa tagasi võtta.",

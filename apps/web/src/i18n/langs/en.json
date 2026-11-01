@@ -946,6 +946,7 @@
     "desktopUnavailable": "Connect or update stella desktop.",
     "featureUnavailable": "This feature is unavailable.",
     "ocrUnavailable": "OCR is unavailable.",
+    "openSettings": "Open settings",
     "translationMissing": "No translation provider is configured."
   },
   "caseLaw": {
@@ -4771,6 +4772,7 @@
     "creationRefused": "The organization could not be created. Check the details and try again.",
     "creationSlugConflict": "This organization address is already in use. Choose another name or address.",
     "invitations": {
+      "cancelConfirmDescription": "The invitation link sent to {email} will stop working. To invite them again, send a new invitation.",
       "cancelInvitation": "Cancel invitation",
       "emailAddressLabel": "Email address",
       "emailAddressPlaceholder": "user@example.com",
@@ -4778,6 +4780,7 @@
       "inviteMember": "Invite member",
       "inviteMemberDescription": "Send an invitation to join your organization",
       "invited": "Invited",
+      "keepInvitation": "Keep invitation",
       "noInvitationsFound": "No invitations found",
       "resendInvitation": "Resend invitation",
       "sendInvitation": "Send invitation",
@@ -6340,6 +6343,7 @@
     },
     "createNewWorkspace": "Create new matter",
     "defaultName": "Untitled",
+    "deleteFromMatter": "Delete from matter…",
     "deleteItem": "Delete item",
     "deleteItems": "Delete {count, plural, one {# item} other {# items}}",
     "deleteItemsDescription": "Are you sure you want to delete {count, plural, one {# item} other {# items}}? This action cannot be undone.",

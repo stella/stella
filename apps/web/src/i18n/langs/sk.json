@@ -946,6 +946,7 @@
     "desktopUnavailable": "Pripojte alebo aktualizujte stella desktop.",
     "featureUnavailable": "Táto funkcia nie je k dispozícii.",
     "ocrUnavailable": "OCR nie je k dispozícii.",
+    "openSettings": "Otvoriť nastavenia",
     "translationMissing": "Nie je nakonfigurovaná žiadna služba prekladu."
   },
   "caseLaw": {
@@ -4771,6 +4772,7 @@
     "creationRefused": "Organizáciu sa nepodarilo vytvoriť. Skontrolujte údaje a skúste to znova.",
     "creationSlugConflict": "Túto adresu organizácie už niekto používa. Vyberte iný názov alebo adresu.",
     "invitations": {
+      "cancelConfirmDescription": "Odkaz z pozvánky odoslanej na {email} prestane fungovať. Ak chcete túto osobu pozvať znova, pošlite novú pozvánku.",
       "cancelInvitation": "Zrušiť pozvánku",
       "emailAddressLabel": "E-mailová adresa",
       "emailAddressPlaceholder": "pouzivatel@example.com",
@@ -4778,6 +4780,7 @@
       "inviteMember": "Pozvať člena",
       "inviteMemberDescription": "Odoslať pozvánku do vašej organizácie",
       "invited": "Pozvaný",
+      "keepInvitation": "Ponechať pozvánku",
       "noInvitationsFound": "Neboli nájdené žiadne pozvánky",
       "resendInvitation": "Znovu odoslať pozvánku",
       "sendInvitation": "Odoslať pozvánku",
@@ -6340,6 +6343,7 @@
     },
     "createNewWorkspace": "Vytvoriť nový spis",
     "defaultName": "Bez názvu",
+    "deleteFromMatter": "Vymazať zo spisu…",
     "deleteItem": "Vymazať položku",
     "deleteItems": "Vymazať {count, plural, one {# položku} few {# položky} other {# položiek}}",
     "deleteItemsDescription": "Naozaj chcete vymazať {count, plural, one {# položku} few {# položky} other {# položiek}}? Túto akciu nemožno vrátiť späť.",

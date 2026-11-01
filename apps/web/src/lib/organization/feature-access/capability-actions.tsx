@@ -264,7 +264,7 @@ export const CapabilityAction = ({
           <div className="flex items-center gap-2">
             <span>{reason}</span>
             <a href={sanitizeHref(state.settingsLink)}>
-              {t("organization.aiConfig.configure")}
+              {t("capabilityActions.openSettings")}
             </a>
           </div>
         </PopoverPopup>
@@ -291,7 +291,7 @@ export const CapabilityAction = ({
         aria-describedby={reasonId}
         render={<a href={sanitizeHref(state.settingsLink)} />}
       >
-        {t("organization.aiConfig.configure")}
+        {t("capabilityActions.openSettings")}
       </MenuItem>
     </>
   );

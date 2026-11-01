@@ -946,6 +946,7 @@
     "desktopUnavailable": "Csatlakoztassa vagy frissítse a stella desktop alkalmazást.",
     "featureUnavailable": "Ez a funkció nem érhető el.",
     "ocrUnavailable": "Az OCR nem érhető el.",
+    "openSettings": "Beállítások megnyitása",
     "translationMissing": "Nincs beállítva fordítási szolgáltatás."
   },
   "caseLaw": {
@@ -4771,6 +4772,7 @@
     "creationRefused": "Nem sikerült létrehozni a szervezetet. Ellenőrizze az adatokat, és próbálja újra.",
     "creationSlugConflict": "Ez a szervezeti cím már használatban van. Válasszon másik nevet vagy címet.",
     "invitations": {
+      "cancelConfirmDescription": "A(z) {email} címre küldött meghívólink nem fog tovább működni. A személy ismételt meghívásához küldjön új meghívót.",
       "cancelInvitation": "Meghívó visszavonása",
       "emailAddressLabel": "E-mail cím",
       "emailAddressPlaceholder": "felhasznalo@example.com",
@@ -4778,6 +4780,7 @@
       "inviteMember": "Tag meghívása",
       "inviteMemberDescription": "Meghívó küldése a szervezetébe",
       "invited": "Meghívva",
+      "keepInvitation": "Meghívó megtartása",
       "noInvitationsFound": "Nincsenek meghívók",
       "resendInvitation": "Meghívó újraküldése",
       "sendInvitation": "Meghívó küldése",
@@ -6340,6 +6343,7 @@
     },
     "createNewWorkspace": "Új ügy létrehozása",
     "defaultName": "Névtelen",
+    "deleteFromMatter": "Törlés az ügyből…",
     "deleteItem": "Elem törlése",
     "deleteItems": "{count, plural, one {# elem} other {# elem}} törlése",
     "deleteItemsDescription": "Biztosan törölni szeretne {count, plural, one {# elemet} other {# elemet}}? Ez a művelet nem vonható vissza.",
