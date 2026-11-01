@@ -248,19 +248,33 @@ const batchUpdate = createSafeHandler(
             if (hasUnpricedEntry) {
               return { type: "unpriced" as const, rows: [] };
             }
-            const updated = await tx
-              .update(timeEntries)
-              .set({
-                status: BILLING_STATUS.APPROVED,
-                approvedByUserId: user.id,
-                approvedAt: now,
-                returnedAt: null,
-                returnedByUserId: null,
-                returnComment: null,
-                updatedAt: now,
-              })
-              .where(and(condition, approvable))
-              .returning({ id: timeEntries.id });
+            // Only the rows locked above are approved: an entry that became
+            // approvable after that read was never checked against the policy
+            // and has no locked status to audit, so it is left for a later
+            // request instead of being swept into this one.
+            const lockedIds = blockers.map(({ id }) => id);
+            const updated =
+              lockedIds.length === 0
+                ? []
+                : await tx
+                    .update(timeEntries)
+                    .set({
+                      status: BILLING_STATUS.APPROVED,
+                      approvedByUserId: user.id,
+                      approvedAt: now,
+                      returnedAt: null,
+                      returnedByUserId: null,
+                      returnComment: null,
+                      updatedAt: now,
+                    })
+                    .where(
+                      and(
+                        condition,
+                        approvable,
+                        inArray(timeEntries.id, lockedIds),
+                      ),
+                    )
+                    .returning({ id: timeEntries.id });
             // The rows were locked when read, so each one's status then is
             // the status the approval moved it from.
             const previousStatus = new Map(

@@ -6,6 +6,7 @@ import {
   gte,
   inArray,
   lte,
+  ne,
   notInArray,
   or,
   sql,
@@ -25,6 +26,7 @@ import {
   TIME_ENTRY_SOURCE,
   timeEntries,
   timeEntrySuggestions,
+  workspaces,
 } from "@/api/db/schema";
 import {
   type ActivitySignal,
@@ -193,9 +195,18 @@ type LoadedTimeSuggestions = {
   loggedMinutes: number;
 };
 
+/** The label a suggested matter is shown with. */
+export type SuggestionMatter = {
+  id: SafeId<"workspace">;
+  name: string;
+  reference: string;
+};
+
 /** One matter on one day of a range, with work to suggest or time recorded. */
 export type LoadedSuggestionScope = LoadedTimeSuggestions & {
   workspaceId: SafeId<"workspace">;
+  /** Read in the same transaction as the scope's signals. */
+  matter: SuggestionMatter;
 };
 
 const signalIdentityKey = (identity: ActivitySignal["identity"]) =>
@@ -504,13 +515,44 @@ const loggedMinutesOn = (date: string, recorded: readonly RecordedRow[]) => {
 const recordedOutsideSuggestions = (recorded: readonly RecordedRow[]) =>
   recorded.filter(({ source }) => source !== TIME_ENTRY_SOURCE.SUGGESTED);
 
-// One transaction for every read: the signals, the names behind them, the
-// decisions already taken, and the time already recorded. Each source is one
-// statement for the whole range and every matter, never one per matter or day.
-const readSuggestionInputs = async (
+// The authorized matters whose rows this transaction still sees, minus any
+// being deleted: the same rule the request's matter authorization applies. A
+// matter deleted, hidden or marked for deletion since that authorization is
+// no longer readable, so it drops out here rather than surfacing later.
+const readVisibleMatters = async (
   tx: Transaction,
   scope: SuggestionReadScope,
+): Promise<SuggestionMatter[]> =>
+  await tx
+    .select({
+      id: workspaces.id,
+      name: workspaces.name,
+      reference: workspaces.reference,
+    })
+    .from(workspaces)
+    .where(
+      and(
+        inArray(workspaces.id, scope.workspaceIds),
+        ne(workspaces.status, "deleting"),
+      ),
+    )
+    .limit(scope.workspaceIds.length);
+
+// One transaction for every read: the matters, the signals, the names behind
+// them, the decisions already taken, and the time already recorded. The
+// matters are read first and every later read is filtered to them, so each
+// row read below belongs to a matter whose label came from this transaction.
+// Each source is one statement for the whole range and every matter, never
+// one per matter or day.
+const readSuggestionInputs = async (
+  tx: Transaction,
+  requested: SuggestionReadScope,
 ) => {
+  const matters = await readVisibleMatters(tx, requested);
+  const scope: SuggestionReadScope = {
+    ...requested,
+    workspaceIds: matters.map(({ id }) => id),
+  };
   const storedChatRows = await readChatSignals(tx, scope);
   const projection = await readWithdrawnCopyProjection({
     values: storedChatRows,
@@ -527,6 +569,7 @@ const readSuggestionInputs = async (
   const decidedRows = await readDecidedEvidence(tx, scope);
   const recordedRows = await readRecordedTime(tx, scope);
   return {
+    matters,
     auditRows,
     chatRows,
     decidedRows,
@@ -602,6 +645,7 @@ type AcceptedWindow = { durationMinutes: 0; startedAt: Date; endedAt: Date };
 
 type ScopeInputs = {
   workspaceId: SafeId<"workspace">;
+  matter: SuggestionMatter;
   date: string;
   signals: ActivitySignal[];
   recorded: RecordedRow[];
@@ -658,32 +702,37 @@ const decidedFingerprintKey = (
 
 /**
  * Buckets signals and recorded time by matter and by the calendar day they
- * fall on in the timekeeper's zone. A row for a matter outside the authorized
- * list cannot be bucketed: the reads filter on that list, so reaching one
- * means the filter was lost, and the request fails instead of leaking it.
+ * fall on in the timekeeper's zone. A row for a matter outside the matters the
+ * transaction read cannot be bucketed: every read filters on that list, so
+ * reaching one means the filter was lost, and the request fails instead of
+ * leaking it.
  */
 const groupByMatterAndDay = ({
-  workspaceIds,
+  matters,
   timezoneId,
   dayBounds,
   signals,
   recordedRows,
   decidedRows,
 }: {
-  workspaceIds: readonly SafeId<"workspace">[];
+  matters: readonly SuggestionMatter[];
   timezoneId: string;
   dayBounds: readonly DayBounds[];
   signals: readonly DatedSignal[];
   recordedRows: readonly RecordedRow[];
   decidedRows: readonly DecidedRow[];
 }) => {
-  const authorized = new Set<string>(workspaceIds);
+  const matterById = new Map<string, SuggestionMatter>(
+    matters.map((matter) => [matter.id, matter]),
+  );
   const scopes = new Map<string, ScopeInputs>();
   const scopeFor = (
     workspaceId: SafeId<"workspace"> | null,
     date: string,
   ): ScopeInputs => {
-    if (workspaceId === null || !authorized.has(workspaceId)) {
+    const matter =
+      workspaceId === null ? undefined : matterById.get(workspaceId);
+    if (workspaceId === null || matter === undefined) {
       return panic("Suggestion input escaped the authorized matters");
     }
     const key = `${date}\n${workspaceId}`;
@@ -693,6 +742,7 @@ const groupByMatterAndDay = ({
     }
     const created: ScopeInputs = {
       workspaceId,
+      matter,
       date,
       signals: [],
       recorded: [],
@@ -742,7 +792,7 @@ const groupByMatterAndDay = ({
  * when its decision's evidence names no signals to exclude.
  */
 const suggestScope = (
-  { workspaceId, date, signals, recorded, accepted }: ScopeInputs,
+  { workspaceId, matter, date, signals, recorded, accepted }: ScopeInputs,
   decidedFingerprints: ReadonlySet<string>,
 ): LoadedSuggestionScope => {
   const clusters = clusterActivitySignals({
@@ -753,6 +803,7 @@ const suggestScope = (
   });
   return {
     workspaceId,
+    matter,
     date,
     pending: subtractRecordedTime(
       clusters.filter(
@@ -785,7 +836,9 @@ const compareScopes = (a: LoadedSuggestionScope, b: LoadedSuggestionScope) =>
  * they sent and the audit rows their actions wrote. Nothing here is visible to
  * anyone but the signal's author, and the result is never persisted; only a
  * decision on a cluster is. Scopes come back in date, then matter order, and
- * only for a matter and day that has activity or recorded time.
+ * only for a matter and day that has activity or recorded time. Each scope
+ * carries its matter's label from the same transaction; an authorized matter
+ * that was deleted or hidden before that read has no scopes.
  * @yields A 400 for an invalid or over-long range, or the scoped read's failure.
  */
 export const loadTimeSuggestionRange = async function* ({
@@ -840,7 +893,7 @@ export const loadTimeSuggestionRange = async function* ({
     ),
   );
   return groupByMatterAndDay({
-    workspaceIds,
+    matters: inputs.matters,
     timezoneId,
     dayBounds: range.dayBounds,
     signals: signals.filter(({ signal }) => undecidedSignals.has(signal)),
