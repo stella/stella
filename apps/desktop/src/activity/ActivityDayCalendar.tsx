@@ -625,13 +625,15 @@ function useCalendarColumns({
         .filter((part) => part !== null)
         .join(" · ");
       const switching = block.matter === null && onlyApp === undefined;
+      // The apps are the caption unless the block is named by its one app.
+      const namedByApp = block.matter === null && onlyApp !== undefined;
       return {
         accessibleLabel: switching
           ? t("mixedActivityLabel", { apps, range })
-          : `${[topic, detail, onlyApp === undefined ? apps : null]
+          : `${[topic, detail, namedByApp ? null : apps]
               .filter((part) => part !== null)
               .join(" · ")}, ${range}`,
-        caption: onlyApp === undefined ? apps : range,
+        caption: namedByApp ? range : apps,
         endMs: block.endMs,
         id: block.id,
         kind: switching ? "mixed" : "segment",
