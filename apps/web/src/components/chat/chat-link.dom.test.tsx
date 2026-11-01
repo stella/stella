@@ -5,7 +5,7 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
-const { ChatLink } = await import("@stll/chat/link");
+const { ChatLink, ChatLinkIdScope } = await import("@stll/chat/link");
 const { EntityLink } = await import("./entity-link");
 const locales = [
   { locale: "en", catalogue: (await import("@/i18n/langs/en.json")).default },
@@ -34,7 +34,17 @@ for (const { locale, catalogue } of locales) {
     const link = view.getByRole("link", { name: label });
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
-    expect(link.getAttribute("title")).toBe(catalogue.common.openInNewTab);
+    // The new-tab notice is a design-system tooltip on the anchor, not a
+    // native title the browser draws after its own delay.
+    expect(link.hasAttribute("title")).toBe(false);
+    expect(Object.hasOwn(link.dataset, "baseUiTooltipTrigger")).toBe(true);
+    // A screen reader still hears that the link opens a new tab: the notice
+    // is the link's description, not only a pointer tooltip.
+    expect(
+      document.querySelector(
+        `[id="${link.getAttribute("aria-describedby") ?? ""}"]`,
+      )?.textContent,
+    ).toBe(catalogue.common.openInNewTab);
     expect(link.firstElementChild?.getAttribute("aria-hidden")).toBe("true");
     expect(link.firstElementChild?.querySelector("svg")).not.toBeNull();
     expect(link.children.item(1)?.tagName).toBe("BDI");
@@ -44,6 +54,32 @@ for (const { locale, catalogue } of locales) {
     expect(view.container.querySelector("img")).toBeNull();
   });
 }
+
+test("a link inside an id scope takes the scope's ids on every render", () => {
+  const label = "Decision source";
+  const scopedId = "user-content-link-tag-2-0";
+  const scopedLink = (
+    <ChatLinkIdScope id={scopedId}>
+      <ChatLink href="https://example.test/ref" newTabLabel="Opens a new tab">
+        {label}
+      </ChatLink>
+    </ChatLinkIdScope>
+  );
+  const first = render(scopedLink);
+  const firstMarkup = first.container.innerHTML;
+  cleanup();
+  // A second mount counts React's generated ids further; scoped ids hold.
+  const view = render(scopedLink);
+  expect(view.container.innerHTML).toBe(firstMarkup);
+  const link = view.getByRole("link", { name: label });
+  expect(link.id).toBe(scopedId);
+  expect(link.getAttribute("aria-describedby")).toBe(`${scopedId}-hint`);
+  // The description resolves to the hint, which stays out of the link's text.
+  expect(document.querySelector(`[id="${scopedId}-hint"]`)?.textContent).toBe(
+    "Opens a new tab",
+  );
+  expect(link.textContent).toBe(label);
+});
 
 test("bare link titles use the hostname and only exact brand hosts receive a mark", () => {
   const raw = "https://github.com/stella/stella";
@@ -167,7 +203,13 @@ for (const href of ["www.github.com/stella/stella", "/github.com/stella"]) {
     );
     const link = view.getByRole("link", { name: label });
     expect(link.id).toBe("source-anchor");
-    expect(link.getAttribute("title")).toBe("Source details");
+    expect(link.hasAttribute("title")).toBe(false);
+    expect(Object.hasOwn(link.dataset, "baseUiTooltipTrigger")).toBe(true);
+    expect(
+      document.querySelector(
+        `[id="${link.getAttribute("aria-describedby") ?? ""}"]`,
+      )?.textContent,
+    ).toBe("Source details");
     expect(link.getAttribute("href")).toBe(
       href.startsWith("/") ? href : `https://${href}`,
     );

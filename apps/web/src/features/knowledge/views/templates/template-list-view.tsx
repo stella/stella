@@ -10,7 +10,6 @@ import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import Tooltip from "@/components/tooltip";
 import type {
   KnowledgeActions,
   KnowledgeSource,
@@ -180,19 +179,17 @@ const TemplateListView = ({
             {tagFilter && (
               <span className="bg-muted text-foreground flex items-center gap-1 rounded-full py-0.5 ps-2 pe-1 text-xs font-medium">
                 {tagFilter}
-                <Tooltip
-                  content={t("common.remove")}
-                  render={
-                    <button
-                      aria-label={t("common.remove")}
-                      className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
-                      onClick={() => setTagFilter(null)}
-                      type="button"
-                    />
-                  }
+                <Button
+                  aria-label={t("common.remove")}
+                  className="group/plain"
+                  onClick={() => setTagFilter(null)}
+                  tooltip={t("common.remove")}
+                  variant="plain"
                 >
-                  <XIcon className="size-3" />
-                </Tooltip>
+                  <span className="text-muted-foreground group-hover/plain:text-foreground flex rounded-full p-0.5">
+                    <XIcon className="size-3" />
+                  </span>
+                </Button>
               </span>
             )}
             {catalogueTab}

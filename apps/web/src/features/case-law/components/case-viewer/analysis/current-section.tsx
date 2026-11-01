@@ -3,6 +3,7 @@ import type { RefObject } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { ChevronUpIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -121,32 +122,44 @@ export const CurrentSection = ({
           current === null ? "pointer-events-none opacity-0" : "opacity-100",
         )}
       >
-        <button
-          className="reader-chrome text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-1.5 border-s-[3px] py-1 ps-2.5 pe-2 text-start text-xs"
-          disabled={current === null}
-          onClick={jumpBack}
+        {/* The category's colour marks the section on its start edge; the
+            reader's sans face for chrome inherits into the button. */}
+        <div
+          className="reader-chrome flex border-s-[3px]"
           style={{
             borderInlineStartColor:
               current === null
                 ? "transparent"
                 : `var(${getCategoryVar(current.category)})`,
           }}
-          title={t("caseLaw.analysis.backToSection")}
-          type="button"
         >
-          <span className="min-w-0 flex-1">
-            {parent !== undefined && parent !== null && (
-              <span className="text-muted-foreground text-2xs block">
-                {parent.label}
+          <Button
+            className="group/plain flex flex-1"
+            disabled={current === null}
+            onClick={jumpBack}
+            tooltip={
+              current === null ? undefined : t("caseLaw.analysis.backToSection")
+            }
+            variant="plain"
+          >
+            <span className="text-foreground-strong-muted group-hover/plain:text-foreground flex w-full items-center gap-1.5 py-1 ps-2.5 pe-2 text-xs">
+              <span className="min-w-0 flex-1 text-xs">
+                {parent !== undefined && parent !== null && (
+                  <span className="text-muted-foreground text-2xs block">
+                    {parent.label}
+                  </span>
+                )}
+                <span className="block truncate font-medium">
+                  {current?.label}
+                </span>
               </span>
-            )}
-            <span className="block truncate font-medium">{current?.label}</span>
-          </span>
-          <ChevronUpIcon
-            aria-hidden="true"
-            className="text-foreground-disabled size-3.5 shrink-0"
-          />
-        </button>
+              <ChevronUpIcon
+                aria-hidden="true"
+                className="text-foreground-disabled size-3.5 shrink-0"
+              />
+            </span>
+          </Button>
+        </div>
       </div>
     </div>
   );

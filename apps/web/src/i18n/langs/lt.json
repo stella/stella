@@ -5497,6 +5497,7 @@
     "citingDecisionsSortCitations": "Šios nuostatos paminėjimai",
     "citingDecisionsSortDate": "Sprendimo data",
     "citingDecisionsYear": "Sprendimo metai",
+    "citingDecisionsYearOutOfRange": "Įveskite metus nuo {min} iki {max}.",
     "citingDecisionsYearPlaceholder": "Visi metai",
     "columns": {
       "act": "Teisės aktas",

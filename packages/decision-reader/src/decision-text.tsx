@@ -12,6 +12,7 @@ import {
 } from "@stll/legal-ast/document-ast";
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { cn } from "@stll/ui/utils";
 
@@ -1145,16 +1146,15 @@ export const DecisionText = ({
           {hydrated && onAnnotationActivate !== undefined && (
             <div className="sr-only">
               {annotationAnchors.map((annotation) => (
-                <button
+                <Button
                   key={annotation.id}
                   onClick={() => onAnnotationActivate(annotation.id)}
-                  type="button"
                 >
                   {annotation.activationLabel ??
                     (annotation.kind === "comment"
                       ? messages["folio.comment"]
                       : messages["legalReader.annotations.highlight"])}
-                </button>
+                </Button>
               ))}
             </div>
           )}

@@ -128,7 +128,9 @@ test("assistant footer places actions before a divider and wrapping citations", 
   const citations = footer.querySelector("[data-chat-answer-citations]");
   expect(citations?.classList.contains("contents")).toBe(true);
   expect(
-    citations?.querySelector("button")?.classList.contains("max-w-full"),
+    citations
+      ?.querySelector('button[data-slot="button"]')
+      ?.classList.contains("max-w-full"),
   ).toBe(true);
   expect(citations?.textContent).toContain("Pl.ÚS 38/06");
   expect(view.getByRole("button", { name: "Retry" })).toBeTruthy();

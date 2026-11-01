@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -16,6 +16,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { Field, FieldLabel } from "@stll/ui/field";
 import { CheckIcon, FileTextIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { cn } from "@stll/ui/utils";
@@ -62,6 +63,7 @@ const StyleSetPickerDialogBody = ({
   title,
 }: Omit<StyleSetPickerDialogProps, "open">) => {
   const t = useTranslations();
+  const nameId = useId();
   const organizationId = useAuthenticatedUser().activeOrganizationId;
   const { data, isLoading, isError } = useQuery(
     styleSetsOptions(organizationId),
@@ -115,15 +117,16 @@ const StyleSetPickerDialogBody = ({
         </DialogDescription>
       </DialogHeader>
       <DialogPanel className="space-y-4">
-        <label className="space-y-1.5">
-          <span className="text-sm font-medium">{t("common.name")}</span>
+        <Field>
+          <FieldLabel htmlFor={nameId}>{t("common.name")}</FieldLabel>
           <Input
             autoFocus
+            id={nameId}
             maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onChange={(event) => setName(event.target.value)}
             value={name}
           />
-        </label>
+        </Field>
         <div className="space-y-2">
           <p className="text-sm font-medium">{t("styleSets.title")}</p>
           <div className="max-h-64 space-y-2 overflow-y-auto">
@@ -192,22 +195,26 @@ const StyleChoice = ({
   selected,
   onSelect,
 }: StyleChoiceProps) => (
-  <button
+  <Button
     aria-pressed={selected}
-    className={cn(
-      "flex w-full items-center gap-3 rounded-lg border p-3 text-start",
-      selected && "border-foreground/30 bg-muted",
-    )}
+    className="flex w-full"
     onClick={onSelect}
-    type="button"
+    variant="plain"
   >
-    <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-      <FileTextIcon className="text-muted-foreground size-4" />
+    <div
+      className={cn(
+        "flex w-full items-center gap-3 rounded-lg border p-3",
+        selected && "border-foreground/30 bg-muted",
+      )}
+    >
+      <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
+        <FileTextIcon className="text-muted-foreground size-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{name}</p>
+        <p className="text-muted-foreground truncate text-xs">{description}</p>
+      </div>
+      {selected && <CheckIcon className="size-4 shrink-0" />}
     </div>
-    <div className="min-w-0 flex-1">
-      <p className="truncate text-sm font-medium">{name}</p>
-      <p className="text-muted-foreground truncate text-xs">{description}</p>
-    </div>
-    {selected && <CheckIcon className="size-4 shrink-0" />}
-  </button>
+  </Button>
 );

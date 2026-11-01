@@ -409,7 +409,12 @@ for (const { kind, path } of citations) {
             // and carries no glyph beside its own text.
             expect(surface.querySelectorAll("a")).toHaveLength(1);
             if (held) {
-              expect(surface.querySelector("svg")).toBeNull();
+              // The "Also consulted" disclosure's own chevron is not a chip.
+              expect(
+                surface.querySelector(
+                  'svg:not([data-slot="accordion-indicator"])',
+                ),
+              ).toBeNull();
             }
           }
         });
@@ -724,6 +729,17 @@ for (const interactive of [false, true]) {
   });
 }
 
+// Tray chips the answer does not cite sit under the "Also consulted"
+// disclosure, out of the accessibility tree until a reader opens it.
+const openConsulted = async () => {
+  const { alsoConsulted } = messages.chat.sourceChips;
+  const consultedLabel = alsoConsulted.split(" (").at(0) ?? alsoConsulted;
+  const trigger = await screen.findByRole("button", {
+    name: new RegExp(`^${consultedLabel}`, "u"),
+  });
+  await act(async () => fireEvent.click(trigger));
+};
+
 test("a long external source title stays inside its truncated tray chip", async () => {
   const title = "Publisher".repeat(12);
   const href = "https://publisher.example.test/long-title";
@@ -742,6 +758,7 @@ test("a long external source title stays inside its truncated tray chip", async 
       ]}
     />,
   );
+  await openConsulted();
   await waitFor(() => {
     const chip = view.getByRole("link", { name: title });
     expect(chip.getAttribute("href")).toBe(href);
@@ -784,6 +801,7 @@ test("a relative held primary is one chip in the tray and the passive answer", a
       </StreamdownMentionLink>
     </>,
   );
+  await openConsulted();
   await waitFor(() => {
     const primaryLinks = view.getAllByRole("link", {
       name: label,

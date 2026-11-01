@@ -29,6 +29,7 @@ import { Button } from "@stll/ui/button";
 import { DateRangeFilter } from "@stll/ui/date-range-filter";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Field, FieldLabel } from "@stll/ui/field";
+import { Form } from "@stll/ui/form";
 import {
   CaseLawIcon,
   ChevronRightIcon,
@@ -471,8 +472,7 @@ const SearchControls = ({
     outOfRangeLabel: t("outOfRange"),
   };
   return (
-    <form
-      className="space-y-4"
+    <Form
       onSubmit={(event) => {
         event.preventDefault();
         bridge.detached(
@@ -634,7 +634,7 @@ const SearchControls = ({
           {t("filter")}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };
 
