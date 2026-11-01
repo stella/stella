@@ -2140,11 +2140,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 20,
+          "heading": 21,
           "paragraph-intro": 3,
           "paragraph-holding": 2,
           "paragraph": 94,
-          "paragraph-signature": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 47
         },
@@ -2167,17 +2166,16 @@
       "issues": [],
       "stats": {
         "originalLength": 104813,
-        "astLength": 103996,
+        "astLength": 103936,
         "retainedPct": 99.2,
         "blockCount": 169,
-        "missingWords": ["přestala", "čemž", "sdělením", "odkázala"],
+        "missingWords": ["systematiky", "pramenů", "odmítnout", "naposledy"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 20,
+          "heading": 21,
           "paragraph-intro": 3,
           "paragraph-holding": 2,
           "paragraph": 93,
-          "paragraph-signature": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 47
         },
@@ -2206,17 +2204,16 @@
       ],
       "stats": {
         "originalLength": 104813,
-        "astLength": 104472,
+        "astLength": 104532,
         "retainedPct": 99.7,
         "blockCount": 171,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 20,
+          "heading": 21,
           "paragraph-intro": 3,
           "paragraph-holding": 2,
           "paragraph": 95,
-          "paragraph-signature": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 47
         },
@@ -2245,11 +2242,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 20,
+          "heading": 21,
           "paragraph-intro": 3,
           "paragraph-holding": 2,
           "paragraph": 94,
-          "paragraph-signature": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 47
         },
@@ -2278,11 +2274,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 20,
+          "heading": 21,
           "paragraph-intro": 3,
           "paragraph-holding": 2,
           "paragraph": 94,
-          "paragraph-signature": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 47
         },
@@ -2311,11 +2306,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 20,
+          "heading": 21,
           "paragraph-intro": 3,
           "paragraph-holding": 2,
           "paragraph": 93,
-          "paragraph-signature": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 47
         },
