@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
-import { pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, unique, uniqueIndex } from "drizzle-orm/pg-core";
 
 import {
   type ConflictTargetIndexName,
@@ -202,6 +202,29 @@ tx.insert(conflictTargetFixture).values(rows).onConflictDoNothing({ target: [con
         }).map(({ reason }) => reason),
       ).toEqual([pending]);
     }
+  });
+
+  test("an unnamed unique constraint resolves to the name Drizzle gives it", () => {
+    const fixture = pgTable(
+      "conflict_target_fixture",
+      { id: text().notNull(), tenant: text().notNull() },
+      (table) => [unique().on(table.tenant, table.id)],
+    );
+    expect(
+      checkConflictTargetSource({
+        file: "apps/api/src/fixture.ts",
+        source: `import { conflictTargetFixture } from "@/api/db/schema";
+tx.insert(conflictTargetFixture).values(rows).onConflictDoNothing({ target: [conflictTargetFixture.tenant, conflictTargetFixture.id] });`,
+        context: {
+          tables: new Map([["conflictTargetFixture", fixture]]),
+          onlineIndexes: [],
+          indexNameConstants: {},
+          lifecycle: { conflict_target_fixture_tenant_id_unique: PENDING },
+        },
+      }).map(({ reason }) => reason),
+    ).toEqual([
+      "conflict target conflict_target_fixture_tenant_id_unique is pending online work, which no migrate run builds; register it DEPLOY_BLOCKING or target an index the migrate step builds",
+    ]);
   });
 
   test("a target-free ON CONFLICT DO NOTHING names no arbiter", () => {

@@ -11,7 +11,7 @@
 
 import { panic } from "better-result";
 import { getColumns, getTableName, is } from "drizzle-orm";
-import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
+import { getTableConfig, PgTable, uniqueKeyName } from "drizzle-orm/pg-core";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
@@ -107,9 +107,9 @@ const declaredUniqueKeys = (table: PgTable): DeclaredUniqueKey[] => {
   }
   for (const key of config.uniqueConstraints) {
     const columns = key.columns.map(({ name }) => name);
-    // An unnamed constraint takes PostgreSQL's default name.
+    // Drizzle names an unnamed constraint, and migrations carry that name.
     keys.push({
-      name: key.getName() ?? `${config.name}_${columns.join("_")}_key`,
+      name: key.getName() ?? uniqueKeyName(table, columns),
       columns,
     });
   }
