@@ -39,6 +39,11 @@ type WorkflowPrivilegeExemption = {
   requires: ExemptionCondition;
   /** The privileges the reason was approved for; any other privilege lapses it. */
   privileges: ExemptionPrivileges;
+  /**
+   * The workflow a job-level `uses` calls, pinned to a commit. Any other
+   * called workflow, and any remote one without a pin, lapses the exemption.
+   */
+  calls?: string;
 };
 
 const CI_PLAN_REASON =
@@ -275,6 +280,18 @@ export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
     covers: PULL_REQUEST_DEPENDABOT,
     requires: CI_PLAN_TRUSTED,
     privileges: ACTIONS_WRITE,
+  },
+  ".github/workflows/pr-lint.yml:pr-lint": {
+    reason:
+      "the pinned called workflow only reads pull-request metadata through the API and never checks out or runs pull-request code",
+    covers: ["class 1:pull_request_target"],
+    requires: {
+      unconditional:
+        "the approval rests on the pinned called workflow, not on the job condition",
+    },
+    calls:
+      "stella/.github/.github/workflows/pr-lint.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
+    privileges: { write: ["pull-requests"], secrets: [] },
   },
   ".github/workflows/release-desktop.yml:build": {
     reason:
@@ -1053,9 +1070,10 @@ const actionNameOf = (uses: string): string =>
 const isCheckoutAction = (uses: string): boolean =>
   actionNameOf(uses) === "actions/checkout";
 
-// Commands that bring another revision into the workspace.
+// Commands that bring another revision into the workspace. The GitHub CLI
+// subcommands match without the `gh` prefix, so a wrapper script counts too.
 const REVISION_FETCH =
-  /\bgit\b[^\n;&|]*?\b(?:am|apply|checkout|cherry-pick|clone|fetch|merge|pull|rebase|reset|restore|switch|worktree)\b|\bgh\s+(?:pr\s+checkout|repo\s+clone|run\s+download)\b|refs\/pull\b/iu;
+  /\bgit\b[^\n;&|]*?\b(?:am|apply|checkout|cherry-pick|clone|fetch|merge|pull|rebase|reset|restore|switch|worktree)\b|\b(?:pr\s+checkout|repo\s+clone|run\s+download)\b|refs\/pull\b/iu;
 // A value computed at run time may name any directory.
 const RUNTIME_VALUE = /\$\{\{|\$[A-Za-z_{(]/u;
 // An action input that is only a credential names no directory.
@@ -1213,6 +1231,7 @@ const findingsForStep = (options: StepFindingOptions): Finding[] => {
 type JobAnalysis = {
   key: string;
   condition: unknown;
+  calls: string;
   privileges: { write: ReadonlySet<string>; secrets: ReadonlySet<string> };
   findings: readonly Finding[];
 };
@@ -1331,6 +1350,7 @@ const analyseJob = (
   return {
     key: `${file}:${jobName}`,
     condition,
+    calls: reusableUses,
     privileges: {
       write: writeScopesOf(permissions, triggers.some(isPrivilegedTrigger)),
       secrets,
@@ -1412,9 +1432,19 @@ const unexemptedFindings = (job: JobAnalysis): readonly Finding[] => {
   if (exemption === undefined) {
     return job.findings;
   }
-  const beyond = privilegesBeyond(exemption.privileges, job.privileges).map(
-    (privilege) => `${privilege} is beyond the exemption`,
-  );
+  // A remote called workflow is approved only at the exact pinned revision.
+  const callLapses =
+    (exemption.calls !== undefined ||
+      (job.calls !== "" && !job.calls.startsWith("./"))) &&
+    exemption.calls !== job.calls
+      ? ["the called workflow is not the approved revision"]
+      : [];
+  const beyond = [
+    ...callLapses,
+    ...privilegesBeyond(exemption.privileges, job.privileges).map(
+      (privilege) => `${privilege} is beyond the exemption`,
+    ),
+  ];
   return job.findings.flatMap((finding) => {
     const lapses = [
       ...(conditionHolds(exemption.requires, job.condition, finding.trigger)

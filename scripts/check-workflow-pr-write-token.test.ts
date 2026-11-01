@@ -47,6 +47,9 @@ describe("privileged workflow policy", () => {
         expect(name).toMatch(/^[A-Za-z][A-Za-z0-9_-]*$/u);
         expect(name).not.toBe("inherit");
       }
+      if ("calls" in exemption) {
+        expect(exemption.calls).toMatch(/^[^@\s]+@[0-9a-f]{40}$/u);
+      }
     }
   });
   test("every allowlist entry still matches a finding and privilege of its job", () => {
@@ -509,6 +512,22 @@ jobs:
         `\n      DOCKERHUB_USERNAME: \${{ secrets.DOCKERHUB_USERNAME }}\n      DOCKERHUB_TOKEN: \${{ secrets.DOCKERHUB_TOKEN }}`,
       ),
     ).toEqual([]);
+  });
+  test("binds a called-workflow exemption to its pinned revision", () => {
+    const caller = (revision: string) =>
+      checkWorkflowPrivilegeSource(
+        ".github/workflows/pr-lint.yml",
+        `
+on: pull_request_target
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  pr-lint:
+    uses: stella/.github/.github/workflows/pr-lint.yml@${revision}`,
+      );
+    expect(caller("main")).not.toHaveLength(0);
+    expect(caller("5764ab66e4df84cfd2e642c7d7e4678261e668f8")).toEqual([]);
   });
 });
 
