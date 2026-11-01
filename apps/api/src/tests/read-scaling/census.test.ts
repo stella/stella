@@ -47,6 +47,7 @@ import {
   scalingCoverageViolations,
   withNewWriteRoutes,
 } from "./surface";
+import { timeEntryReportScalingScenario } from "./time-entry-report";
 import { suggestionRangeScalingScenario } from "./time-suggestion-range";
 import { writeScalingScenarios } from "./write-scenarios";
 
@@ -63,6 +64,7 @@ const measuredApiScenarios = [
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
   suggestionRangeScalingScenario,
+  timeEntryReportScalingScenario,
   mobileClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,

@@ -19,6 +19,7 @@ import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { APIError, isCancellation } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
+import { notifySessionExpired } from "@/lib/errors/session-expired";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 type UserErrorToastOptions = Omit<
@@ -173,6 +174,12 @@ export const notifyUserError = <Cause>(
     return false;
   }
   if (notifyStepUp(error)) {
+    return false;
+  }
+  if (notifySessionExpired(error)) {
+    if (toastId !== undefined) {
+      stellaToast.close(toastId);
+    }
     return false;
   }
   // The stable refusal id coalesces the API client's observer and local error
