@@ -243,13 +243,11 @@ describe("browser control result contract", () => {
         {
           active: true,
           tabId: 7,
-          title: "Example",
           url: "https://example.com/",
         },
         {
           active: false,
           tabId: 9,
-          title: "Opened",
           url: "https://example.com/opened",
         },
       ],
@@ -278,11 +276,29 @@ describe("browser control result contract", () => {
     ).toBeNull();
   });
 
+  test("lists tabs by address only, never by title", () => {
+    expect(
+      parseBrowserControlResult({
+        ...success,
+        snapshot: {
+          ...success.snapshot,
+          tabs: [
+            {
+              active: false,
+              tabId: 9,
+              title: "Opened",
+              url: "https://example.com/opened",
+            },
+          ],
+        },
+      }),
+    ).toBeNull();
+  });
+
   test("lists no more tabs than chat may keep", () => {
     const tab = {
       active: false,
       tabId: 9,
-      title: "Opened",
       url: "https://example.com/opened",
     };
     expect(
@@ -303,10 +319,7 @@ describe("browser control result contract", () => {
         snapshot: {
           ...success.snapshot,
           tabs: [
-            {
-              ...tab,
-              title: "x".repeat(BROWSER_CONTROL_LIMITS.titleChars + 1),
-            },
+            { ...tab, url: "x".repeat(BROWSER_CONTROL_LIMITS.urlChars + 1) },
           ],
         },
       }),

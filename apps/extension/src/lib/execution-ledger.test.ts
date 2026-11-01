@@ -24,7 +24,6 @@ const success = {
       {
         active: true,
         tabId: 7,
-        title: "Example",
         url: "https://example.com/",
       },
     ],

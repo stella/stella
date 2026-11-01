@@ -305,11 +305,14 @@ export type BrowserControlElement = v.InferOutput<
   typeof browserControlElementSchema
 >;
 
-/** One of chat's tabs; `active` marks the one the snapshot was read from. */
+/**
+ * One of chat's tabs; `active` marks the one the snapshot was read from.
+ * No title: Chrome reports other tabs' titles without the page's redaction
+ * of secret values, and the URL tells the tabs apart.
+ */
 const browserControlTabSchema = v.strictObject({
   active: v.boolean(),
   tabId: tabIdSchema,
-  title: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.titleChars)),
   url: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.urlChars)),
 });
 

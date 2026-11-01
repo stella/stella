@@ -1350,8 +1350,8 @@ const injectDomAction = async (
 };
 
 /**
- * Chat's tabs for a snapshot, the one just read first with the title and URL
- * that read returned; the others, newest first, as Chrome reports them. A
+ * Chat's tabs for a snapshot, the one just read first with the URL that read
+ * returned; the others, newest first, at the URL Chrome reports. A
  * tab on a page chat may not operate (an error page, another scheme) is left
  * out, since chat could not switch to it.
  */
@@ -1370,7 +1370,6 @@ const listChatTabs = async (
       return {
         active: false,
         tabId,
-        title: (tab.title ?? "").slice(0, BROWSER_CONTROL_LIMITS.titleChars),
         url: tab.url.slice(0, BROWSER_CONTROL_LIMITS.urlChars),
       };
     }),
@@ -1443,12 +1442,7 @@ const readSnapshot = async ({
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
       revision: crypto.randomUUID(),
       tabId,
-      tabs: await listChatTabs({
-        active: true,
-        tabId,
-        title: merged.title,
-        url: merged.url,
-      }),
+      tabs: await listChatTabs({ active: true, tabId, url: merged.url }),
       ...merged,
     },
     status: "success",

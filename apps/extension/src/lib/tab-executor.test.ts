@@ -586,27 +586,16 @@ describe("chat's tabs", () => {
       { observedTab: { revision: "revision-0", tabId: CONTROLLED_TAB_ID } },
     );
     expect(result).toMatchObject({
-      snapshot: {
-        tabId: 7,
-        // The active tab first, then the others newest first.
-        tabs: [
-          { active: true, tabId: 7, title: "News", url: newUrl },
-          {
-            active: false,
-            tabId: CONTROLLED_TAB_ID,
-            title: "Invoice",
-            url: PAGE_URL,
-          },
-          {
-            active: false,
-            tabId: RESULTS_TAB_ID,
-            title: "Results",
-            url: RESULTS_URL,
-          },
-        ],
-      },
+      snapshot: { tabId: 7, title: "News" },
       status: "success",
     });
+    // The active tab first, then the others newest first; by address only,
+    // since Chrome's titles of other tabs skip the page's redaction.
+    expect(result.status === "success" && result.snapshot.tabs).toEqual([
+      { active: true, tabId: 7, url: newUrl },
+      { active: false, tabId: CONTROLLED_TAB_ID, url: PAGE_URL },
+      { active: false, tabId: RESULTS_TAB_ID, url: RESULTS_URL },
+    ]);
     // Only the user's tabs are left out of the rules from before the new
     // tab requests anything.
     expect(log.slice(0, 3)).toEqual([
@@ -699,21 +688,13 @@ describe("chat's tabs", () => {
       observedTab: { revision: "revision-0", tabId: 99 },
     });
     expect(result).toMatchObject({
-      snapshot: {
-        tabId: RESULTS_TAB_ID,
-        tabs: [
-          { active: true, tabId: RESULTS_TAB_ID, url: RESULTS_URL },
-          {
-            active: false,
-            tabId: CONTROLLED_TAB_ID,
-            title: "Invoice",
-            url: PAGE_URL,
-          },
-        ],
-      },
+      snapshot: { tabId: RESULTS_TAB_ID },
       status: "success",
     });
-    expect(result.status === "success" && result.snapshot.tabs).toHaveLength(2);
+    expect(result.status === "success" && result.snapshot.tabs).toEqual([
+      { active: true, tabId: RESULTS_TAB_ID, url: RESULTS_URL },
+      { active: false, tabId: CONTROLLED_TAB_ID, url: PAGE_URL },
+    ]);
     expect(events).toEqual(["charge"]);
     expect(log).toContain(`activate:${RESULTS_TAB_ID}`);
     expect(session["browserContainedTabs"]).toMatchObject({

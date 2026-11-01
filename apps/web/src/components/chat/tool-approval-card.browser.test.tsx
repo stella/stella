@@ -146,7 +146,6 @@ describe("browser approval card", () => {
             {
               active: true,
               tabId: 7,
-              title: "Example",
               url: "https://example.com/",
             },
           ],

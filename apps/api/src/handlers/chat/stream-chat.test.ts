@@ -3051,7 +3051,6 @@ describe("approved client tool with an output schema", () => {
         {
           active: true,
           tabId: 1,
-          title: "Example Domain",
           url: "https://example.com/",
         },
       ],
