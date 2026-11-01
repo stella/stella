@@ -2223,6 +2223,29 @@ test("welcome uses native icons for sample apps without recorded activity", asyn
   }
 });
 
+test("a suggestion card shows each app with its native icon", async ({
+  page,
+}) => {
+  const iconDataUrl =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1sAAAAASUVORK5CYII=";
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      sourceAppVisuals: [
+        { key: "com.example.editor", iconDataUrl, color: null },
+      ],
+    },
+  });
+  await page.locator(SUGGESTION_BLOCKS).first().click();
+  const card = suggestionCard(page, "Example matter");
+  await card
+    .getByRole("tab", { name: enMessages.activity.evidenceApps })
+    .click();
+  const app = card.getByRole("listitem").filter({ hasText: "Example Editor" });
+  await expect(app.locator("img")).toHaveAttribute("src", iconDataUrl);
+});
+
 test("a call segment reads as a call in the calendar", async ({ page }) => {
   await installNativeBoundary({
     page,
@@ -2337,22 +2360,33 @@ test("suggestions render as dashed blocks and the day is triaged from the keyboa
 });
 
 for (const language of ["en", "ar"] as const) {
-  test(`${language}: selecting a range in Activity opens a card for that range`, async ({
+  test(`${language}: selecting a range in Time entries opens a card for that range`, async ({
     page,
   }) => {
     const messages = language === "ar" ? arMessages : enMessages;
     await installNativeBoundary({ page, language });
+    // Activity is the record and takes no drag; entries are drawn where
+    // they are kept.
+    await expect(
+      page.locator(
+        '[data-column-id="activity"] [role="slider"][data-slot="day-calendar-surface"]',
+      ),
+    ).toHaveCount(0);
     const block = page.locator(ACTIVITY_BLOCKS).first();
     await block.scrollIntoViewIfNeeded();
     const box = await block.boundingBox();
-    if (!box) {
-      throw new TypeError("The activity block must have bounds");
+    const entries = await page
+      .locator('[data-column-id="entries"] [data-slot="day-calendar-surface"]')
+      .boundingBox();
+    if (!box || !entries) {
+      throw new TypeError("The activity block and entries column need bounds");
     }
-    await page.mouse.move(box.x + box.width / 2, box.y + 3);
+    // The suggestion covers the block's time in Time entries; the drag starts
+    // in the empty time just after it and runs up across it.
+    const x = entries.x + entries.width / 2;
+    await page.mouse.move(x, box.y + box.height + 8);
     await page.mouse.down();
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height - 3, {
-      steps: 6,
-    });
+    await page.mouse.move(x, box.y + 3, { steps: 6 });
     await page.mouse.up();
     const card = suggestionCard(page, "Example matter");
     await expect(card).toBeFocused();

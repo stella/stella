@@ -108,6 +108,28 @@ export type AuditResourceType =
 
 export type AuditResourceKind = AuditResourceType;
 
+/**
+ * Kinds with a canonical user-facing name. Only these can read as "not
+ * available": every other kind has no name to lose, so its label alone
+ * identifies it.
+ */
+export const AUDIT_NAMED_RESOURCE_KINDS = [
+  AUDIT_RESOURCE_TYPE.CONTACT,
+  AUDIT_RESOURCE_TYPE.ENTITY,
+  AUDIT_RESOURCE_TYPE.INVOICE,
+  AUDIT_RESOURCE_TYPE.TEMPLATE,
+  AUDIT_RESOURCE_TYPE.USER_FILE,
+  AUDIT_RESOURCE_TYPE.WORKSPACE,
+] as const;
+
+export type AuditNamedResourceKind =
+  (typeof AUDIT_NAMED_RESOURCE_KINDS)[number];
+
+export const isAuditNamedResourceKind = (
+  kind: string,
+): kind is AuditNamedResourceKind =>
+  AUDIT_NAMED_RESOURCE_KINDS.some((named) => named === kind);
+
 export type AuditResource =
   | {
       kind: AuditResourceKind;

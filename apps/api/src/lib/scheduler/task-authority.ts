@@ -121,9 +121,9 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-raw-storage.ts",
     "Public legal corpus storage reconciliation.",
   ),
-  "caseLaw.refreshBrowseFacets": platform(
-    "case-law-browse-facet-refresh.ts",
-    "Public legal corpus aggregates.",
+  "caseLaw.foldPopulationCounts": platform(
+    "case-law-population-fold.ts",
+    "Folds public legal corpus population deltas under the load governor.",
   ),
   "caseLaw.refreshSitemapShards": platform(
     "case-law-sitemap-shard-refresh.ts",
