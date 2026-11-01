@@ -36,7 +36,8 @@
     "flowRunAwaitingApproval": "مسار عمل بانتظار موافقتك",
     "flowRunCompleted": "اكتمل مسار عمل",
     "flowRunFailed": "فشل مسار عمل",
-    "mention": "تمت الإشارة إليك في تعليق"
+    "mention": "تمت الإشارة إليك في تعليق",
+    "taskAssigned": "تم إسناد مهمة إليك"
   },
   "reportExportStatus": {
     "action": "فتح stella",

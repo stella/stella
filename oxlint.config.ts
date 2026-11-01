@@ -1959,6 +1959,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
+    "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
     "./.oxlint-plugins/no-raw-parser-html.ts",
@@ -2061,6 +2062,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-test-state.ts",
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
+    "./.oxlint-plugins/inspector-header-title.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
     "./.oxlint-plugins/no-hover-only-reveal.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
@@ -3718,6 +3720,16 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        "apps/web/src/components/inspector/**/*.tsx",
+        "apps/web/src/**/*{inspector,side-panel}*.tsx",
+        ".oxlint-plugins/__fixtures__/inspector-header-title.fixture.tsx",
+      ],
+      rules: {
+        "inspector-header-title/inspector-header-title": "error",
+      },
+    },
+    {
       // Icon-only actions need visible hover/focus affordance for sighted users;
       // aria-label alone is not discoverable. Decorative icons are ignored.
       files: [
@@ -4646,6 +4658,15 @@ const config = defineConfig({
     },
     {
       files: [
+        ".oxlint-plugins/__fixtures__/no-bare-case-law-source-ingestion-lease.fixture.ts",
+      ],
+      rules: {
+        "no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease":
+          "error",
+      },
+    },
+    {
+      files: [
         "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
         ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture*.ts",
       ],
@@ -5533,6 +5554,14 @@ const config = defineConfig({
       excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
         "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
+          "error",
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts"],
+      rules: {
+        "no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease":
           "error",
       },
     },
