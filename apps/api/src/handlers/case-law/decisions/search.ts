@@ -271,7 +271,10 @@ import {
 } from "@/api/lib/legal-search/legal-alternatives";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import { readPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
-import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
+import {
+  publicReadTimeoutError,
+  publicReadTimeoutResponse,
+} from "@/api/lib/legal-search/public-read-timeout";
 import {
   blendStableCitationAuthority,
   courtTierSignal,
@@ -2642,19 +2645,21 @@ const TERM_COVERAGE_FAILURE_SINK = failureSink({
 
 /**
  * The answer to a failed term coverage read. A refusal the corpus index read
- * answered with (an expired request budget, an unavailable index) travels as
- * the strict scan's does, so every route and tool answers it with its own
- * code; any other failure is the coverage read's.
+ * answered with (an expired request budget, an unavailable index) is returned
+ * as its own envelope, which every route and tool reads with its own code;
+ * any other failure is the coverage read's.
  */
 const termCoverageFailure = (error: HandlerError<502 | 503>) => {
-  if (
-    publicReadTimeoutError(error) !== null ||
-    isSearchIndexUnavailable(error)
-  ) {
-    throw error;
+  // An expired budget is read first: it is never the index being down.
+  const timedOut = publicReadTimeoutError(error) !== null;
+  if (!timedOut && isSearchIndexUnavailable(error)) {
+    // The index refusal observes its own cause.
+    return searchIndexUnavailableResponse(error);
   }
   observeFailure(error, { sink: TERM_COVERAGE_FAILURE_SINK });
-  return status(error.status, { message: error.message });
+  return timedOut
+    ? publicReadTimeoutResponse()
+    : status(error.status, { message: error.message });
 };
 
 export const searchCorpusIndexDecisions = async ({

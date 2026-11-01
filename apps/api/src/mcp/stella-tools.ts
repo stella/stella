@@ -133,7 +133,6 @@ import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { storedCorpusValidationFailure } from "@/api/lib/legal-search/corpus-storage";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
-import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -236,7 +235,7 @@ import {
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   nullAsAbsent,
-  searchIndexUnavailableResult,
+  searchRefusalResult,
   structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
@@ -2280,8 +2279,9 @@ const readCaseLawSearchAnswer = (
   answer: Parameters<typeof isSearchCaseLawSuccess>[0],
   cursor: string | undefined,
 ): CaseLawSearchAnswer => {
-  if (isSearchIndexUnavailable(answer)) {
-    return { type: "failed", result: searchIndexUnavailableResult(answer) };
+  const refusal = searchRefusalResult(answer);
+  if (refusal !== null) {
+    return { type: "failed", result: refusal };
   }
   const resultMessage = handlerResultMessage(answer);
   if (resultMessage === INVALID_CURSOR_MESSAGE) {

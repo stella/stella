@@ -37,7 +37,6 @@ import {
 import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { PROVISION_STATUS } from "@/api/lib/legal-search/legislation-provision-vocabulary";
 import { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
-import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
@@ -89,7 +88,7 @@ import {
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   nullAsAbsent,
-  searchIndexUnavailableResult,
+  searchRefusalResult,
   toolDataResult,
   toPlainCorpusText,
   toPlainTextSnippet,
@@ -628,8 +627,9 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     legislationPublicReadDb,
     observer,
   );
-  if (isSearchIndexUnavailable(result)) {
-    return searchIndexUnavailableResult(result);
+  const refusal = searchRefusalResult(result);
+  if (refusal !== null) {
+    return refusal;
   }
   if (!isLegislationSearchSuccess(result)) {
     const failure = handlerStatusOf(result);

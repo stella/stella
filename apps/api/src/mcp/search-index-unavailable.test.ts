@@ -31,6 +31,10 @@ import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cur
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { PublicLawStatementError } from "@/api/lib/legal-search/public-law-statement-error";
 import {
+  PUBLIC_READ_TIMEOUT_HINT,
+  publicReadTimeoutResponse,
+} from "@/api/lib/legal-search/public-read-timeout";
+import {
   getPublicReadSignal,
   getPublicReadStatementTimeoutMs,
   runWithPublicReadStatementTimeout,
@@ -530,6 +534,36 @@ describe("a search the tool's latency budget ends is a timeout", () => {
 
       expect(result.isError).toBe(true);
       expect(payloadOf(result)).toEqual(EXPECTED_ENVELOPE);
+    });
+  }
+
+  for (const tool of INDEX_BACKED_TOOLS) {
+    test(`${tool.toolName} (${tool.mode}) maps a returned timeout envelope to public_read_timeout`, async () => {
+      const context = createContext();
+      const timedOut = async () =>
+        await Promise.resolve(publicReadTimeoutResponse());
+      const result = await handleMcpToolCall({
+        args: tool.args,
+        context: {
+          ...context,
+          testDependencies: {
+            ...context.testDependencies,
+            searchDecisionsHandler: asTestRaw(timedOut),
+            searchLegislationHandler: asTestRaw(timedOut),
+          },
+        },
+        mode: tool.mode,
+        toolName: tool.toolName,
+      });
+
+      expect(result.isError).toBe(true);
+      expect(payloadOf(result)).toMatchObject({
+        error: {
+          code: "public_read_timeout",
+          hint: PUBLIC_READ_TIMEOUT_HINT,
+          retryable: true,
+        },
+      });
     });
   }
 

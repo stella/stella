@@ -35,7 +35,10 @@ import {
 } from "@/api/lib/chat/tool-output-degrade";
 import { maskUuids } from "@/api/lib/chat/uuid-mask";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
+import {
+  PUBLIC_READ_TIMEOUT_HINT,
+  publicReadTimeoutError,
+} from "@/api/lib/legal-search/public-read-timeout";
 import {
   isSearchIndexUnavailable,
   SEARCH_INDEX_UNAVAILABLE_CODE,
@@ -842,6 +845,19 @@ export const searchIndexUnavailableResult = (
 };
 
 /**
+ * The envelope for a refusal a public-law search handler answered with (a
+ * read that ran out of time, an index that could not serve it), returned or
+ * thrown, or null for any other answer. The timeout is read first, so an
+ * expired budget never reads as the index being down.
+ */
+export const searchRefusalResult = (
+  answer: unknown,
+): InternalToolErrorResult | null =>
+  publicReadTimeoutError(answer) !== null || isSearchIndexUnavailable(answer)
+    ? internalFailureResult(answer, "mcp.searchRefusal")
+    : null;
+
+/**
  * Envelope for a failed backing-handler `Result`, the single sink for the
  * `errorResult(result.error.message)` class. Every tool site that unwraps a
  * `context.safeDb(...)` / `Result.gen(() => handler(...))` failure routes here
@@ -889,7 +905,7 @@ export const internalFailureResult = (
     return structuredErrorResult({
       code: "public_read_timeout",
       message: timeout.message,
-      hint: "Retry with a narrower query or a smaller selection of public-law documents.",
+      hint: PUBLIC_READ_TIMEOUT_HINT,
       retryable: true,
     });
   }
