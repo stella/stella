@@ -28,7 +28,7 @@ type PlanBinding = ReturnType<typeof planBinding>;
 
 let closure: ReadonlySet<string> | undefined;
 const fileIsReplayWriter = (filename: string) => {
-  closure ??= replayImportClosure(path.resolve(import.meta.dir, ".."));
+  closure ??= replayImportClosure(path.resolve(import.meta.dirname, ".."));
   return [...closure].some((file) => filename.endsWith(file));
 };
 
