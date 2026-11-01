@@ -340,6 +340,8 @@ export const narrativeTitles = (suggestion: ActivitySuggestion) =>
   ].slice(0, NARRATIVE_TITLE_LIMIT);
 
 export type EvidenceRow = {
+  /** The app the row's time was recorded in; it picks the row's icon. */
+  appIdentifier: string;
   durationMs: number;
   id: string;
   label: string;
@@ -352,6 +354,7 @@ export const titleRows = (suggestion: ActivitySuggestion): EvidenceRow[] =>
   suggestion.evidence
     .flatMap(({ identifier, details }) =>
       details.map(({ title, durationMs }) => ({
+        appIdentifier: identifier,
         durationMs,
         id: `${identifier}:${title}`,
         label: title,
@@ -367,6 +370,7 @@ export const titleRows = (suggestion: ActivitySuggestion): EvidenceRow[] =>
 /** The Apps tab: each app's time in the suggestion. */
 export const appRows = (suggestion: ActivitySuggestion): EvidenceRow[] =>
   suggestion.apps.map(({ identifier, name, durationMs }) => ({
+    appIdentifier: identifier,
     durationMs,
     id: identifier,
     label: name,

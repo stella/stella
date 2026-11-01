@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Zaloguj się ponownie, aby kontynuować tę czynność.",
     "resendCode": "Wyślij kod ponownie na <email>{emailAddress}</email>",
     "selectOrganization": "Wybierz organizację",
+    "sessionExpired": "Twoja sesja wygasła",
+    "sessionExpiredDescription": "Zaloguj się w nowej karcie. Wpisana treść pozostanie na tej stronie.",
     "signIn": "Zaloguj się",
     "signInBeforeInvitation": "Musisz się zalogować, zanim będziesz mógł przyjąć zaproszenie do organizacji.",
     "signInWithPassword": "Zaloguj się hasłem",
@@ -891,6 +893,24 @@
       "title": "Sugestie na podstawie Twojej aktywności",
       "unnamedRecord": "Wpis w sprawie"
     },
+    "timeReport": {
+      "billableHours": "Godziny podlegające rozliczeniu",
+      "billableShare": "Udział godzin podlegających rozliczeniu",
+      "change": "Zmiana: {value}",
+      "changePoints": "Zmiana w punktach procentowych: {value}",
+      "collapse": "Zwiń {name}",
+      "empty": "Rejestruj czas, aby wypełnić ten raport.",
+      "expand": "Rozwiń {name}",
+      "internal": "Wewnętrzne",
+      "pendingEntries": "Oczekuje na zatwierdzenie",
+      "period": "Okres",
+      "privacy": "Ten raport obejmuje tylko zarejestrowane wpisy czasu. Aktywność na komputerze pozostaje na każdym urządzeniu.",
+      "title": "Raport czasu zespołu",
+      "tooLargeToLoad": "Ten raport jest zbyt duży, aby go wczytać. Skróć zakres albo pokaż tygodnie lub miesiące jako kolumny.",
+      "tooManyCells": "Ten raport jest zbyt duży, aby go tu wyświetlić. Skróć zakres, pokaż tygodnie lub miesiące jako kolumny albo wyeksportuj go do CSV.",
+      "total": "Razem",
+      "unbilledValue": "Nierozliczona wartość godzin podlegających rozliczeniu"
+    },
     "timerActive": "Timer uruchomiony",
     "timesheets": "Karta czasu pracy",
     "total": "Razem",
@@ -928,6 +948,7 @@
     "desktopUnavailable": "Połącz lub zaktualizuj stella desktop.",
     "featureUnavailable": "Ta funkcja jest niedostępna.",
     "ocrUnavailable": "OCR jest niedostępne.",
+    "openSettings": "Otwórz ustawienia",
     "translationMissing": "Nie skonfigurowano usługi tłumaczenia."
   },
   "caseLaw": {
@@ -1104,9 +1125,9 @@
     "loadingMore": "Ładowanie kolejnych...",
     "marginFilter": {
       "label": "Filtr przywołanych przepisów",
-      "paragraph": "{count, plural, =0 {Brak przepisów przywołanych w ¶{paragraph}} one {# przepis przywołany w ¶{paragraph}} few {# przepisy przywołane w ¶{paragraph}} many {# przepisów przywołanych w ¶{paragraph}} other {# przepisu przywołanego w ¶{paragraph}}}",
-      "selection": "{count, plural, =0 {Brak przepisów przywołanych w zaznaczonym fragmencie} one {# przepis przywołany w zaznaczonym fragmencie} few {# przepisy przywołane w zaznaczonym fragmencie} many {# przepisów przywołanych w zaznaczonym fragmencie} other {# przepisu przywołanego w zaznaczonym fragmencie}}",
-      "unnumberedParagraph": "{count, plural, =0 {Brak przepisów przywołanych w tym akapicie} one {# przepis przywołany w tym akapicie} few {# przepisy przywołane w tym akapicie} many {# przepisów przywołanych w tym akapicie} other {# przepisu przywołanego w tym akapicie}}"
+      "paragraph": "{count, plural, one {# przepis przywołany w ¶{paragraph}} few {# przepisy przywołane w ¶{paragraph}} many {# przepisów przywołanych w ¶{paragraph}} other {# przepisu przywołanego w ¶{paragraph}}}",
+      "selection": "{count, plural, one {# przepis przywołany w zaznaczonym fragmencie} few {# przepisy przywołane w zaznaczonym fragmencie} many {# przepisów przywołanych w zaznaczonym fragmencie} other {# przepisu przywołanego w zaznaczonym fragmencie}}",
+      "unnumberedParagraph": "{count, plural, one {# przepis przywołany w tym akapicie} few {# przepisy przywołane w tym akapicie} many {# przepisów przywołanych w tym akapicie} other {# przepisu przywołanego w tym akapicie}}"
     },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# orzeczenie było już tutaj zapisane} few {# orzeczenia były już tutaj zapisane} many {# orzeczeń było już tutaj zapisanych} other {# orzeczeń było już tutaj zapisanych}}",
@@ -1337,9 +1358,30 @@
       "none": "Bez konfiguracji"
     },
     "skillNeedsUnavailableTools": "Niedostępna w czacie. Wymaga narzędzia, które nie jest tam dostępne: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Ukrywa nazwiska klientów, numery rachunków, adresy i inne dane osobowe przed udostępnieniem zawartości sprawy dostawcom AI. Działanie odwracalne po stronie klienta; tekst jawny nigdy nie opuszcza Twojego obszaru roboczego.",
+      "ares": "Wyszukiwanie czeskich firm po numerze IČO lub nazwie w publicznym rejestrze ARES (administracyjny rejestr podmiotów gospodarczych, czeski odpowiednik rejestru handlowego).",
+      "boe": "Hiszpańskie skonsolidowane akty prawne, dziennik urzędowy i BORME (biuletyn rejestru handlowego) z oficjalnego otwartego API Boletín Oficial del Estado.",
+      "brreg": "Wyszukiwanie norweskich firm po organisasjonsnummer lub nazwie w publicznym otwartym API Enhetsregisteret (Brreg).",
+      "companiesHouse": "Wyszukiwanie brytyjskich firm po numerze rejestracyjnym Companies House lub nazwie w publicznym API danych Companies House. Wymaga bezpłatnego klucza API.",
+      "createDocx": "Tworzy dokumenty Word z poziomu czatu, z formatowaniem, tabelami, nagłówkami i osadzonymi stylami. Wynik można pobrać i edytować w Wordzie, LibreOffice i Pages.",
+      "denue": "Wyszukiwanie meksykańskich zakładów i jednostek gospodarczych po identyfikatorze zakładu DENUE, nazwie lub firmie w oficjalnym API DENUE instytutu INEGI. DENUE to katalog zakładów, a nie rejestr spółek Registro Público de Comercio. Wymaga bezpłatnego tokenu API INEGI.",
+      "edgar": "Wyszukiwanie amerykańskich spółek publicznych po Central Index Key (CIK) w API zgłoszeń EDGAR komisji SEC.",
+      "gcis": "Wyszukiwanie tajwańskich firm po 統一編號 (tongbian, identyfikator podatkowy) lub nazwie w otwartym API portalu Commerce Industrial Services Ministerstwa Gospodarki (MoEA).",
+      "infosoud": "Wyszukiwanie czeskich spraw sądowych i kalendarz rozpraw z infosoud.gov.cz. Szukaj po sygnaturze, sądzie lub stronie, aby poznać terminy rozpraw i stan sprawy.",
+      "krs": "Wyszukiwanie polskich firm po numerze KRS w otwartym API Krajowego Rejestru Sądowego (KRS) Ministerstwa Sprawiedliwości. Obejmuje Rejestr Przedsiębiorców oraz Rejestr Stowarzyszeń (stowarzyszenia i fundacje).",
+      "orsr": "Wyszukiwanie słowackich firm po numerze IČO lub nazwie w API JSON Obchodný register Slovenskej republiky prowadzonym przez Ministerstwo Sprawiedliwości.",
+      "prh": "Wyszukiwanie fińskich firm po Y-tunnus lub nazwie w otwartym API AvoinData v3 urzędu Patentti- ja rekisterihallitus (PRH).",
+      "rechercheEntreprises": "Wyszukiwanie francuskich firm po SIREN, SIRET lub nazwie w otwartym API recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Słowackie wyszukiwanie po IČO lub nazwie w Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO) prowadzonym przez Urząd Statystyczny Republiki Słowackiej. Obejmuje wszystkie osoby prawne i przedsiębiorców, w tym jednoosobowe działalności, stowarzyszenia, fundacje i organy publiczne spoza rejestru handlowego.",
+      "vies": "Weryfikacja numerów VAT w całej UE przez API REST systemu wymiany informacji o VAT (VIES) Komisji Europejskiej. Potwierdza, czy numer VAT jest zarejestrowany w państwie członkowskim dostawcy, i zwraca nazwę oraz adres podmiotu, jeśli państwo członkowskie je ujawnia.",
+      "webSearch": "Wyszukiwanie w publicznej sieci i czytanie poszczególnych stron. Gdy ustawiono jurysdykcję, zapytania trafiają najpierw do źródeł pierwotnych (sądy, portale prawne), w przeciwnym razie do otwartej sieci. Włączane dla każdej rozmowy osobno."
+    },
     "toolNames": {
       "anonymize": "Anonimizuj",
       "createDocx": "Utwórz DOCX",
+      "gcis": "Rejestr spółek GCIS",
+      "vies": "Weryfikacja VAT UE (VIES)",
       "webSearch": "Wyszukiwanie w sieci"
     },
     "unavailable": "Jeszcze niedostępne"
@@ -3034,6 +3076,7 @@
     },
     "compareChangeSummary": "Zmiany według typu",
     "compareCreated": "Utworzono dokument ze śledzonymi zmianami",
+    "compareDocxOnly": "Porównaj (tylko DOCX)",
     "compareFailed": "Porównanie nie powiodło się",
     "compareNeedsTwoVersions": "Prześlij inną wersję DOCX do porównania.",
     "compareNoChanges": "Nie znaleziono obsługiwanych różnic.",
@@ -3089,6 +3132,7 @@
     "selectVersion": "Wybierz wersję",
     "setLabel": "Ustaw oznaczenie",
     "showDiff": "Pokaż różnice",
+    "showText": "Pokaż tekst",
     "showVersionList": "Pokaż historię wersji",
     "uploadDate": "Data przesłania",
     "uploadNewVersion": "Prześlij nową wersję",
@@ -4048,6 +4092,28 @@
       "skippedReasonOutsideSkillFolder": "Poza folderem umiejętności",
       "skippedReasonUnsupportedExtension": "Nieobsługiwany typ pliku",
       "skippedReasonUnsupportedFolder": "Poza folderem zasobów",
+      "starter": {
+        "compare": {
+          "body": "Porównaj dwie wersje tego dokumentu i wypisz każdą istotną zmianę wraz z jej lokalizacją.",
+          "description": "Wypisz każdą istotną zmianę między dwiema wersjami",
+          "name": "Porównaj wersje"
+        },
+        "draft": {
+          "body": "Przygotuj wyważoną odpowiedź na to pismo. Zachowaj profesjonalny ton, odnieś się do każdego poruszonego punktu i wskaż otwarte kwestie, które mam potwierdzić.",
+          "description": "Przygotuj profesjonalną odpowiedź na pismo",
+          "name": "Przygotuj odpowiedź"
+        },
+        "risks": {
+          "body": "Sprawdź ten dokument pod kątem ryzyk prawnych, brakujących zabezpieczeń i niejednoznacznych klauzul. Przy każdym ustaleniu wskaż konkretną klauzulę.",
+          "description": "Wskaż ryzyka prawne i niejednoznaczne klauzule",
+          "name": "Znajdź ryzyka"
+        },
+        "summarize": {
+          "body": "Podsumuj ten dokument. Uwzględnij strony, główne zobowiązania, terminy, warunki finansowe oraz ewentualne klauzule dotyczące rozwiązania umowy lub odpowiedzialności.",
+          "description": "Uzyskaj uporządkowane podsumowanie najważniejszych warunków",
+          "name": "Podsumuj dokument"
+        }
+      },
       "uploadHelp": "Użyj pliku SKILL.md lub folderu .zip zawierającego SKILL.md i opcjonalne zasoby tylko do odczytu.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/sciezka/do/umiejetnosci",
       "version": "Wersja: {version}"
@@ -4729,6 +4795,7 @@
     "creationRefused": "Nie udało się utworzyć organizacji. Sprawdź dane i spróbuj ponownie.",
     "creationSlugConflict": "Ten adres organizacji jest już używany. Wybierz inną nazwę lub inny adres.",
     "invitations": {
+      "cancelConfirmDescription": "Link z zaproszenia wysłanego na adres {email} przestanie działać. Aby ponownie zaprosić tę osobę, wyślij nowe zaproszenie.",
       "cancelInvitation": "Anuluj zaproszenie",
       "emailAddressLabel": "Adres e-mail",
       "emailAddressPlaceholder": "uzytkownik@example.com",
@@ -4736,6 +4803,7 @@
       "inviteMember": "Zaproś członka",
       "inviteMemberDescription": "Wyślij zaproszenie do organizacji",
       "invited": "Zaproszony",
+      "keepInvitation": "Zachowaj zaproszenie",
       "noInvitationsFound": "Nie znaleziono zaproszeń",
       "resendInvitation": "Wyślij ponownie zaproszenie",
       "sendInvitation": "Wyślij zaproszenie",
@@ -4972,6 +5040,7 @@
     "caseLawEmptyState": "Zacznij pisać, aby przeszukać orzeczenia sądowe.",
     "caseLawMatchingDecisions": "{count, plural, one {# pasujące orzeczenie} few {# pasujące orzeczenia} many {# pasujących orzeczeń} other {# pasującego orzeczenia}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ pasujące orzeczenie} few {#+ pasujące orzeczenia} many {#+ pasujących orzeczeń} other {#+ pasującego orzeczenia}}",
+    "chatCoveragePartial": "Nie wszystkie czaty przeszukano w całości.",
     "continueInChat": "Kontynuuj na czacie",
     "dateFrom": "Od",
     "dateTo": "Do",
@@ -5108,8 +5177,8 @@
       "desktopDocumentsTitle": "Edycja dokumentów na komputerze",
       "desktopDownloadMac": "Pobierz dla macOS",
       "desktopDownloadOtherMac": "Używasz Windowsa? Pobierz dla Windows",
-      "desktopDownloadOtherWindows": "Lub pobierz instalator .msi do wdrożeń zarządzanych przez IT",
       "desktopDownloadWindows": "Pobierz dla Windows",
+      "desktopDownloadWindowsArm": "Windows na ARM? Pobierz wersję na ARM",
       "desktopHeroTitle": "Schowek gotowy, gdy go potrzebujesz",
       "desktopInstallMacStep": "Otwórz plik DMG i przeciągnij stella desktop do folderu Aplikacje.",
       "desktopInstallOpenStep": "Otwórz stella desktop jeden raz. Schowek pojawi się od razu i pozostanie dostępny z paska menu macOS lub zasobnika systemowego Windows.",
@@ -5330,6 +5399,7 @@
         "legal_list_item": "pozycja listy prawnej",
         "legal_list_verification": "weryfikacja listy prawnej",
         "legal_resolve": "wyszukanie odniesienia prawnego",
+        "legislation_matter_link": "powiązanie przepisu ze sprawą",
         "machine_api_key": "maszynowy klucz API",
         "mcp_connection": "połączenie MCP",
         "mcp_gateway_tool": "narzędzie bramy MCP",
@@ -5784,6 +5854,7 @@
       "open": "Otwarte"
     },
     "subtasks": "Podzadania",
+    "taskCompleted": "Zadanie ukończone",
     "title": "Zadania",
     "untitled": "Zadanie bez tytułu",
     "workTypeValues": {
@@ -6296,6 +6367,7 @@
     },
     "createNewWorkspace": "Utwórz nową sprawę",
     "defaultName": "Bez tytułu",
+    "deleteFromMatter": "Usuń ze sprawy…",
     "deleteItem": "Usuń element",
     "deleteItems": "Usuń {count, plural, one {# element} few {# elementy} many {# elementów} other {# elementów}}",
     "deleteItemsDescription": "Czy na pewno chcesz usunąć {count, plural, one {# element} few {# elementy} many {# elementów} other {# elementów}}? Tej operacji nie można cofnąć.",
@@ -6391,6 +6463,7 @@
       "downloadSearchablePdf": "Przeszukiwalny PDF",
       "downloadWithComments": "Pobierz z komentarzami",
       "emptyFile": "Plik jest pusty.",
+      "fileTooLarge": "Plik jest większy niż {limit, number} MB.",
       "includeReferenceNumber": "Dołącz numer referencyjny",
       "itemLimitReached": "Ta sprawa osiągnęła limit elementów.",
       "maxEntitiesReached": "Osiągnięto maksymalną liczbę elementów",
@@ -6680,11 +6753,14 @@
         "empty": "Brak aktywności w tej sprawie.",
         "fields": {
           "dueDate": "termin",
+          "name": "nazwa",
           "parentFolder": "folder nadrzędny",
           "priority": "priorytet",
           "property": "właściwość",
           "schedule": "harmonogram",
-          "sortOrder": "kolejność"
+          "sortOrder": "kolejność",
+          "status": "status",
+          "type": "typ"
         },
         "filterLabel": "Filtruj aktywność",
         "filters": {
@@ -6734,8 +6810,18 @@
           "team": "zespół sprawy",
           "translation": "tłumaczenie"
         },
+        "taskLinks": {
+          "added": "Połączył(-a) {name} z",
+          "addedUnnamed": "Połączył(-a) element z",
+          "removed": "Odłączył(-a) {name} od",
+          "removedUnnamed": "Odłączył(-a) element od"
+        },
         "title": "Aktywność",
         "updatedFields": "Zaktualizowano: {fields}",
+        "versions": {
+          "added": "Dodał(-a) wersję {version} dokumentu",
+          "deleted": "Usunął(-ęła) wersję {version} dokumentu"
+        },
         "views": {
           "list": "Widok listy",
           "timeline": "Widok osi czasu"

@@ -297,6 +297,9 @@ const SCOPE_STRICTNESS: Record<string, number> = {
  * the same consent.
  */
 const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
+  "legislation.matter-links.batch.create": "stella:matters_write",
+  "legislation.matter-links.create": "stella:matters_write",
+  "legislation.matter-links.delete": "stella:matters_write",
   // Creating an organization is an account-level grant, not an administrative
   // write inside the caller's current organization.
   "organizations.create": "stella:organization_create",
