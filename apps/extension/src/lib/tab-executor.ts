@@ -1882,8 +1882,9 @@ const runGoBack = async (
   }
 };
 
+/** What makes a tab chat's to switch to: who opened it, never a listing. */
 const NOT_A_CHAT_TAB =
-  "That tab is not one of chat's tabs. Switch only to a tab listed in the latest snapshot's tabs, or open the page.";
+  "That tab is not one of chat's tabs. Chat may switch only to a tab it controlled before, or one a page in its tabs opened, that the user has not navigated themselves since. Open the page instead.";
 
 /**
  * Hands control to another of chat's tabs: one chat controlled before, or

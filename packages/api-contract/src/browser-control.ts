@@ -257,9 +257,10 @@ const goBackActionSchema = v.strictObject({
 });
 
 /**
- * Makes another of chat's tabs, as the latest snapshot's `tabs` lists them,
- * the controlled tab. `url` is the address the list showed; the tab must
- * still be on its origin.
+ * Makes another of chat's tabs the controlled tab: one chat controlled
+ * before, or one a page in chat's tabs opened, that the user has not
+ * navigated themselves since. Snapshots list them under `tabs`. `url` is the
+ * address chat knows the tab by; the tab must still be on its origin.
  */
 const switchTabActionSchema = v.strictObject({
   action: v.literal(BROWSER_CONTROL_ACTION.switchTab),

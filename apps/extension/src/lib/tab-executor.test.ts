@@ -969,6 +969,26 @@ describe("chat's tabs", () => {
     });
   });
 
+  test("ownership, not a listing, decides which tab chat may switch to", async () => {
+    const { handlers, tabs } = installChatTabs({ opened: [RESULTS_TAB_ID, 6] });
+    // Tab 6 was on an error page when chat last read, so no list showed it;
+    // it is chat's all the same.
+    tabs.set(6, { id: 6, status: "complete", url: RESULTS_URL });
+    handlers["snapshot"] = () => [
+      { frameId: 0, result: frameSnapshot("Results", RESULTS_URL) },
+    ];
+    expect(await run(switchTo(6))).toMatchObject({
+      snapshot: { tabId: 6 },
+      status: "success",
+    });
+
+    // The refusal names the rule chat is held to.
+    const refusal = JSON.stringify(await run(switchTo(USER_TAB_ID, PAGE_URL)));
+    expect(refusal).toContain(BROWSER_CONTROL_ERROR_CODE.tabChanged);
+    expect(refusal).toContain("controlled before");
+    expect(refusal).not.toContain("listed");
+  });
+
   test("refuses a tab that left the origin the user approved", async () => {
     const { log, session, tabs } = installChatTabs();
     const { budget, events } = createBudget();
