@@ -106,6 +106,13 @@ test("state-column ownership covers every scoped runtime transition", () => {
         stateColumn: "state",
       },
       organizationAccessState,
+      // The population seed advances one singleton row through its phases.
+      {
+        tableName: "caseLawPopulationSeedState",
+        key: "slot",
+        scope: [],
+        stateColumn: "phase",
+      },
       ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
       ...Object.values(FOLIO_COLLAB_TRANSITION_IDENTITIES),
     ].toSorted(order),

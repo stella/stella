@@ -19,7 +19,10 @@ import {
   SetupBadge,
 } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
 import {
   DownloadAffordance,
   InstallButtonPlaceholder,
@@ -95,6 +98,10 @@ function PublicToolDetail() {
   const navigate = Route.useNavigate();
   const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
   const displayName = labelKey ? t(labelKey) : entry.displayName;
+  const descriptionKey = nativeToolDescriptionKey({
+    slug: entry.slug,
+    kind: entry.kind,
+  });
   const homepage = entry.homepage ? sanitizeHref(entry.homepage) : undefined;
 
   return (
@@ -122,7 +129,7 @@ function PublicToolDetail() {
         </div>
 
         <p className="text-foreground text-sm" dir="auto">
-          {entry.description}
+          {descriptionKey ? t(descriptionKey) : entry.description}
         </p>
 
         <div className="flex flex-wrap items-center gap-1.5">

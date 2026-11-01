@@ -64,6 +64,7 @@ import {
 } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import type { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import type { WorkspaceDeletionDependencies } from "@/api/lib/workspace-deletion";
 
@@ -236,8 +237,12 @@ export type ReviewResetReport = {
 };
 
 export type ReviewResetDependencies = {
+  flushWorkspaceSearchRepairs: typeof flushWorkspaceSearchRepairs;
   seed?: ReviewSeedDependencies | undefined;
-  workspaceDeletion?: Omit<WorkspaceDeletionDependencies, "database">;
+  workspaceDeletion?: Omit<
+    WorkspaceDeletionDependencies,
+    "database" | "flushWorkspaceSearchRepairs"
+  >;
   /** Test seam: runs after the target is proved, before the first delete. */
   afterTargetResolved?: (() => Promise<void>) | undefined;
   /** Test seam: runs after the per-row deletes, before the sweep transaction. */
@@ -338,7 +343,7 @@ export type ReviewResetOptions = {
   /** The scheduler run, stamped on every audit row the reset writes. */
   runId: string;
   signal: AbortSignal;
-  dependencies?: ReviewResetDependencies | undefined;
+  dependencies: ReviewResetDependencies;
 };
 
 const failureReason = (error: unknown): string =>
@@ -477,6 +482,8 @@ const deleteMatters = async (scope: ResetScope) => {
               return await callback(tx);
             }),
         },
+        flushWorkspaceSearchRepairs:
+          scope.dependencies.flushWorkspaceSearchRepairs,
       },
     );
     return Result.isOk(outcome) && outcome.value.status !== "deleted"
@@ -506,6 +513,8 @@ const deleteContacts = async (scope: ResetScope) => {
           organizationId,
           contactId: contact.id,
           recordAuditEvent: scope.recorderFor(null),
+          flushWorkspaceSearchRepairs:
+            scope.dependencies.flushWorkspaceSearchRepairs,
         }),
       ),
   );
@@ -697,7 +706,7 @@ export const resetReviewOrganization = async ({
   rlsDatabase,
   runId,
   signal,
-  dependencies = {},
+  dependencies,
 }: ReviewResetOptions): Promise<
   Result<ReviewResetReport, ReviewResetRefusedError>
 > => {

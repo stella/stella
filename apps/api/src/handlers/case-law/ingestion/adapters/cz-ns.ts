@@ -1,9 +1,11 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
+import { normalizeCzechJudgeName } from "@stll/legal-ast/czech-document-roles";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -54,6 +56,7 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceField,
   excludedSourceSurface,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -450,7 +453,7 @@ const extractJudge = (text: string): string | undefined => {
     for (const title of window.matchAll(JUDGE_TITLE_RE)) {
       const name = window.slice(title.index).trim();
       if (JUDGE_NAME_RE.test(name)) {
-        return name;
+        return normalizeCzechJudgeName(name);
       }
     }
   }
@@ -1662,6 +1665,7 @@ export const czNsAdapter = defineSourceAdapter({
                   type: "item_build_failed",
                   count: refused,
                 },
+                publisherRequest: PUBLISHER_REQUEST.ANSWERED,
                 nextCursor: String(start + i),
                 sourceUrl: listPage.url,
               };
@@ -1680,6 +1684,7 @@ export const czNsAdapter = defineSourceAdapter({
                   type: "item_build_failed",
                   count: refused,
                 },
+                publisherRequest: PUBLISHER_REQUEST.ANSWERED,
                 nextCursor: String(start + i),
                 sourceUrl: listPage.url,
               };
@@ -1701,6 +1706,7 @@ export const czNsAdapter = defineSourceAdapter({
 
         return {
           decisions,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor,
           sourceUrl: listPage.url,
           itemBuildFailures: { type: "item_build_failed", count: refused },
