@@ -31,10 +31,11 @@ const endsSentence = (title: string): boolean =>
 /**
  * A finite operative verb marks a quoted or issued ruling item, never a title.
  * Appellate decisions quote the lower court's verdict as `I. Žalovaný je
- * povinen zaplatit…`.
+ * povinen zaplatit…`. `povinen` is the masculine form, `povinna`, `povinni`,
+ * `povinny` the others.
  */
 const OPERATIVE_VERB_RE =
-  /(?<!\p{L})(?:je|jsou)\s+povinn\p{L}*|(?<!\p{L})se\s+(?:zamítá|zamítají|ruší|zrušuje|mění|potvrzuje|odmítá|zastavuje)(?!\p{L})|(?<!\p{L})zaplatit(?!\p{L})/iu;
+  /(?<!\p{L})(?:je|jsou)\s+povin(?:en|n\p{L}*)(?!\p{L})|(?<!\p{L})se\s+(?:zamítá|zamítají|ruší|zrušuje|mění|potvrzuje|odmítá|zastavuje)(?!\p{L})|(?<!\p{L})zaplatit(?!\p{L})/iu;
 const ROMAN_ITEM_RE = /^(?<numeral>(?=[IVX])X{0,3}(?:IX|IV|V?I{0,3}))\.\s+\S/u;
 
 /** The number of a paragraph opening with a Roman numeral, whatever follows it. */

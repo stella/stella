@@ -291,7 +291,7 @@ describe("the operative part of a Constitutional Court decision", () => {
     block.type === "paragraph" &&
     (block.role === "closing" ||
       block.role === "signature" ||
-      /^Poučení/u.test(block.plainText));
+      block.plainText.startsWith("Poučení"));
 
   test("every fixture is read", () => {
     expect(fixtures.length).toBeGreaterThan(0);

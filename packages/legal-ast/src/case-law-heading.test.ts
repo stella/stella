@@ -65,6 +65,8 @@ describe("section heading title shape", () => {
     "VI. Úhrada nákladů zaplatit",
     "VII. Žaloba se zamítá.",
     "VIII. Výrok o nákladech;",
+    "IX. Žalovaný je povinen",
+    "X. Žalované jsou povinny",
   ])("leaves %j as text", (text) => {
     expect(caseLawSectionHeading(text)).toBeNull();
   });

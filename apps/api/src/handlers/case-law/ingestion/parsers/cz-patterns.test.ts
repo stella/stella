@@ -130,7 +130,7 @@ describe("CZ_JUDGE_TITLE_RE whole-word property", () => {
 
   test("declined forms never match", () => {
     assertProperty(
-      "legal-ast.cz-judge-title.declined-forms",
+      "declined forms never match",
       fc.property(
         declinedArb,
         nameArb,
@@ -150,7 +150,7 @@ describe("CZ_JUDGE_TITLE_RE whole-word property", () => {
 
   test("nominative titles on a short line with a name match", () => {
     assertProperty(
-      "legal-ast.cz-judge-title.nominative-forms",
+      "nominative titles on a short line with a name match",
       fc.property(titleArb, nameArb, fc.boolean(), (title, name, nameFirst) => {
         expect(
           CZ_JUDGE_TITLE_RE.test(
