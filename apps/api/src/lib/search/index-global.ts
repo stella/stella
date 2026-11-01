@@ -2183,79 +2183,92 @@ export const reindexWorkspacesForContact = async (
 export const rebuildSupplementalSearchIndex = async (
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
-  // The owner connection reads contacts inside their organization only.
-  await withOwnerOrganizationScope(
-    rootDb,
+  // The owner connection reads contacts inside their organization only, so
+  // each page commits in its own organization-scoped transaction.
+  await rebuildSupplementalSearchDocuments(
     organizationId,
-    async (tx) => await rebuildSupplementalSearchDocuments(organizationId, tx),
+    rootDb,
+    async (run) =>
+      await withOwnerOrganizationScope(rootDb, organizationId, run),
   );
 };
 
 type KeysetPage<Id extends string> = { last: Id | null; more: boolean };
 
+/**
+ * Runs one page's read and projection writes; a caller that must scope them
+ * (the owner connection) wraps each page in its own transaction.
+ */
+type PageScope = <T>(
+  run: (database: SearchDocumentDatabase) => Promise<T>,
+) => Promise<T>;
+
 // One keyset page of an organization's contacts, rebuilt as one batch.
 const rebuildContactPage = async (
   organizationId: SafeId<"organization">,
   after: SafeId<"contact"> | null,
-  database: SearchDocumentDatabase,
-): Promise<KeysetPage<SafeId<"contact">>> => {
-  const page = await database
-    .select({ id: contacts.id })
-    .from(contacts)
-    .where(
-      after
-        ? and(
-            eq(contacts.organizationId, organizationId),
-            gt(contacts.id, after),
-          )
-        : eq(contacts.organizationId, organizationId),
-    )
-    .orderBy(asc(contacts.id))
-    .limit(REINDEX_BATCH_SIZE);
-  await writeContactProjections(
-    page.map(({ id }) => id),
-    database,
-  );
-  return {
-    last: page.at(-1)?.id ?? after,
-    more: page.length === REINDEX_BATCH_SIZE,
-  };
-};
+  inPage: PageScope,
+): Promise<KeysetPage<SafeId<"contact">>> =>
+  await inPage(async (pageDatabase) => {
+    const page = await pageDatabase
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(
+        after
+          ? and(
+              eq(contacts.organizationId, organizationId),
+              gt(contacts.id, after),
+            )
+          : eq(contacts.organizationId, organizationId),
+      )
+      .orderBy(asc(contacts.id))
+      .limit(REINDEX_BATCH_SIZE);
+    await writeContactProjections(
+      page.map(({ id }) => id),
+      pageDatabase,
+    );
+    return {
+      last: page.at(-1)?.id ?? after,
+      more: page.length === REINDEX_BATCH_SIZE,
+    };
+  });
 
 // One keyset page of an organization's matters, rebuilt as one batch.
 const rebuildWorkspacePage = async (
   organizationId: SafeId<"organization">,
   after: SafeId<"workspace"> | null,
-  database: SearchDocumentDatabase,
-): Promise<KeysetPage<SafeId<"workspace">>> => {
-  const page = await database
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(
-      after
-        ? and(
-            eq(workspaces.organizationId, organizationId),
-            gt(workspaces.id, after),
-          )
-        : eq(workspaces.organizationId, organizationId),
-    )
-    .orderBy(asc(workspaces.id))
-    .limit(REINDEX_BATCH_SIZE);
-  await writeWorkspaceProjections(
-    page.map(({ id }) => id),
-    database,
-  );
-  return {
-    last: page.at(-1)?.id ?? after,
-    more: page.length === REINDEX_BATCH_SIZE,
-  };
-};
+  inPage: PageScope,
+): Promise<KeysetPage<SafeId<"workspace">>> =>
+  await inPage(async (pageDatabase) => {
+    const page = await pageDatabase
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(
+        after
+          ? and(
+              eq(workspaces.organizationId, organizationId),
+              gt(workspaces.id, after),
+            )
+          : eq(workspaces.organizationId, organizationId),
+      )
+      .orderBy(asc(workspaces.id))
+      .limit(REINDEX_BATCH_SIZE);
+    await writeWorkspaceProjections(
+      page.map(({ id }) => id),
+      pageDatabase,
+    );
+    return {
+      last: page.at(-1)?.id ?? after,
+      more: page.length === REINDEX_BATCH_SIZE,
+    };
+  });
 
 // Keyset pages of one organization's contacts, then its matters. Each page
 // is one batch: a read of its sources and one projection transaction.
 export const rebuildSupplementalSearchDocuments = async (
   organizationId: SafeId<"organization">,
   database: SearchDocumentDatabase,
+  inPage: PageScope = async (run) => await run(database),
 ): Promise<void> => {
   let contactPage: KeysetPage<SafeId<"contact">> = { last: null, more: true };
   while (contactPage.more) {
@@ -2263,7 +2276,7 @@ export const rebuildSupplementalSearchDocuments = async (
     contactPage = await rebuildContactPage(
       organizationId,
       contactPage.last,
-      database,
+      inPage,
     );
   }
 
@@ -2276,7 +2289,7 @@ export const rebuildSupplementalSearchDocuments = async (
     workspacePage = await rebuildWorkspacePage(
       organizationId,
       workspacePage.last,
-      database,
+      inPage,
     );
   }
 };
