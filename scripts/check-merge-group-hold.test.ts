@@ -33,6 +33,7 @@ const groupFixture = (numbers: number[]) => {
     added: { total_commits: commits.length, commits },
   };
 };
+const headOf = (number: number) => number.toString(16).padStart(40, "c");
 const fixture = (numbers: number[], held: number[] = []) => {
   const { group, added } = groupFixture(numbers);
   const calls: string[] = [];
@@ -42,15 +43,18 @@ const fixture = (numbers: number[], held: number[] = []) => {
         [number, held.includes(number) ? [{ name: HOLD_LABEL }] : []] as const,
     ),
   );
+  const variables: Record<string, unknown> = {};
   return {
     labels,
+    variables,
     calls,
     group,
-    run: (eventName = "merge_group") =>
+    run: (eventName = "merge_group", holdVariables: unknown = variables) =>
       checkMergeGroupHold({
         eventName,
         group,
         repository: "stella/stella",
+        holdVariables,
         readApi: (endpoint) => {
           calls.push(endpoint);
           if (endpoint.includes("/compare/")) {
@@ -58,7 +62,11 @@ const fixture = (numbers: number[], held: number[] = []) => {
           }
           const number = Number(endpoint.split("/").at(-1));
           expect(numbers).toContain(number);
-          return { number, labels: labels.get(number) };
+          return {
+            number,
+            labels: labels.get(number),
+            head: { sha: headOf(number) },
+          };
         },
       }),
   };
@@ -90,6 +98,77 @@ test("a label added after enqueue refuses the group", () => {
   expect(() => run.run()).toThrow("HOLD_LABEL_PRESENT");
 });
 
+test("a hold variable refuses its member without the label", () => {
+  for (const value of [
+    "pending",
+    "held since 2027-01-15T07:00Z",
+    `cleared @${"d".repeat(40)} after review`, // a clearance for an earlier head
+    `cleared @${headOf(18).toUpperCase()}`, // the grammar is exact lower-case hex
+  ]) {
+    const run = fixture([17, 18, 19]);
+    run.variables["STELLA_PR_HOLD_18"] = value;
+    expect(() => run.run()).toThrow(
+      `HOLD_VARIABLE_PRESENT: group ${run.group.head_ref} (${run.group.head_sha}): pull requests #18 are held for their current head`,
+    );
+    expect(run.calls.filter((call) => call.includes("/pulls/"))).toHaveLength(
+      3,
+    );
+  }
+});
+
+test("an empty variable or a clearance of the live head passes", () => {
+  for (const value of [
+    "",
+    `cleared @${headOf(18)}`,
+    `cleared @${headOf(18)} at 2027-01-15T07:00Z`,
+  ]) {
+    const run = fixture([17, 18, 19]);
+    run.variables["STELLA_PR_HOLD_18"] = value;
+    run.variables["UNRELATED"] = "pending";
+    run.run();
+  }
+});
+
+test("a label and a variable are both named", () => {
+  const run = fixture([17, 18], [17]);
+  run.variables["STELLA_PR_HOLD_18"] = "pending";
+  expect(() => run.run()).toThrow(
+    "HOLD_LABEL_PRESENT: group " +
+      `${run.group.head_ref} (${run.group.head_sha}): pull requests #17 carry ${HOLD_LABEL}; pull requests #18 are held for their current head`,
+  );
+});
+
+test("missing or malformed variable context fails closed before any read", () => {
+  for (const holdVariables of [undefined, null, "{}", ["x"]]) {
+    const run = fixture([17]);
+    expect(() => run.run("merge_group", holdVariables)).toThrow(
+      "HOLD_MISSING_VARIABLE_CONTEXT",
+    );
+    expect(run.calls).toEqual([]);
+  }
+  const run = fixture([17]);
+  run.variables["STELLA_PR_HOLD_17"] = 1;
+  expect(() => run.run()).toThrow("HOLD_INVALID_VARIABLE");
+});
+
+test("a member without a readable head fails closed", () => {
+  const { group, added } = groupFixture([17]);
+  for (const head of [undefined, { sha: "x" }, { sha: "A".repeat(40) }]) {
+    expect(() =>
+      checkMergeGroupHold({
+        eventName: "merge_group",
+        group,
+        repository: "stella/stella",
+        holdVariables: {},
+        readApi: (endpoint: string) =>
+          endpoint.includes("/compare/")
+            ? added
+            : { number: 17, labels: [], head },
+      }),
+    ).toThrow("HOLD_INVALID_PULL");
+  }
+});
+
 test("pull request checks pass without API calls", () => {
   const run = fixture([17], [17]);
   run.run("pull_request");
@@ -104,6 +183,7 @@ test("API errors fail closed with a typed message naming the group", () => {
         eventName: "merge_group",
         group,
         repository: "stella/stella",
+        holdVariables: {},
         readApi: (endpoint: string) => {
           if (endpoint.includes(failure)) {
             throw new TypeError("API unavailable");
@@ -111,7 +191,8 @@ test("API errors fail closed with a typed message naming the group", () => {
           if (endpoint.includes("/compare/")) {
             return added;
           }
-          return { number: Number(endpoint.split("/").at(-1)), labels: [] };
+          const number = Number(endpoint.split("/").at(-1));
+          return { number, labels: [], head: { sha: headOf(number) } };
         },
       });
     expect(invoke).toThrow(MergeGroupHoldError);
@@ -146,6 +227,7 @@ test("unmappable or incomplete groups fail closed", () => {
         eventName: "merge_group",
         group,
         repository: "stella/stella",
+        holdVariables: {},
         readApi: () => added,
       }),
     ).toThrow("HOLD_UNMAPPABLE_GROUP");
@@ -386,6 +468,7 @@ test("the required job runs on PRs and merge groups using only trusted base scri
   expect(job?.steps.at(4)?.env?.["MERGE_GROUP_BASE_SHA"]).toBe(
     `\${{ steps.target-base.outputs.base_sha }}`,
   );
+  expect(job?.steps.at(4)?.env?.["HOLD_VARS"]).toBe(`\${{ toJSON(vars) }}`);
   expect(job?.steps.at(3)?.with?.["ref"]).toBe(
     `\${{ steps.target-base.outputs.base_sha }}`,
   );
@@ -393,7 +476,9 @@ test("the required job runs on PRs and merge groups using only trusted base scri
   expect(job?.steps.at(4)?.["timeout-minutes"]).toBeGreaterThan(0);
   expect(job?.steps.at(4)?.if).toBe("github.event_name == 'merge_group'");
   const dequeue = workflow.jobs["dequeue-held-pull-request"];
-  expect(dequeue?.if).toBe("github.event_name == 'pull_request_target'");
+  expect(dequeue?.if).toBe(
+    "github.event_name == 'pull_request_target' && github.event.pull_request.base.ref == github.event.repository.default_branch",
+  );
   expect(dequeue?.permissions).toEqual({
     contents: "read",
     "pull-requests": "write",
