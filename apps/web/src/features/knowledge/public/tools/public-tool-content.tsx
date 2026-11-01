@@ -180,9 +180,13 @@ const McpConfig = ({ entry }: { entry: LoadedEntryByKind<"mcp"> }) => {
   );
 };
 
+// Reserves room for the documentation, so the details below it do not move
+// when the content arrives.
 const ContentLoading = () => {
   const t = useTranslations();
   return (
-    <p className="text-muted-foreground text-sm">{t("publicTools.content")}</p>
+    <p className="text-muted-foreground min-h-96 text-sm">
+      {t("publicTools.content")}
+    </p>
   );
 };

@@ -1,12 +1,13 @@
 import { useTranslations } from "use-intl";
 
-import { MarkdownPreview } from "@/components/markdown-preview";
+import { LoadedMarkdownPreview } from "@/components/markdown-preview-loaded";
 import { CopyButton } from "@/features/knowledge/public/tools/copy-button";
 
 // Client-only: the markdown renderer (streamdown) and clipboard copy are
 // browser concerns. Lazy-loaded by the detail page so SSR stays light;
 // the raw markdown arrives from the route loader (in-tree bundle or a
-// server-fetched pinned SHA).
+// server-fetched pinned SHA). The renderer loads with this chunk, because
+// painting the raw text first moves every line when the rendered text lands.
 export const ToolMarkdown = ({ markdown }: { markdown: string }) => {
   const t = useTranslations();
 
@@ -20,7 +21,7 @@ export const ToolMarkdown = ({ markdown }: { markdown: string }) => {
         <CopyButton text={markdown} />
       </div>
       <div className="border-border bg-card rounded-md border p-4">
-        <MarkdownPreview>{markdown}</MarkdownPreview>
+        <LoadedMarkdownPreview>{markdown}</LoadedMarkdownPreview>
       </div>
     </section>
   );
