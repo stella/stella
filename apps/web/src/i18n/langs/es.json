@@ -4048,6 +4048,28 @@
       "skippedReasonOutsideSkillFolder": "Fuera de la carpeta de la habilidad",
       "skippedReasonUnsupportedExtension": "Tipo de archivo no admitido",
       "skippedReasonUnsupportedFolder": "No está en una carpeta de recursos",
+      "starter": {
+        "compare": {
+          "body": "Compara dos versiones de este documento y enumera cada cambio relevante con su ubicación.",
+          "description": "Enumera cada cambio relevante entre dos versiones",
+          "name": "Comparar versiones"
+        },
+        "draft": {
+          "body": "Redacta una respuesta mesurada a esta carta. Mantén un tono profesional, aborda cada punto planteado y señala las cuestiones abiertas que deba confirmar.",
+          "description": "Redacta una respuesta profesional a una carta",
+          "name": "Redactar una respuesta"
+        },
+        "risks": {
+          "body": "Revisa este documento en busca de riesgos legales, protecciones ausentes y cláusulas ambiguas. Cita la cláusula concreta de cada hallazgo.",
+          "description": "Detecta riesgos legales y cláusulas ambiguas",
+          "name": "Detectar riesgos"
+        },
+        "summarize": {
+          "body": "Resume este documento. Incluye las partes, las obligaciones clave, las fechas, las condiciones financieras y cualquier cláusula de resolución o responsabilidad.",
+          "description": "Obtén un resumen estructurado de las condiciones clave",
+          "name": "Resumir un documento"
+        }
+      },
       "uploadHelp": "Usa un archivo SKILL.md o una carpeta .zip que contenga SKILL.md y recursos opcionales de solo lectura.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/ruta/a/la/habilidad",
       "version": "Versión: {version}"

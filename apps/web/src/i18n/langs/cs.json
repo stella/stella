@@ -4048,6 +4048,28 @@
       "skippedReasonOutsideSkillFolder": "Mimo složku dovednosti",
       "skippedReasonUnsupportedExtension": "Nepodporovaný typ souboru",
       "skippedReasonUnsupportedFolder": "Není ve složce s prostředky",
+      "starter": {
+        "compare": {
+          "body": "Porovnejte dvě verze tohoto dokumentu a vypište všechny podstatné změny včetně toho, kde se nacházejí.",
+          "description": "Vypište všechny podstatné změny mezi dvěma verzemi",
+          "name": "Porovnat verze"
+        },
+        "draft": {
+          "body": "Navrhněte věcnou odpověď na tento dopis. Zachovejte profesionální tón, vyjádřete se ke každému uvedenému bodu a označte otevřené otázky, které mám potvrdit.",
+          "description": "Připravte profesionální odpověď na dopis",
+          "name": "Navrhnout odpověď"
+        },
+        "risks": {
+          "body": "Zkontrolujte, zda tento dokument neobsahuje právní rizika a nejednoznačná ustanovení a zda v něm nechybí ochranná ujednání. U každého zjištění uveďte konkrétní ustanovení.",
+          "description": "Najděte právní rizika a nejednoznačná ustanovení",
+          "name": "Najít rizika"
+        },
+        "summarize": {
+          "body": "Shrňte tento dokument. Uveďte strany, hlavní povinnosti, termíny, finanční podmínky a případná ustanovení o ukončení nebo odpovědnosti.",
+          "description": "Získejte přehledné shrnutí hlavních podmínek",
+          "name": "Shrnout dokument"
+        }
+      },
       "uploadHelp": "Použijte soubor SKILL.md nebo složku .zip obsahující SKILL.md a volitelné zdroje jen pro čtení.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/dovednosti",
       "version": "Verze: {version}"

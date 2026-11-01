@@ -4048,6 +4048,28 @@
       "skippedReasonOutsideSkillFolder": "Už įgūdžio aplanko ribų",
       "skippedReasonUnsupportedExtension": "Nepalaikomas failo tipas",
       "skippedReasonUnsupportedFolder": "Ne išteklių aplanke",
+      "starter": {
+        "compare": {
+          "body": "Palyginkite dvi šio dokumento versijas ir išvardykite visus esminius pakeitimus bei jų vietą.",
+          "description": "Išvardykite visus esminius dviejų versijų pakeitimus",
+          "name": "Palyginti versijas"
+        },
+        "draft": {
+          "body": "Parenkite santūrų atsakymą į šį laišką. Išlaikykite profesionalų toną, aptarkite kiekvieną iškeltą klausimą ir pažymėkite neišspręstus klausimus, kuriuos turiu patvirtinti.",
+          "description": "Parenkite profesionalų atsakymą į laišką",
+          "name": "Parengti atsakymą"
+        },
+        "risks": {
+          "body": "Peržiūrėkite šį dokumentą ir nustatykite teisines rizikas, trūkstamas apsaugos priemones bei dviprasmiškas sąlygas. Prie kiekvienos išvados nurodykite konkrečią sąlygą.",
+          "description": "Raskite teisines rizikas ir dviprasmiškas sąlygas",
+          "name": "Rasti rizikas"
+        },
+        "summarize": {
+          "body": "Apibendrinkite šį dokumentą. Aptarkite šalis, pagrindinius įsipareigojimus, datas, finansines sąlygas ir visas sąlygas dėl nutraukimo ar atsakomybės.",
+          "description": "Gaukite struktūruotą pagrindinių sąlygų santrauką",
+          "name": "Apibendrinti dokumentą"
+        }
+      },
       "uploadHelp": "Naudokite SKILL.md failą arba .zip aplanką su SKILL.md ir pasirinktiniais tik skaitymui skirtais ištekliais.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/kelias/iki/igudzio",
       "version": "Versija: {version}"

@@ -4048,6 +4048,28 @@
       "skippedReasonOutsideSkillFolder": "Außerhalb des Skill-Ordners",
       "skippedReasonUnsupportedExtension": "Dateityp nicht unterstützt",
       "skippedReasonUnsupportedFolder": "Nicht in einem Ressourcenordner",
+      "starter": {
+        "compare": {
+          "body": "Vergleichen Sie zwei Versionen dieses Dokuments und listen Sie jede wesentliche Änderung mit ihrer Fundstelle auf.",
+          "description": "Listen Sie alle wesentlichen Änderungen zwischen zwei Versionen auf",
+          "name": "Versionen vergleichen"
+        },
+        "draft": {
+          "body": "Entwerfen Sie eine sachliche Antwort auf dieses Schreiben. Bleiben Sie im Ton professionell, gehen Sie auf jeden angesprochenen Punkt ein und weisen Sie mich auf offene Fragen hin, die ich bestätigen soll.",
+          "description": "Entwerfen Sie eine professionelle Antwort auf ein Schreiben",
+          "name": "Antwort entwerfen"
+        },
+        "risks": {
+          "body": "Prüfen Sie dieses Dokument auf rechtliche Risiken, fehlende Schutzbestimmungen und unklare Klauseln. Nennen Sie zu jedem Befund die konkrete Klausel.",
+          "description": "Erkennen Sie rechtliche Risiken und unklare Klauseln",
+          "name": "Risiken finden"
+        },
+        "summarize": {
+          "body": "Fassen Sie dieses Dokument zusammen. Gehen Sie auf die Parteien, die wesentlichen Pflichten, Termine, finanziellen Bedingungen sowie etwaige Kündigungs- oder Haftungsbestimmungen ein.",
+          "description": "Erhalten Sie eine strukturierte Zusammenfassung der wichtigsten Bedingungen",
+          "name": "Dokument zusammenfassen"
+        }
+      },
       "uploadHelp": "Verwenden Sie eine SKILL.md-Datei oder einen .zip-Ordner mit SKILL.md und optionalen schreibgeschützten Ressourcen.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/pfad/zum/skill",
       "version": "Version: {version}"

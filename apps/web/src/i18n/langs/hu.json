@@ -4048,6 +4048,28 @@
       "skippedReasonOutsideSkillFolder": "A készség mappáján kívül",
       "skippedReasonUnsupportedExtension": "Nem támogatott fájltípus",
       "skippedReasonUnsupportedFolder": "Nem erőforrásmappában van",
+      "starter": {
+        "compare": {
+          "body": "Hasonlítsa össze a dokumentum két verzióját, és sorolja fel az összes lényeges változást a helyük megjelölésével.",
+          "description": "Sorolja fel a két verzió közötti összes lényeges változást",
+          "name": "Verziók összehasonlítása"
+        },
+        "draft": {
+          "body": "Fogalmazzon meg mértéktartó választ erre a levélre. Őrizze meg a szakszerű hangnemet, térjen ki minden felvetett pontra, és jelezze a nyitott kérdéseket, amelyeket meg kell erősítenem.",
+          "description": "Fogalmazzon meg szakszerű választ egy levélre",
+          "name": "Válasz megfogalmazása"
+        },
+        "risks": {
+          "body": "Vizsgálja át ezt a dokumentumot jogi kockázatok, hiányzó védelmi kikötések és nem egyértelmű kikötések szempontjából. Minden megállapításnál hivatkozzon a konkrét kikötésre.",
+          "description": "Tárja fel a jogi kockázatokat és a nem egyértelmű kikötéseket",
+          "name": "Kockázatok feltárása"
+        },
+        "summarize": {
+          "body": "Foglalja össze ezt a dokumentumot. Térjen ki a felekre, a fő kötelezettségekre, a határidőkre, a pénzügyi feltételekre, valamint az esetleges megszüntetési vagy felelősségi kikötésekre.",
+          "description": "Kapjon strukturált összefoglalót a fő feltételekről",
+          "name": "Dokumentum összefoglalása"
+        }
+      },
       "uploadHelp": "Használjon SKILL.md fájlt vagy olyan .zip mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/utvonal/keszseghez",
       "version": "Verzió: {version}"

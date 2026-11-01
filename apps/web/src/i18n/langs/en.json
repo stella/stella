@@ -4048,6 +4048,28 @@
       "skippedReasonOutsideSkillFolder": "Outside the skill folder",
       "skippedReasonUnsupportedExtension": "File type not supported",
       "skippedReasonUnsupportedFolder": "Not in a resource folder",
+      "starter": {
+        "compare": {
+          "body": "Compare two versions of this document and list every material change with its location.",
+          "description": "List every material change between two versions",
+          "name": "Compare versions"
+        },
+        "draft": {
+          "body": "Draft a measured response to this letter. Keep the tone professional, address each point raised, and flag any open questions for me to confirm.",
+          "description": "Draft a professional reply to a letter",
+          "name": "Draft a response"
+        },
+        "risks": {
+          "body": "Review this document for legal risks, missing protections, and ambiguous clauses. Cite the specific clause for each finding.",
+          "description": "Spot legal risks and ambiguous clauses",
+          "name": "Find risks"
+        },
+        "summarize": {
+          "body": "Summarise this document. Cover parties, key obligations, dates, financial terms, and any termination or liability provisions.",
+          "description": "Get a structured summary of the key terms",
+          "name": "Summarise a document"
+        }
+      },
       "uploadHelp": "Use a SKILL.md file or a .zip folder containing SKILL.md and optional read-only resources.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "Version: {version}"
