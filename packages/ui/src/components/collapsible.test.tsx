@@ -49,6 +49,22 @@ describe("Collapsible", () => {
     expect(markup).not.toMatch(/ hidden=/u);
   });
 
+  test("a bare trigger grows to a 44px touch target under a coarse pointer", () => {
+    const markup = renderToStaticMarkup(
+      <Collapsible>
+        <CollapsibleTrigger>Show details</CollapsibleTrigger>
+        <CollapsiblePanel>Arguments</CollapsiblePanel>
+      </Collapsible>,
+    );
+    const trigger = /<button[^>]*data-slot="collapsible-trigger"[^>]*>/u.exec(
+      markup,
+    )?.[0];
+    expect(trigger).toContain("relative");
+    expect(trigger).toContain("pointer-coarse:after:absolute");
+    expect(trigger).toContain("pointer-coarse:after:min-h-11");
+    expect(trigger).toContain("pointer-coarse:after:min-w-11");
+  });
+
   test("the trigger takes its look from the button it renders", () => {
     const markup = renderToStaticMarkup(
       <Collapsible>

@@ -17,8 +17,22 @@ const Collapsible = (props: CollapsiblePrimitive.Root.Props) => (
   <CollapsiblePrimitive.Root data-slot="collapsible" {...props} />
 );
 
-const CollapsibleTrigger = (props: CollapsiblePrimitive.Trigger.Props) => (
-  <CollapsiblePrimitive.Trigger data-slot="collapsible-trigger" {...props} />
+/**
+ * A bare trigger (plain text, no `render`) still gets the 44px touch target
+ * every control has under a coarse pointer, the same hit area `Button` adds.
+ */
+const CollapsibleTrigger = ({
+  className,
+  ...props
+}: CollapsiblePrimitive.Trigger.Props) => (
+  <CollapsiblePrimitive.Trigger
+    className={cn(
+      "relative pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11",
+      className,
+    )}
+    data-slot="collapsible-trigger"
+    {...props}
+  />
 );
 
 /**
