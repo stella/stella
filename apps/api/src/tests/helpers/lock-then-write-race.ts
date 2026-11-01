@@ -56,47 +56,76 @@ export const withLockThenWriteRace = async <A, B>({
     locked.resolve(undefined);
     await committed.promise;
   };
+  // Every wait is bounded and named, so a misordered race fails instead of
+  // hanging the suite.
+  const bounded = async <T>(label: string, work: Promise<T>) =>
+    await Result.tryPromise(
+      async () =>
+        await withTimeout(async () => await work, { label, timeoutMs }),
+    );
   const first = Result.tryPromise(
     async () => await transactions.a(async (tx) => await a(tx, pause)),
   );
   // A that finishes without pausing never wrote after a concurrent commit.
-  const reachedPause = await Promise.race([
-    locked.promise.then(() => true),
-    first.then(() => false),
-  ]);
-  if (!reachedPause) {
-    const outcome = await first;
+  const reachedPause = await bounded(
+    "Tx A reaching pause() after its lock",
+    Promise.race([locked.promise.then(() => true), first.then(() => false)]),
+  );
+  if (reachedPause.isErr()) {
+    // A pause() reached later rolls A back instead of waiting forever.
+    committed.reject(
+      new LockThenWriteRaceOrder({ message: "Tx A paused after the deadline" }),
+    );
+    return panic(`Tx A did not reach pause(): ${String(reachedPause.error)}`);
+  }
+  if (!reachedPause.value) {
+    const outcome = await bounded("Tx A settling without a pause", first);
+    if (outcome.isOk() && outcome.value.isErr()) {
+      return panic(
+        `Tx A failed before it paused: ${String(outcome.value.error.cause)}`,
+      );
+    }
     return panic(
-      outcome.isErr()
-        ? `Tx A failed before it paused: ${String(outcome.error.cause)}`
-        : "Tx A finished without calling pause() between its lock and its write",
+      "Tx A finished without calling pause() between its lock and its write",
     );
   }
-  const second = await Result.tryPromise(
-    async () =>
-      await withTimeout(async () => await transactions.b(b), {
-        label: "Tx B commit while tx A holds its locks",
-        timeoutMs,
-      }),
+  const secondRun = Result.tryPromise(async () => await transactions.b(b));
+  const second = await bounded(
+    "Tx B commit while tx A holds its locks",
+    secondRun,
   );
   if (second.isErr()) {
-    // Release A so it rolls back and frees whatever B was waiting on.
+    // B still runs. Release A so it rolls back and frees whatever B waits on,
+    // then wait for both to settle before failing, so neither commits after
+    // the race has been reported.
     committed.reject(
       new LockThenWriteRaceOrder({
         message: "Tx B did not commit while tx A held its locks",
       }),
     );
-    await first;
+    const rolledBack = await bounded("Tx A rollback after tx B stalled", first);
+    const settled = await bounded(
+      "Tx B settling after tx A rolled back",
+      secondRun,
+    );
     return panic(
-      `Tx B did not commit while tx A held its locks; it must change rows tx A did not lock: ${String(second.error)}`,
+      `Tx B did not commit while tx A held its locks; it must change rows tx A did not lock (${String(second.error)}; tx A ${rolledBack.isOk() ? "settled" : "did not settle"}, tx B ${settled.isOk() ? "settled" : "did not settle"})`,
     );
   }
+  const committedB = second.value;
+  if (committedB.isErr()) {
+    committed.reject(
+      new LockThenWriteRaceOrder({ message: "Tx B failed before committing" }),
+    );
+    await bounded("Tx A rollback after tx B failed", first);
+    return panic(`Tx B failed: ${String(committedB.error.cause)}`);
+  }
   committed.resolve(undefined);
-  const outcome = await withTimeout(async () => await first, {
-    label: "Tx A write after tx B committed",
-    timeoutMs,
-  });
-  return { a: outcome.unwrap(), b: second.value };
+  const outcome = await bounded("Tx A write after tx B committed", first);
+  if (outcome.isErr()) {
+    return panic(`Tx A did not finish its write: ${String(outcome.error)}`);
+  }
+  return { a: outcome.value.unwrap(), b: committedB.value };
 };
 
 /**

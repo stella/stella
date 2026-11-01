@@ -208,10 +208,12 @@ const submitDraft = (fixture: Fixture) => async (tx: Transaction) =>
     .where(eq(timeEntries.id, fixture.draftId))
     .returning({ id: timeEntries.id });
 
-// Tx B: the timekeeper records the late entry, already submitted, under an id
-// tx A's request names. The approval's running-entry guard locks every
-// requested entry that exists, so a row can only join A's selection after
-// A's lock by being inserted.
+// Tx B: an entry, already submitted, stored under an id tx A's request names
+// after A's lock. This is not a race a live request can hit: the approval's
+// running-entry guard locks every requested entry that exists, and entry ids
+// are minted by the server. It proves the approval write is pinned to the
+// rows it locked and checked (defense in depth), so it cannot reach a row
+// that only matched afterwards, however that row got there.
 const recordLateEntry = (fixture: Fixture) => async (tx: Transaction) =>
   await tx
     .insert(timeEntries)
