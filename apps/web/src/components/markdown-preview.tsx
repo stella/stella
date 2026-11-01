@@ -19,7 +19,10 @@ type MarkdownPreviewProps = Omit<
 export const markdownPreviewProps = ({
   className,
   components,
-}: Pick<MarkdownPreviewProps, "className" | "components">) => ({
+}: {
+  className?: string | undefined;
+  components?: MessageResponseProps["components"];
+}) => ({
   className: cn(
     "text-sm leading-relaxed",
     "[&_h1]:mb-3 [&_h1]:text-xl [&_h1]:font-semibold",
