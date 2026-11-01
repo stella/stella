@@ -37,8 +37,8 @@ import { BROWSER_CONTROLLED_TAB_STORAGE_KEY } from "./storage-keys";
 import {
   chatTabsAtLimit,
   containControlledTab,
-  containedTabIds,
   forgetContainedTab,
+  operableTabIds,
   readContainedTabs,
   readTabOwner,
   switchContainedTab,
@@ -1350,34 +1350,45 @@ const injectDomAction = async (
 };
 
 /**
- * Chat's tabs for a snapshot, the one just read first with the URL that read
- * returned; the others, newest first, at the URL Chrome reports. A
- * tab on a page chat may not operate (an error page, another scheme) is left
- * out, since chat could not switch to it.
+ * A tab's address as chat's tab list shows it: origin and path only. Query
+ * strings and fragments can carry what a page put there for itself, and
+ * `switch-tab` matches on the origin. Null for a page chat may not operate.
+ */
+const listedTabUrl = (rawUrl: string): string | null => {
+  const url = parseControllableUrl(rawUrl);
+  return url === null
+    ? null
+    : `${url.origin}${url.pathname}`.slice(0, BROWSER_CONTROL_LIMITS.urlChars);
+};
+
+/**
+ * Chat's tabs for a snapshot: the one just read first, at the URL that read
+ * returned; then chat's others, newest first, at the URL Chrome reports.
+ * Tabs that are only confined are never listed. A tab on a page chat may not
+ * operate (an error page, another scheme) is left out, since chat could not
+ * switch to it.
  */
 const listChatTabs = async (
-  active: BrowserControlTab,
+  activeTabId: number,
+  activeUrl: string,
 ): Promise<BrowserControlTab[]> => {
-  const others = containedTabIds(await readContainedTabs())
-    .filter((tabId) => tabId !== active.tabId)
+  const others = operableTabIds(await readContainedTabs())
+    .filter((tabId) => tabId !== activeTabId)
     .toReversed();
   const tabs = await Promise.all(
     others.map(async (tabId): Promise<BrowserControlTab | null> => {
       const tab = await chrome.tabs.get(tabId).catch(() => null);
-      if (tab?.url === undefined || parseControllableUrl(tab.url) === null) {
-        return null;
-      }
-      return {
-        active: false,
-        tabId,
-        url: tab.url.slice(0, BROWSER_CONTROL_LIMITS.urlChars),
-      };
+      const url = tab?.url === undefined ? null : listedTabUrl(tab.url);
+      return url === null ? null : { active: false, tabId, url };
     }),
   );
-  return [active, ...tabs.filter((tab) => tab !== null)].slice(
-    0,
-    BROWSER_CONTROL_LIMITS.tabs,
-  );
+  const active = listedTabUrl(activeUrl);
+  return [
+    ...(active === null
+      ? []
+      : [{ active: true, tabId: activeTabId, url: active }]),
+    ...tabs.filter((tab) => tab !== null),
+  ].slice(0, BROWSER_CONTROL_LIMITS.tabs);
 };
 
 type ReadSnapshotOptions = {
@@ -1442,7 +1453,7 @@ const readSnapshot = async ({
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
       revision: crypto.randomUUID(),
       tabId,
-      tabs: await listChatTabs({ active: true, tabId, url: merged.url }),
+      tabs: await listChatTabs(tabId, merged.url),
       ...merged,
     },
     status: "success",
@@ -1551,7 +1562,9 @@ export const adoptControlledTab = async (
   ) {
     return { status: "unsupported-page" };
   }
-  await containControlledTab(tab.id);
+  // The user's hand-over always succeeds: at chat's tab limit the oldest of
+  // chat's other tabs stays confined but is no longer chat's.
+  await containControlledTab(tab.id, { adopted: true, atLimit: "drop-oldest" });
   await writeControlledTabState({
     adopted: true,
     controllerId,
@@ -1565,6 +1578,7 @@ export const adoptControlledTab = async (
 type OpenedControlledTab =
   | { status: "cancelled" }
   | { loaded: boolean; status: "navigated"; tabId: number }
+  | { status: "over-limit" }
   | { status: "unavailable" };
 
 /**
@@ -1586,6 +1600,8 @@ const openControlledTab = async (
   if (tabId === undefined) {
     return { status: "unavailable" };
   }
+  const previousUserNavigated =
+    reused === null && (await readContainedTabs()).controlledUserNavigated;
   // A tab created for this command and stopped before it navigated holds
   // nothing; closing it hands control back to the tab chat had, if any, so
   // no controlled tab is one chat has never read.
@@ -1596,7 +1612,10 @@ const openControlledTab = async (
     if (existing === null) {
       await chrome.storage.session.remove(BROWSER_CONTROLLED_TAB_STORAGE_KEY);
     } else {
-      await containControlledTab(existing.state.tabId);
+      await containControlledTab(existing.state.tabId, {
+        adopted: existing.state.adopted,
+        userNavigated: previousUserNavigated,
+      });
       await writeControlledTabState(existing.state);
     }
     await forgetContainedTab(tabId);
@@ -1606,7 +1625,13 @@ const openControlledTab = async (
     await discardCreatedTab();
     return { status: "cancelled" };
   }
-  await containControlledTab(tabId);
+  // Checked again where the tab joins chat's: a tab a page opened since the
+  // caller's check may have taken the last place.
+  if ((await containControlledTab(tabId)) === "over-limit") {
+    await chrome.tabs.remove(tabId).catch(() => undefined);
+    await forgetContainedTab(tabId);
+    return { status: "over-limit" };
+  }
   await writeControlledTabState({
     adopted: reused?.state.adopted ?? false,
     controllerId,
@@ -1751,11 +1776,15 @@ const runOpen = async (
     );
   }
   const newTab = command.newTab === true;
-  if (newTab && chatTabsAtLimit(await readContainedTabs())) {
-    return browserControlError(
+  const tabLimitReached = (): BrowserControlResult =>
+    browserControlError(
       BROWSER_CONTROL_ERROR_CODE.tabLimitReached,
       `Chat already has ${BROWSER_CONTROL_LIMITS.tabs} tabs open, the most it may keep. Switch to one of them with switch-tab, or open the page in the current tab without newTab.`,
     );
+  // Spares creating a tab only to close it; the limit itself holds where
+  // the tab joins chat's.
+  if (newTab && chatTabsAtLimit(await readContainedTabs())) {
+    return tabLimitReached();
   }
   const overBudget = await budget.charge();
   if (overBudget !== null) {
@@ -1769,6 +1798,10 @@ const runOpen = async (
   if (opened.status === "cancelled") {
     await budget.refund();
     return cancelled();
+  }
+  if (opened.status === "over-limit") {
+    await budget.refund();
+    return tabLimitReached();
   }
   if (opened.status === "unavailable") {
     return browserControlError(
@@ -1832,8 +1865,9 @@ const NOT_A_CHAT_TAB =
 
 /**
  * Hands control to another of chat's tabs: one chat controlled before, or
- * one a page chat operated opened. A stella tab, a tab of the user's and a
- * tab of unknown owner are refused. The tab must still be on the origin the
+ * one a page in chat's tabs opened, unless the user navigated it since. A
+ * stella tab, a tab of the user's, one only confined and a tab of unknown
+ * owner are refused. The tab must still be on the origin the
  * user approved, both before control moves and in the page then read.
  */
 const runSwitchTab = async (
@@ -1848,7 +1882,7 @@ const runSwitchTab = async (
     readTabOwner(tabId),
     readStellaTabs(),
   ]);
-  if ((owner !== "controlled" && owner !== "opened") || stellaTabs.has(tabId)) {
+  if ((owner !== "controlled" && owner !== "chat") || stellaTabs.has(tabId)) {
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.tabChanged,
       NOT_A_CHAT_TAB,
@@ -1885,7 +1919,14 @@ const runSwitchTab = async (
     await budget.refund();
     return cancelled();
   }
-  if ((await switchContainedTab(tabId)) === "refused") {
+  // Containment moves first: it re-checks the tab is chat's in the same step,
+  // and nothing else needs undoing when it refuses. Should the worker stop
+  // before the second write, the stored controlled tab is still the old one,
+  // with the snapshot the web client last saw: it is confined and chat's,
+  // so the next command acts where chat expects, and nothing the user owns
+  // is reached.
+  const switched = await switchContainedTab(tabId);
+  if (switched.status === "refused") {
     await budget.refund();
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.tabChanged,
@@ -1895,7 +1936,8 @@ const runSwitchTab = async (
   const previous = await readControlledTabState();
   if (previous?.controllerId !== controllerId || previous.tabId !== tabId) {
     await writeControlledTabState({
-      adopted: false,
+      // A tab the user handed over keeps the stricter checks that go with it.
+      adopted: switched.adopted,
       controllerId,
       settled: null,
       snapshot: null,

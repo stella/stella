@@ -536,10 +536,14 @@ describe("chat's tabs", () => {
   const RESULTS_URL = "https://example.com/results";
   const USER_TAB_ID = 9;
 
-  /** Chat controls tab 2; its page opened tab 5; tab 9 is the user's. */
+  /**
+   * Chat controls tab 2; its page opened tab 5; tab 9 is the user's. Tabs in
+   * `confined` are confined beside them but not chat's.
+   */
   const installChatTabs = ({
+    confined = [],
     opened = [RESULTS_TAB_ID],
-  }: { opened?: number[] } = {}) => {
+  }: { confined?: number[]; opened?: number[] } = {}) => {
     const installed = installFakeChrome();
     installed.tabs.set(CONTROLLED_TAB_ID, {
       id: CONTROLLED_TAB_ID,
@@ -547,7 +551,7 @@ describe("chat's tabs", () => {
       title: "Invoice",
       url: PAGE_URL,
     });
-    for (const tabId of opened) {
+    for (const tabId of [...opened, ...confined]) {
       installed.tabs.set(tabId, {
         id: tabId,
         status: "complete",
@@ -562,8 +566,11 @@ describe("chat's tabs", () => {
       url: PAGE_URL,
     });
     installed.session["browserContainedTabs"] = {
+      adoptedTabIds: [],
+      chatTabIds: opened,
       controlledTabId: CONTROLLED_TAB_ID,
-      openedTabIds: opened,
+      controlledUserNavigated: false,
+      openedTabIds: [...opened, ...confined],
       userTabIds: [CONTROLLER_TAB_ID, USER_TAB_ID],
     };
     return installed;
@@ -604,7 +611,10 @@ describe("chat's tabs", () => {
       `update:${newUrl}`,
     ]);
     expect(session["browserContainedTabs"]).toEqual({
+      adoptedTabIds: [],
+      chatTabIds: [RESULTS_TAB_ID, CONTROLLED_TAB_ID],
       controlledTabId: 7,
+      controlledUserNavigated: false,
       openedTabIds: [RESULTS_TAB_ID, CONTROLLED_TAB_ID],
       userTabIds: [CONTROLLER_TAB_ID, USER_TAB_ID],
     });
@@ -612,6 +622,113 @@ describe("chat's tabs", () => {
       adopted: false,
       tabId: 7,
     });
+  });
+
+  test("a tab that takes the last place while a new one is created wins it", async () => {
+    // One place is left when the command checks.
+    const opened = Array.from(
+      { length: BROWSER_CONTROL_LIMITS.tabs - 2 },
+      (_, index) => 20 + index,
+    );
+    const { hooks, log, session, tabs } = installChatTabs({ opened });
+    const { budget, events } = createBudget();
+    // A page in chat's tab opens one more while Chrome creates the new tab.
+    hooks.afterCreate = () => {
+      tabs.set(40, { id: 40, status: "complete", url: RESULTS_URL });
+      session["browserContainedTabs"] = {
+        adoptedTabIds: [],
+        chatTabIds: [...opened, 40],
+        controlledTabId: CONTROLLED_TAB_ID,
+        controlledUserNavigated: false,
+        openedTabIds: [...opened, 40],
+        userTabIds: [CONTROLLER_TAB_ID, USER_TAB_ID],
+      };
+    };
+
+    expect(
+      await run({ action: "open", newTab: true, url: PAGE_URL }, { budget }),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.tabLimitReached });
+    expect(events).toEqual(["charge", "refund"]);
+    expect(log).toContain("remove:7");
+    expect(log.filter((entry) => entry.startsWith("update:"))).toEqual([]);
+    expect(session["browserContainedTabs"]).toMatchObject({
+      controlledTabId: CONTROLLED_TAB_ID,
+      chatTabIds: [...opened, 40],
+    });
+    expect(session["browserControlledTab"]).toMatchObject({
+      tabId: CONTROLLED_TAB_ID,
+    });
+  });
+
+  test("lists other tabs by origin and path, and never the merely confined", async () => {
+    const { handlers, tabs } = installChatTabs({ confined: [6] });
+    const resultsWithQuery = `${RESULTS_URL}?session=secret-token#row-4`;
+    tabs.set(RESULTS_TAB_ID, {
+      id: RESULTS_TAB_ID,
+      status: "complete",
+      url: resultsWithQuery,
+    });
+    const pageWithQuery = `${PAGE_URL}invoice?id=42`;
+    handlers["snapshot"] = () => [
+      { frameId: 0, result: frameSnapshot("Invoice", pageWithQuery) },
+    ];
+
+    const result = await run({ action: "snapshot" });
+    // The page read keeps its full address; the list does not.
+    expect(result).toMatchObject({ snapshot: { url: pageWithQuery } });
+    expect(result.status === "success" && result.snapshot.tabs).toEqual([
+      {
+        active: true,
+        tabId: CONTROLLED_TAB_ID,
+        url: `${PAGE_URL}invoice`,
+      },
+      { active: false, tabId: RESULTS_TAB_ID, url: RESULTS_URL },
+    ]);
+    expect(JSON.stringify(result)).not.toContain("secret-token");
+
+    // The listed address is enough to switch: the origin is what counts.
+    handlers["snapshot"] = () => [
+      { frameId: 0, result: frameSnapshot("Results", resultsWithQuery) },
+    ];
+    expect(await run(switchTo(RESULTS_TAB_ID))).toMatchObject({
+      snapshot: { tabId: RESULTS_TAB_ID },
+      status: "success",
+    });
+    // A tab only confined beside chat's (say one an unknown tab opened) is
+    // never chat's to switch to.
+    expect(await run(switchTo(6))).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.tabChanged,
+    });
+  });
+
+  test("switching back to a tab the user handed over keeps it the user's", async () => {
+    const { handlers, session, tabs } = installChatTabs({ opened: [] });
+    const handedOver = 12;
+    tabs.set(handedOver, { id: handedOver, status: "complete", url: PAGE_URL });
+    handlers["snapshot"] = () => [
+      { frameId: 0, result: frameSnapshot("Invoice") },
+    ];
+    expect(
+      await adoptControlledTab(CONTROLLER_ID, userTab(handedOver, PAGE_URL)),
+    ).toMatchObject({ status: "adopted" });
+    expect(
+      await run(
+        { action: "open", newTab: true, url: RESULTS_URL },
+        { observedTab: null },
+      ),
+    ).toMatchObject({ status: "success" });
+
+    expect(
+      await run(switchTo(handedOver, PAGE_URL), { observedTab: null }),
+    ).toMatchObject({ snapshot: { tabId: handedOver }, status: "success" });
+    expect(session["browserControlledTab"]).toMatchObject({
+      adopted: true,
+      tabId: handedOver,
+    });
+    // A web client that saw no tab still may not navigate the user's page.
+    expect(
+      await run({ action: "open", url: RESULTS_URL }, { observedTab: null }),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.tabChanged });
   });
 
   test("refuses a new tab once chat has the most tabs it may keep", async () => {
@@ -654,7 +771,10 @@ describe("chat's tabs", () => {
       tabId: CONTROLLED_TAB_ID,
     });
     expect(session["browserContainedTabs"]).toEqual({
+      adoptedTabIds: [],
+      chatTabIds: [RESULTS_TAB_ID],
       controlledTabId: CONTROLLED_TAB_ID,
+      controlledUserNavigated: false,
       openedTabIds: [RESULTS_TAB_ID],
       userTabIds: [CONTROLLER_TAB_ID, USER_TAB_ID],
     });
@@ -726,7 +846,10 @@ describe("chat's tabs", () => {
     }
     // Even a stella tab that somehow counted as chat's is refused.
     session["browserContainedTabs"] = {
+      adoptedTabIds: [],
+      chatTabIds: [CONTROLLER_TAB_ID],
       controlledTabId: CONTROLLED_TAB_ID,
+      controlledUserNavigated: false,
       openedTabIds: [CONTROLLER_TAB_ID],
       userTabIds: [USER_TAB_ID],
     };
