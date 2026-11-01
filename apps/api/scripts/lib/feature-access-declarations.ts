@@ -273,29 +273,32 @@ const ancestorsOf = (ast: DeclarationSource, node: Node): Node[] => {
   return ancestors;
 };
 
+// Patterns nest; any other node binds nothing.
 const bindingIdentifiers = (pattern: Node): Node[] => {
-  switch (pattern.type) {
-    case "Identifier":
-      return [pattern];
-    case "ObjectPattern":
-      return pattern.properties.flatMap((property) =>
-        bindingIdentifiers(
-          property.type === "RestElement" ? property.argument : property.value,
-        ),
-      );
-    case "ArrayPattern":
-      return pattern.elements.flatMap((element) =>
-        element === null ? [] : bindingIdentifiers(element),
-      );
-    case "AssignmentPattern":
-      return bindingIdentifiers(pattern.left);
-    case "RestElement":
-      return bindingIdentifiers(pattern.argument);
-    case "TSParameterProperty":
-      return bindingIdentifiers(pattern.parameter);
-    default:
-      return [];
+  if (pattern.type === "Identifier") {
+    return [pattern];
   }
+  if (pattern.type === "ObjectPattern") {
+    return pattern.properties.flatMap((property) =>
+      bindingIdentifiers(
+        property.type === "RestElement" ? property.argument : property.value,
+      ),
+    );
+  }
+  if (pattern.type === "ArrayPattern") {
+    return pattern.elements.flatMap((element) =>
+      element === null ? [] : bindingIdentifiers(element),
+    );
+  }
+  if (pattern.type === "AssignmentPattern") {
+    return bindingIdentifiers(pattern.left);
+  }
+  if (pattern.type === "RestElement") {
+    return bindingIdentifiers(pattern.argument);
+  }
+  return pattern.type === "TSParameterProperty"
+    ? bindingIdentifiers(pattern.parameter)
+    : [];
 };
 
 const declarationBindings = (declaration: Node): Node[] => {
@@ -323,39 +326,43 @@ const statementBindings = (statement: Node): Node[] => {
   return declared === null ? [] : declarationBindings(declared);
 };
 
+// The bindings a scope introduces; any other node introduces none.
 const scopeBindings = (scope: Node): Node[] => {
-  switch (scope.type) {
-    case "FunctionDeclaration":
-    case "FunctionExpression":
-    case "ArrowFunctionExpression": {
-      const names = scope.params.flatMap(bindingIdentifiers);
-      if (scope.type === "FunctionExpression" && scope.id !== null) {
-        names.push(scope.id);
-      }
-      return names;
+  if (
+    scope.type === "FunctionDeclaration" ||
+    scope.type === "FunctionExpression" ||
+    scope.type === "ArrowFunctionExpression"
+  ) {
+    const names = scope.params.flatMap(bindingIdentifiers);
+    if (scope.type === "FunctionExpression" && scope.id !== null) {
+      names.push(scope.id);
     }
-    case "Program":
-    case "BlockStatement":
-    case "TSModuleBlock":
-      return scope.body.flatMap(statementBindings);
-    case "SwitchStatement":
-      return scope.cases.flatMap((clause) =>
-        clause.consequent.flatMap(statementBindings),
-      );
-    case "CatchClause":
-      return scope.param === null ? [] : bindingIdentifiers(scope.param);
-    case "ForStatement":
-      return scope.init?.type === "VariableDeclaration"
-        ? declarationBindings(scope.init)
-        : [];
-    case "ForInStatement":
-    case "ForOfStatement":
-      return scope.left.type === "VariableDeclaration"
-        ? declarationBindings(scope.left)
-        : [];
-    default:
-      return [];
+    return names;
   }
+  if (
+    scope.type === "Program" ||
+    scope.type === "BlockStatement" ||
+    scope.type === "TSModuleBlock"
+  ) {
+    return scope.body.flatMap(statementBindings);
+  }
+  if (scope.type === "SwitchStatement") {
+    return scope.cases.flatMap((clause) =>
+      clause.consequent.flatMap(statementBindings),
+    );
+  }
+  if (scope.type === "CatchClause") {
+    return scope.param === null ? [] : bindingIdentifiers(scope.param);
+  }
+  if (scope.type === "ForStatement") {
+    return scope.init?.type === "VariableDeclaration"
+      ? declarationBindings(scope.init)
+      : [];
+  }
+  return (scope.type === "ForInStatement" || scope.type === "ForOfStatement") &&
+    scope.left.type === "VariableDeclaration"
+    ? declarationBindings(scope.left)
+    : [];
 };
 
 /** The binding a name resolves to from its ancestors (nearest last). */
@@ -1051,16 +1058,18 @@ const modifierExport = (statement: Statement) => {
 
 const validOperationalExport = (statement: Statement) => {
   const declared = modifierExport(statement);
-  switch (declared?.type) {
-    case undefined:
-      return true;
-    case "ClassDeclaration":
-    case "TSDeclareFunction":
-      return false;
-    case "FunctionDeclaration":
-      return voidFunction(declared);
-    case "VariableDeclaration":
-      return declared.declarations.every((declaration) => {
+  if (
+    declared?.type === "ClassDeclaration" ||
+    declared?.type === "TSDeclareFunction"
+  ) {
+    return false;
+  }
+  if (declared?.type === "FunctionDeclaration") {
+    return voidFunction(declared);
+  }
+  // Types, enums and modules export no runtime callable.
+  return declared?.type === "VariableDeclaration"
+    ? declared.declarations.every((declaration) => {
         if (declaration.init === null) {
           return false;
         }
@@ -1069,10 +1078,8 @@ const validOperationalExport = (statement: Statement) => {
           value.type === "FunctionExpression"
           ? voidFunction(value)
           : constantLiteral(value);
-      });
-    default:
-      return true;
-  }
+      })
+    : true;
 };
 
 const operationalFeatureReachability = ({
@@ -1915,7 +1922,11 @@ const collectTables = (
         return undefined;
       }
       const helper = resolveLocalHelper(ast, node, node.callee.name);
-      if (helper === undefined || helper.body === null) {
+      if (helper === undefined) {
+        return undefined;
+      }
+      const { body } = helper;
+      if (body === null) {
         return undefined;
       }
       // A helper that builds the row from a `table` parameter selects
@@ -1930,9 +1941,9 @@ const collectTables = (
           selectedNodes.add(argument);
         }
       }
-      if (!visitedHelpers.has(helper.body)) {
-        visitedHelpers.add(helper.body);
-        visit(helper.body);
+      if (!visitedHelpers.has(body)) {
+        visitedHelpers.add(body);
+        visit(body);
       }
       return undefined;
     });
