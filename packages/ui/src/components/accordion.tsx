@@ -1,7 +1,5 @@
 "use client";
 
-import type * as React from "react";
-
 import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
 
 import { ChevronDownIcon } from "../icons";
@@ -82,10 +80,11 @@ const AccordionTrigger = ({
   /**
    * Status at the end of the row, before the chevron: a count, "2 unsaved",
    * a last-updated date. It is part of the trigger, so it is read with the
-   * heading; it is text, never a control (a button inside a button is
-   * unreachable).
+   * heading. It is typed as text so it can never be a control: a button
+   * inside the trigger's button is unreachable and its click would toggle
+   * the panel.
    */
-  trailing?: React.ReactNode;
+  trailing?: string | number;
 }) => (
   <AccordionPrimitive.Header className="flex">
     <AccordionPrimitive.Trigger

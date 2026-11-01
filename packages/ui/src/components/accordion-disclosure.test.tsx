@@ -58,6 +58,20 @@ describe("Accordion disclosure", () => {
     );
   });
 
+  test("the trigger counts a number as status text", () => {
+    const markup = renderToStaticMarkup(
+      <Accordion>
+        <AccordionItem value="documents">
+          <AccordionTrigger trailing={3}>Documents</AccordionTrigger>
+          <AccordionPanel>List</AccordionPanel>
+        </AccordionItem>
+      </Accordion>,
+    );
+    expect(markup).toMatch(
+      /data-slot="accordion-trigger-trailing"[^>]*>3<\/span>/u,
+    );
+  });
+
   test("a trigger without status text adds no empty slot", () => {
     const markup = renderToStaticMarkup(
       <Accordion>
@@ -69,3 +83,16 @@ describe("Accordion disclosure", () => {
     expect(markup).not.toContain("accordion-trigger-trailing");
   });
 });
+
+// The trailing slot is text inside the trigger's button, never a control.
+const trailingControlContract = () => (
+  <Accordion>
+    <AccordionItem value="documents">
+      {/* @ts-expect-error a control inside the trigger button is unreachable */}
+      <AccordionTrigger trailing={<button type="button">Edit</button>}>
+        Documents
+      </AccordionTrigger>
+    </AccordionItem>
+  </Accordion>
+);
+void trailingControlContract;
