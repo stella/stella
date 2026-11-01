@@ -127,12 +127,13 @@ export const AttachmentChip = ({
         <TooltipTrigger
           render={
             // An action fits within the chip's height; the hover fill sits
-            // on the glyph's own square.
+            // on the glyph's own square. It stays in flow (static): its own
+            // box is the coarse touch target, nothing positioned overlays it.
             <Button
               aria-controls={action.disclosure?.controls}
               aria-expanded={action.disclosure?.expanded}
               aria-label={action.label}
-              className="inline-flex size-4 shrink-0 items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-11"
+              className="static inline-flex size-4 shrink-0 items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-11"
               onClick={action.onClick}
               title={action.label}
               variant="plain"
