@@ -335,14 +335,15 @@ export const inspectDecisionTextAbsence = (
   if (absence.type === "invalid") {
     return { type: "invalid", reason: "sidecar" };
   }
-  if (version === undefined) {
+  // A null metadata object has no version, so it is always legacy.
+  if (metadata === null || version === undefined) {
     return { type: "legacy" };
   }
   return {
     type: "current",
     missingFields: DECISION_TEXT_FIELD_KEYS.filter(
       (field) =>
-        (metadata?.[field] === null || metadata?.[field] === undefined) &&
+        (metadata[field] === null || metadata[field] === undefined) &&
         !absence.entries.some((entry) => entry.field === field),
     ),
   };
