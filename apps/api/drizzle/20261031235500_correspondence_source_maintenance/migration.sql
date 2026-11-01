@@ -20,7 +20,8 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_catalog.pg_class WHERE relowner = maintenance_role)
     OR EXISTS (SELECT 1 FROM pg_catalog.pg_proc WHERE proowner = maintenance_role
       AND (pronamespace <> 'public'::regnamespace OR proname NOT IN
-        ('next_correspondence_source', 'remove_correspondence_source', 'remove_entity_correspondence_sources'))) THEN
+        ('next_correspondence_source', 'register_uploaded_correspondence_source',
+          'remove_correspondence_source', 'remove_entity_correspondence_sources'))) THEN
     RAISE EXCEPTION 'Correspondence source maintenance may own only its lifecycle routines';
   END IF;
 END
@@ -29,7 +30,7 @@ $role$;--> statement-breakpoint
 GRANT stella_correspondence_source TO CURRENT_USER WITH INHERIT FALSE, SET TRUE;--> statement-breakpoint
 GRANT USAGE, CREATE ON SCHEMA public TO stella_correspondence_source;--> statement-breakpoint
 GRANT SELECT (organization_id, workspace_id, correspondence_id, entity_id) ON public.correspondence_sources TO stella_correspondence_source;--> statement-breakpoint
-GRANT DELETE ON public.correspondence_sources TO stella_correspondence_source;--> statement-breakpoint
+GRANT INSERT (organization_id, workspace_id, correspondence_id, entity_id), DELETE ON public.correspondence_sources TO stella_correspondence_source;--> statement-breakpoint
 GRANT SELECT (organization_id, workspace_id, id, source_entity_id), UPDATE (source_entity_id, updated_at), DELETE ON public.correspondence TO stella_correspondence_source;--> statement-breakpoint
 
 GRANT EXECUTE ON FUNCTION public.stella_authorized_workspace_ids(text, text) TO stella_correspondence_source;--> statement-breakpoint
@@ -53,6 +54,14 @@ AS PERMISSIVE FOR SELECT TO stella_correspondence_source
 USING (organization_id = nullif(current_setting('app.correspondence_source_organization_id', true), '')
   AND workspace_id = nullif(current_setting('app.correspondence_source_workspace_id', true), '')::uuid
   AND correspondence_id = nullif(current_setting('app.correspondence_source_record_id', true), '')::uuid);--> statement-breakpoint
+-- Registration inserts exactly the uploaded record's own source, scoped from
+-- the inserted record by its trigger, whichever role inserted the record.
+CREATE POLICY correspondence_source_registration ON public.correspondence_sources
+AS PERMISSIVE FOR INSERT TO stella_correspondence_source
+WITH CHECK (organization_id = nullif(current_setting('app.correspondence_source_organization_id', true), '')
+  AND workspace_id = nullif(current_setting('app.correspondence_source_workspace_id', true), '')::uuid
+  AND correspondence_id = nullif(current_setting('app.correspondence_source_record_id', true), '')::uuid
+  AND entity_id = nullif(current_setting('app.correspondence_source_entity_id', true), '')::uuid);--> statement-breakpoint
 CREATE POLICY correspondence_source_maintenance ON public.correspondence
 AS PERMISSIVE FOR ALL TO stella_correspondence_source
 USING (organization_id = nullif(current_setting('app.correspondence_source_organization_id', true), '')
@@ -82,7 +91,35 @@ ALTER TABLE "correspondence" ADD CONSTRAINT "correspondence_source_entity_worksp
 ALTER FUNCTION public.remove_correspondence_source() OWNER TO stella_correspondence_source;--> statement-breakpoint
 -- stella-migration-safety: reviewed change-owner - The entity deletion trigger uses only its trusted OLD row to unlink that source, without depending on caller visibility of correspondence.
 ALTER FUNCTION public.remove_entity_correspondence_sources() OWNER TO stella_correspondence_source;--> statement-breakpoint
+-- stella-migration-safety: reviewed change-owner - Source registration inserts only the inserted record's own source row from its trusted NEW row, independent of the inserting role's source-table policies.
+ALTER FUNCTION public.register_uploaded_correspondence_source() OWNER TO stella_correspondence_source;--> statement-breakpoint
 SET LOCAL ROLE stella_correspondence_source;--> statement-breakpoint
+
+-- stella-migration-safety: reviewed security-definer - Private non-bypass role, fixed search path and forced row security; the inserted source is exactly the uploaded record's own organization, matter, id and file from NEW, and the scope is restored before returning.
+CREATE OR REPLACE FUNCTION public.register_uploaded_correspondence_source() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp SET row_security = on AS $$
+DECLARE
+  previous_organization_id text := current_setting('app.correspondence_source_organization_id', true);
+  previous_workspace_id text := current_setting('app.correspondence_source_workspace_id', true);
+  previous_record_id text := current_setting('app.correspondence_source_record_id', true);
+  previous_entity_id text := current_setting('app.correspondence_source_entity_id', true);
+BEGIN
+  IF NEW.source = 'upload' THEN
+    PERFORM set_config('app.correspondence_source_organization_id', NEW.organization_id, true),
+      set_config('app.correspondence_source_workspace_id', NEW.workspace_id::text, true),
+      set_config('app.correspondence_source_record_id', NEW.id::text, true),
+      set_config('app.correspondence_source_entity_id', NEW.source_entity_id::text, true);
+    INSERT INTO public.correspondence_sources (organization_id, workspace_id, correspondence_id, entity_id)
+    VALUES (NEW.organization_id, NEW.workspace_id, NEW.id, NEW.source_entity_id);
+    PERFORM set_config('app.correspondence_source_organization_id', coalesce(previous_organization_id, ''), true),
+      set_config('app.correspondence_source_workspace_id', coalesce(previous_workspace_id, ''), true),
+      set_config('app.correspondence_source_record_id', coalesce(previous_record_id, ''), true),
+      set_config('app.correspondence_source_entity_id', coalesce(previous_entity_id, ''), true);
+  END IF;
+  RETURN NEW;
+END;
+$$;--> statement-breakpoint
 CREATE FUNCTION public.next_correspondence_source(deleted_source public.correspondence_sources)
 RETURNS uuid LANGUAGE sql SET search_path = pg_catalog SET row_security = on AS $$
   SELECT entity_id FROM public.correspondence_sources
@@ -220,12 +257,12 @@ END;
 $$;--> statement-breakpoint
 REVOKE ALL ON FUNCTION public.remove_entity_correspondence_sources() FROM PUBLIC;--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.correspondence_has_other_sources(uuid, uuid) TO stella;--> statement-breakpoint
+-- The source trigger routine runs for every correspondence writer as its
+-- owner; it stays executable for the roles that write correspondence, not
+-- through PUBLIC. Its owner grants this before giving up the role.
+REVOKE EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() TO stella, stella_entity_gate;--> statement-breakpoint
 RESET ROLE;--> statement-breakpoint
 REVOKE CREATE ON SCHEMA public FROM stella_correspondence_source;--> statement-breakpoint
 -- stella-migration-safety: reviewed grant-privileges - Disable runtime switching to the private lifecycle role after installing its trigger-only entry point.
-GRANT stella_correspondence_source TO CURRENT_USER WITH SET FALSE;--> statement-breakpoint
-
--- The source trigger routine runs for every correspondence writer; it stays
--- executable for the roles that write correspondence, not through PUBLIC.
-REVOKE EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() TO stella, stella_correspondence_source, stella_entity_gate;
+GRANT stella_correspondence_source TO CURRENT_USER WITH SET FALSE;

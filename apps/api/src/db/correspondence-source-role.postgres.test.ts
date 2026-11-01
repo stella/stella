@@ -125,6 +125,11 @@ describe.skipIf(!runPostgresTests)(
           {
             table: "correspondence_sources",
             column: "correspondence_id",
+            privilege: "INSERT",
+          },
+          {
+            table: "correspondence_sources",
+            column: "correspondence_id",
             privilege: "SELECT",
           },
           {
@@ -135,12 +140,27 @@ describe.skipIf(!runPostgresTests)(
           {
             table: "correspondence_sources",
             column: "entity_id",
+            privilege: "INSERT",
+          },
+          {
+            table: "correspondence_sources",
+            column: "entity_id",
             privilege: "SELECT",
           },
           {
             table: "correspondence_sources",
             column: "organization_id",
+            privilege: "INSERT",
+          },
+          {
+            table: "correspondence_sources",
+            column: "organization_id",
             privilege: "SELECT",
+          },
+          {
+            table: "correspondence_sources",
+            column: "workspace_id",
+            privilege: "INSERT",
           },
           {
             table: "correspondence_sources",

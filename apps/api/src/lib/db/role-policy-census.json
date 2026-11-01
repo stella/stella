@@ -4242,6 +4242,16 @@
   {
     "schema": "public",
     "table": "correspondence_sources",
+    "policy": "correspondence_source_registration",
+    "command": "INSERT",
+    "roles": ["stella_correspondence_source"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "(((organization_id)::text = NULLIF(current_setting('app.correspondence_source_organization_id'::text, true), ''::text)) AND (workspace_id = (NULLIF(current_setting('app.correspondence_source_workspace_id'::text, true), ''::text))::uuid) AND (correspondence_id = (NULLIF(current_setting('app.correspondence_source_record_id'::text, true), ''::text))::uuid) AND (entity_id = (NULLIF(current_setting('app.correspondence_source_entity_id'::text, true), ''::text))::uuid))"
+  },
+  {
+    "schema": "public",
+    "table": "correspondence_sources",
     "policy": "correspondence_sources_workspace_delete",
     "command": "DELETE",
     "roles": ["stella"],
