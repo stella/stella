@@ -130,6 +130,21 @@ type RawReplayWriteOptions<T extends PgTable> = {
   result?: RawReplayResult;
 };
 
+/**
+ * A reserved session binds through Bun SQL's `unsafe`, which sends an array
+ * as comma-joined text: only scalars bind faithfully.
+ */
+type RawReplaySessionParam = string | number | bigint | boolean | null;
+
+const isRawReplaySessionParam = (
+  value: unknown,
+): value is RawReplaySessionParam =>
+  value === null ||
+  typeof value === "string" ||
+  typeof value === "number" ||
+  typeof value === "bigint" ||
+  typeof value === "boolean";
+
 type RawReplayExecutor =
   | {
       kind: "drizzle";
@@ -140,7 +155,7 @@ type RawReplayExecutor =
       connection: {
         query: (
           query: string,
-          params?: ReturnType<PgDialect["sqlToQuery"]>["params"],
+          params?: readonly RawReplaySessionParam[],
         ) => PromiseLike<unknown>;
       };
     };
@@ -212,7 +227,12 @@ export const replayRawWrite = <T extends PgTable>({
           return await executor.connection.execute(statement);
         case "session": {
           const query = new PgDialect().sqlToQuery(statement);
-          return await executor.connection.query(query.sql, query.params);
+          const params = query.params.map((param) =>
+            isRawReplaySessionParam(param)
+              ? param
+              : panic("Raw replay session parameters must be scalars"),
+          );
+          return await executor.connection.query(query.sql, params);
         }
         default:
           executor satisfies never;
