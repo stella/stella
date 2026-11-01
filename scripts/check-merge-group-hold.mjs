@@ -5,6 +5,11 @@ import { pathToFileURL } from "node:url";
 import { parseMergeGroupEntries } from "./merge-group-entries.mjs";
 
 export const HOLD_LABEL = "hold";
+/**
+ * A repository variable that is always "1". Unreadable variables read as
+ * empty, so without it "no hold" and "no variable access" would look alike.
+ */
+export const HOLD_CONTEXT = "STELLA_PR_HOLD_CONTEXT";
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 const record = (value) =>
@@ -70,7 +75,8 @@ export const checkMergeGroupHold = ({
   ) {
     return fail("HOLD_INVALID_GROUP");
   }
-  if (!record(holdVariables)) return fail("HOLD_MISSING_VARIABLE_CONTEXT");
+  if (!record(holdVariables) || holdVariables[HOLD_CONTEXT] !== "1")
+    return fail("HOLD_MISSING_VARIABLE_CONTEXT");
   /** @param {string} endpoint @returns {unknown} */
   const read = (endpoint) => {
     try {
@@ -144,7 +150,7 @@ export class HeldPullRequestError extends Error {
 
 /**
  * @param {{ event: unknown, repository: string | undefined,
- * holdValue: string | undefined,
+ * holdValue: string | undefined, holdContext: string | undefined,
  * addLabel: (endpoint: string) => unknown,
  * readApi: (endpoint: string) => unknown,
  * graphql: (options: { query: string, id: string }) => unknown }} options
@@ -153,6 +159,7 @@ export const dequeueHeldPullRequest = ({
   event,
   repository,
   holdValue,
+  holdContext,
   addLabel,
   readApi,
   graphql,
@@ -184,7 +191,7 @@ export const dequeueHeldPullRequest = ({
       if (!label(applied)) return fail("HOLD_INVALID_LABEL_EVENT");
       if (applied.name.toLowerCase() !== HOLD_LABEL) return;
       if (event["action"] === "unlabeled") {
-        if (typeof holdValue !== "string")
+        if (typeof holdValue !== "string" || holdContext !== "1")
           return fail("HOLD_MISSING_VARIABLE_CONTEXT");
         if (holdValue === "") return;
       }
@@ -294,6 +301,7 @@ if (
         event,
         repository: process.env["GITHUB_REPOSITORY"],
         holdValue: process.env["PR_HOLD_VALUE"],
+        holdContext: process.env["PR_HOLD_CONTEXT"],
         addLabel: (endpoint) =>
           api([endpoint, "--method", "POST", "-f", `labels[]=${HOLD_LABEL}`]),
         readApi: (endpoint) => api([endpoint]),

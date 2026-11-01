@@ -113,4 +113,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_HOLD_VALUE: ${{ vars[format('STELLA_PR_HOLD_{0}', github.event.pull_request.number)] }}
+          PR_HOLD_CONTEXT: ${{ vars.STELLA_PR_HOLD_CONTEXT }}
         run: node scripts/check-merge-group-hold.mjs

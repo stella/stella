@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Removes held pull requests targeting the default branch from the merge queue on label and reopen events using a pull-request write token.",
+  "reviewedDigest": "e5856e9700cb2f3e2a87149e7cc87d496b2d89601c09ec3c0d4a44af5ad76554"
+}

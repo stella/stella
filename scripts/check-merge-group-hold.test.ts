@@ -7,6 +7,7 @@ import {
   checkMergeGroupHold,
   dequeueHeldPullRequest,
   HeldPullRequestError,
+  HOLD_CONTEXT,
   HOLD_LABEL,
   MergeGroupHoldError,
 } from "./check-merge-group-hold.mjs";
@@ -43,7 +44,7 @@ const fixture = (numbers: number[], held: number[] = []) => {
         [number, held.includes(number) ? [{ name: HOLD_LABEL }] : []] as const,
     ),
   );
-  const variables: Record<string, unknown> = {};
+  const variables: Record<string, unknown> = { [HOLD_CONTEXT]: "1" };
   return {
     labels,
     variables,
@@ -139,7 +140,17 @@ test("a label and a variable are both named", () => {
 });
 
 test("missing or malformed variable context fails closed before any read", () => {
-  for (const holdVariables of [undefined, null, "{}", ["x"]]) {
+  // Without the sentinel an unreadable variable would read as "no hold".
+  for (const holdVariables of [
+    undefined,
+    null,
+    "{}",
+    ["x"],
+    {},
+    { [HOLD_CONTEXT]: "" },
+    { [HOLD_CONTEXT]: 1 },
+    { STELLA_PR_HOLD_17: "" },
+  ]) {
     const run = fixture([17]);
     expect(() => run.run("merge_group", holdVariables)).toThrow(
       "HOLD_MISSING_VARIABLE_CONTEXT",
@@ -159,7 +170,7 @@ test("a member without a readable head fails closed", () => {
         eventName: "merge_group",
         group,
         repository: "stella/stella",
-        holdVariables: {},
+        holdVariables: { [HOLD_CONTEXT]: "1" },
         readApi: (endpoint: string) =>
           endpoint.includes("/compare/")
             ? added
@@ -183,7 +194,7 @@ test("API errors fail closed with a typed message naming the group", () => {
         eventName: "merge_group",
         group,
         repository: "stella/stella",
-        holdVariables: {},
+        holdVariables: { [HOLD_CONTEXT]: "1" },
         readApi: (endpoint: string) => {
           if (endpoint.includes(failure)) {
             throw new TypeError("API unavailable");
@@ -227,7 +238,7 @@ test("unmappable or incomplete groups fail closed", () => {
         eventName: "merge_group",
         group,
         repository: "stella/stella",
-        holdVariables: {},
+        holdVariables: { [HOLD_CONTEXT]: "1" },
         readApi: () => added,
       }),
     ).toThrow("HOLD_UNMAPPABLE_GROUP");
@@ -250,7 +261,10 @@ const dequeueFixture = () => {
   const calls: { query: string; id: string }[] = [];
   const reads: string[] = [];
   const restored: string[] = [];
-  const hold = { value: "" };
+  const hold: { value: string; context: string | undefined } = {
+    value: "",
+    context: "1",
+  };
   const responses: { query: unknown; mutation: unknown } = {
     query: {
       data: {
@@ -282,6 +296,7 @@ const dequeueFixture = () => {
         event,
         repository: "stella/stella",
         holdValue: hold.value,
+        holdContext: hold.context,
         addLabel: (endpoint: string) => {
           restored.push(endpoint);
           if (transport.failure === "restore") {
@@ -533,6 +548,25 @@ test("removing hold without a repository variable needs no API calls", () => {
   expect(target.calls).toEqual([]);
 });
 
+test("removing hold without the variable context sentinel fails closed", () => {
+  for (const context of [undefined, "", "0"]) {
+    const target = dequeueFixture();
+    target.event.action = "unlabeled";
+    target.pull.labels = [];
+    target.hold.context = context;
+    expect(() => target.run()).toThrow("HOLD_MISSING_VARIABLE_CONTEXT");
+    expect(target.reads).toEqual([]);
+  }
+  // A labeled event needs no variable, so it never depends on the sentinel.
+  const labeled = dequeueFixture();
+  labeled.hold.context = undefined;
+  labeled.run();
+  expect(labeled.calls.map(({ query }) => query.split("(")[0])).toEqual([
+    "query",
+    "mutation",
+  ]);
+});
+
 test("restoring a hold outside the queue leaves the label restored", () => {
   const target = dequeueFixture();
   target.event.action = "unlabeled";
@@ -565,5 +599,6 @@ test("the hold variable travels through env as data on the trusted target job", 
   expect(source).toContain(
     `PR_HOLD_VALUE: \${{ vars[format('STELLA_PR_HOLD_{0}', github.event.pull_request.number)] }}`,
   );
-  expect(source).not.toMatch(/run:.*vars\[/u);
+  expect(source).toContain(`PR_HOLD_CONTEXT: \${{ vars.${HOLD_CONTEXT} }}`);
+  expect(source).not.toMatch(/run:.*vars[.[]/u);
 });
