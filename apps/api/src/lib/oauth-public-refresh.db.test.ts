@@ -6,6 +6,16 @@ import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import {
+  queryCountLogger,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
+
+const REGISTRATION_QUERY_BUDGET = 13;
+// A cold metadata grant includes client discovery, consent, and token writes.
+const GRANT_QUERY_BUDGET = 57;
+const REFRESH_QUERY_BUDGET = 15;
+
 const DOCUMENT_URL = "https://client.example.com/oauth/refresh-client.json";
 const REDIRECT_URI = "https://connector.example.test/oauth/callback";
 
@@ -37,7 +47,7 @@ const { initAgentAuthTestDb, releaseAgentAuthTestDb } =
   await import("@/api/tests/helpers/mock-agent-auth-db");
 
 beforeAll(async () => {
-  await initAgentAuthTestDb();
+  await initAgentAuthTestDb({ logger: queryCountLogger });
 });
 afterAll(async () => {
   await releaseAgentAuthTestDb();
@@ -57,18 +67,26 @@ const fixture = async (
     orgName: "Public refresh",
     orgSlugPrefix: "public-refresh",
   });
-  const registeredAt = performance.now();
-  const client =
-    registration !== "metadata"
-      ? await registerOAuthClient(
-          undefined,
-          registration === "confidential" ? "client_secret_post" : "none",
-        )
-      : { clientId: DOCUMENT_URL };
-  expect(performance.now() - registeredAt).toBeLessThan(10_000);
-  const start = performance.now();
-  const grant = await grantOAuthClient(browser, client);
-  expect(performance.now() - start).toBeLessThan(10_000);
+  const client = await runWithQueryCounter(async (counter) => {
+    const registered =
+      registration !== "metadata"
+        ? await registerOAuthClient(
+            undefined,
+            registration === "confidential" ? "client_secret_post" : "none",
+          )
+        : { clientId: DOCUMENT_URL };
+    if (registration !== "metadata") {
+      expect(counter.count).toBeGreaterThan(0);
+    }
+    expect(counter.count).toBeLessThanOrEqual(REGISTRATION_QUERY_BUDGET);
+    return registered;
+  });
+  const grant = await runWithQueryCounter(async (counter) => {
+    const granted = await grantOAuthClient(browser, client);
+    expect(counter.count).toBeGreaterThan(0);
+    expect(counter.count).toBeLessThanOrEqual(GRANT_QUERY_BUDGET);
+    return granted;
+  });
   expect(grant.scope.split(" ")).toContain("offline_access");
   return { client, grant, userId: browser.userId };
 };
@@ -80,7 +98,7 @@ const countTokenRows = async ({
   clientId: string;
   userId: string;
 }) => {
-  const database = await initAgentAuthTestDb();
+  const database = await initAgentAuthTestDb({ logger: queryCountLogger });
   return {
     refresh: await database.$count(
       oauthRefreshToken,
@@ -113,9 +131,16 @@ describe("resource-bound refresh grants", () => {
       const { client, grant, userId } = await fixture(registration);
       let refreshToken = grant.refreshToken;
       for (let round = 0; round < rotations; round += 1) {
-        const start = performance.now();
-        const response = await refreshOAuthGrant({ client, refreshToken });
-        expect(performance.now() - start).toBeLessThan(10_000);
+        const tokenForRound = refreshToken;
+        const response = await runWithQueryCounter(async (counter) => {
+          const refreshed = await refreshOAuthGrant({
+            client,
+            refreshToken: tokenForRound,
+          });
+          expect(counter.count).toBeGreaterThan(0);
+          expect(counter.count).toBeLessThanOrEqual(REFRESH_QUERY_BUDGET);
+          return refreshed;
+        });
         expect(response.status).toBe(200);
         const tokens = v.parse(tokensSchema, await response.json());
         expect(tokens.refresh_token).not.toBe(refreshToken);

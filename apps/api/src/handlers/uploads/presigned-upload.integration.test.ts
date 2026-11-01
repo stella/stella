@@ -4,6 +4,7 @@ import {
   describe,
   expect,
   setDefaultTimeout,
+  spyOn,
   test,
 } from "bun:test";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
@@ -617,8 +618,8 @@ describe("presigned upload mutation flow", () => {
           "Expected the idle admission budget to admit the hold.",
         );
       }
+      const replayAdmissions = spyOn(UPLOAD_FINALIZE_ADMISSION, "acquire");
       try {
-        const startedAt = performance.now();
         const replayed = await finalizeUpload.handler(
           asTestRaw<FinalizeCtx>(
             createContext({
@@ -630,15 +631,14 @@ describe("presigned upload mutation flow", () => {
           ),
         );
         expect(replayed).toEqual(finalized);
+        expect(replayAdmissions).not.toHaveBeenCalled();
         expect(
           recording.records.filter(
             ({ message }) => message === "uploads.finalize_admitted",
           ),
         ).toHaveLength(1);
-        expect(performance.now() - startedAt).toBeLessThan(
-          LIMITS.uploadFinalizeAdmissionWaitMs,
-        );
       } finally {
+        replayAdmissions.mockRestore();
         holdAgain();
       }
     } finally {
@@ -863,8 +863,8 @@ describe("presigned upload finalize lifecycle", () => {
       declaredSha256:
         "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
       status: "pending",
-      expiresAt: new Date(Date.now() + 60_000),
-      createdAt: new Date(),
+      expiresAt: sql`now() + interval '1 minute'`,
+      createdAt: sql`now()`,
     });
     seededUploadIds.push(uploadId);
 

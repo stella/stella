@@ -20,7 +20,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/db/case-law-provision-extraction-state.postgres.test.ts": {
-    "count": 3,
+    "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -269,17 +269,7 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/handlers/case-law/ingestion/parsers/validate-ast.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/handlers/case-law/ingestion/pipeline-stored-total.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/case-law/ingestion/pipeline.test.ts": {
     "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -316,11 +306,6 @@
   },
   "apps/api/src/handlers/case-law/ingestion/source-total-maintenance.db.test.ts": {
     "count": 8,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/case-law/ingestion/us-citation-scanner.property.test.ts": {
-    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -391,11 +376,6 @@
   },
   "apps/api/src/handlers/chat/tool-call-end-arguments.test.ts": {
     "count": 3,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.test.ts": {
-    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -845,7 +825,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/uploads/presigned-upload.integration.test.ts": {
-    "count": 6,
+    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -1165,11 +1145,6 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/confirmation-otp.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/corpus-index/chunking.test.ts": {
     "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -1504,11 +1479,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/health/database-login-probe.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/hosted-usage-provider/replay.postgres.test.ts": {
     "count": 1,
     "owner": "api",
@@ -1719,18 +1689,8 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/oauth-client-registration.db.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/oauth-issuer-responses.db.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/oauth-public-refresh.db.test.ts": {
-    "count": 7,
+    "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -1745,11 +1705,6 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/observability/event-loop-delay.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/observability/failure-evidence.test.ts": {
     "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -1785,7 +1740,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/rate-limit/auth-storage.test.ts": {
-    "count": 3,
+    "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -2225,17 +2180,12 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/tests/helpers/transaction-interleaving.postgres.test.ts": {
-    "count": 4,
+    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/tests/helpers/transaction-recorder.postgres.test.ts": {
     "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/tests/postgres-test-maintenance.postgres.test.ts": {
-    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -2302,16 +2252,6 @@
   "apps/desktop/tests/browser/registry-interactions.playwright.spec.ts": {
     "count": 4,
     "owner": "desktop",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/extension/e2e/containment.spec.ts": {
-    "count": 2,
-    "owner": "extension",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/extension/src/lib/tab-executor.test.ts": {
-    "count": 2,
-    "owner": "extension",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/visual-preview/browser/render.test.ts": {
@@ -2465,7 +2405,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "packages/cli/src/auth/login.test.ts": {
-    "count": 3,
+    "count": 1,
     "owner": "cli",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -2542,11 +2482,6 @@
   "packages/mcp-kit/src/envelope.test.ts": {
     "count": 4,
     "owner": "mcp-kit",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/mojibake/src/detect.test.ts": {
-    "count": 4,
-    "owner": "mojibake",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "packages/parameter-store/src/read-parameter.test.ts": {
