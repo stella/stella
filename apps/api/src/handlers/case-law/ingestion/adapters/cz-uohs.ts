@@ -94,10 +94,7 @@ const collectionFromUrl = (url: string): CzUohsCollection | undefined =>
  * record must not fail the whole listing, so it reads as an empty list.
  */
 const statedList = <TItem extends v.GenericSchema>(item: TItem) =>
-  v.pipe(
-    v.nullable(v.array(item)),
-    v.transform((value) => value ?? []),
-  );
+  v.nullable(v.array(item), () => []);
 
 const recordSchema = v.looseObject({
   typ: v.unknown(),
