@@ -1842,7 +1842,7 @@ const ActivityDetailAction = ({
 }) => {
   const t = useTranslations();
   if (detail.type === "version") {
-    const version = detail.versionNumber;
+    const version = String(detail.versionNumber);
     return detail.change === "added"
       ? t("workspaces.overview.activity.versions.added", { version })
       : t("workspaces.overview.activity.versions.deleted", { version });
