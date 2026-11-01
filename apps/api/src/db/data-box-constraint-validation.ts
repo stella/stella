@@ -31,7 +31,7 @@ export const DATA_BOX_CONSTRAINTS = [
   {
     tableName: "correspondence",
     constraintName: "correspondence_source_entity_workspace_fk",
-    introducedBy: "20261031235200_data_box_sources",
+    introducedBy: "20261031235500_correspondence_source_maintenance",
   },
 ] as const satisfies readonly (OnlineConstraintValidation & {
   introducedBy: string;

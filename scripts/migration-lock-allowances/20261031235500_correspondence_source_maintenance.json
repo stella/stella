@@ -1,3 +1,5 @@
 {
-  "create-policy": "The four lifecycle policies give only the private non-bypass role row-scoped access derived from the deleted source. Catalog-only policy creation scans no history, under 1s lock_timeout and 5s statement_timeout."
+  "create-policy": "The four lifecycle policies give only the private non-bypass role row-scoped access derived from the deleted source. Catalog-only policy creation scans no history, under 1s lock_timeout and 5s statement_timeout.",
+  "create-trigger": "The record and entity lifecycle triggers are attached through catalog changes after the source table's gate exists; this migration executes no application DML or history backfill. Lock acquisition is bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  "add-foreign-key": "After the source lifecycle triggers are installed, the current-source foreign key changes from cascade to restrict as NOT VALID, without scanning live rows. Gated online validation follows; lock_timeout is 1s and statement_timeout is 5s."
 }

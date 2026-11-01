@@ -26,7 +26,9 @@ CREATE POLICY "correspondence_sources_workspace_delete" ON "public"."corresponde
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."correspondence_sources" TO stella;--> statement-breakpoint
 
 -- The following migration installs this relation's generated feature gate:
--- its gate checks, gate policies and write trigger.
+-- its gate checks, gate policies and write trigger. Nothing writes this table
+-- before then: the source maintenance migration attaches the record and entity
+-- triggers of the routines below only once the gate and the private role exist.
 
 CREATE FUNCTION public.register_uploaded_correspondence_source() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
@@ -38,9 +40,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;--> statement-breakpoint
-CREATE TRIGGER register_uploaded_correspondence_source
-AFTER INSERT ON "correspondence" FOR EACH ROW
-EXECUTE FUNCTION public.register_uploaded_correspondence_source();--> statement-breakpoint
 
 -- Source deletion is a record transition, serialized by the record row. A
 -- correspondence cascade may already have removed the parent; then no work
@@ -85,12 +84,4 @@ BEGIN
   WHERE workspace_id = OLD.workspace_id AND source_entity_id = OLD.id;
   RETURN OLD;
 END;
-$$;--> statement-breakpoint
-CREATE TRIGGER remove_entity_correspondence_sources
-BEFORE DELETE ON "entities" FOR EACH ROW
-EXECUTE FUNCTION public.remove_entity_correspondence_sources();--> statement-breakpoint
-
--- stella-migration-safety: reviewed drop-constraint - replace the first-file cascade with a restricting FK after installing the source deletion protocol; uploaded email deletion remains handled by the same protocol
-ALTER TABLE "correspondence" DROP CONSTRAINT "correspondence_source_entity_workspace_fk";--> statement-breakpoint
--- squawk-ignore adding-foreign-key-constraint -- NOT VALID keeps the live-table validation scan out of the DDL lock window
-ALTER TABLE "correspondence" ADD CONSTRAINT "correspondence_source_entity_workspace_fk" FOREIGN KEY ("source_entity_id", "workspace_id") REFERENCES "entities"("id", "workspace_id") ON DELETE restrict NOT VALID;
+$$;

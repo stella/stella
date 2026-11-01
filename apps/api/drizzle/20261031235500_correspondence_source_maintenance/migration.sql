@@ -62,6 +62,22 @@ WITH CHECK (organization_id = nullif(current_setting('app.correspondence_source_
   AND workspace_id = nullif(current_setting('app.correspondence_source_workspace_id', true), '')::uuid
   AND id = nullif(current_setting('app.correspondence_source_record_id', true), '')::uuid);--> statement-breakpoint
 
+-- Attach the lifecycle in the transaction that makes its routines private: the
+-- source table's gate write trigger (previous migration) gates every row at
+-- insert, and entity deletion never runs these routines as the caller.
+CREATE TRIGGER register_uploaded_correspondence_source
+AFTER INSERT ON "correspondence" FOR EACH ROW
+EXECUTE FUNCTION public.register_uploaded_correspondence_source();--> statement-breakpoint
+-- Run before the entity FK checks: unlink this copy, transition its record,
+-- then permit deletion.
+CREATE TRIGGER remove_entity_correspondence_sources
+BEFORE DELETE ON "entities" FOR EACH ROW
+EXECUTE FUNCTION public.remove_entity_correspondence_sources();--> statement-breakpoint
+-- stella-migration-safety: reviewed drop-constraint - replace the first-file cascade with a restricting FK after installing the source deletion protocol; uploaded email deletion remains handled by the same protocol
+ALTER TABLE "correspondence" DROP CONSTRAINT "correspondence_source_entity_workspace_fk";--> statement-breakpoint
+-- squawk-ignore adding-foreign-key-constraint -- NOT VALID keeps the live-table validation scan out of the DDL lock window
+ALTER TABLE "correspondence" ADD CONSTRAINT "correspondence_source_entity_workspace_fk" FOREIGN KEY ("source_entity_id", "workspace_id") REFERENCES "entities"("id", "workspace_id") ON DELETE restrict NOT VALID;--> statement-breakpoint
+
 -- stella-migration-safety: reviewed change-owner - Only the source lifecycle trigger moves to a non-login, non-bypass role with row-scoped policies; application execution stays revoked.
 ALTER FUNCTION public.remove_correspondence_source() OWNER TO stella_correspondence_source;--> statement-breakpoint
 -- stella-migration-safety: reviewed change-owner - The entity deletion trigger uses only its trusted OLD row to unlink that source, without depending on caller visibility of correspondence.
@@ -209,44 +225,7 @@ REVOKE CREATE ON SCHEMA public FROM stella_correspondence_source;--> statement-b
 -- stella-migration-safety: reviewed grant-privileges - Disable runtime switching to the private lifecycle role after installing its trigger-only entry point.
 GRANT stella_correspondence_source TO CURRENT_USER WITH SET FALSE;--> statement-breakpoint
 
--- Tenant routines remain available to the application without granting them
--- to every private maintenance or public-corpus role through PUBLIC.
-REVOKE EXECUTE ON FUNCTION public.delete_service_oauth_client_credential() FROM PUBLIC;--> statement-breakpoint
-REVOKE EXECUTE ON FUNCTION public.legal_reader_annotation_claim_held(uuid, uuid, uuid) FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.legal_reader_annotation_claim_held(uuid, uuid, uuid) TO stella;--> statement-breakpoint
-REVOKE EXECUTE ON FUNCTION public.legal_reader_annotation_claim_visible(uuid, uuid, uuid) FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.legal_reader_annotation_claim_visible(uuid, uuid, uuid) TO stella;--> statement-breakpoint
-REVOKE EXECUTE ON FUNCTION public.legal_reader_annotation_document_held(uuid, uuid, uuid) FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.legal_reader_annotation_document_held(uuid, uuid, uuid) TO stella;--> statement-breakpoint
-REVOKE EXECUTE ON FUNCTION public.legal_reader_annotation_document_visible(uuid, uuid, uuid) FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.legal_reader_annotation_document_visible(uuid, uuid, uuid) TO stella;--> statement-breakpoint
-REVOKE EXECUTE ON FUNCTION public.mark_sanctions_contact_insert() FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.mark_sanctions_contact_insert() TO stella;--> statement-breakpoint
-REVOKE EXECUTE ON FUNCTION public.mark_sanctions_contact_update() FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.mark_sanctions_contact_update() TO stella;--> statement-breakpoint
-REVOKE EXECUTE ON FUNCTION public.mark_sanctions_organization_insert() FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.mark_sanctions_organization_insert() TO stella;--> statement-breakpoint
-REVOKE EXECUTE ON FUNCTION public.mark_sanctions_organization_update() FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.mark_sanctions_organization_update() TO stella;--> statement-breakpoint
+-- The source trigger routine runs for every correspondence writer; it stays
+-- executable for the roles that write correspondence, not through PUBLIC.
 REVOKE EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() TO stella;--> statement-breakpoint
-REVOKE EXECUTE ON FUNCTION public.stella_entity_display_name(text, text, uuid, uuid) FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_entity_display_name(text, text, uuid, uuid) TO stella;--> statement-breakpoint
-REVOKE EXECUTE ON FUNCTION public.stella_refresh_entity_display_name(uuid) FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_refresh_entity_display_name(uuid) TO stella;--> statement-breakpoint
-REVOKE EXECUTE ON FUNCTION public.stella_refresh_entity_display_name_from_entity() FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_refresh_entity_display_name_from_entity() TO stella;--> statement-breakpoint
-REVOKE EXECUTE ON FUNCTION public.stella_refresh_entity_display_name_from_field() FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_refresh_entity_display_name_from_field() TO stella;--> statement-breakpoint
-REVOKE EXECUTE ON FUNCTION public.sync_time_entry_timer_state() FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.sync_time_entry_timer_state() TO stella;--> statement-breakpoint
-REVOKE EXECUTE ON FUNCTION public.user_files_enforce_organization_key() FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.user_files_enforce_organization_key() TO stella;--> statement-breakpoint
-
--- Preserve execution for application and service roles with existing table
--- or column privileges after replacing PUBLIC access with named grants.
-GRANT EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() TO stella_correspondence_source, stella_entity_gate;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_entity_display_name(text,text,uuid,uuid) TO stella_entity_gate;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_refresh_entity_display_name(uuid) TO stella_entity_gate;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_refresh_entity_display_name_from_entity() TO stella_entity_gate;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_refresh_entity_display_name_from_field() TO stella_entity_gate;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() TO stella, stella_correspondence_source, stella_entity_gate;
