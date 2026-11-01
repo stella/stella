@@ -40,6 +40,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { roleTranslationKeys } from "@/lib/organization/consts";
 import { useInviteMember } from "@/lib/organization/mutations";
 import {
+  defaultInviteRole,
   inviteMemberSchema,
   roleAssignmentOptions,
 } from "@/lib/organization/role-assignment.logic";
@@ -73,7 +74,7 @@ export const InviteMemberDialog = (props: InviteMemberDialogProps) => {
   const defaultRole =
     currentUserRole === undefined
       ? undefined
-      : assignableRoles(currentUserRole).at(-1);
+      : defaultInviteRole(assignableRoles(currentUserRole));
   if (currentUserRole === undefined || defaultRole === undefined) {
     return null;
   }

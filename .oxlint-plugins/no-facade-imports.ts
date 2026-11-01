@@ -29,6 +29,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/entity-feature-gate-metadata",
   "@/api/db/entity-feature-policies",
   "@/api/db/json-utils",
+  "@/api/db/indicator-query",
   "@/api/db/long-running-connection",
   "@/api/db/online-migration-connection",
   "@/api/db/online-unique-indexes",

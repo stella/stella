@@ -3,12 +3,39 @@ import { describe, expect, test } from "bun:test";
 import {
   AI_FAILURE_CODES,
   API_VALIDATION_ERROR_CODE,
+  PREVIEW_UNAVAILABLE_ERROR_CODE,
 } from "@stll/api-contract";
 
 import messages from "@/i18n/langs/en.json";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 
-import { isDisplayableAPIError, toAPIError } from "./api";
+import {
+  isDisplayableAPIError,
+  isPreviewUnavailableError,
+  toAPIError,
+} from "./api";
+
+describe("files with no preview", () => {
+  test("the wire code reads back as that state, with its own message", () => {
+    const error = toAPIError({
+      status: 400,
+      value: {
+        code: PREVIEW_UNAVAILABLE_ERROR_CODE,
+        message: "Server wording",
+      },
+    });
+
+    expect(isPreviewUnavailableError(error)).toBe(true);
+    expect(error.message).toBe(messages.search.previewUnavailable);
+  });
+
+  test("any other refusal does not", () => {
+    expect(
+      isPreviewUnavailableError(toAPIError({ status: 400, value: "Bad" })),
+    ).toBe(false);
+    expect(isPreviewUnavailableError(new TypeError("Bad"))).toBe(false);
+  });
+});
 
 describe("AI API failures", () => {
   test.each(Object.values(AI_FAILURE_CODES))(
