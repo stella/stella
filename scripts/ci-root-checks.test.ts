@@ -481,6 +481,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/autofix-protected-paths.ts",
   ],
   "ci-checks-rest/Test type-aware autofix": [
+    "scripts/autofix-type-aware-precheck.ts",
     "scripts/autofix-type-aware.test.ts",
     "scripts/ci-check-pool-registry.ts",
   ],
@@ -576,6 +577,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test preview scope tool availability": [
     "scripts/visual-preview-scope.test.ts",
+    "scripts/visual-preview-scope.ts",
   ],
   "ci-checks-rest/Test public document fetch": [
     "scripts/fetch-public-documents.test.ts",

@@ -74,7 +74,8 @@
       "none": "Sem data",
       "today": "Hoje",
       "tomorrow": "Amanhã",
-      "nextWeek": "Em uma semana"
+      "nextWeek": "Em uma semana",
+      "pick": "Escolher data"
     },
     "due": {
       "overdue": "Atrasadas",
@@ -164,7 +165,16 @@
     "preview": "Abrir pré-visualização",
     "previewDescription": "Este arquivo abre na pré-visualização do sistema.",
     "unrendered": "Este documento não pode ser exibido aqui, mas a pré-visualização do sistema talvez consiga abri-lo.",
-    "details": "Detalhes"
+    "details": "Detalhes",
+    "zoomOut": "Diminuir zoom",
+    "zoomIn": "Aumentar zoom",
+    "zoomFit": "Ajustar à largura",
+    "fit": "Largura",
+    "appearance": {
+      "system": "Aparência: automática",
+      "light": "Aparência: clara",
+      "dark": "Aparência: escura"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -192,7 +202,8 @@
     "server": "Servidor",
     "signOut": "Sair",
     "deleteAccount": "Excluir conta",
-    "deleteAccountHint": "Abre sua conta na web, onde você pode excluí-la com tudo o que é seu."
+    "deleteAccountHint": "Abre sua conta na web, onde você pode excluí-la com tudo o que é seu.",
+    "signOutFailed": "Não foi possível concluir a saída. Tente novamente."
   },
   "header": {
     "search": "Pesquisar"

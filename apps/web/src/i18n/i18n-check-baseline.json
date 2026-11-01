@@ -65,7 +65,6 @@
     "billing.invoices.dueDate",
     "billing.invoices.statuses.draft",
     "billing.invoices.statuses.paid",
-    "billing.selectedCount",
     "billing.statuses.approved",
     "billing.statuses.draft",
     "billing.stopTimer",
@@ -247,6 +246,7 @@
     "templates.saveFailed",
     "templates.studio.conditionSourceRule",
     "templates.studio.insertFormatDefault",
+    "templates.studio.namePlaceholder",
     "templates.studio.slashEmpty",
     "templates.tags",
     "translate.settings.apiKeyLabel",
@@ -263,6 +263,7 @@
     "workspaces.overview.activity.actorActions.created",
     "workspaces.overview.activity.actorActions.deleted",
     "workspaces.overview.activity.actorActions.updated",
+    "workspaces.overview.activity.fields.name",
     "workspaces.overview.activity.fields.property",
     "workspaces.parties.partyRoles.expert_witness",
     "workspaces.parties.partyRoles.other",
@@ -275,7 +276,6 @@
     "workspaces.properties.chipText",
     "workspaces.properties.text",
     "workspaces.team",
-    "workspaces.views.fieldsSelected",
     "workspaces.views.layouts.calendar"
   ],
   "identicalToSource": {
@@ -471,9 +471,6 @@
     ],
     "common.type": [
       "fr"
-    ],
-    "common.urlIdentifierPlaceholder": [
-      "ar"
     ],
     "common.version": [
       "de",
@@ -919,6 +916,13 @@
     ],
     "workspaces.lead": [
       "de"
+    ],
+    "workspaces.overview.activity.fields.status": [
+      "pl",
+      "pt-BR"
+    ],
+    "workspaces.overview.activity.fields.type": [
+      "fr"
     ],
     "workspaces.overview.activity.targets.folder": [
       "pl"
