@@ -879,7 +879,7 @@
     ]
   },
   "desktop-windows-dry-run": {
-    "displayName": { "prefix": "desktop-windows-dry-run", "suffix": "" },
+    "displayName": { "prefix": "desktop-windows-dry-run (", "suffix": ")" },
     "declaredStepNames": [
       "Cancel merge group after failure in this job",
       "Checkout",
