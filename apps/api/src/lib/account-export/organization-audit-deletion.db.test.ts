@@ -45,7 +45,7 @@ import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 setDefaultTimeout(120_000);
 
 // Archives the builder published, by object key, standing in for the bucket.
-const publishedArchives = new Map<string, Uint8Array>();
+const publishedArchives = new Map<string, Uint8Array<ArrayBuffer>>();
 
 const organizationServer = serveRoutesForTest(organizationsRoute);
 const downloadServer = serveRoutesForTest(

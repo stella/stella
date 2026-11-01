@@ -30,7 +30,7 @@ export type CompletedOrganizationAuditExport = {
   objectKey: string;
   coverage: OrganizationAuditCoverage;
   /** The archive bytes the build published, in place of the bucket. */
-  archive: Uint8Array;
+  archive: Uint8Array<ArrayBuffer>;
 };
 
 /**
@@ -50,7 +50,7 @@ export const completeOrganizationAuditExport = async ({
   const claim =
     (await claimAccountExport(requested.id, ledger)) ??
     panic("Requested organization audit export must be claimable");
-  let archive: Uint8Array | undefined;
+  let archive: Uint8Array<ArrayBuffer> | undefined;
   const coverage = await buildOrganizationAuditArchive({
     db: ledger,
     userId,
@@ -63,7 +63,9 @@ export const completeOrganizationAuditExport = async ({
         panic("Archive published under a key other than its claim");
       }
       archive =
-        body instanceof Blob ? new Uint8Array(await body.arrayBuffer()) : body;
+        body instanceof Blob
+          ? new Uint8Array(await body.arrayBuffer())
+          : new Uint8Array(body);
     },
   });
   const completed = await completeAccountExport({
