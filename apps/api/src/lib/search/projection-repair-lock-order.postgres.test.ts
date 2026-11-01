@@ -152,7 +152,8 @@ if (!databaseUrl || !runPostgresTests) {
           const project = async (
             connection: Pick<GatedTestDb, "query" | "select" | "transaction">,
           ) => {
-            // Projections lock organization parents on the owner connection.
+            // Projections take owner-held parent row locks, so they run on an
+            // owner connection.
             const database = ownerDatabaseDouble(connection);
             switch (kind) {
               case "native": {
