@@ -77,12 +77,14 @@ fn serve(
     }
     let mut bytes = vec![0; header.samples * size_of::<f32>()];
     input.read_exact(&mut bytes)?;
-    let samples = bytes
-      .chunks_exact(size_of::<f32>())
-      .map(|raw| f32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]))
+    let (frames, _) = bytes.as_chunks::<{ size_of::<f32>() }>();
+    let samples = frames
+      .iter()
+      .copied()
+      .map(f32::from_le_bytes)
       .collect::<Vec<_>>();
-    let response = transcribe(&header.model_path, &samples)
-      .map_or(Response::Failed, Response::Text);
+    let response =
+      transcribe(&header.model_path, &samples).map_or(Response::Failed, Response::Text);
     serde_json::to_writer(&mut *output, &response)?;
     output.write_all(b"\n")?;
     output.flush()?;

@@ -263,7 +263,7 @@ where
   let sink = Arc::clone(buffer);
   device
     .build_input_stream(
-      config.clone(),
+      *config,
       move |data: &[T], _info: &cpal::InputCallbackInfo| {
         let mut samples = sink.lock().unwrap_or_else(|error| error.into_inner());
         let room = limit.saturating_sub(samples.len());
