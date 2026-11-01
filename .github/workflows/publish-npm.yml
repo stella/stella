@@ -134,7 +134,10 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/gh-retry.sh
+            scripts/retry.sh
             scripts/check-release-publication-source.sh
+            scripts/check-release-source-on-main.sh
+            scripts/release-branch.sh
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -144,9 +147,13 @@ jobs:
       - name: Preserve release publication verification
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-release-publication-source.sh" "$RUNNER_TEMP/check-release-publication-source.sh"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-release-source-on-main.sh" "$RUNNER_TEMP/check-release-source-on-main.sh"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/release-branch.sh" "$RUNNER_TEMP/release-branch.sh"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/retry.sh" "$RUNNER_TEMP/retry.sh"
 
       - name: Resolve upstream release receipt
         id: source
+        timeout-minutes: 8
         env:
           EVENT_NAME: ${{ github.event_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -200,6 +207,16 @@ jobs:
               echo "::error::${release_ref} does not resolve to the receipt's release_sha in ${GITHUB_REPOSITORY}." >&2
               exit 1
             fi
+            # Protected main must carry the tagged commit, directly or as the
+            # head of the squash-merged release pull request, before pack
+            # builds from it. Only commit history is fetched.
+            history="${RUNNER_TEMP}/release-source-history"
+            git init --quiet "$history"
+            bash "$RUNNER_TEMP/retry.sh" git -C "$history" fetch --quiet --no-tags --filter=tree:0 \
+              "https://github.com/${GITHUB_REPOSITORY}.git" \
+              "+refs/heads/main:refs/remotes/origin/main" \
+              "+refs/tags/${release_ref}:refs/tags/${release_ref}"
+            (cd "$history" && bash "$RUNNER_TEMP/check-release-source-on-main.sh" "$release_sha" "$release_ref")
           fi
           {
             echo "eligible=${eligible}"
@@ -298,6 +315,8 @@ jobs:
             scripts/install-packed-cli.sh
             scripts/prepare-packed-cli-consumer.ts
             scripts/retry.sh
+            scripts/check-release-source-on-main.sh
+            scripts/release-branch.sh
           sparse-checkout-cone-mode: false
 
       - name: Verify manual package recovery source
@@ -318,10 +337,8 @@ jobs:
             echo "::error::Checked-out source does not match source_sha." >&2
             exit 1
           fi
-          if ! git merge-base --is-ancestor "$source_sha" origin/main; then
-            echo "::error::source_sha is not reachable from protected main." >&2
-            exit 1
-          fi
+          # Without a release ref only a commit on protected main qualifies.
+          bash "$GITHUB_WORKSPACE/.pack-tooling/scripts/check-release-source-on-main.sh" "$source_sha"
 
           manifest="packages/${MANUAL_PACKAGE}/package.json"
           if [[ ! -f "$manifest" ]]; then

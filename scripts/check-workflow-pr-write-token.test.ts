@@ -51,6 +51,14 @@ describe("privileged workflow policy", () => {
         expect(exemption.calls).toMatch(/^[^@\s]+@[0-9a-f]{40}$/u);
       }
     }
+    // A job pattern applies only to jobs calling its pinned workflow.
+    for (const [entry, exemption] of Object.entries(
+      WORKFLOW_PRIVILEGE_ALLOWLIST,
+    )) {
+      if (entry.endsWith("*")) {
+        expect("calls" in exemption, entry).toBeTrue();
+      }
+    }
   });
   test("every allowlist entry still matches a finding and privilege of its job", () => {
     expect(
@@ -528,6 +536,45 @@ jobs:
       );
     expect(caller("main")).not.toHaveLength(0);
     expect(caller("5764ab66e4df84cfd2e642c7d7e4678261e668f8")).toEqual([]);
+  });
+  test("binds a job-pattern exemption to its gate, privileges and pinned call", () => {
+    const gate = [
+      "needs.pack.result == 'success'",
+      "github.event.workflow_run.head_repository.full_name == github.repository",
+      "github.event.workflow_run.path == '.github/workflows/release.yml'",
+      `contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)`,
+    ];
+    const release = ({
+      conjuncts = gate,
+      revision = "5764ab66e4df84cfd2e642c7d7e4678261e668f8",
+      extraSecret = "",
+    } = {}) =>
+      checkWorkflowPrivilegeSource(
+        ".github/workflows/publish-npm.yml",
+        `
+on:
+  workflow_run:
+    workflows: [Release Artifacts]
+    types: [completed]
+jobs:
+  release-example:
+    if: >-
+      always() && (github.event_name != 'workflow_run' || (${conjuncts.join(" && ")}))
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@${revision}
+    secrets:
+      RELEASE_APP_ID: \${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: \${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}${extraSecret}`,
+      );
+    expect(release()).toEqual([]);
+    expect(release({ conjuncts: gate.slice(0, 2) })).not.toHaveLength(0);
+    expect(release({ revision: "main" })).not.toHaveLength(0);
+    expect(
+      release({ extraSecret: `\n      OTHER: \${{ secrets.OTHER_KEY }}` }),
+    ).not.toHaveLength(0);
   });
 });
 

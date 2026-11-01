@@ -293,6 +293,25 @@ export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
       "stella/.github/.github/workflows/pr-lint.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
     privileges: { write: ["pull-requests"], secrets: [] },
   },
+  ".github/workflows/publish-npm.yml:release-*": {
+    reason:
+      "a workflow_run publishes only for this repository's release workflow started by a push or dispatch, after release-trigger checks the tag, the receipt and that protected main carries the release commit, and pack succeeds from it",
+    covers: WORKFLOW_RUN_WRITE,
+    requires: {
+      conjuncts: [
+        "needs.pack.result == 'success'",
+        "github.event.workflow_run.head_repository.full_name == github.repository",
+        "github.event.workflow_run.path == '.github/workflows/release.yml'",
+        `contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)`,
+      ],
+    },
+    calls:
+      "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
+    privileges: {
+      write: ["contents", "id-token"],
+      secrets: ["STELLA_RELEASE_APP_ID", "STELLA_RELEASE_APP_PRIVATE_KEY"],
+    },
+  },
   ".github/workflows/release-desktop.yml:build": {
     reason:
       "the workflow_run release reference is resolved and admitted from the trusted release workflow",
@@ -1388,6 +1407,26 @@ const WORKFLOW_PRIVILEGE_EXEMPTIONS: ReadonlyMap<
   WorkflowPrivilegeExemption
 > = new Map(Object.entries(WORKFLOW_PRIVILEGE_ALLOWLIST));
 
+// An entry whose job ends in `*` covers the jobs of that workflow with the
+// prefix that call exactly its pinned workflow; each is still bound to the
+// entry's condition and privileges. An exact entry wins over a pattern.
+const exemptionKeyFor = (job: JobAnalysis): string | undefined => {
+  if (WORKFLOW_PRIVILEGE_EXEMPTIONS.has(job.key)) {
+    return job.key;
+  }
+  const patterns = [...WORKFLOW_PRIVILEGE_EXEMPTIONS].filter(
+    ([entry, exemption]) =>
+      entry.endsWith("*") &&
+      job.key.startsWith(entry.slice(0, -1)) &&
+      exemption.calls !== undefined &&
+      exemption.calls === job.calls,
+  );
+  const [pattern] = patterns;
+  return patterns.length === 1 && pattern !== undefined
+    ? pattern[0]
+    : undefined;
+};
+
 const conditionHolds = (
   requires: ExemptionCondition,
   condition: unknown,
@@ -1428,7 +1467,11 @@ const privilegesBeyond = (
 // job keeps the condition its reason depends on, and only for the privileges
 // it was approved with; anything else is reported.
 const unexemptedFindings = (job: JobAnalysis): readonly Finding[] => {
-  const exemption = WORKFLOW_PRIVILEGE_EXEMPTIONS.get(job.key);
+  const exemptionKey = exemptionKeyFor(job);
+  const exemption =
+    exemptionKey === undefined
+      ? undefined
+      : WORKFLOW_PRIVILEGE_EXEMPTIONS.get(exemptionKey);
   if (exemption === undefined) {
     return job.findings;
   }
@@ -1478,27 +1521,31 @@ const workflowFiles = (root: string): string[] =>
 export const unusedWorkflowPrivilegeExemptions = (
   root = process.cwd(),
 ): string[] => {
-  const jobs = new Map(
-    workflowFiles(root)
-      .flatMap((file) =>
-        analyseWorkflow(file, readFileSync(path.join(root, file), "utf-8")),
-      )
-      .map((job) => [job.key, job]),
+  const jobs = workflowFiles(root).flatMap((file) =>
+    analyseWorkflow(file, readFileSync(path.join(root, file), "utf-8")),
   );
   return [...WORKFLOW_PRIVILEGE_EXEMPTIONS].flatMap(([key, exemption]) => {
-    const job = jobs.get(key);
-    const produced = new Set(
-      job?.findings.map((finding) => `${finding.class}:${finding.trigger}`),
-    );
-    return [
-      ...exemption.covers.filter((covered) => !produced.has(covered)),
-      ...exemption.privileges.write
-        .filter((scope) => job?.privileges.write.has(scope) !== true)
-        .map((scope) => `${scope}: write`),
-      ...exemption.privileges.secrets
-        .filter((name) => job?.privileges.secrets.has(name) !== true)
-        .map((name) => `secrets.${name}`),
-    ].map((unused) => `${key}: ${unused}`);
+    const covered = jobs.filter((job) => exemptionKeyFor(job) === key);
+    if (covered.length === 0) {
+      return [`${key}: no job`];
+    }
+    // Every covered job must produce each approved finding and hold each
+    // approved privilege, so a pattern stays as narrow as its least
+    // privileged job.
+    return covered.flatMap((job) => {
+      const produced = new Set(
+        job.findings.map((finding) => `${finding.class}:${finding.trigger}`),
+      );
+      return [
+        ...exemption.covers.filter((finding) => !produced.has(finding)),
+        ...exemption.privileges.write
+          .filter((scope) => !job.privileges.write.has(scope))
+          .map((scope) => `${scope}: write`),
+        ...exemption.privileges.secrets
+          .filter((name) => !job.privileges.secrets.has(name))
+          .map((name) => `secrets.${name}`),
+      ].map((unused) => `${job.key}: ${unused}`);
+    });
   });
 };
 
