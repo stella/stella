@@ -190,9 +190,20 @@ for (const email of [null, "a@example.test"]) {
       await page.context().addCookies((await request.storageState()).cookies);
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto("/contacts", { waitUntil: "domcontentloaded" });
+      // The unfiltered list can already show the new contact; the debounced
+      // search then replaces its rows, so wait for the filtered page first.
+      const filtered = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          response.request().method() === "GET" &&
+          url.pathname.endsWith("/contacts") &&
+          url.searchParams.get("q") === displayName
+        );
+      });
       await page
         .getByRole("searchbox", { name: "Search contacts" })
         .fill(displayName);
+      expect((await filtered).ok()).toBe(true);
       const row = page.getByRole("row").filter({
         has: page.getByRole("link", { exact: true, name: displayName }),
       });
