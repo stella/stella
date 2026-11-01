@@ -22,7 +22,8 @@
     "toolUsed": "Utilisé : {tool}",
     "threadTitle": "Conversation",
     "threadLoadFailed": "Cette conversation n’a pas pu être chargée.",
-    "threadEmptyDescription": "Cette conversation ne contient encore aucun message.",
+    "greeting": "Sur quoi souhaitez-vous travailler ?",
+    "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
     "sections": {
       "today": "Aujourd’hui",
       "yesterday": "Hier",
@@ -39,6 +40,19 @@
     "answerNeedsInput": "Cette réponse attend votre intervention. Poursuivez-la dans stella sur le web.",
     "answerFailed": "La réponse n’a pas pu être terminée.",
     "composerMenu": "Ouvrir le menu des pièces jointes et des outils",
+    "attachFile": "Joindre un fichier",
+    "attachment": "Pièce jointe",
+    "fileTooLarge": "Le fichier dépasse la limite de {maxSize}",
+    "maxAttachmentsReached": "Maximum {count} fichiers par message",
+    "unsupportedFileType": "Type de fichier non pris en charge",
+    "uploadFailed": "Échec du traitement du fichier",
+    "scanDocument": "Numériser un document",
+    "removeAttachment": "Retirer {name}",
+    "attachmentReading": "Préparation…",
+    "attachmentUploading": "Envoi…",
+    "pickFailed": "Impossible d’ouvrir le sélecteur de fichiers. Réessayez.",
+    "sendFileRefused": "Un fichier n’a pas pu être envoyé, donc le message n’a pas été envoyé. Retirez le fichier et réessayez.",
+    "sendFileNotAnonymizable": "Cette conversation est anonymisée et stella n’a pas pu anonymiser l’un des fichiers, donc rien n’a été envoyé. Retirez le fichier et réessayez.",
     "pickTitle": "Choisissez une conversation",
     "pickDescription": "Choisissez un fil dans la liste ou démarrez-en un avec +."
   },
@@ -60,7 +74,8 @@
       "none": "Sans date",
       "today": "Aujourd’hui",
       "tomorrow": "Demain",
-      "nextWeek": "Dans une semaine"
+      "nextWeek": "Dans une semaine",
+      "pick": "Choisir une date"
     },
     "due": {
       "overdue": "En retard",
@@ -75,7 +90,14 @@
     "statusFailed": "La tâche n’a pas pu être modifiée. Réessayez.",
     "pickTitle": "Choisissez une tâche",
     "pickDescription": "Choisissez une tâche dans la liste pour l’afficher ici.",
-    "openMatter": "Ouvrir le dossier"
+    "openMatter": "Ouvrir le dossier",
+    "assignedTo": "Attribuée à",
+    "nobody": "Non attribué",
+    "assign": "Attribuer",
+    "doneAssigning": "Terminé",
+    "someone": "Quelqu’un",
+    "membersFailed": "Les membres du dossier n’ont pas pu être chargés.",
+    "assignFailed": "La tâche n’a pas pu être attribuée. Réessayez."
   },
   "matters": {
     "emptyTitle": "Aucun dossier pour le moment",
@@ -119,7 +141,9 @@
     },
     "add": "Ajouter",
     "scanDocument": "Numériser un document",
-    "newTask": "Nouvelle tâche"
+    "newTask": "Nouvelle tâche",
+    "uploadDocument": "Téléverser un document",
+    "uploadFailed": "Le document n’a pas pu être importé. Réessayez."
   },
   "entity": {
     "type": "Type",
@@ -183,6 +207,7 @@
     "headnote": "Sommaire",
     "textUnavailable": "Aucun texte n'est disponible pour cette décision",
     "openSource": "Ouvrir la source d’origine",
+    "openFailed": "Le lien n’a pas pu être ouvert.",
     "loadFailed": "Impossible de charger la jurisprudence.",
     "share": "Partager"
   },
@@ -236,7 +261,27 @@
     "matterTitle": "Dossier",
     "uploadFailed": "La numérisation n’a pas pu être envoyée. Réessayez.",
     "failedTitle": "Échec de la numérisation",
-    "failed": "L’appareil photo n’a pas pu enregistrer la numérisation. Réessayez."
+    "failed": "L’appareil photo n’a pas pu enregistrer la numérisation. Réessayez.",
+    "save": "Enregistrer",
+    "saveTitle": "Enregistrer dans un dossier",
+    "share": "Partager",
+    "addPages": "Ajouter des pages",
+    "page": "Page {number}",
+    "rotatePage": "Faire pivoter la page {number}",
+    "removePage": "Retirer la page {number}",
+    "deletePage": "Supprimer",
+    "movePage": "Déplacer la page {number}",
+    "moveUp": "Monter",
+    "moveDown": "Descendre",
+    "noPages": "Il ne reste aucune page. Numérisez-en d’autres avec « Ajouter des pages ».",
+    "kilobytes": "{size} Ko",
+    "megabytes": "{size} Mo",
+    "pdfFailed": "Le PDF n’a pas pu être créé. Réessayez.",
+    "shareFailed": "Le PDF n’a pas pu être partagé. Réessayez.",
+    "discardTitle": "Abandonner cette numérisation ?",
+    "discardMessage": "Ses pages ne sont enregistrées dans aucun dossier et seront supprimées de cet appareil.",
+    "discard": "Abandonner",
+    "keepEditing": "Continuer à modifier"
   },
   "shortcuts": {
     "search": "Rechercher",

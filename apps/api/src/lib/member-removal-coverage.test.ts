@@ -361,6 +361,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_item_reviews.reviewer_id":
     "Retained attribution or request history; this column grants no matter membership.",
+  "legal_list_item_source_decisions.actor_id":
+    "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_item_sources.verified_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_item_sources.created_by":
@@ -383,6 +385,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "notifications.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
+  "push_devices.user_id":
+    "The person's own device registration, holding no organization content; alerts name nothing, and the row moves when the app signs in to another organization.",
   "pending_uploads.user_id":
     "Short-lived operation; current membership is revalidated before use.",
   "playbook_definition_versions.created_by":

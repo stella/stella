@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseDocumentAst, plainTextOf } from "./document-ast";
+import {
+  parseDocumentAst,
+  plainTextOf,
+  projectPlainText,
+} from "./document-ast";
 import {
   flattenInlineText,
   hasInlineChildren,
@@ -111,6 +115,121 @@ describe("text axis", () => {
     expect(
       plainTextOf([SAMPLES.superscript, SAMPLES.subscript, SAMPLES.underline]),
     ).toBe("32not");
+  });
+
+  test("numeric superscripts keep their boundary in searchable text", () => {
+    expect(
+      flattenInlineText([
+        { type: "text", text: "art. 505" },
+        {
+          type: "superscript",
+          children: [{ type: "bold", children: [{ type: "text", text: "9" }] }],
+        },
+        { type: "text", text: " k.p.c." },
+      ]),
+    ).toBe("art. 505^9 k.p.c.");
+    expect(
+      flattenInlineText([
+        { type: "superscript", children: [{ type: "text", text: "note" }] },
+      ]),
+    ).toBe("note");
+  });
+
+  test("adjacent numeric superscripts share one index boundary", () => {
+    const split: Inline[] = [
+      { type: "text", text: "398" },
+      { type: "superscript", children: [{ type: "text", text: "1" }] },
+      { type: "superscript", children: [{ type: "text", text: "2" }] },
+    ];
+    const formattedSplit: Inline[] = [
+      { type: "text", text: "398" },
+      {
+        type: "superscript",
+        children: [{ type: "bold", children: [{ type: "text", text: "1" }] }],
+      },
+      {
+        type: "italic",
+        children: [
+          { type: "superscript", children: [{ type: "text", text: "2" }] },
+        ],
+      },
+    ];
+    const joined: Inline[] = [
+      { type: "text", text: "398" },
+      { type: "superscript", children: [{ type: "text", text: "12" }] },
+    ];
+    const literal: Inline[] = [{ type: "text", text: "398¹²" }];
+    const projections = [split, formattedSplit, joined, literal].map(
+      (inlines) => projectPlainText(inlines),
+    );
+    const tokens = projections.map((projection) =>
+      projection.split(/[^\p{L}\p{N}]+/u).filter(Boolean),
+    );
+
+    expect(projections).toEqual(["398^12", "398^12", "398^12", "398^12"]);
+    expect(tokens).toEqual([
+      ["398", "12"],
+      ["398", "12"],
+      ["398", "12"],
+      ["398", "12"],
+    ]);
+  });
+
+  test("a character between numeric superscripts starts a new index boundary", () => {
+    expect(
+      projectPlainText([
+        { type: "text", text: "398" },
+        { type: "superscript", children: [{ type: "text", text: "1" }] },
+        { type: "text", text: " " },
+        { type: "superscript", children: [{ type: "text", text: "2" }] },
+      ]),
+    ).toBe("398^1 ^2");
+  });
+
+  test("literal superscript digits share the search projection across inline boundaries", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "art. 505" },
+      { type: "bold", children: [{ type: "text", text: "⁹" }] },
+    ];
+    expect(flattenInlineText(inlines)).toBe("art. 505^9");
+    expect(plainTextOf(inlines)).toBe("art. 505⁹");
+  });
+
+  test("validation replaces only line-break nodes and preserves rendered digits", () => {
+    expect(
+      flattenInlineText(
+        [
+          { type: "text", text: "505\n" },
+          { type: "superscript", children: [{ type: "text", text: "9" }] },
+          { type: "line-break" },
+          { type: "text", text: "k.p.c." },
+        ],
+        "validation",
+      ),
+    ).toBe("505\n9 k.p.c.");
+  });
+
+  test("numeric indices retain context across containers without changing units or footnotes", () => {
+    expect(
+      flattenInlineText([
+        { type: "text", text: "505" },
+        {
+          type: "bold",
+          children: [
+            { type: "superscript", children: [{ type: "text", text: "9" }] },
+          ],
+        },
+      ]),
+    ).toBe("505^9");
+    for (const base of ["m", "Body", "Body.", "("]) {
+      expect(
+        flattenInlineText([
+          { type: "text", text: base },
+          { type: "superscript", children: [{ type: "text", text: "2" }] },
+        ]),
+      ).toBe(`${base}2`);
+    }
+    expect(flattenInlineText([{ type: "text", text: "20 m²" }])).toBe("20 m²");
   });
 
   test("a page anchor still contributes nothing", () => {

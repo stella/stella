@@ -25,6 +25,7 @@ import {
   serializeRegistry,
   splitTestId,
 } from "./flaky-test-quarantine";
+import { guardRolloutSource } from "./guard-rollout-policy.ts";
 import {
   collectLintDirectives,
   resolveDirectiveAnchors,
@@ -348,68 +349,26 @@ const leadingComments = (ast: ParsedSource, node: Node) =>
   );
 
 const removeGuardRollout = (source: string, entry: DatedWaiver): string => {
-  const ast = parseOwner(source, entry.source);
-  const matches: ObjectExpression[] = [];
-  walk(ast.program, (node) => {
-    if (
-      node.type === "ObjectExpression" &&
-      node.properties.some(
-        (property) =>
-          property.type === "Property" &&
-          !property.method &&
-          !property.shorthand &&
-          source.slice(property.key.start, property.key.end) === "id" &&
-          property.value.type === "Literal" &&
-          property.value.value === entry.id,
-      )
-    ) {
-      matches.push(node);
-    }
-  });
-  const target = matches.at(0);
-  if (matches.length !== 1 || !target) {
-    panic(`Guard rollout anchor is not unique: ${entry.id}`);
+  if (entry.source !== guardRolloutSource(entry.id)) {
+    panic(
+      `Guard rollout heals only in its own file: ${entry.source} (${entry.id})`,
+    );
   }
-  const scope = target.properties.find(
-    (property) =>
-      property.type === "Property" &&
-      !property.method &&
-      !property.shorthand &&
-      source.slice(property.key.start, property.key.end) === "type",
-  );
-  const expiry = target.properties.find(
-    (property) =>
-      property.type === "Property" &&
-      !property.method &&
-      !property.shorthand &&
-      source.slice(property.key.start, property.key.end) === "expiresAt",
-  );
+  const rollout: unknown = JSON.parse(source);
   if (
-    scope?.type !== "Property" ||
-    scope.method ||
-    scope.shorthand ||
-    scope.value.type !== "Literal" ||
-    scope.value.value !== "changed-lines" ||
-    expiry?.type !== "Property" ||
-    expiry.method ||
-    expiry.shorthand ||
-    expiry.value.type !== "Literal" ||
-    expiry.value.value !== entry.expiresAt
+    typeof rollout !== "object" ||
+    rollout === null ||
+    !("id" in rollout) ||
+    rollout.id !== entry.id ||
+    !("type" in rollout) ||
+    rollout.type !== "changed-lines" ||
+    !("expiresAt" in rollout) ||
+    rollout.expiresAt !== entry.expiresAt
   ) {
     panic(`Guard rollout scope or expiry changed: ${entry.id}`);
   }
-  // Apply rightmost edits first so each offset still refers to the owner AST.
-  let updated = source;
-  for (const node of [scope.value, expiry].toSorted(
-    (a, b) => b.start - a.start,
-  )) {
-    updated =
-      node === expiry
-        ? removeNode(updated, ast, node)
-        : `${updated.slice(0, node.start)}"full"${updated.slice(node.end)}`;
-  }
-  parseOwner(updated, entry.source);
-  return updated;
+  const { expiresAt, ...fields } = rollout;
+  return `${JSON.stringify({ ...fields, type: "full" }, null, 2)}\n`;
 };
 
 export const removeWaiver = (

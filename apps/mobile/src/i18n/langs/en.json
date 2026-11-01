@@ -22,7 +22,8 @@
     "toolUsed": "Used {tool}",
     "threadTitle": "Conversation",
     "threadLoadFailed": "This conversation could not be loaded.",
-    "threadEmptyDescription": "This conversation has no messages yet.",
+    "greeting": "What would you like to work on?",
+    "greetingSubtitle": "Start with a matter, document, or plain question.",
     "sections": {
       "today": "Today",
       "yesterday": "Yesterday",
@@ -39,6 +40,19 @@
     "answerNeedsInput": "This answer needs your input. Continue it in stella on the web.",
     "answerFailed": "The answer could not be completed.",
     "composerMenu": "Open attachments and tools menu",
+    "attachFile": "Attach file",
+    "attachment": "Attachment",
+    "fileTooLarge": "File exceeds {maxSize} limit",
+    "maxAttachmentsReached": "Maximum {count} files per message",
+    "unsupportedFileType": "Unsupported file type",
+    "uploadFailed": "Failed to process file",
+    "scanDocument": "Scan a document",
+    "removeAttachment": "Remove {name}",
+    "attachmentReading": "Preparing…",
+    "attachmentUploading": "Uploading…",
+    "pickFailed": "The file picker could not be opened. Try again.",
+    "sendFileRefused": "A file could not be sent, so the message was not sent. Remove the file and try again.",
+    "sendFileNotAnonymizable": "This conversation is anonymized, and stella could not anonymize one of the files, so nothing was sent. Remove the file and try again.",
     "pickTitle": "Pick a conversation",
     "pickDescription": "Choose a thread from the list, or start a new one with +."
   },
@@ -60,7 +74,8 @@
       "none": "No date",
       "today": "Today",
       "tomorrow": "Tomorrow",
-      "nextWeek": "In a week"
+      "nextWeek": "In a week",
+      "pick": "Pick a date"
     },
     "due": {
       "overdue": "Overdue",
@@ -75,7 +90,14 @@
     "statusFailed": "The task could not be changed. Try again.",
     "pickTitle": "Pick a task",
     "pickDescription": "Choose a task from the list to see it here.",
-    "openMatter": "Open matter"
+    "openMatter": "Open matter",
+    "assignedTo": "Assigned to",
+    "nobody": "Unassigned",
+    "assign": "Assign",
+    "doneAssigning": "Done",
+    "someone": "Someone",
+    "membersFailed": "The matter's members could not be loaded.",
+    "assignFailed": "The task could not be assigned. Try again."
   },
   "matters": {
     "emptyTitle": "No matters yet",
@@ -119,7 +141,9 @@
     },
     "add": "Add",
     "scanDocument": "Scan a document",
-    "newTask": "New task"
+    "newTask": "New task",
+    "uploadDocument": "Upload document",
+    "uploadFailed": "The document could not be uploaded. Try again."
   },
   "entity": {
     "type": "Type",
@@ -183,6 +207,7 @@
     "headnote": "Headnote",
     "textUnavailable": "No text is available for this decision",
     "openSource": "Open original source",
+    "openFailed": "The link could not be opened.",
     "loadFailed": "Case law could not be loaded.",
     "share": "Share"
   },
@@ -236,7 +261,27 @@
     "matterTitle": "Matter",
     "uploadFailed": "The scan could not be uploaded. Try again.",
     "failedTitle": "Scan failed",
-    "failed": "The camera could not save the scan. Try again."
+    "failed": "The camera could not save the scan. Try again.",
+    "save": "Save",
+    "saveTitle": "Save to a matter",
+    "share": "Share",
+    "addPages": "Add pages",
+    "page": "Page {number}",
+    "rotatePage": "Rotate page {number}",
+    "removePage": "Remove page {number}",
+    "deletePage": "Delete",
+    "movePage": "Reorder page {number}",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "noPages": "No pages left. Scan more with Add pages.",
+    "kilobytes": "{size} KB",
+    "megabytes": "{size} MB",
+    "pdfFailed": "The PDF could not be made. Try again.",
+    "shareFailed": "The PDF could not be shared. Try again.",
+    "discardTitle": "Discard this scan?",
+    "discardMessage": "Its pages are not saved to a matter and will be deleted from this device.",
+    "discard": "Discard",
+    "keepEditing": "Keep editing"
   },
   "shortcuts": {
     "search": "Search",
