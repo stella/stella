@@ -6439,6 +6439,7 @@
       "downloadSearchablePdf": "Otsitav PDF",
       "downloadWithComments": "Laadi alla koos kommentaaridega",
       "emptyFile": "Fail on tühi.",
+      "fileTooLarge": "Fail on suurem kui {limit, number} MB.",
       "includeReferenceNumber": "Lisa viitenumber",
       "itemLimitReached": "See toimik on jõudnud üksuste piirini.",
       "maxEntitiesReached": "Kirjete piirarv on täis",

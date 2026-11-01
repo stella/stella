@@ -47,6 +47,7 @@ import {
   STATUS_TO_KEY,
   translateError,
 } from "@/lib/errors/localization";
+import { uploadFileTooLargeMessage } from "@/lib/files/upload-file-validation";
 
 export class APIError extends TaggedError(API_ERROR_TAG)<{
   code?: string | undefined;
@@ -313,6 +314,10 @@ const validationIssueMessage = (issue: ApiValidationIssue): string => {
       return issue.limit === undefined
         ? t("errors.apiCodes.validationInvalid")
         : t("errors.apiCodes.validationTooShort", { limit: issue.limit });
+    case "maxBytes":
+      return issue.limit === undefined
+        ? t("errors.apiCodes.validationInvalid")
+        : uploadFileTooLargeMessage(issue.limit);
     case "required":
       return t("errors.apiCodes.validationRequired");
     case "invalid":

@@ -6439,6 +6439,7 @@
       "downloadSearchablePdf": "Kereshető PDF",
       "downloadWithComments": "Letöltés megjegyzésekkel",
       "emptyFile": "A fájl üres.",
+      "fileTooLarge": "A fájl nagyobb, mint {limit, number} MB.",
       "includeReferenceNumber": "Hivatkozási szám hozzáadása",
       "itemLimitReached": "Ez az ügy elérte az elemek korlátját.",
       "maxEntitiesReached": "Elérte a maximális elemszámot",

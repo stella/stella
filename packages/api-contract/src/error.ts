@@ -13,6 +13,7 @@ export const API_VALIDATION_CONSTRAINTS = [
   "required",
   "maxLength",
   "minLength",
+  "maxBytes",
   "invalid",
 ] as const;
 
@@ -23,7 +24,7 @@ export type ApiValidationIssue = {
   /** Dotted path inside the request part, e.g. `name` or `items.0.title`. */
   field: string;
   constraint: ApiValidationConstraint;
-  /** The bound a length constraint was checked against. */
+  /** The bound a length or byte-size constraint was checked against. */
   limit?: number | undefined;
 };
 

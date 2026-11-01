@@ -6439,6 +6439,7 @@
       "downloadSearchablePdf": "PDF con texto buscable",
       "downloadWithComments": "Descargar con comentarios",
       "emptyFile": "El archivo está vacío.",
+      "fileTooLarge": "El archivo supera los {limit, number} MB.",
       "includeReferenceNumber": "Incluir número de referencia",
       "itemLimitReached": "Este asunto ha alcanzado su límite de elementos.",
       "maxEntitiesReached": "Se ha alcanzado el número máximo de elementos",

@@ -6439,6 +6439,7 @@
       "downloadSearchablePdf": "Prehľadávateľné PDF",
       "downloadWithComments": "Stiahnuť s komentármi",
       "emptyFile": "Súbor je prázdny.",
+      "fileTooLarge": "Súbor je väčší ako {limit, number} MB.",
       "includeReferenceNumber": "Pridať referenčné číslo",
       "itemLimitReached": "Tento spis dosiahol limit položiek.",
       "maxEntitiesReached": "Dosiahnutý maximálny počet položiek",

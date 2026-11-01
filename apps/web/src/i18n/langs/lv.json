@@ -6439,6 +6439,7 @@
       "downloadSearchablePdf": "Meklējams PDF",
       "downloadWithComments": "Lejupielādēt ar komentāriem",
       "emptyFile": "Fails ir tukšs.",
+      "fileTooLarge": "Fails ir lielāks par {limit, number} MB.",
       "includeReferenceNumber": "Iekļaut atsauces numuru",
       "itemLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums.",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",
