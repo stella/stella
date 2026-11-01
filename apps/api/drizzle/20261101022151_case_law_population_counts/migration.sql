@@ -88,6 +88,7 @@ ALTER TABLE public.case_law_population_projections ENABLE ROW LEVEL SECURITY;-->
 ALTER TABLE public.case_law_population_projections FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE public.case_law_population_seed_state ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE public.case_law_population_seed_state FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+REVOKE ALL PRIVILEGES ON TABLE public.case_law_population_counts, public.case_law_population_deltas, public.case_law_population_projections, public.case_law_population_seed_state FROM stella;--> statement-breakpoint
 CREATE POLICY case_law_population_count_owner_access ON public.case_law_population_counts FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_counts'::regclass))
   WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_counts'::regclass));--> statement-breakpoint
