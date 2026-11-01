@@ -43,7 +43,8 @@ export const withStaleSocketRetry = async <T>(
     return first.value;
   }
   if (!isStaleSocket(first.error)) {
-    throw first.error.cause ?? first.error;
+    const { cause } = first.error;
+    throw cause instanceof Error ? cause : first.error;
   }
   return await send();
 };
