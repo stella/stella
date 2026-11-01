@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { parseTestBaseline } from "../scripts/check-test-state-baseline.ts";
-import type { GUARD_ROLLOUT_FILES } from "../scripts/guard-rollouts.gen.ts";
 import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import { repoRelativeFilename } from "./utils.ts";
 
@@ -23,7 +22,7 @@ const baselineCounts = (baselinePath: string) => {
 };
 
 type CreateTestDeterminismRuleOptions = {
-  guard: keyof typeof GUARD_ROLLOUT_FILES;
+  guard: string;
   baselinePath: string;
   message: string;
   createDetector: (context: Context) => (node: ESTree.Node) => boolean;
