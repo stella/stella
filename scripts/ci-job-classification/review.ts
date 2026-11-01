@@ -82,4 +82,5 @@ export const isPrivilegedJobClosure = ({
 export class ReviewRequiredError extends TaggedError("ReviewRequiredError")<{
   message: string;
   privilegedJobs: string[];
+  refusal?: string;
 }> {}
