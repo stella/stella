@@ -225,12 +225,12 @@ const isReferencePosition = (
   ) {
     return false;
   }
-  if (
-    parent?.type === "ImportSpecifier" &&
-    parent.imported === identifier &&
-    parent.local !== identifier
-  ) {
-    return false;
+  if (parent?.type === "ImportSpecifier" && parent.imported === identifier) {
+    // A renamed import's imported name is not a reference to the binding.
+    const binding = parent.local;
+    if (binding !== identifier) {
+      return false;
+    }
   }
   if (
     parent?.type === "Property" &&
