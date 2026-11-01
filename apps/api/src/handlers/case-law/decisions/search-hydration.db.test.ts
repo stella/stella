@@ -60,6 +60,7 @@ import {
 import { CORPUS_BM25_RATIO_POWER } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
+import { LIMITS } from "@/api/lib/limits";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -1812,7 +1813,6 @@ test("a sparse broad provision walk resumes from its bounded examined candidates
     .update(caseLawDecisions)
     .set({ citationAuthority: 3 })
     .where(eq(caseLawDecisions.id, slovakId));
-  const examined: number[] = [];
   const request = {
     ...SEARCH_BODY,
     provision: { work: "262/2006 Sb.", anchor: "par_316" },
@@ -1825,15 +1825,14 @@ test("a sparse broad provision walk resumes from its bounded examined candidates
       dependencies: {
         candidateBudget: 1,
         provisionIdSetMax: 0,
-        reportExaminedCandidates: (count) => {
-          examined.push(count);
-        },
         servingGeneration: GENERATION,
         provider: "corpus-index",
         loadCourtWeights: async () => await Promise.resolve(courtWeights),
       },
     });
   try {
+    // The first candidate does not cite the provision and spends the whole
+    // budget: an empty page that continues after it.
     const first = await list();
     if (!("hits" in first) || first.nextCursor === null) {
       throw new Error("expected an empty bounded page with a continuation");
@@ -1846,13 +1845,234 @@ test("a sparse broad provision walk resumes from its bounded examined candidates
     expect(second.hits.map(({ decisionId }) => decisionId)).toEqual([
       String(czechId),
     ]);
-    expect(examined).toEqual([1, 1]);
+    // The budget ran out on the hit itself, so the list still continues.
+    expect(second.nextCursor).not.toBeNull();
   } finally {
     await db
       .update(caseLawDecisions)
       .set({ citationAuthority: 1 })
       .where(eq(caseLawDecisions.id, slovakId));
   }
+});
+
+/**
+ * A provision whose anchor every link below shares, with its letter skipped
+ * in the anchor: links that miss the letter still sit inside the subtree the
+ * probe reads, so they spend its row budget. The work is cited nowhere else.
+ */
+const GAPPED_PROVISION = {
+  work: "77/2001 Sb.",
+  anchor: "par_5",
+  letter: "z",
+} as const;
+/** Two whole probe budgets of misses, then a few more before the match. */
+const GAPPED_MISSES = LIMITS.caseLawProvisionLinkProbeMax * 2 + 5;
+
+const gappedLink = (
+  decisionId: SafeId<"caseLawDecision">,
+  spanStart: number,
+  letter: string,
+): typeof caseLawProvisionCitations.$inferInsert => ({
+  anchor: GAPPED_PROVISION.anchor,
+  confidence: 0.9,
+  decisionDate: "2024-01-01",
+  decisionId,
+  jurisdiction: "CZE",
+  section: 5,
+  letter,
+  sentenceText: `sentence par_5 písm. ${letter}`,
+  spanEnd: spanStart + 1,
+  spanStart,
+  unit: "section",
+  workCollection: "Sb.",
+  workIdentifier: GAPPED_PROVISION.work,
+  workNumber: 77,
+  workYear: 2001,
+});
+
+const gappedMisses = (decisionId: SafeId<"caseLawDecision">) =>
+  Array.from({ length: GAPPED_MISSES }, (_, index) =>
+    gappedLink(decisionId, index + 1, "a"),
+  );
+
+/**
+ * The Czech decision cites the provision only after more links than two
+ * probes read; the Slovak one cites it at once. `missesOnly` decisions carry
+ * the same misses and no citing link.
+ */
+const withGappedLinks = async (
+  { missesOnly = [] }: { missesOnly?: SafeId<"caseLawDecision">[] },
+  run: () => Promise<void>,
+) => {
+  const db = drizzle({ client });
+  await db
+    .insert(caseLawProvisionCitations)
+    .values([
+      ...gappedMisses(czechId),
+      gappedLink(czechId, GAPPED_MISSES + 1, "z"),
+      gappedLink(slovakId, 1, "z"),
+      ...missesOnly.flatMap(gappedMisses),
+    ]);
+  try {
+    await run();
+  } finally {
+    await db
+      .delete(caseLawProvisionCitations)
+      .where(
+        eq(caseLawProvisionCitations.workIdentifier, GAPPED_PROVISION.work),
+      );
+  }
+};
+
+const listGapped = async (
+  sort: "relevance" | "newest",
+  cursor: string | undefined,
+) => {
+  const listed = await listCaseLawProvisionDecisions({
+    body: {
+      ...SEARCH_BODY,
+      provision: GAPPED_PROVISION,
+      sort,
+      limit: 1,
+      ...(cursor === undefined ? {} : { cursor }),
+    },
+    caseLawDb,
+    dependencies: {
+      provisionIdSetMax: 0,
+      servingGeneration: GENERATION,
+      provider: "corpus-index",
+      loadCourtWeights: async () => await Promise.resolve(courtWeights),
+    },
+  });
+  if (!("hits" in listed)) {
+    throw new Error("expected a provision list page");
+  }
+  return listed;
+};
+
+const resumedProbeCases: {
+  sort: "relevance" | "newest";
+  pages: SafeId<"caseLawDecision">[][];
+}[] = [
+  // The Czech decision ranks first by authority: two pages resume its probe
+  // before it is emitted, and the list then reads on to the Slovak one.
+  { sort: "relevance", pages: [[], [], [czechId], [slovakId]] },
+  // Undated, newest reads by id: the Slovak hit fills the first page before
+  // the Czech probe stops, and the resumed probe emits it on the last.
+  { sort: "newest", pages: [[slovakId], [], [czechId]] },
+];
+
+test.each(resumedProbeCases)(
+  "a $sort provision list resumes a probe past its link budget, emits the decision and reads on",
+  async ({ sort, pages }) => {
+    await withGappedLinks({}, async () => {
+      const read: string[][] = [];
+      const cursors: string[] = [];
+      let cursor: string | undefined;
+      while (read.length < pages.length) {
+        // db-await-in-loop: each page resumes from the cursor the previous page issued.
+        const page = await listGapped(sort, cursor);
+        read.push(page.hits.map(({ decisionId }) => decisionId));
+        if (page.nextCursor === null) {
+          break;
+        }
+        cursors.push(page.nextCursor);
+        cursor = page.nextCursor;
+      }
+      expect(read).toEqual(pages.map((ids) => ids.map(String)));
+      // The last page ends the list: no cursor after it.
+      expect(cursors).toHaveLength(pages.length - 1);
+      // Every cursor moves on, including the two that resume one probe.
+      expect(new Set(cursors).size).toBe(cursors.length);
+    });
+  },
+);
+
+test("a provision list whose resumed decision left the list reads on from its position", async () => {
+  const db = drizzle({ client });
+  await withGappedLinks({}, async () => {
+    const first = await listGapped("relevance", undefined);
+    expect(first.hits).toEqual([]);
+    const cursor =
+      first.nextCursor ?? panic("expected a cursor resuming the probe");
+    // Moved out of the listed country between the pages: the resumed probe
+    // finds no decision to resume.
+    await db
+      .update(caseLawDecisions)
+      .set({ country: "SVK" })
+      .where(eq(caseLawDecisions.id, czechId));
+    try {
+      const second = await listGapped("relevance", cursor);
+      expect(second.hits.map(({ decisionId }) => decisionId)).toEqual([
+        String(slovakId),
+      ]);
+      expect(second.nextCursor).toBeNull();
+    } finally {
+      await db
+        .update(caseLawDecisions)
+        .set({ country: "CZE" })
+        .where(eq(caseLawDecisions.id, czechId));
+    }
+  });
+});
+
+test("the Postgres search plan and the engine page read agree on a citation past the probe budget", async () => {
+  await withGappedLinks({ missesOnly: [withheldId] }, async () => {
+    const planIds = async (provision?: typeof GAPPED_PROVISION) => {
+      const plan = caseLawSearchPlan({
+        body: {
+          country: "CZE",
+          query: "sampleword",
+          ...(provision === undefined ? {} : { provision }),
+        },
+        configs: [
+          {
+            languages: ["cs"],
+            regconfig: "simple",
+            includeDefault: false,
+            useUnaccent: false,
+          },
+        ],
+        courtWeights,
+        excerpt: DEFAULT_SEARCH_EXCERPT,
+        limit: 10,
+        parsedCursor: null,
+        queryUsed: "sampleword",
+        sort: DEFAULT_SEARCH_SORT,
+      });
+      const result = await withPublicLawReaderRole(
+        drizzle({ client }),
+        async (tx) => await tx.execute(plan.hits),
+      );
+      return result.rows.map((row) => String(row["decision_id"])).toSorted();
+    };
+    const engineIds = async (provision?: typeof GAPPED_PROVISION) =>
+      await caseLawDb(async (tx) => {
+        const options = {
+          body: {
+            ...SEARCH_BODY,
+            ...(provision === undefined ? {} : { provision }),
+          },
+          generation: GENERATION,
+          ids: [czechId, withheldId],
+        };
+        const candidates = await candidateDecisionRowsQuery(tx, options);
+        const page = await pageDecisionRowsQuery(tx, options);
+        const candidateIds = candidates.rows.map(({ id }) => String(id));
+        expect(page.rows.map(({ id }) => String(id)).toSorted()).toEqual(
+          candidateIds.toSorted(),
+        );
+        return candidateIds.toSorted();
+      });
+    // Both decisions are in both reads before the provision narrows them.
+    const both = [czechId, withheldId].map(String).toSorted();
+    expect(await planIds()).toEqual(both);
+    expect(await engineIds()).toEqual(both);
+    // Each has more misses than one probe reads; only the Czech one cites
+    // the provision after them. Both providers keep it and drop the other.
+    expect(await planIds(GAPPED_PROVISION)).toEqual([String(czechId)]);
+    expect(await engineIds(GAPPED_PROVISION)).toEqual([String(czechId)]);
+  });
 });
 
 // The planner picks the decision-id or the work-subtree index by the data's

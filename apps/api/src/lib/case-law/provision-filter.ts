@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as v from "valibot";
@@ -156,18 +155,15 @@ const provisionBaseConditions = (
 };
 
 /**
- * The link rows that cite the provision or one under it. The base conditions
- * are the work-subtree index's whole key, so every read of a provision's
- * citing decisions seeks that provision's own links; the named levels are
- * compared within them.
+ * The named levels below the anchor, and for an EU act the citing country:
+ * what a link inside the anchor subtree must also carry to cite the
+ * provision. The bounded probe classifies its slice by these and the exact
+ * predicate filters by them, so both read one membership rule.
  */
-const provisionLinkConditions = (
-  scope: ProvisionScopeOptions,
-  access?: "ordered",
-): SQL[] => {
+const provisionHierarchyConditions = (scope: ProvisionScopeOptions): SQL[] => {
   const link = caseLawProvisionCitations;
   const { jurisdiction, provision } = scope;
-  const conditions: SQL[] = provisionBaseConditions(scope, access);
+  const conditions: SQL[] = [];
   if (provision.subsection !== undefined) {
     conditions.push(
       sql`${link.subsection} = ${canonicalPathValue(provision.subsection)}`,
@@ -196,6 +192,20 @@ const provisionLinkConditions = (
   }
   return conditions;
 };
+
+/**
+ * The link rows that cite the provision or one under it. The base conditions
+ * are the work-subtree index's whole key, so every read of a provision's
+ * citing decisions seeks that provision's own links; the named levels are
+ * compared within them.
+ */
+const provisionLinkConditions = (
+  scope: ProvisionScopeOptions,
+  access?: "ordered",
+): SQL[] => [
+  ...provisionBaseConditions(scope, access),
+  ...provisionHierarchyConditions(scope),
+];
 
 const provisionAnchorConditions = (scope: ProvisionScopeOptions): SQL[] =>
   provisionBaseConditions(scope, "ordered");
@@ -240,35 +250,29 @@ export const readProvisionWorkLinked = async (
 };
 
 /**
- * Whether the correlated decision cites the provision. Correlated on the
- * decision id, which leads the links' unique index, so the predicate costs a
- * short index probe per candidate rather than a scan of the work's links.
- * OFFSET 0 prevents decorrelation into every citing decision before the
- * ranked page can apply its LIMIT.
+ * What one bounded probe of a decision's links proved: a citing link, no
+ * citing link at all, or neither within the probe's row budget, with the last
+ * link it examined.
  */
 export type ProvisionLinkReadOutcome =
   | { type: "match" }
   | { type: "noMatch" }
   | { type: "incomplete"; after: { spanStart: number; anchor: string } };
 
-/** Only a proved match may pass candidate eligibility. */
-export const provisionLinkOutcomeEmitsHit = (
-  outcome: ProvisionLinkReadOutcome,
-): boolean => {
-  switch (outcome.type) {
-    case "match":
-      return true;
-    case "noMatch":
-    case "incomplete":
-      return false;
-    default: {
-      outcome satisfies never;
-      return panic("Unhandled provision-link read outcome");
-    }
-  }
-};
-
-/** The sole correlated citation-link reader: seek its exact range, then classify. */
+/**
+ * Whether the correlated decision cites the provision, reading at most
+ * {@link LIMITS.caseLawProvisionLinkProbeMax} of its links in the provision's
+ * subtree. Correlated on the decision id, which leads the decision subtree
+ * index, so the probe costs a short index range per candidate rather than a
+ * scan of the work's links. OFFSET 0 prevents decorrelation into every citing
+ * decision before the ranked page can apply its LIMIT.
+ *
+ * The walk orders and resumes on `(anchor COLLATE "C", span_start)`. That
+ * pair is unique within a decision: the links' unique index is
+ * `(decision_id, span_start, anchor)` and the database collation is
+ * deterministic, so anchors equal under it are equal byte-wise. A strict
+ * continuation therefore never skips a tied link.
+ */
 export const provisionLinkReadOutcomeSql = ({
   decisionId,
   after,
@@ -280,37 +284,11 @@ export const provisionLinkReadOutcomeSql = ({
   after?: { anchor: string; spanStart: number };
 }): SQL<ProvisionLinkReadOutcome> => {
   const link = caseLawProvisionCitations;
-  const { jurisdiction, provision } = scope;
   const rangeConditions: SQL[] = [
     sql`${link.decisionId} = ${decisionId}`,
     ...provisionBaseConditions(scope, "ordered"),
   ];
-  const hierarchyConditions: SQL[] = [];
-  if (provision.subsection !== undefined) {
-    hierarchyConditions.push(
-      sql`${link.subsection} = ${canonicalPathValue(provision.subsection)}`,
-    );
-  }
-  if (provision.letter !== undefined) {
-    hierarchyConditions.push(
-      sql`${link.letter} = ${canonicalPathValue(provision.letter)}`,
-    );
-  }
-  if (provision.point !== undefined) {
-    hierarchyConditions.push(
-      sql`${link.point} = ${canonicalPathValue(provision.point)}`,
-    );
-  }
-  if (provision.jurisdiction === "EU") {
-    hierarchyConditions.push(sql`EXISTS (
-      SELECT 1 FROM ${publishedCaseLawDecisions}
-      INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = ${publishedCaseLawDecisions.sourceId}
-      WHERE ${publishedCaseLawDecisions.id} = ${link.decisionId}
-        AND ${publishedCaseLawDecisions.country} = ${jurisdiction}
-        AND ${redistributableCaseLawSource}
-    )`);
-  }
-
+  const hierarchyConditions = provisionHierarchyConditions(scope);
   const hierarchyPredicate =
     hierarchyConditions.length === 0
       ? sql`TRUE`
@@ -355,28 +333,35 @@ export const provisionLinkReadOutcomeSql = ({
 };
 
 /**
- * Whether the correlated decision cites the provision at a link after the
- * position an incomplete probe stopped at. One statement resolves every
- * continuation a hydrated page carries, so the statement count does not grow
- * with the rows or with the probe rounds each would need.
+ * Whether the correlated decision cites the provision: the exact membership
+ * rule, with no row budget. With `after`, it reads only the links after the
+ * position an incomplete probe stopped at, so a probe's outcome and this
+ * continuation together decide what the predicate decides without `after`.
+ * One statement resolves every continuation a hydrated page carries, so the
+ * statement count does not grow with the rows or with the probe rounds each
+ * would need.
  */
-export const provisionLinkMatchesAfterSql = ({
+export const provisionLinkMatchSql = ({
   decisionId,
   after,
   ...scope
 }: ProvisionScopeOptions & {
   /** The decision id the predicate is correlated with. */
   decisionId: SQL;
-  /** The last physical link the incomplete probe examined. */
-  after: { anchor: SQL; spanStart: SQL };
+  /** The last physical link an incomplete probe examined. */
+  after?: { anchor: SQL; spanStart: SQL };
 }): SQL<boolean> => {
   const link = caseLawProvisionCitations;
+  const afterCondition =
+    after === undefined
+      ? sql``
+      : sql`AND (${link.anchor} COLLATE "C", ${link.spanStart}) >
+        (${after.anchor} COLLATE "C", ${after.spanStart})`;
   return sql<boolean>`EXISTS (
     SELECT 1 FROM ${link}
     WHERE ${link.decisionId} = ${decisionId}
       AND ${sql.join(provisionLinkConditions(scope, "ordered"), sql` AND `)}
-      AND (${link.anchor} COLLATE "C", ${link.spanStart}) >
-        (${after.anchor} COLLATE "C", ${after.spanStart})
+      ${afterCondition}
   )`;
 };
 

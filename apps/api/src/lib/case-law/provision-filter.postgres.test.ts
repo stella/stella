@@ -4,12 +4,14 @@ import { desc, sql } from "drizzle-orm";
 
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
-import { provisionDecisionCandidatesQuery } from "@/api/handlers/case-law/decisions/search";
+import {
+  provisionDecisionProbeQuery,
+  provisionDecisionWalkQuery,
+} from "@/api/handlers/case-law/decisions/search";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import {
-  provisionLinkMatchesAfterSql,
-  provisionLinkOutcomeEmitsHit,
+  provisionLinkMatchSql,
   provisionLinkReadOutcomeSql,
   readCaseLawProvisionScope,
 } from "@/api/lib/case-law/provision-filter";
@@ -20,7 +22,10 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { caseLawPublishedDecisionsFixtureSql } from "@/api/tests/helpers/case-law-publication-view-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { explainRoot } from "@/api/tests/query-plans/plan-walker";
+import {
+  explainRoot,
+  indexedAccessPaths,
+} from "@/api/tests/query-plans/plan-walker";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const PAGE_SIZE = 20;
@@ -36,6 +41,18 @@ const GAPPED_PROVISION = {
   anchor: "cl_36",
   letter: "z",
 } as const;
+/** One decision in this many cites the provision in the sparse walk. */
+const SPARSE_EVERY = 1000;
+/**
+ * The shared-buffer ceiling per examined candidate for the sparse walk. The
+ * rank index, the projection state and the link probe each cost a small
+ * constant per candidate; a scan of the corpus or of every link would not fit.
+ */
+const SPARSE_BLOCKS_PER_CANDIDATE = 16;
+const RANK_ORDER = [
+  desc(publishedCaseLawDecisions.citationAuthority),
+  desc(publishedCaseLawDecisions.id),
+];
 const TABLES = [
   "case_law_sources",
   "case_law_decisions",
@@ -43,17 +60,6 @@ const TABLES = [
   "corpus_index_jurisdiction_serving",
   "corpus_index_projection_states",
 ] as const;
-
-test("only a verified provision membership outcome emits a decision", () => {
-  expect(provisionLinkOutcomeEmitsHit({ type: "match" })).toBe(true);
-  expect(provisionLinkOutcomeEmitsHit({ type: "noMatch" })).toBe(false);
-  expect(
-    provisionLinkOutcomeEmitsHit({
-      type: "incomplete",
-      after: { spanStart: 128, anchor: "cl_36" },
-    }),
-  ).toBe(false);
-});
 
 const nodesOf = (root: Record<string, unknown>): Record<string, unknown>[] => {
   const children = root["Plans"];
@@ -76,20 +82,27 @@ const readBlocks = (root: Record<string, unknown>) => {
 };
 
 const citationScans = (root: Record<string, unknown>) => {
-  const scans = nodesOf(root).filter(
-    (node) => node["Relation Name"] === "case_law_provision_citations",
+  const relation = "case_law_provision_citations";
+  const reads = nodesOf(root).filter(
+    (node) => node["Relation Name"] === relation,
   );
-  expect(scans.length).toBeGreaterThan(0);
-  for (const scan of scans) {
-    expect(["Index Scan", "Index Only Scan", "Bitmap Heap Scan"]).toContain(
-      String(scan["Node Type"]),
-    );
-    if (scan["Node Type"] !== "Bitmap Heap Scan") {
-      expect(String(scan["Index Name"])).toContain(
-        "case_law_provision_citations",
-      );
+  const paths = indexedAccessPaths(root, relation);
+  expect(paths.length).toBeGreaterThan(0);
+  // Every read of the links goes through one of their indexes.
+  expect(paths.map(({ node }) => node)).toEqual(reads);
+  for (const path of paths) {
+    for (const branch of path.branches) {
+      expect(branch.indexName).toContain(relation);
     }
   }
+  return reads;
+};
+
+const rankScans = (root: Record<string, unknown>) => {
+  const scans = nodesOf(root).filter(
+    (node) => node["Index Name"] === CASE_LAW_PROVISION_SEARCH_INDEX.name,
+  );
+  expect(scans.length).toBeGreaterThan(0);
   return scans;
 };
 
@@ -240,15 +253,15 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
               SCOPE_LIMIT + 1,
             );
           }
-          const pageQuery = provisionDecisionCandidatesQuery(tx, {
+          // The handler's own shape: the whole candidate budget, stopped by
+          // the page's hits.
+          const pageQuery = provisionDecisionWalkQuery(tx, {
             body: { country: "CZE", query: "", provision: PROVISION },
             generation: GENERATION,
             after: undefined,
-            orderBy: [
-              desc(publishedCaseLawDecisions.citationAuthority),
-              desc(publishedCaseLawDecisions.id),
-            ],
-            limit: PAGE_SIZE + 1,
+            orderBy: RANK_ORDER,
+            budget: LIMITS.caseLawProvisionCandidateBudget,
+            stopAfter: PAGE_SIZE + 1,
           });
           const rows = await pageQuery;
           expect(rows).toHaveLength(PAGE_SIZE + 1);
@@ -273,6 +286,12 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
               PAGE_SIZE + 1,
             );
           }
+          // The rank walk stops with the probes, far inside its budget.
+          for (const scan of rankScans(pagePlan)) {
+            expect(Number(scan["Actual Rows"])).toBeLessThanOrEqual(
+              PAGE_SIZE + 2,
+            );
+          }
           measurements.push({
             scope: readBlocks(scopePlan),
             page: readBlocks(pagePlan),
@@ -289,6 +308,68 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
         expect(large.scope).toBeLessThan(1024);
         expect(large.page).toBeLessThan(1024);
         console.log("provision search shared blocks", measurements);
+
+        // A provision few decisions cite: one in a thousand candidates. The
+        // walk spends exactly its candidate budget, never the whole corpus,
+        // and hands back the candidate it stopped at.
+        const budget = LIMITS.caseLawProvisionCandidateBudget;
+        await db.execute(sql`UPDATE case_law_provision_citations link
+          SET anchor = 'cl_99-odst_1', section = 99
+          FROM (
+            SELECT id, row_number() OVER (
+              ORDER BY citation_authority DESC, id DESC
+            ) AS rank
+            FROM case_law_decisions
+          ) ranked
+          WHERE link.decision_id = ranked.id
+            AND link.anchor = 'cl_36-odst_1'
+            AND ranked.rank % ${SPARSE_EVERY} <> 0`);
+        await db.execute(
+          sql`VACUUM (ANALYZE) ${schema}.case_law_provision_citations`,
+        );
+        await db.execute(
+          sql`SELECT set_config('statement_timeout', ${`${PUBLIC_READ_STATEMENT_TIMEOUT_MS.search}ms`}, false)`,
+        );
+        const sparseQuery = provisionDecisionWalkQuery(tx, {
+          body: { country: "CZE", query: "", provision: PROVISION },
+          generation: GENERATION,
+          after: undefined,
+          orderBy: RANK_ORDER,
+          budget,
+          stopAfter: PAGE_SIZE + 1,
+        });
+        const sparse = (await sparseQuery).toSorted(
+          (left, right) => left.ordinal - right.ordinal,
+        );
+        expect(
+          sparse
+            .filter(({ provisionOutcome }) => provisionOutcome.type === "match")
+            .map(({ ordinal }) => ordinal),
+        ).toEqual(
+          Array.from(
+            { length: budget / SPARSE_EVERY },
+            (_, step) => (step + 1) * SPARSE_EVERY,
+          ),
+        );
+        expect(sparse.at(-1)?.ordinal).toBe(budget);
+        const sparsePlan = explainRoot(
+          await db.execute(
+            sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sparseQuery.getSQL()}`,
+          ),
+        );
+        for (const scan of citationScans(sparsePlan)) {
+          expect(Number(scan["Actual Loops"])).toBeLessThanOrEqual(budget);
+          expect(Number(scan["Actual Rows"])).toBeLessThanOrEqual(1);
+        }
+        for (const scan of rankScans(sparsePlan)) {
+          expect(Number(scan["Actual Rows"])).toBeLessThanOrEqual(budget + 1);
+        }
+        const sparseBlocks = readBlocks(sparsePlan);
+        console.log("sparse provision walk shared blocks", sparseBlocks);
+        // A few blocks per examined candidate: its rank entry, its link probe
+        // and its projection state. Reading the corpus would be far more.
+        expect(sparseBlocks).toBeLessThan(budget * SPARSE_BLOCKS_PER_CANDIDATE);
+        await db.execute(sql`SET statement_timeout = 0`);
 
         // A skipped hierarchy level makes the anchor cover every letter under
         // the section. Non-matching letters must still consume the fixed
@@ -359,13 +440,10 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
         );
         await db.execute(sql`SET enable_seqscan = off`);
         await db.execute(sql`SET enable_bitmapscan = off`);
-        const noMatchProbe = provisionDecisionCandidatesQuery(tx, {
+        const noMatchProbe = provisionDecisionProbeQuery(tx, {
           body: { country: "CZE", query: "", provision: GAPPED_PROVISION },
           generation: GENERATION,
-          after: undefined,
-          orderBy: [desc(publishedCaseLawDecisions.id)],
-          limit: 1,
-          probeDecisionId: adversarialDecision,
+          decisionId: adversarialDecision,
         });
         expect((await noMatchProbe).at(0)?.provisionOutcome.type).toBe(
           "incomplete",
@@ -460,7 +538,7 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
         }) =>
           (
             await db.execute(
-              sql`SELECT ${provisionLinkMatchesAfterSql({
+              sql`SELECT ${provisionLinkMatchSql({
                 decisionId: sql`${adversarialDecision}::uuid`,
                 jurisdiction: "CZE",
                 provision: GAPPED_PROVISION,
