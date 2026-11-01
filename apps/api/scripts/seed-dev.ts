@@ -86,6 +86,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { DEFAULT_DOCUMENT_TYPES } from "@/api/lib/document-types/defaults";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import { parsedEmailToText, parseEmail } from "@/api/lib/files/email-to-html";
@@ -5070,15 +5071,10 @@ export async function seed(organizationId?: string, userId?: string) {
   let USER_ID = userId ?? DEFAULT_USER_ID;
   let resolvedSeedUserIds: readonly string[] | undefined;
   const toWs = (id: WorkspaceId) => id;
+  // Contacts admit the owner connection inside one organization only.
   const organizationTransaction = async <T>(
     fn: (tx: Transaction) => Promise<T>,
-  ): Promise<T> =>
-    await withAggregateTransaction(db, async (tx) => {
-      await tx.execute(
-        sql`SELECT set_config('app.organization_id', ${ORG_ID}, true)`,
-      );
-      return await fn(tx);
-    });
+  ): Promise<T> => await withOwnerOrganizationScope(db, ORG_ID, fn);
 
   const ensureSeedUsers = async () => {
     if (ORG_ID === DEFAULT_ORG_ID && USER_ID === DEFAULT_USER_ID) {

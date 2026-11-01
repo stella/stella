@@ -96,13 +96,12 @@ const NO_STORED_WORKSPACES = {
 export const createRootOrganizationBackgroundDb = (
   organizationId: SafeId<"organization">,
   database?: RlsDatabase<Transaction>,
-  workspaceIds: SafeId<"workspace">[] = [],
 ) =>
   createRootScopedDb(
     {
       organizationId: brandPersistedOrganizationId(organizationId),
       userId: null,
-      workspaceIds,
+      workspaceScope: NO_STORED_WORKSPACES,
     },
     database,
   );

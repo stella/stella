@@ -30,6 +30,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
 import {
@@ -487,19 +488,20 @@ const deleteMatters = async (scope: ResetScope) => {
 
 const deleteContacts = async (scope: ResetScope) => {
   const { organizationId } = scope.target;
-  const rows = (
-    await scope.safeDb(
-      async (tx) =>
-        await readBounded(
-          tx
-            .select({ id: contacts.id })
-            .from(contacts)
-            .where(eq(contacts.organizationId, organizationId))
-            .orderBy(asc(contacts.id)),
-          LIMITS.contactsCount,
-        ),
-    )
-  ).unwrap("Review contact enumeration failed for the target organization");
+  // The owner connection reads contacts inside their organization only.
+  const rows = await withOwnerOrganizationScope(
+    scope.db,
+    organizationId,
+    async (tx) =>
+      await readBounded(
+        tx
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(eq(contacts.organizationId, organizationId))
+          .orderBy(asc(contacts.id)),
+        LIMITS.contactsCount,
+      ),
+  );
   return await deleteEach(
     scope,
     "contacts",

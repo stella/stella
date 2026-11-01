@@ -25,11 +25,11 @@ import { readPublicDecisionLanguageAlternatesForGroupKeys } from "@/api/lib/case
 import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { escapeLike } from "@/api/lib/escape-like";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { LIMITS } from "@/api/lib/limits";
-import { createRootOrganizationBackgroundDb } from "@/api/lib/root-scoped-db";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedChatThreadId,
@@ -2183,21 +2183,11 @@ export const reindexWorkspacesForContact = async (
 export const rebuildSupplementalSearchIndex = async (
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
-  const rows = await rootDb
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(eq(workspaces.organizationId, organizationId));
-  await createRootOrganizationBackgroundDb(
+  // The owner connection reads contacts inside their organization only.
+  await withOwnerOrganizationScope(
+    rootDb,
     organizationId,
-    undefined,
-    rows.map(({ id }) => id),
-  )(
-    async (database) =>
-      await rebuildSupplementalSearchDocuments(organizationId, {
-        query: database.query,
-        select: database.select.bind(database),
-        transaction: rootDb.transaction.bind(rootDb),
-      }),
+    async (tx) => await rebuildSupplementalSearchDocuments(organizationId, tx),
   );
 };
 

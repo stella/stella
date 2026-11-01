@@ -4,8 +4,8 @@
   "worker": {},
   "scheduler": {
     "reviewOrganization.reset": {
-      "threshold": 979,
-      "reason": "Initial CI census: the complete canonical table sweep, fixture seeding and audit queries plus transaction round trips in both real registered reset tests."
+      "threshold": 982,
+      "reason": "CI census of the complete canonical table sweep, fixture seeding and audit queries plus transaction round trips in both real registered reset tests; contacts are enumerated and swept inside their organization owner scope."
     }
   }
 }

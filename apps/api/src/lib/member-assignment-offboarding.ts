@@ -70,6 +70,7 @@ import {
   lockOpenSigningPage,
   lockRequestReceiptPrincipalRows,
 } from "@/api/lib/db/aggregate-lock";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import { clearOrganizationCorrespondenceAssignments } from "@/api/lib/email/correspondence/offboarding";
@@ -602,7 +603,12 @@ const closeMemberExchanges = async ({
   }
 };
 
-const clearMemberContactAssignments = async ({
+/**
+ * The owner connection reaches one organization's contacts per scope, so the
+ * attorney references are cleared organization by organization: the one the
+ * member leaves, or every organization an account being deleted belongs to.
+ */
+const clearContactAssignmentsByOrganization = async ({
   tx,
   scope,
   userId,
@@ -616,43 +622,39 @@ const clearMemberContactAssignments = async ({
       ? [scope.organizationId]
       : (
           await tx
-            .select({ organizationId: organization.id })
-            .from(organization)
+            .select({ organizationId: member.organizationId })
+            .from(member)
+            .where(eq(member.userId, userId))
         ).map((row) => brandPersistedOrganizationId(row.organizationId));
   for (const organizationId of organizationIds) {
-    // db-await-in-loop: forced contact RLS requires one tenant setting at a time.
-    await runScopedWorkInTransaction({
+    // db-await-in-loop: the owner policy admits one organization's contacts per scope.
+    await withOwnerOrganizationScope(
       tx,
       organizationId,
-      userId,
-      workspaceScope: {
-        type: WORKSPACE_ACCESS_MODE.explicit,
-        workspaceIds: [],
-      },
-      fn: async (scopedTx) =>
-        await clearOrganizationContactAssignments({
+      async (scopedTx) =>
+        await clearMemberContactAssignments({
           tx: scopedTx,
           organizationId,
           userId,
           actorUserId,
         }),
-    });
+    );
   }
 };
 
-type ClearOrganizationContactAssignmentsOptions = {
+type ClearMemberContactAssignmentsOptions = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   actorUserId: SafeId<"user">;
 };
 
-const clearOrganizationContactAssignments = async ({
+const clearMemberContactAssignments = async ({
   tx,
   organizationId,
   userId,
   actorUserId,
-}: ClearOrganizationContactAssignmentsOptions) => {
+}: ClearMemberContactAssignmentsOptions) => {
   const contactScope = eq(contacts.organizationId, organizationId);
   const attorneyScope = and(
     contactScope,
@@ -920,7 +922,7 @@ export const clearMemberAssignments = async (
   await clearMemberTaskAssignments(options);
   await clearMemberTimeEntryApprovals(options);
   await closeMemberExchanges(options);
-  await clearMemberContactAssignments(options);
+  await clearContactAssignmentsByOrganization(options);
   await clearMemberRequestReceipts(options);
 };
 

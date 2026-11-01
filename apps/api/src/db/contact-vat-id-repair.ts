@@ -44,68 +44,100 @@ const MOVABLE = `vat_id IS NULL AND tax_id IS NOT NULL AND ${EU_VAT_ID_SQL_COMPA
 type Query = Pick<OnlineMigrationConnection, "query">;
 
 /**
- * Moves up to `size` contacts and returns how many moved. The outer predicate
- * repeats the selection: a contact a user edits concurrently is re-checked on
- * its new version after the row lock, so a VAT ID set meanwhile is kept.
+ * Organizations a step walks before it yields; a step resumes at the
+ * organization its cursor names.
+ */
+const ORGANIZATION_PAGE = 100;
+
+/**
+ * The owner reaches one organization's contacts at a time: `contacts` forces
+ * row security on its owner and admits the organization the session names.
+ * The setting is its own statement, so it holds before the next statement
+ * plans its row policy.
+ */
+const SCOPE_ORGANIZATION = "SELECT set_config('app.organization_id', $1, $2)";
+
+/**
+ * Moves up to `size` contacts of the scoped organization and returns how many
+ * moved. The outer predicate repeats the selection: a contact a user edits
+ * concurrently is re-checked on its new version after the row lock, so a VAT
+ * ID set meanwhile is kept.
  */
 const moveContactVatIdBatch = async (
   tx: Query,
-  organizationId: string,
   size: number,
 ): Promise<number> =>
   (
     await tx.query(
-      `WITH organization_scope AS MATERIALIZED (
-         SELECT set_config('app.organization_id', $2, true)
-       )
-       UPDATE public."${TABLE_NAME}" SET vat_id = tax_id, tax_id = NULL
-        FROM organization_scope
+      `UPDATE public."${TABLE_NAME}" SET vat_id = tax_id, tax_id = NULL
         WHERE ${MOVABLE}
           AND id IN (
             SELECT id FROM public."${TABLE_NAME}"
              WHERE ${MOVABLE}
              ORDER BY id
-             LIMIT $3
+             LIMIT $2
           )
         RETURNING id`,
-      [EU_VAT_ID_SQL_PATTERN, organizationId, size],
+      [EU_VAT_ID_SQL_PATTERN, size],
     )
   ).length;
 
-const organizationIds = async (connection: Query): Promise<string[]> =>
-  (
-    await connection.query(
-      "SELECT id::text AS organization_id FROM public.organization ORDER BY id",
-    )
+/** Up to `limit` organization ids from `from` (inclusive), in id order. */
+const organizationIds = async (
+  connection: Query,
+  from: string | null,
+  limit: number,
+): Promise<string[]> =>
+  (from === null
+    ? await connection.query(
+        "SELECT id::text AS organization_id FROM public.organization ORDER BY id LIMIT $1",
+        [limit],
+      )
+    : await connection.query(
+        "SELECT id::text AS organization_id FROM public.organization WHERE id >= $1 ORDER BY id LIMIT $2",
+        [from, limit],
+      )
   ).map((row) =>
     isRecord(row) && typeof row["organization_id"] === "string"
       ? row["organization_id"]
       : panic("Organization enumeration returned an invalid identifier"),
   );
 
-const hasMovableContactInOrganization = async (
-  connection: Query,
-  organizationId: string,
-): Promise<boolean> =>
-  (
-    await connection.query(
-      `WITH organization_scope AS MATERIALIZED (
-         SELECT set_config('app.organization_id', $2, true)
-       )
-       SELECT 1 FROM public."${TABLE_NAME}", organization_scope
-       WHERE ${MOVABLE} LIMIT 1`,
-      [EU_VAT_ID_SQL_PATTERN, organizationId],
-    )
-  ).length > 0;
-
-const hasMovableContact = async (connection: Query): Promise<boolean> => {
-  for (const organizationId of await organizationIds(connection)) {
-    // db-await-in-loop: forced RLS admits exactly one organization per query.
-    if (await hasMovableContactInOrganization(connection, organizationId)) {
-      return true;
+/**
+ * Whether any organization still holds a movable contact. The probe runs on
+ * the migration session outside a transaction, so it names each organization
+ * for the session and clears the setting before it returns.
+ */
+const hasMovableContact = async (
+  connection: OnlineMigrationConnection,
+): Promise<boolean> => {
+  try {
+    let from: string | null = null;
+    for (;;) {
+      const page = await organizationIds(
+        connection,
+        from,
+        ORGANIZATION_PAGE + 1,
+      );
+      for (const organizationId of page.slice(0, ORGANIZATION_PAGE)) {
+        await connection.query(SCOPE_ORGANIZATION, [organizationId, false]);
+        const movable = await connection.query(
+          `SELECT 1 FROM public."${TABLE_NAME}" WHERE ${MOVABLE} LIMIT 1`,
+          [EU_VAT_ID_SQL_PATTERN],
+        );
+        if (movable.length > 0) {
+          return true;
+        }
+      }
+      const next = page.at(ORGANIZATION_PAGE);
+      if (next === undefined) {
+        return false;
+      }
+      from = next;
     }
+  } finally {
+    await connection.query(SCOPE_ORGANIZATION, ["", false]);
   }
-  return false;
 };
 
 const readCompletion = async (
@@ -157,14 +189,21 @@ const moveUntilEmpty = async (
       sleep,
       step: async () =>
         await runtime.step(async ({ tx, size, cursor }) => {
-          for (const organizationId of await organizationIds(tx)) {
-            // db-await-in-loop: move one forced-RLS tenant batch per throttled step.
-            const moved = await moveContactVatIdBatch(tx, organizationId, size);
+          // The cursor names the organization the pass resumes at; a step
+          // moves one batch of the first organization from there that still
+          // holds a movable contact, or walks one page of organizations.
+          const page = await organizationIds(tx, cursor, ORGANIZATION_PAGE + 1);
+          for (const organizationId of page.slice(0, ORGANIZATION_PAGE)) {
+            await tx.query(SCOPE_ORGANIZATION, [organizationId, true]);
+            const moved = await moveContactVatIdBatch(tx, size);
             if (moved > 0) {
-              return { cursor, done: false, value: moved };
+              return { cursor: organizationId, done: false, value: moved };
             }
           }
-          return { cursor, done: true, value: 0 };
+          const next = page.at(ORGANIZATION_PAGE);
+          return next === undefined
+            ? { cursor: null, done: true, value: 0 }
+            : { cursor: next, done: false, value: 0 };
         }),
     });
   } finally {

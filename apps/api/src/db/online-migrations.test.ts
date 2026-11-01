@@ -2374,9 +2374,18 @@ const createHarness = ({
           if (query.startsWith("SELECT set_config(")) {
             return [];
           }
-          // The contact VAT ID repair's movable-contact probe: none left, so
-          // its completion holds and the phase skips it.
-          if (query.startsWith('SELECT 1 FROM public."contacts"')) {
+          // The contact VAT ID repair reads contacts one organization at a
+          // time: it enumerates organizations, then probes each for a movable
+          // contact. None is left, so its completion holds and the phase
+          // skips it.
+          if (
+            query.startsWith(
+              "SELECT id::text AS organization_id FROM public.organization",
+            )
+          ) {
+            return [{ organization_id: "online-migration-organization" }];
+          }
+          if (query.includes('SELECT 1 FROM public."contacts"')) {
             return [];
           }
           // The source config repair's probe: no legacy string config left.
