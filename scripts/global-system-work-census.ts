@@ -16,7 +16,7 @@ import type {
   ObjectExpression,
   ObjectProperty,
 } from "../packages/scripts/src/syntax-tree.ts";
-import { findImportedFunctionCalls } from "./root-connection-shapes.ts";
+import { findImportedFunctionCalls } from "./imported-function-calls.ts";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const jobSource = "apps/api/src/lib/db/global-system-work.ts";

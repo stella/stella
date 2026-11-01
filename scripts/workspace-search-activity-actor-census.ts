@@ -7,7 +7,7 @@ import { compareCodeUnit } from "@stll/collation";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { repoRelativePath } from "@stll/portable-path";
 
-import { findImportedFunctionCalls } from "./root-connection-shapes.ts";
+import { findImportedFunctionCalls } from "./imported-function-calls.ts";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const API_SOURCE_ROOT = "apps/api/src";
