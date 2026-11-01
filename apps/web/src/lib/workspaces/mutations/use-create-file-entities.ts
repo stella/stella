@@ -229,16 +229,14 @@ const prepareSingleFileEntityUpload = async ({
     workspaceId: toSafeId<"workspace">(workspaceId),
   });
   const presign = await wsClient.presign.post(
-    readQueryResult(
-      buildEntityCreatePresignPayload({
-        propertyId,
-        parentId,
-        name: file.name,
-        mimeType: file.type || "application/octet-stream",
-        size: file.size,
-        sha256Hex,
-      }),
-    ),
+    buildEntityCreatePresignPayload({
+      propertyId,
+      parentId,
+      name: file.name,
+      mimeType: file.type || "application/octet-stream",
+      size: file.size,
+      sha256Hex,
+    }),
     { fetch: { signal } },
   );
   if (presign.error) {

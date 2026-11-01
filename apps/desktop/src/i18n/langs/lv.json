@@ -484,7 +484,7 @@
     "evidenceTitles": "Nosaukumi",
     "evidenceApps": "Lietotnes",
     "rangeEmpty": "Šajā posmā nekas netika reģistrēts.",
-    "calendarHint": "Atveriet ieteikumu ar pārtrauktu līniju, lai to pārskatītu, vai velciet kolonnā Darbība, lai sagatavotu ierakstu jebkuram posmam.",
+    "calendarHint": "Atveriet ieteikumu ar pārtrauktu līniju, lai to pārskatītu, vai velciet kolonnā Laika ieraksti, lai sagatavotu ierakstu jebkuram posmam.",
     "narrativeAiPrompt": "Rakstīt aprakstu ar stella AI? Tiek nosūtīti tikai šī ieteikuma logu nosaukumi; tie netiek saglabāti.",
     "narrativeAiNo": "Nē",
     "narrativeAiApprove": "Apstiprināt",
@@ -494,6 +494,22 @@
     "narrativeAiFailed": "stella AI neizdevās uzrakstīt aprakstu. Paliek veidne.",
     "narrativeAssistAlways": "Rakstīt aprakstus ar stella AI, nejautājot",
     "narrativeAssistDescription": "Tiek nosūtīti tikai ieteikuma logu nosaukumi; tie netiek saglabāti."
+  },
+  "dictation": {
+    "title": "Diktēšana",
+    "description": "Turiet {shortcut} un runājiet. Teksts parādās lietotnē, kuru izmantojat. Runa tiek pārveidota šajā datorā un netiek saglabāta.",
+    "modelNeeded": "Runas modelis darbojas šajā datorā.",
+    "download": "Lejupielādēt ({size} MB)",
+    "downloading": "Lejupielādē runas modeli: {percent}%",
+    "downloadFailed": "Runas modeli neizdevās lejupielādēt.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
+    "shortcutTaken": "{shortcut} izmanto cita lietotne.",
+    "failure": {
+      "accessibility": "Atļaujiet piekļuvi pieejamībai, lai stella varētu rakstīt citās lietotnēs.",
+      "microphone": "stella nedzird jūsu mikrofonu. Pārbaudiet piekļuvi mikrofonam sistēmas iestatījumos.",
+      "modelMissing": "Vispirms lejupielādējiet runas modeli.",
+      "transcription": "Pārveide neizdevās. Mēģiniet vēlreiz."
+    }
   },
   "shortcut": {
     "title": "Starpliktuves īsinājumtaustiņš",
@@ -614,7 +630,6 @@
     "guideAllowed": "stella desktop ir atļauts",
     "never": {
       "screenRecording": "Ekrāna ierakstīšana",
-      "microphone": "Mikrofons",
       "camera": "Kamera",
       "keystrokes": "Taustiņsitieni",
       "fullDiskAccess": "Pilna piekļuve diskam",
