@@ -844,12 +844,11 @@ test("invalid structure without text is rejected before reservation or transfer"
         plainText: "Decision text.",
       },
       {
-        id: "late-head-matter",
-        anchorId: "late-head-matter",
-        type: "paragraph",
-        role: "apparatus",
-        inlines: [{ type: "text", text: "Publisher metadata." }],
-        plainText: "Publisher metadata.",
+        id: "plain-http-image",
+        anchorId: "plain-http-image",
+        type: "image",
+        src: "http://example.test/i.png",
+        plainText: "",
       },
     ],
   };
