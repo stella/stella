@@ -546,7 +546,7 @@ jobs:
     ];
     const release = ({
       conjuncts = gate,
-      revision = "5764ab66e4df84cfd2e642c7d7e4678261e668f8",
+      revision = "042baebaf071329b956555c05caf5736504c278d",
       extraSecret = "",
     } = {}) =>
       checkWorkflowPrivilegeSource(
@@ -612,7 +612,7 @@ describe("checkout locations", () => {
         `      - uses: actions/checkout@pin\n      - run: ${command}\n      - run: bash scripts/x.sh`,
       );
     expect(fetch("git fetch origin refs/pull/1/head")).not.toHaveLength(0);
-    expect(fetch("git log -1")).toHaveLength(0);
+    expect(fetch("git status --short")).toHaveLength(0);
   });
 });
 

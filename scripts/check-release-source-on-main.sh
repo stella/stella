@@ -20,11 +20,12 @@ refuse() {
   exit 1
 }
 
+main='origin/main'
 [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || refuse 'Release source must be a full lowercase commit SHA.'
-git rev-parse --verify --quiet refs/remotes/origin/main >/dev/null \
-  || refuse 'origin/main is not fetched.'
+git rev-parse --verify --quiet "refs/remotes/${main}" >/dev/null \
+  || refuse "${main} is not fetched."
 
-if git merge-base --is-ancestor "$sha" refs/remotes/origin/main 2>/dev/null; then
+if git merge-base --is-ancestor "$sha" "refs/remotes/${main}" 2>/dev/null; then
   exit 0
 fi
 
@@ -56,7 +57,7 @@ merge_commit=$(jq -er --arg sha "$sha" --arg repo "$GITHUB_REPOSITORY" --arg bra
   end' <<< "$pulls" 2>/dev/null) || merge_commit=''
 
 if [[ "$merge_commit" =~ ^[0-9a-f]{40}$ ]] \
-  && git merge-base --is-ancestor "$merge_commit" refs/remotes/origin/main 2>/dev/null; then
+  && git merge-base --is-ancestor "$merge_commit" "refs/remotes/${main}" 2>/dev/null; then
   exit 0
 fi
 

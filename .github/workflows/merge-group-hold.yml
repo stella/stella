@@ -98,7 +98,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         timeout-minutes: 2
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          # The base-branch revision this workflow runs from, not a revision
+          # taken from the event payload.
+          ref: ${{ github.workflow_sha }}
           persist-credentials: false
           sparse-checkout-cone-mode: false
           sparse-checkout: |

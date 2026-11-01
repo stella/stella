@@ -147,9 +147,6 @@ jobs:
       - name: Preserve release publication verification
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-release-publication-source.sh" "$RUNNER_TEMP/check-release-publication-source.sh"
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-release-source-on-main.sh" "$RUNNER_TEMP/check-release-source-on-main.sh"
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/release-branch.sh" "$RUNNER_TEMP/release-branch.sh"
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/retry.sh" "$RUNNER_TEMP/retry.sh"
 
       - name: Resolve upstream release receipt
         id: source
@@ -212,11 +209,11 @@ jobs:
             # builds from it. Only commit history is fetched.
             history="${RUNNER_TEMP}/release-source-history"
             git init --quiet "$history"
-            bash "$RUNNER_TEMP/retry.sh" git -C "$history" fetch --quiet --no-tags --filter=tree:0 \
+            bash "$GITHUB_WORKSPACE/.gh-retry/scripts/retry.sh" git -C "$history" fetch --quiet --no-tags --filter=tree:0 \
               "https://github.com/${GITHUB_REPOSITORY}.git" \
               "+refs/heads/main:refs/remotes/origin/main" \
               "+refs/tags/${release_ref}:refs/tags/${release_ref}"
-            (cd "$history" && bash "$RUNNER_TEMP/check-release-source-on-main.sh" "$release_sha" "$release_ref")
+            (cd "$history" && bash "$GITHUB_WORKSPACE/.gh-retry/scripts/check-release-source-on-main.sh" "$release_sha" "$release_ref")
           fi
           {
             echo "eligible=${eligible}"

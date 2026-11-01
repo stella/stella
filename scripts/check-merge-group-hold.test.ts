@@ -399,7 +399,7 @@ test("the required job runs on PRs and merge groups using only trusted base scri
     "pull-requests": "write",
   });
   expect(dequeue?.steps.at(0)?.with?.["ref"]).toBe(
-    `\${{ github.event.pull_request.base.sha }}`,
+    `\${{ github.workflow_sha }}`,
   );
   expect(dequeue?.steps.at(0)?.with?.["persist-credentials"]).toBe(false);
   expect(dequeue?.steps.at(0)?.["timeout-minutes"]).toBeGreaterThan(0);

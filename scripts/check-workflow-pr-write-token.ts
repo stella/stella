@@ -306,7 +306,7 @@ export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
       ],
     },
     calls:
-      "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
+      "stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d",
     privileges: {
       write: ["contents", "id-token"],
       secrets: ["STELLA_RELEASE_APP_ID", "STELLA_RELEASE_APP_PRIVATE_KEY"],
@@ -593,7 +593,7 @@ const parseExpression = (source: string): Expression | undefined => {
   const parseAnd = binaryLevel(["&&"], parseEquality);
   const parseOr: () => Expression = binaryLevel(["||"], parseAnd);
   const expression = parseOr();
-  return failed || cursor !== tokens.length ? undefined : expression;
+  return parsing() && cursor === tokens.length ? expression : undefined;
 };
 
 // A canonical spelling: two expressions match only when their parse trees do.
@@ -617,7 +617,8 @@ const renderExpression = (expression: Expression): string => {
       return `${expression.name}(${expression.args.map(renderExpression).join(", ")})`;
     case "not":
       return `!(${renderExpression(expression.operand)})`;
-    case "binary":
+    default:
+      // Every other kind is handled above, so this is the binary operator.
       return `(${renderExpression(expression.left)} ${expression.operator} ${renderExpression(expression.right)})`;
   }
 };
@@ -1060,7 +1061,12 @@ const workspaceDirectory = (value: unknown): string | undefined => {
   ) {
     return undefined;
   }
-  const normalized = path.posix.normalize(value).replace(/\/+$/u, "");
+  // normalize collapses repeated separators, so one trailing slash remains
+  // at most; string operations avoid a backtracking pattern.
+  const collapsed = path.posix.normalize(value);
+  const normalized = collapsed.endsWith("/")
+    ? collapsed.slice(0, -1)
+    : collapsed;
   if (normalized === ".." || normalized.startsWith("../")) {
     return undefined;
   }

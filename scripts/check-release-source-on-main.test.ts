@@ -227,7 +227,7 @@ describe("release branch name", () => {
       "utf-8",
     );
     expect(workflow).toContain(
-      'bash "$RUNNER_TEMP/check-release-source-on-main.sh" "$release_sha" "$release_ref"',
+      'bash "$GITHUB_WORKSPACE/.gh-retry/scripts/check-release-source-on-main.sh" "$release_sha" "$release_ref"',
     );
     expect(workflow).toContain(
       'bash "$GITHUB_WORKSPACE/.pack-tooling/scripts/check-release-source-on-main.sh" "$source_sha"',

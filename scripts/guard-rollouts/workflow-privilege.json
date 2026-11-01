@@ -1,0 +1,5 @@
+{
+  "id": "workflow-privilege",
+  "type": "full",
+  "check": ["bun", "scripts/check-workflow-pr-write-token.ts"]
+}
