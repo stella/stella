@@ -12,6 +12,7 @@ const AUTH_BASE_URL = `${API_BASE_URL}/api/auth`;
 const CONSENT_SCOPES = "openid profile stella:read stella:search";
 const CALLBACK_PORT = 54_321;
 const LOCALE_STORAGE_KEY = getStorageKey("i18n");
+const RENDERED_HEADING_BINDING = "__oauthConsentRenderedHeading";
 
 const token = () => randomUUID().replaceAll("-", "");
 const loopbackRedirectUriFor = (id: string) =>
@@ -164,6 +165,17 @@ test("OAuth consent skips loopback completion and keeps hosted completion", asyn
 }) => {
   await setEnglishLocale(page);
   const apiRequest = context.request;
+  // Headings the consent document rendered, reported from the page as they
+  // appear so a heading shown just before the navigation is still recorded.
+  const renderedHeadings: string[] = [];
+  await page.exposeBinding(
+    RENDERED_HEADING_BINDING,
+    (_source, text: unknown) => {
+      if (typeof text === "string") {
+        renderedHeadings.push(text);
+      }
+    },
+  );
 
   const scenarios = [
     { decision: "allow", destination: "loopback" },
@@ -182,20 +194,6 @@ test("OAuth consent skips loopback completion and keeps hosted completion", asyn
       redirectUri: callbackUrl,
     });
     await page.route(`${callbackUrl}**`, async (route) => {
-      if (decision === "allow" && destination === "loopback") {
-        // Navigation is paused here, so this still inspects the consent document.
-        expect(
-          await page.evaluate(
-            (key) => sessionStorage.getItem(key),
-            `connected-${id}`,
-          ),
-        ).toBeNull();
-        await expect(
-          page.getByRole("heading", {
-            name: `Connected to Consent browser test ${id}`,
-          }),
-        ).toHaveCount(0);
-      }
       await route.fulfill({
         contentType: "text/html",
         body: "<!doctype html><title>OAuth callback received</title><p>Callback received</p>",
@@ -203,30 +201,21 @@ test("OAuth consent skips loopback completion and keeps hosted completion", asyn
     });
 
     await openConsent({ page, clientId, id, redirectUri: callbackUrl });
-    if (decision === "allow" && destination === "loopback") {
-      await page.evaluate(
-        ({ key, heading }) => {
-          sessionStorage.removeItem(key);
-          new MutationObserver(() => {
-            if (
-              [...document.querySelectorAll("h1")].some(
-                (node) => node.textContent === heading,
-              )
-            ) {
-              sessionStorage.setItem(key, "rendered");
-            }
-          }).observe(document.body, {
-            subtree: true,
-            childList: true,
-            characterData: true,
-          });
-        },
-        {
-          key: `connected-${id}`,
-          heading: `Connected to Consent browser test ${id}`,
-        },
-      );
-    }
+    await page.evaluate((binding) => {
+      new MutationObserver(() => {
+        const report: unknown = Reflect.get(window, binding);
+        if (typeof report !== "function") {
+          return;
+        }
+        for (const node of document.querySelectorAll("h1")) {
+          Reflect.apply(report, window, [node.textContent]);
+        }
+      }).observe(document.body, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+      });
+    }, RENDERED_HEADING_BINDING);
     const callbackRequestPromise = page.waitForRequest((request) =>
       request.url().startsWith(callbackUrl),
     );
@@ -261,6 +250,9 @@ test("OAuth consent skips loopback completion and keeps hosted completion", asyn
         expect(Date.now() - clickedAt).toBeGreaterThanOrEqual(800);
       } else {
         expect(callbackParams.get("organization_name")).not.toBeNull();
+        expect(renderedHeadings).not.toContain(
+          `Connected to Consent browser test ${id}`,
+        );
       }
       expect(callbackParams.get("code")).not.toBeNull();
     } else {

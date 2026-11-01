@@ -13,7 +13,6 @@ import * as v from "valibot";
 
 import { resolveConsentClientIdentity } from "@/components/oauth-consent/client-identity.logic";
 import { ConsentCard } from "@/components/oauth-consent/consent-card";
-import { consentCompletion } from "@/components/oauth-consent/consent-completion.logic";
 import {
   ConsentAccountRows,
   ConsentDecisionBar,
@@ -44,6 +43,7 @@ import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
+import { consentCompletion } from "@/routes/-consent-completion.logic";
 import { ConsentSuccess } from "@/routes/-consent-success";
 
 export const Route = createFileRoute("/consent")({
@@ -246,7 +246,7 @@ function ConsentPage() {
         return;
       default:
         completion satisfies never;
-        return panic("Unhandled consent completion");
+        panic("Unhandled consent completion");
     }
   };
 

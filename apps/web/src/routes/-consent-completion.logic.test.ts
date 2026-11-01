@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { consentCompletion } from "@/components/oauth-consent/consent-completion.logic";
+import { consentCompletion } from "@/routes/-consent-completion.logic";
 
 describe("consent completion", () => {
   test.each([
