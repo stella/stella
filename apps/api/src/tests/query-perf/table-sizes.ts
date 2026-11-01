@@ -8,6 +8,12 @@ export const QUERY_PERF_TABLE_SIZES = {
   case_law_court_weights: "small",
   // One row per source, keyed by source_id.
   case_law_source_arrivals: "small",
+  // The key primary key and key=global CHECK permit exactly one revision row.
+  case_law_provision_admission: "small",
+  case_law_provision_extraction_scopes: "small",
+  // The name primary key and CHECK allow only scope-bootstrap and state-seed.
+  case_law_provision_repair_cursors: "small",
+  case_law_provision_scope_transitions: "small",
   case_law_sources: "small",
   // Source/country/court/year populations grow with the registry, not corpus rows.
   case_law_population_counts: "small",
