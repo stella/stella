@@ -17,9 +17,16 @@ CREATE TABLE "correspondence_sources" (
 CREATE INDEX "correspondence_sources_ws_record_entity_idx" ON "correspondence_sources" ("workspace_id", "correspondence_id", "entity_id");--> statement-breakpoint
 ALTER TABLE "correspondence_sources" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "correspondence_sources" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "review_reset_owner_select" ON "public"."correspondence_sources" AS PERMISSIVE FOR SELECT TO PUBLIC USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_sources'::regclass) AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), ''));--> statement-breakpoint
+CREATE POLICY "review_reset_owner_delete" ON "public"."correspondence_sources" AS PERMISSIVE FOR DELETE TO PUBLIC USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_sources'::regclass) AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), ''));--> statement-breakpoint
+CREATE POLICY "correspondence_sources_workspace_select" ON "public"."correspondence_sources" AS PERMISSIVE FOR SELECT TO "stella" USING (( CASE WHEN workspace_id = ANY( COALESCE( NULLIF( (SELECT pg_catalog.current_setting( 'app.workspace_ids', true )), '' )::uuid[], ARRAY[]::uuid[] ) ) THEN true ELSE workspace_id IN ( SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw ) END AND organization_id = (SELECT current_setting( 'app.organization_id', true )) ));--> statement-breakpoint
+CREATE POLICY "correspondence_sources_workspace_insert" ON "public"."correspondence_sources" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK (( CASE WHEN workspace_id = ANY( COALESCE( NULLIF( (SELECT pg_catalog.current_setting( 'app.workspace_ids', true )), '' )::uuid[], ARRAY[]::uuid[] ) ) THEN true ELSE workspace_id IN ( SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw ) END AND organization_id = (SELECT current_setting( 'app.organization_id', true )) ));--> statement-breakpoint
+CREATE POLICY "correspondence_sources_workspace_update" ON "public"."correspondence_sources" AS PERMISSIVE FOR UPDATE TO "stella" USING (( CASE WHEN workspace_id = ANY( COALESCE( NULLIF( (SELECT pg_catalog.current_setting( 'app.workspace_ids', true )), '' )::uuid[], ARRAY[]::uuid[] ) ) THEN true ELSE workspace_id IN ( SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw ) END AND organization_id = (SELECT current_setting( 'app.organization_id', true )) ));--> statement-breakpoint
+CREATE POLICY "correspondence_sources_workspace_delete" ON "public"."correspondence_sources" AS PERMISSIVE FOR DELETE TO "stella" USING (( CASE WHEN workspace_id = ANY( COALESCE( NULLIF( (SELECT pg_catalog.current_setting( 'app.workspace_ids', true )), '' )::uuid[], ARRAY[]::uuid[] ) ) THEN true ELSE workspace_id IN ( SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw ) END AND organization_id = (SELECT current_setting( 'app.organization_id', true )) ));--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."correspondence_sources" TO stella;--> statement-breakpoint
 
--- The following migration installs this new relation's generated gate graph,
--- policies and write trigger before application traffic can use the table.
+-- The following migration installs this relation's generated feature gate:
+-- its gate checks, gate policies and write trigger.
 
 CREATE FUNCTION public.register_uploaded_correspondence_source() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
