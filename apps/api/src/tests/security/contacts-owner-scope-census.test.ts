@@ -182,6 +182,44 @@ export const mixed = async (organizationId: string) =>
     });
   });
 
+  test("an alias of the owner scope is pinned like the owner scope", () => {
+    expect(
+      fixtureSites(`${IMPORTS}
+const scoped = withOwnerOrganizationScope;
+export const aliased = async (other: { organizationId: string }) =>
+  await scoped(rootDb, other.organizationId, async (tx) => tx);
+`),
+    ).toEqual({
+      "aliased#withOwnerOrganizationScope(other.organizationId)": 1,
+    });
+  });
+
+  test("a callback that declares its transaction name again is not screened", () => {
+    expect(
+      fixtureSites(`${IMPORTS}
+export const shadowed = async (organizationId: string) =>
+  await withOwnerOrganizationScope(rootDb, organizationId, async (tx) => {
+    {
+      const tx = rootDb;
+      await tx.select().from(people);
+    }
+  });
+`),
+    ).toEqual({
+      "shadowed#withOwnerOrganizationScope(organizationId)": 1,
+      shadowed: 1,
+    });
+  });
+
+  test("a relation-only read under a quoted key is a finding", () => {
+    expect(
+      fixtureSites(`
+export const matter = async (db: { query: { workspaces: { findFirst: (q: unknown) => unknown } } }) =>
+  await db.query.workspaces.findFirst({ "with": { "client": true } });
+`),
+    ).toEqual({ "matter.with": 1 });
+  });
+
   test("a relation followed into contacts from another table is a finding", () => {
     expect(
       fixtureSites(`${IMPORTS}

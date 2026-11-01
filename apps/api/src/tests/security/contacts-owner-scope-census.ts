@@ -3,6 +3,7 @@ import {
   type ImportDeclaration,
   type Node,
   parseSource,
+  staticPropertyName,
   walk,
 } from "@stll/scripts/src/syntax-tree";
 
@@ -156,6 +157,13 @@ const recordLocalAlias = (node: Node, bindings: Bindings) => {
   if (node.init?.type === "Identifier" && bindings.tables.has(node.init.name)) {
     bindings.tables.add(node.id.name);
   }
+  // `const scoped = withOwnerOrganizationScope` calls the owner scope too.
+  if (
+    node.init?.type === "Identifier" &&
+    bindings.ownerScope.has(node.init.name)
+  ) {
+    bindings.ownerScope.add(node.id.name);
+  }
   if (
     node.init?.type === "Literal" &&
     node.init.value === CONTACTS_TABLE_NAME
@@ -191,8 +199,30 @@ const isOwnerScopeCall = (
   node.callee.type === "Identifier" &&
   bindings.ownerScope.has(node.callee.name);
 
+const CHAIN_NODE_TYPES = [
+  "Identifier",
+  "MemberExpression",
+  "CallExpression",
+  "AwaitExpression",
+  "ParenthesizedExpression",
+  "TSAsExpression",
+  "TSNonNullExpression",
+  "ChainExpression",
+] as const;
+
+/** The nodes a receiver chain passes through on the way to its root. */
+type ChainNode = Extract<Node, { type: (typeof CHAIN_NODE_TYPES)[number] }>;
+
+const CHAIN_NODE_TYPE_SET: ReadonlySet<string> = new Set(CHAIN_NODE_TYPES);
+
+const isChainNode = (node: Node): node is ChainNode =>
+  CHAIN_NODE_TYPE_SET.has(node.type);
+
 /** The identifier a receiver chain starts from: `tx` in `tx.a().b`. */
 const chainRoot = (node: Node): string | undefined => {
+  if (!isChainNode(node)) {
+    return undefined;
+  }
   switch (node.type) {
     case "Identifier":
       return node.name;
@@ -208,8 +238,36 @@ const chainRoot = (node: Node): string | undefined => {
     case "ChainExpression":
       return chainRoot(node.expression);
     default:
-      return undefined;
+      return node satisfies never;
   }
+};
+
+/**
+ * Whether a function body declares `name` again (a variable or a nested
+ * parameter): a chain rooted at that spelling may not be the scope's own
+ * transaction, so the callback is not screened.
+ */
+const redeclares = (body: Node, name: string) => {
+  let found = false;
+  walk(body, (node) => {
+    if (
+      (node.type === "VariableDeclarator" &&
+        node.id.type === "Identifier" &&
+        node.id.name === name) ||
+      ((node.type === "ArrowFunctionExpression" ||
+        node.type === "FunctionExpression" ||
+        node.type === "FunctionDeclaration") &&
+        node.params.some(
+          (parameter) =>
+            parameter.type === "Identifier" && parameter.name === name,
+        ))
+    ) {
+      found = true;
+      return "skip-children";
+    }
+    return undefined;
+  });
+  return found;
 };
 
 /**
@@ -237,7 +295,10 @@ const onOwnerScopeTransaction = (
       continue;
     }
     const parameter = callback.params.at(0);
-    if (parameter?.type !== "Identifier") {
+    if (
+      parameter?.type !== "Identifier" ||
+      redeclares(callback.body, parameter.name)
+    ) {
       return false;
     }
     // The nearest statement chain around the site decides; `sql` fragments
@@ -280,25 +341,28 @@ const isNotTableUse = (node: Node, parent: Node | undefined) =>
   (parent?.type === "MemberExpression" &&
     (parent.object === node || (parent.property === node && !parent.computed)));
 
-/** `with: { client: true }`: the relation entries of a relational query. */
+/**
+ * `with: { client: true }`: the relation entries of a relational query, under
+ * identifier or quoted keys.
+ */
 const relationEntries = (node: Node) => {
   if (
     node.type !== "Property" ||
-    node.computed ||
-    node.key.type !== "Identifier" ||
-    node.key.name !== "with" ||
+    staticPropertyName(node) !== "with" ||
     node.value.type !== "ObjectExpression"
   ) {
     return [];
   }
-  return node.value.properties.flatMap((entry) =>
-    entry.type === "Property" &&
-    !entry.computed &&
-    entry.key.type === "Identifier" &&
-    !(entry.value.type === "Literal" && entry.value.value === false)
-      ? [{ name: entry.key.name, entry }]
-      : [],
-  );
+  return node.value.properties.flatMap((entry) => {
+    if (
+      entry.type !== "Property" ||
+      (entry.value.type === "Literal" && entry.value.value === false)
+    ) {
+      return [];
+    }
+    const name = staticPropertyName(entry);
+    return name === undefined ? [] : [{ name, entry }];
+  });
 };
 
 /** Interpolations of a contacts-name constant right after a SQL keyword. */
@@ -324,8 +388,17 @@ const TYPE_WRAPPED_EXPRESSIONS = new Set([
   "TSSatisfiesExpression",
 ]);
 
-// Cheap prefilter so only candidate files are parsed.
+// Cheap prefilter so only candidate files are parsed: the table, the owner
+// scope, or a relation into contacts named in a module that follows `with`.
 const CANDIDATE = /\bcontacts\b|withOwnerOrganizationScope/u;
+const RELATION_CANDIDATE = /\bwith["'`]?\s*:/u;
+
+const isCandidate = (source: string, contactRelations: ReadonlySet<string>) =>
+  CANDIDATE.test(source) ||
+  (RELATION_CANDIDATE.test(source) &&
+    [...contactRelations].some((name) =>
+      new RegExp(`["'\`]?\\b${name}\\b["'\`]?\\s*:`, "u").test(source),
+    ));
 
 const sourceText = (source: string, node: Node) =>
   source.slice(node.start, node.end).replaceAll(/\s+/gu, " ");
@@ -341,7 +414,10 @@ export const classifyContactsAccessModule = (
   source: string,
   { contactRelations }: ClassifyOptions,
 ): ContactsAccessFinding[] => {
-  if (!CANDIDATE.test(source) || file.startsWith(`${SCHEMA_DIRECTORY}/`)) {
+  if (
+    !isCandidate(source, contactRelations) ||
+    file.startsWith(`${SCHEMA_DIRECTORY}/`)
+  ) {
     return [];
   }
   const { program } = parseSource(file, source);

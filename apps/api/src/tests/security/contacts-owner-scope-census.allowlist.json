@@ -131,6 +131,12 @@
       "createWorkspaceContactHandler.txResult.contact": 1
     }
   },
+  "apps/api/src/handlers/workspaces/get.ts::names-contacts-table": {
+    "reason": "Request handler: the matter read follows its client relation inside the request's organization-scoped application transaction (`scopedDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "readWorkspaceHandler.result.with": 1
+    }
+  },
   "apps/api/src/handlers/workspaces/read-navigation.ts::names-contacts-table": {
     "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
     "sites": {
@@ -313,6 +319,12 @@
     "sites": {
       "fetchParties.links.with": 1,
       "fetchWorkspace.workspace.with": 1
+    }
+  },
+  "apps/api/src/lib/workspaces/list-query.ts::names-contacts-table": {
+    "reason": "Matter list query: follows the client relation on the transaction its callers hand it, the matter list and desktop matter handlers' organization-scoped `safeDb` transactions.",
+    "sites": {
+      "readWorkspaceListRows.with": 1
     }
   },
   "apps/api/src/mcp/matter-tools.ts::names-contacts-table": {

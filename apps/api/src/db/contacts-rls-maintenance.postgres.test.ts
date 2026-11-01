@@ -35,17 +35,9 @@ describe.skipIf(!enabled)("contacts RLS maintenance (postgres)", () => {
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       // One connection: the repair runs on a single migration session.
       const { db, sql: client } = openClient({ max: 1 });
-      const organizations = [
-        mintAuthProviderId<"organization">(),
-        mintAuthProviderId<"organization">(),
-      ];
-      const [firstOrganizationId, secondOrganizationId] = organizations;
-      if (
-        firstOrganizationId === undefined ||
-        secondOrganizationId === undefined
-      ) {
-        return panic("Fixture organizations missing");
-      }
+      const firstOrganizationId = mintAuthProviderId<"organization">();
+      const secondOrganizationId = mintAuthProviderId<"organization">();
+      const organizations = [firstOrganizationId, secondOrganizationId];
       const fixture = [
         {
           id: createSafeId<"contact">(),
