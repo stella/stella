@@ -840,7 +840,6 @@
     },
     "selectMatter": "Valige toimik...",
     "selectMatterToStart": "Ajastuse alustamiseks valige toimik",
-    "selectedCount": "{count, plural, one {# valitud} other {# valitud}}",
     "sellerProfiles": {
       "add": "Lisa müüja profiil",
       "archiveConfirm": "Kas arhiveerida see müüja profiil? Seda ei saa enam uute arvete jaoks kasutada.",
@@ -2107,6 +2106,7 @@
     "clearDate": "Tühjenda kuupäev",
     "clearFilters": "Tühjenda filtrid",
     "clearSearch": "Tühjenda otsing",
+    "clearSelection": "Tühista valik",
     "close": "Sulge",
     "columns": "Veerud",
     "comfortable": "Avar",
@@ -2346,8 +2346,11 @@
     "selectAMatter": "Vali toimik",
     "selectARole": "Valige roll",
     "selectAll": "Vali kõik",
+    "selectAllRows": "Vali kõik read",
     "selectDate": "Vali kuupäev…",
+    "selectRow": "Vali {label}",
     "selected": "Valitud",
+    "selectedCount": "{count, plural, one {# valitud} other {# valitud}}",
     "sessions": "Seansid",
     "settings": "Seaded",
     "showAll": "Näita kõiki",
@@ -2389,7 +2392,6 @@
     "unverifiedCitationHint": "Seda tsitaati ei õnnestunud lähtedokumendiga sobitada.",
     "uploadFiles": "Laadi failid üles",
     "urlIdentifier": "Lühitunnus",
-    "urlIdentifierPlaceholder": "minu-organisatsioon",
     "user": "Kasutaja",
     "value": "Väärtus",
     "vatId": "Käibemaksukohustuslase number",
@@ -2440,6 +2442,7 @@
     "scopeMemoryWrite": "Assistendi mälestuste loomine ja muutmine",
     "scopeOfflineAccess": "Hoida teid sisse logituna ilma korduva nõusolekuta",
     "scopeOnboarding": "Seadistada teie organisatsiooni praktikajurisdiktsioonid",
+    "scopeOrganizationCreate": "Luua uusi organisatsioone, mille omanikuks saad sina",
     "scopeProfile": "Pääseda ligi teie profiiliandmetele",
     "scopeRead": "Lugeda teie dokumente, toimikuid ja kontakte",
     "scopeReadAnonymized": "Lugeda teie dokumentide ja toimikute anonüümitud versioone",
@@ -2966,7 +2969,6 @@
     "failedToVerifyOtp": "Koodi kinnitamine ebaõnnestus",
     "matterNotFound": "Toimikut ei leitud",
     "partyAlreadyExists": "Kontaktil on selles toimikus juba see roll",
-    "slugAlreadyTaken": "See slug on juba kasutusel",
     "uploadFailed": "Üleslaadimine ebaõnnestus"
   },
   "feedback": {
@@ -4550,7 +4552,8 @@
       "flowRunFailed": "Töövoog <bdi>{flowName}</bdi> ebaõnnestus",
       "mention": "<bdi>{actorName}</bdi> mainis teid kommentaaris",
       "reportExportFailed": "Aruande eksportimine ebaõnnestus",
-      "reportExportSucceeded": "Teie aruanne on valmis"
+      "reportExportSucceeded": "Teie aruanne on valmis",
+      "taskAssigned": "<bdi>{actorName}</bdi> määras teile ülesande"
     },
     "loadOlder": "Laadi vanemad",
     "markAllRead": "Märgi kõik loetuks",
@@ -4718,6 +4721,13 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Kasutusel on vaikeseaded"
     },
+    "creationEvaluationLimitReached": "Olete kasutanud ära kõik {limit} organisatsioonide prooviperioodi. Organisatsiooni kustutamine ei taasta prooviperioodi. Kasutage olemasolevat organisatsiooni või võtke tasulise ligipääsu saamiseks ühendust klienditoega.",
+    "creationInvalidName": "Sisesta sobiv organisatsiooni nimi (kuni {maxLength} märki).",
+    "creationNotAllowed": "Selle kontoga ei saa organisatsioone luua.",
+    "creationOutcomeUnknown": "Päring võis organisatsiooni luua. Tulemuse kontrollimiseks proovi uuesti.",
+    "creationRateLimited": "Hiljuti on loodud liiga palju organisatsioone. Proovi hiljem uuesti.",
+    "creationRefused": "Organisatsiooni ei saanud luua. Kontrolli andmeid ja proovi uuesti.",
+    "creationSlugConflict": "See organisatsiooni aadress on juba kasutusel. Vali teine nimi või aadress.",
     "invitations": {
       "cancelInvitation": "Tühista kutse",
       "emailAddressLabel": "E-posti aadress",
@@ -4732,6 +4742,7 @@
       "statuses": {
         "accepted": "Vastu võetud",
         "canceled": "Tühistatud",
+        "expired": "Aegunud",
         "pending": "Ootel",
         "rejected": "Tagasi lükatud"
       }
@@ -4765,6 +4776,8 @@
       "typeEmailToConfirm": "Kinnitamiseks tippige {email}",
       "updateRole": "Uuenda roll"
     },
+    "newOrganization": "Uus organisatsioon",
+    "newOrganizationDescription": "Loo organisatsioon, mille omanikuks saad sina.",
     "roles": {
       "admin": "Administraator",
       "descriptions": {
@@ -4780,6 +4793,9 @@
       "owner": "Omanik"
     },
     "settingsDescription": "Muutke oma organisatsiooni nime ja slugi",
+    "startOver": "Alusta uuesti",
+    "startOverDescription": "Algne päring võis organisatsiooni juba luua. Enne uuesti alustamist kontrolli oma organisatsioone; uus päring võib luua veel ühe organisatsiooni.",
+    "startOverTitle": "Kas saata uus loomispäring?",
     "switchOrganization": "Vaheta organisatsiooni"
   },
   "publicTools": {
@@ -5375,6 +5391,7 @@
         "title": "Mälu ekstraktimine",
         "toggleLabel": "Paku taustal mälukirjeid vestluste ajaloost"
       },
+      "pastInvitations": "Varasemad kutsed",
       "pendingInvitations": "Ootel kutsed",
       "practiceJurisdictions": "Jurisdiktsioonid",
       "practiceJurisdictionsDescription": "Valige teile asjakohased jurisdiktsioonid.",
@@ -6212,8 +6229,7 @@
   "validation": {
     "invalidEmail": "Sisestage kehtiv e-posti aadress.",
     "organizationNameRequired": "Organisatsiooni nimi on kohustuslik",
-    "slugFormat": "Slug tohib sisaldada ainult väiketähti, numbreid ja sidekriipse",
-    "slugRequired": "Slug on kohustuslik"
+    "slugFormat": "Slug tohib sisaldada ainult väiketähti, numbreid ja sidekriipse"
   },
   "verify": {
     "history": "{history, select, refiled {Trükitud viitenumbriga <bdi>{reference}</bdi>; nüüd on dokument viitenumbriga <bdi>{currentReference}</bdi> toimikus <bdi>{matterName}</bdi>.} superseded {See viitenumber osutab versioonile {version, number}; praegune versioon on {currentVersion, number}.} other {Trükitud viitenumbriga <bdi>{reference}</bdi>; nüüd on dokument viitenumbriga <bdi>{currentReference}</bdi> toimikus <bdi>{matterName}</bdi>. See viitenumber osutab versioonile {version, number}; praegune versioon on {currentVersion, number}.}}",
@@ -7097,7 +7113,6 @@
       "exportTable": "Ekspordi tabel",
       "exportXlsx": "Ekspordi XLSX",
       "fields": "Väljad:",
-      "fieldsSelected": "{count, plural, one {# valitud} other {# valitud}}",
       "filter": "Filtreeri",
       "filterByPlaceholder": "Filtreeri välja järgi…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filtrit}}",

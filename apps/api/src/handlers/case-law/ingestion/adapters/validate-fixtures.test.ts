@@ -165,5 +165,11 @@ describe("fixture validation", () => {
 });
 
 test("synthetic UK fixture has the common decision shape", async () => {
-  validateDecision(await ukFclFixture().buildDecision(), 0, "uk-fcl");
+  // Building the decision replaces the global fetch with the fixture's.
+  const originalFetch = globalThis.fetch;
+  try {
+    validateDecision(await ukFclFixture().buildDecision(), 0, "uk-fcl");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

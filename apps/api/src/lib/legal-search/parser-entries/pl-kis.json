@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_KIS",
   "key": "pl-kis",
-  "parserVersion": 14,
+  "parserVersion": 15,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."
+    "reason": "Re-read word-processor HTML so single printed line breaks stay inside their sentence and blank lines alone end paragraphs. A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."
   }
 }

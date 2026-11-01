@@ -3053,6 +3053,14 @@ export const lockCaseLawRemovalSnapshots = async (
     IN SHARE ROW EXCLUSIVE MODE`);
 };
 
+/** A sitemap recount holds its snapshot fence before reading its inputs. */
+export const lockCaseLawSitemapSnapshot = async (
+  tx: ExecuteTransaction,
+): Promise<void> => {
+  await tx.execute(sql`LOCK TABLE case_law_sitemap_shard_counts, case_law_sitemap_shards
+    IN SHARE ROW EXCLUSIVE MODE`);
+};
+
 /** A coverage answer holds its snapshot fence before reading its inputs. */
 export const lockCaseLawCoverageSnapshot = async (
   tx: ExecuteTransaction,

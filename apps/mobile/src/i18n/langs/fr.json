@@ -74,7 +74,8 @@
       "none": "Sans date",
       "today": "Aujourd’hui",
       "tomorrow": "Demain",
-      "nextWeek": "Dans une semaine"
+      "nextWeek": "Dans une semaine",
+      "pick": "Choisir une date"
     },
     "due": {
       "overdue": "En retard",

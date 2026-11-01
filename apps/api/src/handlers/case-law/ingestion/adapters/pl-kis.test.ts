@@ -509,29 +509,31 @@ describe("every ingested category, as the service served it", () => {
       } as const satisfies StoredRawReparseInput;
       const reparse =
         plKisAdapter.reparseStoredRaw ?? panic("Missing KIS replay");
-      globalThis.fetch = asFetchMock(async () =>
-        panic("Replay must not fetch"),
-      );
-      const replay = await reparse(input);
-      expect(replay).toEqual({ type: "parsed", result: decision });
-      expect(await reparse(input)).toEqual(replay);
-      // Without its PDF object the row replays from the stored listing and
-      // detail, as it did before document objects were captured.
-      expect(
-        await reparse({
-          ...input,
-          raw: new TextEncoder().encode(decision.sourceRaw),
-        }),
-      ).toMatchObject({
-        type: "parsed",
-        result: { caseNumber: decision.caseNumber },
-      });
-      expect(
-        await reparse({ ...input, readObject: async () => Result.ok(null) }),
-      ).toMatchObject({
-        type: "parsed",
-        result: { caseNumber: decision.caseNumber },
-      });
+      const { restore } = stubPublisher(() => panic("Replay must not fetch"));
+      try {
+        const replay = await reparse(input);
+        expect(replay).toEqual({ type: "parsed", result: decision });
+        expect(await reparse(input)).toEqual(replay);
+        // Without its PDF object the row replays from the stored listing and
+        // detail, as it did before document objects were captured.
+        expect(
+          await reparse({
+            ...input,
+            raw: new TextEncoder().encode(decision.sourceRaw),
+          }),
+        ).toMatchObject({
+          type: "parsed",
+          result: { caseNumber: decision.caseNumber },
+        });
+        expect(
+          await reparse({ ...input, readObject: async () => Result.ok(null) }),
+        ).toMatchObject({
+          type: "parsed",
+          result: { caseNumber: decision.caseNumber },
+        });
+      } finally {
+        restore();
+      }
     }
   });
 

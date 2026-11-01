@@ -9,7 +9,10 @@ import {
   PL_KIO_HTML_BUDGET,
   PlKioHtmlBudgetError,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
-import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import {
+  parsePlDecisionContent as uncheckedParsePlDecisionContent,
+  PL_DECISION_MARKUP,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
@@ -61,6 +64,37 @@ const flattenInlineText = (inlines: Inline[]): string =>
     .join("");
 
 describe("parsePlDecisionContent", () => {
+  test.each([
+    [
+      "Sąd Apelacyjny w Szczecinie III Wydział Pracy i Ubezpieczeń Społecznych w osobie sędziego SA Urszuli Iwanowskiej, po rozpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym,",
+      '<strong>sprawy z odwołania </strong><span class="anon-block">A. N.</span>',
+    ],
+    [
+      "po rozpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym,",
+      '<strong>sprawy z odwołania </strong><span class="anon-block"> (...) DRUKARNIA spółki z ograniczoną odpowiedzialnością</span> w <span class="anon-block">S.</span>',
+    ],
+  ])(
+    "a common-court opening recital stays whole across its printed lines",
+    (opening, continuation) => {
+      const { documentAst } = parsePlDecisionContent(
+        baseInput(`<p>${opening}</p><p>${continuation}</p>`, {
+          markup: PL_DECISION_MARKUP.COMMON_COURT,
+        }),
+      );
+      const recital = documentAst.blocks.find((block) =>
+        block.plainText.startsWith(opening),
+      );
+      expect(recital?.plainText).toBe(
+        `${opening} ${cheerio.load(continuation).text()}`.replace(/\s+/gu, " "),
+      );
+      expect(
+        documentAst.blocks.some((block) =>
+          block.plainText.startsWith("sprawy z odwołania"),
+        ),
+      ).toBe(false);
+    },
+  );
+
   test("keeps a Polish court's printed order and assigns roles from its text", () => {
     const content = `
       <p><strong>II CSKP 1456/22</strong></p>
@@ -693,6 +727,25 @@ describe("markup whitespace", () => {
     });
   });
 
+  test("a printed blank line inside an inline element splits its formatting", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<p><b>First<br> \n <br>Second</b></p>", {
+        decisionType: undefined,
+        markup: PL_DECISION_MARKUP.PRINTED_LINES,
+      }),
+    );
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "First",
+      "Second",
+    ]);
+    expect(
+      documentAst.blocks.map((block) =>
+        "inlines" in block ? block.inlines.at(0)?.type : undefined,
+      ),
+    ).toEqual(["bold", "bold"]);
+  });
+
   test("paragraphs inside one cell stay apart, a line each", () => {
     // Captured KIO markup: each paragraph ends in a space and the next
     // follows with nothing between them.
@@ -789,6 +842,20 @@ describe("ordered list items print the number a browser gives them", () => {
     ["<ul><li>a</li><li>b</li></ul>", ["a", "b"]],
   ])("%s", (html, expected) => {
     expect(itemsOf(html)).toEqual(expected);
+  });
+
+  test("a numbered first paragraph keeps a printed blank line", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<ol><li><p>First<br> \n <br>Second</p></li></ol>", {
+        decisionType: undefined,
+        markup: PL_DECISION_MARKUP.PRINTED_LINES,
+      }),
+    );
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "1. First",
+      "Second",
+    ]);
   });
 
   test("reading an item's runs around its blocks costs work linear in the item", () => {

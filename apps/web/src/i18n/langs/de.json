@@ -840,7 +840,6 @@
     },
     "selectMatter": "Akte auswählen...",
     "selectMatterToStart": "Wählen Sie eine Akte, um die Zeiterfassung zu starten",
-    "selectedCount": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
     "sellerProfiles": {
       "add": "Verkäuferprofil hinzufügen",
       "archiveConfirm": "Dieses Verkäuferprofil archivieren? Es steht dann für neue Rechnungen nicht mehr zur Verfügung.",
@@ -2107,6 +2106,7 @@
     "clearDate": "Datum löschen",
     "clearFilters": "Filter löschen",
     "clearSearch": "Suche löschen",
+    "clearSelection": "Auswahl aufheben",
     "close": "Schließen",
     "columns": "Spalten",
     "comfortable": "Komfortabel",
@@ -2346,8 +2346,11 @@
     "selectAMatter": "Akte auswählen",
     "selectARole": "Rolle auswählen",
     "selectAll": "Alle auswählen",
+    "selectAllRows": "Alle Zeilen auswählen",
     "selectDate": "Datum wählen…",
+    "selectRow": "{label} auswählen",
     "selected": "Ausgewählt",
+    "selectedCount": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
     "sessions": "Sitzungen",
     "settings": "Einstellungen",
     "showAll": "Alle anzeigen",
@@ -2389,7 +2392,6 @@
     "unverifiedCitationHint": "Dieses Zitat konnte dem Quelldokument nicht zugeordnet werden.",
     "uploadFiles": "Dateien hochladen",
     "urlIdentifier": "URL-Kennung",
-    "urlIdentifierPlaceholder": "meine-organisation",
     "user": "Benutzer",
     "value": "Wert",
     "vatId": "Umsatzsteuer-ID",
@@ -2440,6 +2442,7 @@
     "scopeMemoryWrite": "Erinnerungen des Assistenten erstellen und bearbeiten",
     "scopeOfflineAccess": "Sie angemeldet halten, ohne erneute Zustimmung zu verlangen",
     "scopeOnboarding": "Tätigkeitsgebiete Ihrer Organisation konfigurieren",
+    "scopeOrganizationCreate": "Neue Organisationen erstellen, deren Eigentümer Sie sind",
     "scopeProfile": "Auf Ihre Profilinformationen zugreifen",
     "scopeRead": "Ihre Dokumente, Akten und Kontakte lesen",
     "scopeReadAnonymized": "Anonymisierte Versionen Ihrer Dokumente und Akten lesen",
@@ -2966,7 +2969,6 @@
     "failedToVerifyOtp": "Code konnte nicht verifiziert werden",
     "matterNotFound": "Akte nicht gefunden",
     "partyAlreadyExists": "Kontakt hat bereits diese Rolle in der Akte",
-    "slugAlreadyTaken": "Dieser Slug ist bereits vergeben",
     "uploadFailed": "Upload fehlgeschlagen"
   },
   "feedback": {
@@ -4550,7 +4552,8 @@
       "flowRunFailed": "Workflow <bdi>{flowName}</bdi> fehlgeschlagen",
       "mention": "<bdi>{actorName}</bdi> hat Sie in einem Kommentar erwähnt",
       "reportExportFailed": "Ihr Berichtsexport ist fehlgeschlagen",
-      "reportExportSucceeded": "Ihr Bericht ist bereit"
+      "reportExportSucceeded": "Ihr Bericht ist bereit",
+      "taskAssigned": "<bdi>{actorName}</bdi> hat Ihnen eine Aufgabe zugewiesen"
     },
     "loadOlder": "Ältere laden",
     "markAllRead": "Alle als gelesen markieren",
@@ -4718,6 +4721,13 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Standardeinstellungen aktiv"
     },
+    "creationEvaluationLimitReached": "Sie haben alle {limit} Testzeiträume für Organisationen genutzt. Durch das Löschen einer Organisation wird kein Testzeitraum wieder verfügbar. Nutzen Sie eine bestehende Organisation oder wenden Sie sich für einen kostenpflichtigen Zugang an den Support.",
+    "creationInvalidName": "Geben Sie einen gültigen Organisationsnamen ein (höchstens {maxLength} Zeichen).",
+    "creationNotAllowed": "Mit diesem Konto können keine Organisationen erstellt werden.",
+    "creationOutcomeUnknown": "Die Anfrage hat möglicherweise eine Organisation erstellt. Wiederholen Sie die Anfrage, um das Ergebnis zu prüfen.",
+    "creationRateLimited": "In letzter Zeit wurden zu viele Organisationen erstellt. Versuchen Sie es später erneut.",
+    "creationRefused": "Die Organisation konnte nicht erstellt werden. Prüfen Sie die Angaben und versuchen Sie es erneut.",
+    "creationSlugConflict": "Diese Organisationsadresse wird bereits verwendet. Wählen Sie einen anderen Namen oder eine andere Adresse.",
     "invitations": {
       "cancelInvitation": "Einladung stornieren",
       "emailAddressLabel": "E-Mail-Adresse",
@@ -4732,6 +4742,7 @@
       "statuses": {
         "accepted": "Angenommen",
         "canceled": "Storniert",
+        "expired": "Abgelaufen",
         "pending": "Ausstehend",
         "rejected": "Abgelehnt"
       }
@@ -4765,6 +4776,8 @@
       "typeEmailToConfirm": "Geben Sie zur Bestätigung {email} ein",
       "updateRole": "Rolle aktualisieren"
     },
+    "newOrganization": "Neue Organisation",
+    "newOrganizationDescription": "Erstellen Sie eine Organisation, deren Eigentümer Sie sind.",
     "roles": {
       "admin": "Administrator",
       "descriptions": {
@@ -4780,6 +4793,9 @@
       "owner": "Eigentümer"
     },
     "settingsDescription": "Name und Slug der Organisation bearbeiten",
+    "startOver": "Neu beginnen",
+    "startOverDescription": "Die ursprüngliche Anfrage hat möglicherweise bereits eine Organisation erstellt. Prüfen Sie Ihre Organisationen, bevor Sie neu beginnen; eine neue Anfrage könnte eine weitere Organisation erstellen.",
+    "startOverTitle": "Eine neue Erstellungsanfrage starten?",
     "switchOrganization": "Organisation wechseln"
   },
   "publicTools": {
@@ -5375,6 +5391,7 @@
         "title": "Gedächtnis-Extraktion",
         "toggleLabel": "Im Hintergrund Erinnerungen aus dem Chatverlauf vorschlagen"
       },
+      "pastInvitations": "Frühere Einladungen",
       "pendingInvitations": "Ausstehende Einladungen",
       "practiceJurisdictions": "Jurisdiktionen",
       "practiceJurisdictionsDescription": "Wählen Sie die für Sie relevanten Jurisdiktionen aus.",
@@ -6212,8 +6229,7 @@
   "validation": {
     "invalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein.",
     "organizationNameRequired": "Organisationsname ist erforderlich",
-    "slugFormat": "Slug darf nur Kleinbuchstaben, Zahlen und Bindestriche enthalten",
-    "slugRequired": "Slug ist erforderlich"
+    "slugFormat": "Slug darf nur Kleinbuchstaben, Zahlen und Bindestriche enthalten"
   },
   "verify": {
     "history": "{history, select, refiled {Gedruckt unter <bdi>{reference}</bdi>; jetzt geführt unter <bdi>{currentReference}</bdi> in der Akte <bdi>{matterName}</bdi>.} superseded {Dieses Aktenzeichen verweist auf Version {version, number}; die aktuelle Version ist {currentVersion, number}.} other {Gedruckt unter <bdi>{reference}</bdi>; jetzt geführt unter <bdi>{currentReference}</bdi> in der Akte <bdi>{matterName}</bdi>. Dieses Aktenzeichen verweist auf Version {version, number}; die aktuelle Version ist {currentVersion, number}.}}",
@@ -7097,7 +7113,6 @@
       "exportTable": "Tabelle exportieren",
       "exportXlsx": "XLSX exportieren",
       "fields": "Felder:",
-      "fieldsSelected": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
       "filter": "Filtern",
       "filterByPlaceholder": "Filtern nach…",
       "filtersWithCount": "{count, plural, one {# Filter} other {# Filter}}",
