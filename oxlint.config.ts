@@ -330,6 +330,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-hand-built-date-range-filter.fixture.tsx", [
     "no-hand-built-date-range-filter/no-hand-built-date-range-filter",
   ]),
+  fixtureRuleOverride("no-canonical-money-form-parse.fixture.ts", [
+    "no-canonical-money-form-parse/no-canonical-money-form-parse",
+  ]),
   fixtureRuleOverride("no-ad-hoc-inline-rename.fixture.tsx", [
     "no-ad-hoc-inline-rename/no-ad-hoc-inline-rename",
   ]),
@@ -1867,6 +1870,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-in-flow-viewport-popup.ts",
     "./.oxlint-plugins/no-unformatted-number.ts",
     "./.oxlint-plugins/no-literal-minor-unit-scale.ts",
+    "./.oxlint-plugins/no-canonical-money-form-parse.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
     "./.oxlint-plugins/no-first-observer-entry.ts",
@@ -2989,6 +2993,7 @@ const config = defineConfig({
         "no-raw-colors/no-raw-colors": "error",
         "no-raw-foreground-opacity/no-raw-foreground-opacity": "error",
         "no-ad-hoc-inline-rename/no-ad-hoc-inline-rename": "error",
+        "no-canonical-money-form-parse/no-canonical-money-form-parse": "error",
         "no-inline-style-colors/no-inline-style-colors": "error",
         "no-inline-heavy-host-props/no-inline-heavy-host-props": "error",
         "no-physical-properties/no-physical-properties": "error",

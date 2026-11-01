@@ -8,6 +8,11 @@ import type * as v from "valibot";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { BPS_PER_PERCENTAGE_POINT } from "@stll/api-contract/billing";
 import { CURRENCY_CODE_LENGTH } from "@stll/api-contract/currency-code";
+import {
+  EMPTY_LOCALE_INPUT_TEXT,
+  formatLocaleDecimalInput,
+  localeInputText,
+} from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
@@ -15,6 +20,7 @@ import { Input } from "@stll/ui/input";
 
 import { majorUnitInput } from "@/components/billing/amount-input.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
@@ -93,6 +99,7 @@ const HourlyArrangementForm = ({
   workspaceId: string;
 }) => {
   const t = useTranslations();
+  const locale = useFormattingLocale();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const save = useCapabilityMutation({
@@ -132,7 +139,10 @@ const HourlyArrangementForm = ({
   });
   const hourly = arrangement?.mode === "hourly" ? arrangement : null;
   const currency = hourly?.currency ?? "USD";
-  const schema = hourlyArrangementSchema(t("billing.arrangement.invalidCap"));
+  const schema = hourlyArrangementSchema(
+    t("billing.arrangement.invalidCap"),
+    locale,
+  );
   const form = useForm(
     schemaFormOptions({
       schema,
@@ -141,14 +151,22 @@ const HourlyArrangementForm = ({
         currency,
         capAmount:
           hourly && "capAmount" in hourly
-            ? majorUnitInput(hourly.capAmount, currency)
-            : "",
+            ? majorUnitInput(hourly.capAmount, currency, locale)
+            : EMPTY_LOCALE_INPUT_TEXT,
         capMinutes:
-          hourly && "capMinutes" in hourly ? `${hourly.capMinutes}` : "",
+          hourly && "capMinutes" in hourly
+            ? formatLocaleDecimalInput({
+                amount: `${hourly.capMinutes}`,
+                locale,
+              })
+            : EMPTY_LOCALE_INPUT_TEXT,
         alertThreshold:
           hourly && "alertThresholdBps" in hourly
-            ? `${hourly.alertThresholdBps / BPS_PER_PERCENTAGE_POINT}`
-            : "80",
+            ? formatLocaleDecimalInput({
+                amount: `${hourly.alertThresholdBps / BPS_PER_PERCENTAGE_POINT}`,
+                locale,
+              })
+            : formatLocaleDecimalInput({ amount: "80", locale }),
       },
       onSubmit: async ({ value }) => {
         await save.mutateAsync(value);
@@ -207,7 +225,7 @@ const HourlyArrangementForm = ({
                   field.handleChange(
                     name === "currency"
                       ? event.currentTarget.value.toUpperCase()
-                      : event.currentTarget.value,
+                      : localeInputText(event.currentTarget),
                   )
                 }
               />

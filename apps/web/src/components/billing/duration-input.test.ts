@@ -27,7 +27,7 @@ describe("duration parts", () => {
     ["-1", null],
     ["time", null],
     ["2hours", null],
-    [" 2", null],
+    [" 2", 2],
     ["+2", null],
     ["0x2", null],
     ["2e1", null],

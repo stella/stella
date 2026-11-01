@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { cents } from "@stll/money";
+import { cents, formatLocaleDecimalInput } from "@stll/money";
 
 import { hourlyArrangementSchema } from "./billing-arrangement-editor.logic";
 
-const schema = hourlyArrangementSchema("Invalid cap");
+const schema = hourlyArrangementSchema("Invalid cap", "en");
 const input = {
   currency: "USD",
   capAmount: "",
@@ -42,14 +42,23 @@ test("minute caps and percentage thresholds become integer contract values", () 
   });
 });
 
-test.each(["1e2", "1.5", " 60", "+60", "-0", "0", "Infinity", "2147483648"])(
+test.each([" 60", "60 ", "60.0"])(
+  "minute input reads the typed whole number %s",
+  (capMinutes) => {
+    expect(v.parse(schema, { ...input, capMinutes })).toMatchObject({
+      capMinutes: 60,
+    });
+  },
+);
+
+test.each(["1e2", "1.5", "+60", "-0", "0", "Infinity", "2147483648"])(
   "minute input refuses the noncanonical or out-of-range token %s",
   (capMinutes) => {
     expect(v.safeParse(schema, { ...input, capMinutes }).success).toBe(false);
   },
 );
 
-test.each(["1e2", " 80", "0", "0.001", "100.01", "Infinity"])(
+test.each(["1e2", "0", "0.001", "100.01", "Infinity"])(
   "percentage input refuses the noncanonical or out-of-range token %s",
   (alertThreshold) => {
     expect(v.safeParse(schema, { ...input, alertThreshold }).success).toBe(
@@ -69,3 +78,17 @@ test.each([
     ).toEqual({ currency, capAmount: expected, alertThresholdBps: 8000 });
   },
 );
+
+test("a saved minute cap redisplayed in locale digits saves unchanged", () => {
+  for (const locale of ["ar-u-nu-arab", "sk", "en-IN"]) {
+    const redisplayed = {
+      currency: "USD",
+      capAmount: "",
+      capMinutes: formatLocaleDecimalInput({ amount: "60", locale }),
+      alertThreshold: formatLocaleDecimalInput({ amount: "80", locale }),
+    };
+    expect(
+      v.parse(hourlyArrangementSchema("Invalid cap", locale), redisplayed),
+    ).toEqual({ currency: "USD", capMinutes: 60, alertThresholdBps: 8000 });
+  }
+});

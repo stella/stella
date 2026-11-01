@@ -623,6 +623,7 @@
     },
     "hourlyRateMustBeNonNegative": "Tunnitasu ei tohi olla negatiivne",
     "hours": "Tunnid",
+    "invalidNumberFormat": "Kontrollige arvu vormingut",
     "invoiceComposer": {
       "addSellerProfile": "Lisage müüja profiil arvelduse seadetes",
       "billedHours": "Arveldatavad tunnid",

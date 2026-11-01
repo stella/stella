@@ -623,6 +623,7 @@
     },
     "hourlyRateMustBeNonNegative": "Hourly rate cannot be negative",
     "hours": "Hours",
+    "invalidNumberFormat": "Check the number format",
     "invoiceComposer": {
       "addSellerProfile": "Add a seller profile in billing settings",
       "billedHours": "Billed hours",
