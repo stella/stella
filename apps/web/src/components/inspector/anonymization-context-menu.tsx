@@ -6,14 +6,16 @@
  * situation — bare right-clicks (no selection) pass through to
  * the browser unchanged.
  *
- * Renders via React portal at body level so the popup escapes
- * the inspector's clipping containers.
+ * The popup is the design system's `Menu`, anchored at the pointer: it
+ * portals out of the inspector's clipping containers and owns focus,
+ * keyboard navigation, Escape and outside-press dismissal.
  */
 
-import { useState } from "react";
-import { createPortal } from "react-dom";
+import { useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
+
+import { Menu, MenuItem, MenuPopup } from "@stll/ui/menu";
 
 import { useMountEffect } from "@/hooks/use-effect";
 
@@ -35,7 +37,13 @@ export const AnonymizationContextMenu = ({
   onAnonymize,
 }: AnonymizationContextMenuProps) => {
   const t = useTranslations();
+  // The last place the menu opened stays put while it closes, so the popup
+  // animates out where it was instead of jumping to the corner.
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const [open, setOpen] = useState(false);
+  // Where focus was when the right-click opened the menu, so closing it
+  // hands focus back to the document instead of the page body.
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   useMountEffect(() => {
     const handleContextMenu = (event: MouseEvent) => {
@@ -62,25 +70,25 @@ export const AnonymizationContextMenu = ({
         return;
       }
       event.preventDefault();
+      returnFocusRef.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
       setMenu({ x: event.clientX, y: event.clientY, selection: raw });
+      // Open on the next frame: the right-click's trailing pointerup would
+      // otherwise count as a press outside the menu it just opened.
+      requestAnimationFrame(() => setOpen(true));
     };
-    const dismiss = () => setMenu(null);
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        dismiss();
-      }
-    };
+    // The menu is pinned to where the pointer was; once the page under it
+    // moves or the window loses focus, that point means nothing.
+    const dismiss = () => setOpen(false);
     document.addEventListener("contextmenu", handleContextMenu);
-    document.addEventListener("click", dismiss);
     window.addEventListener("blur", dismiss);
     window.addEventListener("scroll", dismiss, true);
-    document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("contextmenu", handleContextMenu);
-      document.removeEventListener("click", dismiss);
       window.removeEventListener("blur", dismiss);
       window.removeEventListener("scroll", dismiss, true);
-      document.removeEventListener("keydown", handleKeyDown);
     };
   });
 
@@ -88,27 +96,21 @@ export const AnonymizationContextMenu = ({
     return null;
   }
 
-  return createPortal(
-    <div
-      className="bg-popover text-popover-foreground fixed z-[100] min-w-44 rounded-md border p-1 text-sm shadow-md"
-      style={{ left: menu.x, top: menu.y }}
-      onContextMenu={(event) => event.preventDefault()}
-      role="menu"
-      tabIndex={-1}
-    >
-      <button
-        className="hover:bg-accent hover:text-accent-foreground flex w-full items-center rounded px-2 py-1.5 text-start"
-        onClick={(event) => {
-          event.stopPropagation();
-          onAnonymize(menu.selection);
-          setMenu(null);
+  return (
+    // Not modal: the page keeps scrolling (which dismisses the menu) and the
+    // first press outside lands where it was aimed.
+    <Menu modal={false} onOpenChange={setOpen} open={open}>
+      <MenuPopup
+        anchor={{
+          getBoundingClientRect: () => new DOMRect(menu.x, menu.y, 0, 0),
         }}
-        role="menuitem"
-        type="button"
+        finalFocus={returnFocusRef}
+        onContextMenu={(event) => event.preventDefault()}
       >
-        {t("inspector.anonymization.contextMenuAddAction")}
-      </button>
-    </div>,
-    document.body,
+        <MenuItem onClick={() => onAnonymize(menu.selection)}>
+          {t("inspector.anonymization.contextMenuAddAction")}
+        </MenuItem>
+      </MenuPopup>
+    </Menu>
   );
 };

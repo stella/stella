@@ -75,8 +75,8 @@
   "allowWebsiteAccess": {
     "message": "Leisti prieigą prie svetainių"
   },
-  "connectTab": {
-    "message": "Prijungti šį „stella“ skirtuką"
+  "connectStella": {
+    "message": "Prijungti „stella“"
   },
   "adoptTab": {
     "message": "Naudoti šį skirtuką su „stella“"
@@ -97,9 +97,9 @@
     "message": "Tikrinamas ryšys…"
   },
   "statusConnectedElsewhere": {
-    "message": "Prijungtas kitas stella skirtukas"
+    "message": "„stella“ prijungta kitu adresu"
   },
-  "connectTabInstead": {
-    "message": "Vietoj jo prijungti šį stella skirtuką"
+  "connectStellaInstead": {
+    "message": "Vietoj to prijungti „stella“ čia"
   }
 }

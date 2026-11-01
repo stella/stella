@@ -98,6 +98,7 @@ import {
   useCreatePropertiesBatch,
 } from "@/lib/workspaces/mutations/properties";
 import type { CreatePropertySpec } from "@/lib/workspaces/mutations/properties";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 // Sentinel for the "every document type" (ungated) scope; a Select value can't
@@ -501,17 +502,18 @@ const PropertyColumnsBody = ({
   const submitOnce = useSingleFlight();
   const startWorkflow = useStartWorkflow(workspaceId);
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
+  const displayName = usePropertyDisplayName();
 
   const fileProperties = useMemo<FileChip[]>(
     () =>
       properties.flatMap((p) =>
-        p.content.type === "file" ? [{ id: p.id, name: p.name }] : [],
+        p.content.type === "file" ? [{ id: p.id, name: displayName(p) }] : [],
       ),
-    [properties],
+    [displayName, properties],
   );
   const allProperties = useMemo<FileChip[]>(
-    () => properties.map((p) => ({ id: p.id, name: p.name })),
-    [properties],
+    () => properties.map((p) => ({ id: p.id, name: displayName(p) })),
+    [displayName, properties],
   );
   const defaultFileIds = useMemo(
     () => fileProperties.map((p) => p.id),

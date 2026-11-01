@@ -5,6 +5,8 @@ import type {
 import type { AnnotationAnchorSource } from "@stll/decision-reader/annotation-anchors";
 import { readerBlockByAnchor } from "@stll/decision-reader/reader-landing";
 
+import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
+
 export const readerAnswerAnchors = (
   answers: readonly ReaderAnswer[],
   activationLabel: string,
@@ -67,13 +69,7 @@ export const jumpReaderAnswerCitation = async ({
   if (paragraph === null) {
     return;
   }
-  for (
-    let disclosure = paragraph.closest("details");
-    disclosure !== null;
-    disclosure = disclosure.parentElement?.closest("details") ?? null
-  ) {
-    disclosure.open = true;
-  }
+  revealEnclosingDisclosures(paragraph);
   paragraph.tabIndex = -1;
   paragraph.focus({ preventScroll: true });
   paragraph.scrollIntoView({ behavior: "instant", block: "center" });

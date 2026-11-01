@@ -9,7 +9,9 @@ export type ZoomDirection = "in" | "out";
  * instead of drifting by floating-point addition, and every value a browser has
  * ever persisted is one of these.
  */
-export const READER_TEXT_SCALES = [0.85, 0.9, 1, 1.1, 1.2, 1.3, 1.4] as const;
+export const READER_TEXT_SCALES = [
+  0.7, 0.75, 0.8, 0.85, 0.9, 1, 1.1, 1.2, 1.3, 1.4,
+] as const;
 
 /** The size the reader is set at until someone changes it. A rung. */
 export const READER_TEXT_SCALE_DEFAULT = 1;
