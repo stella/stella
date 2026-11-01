@@ -63,6 +63,7 @@ import {
   type BindingPattern,
   type BindingRestElement,
   type CallExpression,
+  type Class,
   type Directive,
   type Expression,
   type FormalParameterRest,
@@ -368,7 +369,9 @@ const scopeDeclarations = function* (scope: Node): Generator<Identifier> {
   }
 };
 
-const unwrapTypes = (node: Expression): Expression => {
+function unwrapTypes(node: Expression): Expression;
+function unwrapTypes(node: Node): Node;
+function unwrapTypes(node: Node): Node {
   let current = node;
   while (
     current.type === "ParenthesizedExpression" ||
@@ -381,14 +384,17 @@ const unwrapTypes = (node: Expression): Expression => {
     current = current.expression;
   }
   return current;
-};
-const unwrap = (node: Expression): Expression => {
+}
+/** Type wrappers and awaits removed; a non-expression node is returned as is. */
+function unwrap(node: Expression): Expression;
+function unwrap(node: Node): Node;
+function unwrap(node: Node): Node {
   let current = unwrapTypes(node);
   while (current.type === "AwaitExpression") {
     current = unwrapTypes(current.argument);
   }
   return current;
-};
+}
 
 type ParentMap = ReadonlyMap<Node, Node>;
 const scopeDeclarationIndexes = new WeakMap<
@@ -1658,47 +1664,51 @@ type OrgGraphBindingPattern = Extract<
     type: "Identifier" | "AssignmentPattern" | "ObjectPattern" | "ArrayPattern";
   }
 >;
-type OrgGraphOtherExpression = Extract<
-  Node,
-  {
-    type:
-      | "AssignmentExpression"
-      | "UpdateExpression"
-      | "ClassExpression"
-      | "ClassDeclaration"
-      | "NewExpression"
-      | "TSTypeAliasDeclaration"
-      | "TSInterfaceDeclaration"
-      | "TSDeclareFunction";
-  }
+/**
+ * The nodes whose `type` is one of `T`. Unlike `Extract<Node, { type: T }>`, a
+ * node whose `type` is itself a union (`Function`, `Class`) keeps the members of
+ * that union that `T` names.
+ */
+type NodeOfType<T extends Node["type"]> = Node extends infer Candidate
+  ? Candidate extends { type: infer CandidateType }
+    ? [Extract<CandidateType, T>] extends [never]
+      ? never
+      : Candidate & { type: Extract<CandidateType, T> }
+    : never
+  : never;
+type OrgGraphOtherExpression = NodeOfType<
+  | "AssignmentExpression"
+  | "UpdateExpression"
+  | "ClassExpression"
+  | "ClassDeclaration"
+  | "NewExpression"
+  | "TSTypeAliasDeclaration"
+  | "TSInterfaceDeclaration"
+  | "TSDeclareFunction"
 >;
-type OrgGraphStatement = Extract<
-  Node,
-  {
-    type:
-      | "Program"
-      | "BlockStatement"
-      | "ExportNamedDeclaration"
-      | "ExportDefaultDeclaration"
-      | "VariableDeclaration"
-      | "FunctionDeclaration"
-      | "ExpressionStatement"
-      | "ReturnStatement"
-      | "ThrowStatement"
-      | "BreakStatement"
-      | "ContinueStatement"
-      | "IfStatement"
-      | "SwitchStatement"
-      | "ForOfStatement"
-      | "ForStatement"
-      | "ForInStatement"
-      | "WhileStatement"
-      | "DoWhileStatement"
-      | "TryStatement"
-      | "ImportDeclaration"
-      | "ExportAllDeclaration"
-      | "EmptyStatement";
-  }
+type OrgGraphStatement = NodeOfType<
+  | "Program"
+  | "BlockStatement"
+  | "ExportNamedDeclaration"
+  | "ExportDefaultDeclaration"
+  | "VariableDeclaration"
+  | "FunctionDeclaration"
+  | "ExpressionStatement"
+  | "ReturnStatement"
+  | "ThrowStatement"
+  | "BreakStatement"
+  | "ContinueStatement"
+  | "IfStatement"
+  | "SwitchStatement"
+  | "ForOfStatement"
+  | "ForStatement"
+  | "ForInStatement"
+  | "WhileStatement"
+  | "DoWhileStatement"
+  | "TryStatement"
+  | "ImportDeclaration"
+  | "ExportAllDeclaration"
+  | "EmptyStatement"
 >;
 
 const isOrgGraphReferenceExpression = (
@@ -3768,7 +3778,7 @@ class OrgWriteGraphEngine {
     node,
     frame,
   }: {
-    node: Extract<Node, { type: "ClassDeclaration" }>;
+    node: Class;
     frame: OrgGraphFrame;
   }): string | undefined => {
     const superclass = node.superClass;
@@ -3821,7 +3831,7 @@ class OrgWriteGraphEngine {
     node,
     frame,
   }: {
-    node: Extract<Node, { type: "ClassDeclaration" }>;
+    node: Class;
     frame: OrgGraphFrame;
   }): boolean => {
     const constructor = node.body.body.at(0);
@@ -3830,25 +3840,24 @@ class OrgWriteGraphEngine {
       node.body.body.length === 1 &&
       constructor?.type === "MethodDefinition" &&
       constructor.kind === "constructor" &&
-      constructor.computed === false &&
-      constructor.static === false &&
+      !constructor.computed &&
+      !constructor.static &&
       constructor.decorators.length === 0 &&
       constructor.key.type === "Identifier" &&
       constructor.key.name === "constructor" &&
-      constructor.value.async === false &&
-      constructor.value.generator === false &&
+      !constructor.value.async &&
+      !constructor.value.generator &&
       constructor.value.params.length === 1 &&
       constructor.value.params.at(0)?.type === "Identifier" &&
       constructor.value.body?.body.length === 1 &&
       constructor.value.body.body.at(0)?.type === "ExpressionStatement";
-    if (!validClassShape || constructor?.type !== "MethodDefinition") {
+    if (!validClassShape) {
       return false;
     }
     const parameter = constructor.value.params.at(0);
     const statement = constructor.value.body?.body.at(0);
     if (
       parameter?.type !== "Identifier" ||
-      parameter.decorators.length !== 0 ||
       statement?.type !== "ExpressionStatement" ||
       statement.expression.type !== "CallExpression" ||
       statement.expression.callee.type !== "Super" ||
@@ -3881,7 +3890,7 @@ class OrgWriteGraphEngine {
   };
 
   readonly #taggedErrorClassValue = (
-    node: Extract<Node, { type: "ClassDeclaration" }>,
+    node: Class,
     frame: OrgGraphFrame,
   ): OrgGraphValue => {
     const tag = this.#taggedErrorClassTag({ node, frame });
@@ -5827,7 +5836,7 @@ class OrgWriteGraphEngine {
       return undefined;
     }
     const declarator = this.#bindingDeclarator(binding, frame);
-    if (declarator === undefined || declarator.init === null) {
+    if (!declarator?.init) {
       return undefined;
     }
     const declaration = frame.module.parents.get(declarator);
@@ -6007,7 +6016,8 @@ class OrgWriteGraphEngine {
         return value;
       }
       if (parent.type === "BlockStatement") {
-        const index = parent.body.indexOf(current);
+        const siblings: readonly Node[] = parent.body;
+        const index = siblings.indexOf(current);
         for (const statement of parent.body.slice(0, Math.max(0, index))) {
           if (statement.type !== "IfStatement") {
             continue;
@@ -7120,6 +7130,7 @@ class OrgWriteGraphEngine {
               (known) =>
                 known === item ||
                 (known.kind === "literal" &&
+                  item.kind === "literal" &&
                   (known.value === item.value ||
                     Object.is(known.value, item.value))),
             )
@@ -9052,11 +9063,7 @@ class OrgWriteGraphEngine {
         args.push({ kind: "literal", value });
         continue;
       }
-      if (
-        index === nativeArgs.length - 1 &&
-        typeof value === "object" &&
-        value !== null
-      ) {
+      if (index === nativeArgs.length - 1 && typeof value === "object") {
         const fields = new Map<string, OrgGraphValue>();
         for (const [key, field] of Object.entries(value)) {
           if (field !== undefined && typeof field !== "string") {
@@ -9291,11 +9298,8 @@ class OrgWriteGraphEngine {
     if (name === "split") {
       return this.#callNativeStringSplit({ literal, args, frame, node });
     }
-    if (name === "replace") {
-      return this.#callNativeStringReplacement({ literal, args, frame, node });
-    }
-    name satisfies never;
-    return panic("Unknown native string method");
+    name satisfies "replace";
+    return this.#callNativeStringReplacement({ literal, args, frame, node });
   };
 
   readonly #callNativeStringSplit = ({
@@ -9555,7 +9559,8 @@ class OrgWriteGraphEngine {
       this.#nativeReplacementResult({ value: returned, frame, node });
       return { kind: "input", primitive: "string" };
     }
-    let dynamicResult = false;
+    // The replacer runs synchronously inside `replace`; it records a dynamic part here.
+    const outcome = { dynamic: false };
     const replaced = literal.replace(search, (...nativeArgs: unknown[]) => {
       const returned = this.#callbackCall({
         callback: replacement,
@@ -9569,12 +9574,12 @@ class OrgWriteGraphEngine {
         node,
       });
       if ("dynamic" in converted) {
-        dynamicResult = true;
+        outcome.dynamic = true;
         return "";
       }
       return converted.literal;
     });
-    return dynamicResult
+    return outcome.dynamic
       ? { kind: "input", primitive: "string" }
       : { kind: "literal", value: replaced };
   };
@@ -10217,7 +10222,11 @@ class OrgWriteGraphEngine {
       (side): side is MemberExpression => side.type === "MemberExpression",
     );
     const literal = sides.find(
-      (side): side is Extract<Node, { type: "Literal" }> =>
+      (
+        side,
+      ): side is Extract<Node, { type: "Literal" }> & {
+        value: string | number | boolean | null;
+      } =>
         side.type === "Literal" &&
         (typeof side.value === "string" ||
           typeof side.value === "number" ||
@@ -10344,7 +10353,7 @@ class OrgWriteGraphEngine {
         break;
       }
       if (parent.type === "IfStatement") {
-        let child = reference;
+        let child: Node = reference;
         while (frame.module.parents.get(child) !== parent) {
           const next = frame.module.parents.get(child);
           if (next === undefined) {
@@ -10359,7 +10368,8 @@ class OrgWriteGraphEngine {
         }
       }
       if (parent.type === "BlockStatement") {
-        const index = parent.body.indexOf(current);
+        const siblings: readonly Node[] = parent.body;
+        const index = siblings.indexOf(current);
         for (const statement of parent.body.slice(0, Math.max(index, 0))) {
           if (statement.type !== "IfStatement") {
             continue;
@@ -10518,12 +10528,12 @@ class OrgWriteGraphEngine {
       if (this.#branchConflictsWithFacts({ node: child, facts, frame })) {
         return "skip-children";
       }
+      const holder = frame.module.parents.get(child);
       if (
         child.type === "Identifier" &&
         resolveDeclaration(child, frame.module.parents) === binding &&
-        (frame.module.parents.get(child)?.type !== "MemberExpression" ||
-          (frame.module.parents.get(child)?.type === "MemberExpression" &&
-            frame.module.parents.get(child)?.object !== child) ||
+        (holder?.type !== "MemberExpression" ||
+          holder.object !== child ||
           ancestors.some((ancestor) => this.#isFunctionNode(ancestor)))
       ) {
         unstableNodes.push(child);
@@ -10631,9 +10641,10 @@ class OrgWriteGraphEngine {
       }
       return child;
     };
-    const start = block.body.indexOf(declaration);
+    const statements: readonly Node[] = block.body;
+    const start = statements.indexOf(declaration);
     const endChild = directChild(reference);
-    const end = endChild === undefined ? -1 : block.body.indexOf(endChild);
+    const end = endChild === undefined ? -1 : statements.indexOf(endChild);
     if (start === -1 || end === -1 || end <= start) {
       return false;
     }
@@ -10703,7 +10714,7 @@ class OrgWriteGraphEngine {
       if (parent.type === "VariableDeclarator") {
         return parent.id === current ? parent : undefined;
       }
-      const currentNode = current;
+      const currentNode: Node = current;
       if (
         (parent.type === "ArrayPattern" &&
           parent.elements.some((element) => element === currentNode)) ||
@@ -10775,7 +10786,8 @@ class OrgWriteGraphEngine {
         break;
       }
       if (parent.type === "BlockStatement") {
-        const index = parent.body.indexOf(current);
+        const siblings: readonly Node[] = parent.body;
+        const index = siblings.indexOf(current);
         for (const statement of parent.body.slice(0, Math.max(index, 0))) {
           if (statement.type !== "IfStatement") {
             continue;
@@ -11630,7 +11642,8 @@ class OrgWriteGraphEngine {
     ) {
       return undefined;
     }
-    switch (node.operator) {
+    const { operator } = node;
+    switch (operator) {
       case "+":
         return { kind: "literal", value: left.value + right.value };
       case "-":
@@ -11660,13 +11673,22 @@ class OrgWriteGraphEngine {
         return {
           kind: "literal",
           value: this.#literalBitwiseOperator({
-            operator: node.operator,
+            operator,
             left: left.value,
             right: right.value,
           }),
         };
-      default:
+      // Equality and membership are not numeric arithmetic.
+      case "==":
+      case "!=":
+      case "===":
+      case "!==":
+      case "in":
+      case "instanceof":
         return undefined;
+      default:
+        operator satisfies never;
+        return panic("Unknown binary operator");
     }
   };
 
@@ -11886,26 +11908,20 @@ class OrgWriteGraphEngine {
     if (node.operator === "void") {
       return { kind: "literal", value: undefined };
     }
+    node.operator satisfies "+" | "-" | "~";
+    this.#assertOperatorCoercionIsPrimitive({
+      values: [argument],
+      frame,
+      node,
+    });
     if (
-      node.operator === "+" ||
-      node.operator === "-" ||
-      node.operator === "~"
+      node.operator === "~" &&
+      argument.kind === "literal" &&
+      typeof argument.value === "number"
     ) {
-      this.#assertOperatorCoercionIsPrimitive({
-        values: [argument],
-        frame,
-        node,
-      });
-      if (
-        node.operator === "~" &&
-        argument.kind === "literal" &&
-        typeof argument.value === "number"
-      ) {
-        return { kind: "literal", value: -this.#toInt32(argument.value) - 1 };
-      }
-      return { kind: "input" };
+      return { kind: "literal", value: -this.#toInt32(argument.value) - 1 };
     }
-    return this.#unknown("unary result");
+    return { kind: "input" };
   };
 
   readonly #evaluateOperator = (
@@ -13242,11 +13258,7 @@ class OrgWriteGraphEngine {
       );
     }
     const declaration = init.declarations.at(0);
-    if (
-      declaration === undefined ||
-      declaration.id.type !== "Identifier" ||
-      declaration.init === null
-    ) {
+    if (declaration?.id.type !== "Identifier" || declaration.init === null) {
       return this.#fail(
         frame,
         node,
@@ -13577,73 +13589,75 @@ class OrgWriteGraphEngine {
     frame: OrgGraphFrame,
   ): boolean => {
     const value = unwrapTypes(node);
-    switch (value.type) {
-      case "Literal":
-      case "ArrowFunctionExpression":
-      case "FunctionExpression":
-        return true;
-      case "Identifier": {
-        const binding = resolveDeclaration(value, frame.module.parents);
-        if (binding === undefined) {
-          return (
-            value.name === "undefined" ||
-            value.name === "NaN" ||
-            value.name === "Infinity"
-          );
-        }
-        if (frame.values.has(binding)) {
-          return true;
-        }
-        const parent = frame.module.parents.get(binding);
+    // Only these operand shapes are known not to throw; every other one may.
+    if (
+      value.type === "Literal" ||
+      value.type === "ArrowFunctionExpression" ||
+      value.type === "FunctionExpression"
+    ) {
+      return true;
+    }
+    if (value.type === "Identifier") {
+      const binding = resolveDeclaration(value, frame.module.parents);
+      if (binding === undefined) {
         return (
-          parent?.type === "ImportSpecifier" ||
-          parent?.type === "ImportDefaultSpecifier" ||
-          parent?.type === "ImportNamespaceSpecifier"
+          value.name === "undefined" ||
+          value.name === "NaN" ||
+          value.name === "Infinity"
         );
       }
-      case "ObjectExpression":
-        return value.properties.every(
-          (property) =>
-            property.type === "Property" &&
-            property.kind === "init" &&
-            !property.method &&
-            !property.computed &&
-            this.#inertThrowOperand(property.value, frame),
-        );
-      case "ArrayExpression":
-        return value.elements.every(
-          (element) =>
-            element === null ||
-            (element.type !== "SpreadElement" &&
-              this.#inertThrowOperand(element, frame)),
-        );
-      default:
-        return false;
+      if (frame.values.has(binding)) {
+        return true;
+      }
+      const parent = frame.module.parents.get(binding);
+      return (
+        parent?.type === "ImportSpecifier" ||
+        parent?.type === "ImportDefaultSpecifier" ||
+        parent?.type === "ImportNamespaceSpecifier"
+      );
     }
+    if (value.type === "ObjectExpression") {
+      return value.properties.every(
+        (property) =>
+          property.type === "Property" &&
+          property.kind === "init" &&
+          !property.method &&
+          !property.computed &&
+          this.#inertThrowOperand(property.value, frame),
+      );
+    }
+    if (value.type === "ArrayExpression") {
+      return value.elements.every(
+        (element) =>
+          element === null ||
+          (element.type !== "SpreadElement" &&
+            this.#inertThrowOperand(element, frame)),
+      );
+    }
+    return false;
   };
 
   readonly #mayThrowImplicitly = (
     node: Node,
     frame: OrgGraphFrame,
   ): boolean => {
-    switch (node.type) {
-      case "BlockStatement":
-        return node.body.some((statement) =>
-          this.#mayThrowImplicitly(statement, frame),
-        );
-      case "ReturnStatement":
-        return (
-          node.argument !== null &&
-          !this.#inertThrowOperand(node.argument, frame)
-        );
-      case "ThrowStatement":
-        return !this.#inertThrowOperand(node.argument, frame);
-      case "EmptyStatement":
-      case "FunctionDeclaration":
-        return false;
-      default:
-        return true;
+    // Only these statements are modeled; every other one may throw.
+    if (node.type === "BlockStatement") {
+      return node.body.some((statement) =>
+        this.#mayThrowImplicitly(statement, frame),
+      );
     }
+    if (node.type === "ReturnStatement") {
+      return (
+        node.argument !== null && !this.#inertThrowOperand(node.argument, frame)
+      );
+    }
+    if (node.type === "ThrowStatement") {
+      return !this.#inertThrowOperand(node.argument, frame);
+    }
+    return !(
+      node.type === "EmptyStatement" || node.type === "FunctionDeclaration"
+    );
   };
 
   readonly #executeTry = (

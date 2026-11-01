@@ -1700,7 +1700,9 @@ describe("delegated organization write graph", () => {
       };`,
         helper,
       );
-      expect(result.hits.map(({ operation }) => operation)).toEqual(expected);
+      expect(result.hits.map(({ operation }) => operation)).toEqual([
+        ...expected,
+      ]);
     },
   );
 
@@ -2592,7 +2594,9 @@ describe("delegated organization write graph", () => {
     `,
         helper,
       );
-      expect(result.hits.map(({ operation }) => operation)).toEqual(expected);
+      expect(result.hits.map(({ operation }) => operation)).toEqual([
+        ...expected,
+      ]);
     },
   );
 
@@ -2678,7 +2682,9 @@ describe("delegated organization write graph", () => {
     `,
         helper,
       );
-      expect(result.hits.map(({ operation }) => operation)).toEqual(expected);
+      expect(result.hits.map(({ operation }) => operation)).toEqual([
+        ...expected,
+      ]);
     },
   );
 
@@ -3801,7 +3807,7 @@ describe("delegated organization write graph", () => {
       if (outcome.isErr()) {
         expect(target).toBe("holder[key]");
         if (!Panic.is(outcome.error)) {
-          return panic("Computed mutation produced an unexpected error type");
+          panic("Computed mutation produced an unexpected error type");
         }
         expect(outcome.error.message).toContain(
           "unresolved callable: unresolved member includes",
@@ -6065,7 +6071,9 @@ describe("delegated organization write graph", () => {
         helper,
       );
       expect(result.reachedRecoveryOwners).toEqual([owner]);
-      expect(result.hits.map(({ operation }) => operation)).toEqual(operations);
+      expect(result.hits.map(({ operation }) => operation)).toEqual([
+        ...operations,
+      ]);
     },
   );
 
@@ -6085,7 +6093,9 @@ describe("delegated organization write graph", () => {
     `,
       helper,
     );
-    expect(result.hits.map(({ operation }) => operation)).toEqual(expected);
+    expect(result.hits.map(({ operation }) => operation)).toEqual([
+      ...expected,
+    ]);
   });
 
   test("array rest creates a fresh container while preserving element references", () => {
@@ -7614,7 +7624,7 @@ describe("delegated organization write graph", () => {
       const checks = expected
         .map(
           (value, index) =>
-            `if (values.at(${index}) !== ${JSON.stringify(value) ?? "undefined"}) rootDb.delete(flowRuns);`,
+            `if (values.at(${index}) !== ${value === undefined ? "undefined" : JSON.stringify(value)}) rootDb.delete(flowRuns);`,
         )
         .join("\n");
       const result = analyze(
@@ -9488,7 +9498,7 @@ describe("delegated organization write graph", () => {
     });
     if (outcome.isErr()) {
       if (!Panic.is(outcome.error)) {
-        return panic("Opaque mutation guard produced an unexpected error type");
+        panic("Opaque mutation guard produced an unexpected error type");
       }
       expect(outcome.error.message).toContain(
         ": opaque delegate receives mutable tracked data; entry ",
@@ -10461,9 +10471,7 @@ describe("delegated organization write graph", () => {
     });
     if (outcome.isErr()) {
       if (!Panic.is(outcome.error)) {
-        return panic(
-          "Operator coercion guard produced an unexpected error type",
-        );
+        panic("Operator coercion guard produced an unexpected error type");
       }
       expect(outcome.error.message).toMatch(
         /operator coercion may invoke mutable tracked data/iu,
@@ -10563,9 +10571,7 @@ describe("delegated organization write graph", () => {
     });
     if (outcome.isErr()) {
       if (!Panic.is(outcome.error)) {
-        return panic(
-          "instanceof capability guard produced an unexpected error type",
-        );
+        panic("instanceof capability guard produced an unexpected error type");
       }
       expect(outcome.error.message).toMatch(
         /operator coercion may invoke mutable tracked data/iu,
@@ -10638,7 +10644,7 @@ describe("delegated organization write graph", () => {
         `${header}
       export const run = () => {
         withOrgScope({tx: rootDb, scope, actor, fn: (tx) => {write({type: "write", tx, table: flowRuns}); return null;}});
-        if (["first", "second"].at(${argument}) !== ${JSON.stringify(expected) ?? "undefined"}) rootDb.delete(flowRuns);
+        if (["first", "second"].at(${argument}) !== ${expected === undefined ? "undefined" : JSON.stringify(expected)}) rootDb.delete(flowRuns);
       };
     `,
         helper,
@@ -10741,7 +10747,7 @@ describe("delegated organization write graph", () => {
       export const run = () => {
         withOrgScope({tx: rootDb, scope, actor, fn: (tx) => {write({type: "write", tx, table: flowRuns}); return null;}});
         const values = ${values};
-        if (values.${method}() !== ${JSON.stringify(expected) ?? "undefined"}) rootDb.delete(flowRuns);
+        if (values.${method}() !== ${expected === undefined ? "undefined" : JSON.stringify(expected)}) rootDb.delete(flowRuns);
       };
     `,
         helper,
@@ -10887,7 +10893,9 @@ describe("delegated organization write graph", () => {
         helper,
       );
       expect(result.reachedRecoveryOwners).toEqual([owner]);
-      expect(result.hits.map(({ operation }) => operation)).toEqual(operations);
+      expect(result.hits.map(({ operation }) => operation)).toEqual([
+        ...operations,
+      ]);
     },
   );
 
@@ -12045,9 +12053,7 @@ describe("delegated organization write graph", () => {
       });
       if (outcome.isErr()) {
         if (!Panic.is(outcome.error)) {
-          return panic(
-            "Inherited-field guard produced an unexpected error type",
-          );
+          panic("Inherited-field guard produced an unexpected error type");
         }
         expect(outcome.error.message).toMatch(
           /unresolved callable: unmodeled inherited object field toString/iu,
@@ -13006,7 +13012,9 @@ describe("delegated organization write graph", () => {
         helper,
       );
       expect(result.reachedRecoveryOwners).toEqual([owner]);
-      expect(result.hits.map(({ operation }) => operation)).toEqual(operations);
+      expect(result.hits.map(({ operation }) => operation)).toEqual([
+        ...operations,
+      ]);
     },
   );
 
