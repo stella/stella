@@ -1269,12 +1269,11 @@ const createReservationOperations = ({ transaction, now }: StoreContext) => {
                 })),
               )
               .returning();
+      const nextCursor =
+        page.at(-1)?.id ?? panic("Completion page unexpectedly empty");
       const write = replayWrite(
         databaseBackfillStates,
-        {
-          cursor:
-            page.at(-1)?.id ?? panic("Completion page unexpectedly empty"),
-        },
+        { cursor: nextCursor },
         {
           modifiedAt: {
             column: databaseBackfillStates.updatedAt,
@@ -1297,7 +1296,9 @@ const createReservationOperations = ({ transaction, now }: StoreContext) => {
           ),
         )
         .returning();
-      if (advanced.length !== 1) {
+      // The row is locked above, so only an equal cursor (a wrapped first
+      // page ending where the checkpoint already stands) writes nothing.
+      if (advanced.length !== 1 && nextCursor !== state.cursor) {
         panic("Completion checkpoint CAS failed under lock");
       }
       if (readmitted.length > 0) {
@@ -1567,10 +1568,11 @@ const createRetentionOperations = ({ transaction, now }: StoreContext) => {
             .onConflictDoUpdate({
               target: euCompletionRequestHours.hour,
               set: write.set,
-              setWhere: and(
-                write.setWhere,
-                sql`${euCompletionRequestHours.requests} < ${EU_COMPLETION_REQUESTS_PER_HOUR}`,
-              ),
+              setWhere:
+                and(
+                  write.setWhere,
+                  sql`${euCompletionRequestHours.requests} < ${EU_COMPLETION_REQUESTS_PER_HOUR}`,
+                ) ?? panic("Completion request budget requires its predicate"),
             })
             .returning()
         ).length === 1,
