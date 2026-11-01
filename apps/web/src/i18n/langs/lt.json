@@ -1358,9 +1358,30 @@
       "none": "Nereikia nustatyti"
     },
     "skillNeedsUnavailableTools": "Pokalbyje nesiūloma. Reikia įrankio, kuris ten nepasiekiamas: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Paslepia klientų vardus, sąskaitų numerius, adresus ir kitus asmens duomenis prieš bendrinant bylos turinį su DI paslaugų teikėjais. Grįžtama kliento pusėje; atviras tekstas niekada nepalieka jūsų darbo vietos.",
+      "ares": "Čekijos įmonių paieška pagal IČO arba pavadinimą viešajame ARES registre (ūkio subjektų administracinis registras, Čekijos juridinių asmenų registro atitikmuo).",
+      "boe": "Ispanijos konsoliduoti teisės aktai, kasdienis oficialus leidinys ir BORME (prekybos registro leidinys) iš oficialios Boletín Oficial del Estado atvirųjų duomenų API.",
+      "brreg": "Norvegijos įmonių paieška pagal organisasjonsnummer arba pavadinimą viešoje atviroje Brreg Enhetsregisteret API.",
+      "companiesHouse": "JK įmonių paieška pagal Companies House registracijos numerį arba pavadinimą Companies House viešųjų duomenų API. Reikalingas nemokamas API raktas.",
+      "createDocx": "Kuria „Word“ dokumentus iš pokalbio su formatavimu, lentelėmis, antraštėmis ir įterptais stiliais. Rezultatą galima atsisiųsti ir redaguoti „Word“, „LibreOffice“ ir „Pages“ programose.",
+      "denue": "Meksikos veiklos vietų ir ūkio vienetų paieška pagal DENUE veiklos vietos ID, pavadinimą arba teisinį pavadinimą oficialioje INEGI DENUE API. DENUE yra veiklos vietų katalogas, o ne bendrovių teisės registras Registro Público de Comercio. Reikalingas nemokamas INEGI API žetonas.",
+      "edgar": "JAV biržinių bendrovių paieška pagal Central Index Key (CIK) SEC EDGAR pateikčių API.",
+      "gcis": "Taivano įmonių paieška pagal 統一編號 (tongbian, mokesčių identifikatorius) arba pavadinimą Ekonomikos reikalų ministerijos (MoEA) portalo Commerce Industrial Services atvirųjų duomenų API.",
+      "infosoud": "Čekijos teismo bylų paieška ir posėdžių kalendorius iš infosoud.gov.cz. Ieškokite pagal bylos numerį, teismą arba šalį ir sužinokite posėdžių datas bei bylos būseną.",
+      "krs": "Lenkijos įmonių paieška pagal KRS numerį Teisingumo ministerijos Krajowy Rejestr Sądowy (KRS) atviroje API. Apima Rejestr Przedsiębiorców (komercinės bendrovės) ir Rejestr Stowarzyszeń (asociacijos ir fondai).",
+      "orsr": "Slovakijos įmonių paieška pagal IČO arba pavadinimą Teisingumo ministerijos tvarkomo Obchodný register Slovenskej republiky JSON API.",
+      "prh": "Suomijos įmonių paieška pagal Y-tunnus arba pavadinimą Patentti- ja rekisterihallitus (PRH) atviroje API AvoinData v3.",
+      "rechercheEntreprises": "Prancūzijos įmonių paieška pagal SIREN, SIRET arba pavadinimą atviroje API recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Slovakijos paieška pagal IČO arba pavadinimą registre Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO), kurį tvarko Slovakijos Respublikos statistikos biuras. Apima visus juridinius asmenis ir verslininkus, įskaitant individualią veiklą vykdančius asmenis, asociacijas, fondus ir viešąsias įstaigas, nepatenkančias į prekybos registrą.",
+      "vies": "PVM mokėtojų kodų tikrinimas visoje ES per Europos Komisijos PVM informacijos mainų sistemos (VIES) REST API. Patvirtina, ar kodas registruotas tiekėjo valstybėje narėje, ir grąžina registruoto prekiautojo pavadinimą bei adresą, jei valstybė narė juos atskleidžia.",
+      "webSearch": "Ieško viešajame internete ir skaito atskirus puslapius. Kai nustatyta jurisdikcija, užklausos pirmiausia nukreipiamos į pirminius šaltinius (teismus, teisės aktų portalus), kitu atveju į atvirą internetą. Įjungiama kiekvienam pokalbiui atskirai."
+    },
     "toolNames": {
       "anonymize": "Anonimizuoti",
       "createDocx": "Sukurti DOCX",
+      "gcis": "GCIS įmonių registras",
+      "vies": "ES PVM kodo tikrinimas (VIES)",
       "webSearch": "Žiniatinklio paieška"
     },
     "unavailable": "Dar neprieinama"

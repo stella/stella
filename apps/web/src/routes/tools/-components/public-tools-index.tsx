@@ -24,6 +24,10 @@ import {
 } from "@stll/ui/input-group";
 import { Prose } from "@stll/ui/prose";
 
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
 import { ToggleChip } from "@/features/knowledge/public/tools/toggle-chip";
 import type { TranslationKey } from "@/i18n/types";
 import { loadPublicToolsIndexData } from "@/lib/public-tools-data";
@@ -100,8 +104,22 @@ export function PublicToolsIndex({
     ReadonlySet<string>
   >(new Set());
 
+  // Search and order follow what the reader sees on each card; the source copy
+  // stays searchable, so a term from it still finds the tool in any language.
+  const localizedEntries = catalogueEntries.map((entry) => {
+    const identity = { slug: entry.slug, kind: entry.kind };
+    const labelKey = nativeToolLabelKey(identity);
+    const descriptionKey = nativeToolDescriptionKey(identity);
+    return {
+      ...entry,
+      displayName: labelKey ? t(labelKey) : entry.displayName,
+      description: descriptionKey ? t(descriptionKey) : entry.description,
+      sourceCopy: `${entry.displayName} ${entry.description}`,
+    };
+  });
+
   const entries = sortToolEntries(
-    filterPublicToolEntries(catalogueEntries, {
+    filterPublicToolEntries(localizedEntries, {
       jurisdictions: selectedJurisdictions,
       kind,
       query,

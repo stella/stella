@@ -1358,9 +1358,30 @@
       "none": "Nav jāiestata"
     },
     "skillNeedsUnavailableTools": "Tērzēšanā netiek piedāvāta. Nepieciešams rīks, kas tur nav pieejams: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Paslēpj klientu vārdus, kontu numurus, adreses un citus personas datus pirms lietas satura kopīgošanas ar AI pakalpojumu sniedzējiem. Atgriezeniski klienta pusē; sākotnējais teksts nekad neatstāj jūsu darbvietu.",
+      "ares": "Čehijas uzņēmumu meklēšana pēc IČO vai nosaukuma publiskajā ARES reģistrā (ekonomikas dalībnieku administratīvais reģistrs, Čehijas komercreģistra analogs).",
+      "boe": "Spānijas konsolidētie tiesību akti, ikdienas oficiālais izdevums un BORME (komercreģistra biļetens) no Boletín Oficial del Estado oficiālās atvērto datu API.",
+      "brreg": "Norvēģijas uzņēmumu meklēšana pēc organisasjonsnummer vai nosaukuma Brreg Enhetsregisteret publiskajā atvērtajā API.",
+      "companiesHouse": "Apvienotās Karalistes uzņēmumu meklēšana pēc Companies House reģistrācijas numura vai nosaukuma Companies House publisko datu API. Nepieciešama bezmaksas API atslēga.",
+      "createDocx": "Izveido Word dokumentus no tērzēšanas ar formatējumu, tabulām, galvenēm un iegultiem stiliem. Rezultātu var lejupielādēt un rediģēt programmās Word, LibreOffice un Pages.",
+      "denue": "Meksikas uzņēmējdarbības vietu un saimniecisko vienību meklēšana pēc DENUE vietas identifikatora, nosaukuma vai juridiskā nosaukuma INEGI oficiālajā DENUE API. DENUE ir uzņēmējdarbības vietu katalogs, nevis uzņēmumu tiesību reģistrs Registro Público de Comercio. Nepieciešama bezmaksas INEGI API pilnvara.",
+      "edgar": "ASV biržā kotētu uzņēmumu meklēšana pēc Central Index Key (CIK) SEC EDGAR iesniegumu API.",
+      "gcis": "Taivānas uzņēmumu meklēšana pēc 統一編號 (tongbian, nodokļu identifikators) vai nosaukuma Ekonomikas lietu ministrijas (MoEA) portāla Commerce Industrial Services atvērto datu API.",
+      "infosoud": "Čehijas tiesas lietu meklēšana un tiesas sēžu kalendārs no infosoud.gov.cz. Meklējiet pēc lietas numura, tiesas vai puses, lai iegūtu sēžu datumus un lietas statusu.",
+      "krs": "Polijas uzņēmumu meklēšana pēc KRS numura Tieslietu ministrijas Krajowy Rejestr Sądowy (KRS) atvērtajā API. Aptver Rejestr Przedsiębiorców (komercsabiedrības) un Rejestr Stowarzyszeń (biedrības un nodibinājumi).",
+      "orsr": "Slovākijas uzņēmumu meklēšana pēc IČO vai nosaukuma Tieslietu ministrijas uzturētā Obchodný register Slovenskej republiky JSON API.",
+      "prh": "Somijas uzņēmumu meklēšana pēc Y-tunnus vai nosaukuma Patentti- ja rekisterihallitus (PRH) atvērtajā API AvoinData v3.",
+      "rechercheEntreprises": "Francijas uzņēmumu meklēšana pēc SIREN, SIRET vai nosaukuma atvērtajā API recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Slovākijas meklēšana pēc IČO vai nosaukuma reģistrā Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO), ko uztur Slovākijas Republikas Statistikas birojs. Aptver visas juridiskās personas un uzņēmējus, arī individuālos komersantus, biedrības, nodibinājumus un publiskās iestādes ārpus komercreģistra.",
+      "vies": "PVN reģistrācijas numuru pārbaude visā ES, izmantojot Eiropas Komisijas PVN informācijas apmaiņas sistēmas (VIES) REST API. Apstiprina, vai numurs ir reģistrēts piegādātāja dalībvalstī, un atgriež reģistrētā komersanta nosaukumu un adresi, ja dalībvalsts tos izpauž.",
+      "webSearch": "Meklē publiskajā tīmeklī un lasa atsevišķas lapas. Ja ir iestatīta jurisdikcija, vaicājumi vispirms tiek virzīti uz primārajiem avotiem (tiesām, tiesību aktu portāliem), pretējā gadījumā uz atvērto tīmekli. Iespējo katrai sarunai atsevišķi."
+    },
     "toolNames": {
       "anonymize": "Anonimizēt",
       "createDocx": "Izveidot DOCX",
+      "gcis": "GCIS uzņēmumu reģistrs",
+      "vies": "ES PVN numura pārbaude (VIES)",
       "webSearch": "Tīmekļa meklēšana"
     },
     "unavailable": "Vēl nav pieejams"
