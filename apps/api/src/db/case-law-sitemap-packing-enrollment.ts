@@ -132,4 +132,4 @@ export const CASE_LAW_SITEMAP_PACKING_ENROLLMENT = {
       }
     }
   },
-} satisfies MigrationOwnedOnlineRepair;
+} as const satisfies MigrationOwnedOnlineRepair;

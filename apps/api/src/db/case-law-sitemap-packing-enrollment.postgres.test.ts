@@ -37,11 +37,12 @@ import { caseLawPublishedDecisionsFixtureSql } from "@/api/tests/helpers/case-la
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
-import type { OnlineMigrationConnection } from "./online-migration-connection";
+import type { OnlineBuildConnection } from "./online-migration-connection";
 import {
   ONLINE_MIGRATION_REPAIRS,
   runOnlineMigrations,
 } from "./online-migrations";
+import { terminateReserved } from "./sql-close";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -253,7 +254,8 @@ if (!databaseUrl || !enabled) {
                 return rows;
               },
               release: async () => await session.release(),
-            } satisfies OnlineMigrationConnection;
+              terminate: async () => await terminateReserved(session),
+            } satisfies OnlineBuildConnection;
           };
           const repairClient = openClient({ max: 1, idleTimeout: 0 }).sql;
           const observerClient = openClient({ max: 1, idleTimeout: 0 }).sql;
@@ -261,6 +263,10 @@ if (!databaseUrl || !enabled) {
             await runOnlineMigrations(
               { reserve: async () => await reserveConnection(repairClient) },
               {
+                scope: {
+                  type: "unit",
+                  name: CASE_LAW_SITEMAP_PACKING_ENROLLMENT.name,
+                },
                 repairs: ONLINE_MIGRATION_REPAIRS.filter(
                   (repair) => repair === CASE_LAW_SITEMAP_PACKING_ENROLLMENT,
                 ),

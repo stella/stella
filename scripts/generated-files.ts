@@ -258,6 +258,9 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/user-files/types.ts",
     "apps/api/src/lib/views/*",
     "apps/api/src/lib/workspaces/list-query.ts",
+    "apps/api/src/scripts/better-auth-17-backfill.logic.ts",
+    "apps/api/src/scripts/better-auth-migration-audit.logic.ts",
+    "apps/api/src/scripts/repair-decision-dates-plan.ts",
     "packages/anonymize-chat/src/index.ts",
     "packages/anonymize-chat/src/normalization.ts",
     "packages/business-registries/src/cnpj/index.ts",
@@ -508,6 +511,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/scripts/src/generated-artifact-format.ts",
   ],
   "env-examples": [
+    "apps/api/src/db/migrate-online-work-mode.ts",
     "apps/api/src/db/role-names.ts",
     "apps/api/src/lib/*",
     "apps/api/src/lib/case-law/derived-ai-mode.ts",
@@ -549,6 +553,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/uuid-codec/src/index.ts",
   ],
   "mcp-app-contracts": [
+    "apps/api/src/db/migrate-online-work-mode.ts",
     "apps/api/package.json",
     "apps/api/src/db-components.ts",
     "apps/api/src/db-url.ts",
@@ -620,6 +625,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/generated-artifacts.ts",
   ],
   selfhost: [
+    "apps/api/src/db/migrate-online-work-mode.ts",
     "apps/api/src/db-components.ts",
     "apps/api/src/db-url.ts",
     "apps/api/src/lib/*",
@@ -1290,6 +1296,8 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/scripts/generate-online-unique-index-names.ts",
       "apps/api/src/db/online-unique-indexes.ts",
       "apps/api/src/lib/db/migration-history.ts",
+      "apps/api/src/db/online-work-lifecycle.ts",
+      "packages/api-contract/src/own-key.ts",
       "apps/api/src/lib/db/migration-alias-inventory.json",
       "packages/sha256/src/bun.ts",
       "packages/portable-path/src/index.ts",

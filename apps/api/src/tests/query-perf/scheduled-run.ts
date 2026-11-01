@@ -29,6 +29,7 @@ import {
   createCaseLawProvisionStateBackfillTask,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import { createLegislationExpressionIdBackfill } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
+import { createPendingOnlineWorkTask } from "@/api/lib/scheduler/tasks/online-work-runner";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type {
   GatedTestClientScope,
@@ -512,6 +513,7 @@ export const measureScheduledJobRun = async ({
             readVerdict: async () => await Promise.resolve(admission),
           }),
       }),
+      { onlineWork: createPendingOnlineWorkTask() },
     ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
   // The search configuration is cached for 60 s, and the scheduled jobs run
   // minutes apart, so a production run reads it cold. Every measured run does

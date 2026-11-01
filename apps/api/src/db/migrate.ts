@@ -7,6 +7,7 @@ import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 // Relative imports: this entrypoint also ships as a loose file without tsconfig.
 import { resolveDatabaseUrl } from "../db-url";
 import { envDbLoadGate } from "../env-db-load-gate";
+import { envMigrate } from "../env-migrate";
 import {
   requireEbsConfiguration,
   resolveEbsConfiguration,
@@ -40,6 +41,7 @@ await runScriptWithErrorOutput(async () => {
       databaseUrl: url,
       migrationsFolder,
       ebs: ebs.value,
+      onlineWorkMode: envMigrate.STELLA_MIGRATE_ONLINE_WORK,
     });
     if (result.status === "applied") {
       // oxlint-disable-next-line no-console -- migrate CLI entrypoint; stdout is its interface

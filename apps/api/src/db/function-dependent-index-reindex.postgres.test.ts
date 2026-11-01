@@ -45,7 +45,7 @@ const connectionOf = (database: SQL): OnlineMigrationConnection => ({
 type ReplacementCoverageOptions = {
   connection: OnlineMigrationConnection;
   migrations: readonly { revision: string; sql: string }[];
-  repairs: typeof FUNCTION_DEPENDENT_INDEX_REINDEXES;
+  repairs: readonly ReturnType<typeof createFunctionDependentIndexReindex>[];
 };
 
 type ReplacementArgumentOptions = {

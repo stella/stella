@@ -68,6 +68,9 @@ const monitoringBackfillAuditBindings = (
 };
 
 const BACKFILL_BATCH_TRANSITIONS = defineScopedTransitions({
+  arbiter: {
+    constraint: "sanctions_monitoring_backfills_organization_id_source_id_pk",
+  },
   table: sanctionsMonitoringBackfills,
   key: "sourceId",
   scope: ["organizationId"],

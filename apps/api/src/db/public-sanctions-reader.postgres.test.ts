@@ -16,6 +16,7 @@ import { markRlsDatabase } from "@/api/db/scoped";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
+import { MIGRATE_ONLINE_WORK_MODE } from "./migrate-online-work-mode";
 import { runMigrations } from "./migration-runner";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -41,6 +42,7 @@ describe.skipIf(!runPostgresTests)("migrated public sanctions reader", () => {
       const connection = await admin.reserve();
       try {
         await runMigrations({
+          onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
           connection,
           migrationsFolder,
           databaseUrl: url,

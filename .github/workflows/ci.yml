@@ -4063,6 +4063,7 @@ jobs:
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          STELLA_MIGRATE_ONLINE_WORK: build_finalized
         run: bun run src/db/migrate.ts
 
       - name: Prepare the dev seed database
@@ -4071,6 +4072,7 @@ jobs:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5433/stella
           RUSTFS_ACCESS_KEY: stella-rustfs-dev
           RUSTFS_SECRET_KEY: stella-rustfs-dev-secret
+          STELLA_MIGRATE_ONLINE_WORK: build_finalized
         # The restricted owner and the bucket a local stack has, then the
         # committed migrations; `db:push` would skip the policies they create.
         run: |
@@ -4227,6 +4229,7 @@ jobs:
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          STELLA_MIGRATE_ONLINE_WORK: build_finalized
         run: bun run src/db/migrate.ts
 
       - name: Login to GHCR for corpus engine
@@ -4431,6 +4434,9 @@ jobs:
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          # The parity check below compares with schema.ts, which declares
+          # pending online work too.
+          STELLA_MIGRATE_ONLINE_WORK: build_all
         # Exercises the shipped migrate path (Bun SQL + drizzle migrator),
         # the same entrypoint the deploy runs, not the drizzle-kit CLI.
         run: bun run src/db/migrate.ts
@@ -4473,6 +4479,7 @@ jobs:
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           PGPASSWORD: stella
+          STELLA_MIGRATE_ONLINE_WORK: build_finalized
         run: |
           set -euo pipefail
           psql -h 127.0.0.1 -U stella_owner -d stella -c \

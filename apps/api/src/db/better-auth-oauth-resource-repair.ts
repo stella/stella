@@ -437,4 +437,4 @@ export const BETTER_AUTH_OAUTH_RESOURCE_REPAIR = {
     await repair(connection);
     return { type: "complete" } as const;
   },
-} satisfies OnlineRepair & { introducedBy: CodeOwnedOnlineStep };
+} as const satisfies OnlineRepair & { introducedBy: CodeOwnedOnlineStep };

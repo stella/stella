@@ -65,4 +65,4 @@ export const LEGAL_LIST_SOURCE_DECISION_BACKFILL = {
       }
     }
   },
-} satisfies OnlineRepair;
+} as const satisfies OnlineRepair;

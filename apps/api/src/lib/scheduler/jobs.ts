@@ -70,6 +70,7 @@ import { REFRESH_LEGISLATION_FACETS_TASK } from "@/api/lib/scheduler/tasks/legis
 import { RECONCILE_LIST_VERIFICATION_RUNS_TASK } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
 import { MEMORY_CURATOR_TASK } from "@/api/lib/scheduler/tasks/memory-curator";
 import { MEMORY_EXTRACTOR_TASK } from "@/api/lib/scheduler/tasks/memory-extractor";
+import { ONLINE_WORK_RUNNER_TASK } from "@/api/lib/scheduler/tasks/online-work-runner";
 import { RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK } from "@/api/lib/scheduler/tasks/organization-access-state-reconcile";
 import { RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK } from "@/api/lib/scheduler/tasks/organization-file-reservation-reconcile";
 import { SWEEP_REGISTRATIONS_TASK } from "@/api/lib/scheduler/tasks/registration-retention";
@@ -579,6 +580,14 @@ export const DECLARED_SCHEDULER_JOBS = [
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_HEARTBEAT_TASK,
     reads: "unmeasured",
+  },
+  {
+    description: "Build one pending online database work unit",
+    id: "onlineWork.runPending.minutely",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: ONLINE_WORK_RUNNER_TASK,
+    reads: { budget: "scheduled.onlineWork.runPending" },
   },
   {
     description: "Check data-correctness invariants over pipeline outputs",

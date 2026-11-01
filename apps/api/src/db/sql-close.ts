@@ -3,7 +3,9 @@ import type { ReservedSQL, SQL } from "bun";
 const POOL_FORCE_CLOSE_TIMEOUT_SECONDS = 0.001;
 
 /** Pooled SQL.close(0) drains queries; its termination budget is in seconds. */
-export const forceClosePool = async (pool: SQL): Promise<void> => {
+export const forceClosePool = async (
+  pool: Pick<SQL, "close">,
+): Promise<void> => {
   await pool.close({ timeout: POOL_FORCE_CLOSE_TIMEOUT_SECONDS });
 };
 

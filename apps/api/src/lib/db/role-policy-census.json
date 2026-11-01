@@ -8951,6 +8951,16 @@
   },
   {
     "schema": "public",
+    "table": "online_work_state",
+    "policy": "online_work_state_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "( SELECT (CURRENT_USER = pg_get_userbyid(pg_class.relowner))\n   FROM pg_class\n  WHERE (pg_class.oid = ('online_work_state'::regclass)::oid))",
+    "withCheck": "( SELECT (CURRENT_USER = pg_get_userbyid(pg_class.relowner))\n   FROM pg_class\n  WHERE (pg_class.oid = ('online_work_state'::regclass)::oid))"
+  },
+  {
+    "schema": "public",
     "table": "organization",
     "policy": "auth_organization_select",
     "command": "SELECT",

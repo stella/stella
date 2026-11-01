@@ -15,6 +15,7 @@ import {
   folioCollabRooms,
   invoices,
   legalReaderAnswerMessages,
+  onlineWorkState,
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
   pdfSigningSessions,
@@ -137,6 +138,7 @@ const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
 );
 
 export const FOLIO_COLLAB_SEED_TRANSITIONS = defineScopedTransitions({
+  arbiter: { constraint: "folio_collab_rooms_id_workspace_uidx" },
   ...FOLIO_COLLAB_TRANSITION_IDENTITIES.FOLIO_COLLAB_SEED_TRANSITIONS,
   table: folioCollabRooms,
   edges: {
@@ -163,6 +165,9 @@ export const SITEMAP_DRAIN_TRANSITION_IDENTITY = {
 } as const;
 
 const SITEMAP_DRAIN_TRANSITIONS = defineScopedTransitions({
+  arbiter: {
+    constraint: "case_law_sitemap_drain_progress_country_year_month_pk",
+  },
   table: caseLawSitemapDrainProgress,
   key: SITEMAP_DRAIN_TRANSITION_IDENTITY.key,
   scope: SITEMAP_DRAIN_TRANSITION_IDENTITY.scope,
@@ -221,10 +226,26 @@ const CASE_LAW_REPLAY_BATCH_TRANSITIONS = defineLifecycle({
 });
 
 const READER_ANSWER_MESSAGE_TRANSITIONS = defineScopedTransitions({
+  arbiter: { constraint: "legal_reader_answer_messages_pkey" },
   ...READER_ANSWER_TRANSITION_IDENTITIES.READER_ANSWER_MESSAGE_TRANSITIONS,
   table: legalReaderAnswerMessages,
   edges: { streaming: ["complete", "failed"], complete: [], failed: [] },
   initial: ["streaming", "complete"],
+});
+
+export const ONLINE_WORK_STATE_TRANSITIONS = defineScopedTransitions({
+  arbiter: { constraint: "online_work_state_pkey" },
+  table: onlineWorkState,
+  key: "name",
+  scope: [],
+  stateColumn: "state",
+  edges: {
+    building: ["building", "finalized", "failed"],
+    finalized: [],
+    failed: ["building"],
+  },
+  initial: ["building"],
+  sameStateUpsert: "update",
 });
 
 const DESKTOP_EDIT_SESSION_TRANSITIONS = defineTransitions(
@@ -245,6 +266,7 @@ const PDF_SIGNING_SESSION_TRANSITIONS = defineTransitions(
 );
 
 const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
+  arbiter: { constraint: "desktop_time_entry_batches_pkey" },
   table: desktopTimeEntryBatches,
   key: "idempotencyKey",
   scope: ["organizationId", "userId"],
@@ -254,6 +276,7 @@ const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
 });
 
 export const ORGANIZATION_ACCESS_STATE_TRANSITIONS = defineScopedTransitions({
+  arbiter: { constraint: "organization_access_states_pkey" },
   table: organizationAccessStates,
   key: "organizationId",
   scope: [],
@@ -503,6 +526,7 @@ export const TRANSITIONS = {
   mcpOAuthState: { unmanaged: UNMANAGED_REASONS.antiForgery },
   mcpUserConnections: { unmanaged: UNMANAGED_REASONS.connection },
   officeFileEvidence: { unmanaged: UNMANAGED_REASONS.workerRun },
+  onlineWorkState: ONLINE_WORK_STATE_TRANSITIONS,
   organizationAccessStates: ORGANIZATION_ACCESS_STATE_TRANSITIONS,
   organizationConfiguredAccess: { unmanaged: UNMANAGED_REASONS.projection },
   organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },

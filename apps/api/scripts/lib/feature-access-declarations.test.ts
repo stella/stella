@@ -130,6 +130,32 @@ describe("feature source declarations", () => {
       });
     },
   );
+  test("schema maintenance does not make its caller a feature user, and nothing else is exempt", () => {
+    const maintenance = "apps/api/src/db/online-migrations.ts";
+    const sources = [
+      [
+        maintenance,
+        'import { featureRows } from "./schema/feature"; export const walk = (tx) => tx.select().from(featureRows);',
+      ],
+    ] as const;
+    expect(
+      check(
+        'import { walk } from "../db/online-migrations"; export const run = () => walk;',
+        {},
+        sources,
+      ),
+    ).toEqual([]);
+    expect(
+      check(
+        'import { featureRows } from "../db/schema/feature"; export const read = (tx) => tx.select().from(featureRows);',
+        {},
+        sources,
+      ),
+    ).toContainEqual({
+      file: "apps/api/src/routes/ordinary.ts",
+      message: "source ownership requires featureAccess fixture",
+    });
+  });
   test("shared view storage and feature execution have separate owners", () => {
     const file = "apps/api/src/routes/ordinary.ts";
     const shared = "apps/api/src/db/schema/views.ts";

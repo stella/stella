@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { OnlineTableGate } from "./online-ddl";
+import type { OnlineWorkLifecycleName } from "./online-work-lifecycle";
 
 /**
  * The connection the online phase of a migration runs on, and the shape of a
@@ -59,6 +60,18 @@ export type OnlineMigrationPool = {
   reserve: () => Promise<OnlineMigrationConnection>;
 };
 
+/**
+ * A session that may run an index build: the gate ends it physically when
+ * cancelling the build fails, so building without `terminate` cannot compile.
+ */
+export type OnlineBuildConnection = OnlineMigrationConnection & {
+  terminate: () => Promise<void>;
+};
+
+export type OnlineBuildPool = {
+  reserve: () => Promise<OnlineBuildConnection>;
+};
+
 /** Whether a repair's postcondition already holds, and why it does not. */
 export type OnlineRepairCompletion =
   | { cause?: unknown; reason: string; type: "incomplete" }
@@ -105,12 +118,19 @@ export type OnlineStepIntroduction = string | CodeOwnedOnlineStep;
  * `readCompletion` never repairs. The phase reads it before the repair, and
  * runs no walk when the postcondition already holds, so the fixed point costs
  * one read rather than a pass over the table. Repair mode may defer a durable
- * pending backfill. Startup reports unfinished work only for the newest
- * applied migration; work introduced by an older migration must be complete.
+ * pending backfill. Startup reports unfinished pending work at any migration age; finalized
+ * work must be complete.
  */
 export type OnlineRepair = {
   introducedBy: OnlineStepIntroduction;
   name: string;
+  /**
+   * Units whose completion `readCompletion` and `repair` presuppose. Each
+   * precedes this repair in the walk; while one is incomplete this repair is
+   * not read and counts as pending, and a migrate-ready repair may depend
+   * only on migrate-ready work (`scripts/check-online-work-lifecycle.ts`).
+   */
+  dependsOn?: readonly OnlineWorkLifecycleName[];
   readCompletion: (
     connection: OnlineMigrationConnection,
   ) => Promise<OnlineRepairCompletion>;

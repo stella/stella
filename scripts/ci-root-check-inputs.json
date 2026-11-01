@@ -822,6 +822,7 @@
     "Dead columns": ["**"],
     "Projection totality": ["**"],
     "Aggregate ownership": ["**"],
+    "Online work lifecycle": ["**"],
     "Split-button census": ["**"],
     "Database awaits in loops": ["**"],
     "Online unique index dependency guard": ["**"],

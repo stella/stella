@@ -87,6 +87,12 @@ test("state-column ownership covers every scoped runtime transition", () => {
     scope: ["organizationId", "userId"],
     stateColumn: "status",
   };
+  const onlineWorkLifecycle = {
+    tableName: "onlineWorkState",
+    key: "name",
+    scope: [],
+    stateColumn: "state",
+  };
   // An organization's access state is one row keyed by the organization.
   const organizationAccessState = {
     tableName: "organizationAccessStates",
@@ -99,6 +105,7 @@ test("state-column ownership covers every scoped runtime transition", () => {
       ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
       SITEMAP_DRAIN_TRANSITION_IDENTITY,
       desktopBatchReceipt,
+      onlineWorkLifecycle,
       {
         tableName: "requestIdempotencyReceipts",
         key: "id",
@@ -588,6 +595,7 @@ test.each(["array", "rows"] as const)(
   "%s driver: scoped counts validate aggregates and audit only changes",
   async (shape) => {
     const scoped = defineScopedTransitions({
+      arbiter: { constraint: "transition_test_jobs_pkey" },
       table: jobs,
       key: "id",
       scope: [],
@@ -644,6 +652,9 @@ test.each(["array", "rows"] as const)(
       ],
     );
     const scoped = defineScopedTransitions({
+      arbiter: {
+        constraint: "scoped_transition_rows_organization_id_source_id_pk",
+      },
       table: scopedRows,
       key: "sourceId",
       scope: ["organizationId"],
@@ -719,6 +730,9 @@ test.each(["array", "rows"] as const)(
       ],
     );
     const scoped = defineScopedTransitions({
+      arbiter: {
+        constraint: "scoped_upsert_rows_organization_id_source_id_pk",
+      },
       table: scopedRows,
       key: "sourceId",
       scope: ["organizationId"],
@@ -810,6 +824,9 @@ test.each(["array", "rows"] as const)(
       ],
     );
     const base = {
+      arbiter: {
+        constraint: "same_state_upsert_rows_organization_id_source_id_pk",
+      },
       table: scopedRows,
       key: "sourceId",
       scope: ["organizationId"],
@@ -877,6 +894,11 @@ test("scoped identities accept only schema-declared non-null primary or unique c
   for (const key of keys) {
     const outcome = Result.try(() =>
       defineScopedTransitions({
+        arbiter: {
+          constraint: columns[key].primary
+            ? "declared_transition_identity_pkey"
+            : `declared_transition_identity_${columns[key].name}_key`,
+        },
         table: rows,
         key,
         scope: [],
@@ -951,6 +973,7 @@ test.each([
     );
     const declare = () =>
       defineScopedTransitions({
+        arbiter: { constraint: "identity" },
         table: rows,
         key: kind === "nullable" ? "optionalKey" : "id",
         scope: ["organizationId"],

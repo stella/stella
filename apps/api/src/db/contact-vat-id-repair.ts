@@ -132,7 +132,10 @@ const moveUntilEmpty = async (
 
 export const createContactVatIdRepair = (
   options: RepairRuntimeOptions = {},
-): MigrationOwnedOnlineRepair => ({
+): MigrationOwnedOnlineRepair & {
+  // The lifecycle map keys on the literal name.
+  readonly name: typeof CONTACT_VAT_ID_REPAIR_NAME;
+} => ({
   introducedBy: "20261019010000_invoice_party_tax_vat_ids",
   name: CONTACT_VAT_ID_REPAIR_NAME,
   readCompletion,

@@ -26,4 +26,4 @@ export const CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION = {
       tables,
       constraints: CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS,
     }),
-} satisfies OnlineRepair;
+} as const satisfies OnlineRepair;

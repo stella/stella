@@ -26,4 +26,4 @@ export const EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION = {
       tables,
       constraints: EMAIL_UNDELIVERABLE_CONSTRAINTS,
     }),
-} satisfies OnlineRepair;
+} as const satisfies OnlineRepair;
