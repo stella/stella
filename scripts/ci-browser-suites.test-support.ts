@@ -294,13 +294,25 @@ type Walk = {
   visiting: ReadonlySet<string>;
 };
 
+const ACTION_FILE_NAMES = ["action.yml", "action.yaml"] as const;
+
 const walkSteps = (steps: readonly Step[], walk: Walk) => {
   for (const step of steps) {
     const name = `${walk.label}${step.name ?? step.uses ?? "unnamed"}`;
     if (step.uses?.startsWith("./") === true) {
       const directory = normalize(step.uses.slice(2));
-      const file = `${directory}/action.yml`;
-      const action = v.safeParse(ACTION, walk.io.yaml(file));
+      // GitHub reads `action.yml`, then `action.yaml`.
+      const [file, source] = ACTION_FILE_NAMES.map(
+        (fileName) =>
+          [
+            `${directory}/${fileName}`,
+            walk.io.yaml(`${directory}/${fileName}`),
+          ] as const,
+      ).find(([, parsed]) => parsed !== undefined) ?? [
+        `${directory}/action.yml`,
+        undefined,
+      ];
+      const action = v.safeParse(ACTION, source);
       if (
         action.success &&
         action.output.runs.using === "composite" &&

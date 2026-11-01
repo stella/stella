@@ -678,6 +678,78 @@ test.each([
   }
 });
 
+const uiPackage = {
+  "packages/ui/package.json": JSON.stringify({
+    name: "@stll/ui",
+    scripts: {
+      "test:browser": "playwright test --config playwright.config.ts",
+    },
+  }),
+};
+
+test("comments never change a config's layout", () => {
+  const root = writeTree({
+    ...uiPackage,
+    "packages/ui/playwright.config.ts": [
+      '// testIgnore is not used here; testDir: "./old" moved below.',
+      "export default defineConfig({",
+      '  /* testMatch: "*.x.ts" */',
+      '  testDir: "./specs",',
+      "});",
+      "",
+    ].join("\n"),
+    "packages/ui/specs/button.spec.ts": "",
+  });
+  try {
+    expect(browserSuiteSpecs(changedSpecSuite("ui-components"), root)).toEqual([
+      "packages/ui/specs/button.spec.ts",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a config whose test directory is missing fails loudly", () => {
+  const root = writeTree({
+    ...uiPackage,
+    "packages/ui/playwright.config.ts":
+      'export default defineConfig({ testDir: "./missing" });\n',
+  });
+  try {
+    expect(() =>
+      browserSuiteSpecs(changedSpecSuite("ui-components"), root),
+    ).toThrow(BrowserSuiteDeclarationError);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the census reads a composite action declared as action.yaml", () => {
+  const ci = withRouteSmokeStep({
+    name: "Composite",
+    uses: "./.github/actions/yaml-browser",
+  });
+  const mutated = browserInvocations(
+    overlayIo(
+      {
+        ".github/workflows/ci.yml": ci,
+        ".github/actions/yaml-browser/action.yaml": {
+          runs: {
+            using: "composite",
+            steps: [
+              { name: "Inner", run: "bun --filter @stll/web test:e2e:soak" },
+            ],
+          },
+        },
+      },
+      {},
+    ),
+  );
+  expect(unclaimed(mutated)).toEqual([
+    "route-smoke / Composite › Inner: @stll/web test:e2e:soak",
+  ]);
+});
+
 test("a script whose --config names nothing fails loudly", () => {
   expect(() => playwrightConfigOf("playwright test --config")).toThrow(
     BrowserSuiteDeclarationError,

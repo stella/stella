@@ -351,6 +351,8 @@ const literalValues = (source: string, key: string) => {
   return { keys: keys.length, literals };
 };
 
+const CONFIG_TRANSPILER = new Bun.Transpiler({ loader: "ts" });
+
 const configSource = (config: string, root: string) => {
   const absolute = path.join(root, config);
   if (!existsSync(absolute)) {
@@ -358,7 +360,9 @@ const configSource = (config: string, root: string) => {
       `Missing Playwright config ${config}`,
     );
   }
-  return readFileSync(absolute, "utf-8");
+  // Read the config as code, not text: transpiling drops comments, so a
+  // commented key or a word inside a comment never changes the layout.
+  return CONFIG_TRANSPILER.transformSync(readFileSync(absolute, "utf-8"));
 };
 
 /** The one literal value of a config key, or undefined when it is absent. */
@@ -413,7 +417,9 @@ const configSpecs = (suite: BrowserSuite, root: string): string[] => {
   const layout = specLayout(suite, root);
   const absolute = path.join(root, layout.testDir);
   if (!existsSync(absolute)) {
-    return [];
+    throw new BrowserSuiteDeclarationError(
+      `${suite.id}: test directory ${layout.testDir} does not exist`,
+    );
   }
   const specs: string[] = [];
   for (const entry of readdirSync(absolute, {
