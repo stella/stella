@@ -87,7 +87,12 @@ const succeed = (cwd: string, command: readonly string[]) => {
 };
 const git = (cwd: string, ...args: string[]) => succeed(cwd, ["git", ...args]);
 const ratchet = (cwd: string, ...args: string[]) =>
-  succeed(cwd, [process.execPath, "scripts/ratchet.ts", ...args]);
+  succeed(cwd, [
+    process.execPath,
+    "scripts/ratchet.ts",
+    "--partial-tree",
+    ...args,
+  ]);
 type WriteOptions = { root: string; relative: string; contents: string };
 const write = ({ root, relative, contents }: WriteOptions) => {
   mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
@@ -230,6 +235,7 @@ test("a metric increase fails even with a forged committed budget", () => {
     const rejected = run(root, [
       process.execPath,
       "scripts/ratchet.ts",
+      "--partial-tree",
       "--check",
     ]);
     expect(rejected.code, rejected.output).toBe(1);
@@ -248,6 +254,7 @@ test("a metric increase fails even with a forged committed budget", () => {
     const bypassed = run(root, [
       process.execPath,
       "scripts/ratchet.ts",
+      "--partial-tree",
       "--check",
     ]);
     expect(bypassed.code, bypassed.output).toBe(0);
@@ -354,6 +361,7 @@ test("the measured base overrides stale headroom and explicit merge-group bases"
     const rejected = run(root, [
       process.execPath,
       "scripts/ratchet.ts",
+      "--partial-tree",
       "--check",
     ]);
     expect(rejected.code, rejected.output).toBe(1);
@@ -364,6 +372,7 @@ test("the measured base overrides stale headroom and explicit merge-group bases"
     const badBase = run(root, [
       process.execPath,
       "scripts/ratchet.ts",
+      "--partial-tree",
       "--check",
       "--base",
       "absent-ref",
@@ -443,6 +452,7 @@ test("--head measures a commit as data with that commit's allowances", () => {
       run(root, [
         process.execPath,
         "scripts/ratchet.ts",
+        "--partial-tree",
         "--check",
         "--base",
         base,
@@ -536,7 +546,7 @@ test("CI selects the merge base on PRs and the target-branch base on merge group
         `RATCHET_BASE_REF=${eventBase || newBase}\n`,
       );
       const checked = Bun.spawnSync(
-        [process.execPath, "scripts/ratchet.ts", "--check"],
+        [process.execPath, "scripts/ratchet.ts", "--partial-tree", "--check"],
         {
           cwd: root,
           env: { ...process.env, RATCHET_BASE_REF: eventBase || newBase },
@@ -605,7 +615,13 @@ const ALLOWANCE = "scripts/ratchet-allowances/fixture-increase.json";
 const fund = (root: string, allowance: unknown, relative = ALLOWANCE) =>
   write({ root, relative, contents: `${JSON.stringify(allowance)}\n` });
 const check = (root: string, ...args: string[]) =>
-  run(root, [process.execPath, "scripts/ratchet.ts", "--check", ...args]);
+  run(root, [
+    process.execPath,
+    "scripts/ratchet.ts",
+    "--partial-tree",
+    "--check",
+    ...args,
+  ]);
 
 for (const { name, count, delta, code, diagnostic } of [
   {
@@ -1191,7 +1207,9 @@ test("malformed ledger and dependency schemas fail in both measurement roles", (
     ]) {
       write({ root, relative, contents });
       for (const role of ["head", "base"] as const) {
-        expect(() => scanAll(root, { role })).toThrow(diagnostic);
+        expect(() => scanAll(root, { role, extent: "partial" })).toThrow(
+          diagnostic,
+        );
       }
       rmSync(path.join(root, relative));
     }

@@ -142,9 +142,22 @@ const isExcludedFromResultConventionMetrics = (file: string): boolean =>
 // Every metric scans the same checkout, so each distinct glob is walked once
 // and each file is read once, however many metrics select it.
 
+/**
+ * A whole checkout measures every metric. A partial one (the closure clone the
+ * derived-totals harness builds from the ratchet definition paths) holds only
+ * the guard and its declared inputs, so it does not measure whole-tree metrics.
+ */
+type TreeExtent = "whole" | "partial";
+// Only an explicit command-line request measures a checkout as partial.
+const CHECKOUT_EXTENT: TreeExtent =
+  import.meta.main && process.argv.includes("--partial-tree")
+    ? "partial"
+    : "whole";
+
 type SourceTree = {
   readonly root: string;
   readonly role: MeasurementRole;
+  readonly extent: TreeExtent;
   readonly trackedFiles?: ReadonlySet<string> | undefined;
   readonly headOrgGraph?: OrgWriteGraphHeadMetadata | undefined;
   readonly globs: Map<string, readonly string[]>;
@@ -153,10 +166,15 @@ type SourceTree = {
 
 export const openSourceTree = (
   root: string,
-  { role = "head", trackedFiles }: Omit<ScanOptions, "metrics"> = {},
+  {
+    role = "head",
+    trackedFiles,
+    extent = CHECKOUT_EXTENT,
+  }: Omit<ScanOptions, "metrics"> = {},
 ): SourceTree => ({
   root,
   role,
+  extent,
   trackedFiles,
   globs: new Map(),
   contents: new Map(),
@@ -2609,6 +2627,11 @@ export type RatchetMetric = (
       readonly id: string;
       readonly description: string;
       readonly count: RepoCounter;
+      /**
+       * Measured only on a whole checkout: the count closes over the whole
+       * source graph and refuses a tree that lacks part of it.
+       */
+      readonly tree?: "whole";
       /** Gate each measured member independently, including virtual file keys. */
       readonly perFile?: true;
     }
@@ -3547,6 +3570,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     scope: "repo",
     id: "unscoped-org-owner-writes",
+    tree: "whole",
     description:
       "ORG table writes in owner modules outside the withOrgScope callback transaction; each file/table/operation/normalized-statement identity is independently shrink-only",
     perFile: true,
@@ -4208,9 +4232,15 @@ export const scanTree = ({
   previous,
 }: ScanTreeOptions): TreeScan => {
   assertMetricRegistry();
+  const measured = (metric: RatchetMetric) =>
+    tree.extent === "whole" ||
+    metric.scope !== "repo" ||
+    metric.tree !== "whole";
   const needsOrgWriteGraph = metrics.some(
     (metric) =>
-      metric.scope === "repo" && metric.id === "unscoped-org-owner-writes",
+      measured(metric) &&
+      metric.scope === "repo" &&
+      metric.id === "unscoped-org-owner-writes",
   );
   let headOrgGraph = previous?.headOrgGraph;
   if (needsOrgWriteGraph && tree.role === "head") {
@@ -4277,6 +4307,12 @@ export const scanTree = ({
   for (const metric of metrics) {
     switch (metric.scope) {
       case "repo":
+        if (!measured(metric)) {
+          // A partial tree keeps an unmeasured whole-tree metric level with
+          // its base, which is measured the same way.
+          snapshot[metric.id] = { count: 0, files: {} };
+          break;
+        }
         if (metric.count === countDuplicateTokenBlocks) {
           // Release transient syntax trees and the prior tree's token index
           // before allocating another whole-repository duplication index.
@@ -4311,15 +4347,22 @@ type ScanOptions = {
   metrics?: readonly RatchetMetric[];
   role?: MeasurementRole;
   trackedFiles?: ReadonlySet<string>;
+  extent?: TreeExtent;
 };
 
 export const scanAll = (
   root: string,
-  { metrics = RATCHET_METRICS, role = "head", trackedFiles }: ScanOptions = {},
+  {
+    metrics = RATCHET_METRICS,
+    role = "head",
+    trackedFiles,
+    extent,
+  }: ScanOptions = {},
 ): Baseline =>
   scanTree({
     tree: openSourceTree(root, {
       role,
+      ...(extent === undefined ? {} : { extent }),
       ...(trackedFiles === undefined ? {} : { trackedFiles }),
     }),
     metrics,
@@ -7368,27 +7411,10 @@ const runSelfTest = (): number => {
       "const z = value as Widget;\n",
     );
 
-    // The organization write graph reads HEAD's declared scope registry,
-    // relation map and recovery owner; an empty graph counts zero.
-    writeFixture(
-      root,
-      "apps/api/src/db/org-scope-registry.ts",
-      "export const ORG_SCOPE_TABLES = {};\nexport const GLOBAL_SCOPE_TABLES = {};\n",
-    );
-    writeFixture(
-      root,
-      "apps/api/src/lib/db/table-relations.gen.ts",
-      "export const TABLE_RELATIONS = {} as const;\n",
-    );
-    writeFixture(
-      root,
-      "scripts/ownership/recovery-bookkeeping.ts",
-      `const CLASSES = [] as const;\nexport default { id: "recovery-bookkeeping", owner: CLASSES.map((kind) => \`apps/api/src/lib/db/recovery-bookkeeping/\${kind}.ts\`) };\n`,
-    );
-
     writeFileSync(path.join(root, "package.json"), "{}");
     writeFileSync(path.join(root, "bun.lock"), "{ packages: {} }");
-    const snapshot = scanAll(root);
+    // A synthetic tree, so whole-tree metrics are not measured here.
+    const snapshot = scanAll(root, { extent: "partial" });
 
     failures.push(...schemaIntrospectionSelfTestFailures(snapshot));
 
@@ -7809,6 +7835,8 @@ Options:
   --base <commit> Compare against this revision instead of the merge base.
   --head <commit> Measure this revision instead of the working tree.
   --details       Include per-file counts in report mode.
+  --partial-tree  Measure a closure clone, not a whole checkout: whole-tree
+                  metrics stay unmeasured on both sides of the comparison.
   -h, --help      Print this usage and exit.
 
 Allowances:
@@ -7828,6 +7856,7 @@ const main = (): number => {
     "--base",
     "--head",
     "--details",
+    "--partial-tree",
   ]);
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
     printUsage();

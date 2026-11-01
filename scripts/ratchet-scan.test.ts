@@ -84,6 +84,54 @@ const seedOrgWriteGraphFixture = (
   }
 };
 
+describe("whole-tree metrics", () => {
+  const metric =
+    RATCHET_METRICS.find(({ id }) => id === "unscoped-org-owner-writes") ??
+    panic("Owner writer metric is missing");
+  const seedMissingDoorOwner = (root: string) =>
+    seedOrgWriteGraphFixture(root, {
+      sources: {},
+      entryFiles: ["apps/api/src/lib/flows/absent-writer.ts"],
+      orgTables: { flowRuns: "flow_runs" },
+      globalTables: {},
+    });
+
+  test("the organization write graph declares itself whole-tree", () => {
+    expect(metric.scope === "repo" && metric.tree).toBe("whole");
+  });
+
+  test("a whole checkout missing a root-door owner panics", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "ratchet-whole-tree-"));
+    try {
+      seedMissingDoorOwner(root);
+      expect(() =>
+        scanTree({ tree: openSourceTree(root), metrics: [metric] }),
+      ).toThrow(
+        /missing root-door owner apps\/api\/src\/lib\/flows\/absent-writer\.ts/u,
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a partial tree leaves a whole-tree metric unmeasured on both sides", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "ratchet-partial-tree-"));
+    try {
+      seedMissingDoorOwner(root);
+      for (const role of ["head", "base"] as const) {
+        expect(
+          scanTree({
+            tree: openSourceTree(root, { role, extent: "partial" }),
+            metrics: [metric],
+          }).snapshot[metric.id],
+        ).toEqual({ count: 0, files: {} });
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("shared ratchet scan", () => {
   test("owner writer budgets remain independent per table and operation", () => {
     const root = mkdtempSync(path.join(tmpdir(), "ratchet-org-writers-"));
