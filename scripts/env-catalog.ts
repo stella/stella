@@ -1386,6 +1386,7 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_DESKTOP_VIEW_PORT",
   "STELLA_ENABLE_DEBUG_CLIPBOARD_PERSISTENCE",
   "STELLA_GENERATED_STORE",
+  "STELLA_MARKETING_CAPTURE",
   "STELLA_OPEN_CLIPBOARD_ON_LAUNCH",
   "STELLA_PGLITE_SNAPSHOT_CACHE_DIR",
   "STELLA_SEED_EMAIL_WORKSPACE_ID",
@@ -1503,12 +1504,21 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_VERIFY",
   "QUERY_PERF_CHANGED_PATHS",
   "QUERY_PERF_SCOPE_UNKNOWN",
+  // CI migration planning hands the schema import check its changed-paths file.
+  "CHANGED_PATHS",
   // CI playground planning passes the selected and complete spec sets to the
   // shard planner, together with the desktop scope decision.
   "UI_PLAYGROUND_CHANGED_PATHS",
   "UI_PLAYGROUND_SELECTED_SPECS",
   "UI_PLAYGROUND_ALL_SPECS",
   "DESKTOP_REQUIRED",
+  // CI browser suite planning reads the changed paths, and each browser leg
+  // passes the specs it carries; the shard planner adds the suite legs.
+  "BROWSER_SUITE_CHANGED_PATHS",
+  "BROWSER_SUITE_LEGS",
+  "LEG",
+  "LEG_SPECS",
+  "SCOPE_UNKNOWN",
   // CI image resolution and smoke tooling; product defaults remain upstream.
   "CI_IMAGE_MIRROR_ENABLED",
   "CI_PLAYWRIGHT_IMAGE",
@@ -1673,6 +1683,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "JOURNEY_REGISTRY_TIMEOUT_MS",
   "JOURNEY_RELEASES_API_URL",
   "JOURNEY_RETRY_PAUSE_SECONDS",
+  "JOURNEY_SEARCH_SLOT",
   "JOURNEY_SIGN_IN",
   "JOURNEY_SMOKE_SESSION_URL",
   "JOURNEY_TIMEOUT_SECONDS",
@@ -1924,6 +1935,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "AWS_REGION",
   "AWS_SECRET_ACCESS_KEY",
   "AWS_SESSION_TOKEN",
+  "CARGO_CFG_TARGET_ARCH",
+  "CARGO_CFG_TARGET_OS",
   "CARGO_MANIFEST_DIR",
   "CARGO_PKG_VERSION",
   "CI",

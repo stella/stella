@@ -230,7 +230,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, paged without a total."
         },
         "limit": {
           "type": "integer",
@@ -284,7 +284,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total."
         },
         "has_legal_sentence": {
           "type": "boolean",
@@ -6386,47 +6386,47 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Free-text search over consolidated legislation"
+          "description": "Consolidated legislation full-text query"
         },
         "title": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Filter search results by title text"
+          "description": "Title text"
         },
         "department_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by department code"
+          "description": "Department code"
         },
         "legal_range_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by legal-range code (law rank)"
+          "description": "Legal-range code (law rank)"
         },
         "matter_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by subject-matter code"
+          "description": "Subject-matter code"
         },
         "date_from": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or after this date (YYYYMMDD)"
+          "description": "Published on or after YYYYMMDD"
         },
         "date_to": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or before this date (YYYYMMDD)"
+          "description": "Published on or before YYYYMMDD"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max search results to return. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Result limit. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -6440,13 +6440,13 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         },
         "law_id": {
           "type": "string",
-          "description": "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search"
+          "description": "BOE law id (e.g. BOE-A-1889-4763); omit to search"
         },
         "block_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "With law_id, return this text block's content instead of the whole law"
+          "description": "With law_id: read this block instead of the law"
         },
         "relation_type": {
           "enum": [
@@ -6457,11 +6457,11 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "all"
           ],
           "type": "string",
-          "description": "With law_id, list related laws of this relation kind instead of the law body"
+          "description": "With law_id: list this relation kind instead of the law"
         },
         "full_text": {
           "type": "boolean",
-          "description": "With law_id (no block_id/relation_type), include the consolidated full text"
+          "description": "With law_id only: include consolidated full text"
         }
       }
     }
@@ -6475,7 +6475,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "List audit log does not change state.",
       "openWorldHint": "List audit log is confined to the private workspace or a bounded computation."
     },
-    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail (null unless changesStatus is \\"visible\\"). Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Filter and paginate with the fields below. Requires audit-log access.",
     "annotations": {
       "title": "List audit log",
       "destructiveHint": false,
@@ -6495,32 +6495,32 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "action": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries with this audit action"
+          "description": "Audit action"
         },
         "resource_type": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries about this resource type"
+          "description": "Resource type"
         },
         "resource_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries about this resource id; requires resource_type"
+          "description": "Resource id; requires resource_type"
         },
         "user_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries whose actor is this user"
+          "description": "Actor user id"
         },
         "from": {
           "type": "string",
           "maxLength": 40,
-          "description": "Only entries created on or after this ISO date-time, or from the start of this YYYY-MM-DD date (UTC)"
+          "description": "Created at or after this ISO date-time or YYYY-MM-DD start (UTC)"
         },
         "to": {
           "type": "string",
           "maxLength": 40,
-          "description": "Only entries created on or before this ISO date-time, or up to the end of this YYYY-MM-DD date (UTC)"
+          "description": "Created at or before this ISO date-time or YYYY-MM-DD end (UTC)"
         },
         "limit": {
           "type": "integer",
@@ -6536,7 +6536,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_audit_log call to fetch the next page"
+          "description": "Next-page cursor from list_audit_log"
         }
       }
     }
@@ -6588,7 +6588,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "description": "Revoke matter access and cancel desktop edits; reassign or unassign work. Requires approval (confirm:true).",
     "annotations": {
       "title": "Remove matter member",
       "readOnlyHint": false,
@@ -6652,7 +6652,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Number pattern; pair with matter_number_padding"
+          "description": "Pattern; send with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
@@ -6662,7 +6662,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         },
         "matter_numbering_enabled": {
           "type": "boolean",
-          "description": "Show the matter number beside the matter name in titles"
+          "description": "Show matter numbers in titles"
         },
         "prompt_caching_enabled": {
           "type": "boolean",
@@ -6715,6 +6715,53 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             }
           ],
           "description": "IANA zone; null follows the primary practice jurisdiction"
+        }
+      }
+    }
+  },
+  {
+    "name": "create_organization",
+    "scope": "stella:organization_create",
+    "access": "write",
+    "annotationReasons": {
+      "readOnlyHint": "Create organization changes state or starts stateful work.",
+      "destructiveHint": "Create organization is additive and does not overwrite or remove existing state.",
+      "openWorldHint": "Create organization is confined to the private workspace or a bounded computation."
+    },
+    "description": "Create an owned organization after human approval (confirm:true). Lifetime cap: 3 evaluations; deletion never resets it. organization_evaluation_limit_reached: no evaluations left. Existing paid organizations keep access. Next: stella auth login; select the new organization.",
+    "annotations": {
+      "title": "Create organization",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50,
+          "description": "Name of the new organization."
+        },
+        "slug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-z0-9\\\\x2d]+$",
+          "description": "Optional URL slug. Omit to generate an opaque organization address. Use a-z, 0-9 or hyphens; outer whitespace is trimmed.",
+          "x-stella-agent-input": {
+            "kind": "slug"
+          }
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "True after human approval"
         }
       }
     }
@@ -7457,7 +7504,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, paged without a total."
         },
         "limit": {
           "type": "integer",
@@ -7511,7 +7558,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total."
         },
         "has_legal_sentence": {
           "type": "boolean",
@@ -13613,47 +13660,47 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Free-text search over consolidated legislation"
+          "description": "Consolidated legislation full-text query"
         },
         "title": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Filter search results by title text"
+          "description": "Title text"
         },
         "department_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by department code"
+          "description": "Department code"
         },
         "legal_range_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by legal-range code (law rank)"
+          "description": "Legal-range code (law rank)"
         },
         "matter_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by subject-matter code"
+          "description": "Subject-matter code"
         },
         "date_from": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or after this date (YYYYMMDD)"
+          "description": "Published on or after YYYYMMDD"
         },
         "date_to": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or before this date (YYYYMMDD)"
+          "description": "Published on or before YYYYMMDD"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max search results to return. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Result limit. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -13667,13 +13714,13 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "law_id": {
           "type": "string",
-          "description": "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search"
+          "description": "BOE law id (e.g. BOE-A-1889-4763); omit to search"
         },
         "block_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "With law_id, return this text block's content instead of the whole law"
+          "description": "With law_id: read this block instead of the law"
         },
         "relation_type": {
           "enum": [
@@ -13684,11 +13731,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "all"
           ],
           "type": "string",
-          "description": "With law_id, list related laws of this relation kind instead of the law body"
+          "description": "With law_id: list this relation kind instead of the law"
         },
         "full_text": {
           "type": "boolean",
-          "description": "With law_id (no block_id/relation_type), include the consolidated full text"
+          "description": "With law_id only: include consolidated full text"
         }
       }
     }
@@ -13702,7 +13749,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "List audit log does not change state.",
       "openWorldHint": "List audit log is confined to the private workspace or a bounded computation."
     },
-    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail (null unless changesStatus is \\"visible\\"). Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Filter and paginate with the fields below. Requires audit-log access.",
     "annotations": {
       "title": "List audit log",
       "destructiveHint": false,
@@ -13722,32 +13769,32 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "action": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries with this audit action"
+          "description": "Audit action"
         },
         "resource_type": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries about this resource type"
+          "description": "Resource type"
         },
         "resource_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries about this resource id; requires resource_type"
+          "description": "Resource id; requires resource_type"
         },
         "user_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries whose actor is this user"
+          "description": "Actor user id"
         },
         "from": {
           "type": "string",
           "maxLength": 40,
-          "description": "Only entries created on or after this ISO date-time, or from the start of this YYYY-MM-DD date (UTC)"
+          "description": "Created at or after this ISO date-time or YYYY-MM-DD start (UTC)"
         },
         "to": {
           "type": "string",
           "maxLength": 40,
-          "description": "Only entries created on or before this ISO date-time, or up to the end of this YYYY-MM-DD date (UTC)"
+          "description": "Created at or before this ISO date-time or YYYY-MM-DD end (UTC)"
         },
         "limit": {
           "type": "integer",
@@ -13763,7 +13810,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_audit_log call to fetch the next page"
+          "description": "Next-page cursor from list_audit_log"
         }
       }
     }
@@ -13815,7 +13862,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "description": "Revoke matter access and cancel desktop edits; reassign or unassign work. Requires approval (confirm:true).",
     "annotations": {
       "title": "Remove matter member",
       "readOnlyHint": false,
@@ -13879,7 +13926,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Number pattern; pair with matter_number_padding"
+          "description": "Pattern; send with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
@@ -13889,7 +13936,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "matter_numbering_enabled": {
           "type": "boolean",
-          "description": "Show the matter number beside the matter name in titles"
+          "description": "Show matter numbers in titles"
         },
         "prompt_caching_enabled": {
           "type": "boolean",
@@ -15460,7 +15507,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, paged without a total."
         },
         "limit": {
           "type": "integer",
@@ -15514,7 +15561,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total."
         },
         "has_legal_sentence": {
           "type": "boolean",
@@ -17299,47 +17346,47 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Free-text search over consolidated legislation"
+          "description": "Consolidated legislation full-text query"
         },
         "title": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Filter search results by title text"
+          "description": "Title text"
         },
         "department_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by department code"
+          "description": "Department code"
         },
         "legal_range_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by legal-range code (law rank)"
+          "description": "Legal-range code (law rank)"
         },
         "matter_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by subject-matter code"
+          "description": "Subject-matter code"
         },
         "date_from": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or after this date (YYYYMMDD)"
+          "description": "Published on or after YYYYMMDD"
         },
         "date_to": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or before this date (YYYYMMDD)"
+          "description": "Published on or before YYYYMMDD"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max search results to return. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Result limit. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -17353,13 +17400,13 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "law_id": {
           "type": "string",
-          "description": "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search"
+          "description": "BOE law id (e.g. BOE-A-1889-4763); omit to search"
         },
         "block_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "With law_id, return this text block's content instead of the whole law"
+          "description": "With law_id: read this block instead of the law"
         },
         "relation_type": {
           "enum": [
@@ -17370,11 +17417,11 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             "all"
           ],
           "type": "string",
-          "description": "With law_id, list related laws of this relation kind instead of the law body"
+          "description": "With law_id: list this relation kind instead of the law"
         },
         "full_text": {
           "type": "boolean",
-          "description": "With law_id (no block_id/relation_type), include the consolidated full text"
+          "description": "With law_id only: include consolidated full text"
         }
       }
     }
@@ -17513,7 +17560,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, paged without a total."
         },
         "limit": {
           "type": "integer",
@@ -17567,7 +17614,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total."
         },
         "has_legal_sentence": {
           "type": "boolean",

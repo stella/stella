@@ -31,6 +31,7 @@ export const CLI_KNOWN_SCOPES = [
   "stella:admin_write",
   "stella:account_export_read",
   "stella:account_export_write",
+  "stella:organization_create",
   "stella:onboarding",
   "stella:skills",
   "stella:feedback",
@@ -52,6 +53,7 @@ export const CLI_REQUIRED_RESOURCE_SCOPES = [
   "stella:admin_write",
   "stella:account_export_read",
   "stella:account_export_write",
+  "stella:organization_create",
   "stella:onboarding",
   "stella:skills",
   "stella:feedback",
@@ -157,6 +159,7 @@ export const MCP_CLI_TOOL_SCOPES = [
   "billing_write",
   "admin_read",
   "admin_write",
+  "organization_create",
   "feedback",
 ] as const;
 export const MCP_SCOPE_IMPLICATIONS = [
