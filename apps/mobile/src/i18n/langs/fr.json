@@ -230,9 +230,7 @@
     "share": "Partager"
   },
   "more": {
-    "soon": "Bientôt disponible",
-    "timers": "Chronomètres",
-    "voiceInput": "Saisie vocale"
+    "timers": "Chronomètres"
   },
   "writes": {
     "consentNeeded": "Pour modifier depuis l’app, stella a besoin de votre autorisation. Reconnectez-vous pour la donner.",

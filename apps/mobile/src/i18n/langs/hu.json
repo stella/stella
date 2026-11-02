@@ -230,9 +230,7 @@
     "share": "Megosztás"
   },
   "more": {
-    "soon": "Hamarosan",
-    "timers": "Időmérők",
-    "voiceInput": "Hangbevitel"
+    "timers": "Időmérők"
   },
   "writes": {
     "consentNeeded": "Ahhoz, hogy az alkalmazásból módosíthasson, a stellának szüksége van az engedélyére. Jelentkezzen be újra a megadásához.",

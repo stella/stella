@@ -230,9 +230,7 @@
     "share": "Teilen"
   },
   "more": {
-    "soon": "Demnächst verfügbar",
-    "timers": "Timer",
-    "voiceInput": "Spracheingabe"
+    "timers": "Timer"
   },
   "writes": {
     "consentNeeded": "Damit die App Änderungen vornehmen kann, braucht stella Ihre Erlaubnis. Melden Sie sich erneut an, um sie zu erteilen.",

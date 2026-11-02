@@ -230,9 +230,7 @@
     "share": "Jaga"
   },
   "more": {
-    "soon": "Tulemas peagi",
-    "timers": "Taimerid",
-    "voiceInput": "Häälsisestus"
+    "timers": "Taimerid"
   },
   "writes": {
     "consentNeeded": "Et rakendusest muudatusi teha, vajab stella teie luba. Selle andmiseks logige uuesti sisse.",

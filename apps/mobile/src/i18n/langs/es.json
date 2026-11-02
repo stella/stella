@@ -230,9 +230,7 @@
     "share": "Compartir"
   },
   "more": {
-    "soon": "Próximamente",
-    "timers": "Temporizadores",
-    "voiceInput": "Entrada de voz"
+    "timers": "Temporizadores"
   },
   "writes": {
     "consentNeeded": "Para hacer cambios desde la app, stella necesita su permiso. Vuelva a iniciar sesión para concederlo.",
