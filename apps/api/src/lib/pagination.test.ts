@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   createCursorPage,
@@ -107,28 +107,31 @@ describe("cursor pagination — properties", () => {
   });
 
   test("encode → decode round-trips any cursor primitive array", () => {
-    fc.assert(
+    assertProperty(
+      "encode → decode round-trips any cursor primitive array",
       fc.property(fc.array(cursorPrimitive), (parts) => {
         expect(decodePaginationCursor(encodePaginationCursor(parts))).toEqual(
           parts,
         );
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("decode is total on arbitrary input — never throws", () => {
-    fc.assert(
+    assertProperty(
+      "decode is total on arbitrary input — never throws",
       fc.property(fc.string(), (input) => {
         const result = decodePaginationCursor(input);
         expect(result === null || Array.isArray(result)).toBe(true);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("createCursorPage — items is the prefix slice of rows", () => {
-    fc.assert(
+    assertProperty(
+      "createCursorPage — items is the prefix slice of rows",
       fc.property(
         fc.array(fc.record({ id: fc.string() }), { maxLength: 50 }),
         fc.integer({ min: 1, max: 100 }),
@@ -144,12 +147,13 @@ describe("cursor pagination — properties", () => {
           expect(page.items).toEqual(rows.slice(0, page.items.length));
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("createCursorPage — nextCursor is null iff rows fit within limit", () => {
-    fc.assert(
+    assertProperty(
+      "createCursorPage — nextCursor is null iff rows fit within limit",
       fc.property(
         fc.array(fc.record({ id: fc.string() }), { maxLength: 50 }),
         fc.integer({ min: 1, max: 100 }),
@@ -168,23 +172,25 @@ describe("cursor pagination — properties", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("isDateOnlyPaginationCursorPart accepts every canonical UTC date", () => {
-    fc.assert(
+    assertProperty(
+      "isDateOnlyPaginationCursorPart accepts every canonical UTC date",
       fc.property(boundedDate, (d) => {
         expect(
           isDateOnlyPaginationCursorPart(d.toISOString().slice(0, 10)),
         ).toBe(true);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("isDateOnlyPaginationCursorPart only accepts strings that round-trip through Date", () => {
-    fc.assert(
+    assertProperty(
+      "isDateOnlyPaginationCursorPart only accepts strings that round-trip through Date",
       fc.property(fc.string(), (s) => {
         if (!isDateOnlyPaginationCursorPart(s)) {
           return;
@@ -193,37 +199,40 @@ describe("cursor pagination — properties", () => {
           s,
         );
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("parseDateTimePaginationCursorPart accepts every canonical ISO datetime", () => {
-    fc.assert(
+    assertProperty(
+      "parseDateTimePaginationCursorPart accepts every canonical ISO datetime",
       fc.property(boundedDate, (d) => {
         expect(parseDateTimePaginationCursorPart(d.toISOString())).toEqual(d);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("parseDateTimePaginationCursorPart rejects non-canonical variants", () => {
-    fc.assert(
+    assertProperty(
+      "parseDateTimePaginationCursorPart rejects non-canonical variants",
       fc.property(boundedDate, (d) => {
         // Stripping milliseconds produces a valid ISO string but not the canonical form
         // toISOString() emits — parser must reject to preserve cursor equality semantics.
         const stripped = d.toISOString().replace(/\.\d{3}Z$/u, "Z");
         expect(parseDateTimePaginationCursorPart(stripped)).toBeNull();
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("isUuidPaginationCursorPart accepts every RFC-4122 UUID", () => {
-    fc.assert(
+    assertProperty(
+      "isUuidPaginationCursorPart accepts every RFC-4122 UUID",
       fc.property(fc.uuid(), (id) => {
         expect(isUuidPaginationCursorPart(id)).toBe(true);
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

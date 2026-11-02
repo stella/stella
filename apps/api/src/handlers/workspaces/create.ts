@@ -20,7 +20,7 @@ import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS } from "@/api/lib/auth/feature-access/view-eligibility";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  defaultVarcharSchema,
+  displayNameSchema,
   resourceIdSchema,
   withDescription,
 } from "@/api/lib/custom-schema";
@@ -61,8 +61,8 @@ const createWorkspaceBodySchema = v.object({
       v.maxLength(LIMITS.workspaceMembersCount - 1),
     ),
   ),
-  name: withDescription(defaultVarcharSchema, "Matter name"),
-  filePropertyName: defaultVarcharSchema,
+  name: withDescription(displayNameSchema(), "Matter name"),
+  filePropertyName: displayNameSchema(),
   reference: v.optional(v.pipe(v.string(), v.maxLength(64), v.minLength(1))),
   billingReference: v.optional(
     v.nullable(v.pipe(v.string(), v.maxLength(128))),

@@ -1157,10 +1157,8 @@ export const caseLawDecisions = p.pgTable(
     // every such citation.
     p.check("decisions_citation_key_non_empty", sql`${t.citationKey} <> ''`),
     ...globalCaseLawPolicies(),
-    // Expand phase: the reader policies stay while older readers query this
-    // table. The contract step in `lib/db/pending-contract-migrations`
-    // removes them together with the reader grants.
-    ...publicCaseLawReaderPolicies(),
+    // Neither reader role holds a policy here: both read decisions through
+    // the published and unredacted views, which own their row filters.
     ...caseLawAnalysisWriterPolicies(),
     ...caseLawAnalysisReaderDecisionPolicies(),
     ...corpusSampleReaderDecisionPolicies(),
@@ -3059,7 +3057,7 @@ export const caseLawSourceArrivals = p.pgTable(
   ],
 );
 
-/** The complete coverage answer, replaced atomically by the governed refresh. */
+/** The stored coverage answer, naming any parts its refresh could not read. */
 export const caseLawCoverageSummaries = p.pgTable(
   "case_law_coverage_summaries",
   {

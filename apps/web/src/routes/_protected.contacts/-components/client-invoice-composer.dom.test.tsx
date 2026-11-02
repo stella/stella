@@ -72,6 +72,7 @@ const prefill = ({
       defaultCurrency: "EUR",
     },
     sellerSource: "default",
+    issueBlockers: [],
     buyer: {
       buyerName: "Invoice client",
       buyerRegistrationId: null,
