@@ -30,7 +30,10 @@ Project: root
 - @better-auth/cimd 1.7.12 — MIT
 - @better-auth/core 1.7.12 — MIT
 - @better-auth/oauth-provider 1.7.12 — MIT
+- @dnd-kit/core 6.3.1 — MIT
+- @dnd-kit/sortable 10.0.0 — MIT
 - @embedpdf/pdfium 2.15.1 — MIT
+- @expo-google-fonts/dm-sans 0.4.2 — MIT AND OFL-1.1
 - @expo/fingerprint 0.21.6 — MIT
 - @expo/ui 58.0.22 — MIT
 - @expo/vector-icons 15.1.1 — MIT
@@ -44,7 +47,7 @@ Project: root
 - @hocuspocus/provider 4.7.1 — MIT
 - @hocuspocus/server 4.7.1 — MIT
 - @jitl/quickjs-wasmfile-release-asyncify 0.32.0 — MIT
-- @libpdf/core 0.5.2 — MIT
+- @libpdf/core 0.5.3 — MIT
 - @litko/yara-x 0.7.5 — MIT
 - @modelcontextprotocol/client 2.3.1 — Apache-2.0
 - @modelcontextprotocol/ext-apps 2.0.3 — MIT
@@ -54,10 +57,8 @@ Project: root
 - @nodable/entities 3.1.0 — MIT
 - @openrouter/sdk 0.13.67 — Apache-2.0
 - @playwright/test 1.63.0 — Apache-2.0
-- @react-email/components 1.0.12 — MIT
-- @react-email/render 2.1.1 — MIT
 - @resvg/resvg-js 2.6.2 — MPL-2.0
-- @silurus/ooxml 0.88.0 — MIT
+- @silurus/ooxml 0.89.2 — MIT
 - @smithy/fetch-http-handler 5.8.0 — Apache-2.0
 - @sparticuz/chromium-min 153.0.0 — MIT
 - @standard-schema/spec 1.1.0 — MIT
@@ -129,11 +130,14 @@ Project: root
 - disposable-email-domains-js 1.26.0 — CC0-1.0
 - domhandler 6.0.1 — BSD-2-Clause
 - driver.js 1.10.2 — MIT
+- drizzle-kit 1.0.0-rc.4 — MIT
 - drizzle-orm 1.0.0-rc.4 — Apache-2.0
 - entities 8.1.0 — BSD-2-Clause
 - expo 58.0.17 — MIT
 - expo-constants 58.0.13 — MIT
 - expo-crypto 58.0.7 — MIT
+- expo-document-picker 58.0.4 — MIT
+- expo-glass-effect 58.0.4 — MIT
 - expo-linking 58.0.14 — MIT
 - expo-notifications 58.1.6 — MIT
 - expo-router 58.0.25 — MIT
@@ -173,7 +177,7 @@ Project: root
 - parse5-htmlparser2-tree-adapter 7.1.0 — MIT
 - pdfjs-dist 6.4.299 — Apache-2.0
 - pele 1.9.0 — MIT
-- pkijs 3.4.1 — BSD-3-Clause
+- pkijs 3.4.2 — BSD-3-Clause
 - playwright-core 1.63.0 — Apache-2.0
 - postal-mime 4.0.11 — MIT-0
 - postcss 8.5.29 — MIT

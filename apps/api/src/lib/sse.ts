@@ -7,6 +7,8 @@ import type {
   WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { sleep } from "@stll/concurrency/sleep";
 
 import {
   CACHE_CONTROL_HEADER,
@@ -887,6 +889,18 @@ const dispatchRedisMessage = (message: string): void => {
   if (!parsed) {
     return;
   }
+  if (parsed.scope === "mcp-tool-projection") {
+    if (parsed.originInstanceId !== INSTANCE_ID) {
+      mcpToolProjectionDeliveryHandler?.({
+        organizationId: brandPersistedOrganizationId(parsed.id),
+        userId:
+          parsed.userId === undefined
+            ? undefined
+            : brandPersistedUserId(parsed.userId),
+      });
+    }
+    return;
+  }
   if (parsed.scope === "user-access-revoked") {
     const userId = brandPersistedUserId(parsed.id);
     const organizationId = brandPersistedOrganizationId(parsed.organizationId);
@@ -1119,6 +1133,82 @@ export const broadcastToOrganization = (
   );
 };
 
+// ── MCP tool projections ────────────────────────────────
+//
+// Live MCP sessions are held by the replica that serves their stream. The
+// tool-freshness module registers a handler here so a projection change
+// written on another replica reprojects this replica's sessions too.
+
+type McpToolProjectionChange = {
+  organizationId: SafeId<"organization">;
+  userId?: SafeId<"user"> | undefined;
+};
+
+let mcpToolProjectionDeliveryHandler:
+  ((change: McpToolProjectionChange) => void) | null = null;
+
+/** Register this replica's handler for projection changes made elsewhere. */
+export const registerMcpToolProjectionDelivery = (
+  handler: (change: McpToolProjectionChange) => void,
+): void => {
+  mcpToolProjectionDeliveryHandler = handler;
+};
+
+/**
+ * Publish attempts for one projection change. Nothing else re-announces a
+ * change, so a publish lost to a brief Redis outage would leave the other
+ * replicas' clients on a stale list until they reconnect.
+ */
+const MCP_TOOL_PROJECTION_PUBLISH_ATTEMPTS = 3;
+const MCP_TOOL_PROJECTION_RETRY_BASE_MS = 250;
+const MCP_TOOL_PROJECTION_PUBLISH_FAILURE_SINK = failureSink({
+  event: "sse.mcp_tool_projection_publish_failed",
+  expected: [],
+});
+
+const publishMcpToolProjectionAttempt = async (
+  change: McpToolProjectionChange,
+  attempt: number,
+): Promise<void> => {
+  const published = await Result.tryPromise({
+    try: async () => {
+      await activePublisher().publishMcpToolProjectionChange(change, {
+        originInstanceId: INSTANCE_ID,
+      });
+    },
+    catch: (cause) => cause,
+  });
+  if (!Result.isError(published)) {
+    return;
+  }
+  const exhausted = attempt + 1 >= MCP_TOOL_PROJECTION_PUBLISH_ATTEMPTS;
+  observeFailure(published.error, {
+    sink: MCP_TOOL_PROJECTION_PUBLISH_FAILURE_SINK,
+    ctx: {
+      phase: exhausted ? "abandoned" : "retrying",
+      step: `attempt_${attempt + 1}_of_${MCP_TOOL_PROJECTION_PUBLISH_ATTEMPTS}`,
+    },
+  });
+  if (exhausted) {
+    return;
+  }
+  await activeRetryWait()(
+    backoffDelay(attempt, { baseMs: MCP_TOOL_PROJECTION_RETRY_BASE_MS }),
+  );
+  await publishMcpToolProjectionAttempt(change, attempt + 1);
+};
+
+/**
+ * Announce a projection change to the other replicas, retrying a failed
+ * publish with backoff. Never rejects. The caller reprojects its own
+ * sessions; its looped-back copy is ignored.
+ */
+export const announceMcpToolProjectionChange = async (
+  change: McpToolProjectionChange,
+): Promise<void> => {
+  await publishMcpToolProjectionAttempt(change, 0);
+};
+
 // ── Desktop-edit session events ─────────────────────────
 //
 // Session-scoped SSE rides the same Redis channel as workspace
@@ -1244,9 +1334,13 @@ export type SseConnectionAuthorizers = {
   workspace: WorkspaceConnectionAuthorizer;
 };
 
+/** Waits before a failed cross-replica publish is retried. */
+type SseRetryWait = (delayMs: number) => Promise<void>;
+
 type StartSseDependencies = {
   createClient?: CreateSseRedisClient | undefined;
   publisher?: SseBroadcastPublisher | undefined;
+  retryWait?: SseRetryWait | undefined;
 };
 
 type SseLifecycle = {
@@ -1256,6 +1350,7 @@ type SseLifecycle = {
   keepAliveTimer: ReturnType<typeof setInterval>;
   /** Every scope's cross-instance publish goes through this one publisher. */
   publisher: SseBroadcastPublisher;
+  retryWait: SseRetryWait;
   subscriber: SseRedisClient | null;
   /**
    * Whether `subscriber` currently holds a live SUBSCRIBE on its present
@@ -1293,6 +1388,8 @@ let activeLifecycle: SseLifecycle | null = null;
  */
 const activePublisher = (): SseBroadcastPublisher =>
   activeLifecycle?.publisher ?? defaultSseBroadcastPublisher;
+
+const activeRetryWait = (): SseRetryWait => activeLifecycle?.retryWait ?? sleep;
 
 /**
  * Whether this instance currently has a live, subscribed Redis subscriber. Used
@@ -1571,6 +1668,7 @@ export const startSse = (
     ),
     keepAliveTimer: setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL_MS),
     publisher: dependencies.publisher ?? defaultSseBroadcastPublisher,
+    retryWait: dependencies.retryWait ?? sleep,
     subscriber: null,
     subscriptionLive: false,
     attachTimer: null,

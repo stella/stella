@@ -15,6 +15,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, withDescription } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { normalizeEntityName } from "@/api/lib/entities/entity-name";
 import { validateParentId } from "@/api/lib/entities/validate-parent-id";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -53,12 +54,12 @@ export const createEntitiesHandler = async function* ({
 }: CreateEntitiesHandlerProps) {
   const parentId = body.parentId ?? null;
   const kind = body.kind;
-  const name = body.name.trim();
+  const trimmedName = body.name.trim();
 
   // `entities.name` is the canonical display label and is non-null
   // for every kind. Reject empty names here so the row never
   // reaches the DB without one.
-  if (name.length === 0) {
+  if (trimmedName.length === 0) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -66,6 +67,8 @@ export const createEntitiesHandler = async function* ({
       }),
     );
   }
+
+  const name = normalizeEntityName(trimmedName);
 
   const txResult = yield* Result.await(
     safeDb(async (tx) => {

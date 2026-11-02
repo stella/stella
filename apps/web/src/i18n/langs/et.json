@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Selle toimingu jätkamiseks logige uuesti sisse.",
     "resendCode": "Saada kood uuesti aadressile <email>{emailAddress}</email>",
     "selectOrganization": "Valige organisatsioon",
+    "sessionExpired": "Teie seanss on aegunud",
+    "sessionExpiredDescription": "Logige sisse uuel vahekaardil. Sisestatud tekst jääb sellele lehele alles.",
     "signIn": "Logi sisse",
     "signInBeforeInvitation": "Enne organisatsiooni kutse vastuvõtmist peate sisse logima.",
     "signInWithPassword": "Logi sisse parooliga",
@@ -891,6 +893,24 @@
       "title": "Ettepanekud teie tegevuse põhjal",
       "unnamedRecord": "Toimiku kirje"
     },
+    "timeReport": {
+      "billableHours": "Arveldatavad tunnid",
+      "billableShare": "Arveldatava aja osakaal",
+      "change": "Muutus: {value}",
+      "changePoints": "Muutus protsendipunktides: {value}",
+      "collapse": "Ahenda {name}",
+      "empty": "Lisa aega, et see aruanne täituks.",
+      "expand": "Laienda {name}",
+      "internal": "Ettevõttesisene",
+      "pendingEntries": "Kinnitamise ootel",
+      "period": "Periood",
+      "privacy": "See aruanne kasutab ainult salvestatud ajakirjeid. Töölaua tegevus jääb igasse seadmesse.",
+      "title": "Meeskonna ajaülevaade",
+      "tooLargeToLoad": "See aruanne on laadimiseks liiga suur. Lühenda vahemikku või kuva veergudena nädalaid või kuid.",
+      "tooManyCells": "See aruanne on siin kuvamiseks liiga suur. Lühenda vahemikku, kuva veergudena nädalaid või kuid või ekspordi see CSV-failina.",
+      "total": "Kokku",
+      "unbilledValue": "Arveldamata arveldatav väärtus"
+    },
     "timerActive": "Taimer käib",
     "timesheets": "Tööajatabelid",
     "total": "Kokku",
@@ -928,6 +948,7 @@
     "desktopUnavailable": "Ühendage või uuendage stella desktopi.",
     "featureUnavailable": "See funktsioon pole saadaval.",
     "ocrUnavailable": "OCR pole saadaval.",
+    "openSettings": "Ava seaded",
     "translationMissing": "Tõlketeenus pole seadistatud."
   },
   "caseLaw": {
@@ -1104,9 +1125,9 @@
     "loadingMore": "Laadib rohkem...",
     "marginFilter": {
       "label": "Viidatud sätete filter",
-      "paragraph": "{count, plural, =0 {¶{paragraph} ei viita ühelegi sättele} one {¶{paragraph} viitab # sättele} other {¶{paragraph} viitab # sättele}}",
-      "selection": "{count, plural, =0 {Valitud tekst ei viita ühelegi sättele} one {Valitud tekst viitab # sättele} other {Valitud tekst viitab # sättele}}",
-      "unnumberedParagraph": "{count, plural, =0 {See lõik ei viita ühelegi sättele} one {See lõik viitab # sättele} other {See lõik viitab # sättele}}"
+      "paragraph": "{count, plural, one {¶{paragraph} viitab # sättele} other {¶{paragraph} viitab # sättele}}",
+      "selection": "{count, plural, one {Valitud tekst viitab # sättele} other {Valitud tekst viitab # sättele}}",
+      "unnumberedParagraph": "{count, plural, one {See lõik viitab # sättele} other {See lõik viitab # sättele}}"
     },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# lahend oli siia juba salvestatud} other {# lahendit oli siia juba salvestatud}}",
@@ -1337,9 +1358,30 @@
       "none": "Seadistus puudub"
     },
     "skillNeedsUnavailableTools": "Vestluses seda ei pakuta. See vajab tööriista, mis seal pole saadaval: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Peidab klientide nimed, kontonumbrid, aadressid ja muud isikuandmed enne toimiku sisu jagamist AI-teenuse pakkujatega. Kliendi poolel pööratav; avatekst ei lahku kunagi teie tööruumist.",
+      "ares": "Tšehhi ettevõtete otsing IČO või ärinime järgi avalikust ARES-i registrist (majandusüksuste haldusregister, Tšehhi vaste äriregistrile).",
+      "boe": "Hispaania konsolideeritud õigusaktid, igapäevane ametlik väljaanne ja BORME (äriregistri väljaanne) Boletín Oficial del Estado ametlikust avaandmete API-st.",
+      "brreg": "Norra ettevõtete otsing organisasjonsnummeri või ärinime järgi Brreg Enhetsregisteret'i avalikust avatud API-st.",
+      "companiesHouse": "Ühendkuningriigi ettevõtete otsing Companies House'i registrinumbri või ärinime järgi Companies House'i avalike andmete API-st. Vajalik on tasuta API-võti.",
+      "createDocx": "Loob vestlusest Wordi dokumente koos vormingu, tabelite, päiste ja manustatud stiilidega. Tulemuse saab alla laadida ning seda Wordis, LibreOffice'is ja Pagesis muuta.",
+      "denue": "Mehhiko tegevuskohtade ja majandusüksuste otsing DENUE tegevuskoha ID, nime või ärinime järgi INEGI ametlikust DENUE API-st. DENUE on tegevuskohtade kataloog, mitte äriühinguõiguse register Registro Público de Comercio. Vajalik on tasuta INEGI API-tunnus.",
+      "edgar": "USA börsiettevõtete otsing Central Index Key (CIK) järgi SEC-i EDGAR-i esitiste API-st.",
+      "gcis": "Taiwani ettevõtete otsing 統一編號 (tongbian, maksukohustuslase number) või ärinime järgi majandusministeeriumi (MoEA) portaali Commerce Industrial Services avaandmete API-st.",
+      "infosoud": "Tšehhi kohtuasjade otsing ja istungite kalender aadressilt infosoud.gov.cz. Otsi kohtuasja numbri, kohtu või poole järgi, et saada istungite ajad ja menetluse seis.",
+      "krs": "Poola ettevõtete otsing KRS-numbri järgi justiitsministeeriumi Krajowy Rejestr Sądowy (KRS) avatud API-st. Hõlmab registreid Rejestr Przedsiębiorców (äriühingud) ja Rejestr Stowarzyszeń (ühingud ja sihtasutused).",
+      "orsr": "Slovakkia ettevõtete otsing IČO või ärinime järgi justiitsministeeriumi hallatava registri Obchodný register Slovenskej republiky JSON API-st.",
+      "prh": "Soome ettevõtete otsing Y-tunnuse või ärinime järgi asutuse Patentti- ja rekisterihallitus (PRH) avatud API-st AvoinData v3.",
+      "rechercheEntreprises": "Prantsuse ettevõtete otsing SIREN-i, SIRET-i või ärinime järgi avatud API-st recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Slovakkia otsing IČO või nime järgi Slovaki Vabariigi Statistikaameti hallatavas registris Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO). Hõlmab kõiki juriidilisi isikuid ja ettevõtjaid, sealhulgas füüsilisest isikust ettevõtjaid, ühinguid, sihtasutusi ja avalikke asutusi, kes äriregistris ei ole.",
+      "vies": "Üle-ELiline käibemaksukohustuslase numbri kontroll Euroopa Komisjoni käibemaksuteabe vahetamise süsteemi (VIES) REST API kaudu. Kinnitab, kas number on tarnija liikmesriigis registreeritud, ning tagastab registreeritud ettevõtja nime ja aadressi, kui liikmesriik need avaldab.",
+      "webSearch": "Otsib avalikust veebist ja loeb üksikuid lehti. Kui jurisdiktsioon on määratud, suunatakse päringud esmalt esmaallikatesse (kohtud, õigusaktide portaalid), muidu avatud veebi. Lubatakse iga vestluse jaoks eraldi."
+    },
     "toolNames": {
       "anonymize": "Anonüümimine",
       "createDocx": "Loo DOCX",
+      "gcis": "GCIS-i äriregister",
+      "vies": "ELi käibemaksukohustuslase kontroll (VIES)",
       "webSearch": "Veebiotsing"
     },
     "unavailable": "Veel pole saadaval"
@@ -1413,10 +1455,12 @@
           "click": "Klõpsa",
           "fill": "Sisesta tekst",
           "open": "Ava veebisait",
+          "openNewTab": "Ava veebisait uuel vahekaardil",
           "pressKey": "Vajuta klahvi",
           "select": "Vali suvand",
           "snapshot": "Loe lehte",
-          "snapshotContinue": "Jätka lehe lugemist"
+          "snapshotContinue": "Jätka lehe lugemist",
+          "switchTab": "Lülitu vahekaardile"
         },
         "askAgain": "Küsi uuesti",
         "autoApproveReads": "Kinnita lehtede lugemine automaatselt",
@@ -1450,11 +1494,15 @@
     "audioContent": "Loodud heli",
     "browserExtension": {
       "connect": "Ühenda laiendus",
-      "connectDescription": "Klõpsa sellel vahekaardil brauseri tööriistaribal stella laienduse ikooni. Kui küsitakse, luba juurdepääs veebisaitidele ja ühenda see vahekaart.",
+      "connectDescription": "Klõpsa brauseri tööriistaribal stella laienduse ikooni, luba küsimisel juurdepääs veebisaitidele ja ühenda stella. Üks ühendus kehtib kõigil sinu stella vahekaartidel.",
       "connected": "Laiendus on ühendatud",
       "description": "stella saab sinu palvel veebilehti eraldi vahekaardil avada ja lugeda.",
       "install": "Paigalda laiendus",
-      "installDescription": "stella laiendus võimaldab stellal sinu palvel veebilehti eraldi vahekaardil avada ja lugeda. Paigalda see Chrome’i veebipoest."
+      "installDescription": "stella laiendus võimaldab stellal sinu palvel veebilehti eraldi vahekaardil avada ja lugeda. Paigalda see Chrome’i veebipoest.",
+      "reload": "Laadi vahekaart uuesti",
+      "reloadDescription": "Sinu stella laiendus on uuem kui see vahekaart. Laadi vahekaart uuesti, et laiendust edasi kasutada.",
+      "updating": "Laienduse uuendus ootel",
+      "updatingDescription": "Sinu stella laiendus on vanem versioon. Chrome uuendab selle automaatselt, tavaliselt mõne tunni jooksul; siis saab stella sinu eest jälle veebilehti avada ja lugeda."
     },
     "cancelQueuedMessage": "Tühista järjekorras sõnum",
     "caseLawGreeting": "Esita küsimusi selle otsuse kohta — täistekst on siin saadaval.",
@@ -2392,7 +2440,6 @@
     "unverifiedCitationHint": "Seda tsitaati ei õnnestunud lähtedokumendiga sobitada.",
     "uploadFiles": "Laadi failid üles",
     "urlIdentifier": "Lühitunnus",
-    "urlIdentifierPlaceholder": "minu-organisatsioon",
     "user": "Kasutaja",
     "value": "Väärtus",
     "vatId": "Käibemaksukohustuslase number",
@@ -2443,6 +2490,7 @@
     "scopeMemoryWrite": "Assistendi mälestuste loomine ja muutmine",
     "scopeOfflineAccess": "Hoida teid sisse logituna ilma korduva nõusolekuta",
     "scopeOnboarding": "Seadistada teie organisatsiooni praktikajurisdiktsioonid",
+    "scopeOrganizationCreate": "Luua uusi organisatsioone, mille omanikuks saad sina",
     "scopeProfile": "Pääseda ligi teie profiiliandmetele",
     "scopeRead": "Lugeda teie dokumente, toimikuid ja kontakte",
     "scopeReadAnonymized": "Lugeda teie dokumentide ja toimikute anonüümitud versioone",
@@ -2888,6 +2936,7 @@
       "aiOutputModerated": "Tehisintellekti teenusepakkuja modereeris väljundit. Sõnastage taotlus ümber või valige teine mudel.",
       "aiProviderTaskUnsupported": "Seadistatud tehisintellekti teenusepakkuja ei saa seda ülesannet täita. Valige teenusepakkuja, kes saab.",
       "aiUnknown": "Tehisintellekti taotlus nurjus. Proovige uuesti.",
+      "alreadyOrganizationMember": "See inimene on juba selle organisatsiooni liige.",
       "clauseDirectivesInvalid": "Seotud klausel sisaldab vigaseid direktiive. Enne malli täitmist parandage klausel.",
       "clauseDirectivesInvalidDetails": "Klausel {clauseName} väljas {slotName} sisaldab vigaseid direktiive. Avage klausliredaktor, parandage nimetatud lõigud ja täitke mall uuesti.",
       "clauseDirectivesOverrideInvalidDetails": "Klausli {clauseName} asendustekst väljas {slotName} sisaldab vigaseid direktiive. Parandage selle täitmise asendustekst ja proovige uuesti.",
@@ -2903,12 +2952,19 @@
       "idempotencyInProgress": "Seda päringut veel töödeldakse. Oodake hetk ja proovige uuesti.",
       "idempotencyKeyReused": "Andmed on eelmise katsega võrreldes muutunud. Lähtestage vorm ja proovige uuesti.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
+      "invitationAlreadyPending": "Sellel inimesel on juba ootel kutse. Saatke see uuesti jaotisest Ootel kutsed.",
+      "invitationEmailUnverified": "Sellele kutsele vastamiseks kinnitage oma e-posti aadress.",
+      "invitationLimitReached": "See organisatsioon on jõudnud kutsete piirangu täitumiseni. Tühistage esmalt mõni ootel kutse.",
+      "invitationOtherRecipient": "See kutse saadeti teisele e-posti aadressile.",
+      "invitationRoleNotAllowed": "Selle rolliga ei saa kedagi kutsuda. Valige muu roll.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",
       "legalSourceFilePropertyMissing": "Sellel toimikul puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
       "matterContactCapacityExceeded": "Selles toimikus on rohkem kontakte, kui saab kuvada. Ülejäänud kontaktide kuvamiseks eemaldage nähtavaid kontaktiseoseid.",
       "matterContactCapacityReached": "See toimik on saavutanud kontaktide arvu ülempiiri. Enne uue kontakti lisamist eemaldage üks kontaktiseos.",
       "mcpAuthorizationApprovalRequired": "Enne ühendamist peab administraator selle ühenduse heaks kiitma.",
       "notOrganizationMember": "Te ei ole selle organisatsiooni liige.",
+      "organizationLastOwner": "Organisatsioonil peab olema omanik. Andke esmalt omandiõigus üle.",
+      "organizationMemberLimitReached": "See organisatsioon on jõudnud liikmete piirangu täitumiseni.",
       "providerKeyRejected": "Teenusepakkuja lükkas API-võtme tagasi.",
       "providerRateLimited": "Teenusepakkuja päringulimiit on täis. Proovige varsti uuesti.",
       "thirdPartyBoundaryRefusal": "Päring üritas kasutada sisu väljaspool lubatud tööruumi konteksti.",
@@ -2969,7 +3025,6 @@
     "failedToVerifyOtp": "Koodi kinnitamine ebaõnnestus",
     "matterNotFound": "Toimikut ei leitud",
     "partyAlreadyExists": "Kontaktil on selles toimikus juba see roll",
-    "slugAlreadyTaken": "See slug on juba kasutusel",
     "uploadFailed": "Üleslaadimine ebaõnnestus"
   },
   "feedback": {
@@ -3035,6 +3090,7 @@
     },
     "compareChangeSummary": "Muudatused tüübi järgi",
     "compareCreated": "Jälgitud-muudatuste dokument loodud",
+    "compareDocxOnly": "Võrdle (ainult DOCX)",
     "compareFailed": "Võrdlus ebaõnnestus",
     "compareNeedsTwoVersions": "Laadige võrdlemiseks üles teine ​​DOCX-i versioon.",
     "compareNoChanges": "Toetatud erinevusi ei leitud.",
@@ -3090,6 +3146,7 @@
     "selectVersion": "Vali versioon",
     "setLabel": "Määra silt",
     "showDiff": "Näita erinevusi",
+    "showText": "Kuva tekst",
     "showVersionList": "Näita versiooniajalugu",
     "uploadDate": "Üleslaadimise kuupäev",
     "uploadNewVersion": "Laadi üles uus versioon",
@@ -4049,6 +4106,28 @@
       "skippedReasonOutsideSkillFolder": "Väljaspool oskuse kausta",
       "skippedReasonUnsupportedExtension": "Failitüüpi ei toetata",
       "skippedReasonUnsupportedFolder": "Pole ressursikaustas",
+      "starter": {
+        "compare": {
+          "body": "Võrdle selle dokumendi kahte versiooni ja too välja kõik olulised muudatused koos nende asukohaga.",
+          "description": "Too välja kõik olulised muudatused kahe versiooni vahel",
+          "name": "Võrdle versioone"
+        },
+        "draft": {
+          "body": "Koosta sellele kirjale tasakaalukas vastus. Hoia professionaalset tooni, käsitle iga tõstatatud punkti ja too välja avatud küsimused, mida pean kinnitama.",
+          "description": "Koosta kirjale professionaalne vastus",
+          "name": "Koosta vastus"
+        },
+        "risks": {
+          "body": "Vaata see dokument üle õiguslike riskide, puuduvate kaitsesätete ja ebaselgete klauslite leidmiseks. Too iga leiu juures välja konkreetne klausel.",
+          "description": "Leia õiguslikud riskid ja ebaselged klauslid",
+          "name": "Leia riskid"
+        },
+        "summarize": {
+          "body": "Tee sellest dokumendist kokkuvõte. Käsitle pooli, peamisi kohustusi, kuupäevi, rahalisi tingimusi ning lõpetamist või vastutust puudutavaid klausleid.",
+          "description": "Saa struktureeritud kokkuvõte põhitingimustest",
+          "name": "Tee dokumendist kokkuvõte"
+        }
+      },
       "uploadHelp": "Kasuta SKILL.md-faili või .zip-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/tee/oskuseni",
       "version": "Versioon: {version}"
@@ -4722,7 +4801,15 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Kasutusel on vaikeseaded"
     },
+    "creationEvaluationLimitReached": "Olete kasutanud ära kõik {limit} organisatsioonide prooviperioodi. Organisatsiooni kustutamine ei taasta prooviperioodi. Kasutage olemasolevat organisatsiooni või võtke tasulise ligipääsu saamiseks ühendust klienditoega.",
+    "creationInvalidName": "Sisesta sobiv organisatsiooni nimi (kuni {maxLength} märki).",
+    "creationNotAllowed": "Selle kontoga ei saa organisatsioone luua.",
+    "creationOutcomeUnknown": "Päring võis organisatsiooni luua. Tulemuse kontrollimiseks proovi uuesti.",
+    "creationRateLimited": "Hiljuti on loodud liiga palju organisatsioone. Proovi hiljem uuesti.",
+    "creationRefused": "Organisatsiooni ei saanud luua. Kontrolli andmeid ja proovi uuesti.",
+    "creationSlugConflict": "See organisatsiooni aadress on juba kasutusel. Vali teine nimi või aadress.",
     "invitations": {
+      "cancelConfirmDescription": "Aadressile {email} saadetud kutse link lakkab töötamast. Selle inimese uuesti kutsumiseks saatke uus kutse.",
       "cancelInvitation": "Tühista kutse",
       "emailAddressLabel": "E-posti aadress",
       "emailAddressPlaceholder": "kasutaja@example.com",
@@ -4730,12 +4817,14 @@
       "inviteMember": "Kutsu liige",
       "inviteMemberDescription": "Saatke kutse oma organisatsiooniga liitumiseks",
       "invited": "Kutsutud",
+      "keepInvitation": "Jäta kutse alles",
       "noInvitationsFound": "Kutseid ei leitud",
       "resendInvitation": "Saada kutse uuesti",
       "sendInvitation": "Saada kutse",
       "statuses": {
         "accepted": "Vastu võetud",
         "canceled": "Tühistatud",
+        "expired": "Aegunud",
         "pending": "Ootel",
         "rejected": "Tagasi lükatud"
       }
@@ -4769,6 +4858,8 @@
       "typeEmailToConfirm": "Kinnitamiseks tippige {email}",
       "updateRole": "Uuenda roll"
     },
+    "newOrganization": "Uus organisatsioon",
+    "newOrganizationDescription": "Loo organisatsioon, mille omanikuks saad sina.",
     "roles": {
       "admin": "Administraator",
       "descriptions": {
@@ -4784,6 +4875,9 @@
       "owner": "Omanik"
     },
     "settingsDescription": "Muutke oma organisatsiooni nime ja slugi",
+    "startOver": "Alusta uuesti",
+    "startOverDescription": "Algne päring võis organisatsiooni juba luua. Enne uuesti alustamist kontrolli oma organisatsioone; uus päring võib luua veel ühe organisatsiooni.",
+    "startOverTitle": "Kas saata uus loomispäring?",
     "switchOrganization": "Vaheta organisatsiooni"
   },
   "publicTools": {
@@ -4960,6 +5054,7 @@
     "caseLawEmptyState": "Alustage tippimist, et otsida kohtulahendeid.",
     "caseLawMatchingDecisions": "{count, plural, one {# sobiv kohtulahend} other {# sobivat kohtulahendit}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ sobiv kohtulahend} other {#+ sobivat kohtulahendit}}",
+    "chatCoveragePartial": "Kõiki vestlusi ei otsitud täielikult.",
     "continueInChat": "Jätka vestluses",
     "dateFrom": "Alates",
     "dateTo": "Kuni",
@@ -5096,8 +5191,8 @@
       "desktopDocumentsTitle": "Dokumentide muutmine töölaual",
       "desktopDownloadMac": "Laadi alla macOS-i jaoks",
       "desktopDownloadOtherMac": "Kasutate Windowsit? Laadi alla Windowsi jaoks",
-      "desktopDownloadOtherWindows": "Või laadi alla .msi-installer IT-hallatavate juurutuste jaoks",
       "desktopDownloadWindows": "Laadi alla Windowsi jaoks",
+      "desktopDownloadWindowsArm": "Windows ARM-seadmes? Laadi alla ARM-versioon",
       "desktopHeroTitle": "Teie lõikelaud, valmis siis, kui seda vajate",
       "desktopInstallMacStep": "Avage DMG ja lohistage stella desktop kausta Applications.",
       "desktopInstallOpenStep": "Avage stella desktop üks kord. Lõikelaud ilmub kohe ja jääb kättesaadavaks macOS-i menüüribalt või Windowsi süsteemisalvest.",
@@ -5318,6 +5413,7 @@
         "legal_list_item": "õigusnimekirja kirje",
         "legal_list_verification": "õigusnimekirja kontroll",
         "legal_resolve": "õigusviite otsing",
+        "legislation_matter_link": "õigusakti seos toimikuga",
         "machine_api_key": "masina API-võti",
         "mcp_connection": "MCP-ühendus",
         "mcp_gateway_tool": "MCP-lüüsi tööriist",
@@ -5357,6 +5453,12 @@
         "workspace_contact": "toimiku kontakt",
         "workspace_member": "toimiku liige"
       },
+      "billingDrafts": {
+        "description": "Koostage töö kirjeldused valitud tegevustest ning büroo või kliendi teadmiste failidest. Iga kasutaja annab ka oma nõusoleku. Enne mustandite lubamist lisage büroo juhised.",
+        "firm": "Büroo juhised",
+        "ledes": "Elektrooniline arveldamine (LEDES)",
+        "title": "Tehisintellekti arveldusmustandid"
+      },
       "documentProcessing": {
         "description": "Tuvastage skannitud PDF-ides tekst automaatselt, et nende sisu oleks otsitav.",
         "title": "Dokumenditeksti tuvastamine",
@@ -5379,6 +5481,7 @@
         "title": "Mälu ekstraktimine",
         "toggleLabel": "Paku taustal mälukirjeid vestluste ajaloost"
       },
+      "pastInvitations": "Varasemad kutsed",
       "pendingInvitations": "Ootel kutsed",
       "practiceJurisdictions": "Jurisdiktsioonid",
       "practiceJurisdictionsDescription": "Valige teile asjakohased jurisdiktsioonid.",
@@ -5771,6 +5874,7 @@
       "open": "Avatud"
     },
     "subtasks": "Alamülesanded",
+    "taskCompleted": "Ülesanne on lõpetatud",
     "title": "Ülesanded",
     "untitled": "Pealkirjata ülesanne",
     "workTypeValues": {
@@ -6216,8 +6320,7 @@
   "validation": {
     "invalidEmail": "Sisestage kehtiv e-posti aadress.",
     "organizationNameRequired": "Organisatsiooni nimi on kohustuslik",
-    "slugFormat": "Slug tohib sisaldada ainult väiketähti, numbreid ja sidekriipse",
-    "slugRequired": "Slug on kohustuslik"
+    "slugFormat": "Slug tohib sisaldada ainult väiketähti, numbreid ja sidekriipse"
   },
   "verify": {
     "history": "{history, select, refiled {Trükitud viitenumbriga <bdi>{reference}</bdi>; nüüd on dokument viitenumbriga <bdi>{currentReference}</bdi> toimikus <bdi>{matterName}</bdi>.} superseded {See viitenumber osutab versioonile {version, number}; praegune versioon on {currentVersion, number}.} other {Trükitud viitenumbriga <bdi>{reference}</bdi>; nüüd on dokument viitenumbriga <bdi>{currentReference}</bdi> toimikus <bdi>{matterName}</bdi>. See viitenumber osutab versioonile {version, number}; praegune versioon on {currentVersion, number}.}}",
@@ -6284,6 +6387,7 @@
     },
     "createNewWorkspace": "Loo uus toimik",
     "defaultName": "Pealkirjata",
+    "deleteFromMatter": "Kustuta toimikust…",
     "deleteItem": "Kustuta element",
     "deleteItems": "Kustuta {count, plural, one {# element} other {# elementi}}",
     "deleteItemsDescription": "Kas soovite kindlasti kustutada {count, plural, one {# elemendi} other {# elementi}}? Seda toimingut ei saa tagasi võtta.",
@@ -6379,6 +6483,7 @@
       "downloadSearchablePdf": "Otsitav PDF",
       "downloadWithComments": "Laadi alla koos kommentaaridega",
       "emptyFile": "Fail on tühi.",
+      "fileTooLarge": "Fail on suurem kui {limit, number} MB.",
       "includeReferenceNumber": "Lisa viitenumber",
       "itemLimitReached": "See toimik on jõudnud üksuste piirini.",
       "maxEntitiesReached": "Kirjete piirarv on täis",
@@ -6668,11 +6773,14 @@
         "empty": "Selles toimikus pole veel tegevust.",
         "fields": {
           "dueDate": "tähtaeg",
+          "name": "nimi",
           "parentFolder": "ülemkaust",
           "priority": "prioriteet",
           "property": "omadus",
           "schedule": "ajakava",
-          "sortOrder": "järjestus"
+          "sortOrder": "järjestus",
+          "status": "olek",
+          "type": "tüüp"
         },
         "filterLabel": "Filtreeri tegevust",
         "filters": {
@@ -6722,8 +6830,18 @@
           "team": "toimiku meeskond",
           "translation": "tõlge"
         },
+        "taskLinks": {
+          "added": "Sidus {name} ülesandega",
+          "addedUnnamed": "Sidus elemendi ülesandega",
+          "removed": "Eemaldas {name} sidumise ülesandelt",
+          "removedUnnamed": "Eemaldas elemendi sidumise ülesandelt"
+        },
         "title": "Tegevus",
         "updatedFields": "Uuendati: {fields}",
+        "versions": {
+          "added": "Lisas versiooni {version} dokumendile",
+          "deleted": "Kustutas versiooni {version} dokumendist"
+        },
         "views": {
           "list": "Loendivaade",
           "timeline": "Ajajoone vaade"

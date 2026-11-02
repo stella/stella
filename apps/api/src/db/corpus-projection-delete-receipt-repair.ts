@@ -27,8 +27,9 @@
 import { panic } from "better-result";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+import type { Verdict } from "@stll/db-load-gate/health";
 
+import { loadGateHealthConfig } from "../env-online-index";
 import { isRecord } from "../lib/type-guards";
 import { createBackfillRuntime } from "./backfill-runtime";
 import { readConstraintCompletion } from "./online-constraint-completion";
@@ -112,7 +113,7 @@ const repairFrom = async (
     tableName: TABLE_NAME,
     initialSize: BATCH,
     config: {
-      ...defaultConfig,
+      ...loadGateHealthConfig(),
       batchLockTimeoutMs: 30_000,
       batchStatementTimeoutMs: 60_000,
     },

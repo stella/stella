@@ -5,8 +5,6 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { Skeleton } from "@stll/ui/skeleton";
-
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { workflowsRouteAvailable } from "@/hooks/use-workflows-preview";
@@ -28,7 +26,10 @@ import { toSafeId } from "@/lib/safe-id";
 import { routePresentation } from "@/routes/-route-presentation";
 import { FlowEditor } from "@/routes/knowledge/-components/flow-editor";
 import type { FlowExampleKey } from "@/routes/knowledge/-components/flow-examples";
-import { FlowList } from "@/routes/knowledge/-components/flow-list";
+import {
+  FlowList,
+  FlowListSkeleton,
+} from "@/routes/knowledge/-components/flow-list";
 import type {
   FlowDefinitionBody,
   FlowDefinitionDetail,
@@ -56,8 +57,6 @@ export const Route = createFileRoute("/knowledge/workflows")({
   component: GuardedWorkflowsPage,
   head: () => ({ meta: [{ title: pageTitle("common.workflows") }] }),
 });
-
-const FLOW_ROW_KEYS = ["a", "b", "c", "d", "e"];
 
 // The GET response carries workspace ids as plain strings; the PUT body
 // expects branded SafeIds, so rebrand before sending a fetched trigger back.
@@ -91,29 +90,6 @@ const toTriggerBody = (
   }
   return trigger;
 };
-
-function WorkflowsPageSkeleton() {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-end gap-1 border-b px-4 py-2">
-        <Skeleton className="h-8 w-8 rounded-md" />
-        <Skeleton className="h-8 w-28 rounded-md" />
-      </div>
-      <ul className="flex-1 divide-y overflow-y-auto">
-        {FLOW_ROW_KEYS.map((key) => (
-          <li className="flex items-center gap-3 px-4 py-3" key={key}>
-            <Skeleton className="size-9 shrink-0 rounded-lg" />
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <Skeleton className="h-4 w-48" />
-              <Skeleton className="h-3 w-32" />
-            </div>
-            <Skeleton className="h-5 w-9 rounded-full" />
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 function RouteComponent() {
   const t = useTranslations();
@@ -206,7 +182,7 @@ function RouteComponent() {
   }
 
   if (isLoading) {
-    return <WorkflowsPageSkeleton />;
+    return <FlowListSkeleton />;
   }
 
   if (isError) {
@@ -251,7 +227,7 @@ function RouteComponent() {
 
 function GuardedWorkflowsPage() {
   return (
-    <KnowledgeMemberOnly pending={<WorkflowsPageSkeleton />}>
+    <KnowledgeMemberOnly pending={<FlowListSkeleton />}>
       {(organizationId) => <RouteComponent key={organizationId} />}
     </KnowledgeMemberOnly>
   );

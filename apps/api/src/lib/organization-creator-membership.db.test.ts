@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
+import { organizationsRoute } from "@/api/handlers/organizations/routes";
 import { getAuth } from "@/api/lib/auth";
-import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import {
   createHumanSession,
   signInHuman,
@@ -12,6 +12,7 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 let database: TestDatabase;
@@ -24,44 +25,42 @@ afterAll(async () => {
 });
 
 describe("organization creator membership", () => {
-  test("browser creation and onboarding each persist exactly one owner", async () => {
+  test("browser creation persists exactly one owner", async () => {
     const db = getDatabase();
     const browser = await signInHuman(
       `creator-browser-${Bun.randomUUIDv7()}@stella.dev`,
     );
-    for (const keepCurrentActiveOrganization of [false, true]) {
-      const slug = `creator-browser-${Bun.randomUUIDv7()}`;
-      const headers = browser.headers();
-      headers.set("content-type", "application/json");
-      headers.set("origin", "http://localhost:3000");
-      const response = await getAuth().handler(
-        new Request(getAuthEndpointUrl("organization/create"), {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            name: "Creator membership",
-            slug,
-            keepCurrentActiveOrganization,
-          }),
+    await using api = serveRoutesForTest(organizationsRoute);
+    const slug = `creator-browser-${Bun.randomUUIDv7()}`;
+    const headers = browser.headers();
+    headers.set("content-type", "application/json");
+    headers.set("origin", "http://localhost:3000");
+    const response = await api.fetch(
+      new Request("http://localhost/organizations", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: "Creator membership",
+          slug,
         }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    const org = await db.query.organization.findFirst({
+      where: { slug: { eq: slug } },
+    });
+    expect(org).toBeDefined();
+    if (!org) {
+      throw new TypeError(
+        "Successful organization creation must persist its organization",
       );
-      expect(response.status).toBe(200);
-      const org = await db.query.organization.findFirst({
-        where: { slug: { eq: slug } },
-      });
-      expect(org).toBeDefined();
-      if (!org) {
-        throw new TypeError(
-          "Successful organization creation must persist its organization",
-        );
-      }
-      expect(
-        await db
-          .select({ role: member.role, userId: member.userId })
-          .from(member)
-          .where(eq(member.organizationId, org.id)),
-      ).toEqual([{ role: "owner", userId: browser.userId }]);
     }
+    expect(
+      await db
+        .select({ role: member.role, userId: member.userId })
+        .from(member)
+        .where(eq(member.organizationId, org.id)),
+    ).toEqual([{ role: "owner", userId: browser.userId }]);
   }, 120_000);
 
   test("system userId creation without session headers persists exactly one owner", async () => {

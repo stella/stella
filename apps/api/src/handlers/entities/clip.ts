@@ -11,6 +11,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { defaultVarcharSchema } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { normalizeEntityName } from "@/api/lib/entities/entity-name";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -54,6 +55,7 @@ export default createSafeHandler(
       recordAuditEvent,
       body: { title, url, snippet, citation, jurisdiction, sourceType },
     } = ctx;
+    const name = normalizeEntityName(title);
 
     // Non-authoritative fast-fail: cheap, unlocked, avoids doing
     // metadata work for a request that's obviously over the limit.
@@ -102,7 +104,7 @@ export default createSafeHandler(
           id: entityId,
           workspaceId,
           kind: "link",
-          name: title,
+          name,
           metadata,
           createdBy: user.id,
           docSequence: entityStamp.docSequence,
@@ -136,7 +138,7 @@ export default createSafeHandler(
                 old: null,
                 new: {
                   kind: "link",
-                  name: title,
+                  name,
                   metadata,
                   currentVersionId: entityVersionId,
                 },

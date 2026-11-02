@@ -446,6 +446,11 @@ const CENSUS: readonly CensusEntry[] = [
     path: "off-request",
     why: "The generated CLI's client transport deadline; the server does not wait on it.",
   },
+  {
+    site: "apps/api/src/mcp/tool-freshness.ts#this.#reprojectionDeadlineMs",
+    path: "off-request",
+    why: "Bounds a live session's tool reprojection; registration and every publish run detached from the request that triggered them.",
+  },
   // --- Public corpus handlers the tools share --------------------------------
   {
     site: "apps/api/src/handlers/case-law/decisions/document-on-demand.ts#requestBoundedTimeoutMs(READ_BUDGET_MS)",

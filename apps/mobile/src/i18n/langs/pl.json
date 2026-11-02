@@ -165,7 +165,16 @@
     "preview": "Otwórz podgląd",
     "previewDescription": "Ten plik otworzy się w podglądzie systemowym.",
     "unrendered": "Tego dokumentu nie można tu wyświetlić, ale podgląd systemowy może go otworzyć.",
-    "details": "Szczegóły"
+    "details": "Szczegóły",
+    "zoomOut": "Pomniejsz",
+    "zoomIn": "Powiększ",
+    "zoomFit": "Dopasuj do szerokości",
+    "fit": "Szerokość",
+    "appearance": {
+      "system": "Wygląd: automatyczny",
+      "light": "Wygląd: jasny",
+      "dark": "Wygląd: ciemny"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -193,7 +202,8 @@
     "server": "Serwer",
     "signOut": "Wyloguj się",
     "deleteAccount": "Usuń konto",
-    "deleteAccountHint": "Otwiera Twoje konto w przeglądarce, gdzie możesz je usunąć wraz ze wszystkim, co do Ciebie należy."
+    "deleteAccountHint": "Otwiera Twoje konto w przeglądarce, gdzie możesz je usunąć wraz ze wszystkim, co do Ciebie należy.",
+    "signOutFailed": "Nie udało się wylogować. Spróbuj ponownie."
   },
   "header": {
     "search": "Szukaj"
@@ -293,6 +303,29 @@
   "palette": {
     "placeholder": "Szukaj spraw i rozmów lub uruchom polecenie",
     "noResults": "Nic nie pasuje do „{query}”"
+  },
+  "search": {
+    "placeholder": "Szukaj w stella",
+    "clear": "Wyczyść wyszukiwanie",
+    "cancel": "Anuluj",
+    "recent": "Ostatnie wyszukiwania",
+    "clearRecent": "Wyczyść",
+    "hint": "Szukaj w sprawach, dokumentach, zadaniach, rozmowach i orzecznictwie.",
+    "filters": "Filtry",
+    "noResultsTitle": "Brak wyników",
+    "noResults": "Nic nie pasuje do „{query}”. Spróbuj innych słów lub usuń filtr.",
+    "loadFailed": "Nie udało się wykonać wyszukiwania.",
+    "retry": "Spróbuj ponownie",
+    "type": {
+      "document": "Dokumenty",
+      "matter": "Sprawy",
+      "task": "Zadania",
+      "caseLaw": "Orzecznictwo",
+      "chat": "Rozmowy",
+      "folder": "Foldery",
+      "message": "E-maile",
+      "link": "Linki"
+    }
   },
   "pane": {
     "showList": "Pokaż listę",

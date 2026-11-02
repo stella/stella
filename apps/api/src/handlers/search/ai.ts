@@ -234,6 +234,8 @@ type SearchAIContext = {
 
 type SearchSummaryContext = SearchAIContext & {
   accessibleWorkspaceIds: SafeId<"workspace">[];
+  /** The caller's access-token scopes; `undefined` for a browser session. */
+  grantedScopes: readonly string[] | undefined;
 };
 
 type SearchResultContext = {
@@ -268,6 +270,8 @@ const citableSummaryTypes = (
 type SearchSummaryChatContext = {
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   accessibleWorkspaceIds: SafeId<"workspace">[];
+  /** The caller's access-token scopes; `undefined` for a browser session. */
+  grantedScopes: readonly string[] | undefined;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
@@ -489,6 +493,7 @@ export const summarizeSearchResults = async ({
   admission,
   userId,
   accessibleWorkspaceIds,
+  grantedScopes,
   orgAIConfig,
   managedAIResidency,
   orgAIConfigStatus,
@@ -520,6 +525,7 @@ export const summarizeSearchResults = async ({
 
   const contextsResult = await loadSummaryContexts({
     accessibleWorkspaceIds,
+    grantedScopes,
     filters: body,
     organizationId,
     userId,
@@ -669,6 +675,7 @@ const resolveSummaryCitations = ({
 export const createSearchSummaryChatThread = async ({
   featureAccessSnapshot,
   accessibleWorkspaceIds,
+  grantedScopes,
   body,
   organizationId,
   safeDb,
@@ -694,6 +701,7 @@ export const createSearchSummaryChatThread = async ({
 
   const contextsResult = await loadSummaryContexts({
     accessibleWorkspaceIds,
+    grantedScopes,
     filters: body,
     organizationId,
     userId,
@@ -860,6 +868,7 @@ export const createSearchSummaryChatThread = async ({
 
 const loadSummaryContexts = async ({
   accessibleWorkspaceIds,
+  grantedScopes,
   filters,
   organizationId,
   userId,
@@ -868,6 +877,7 @@ const loadSummaryContexts = async ({
   scopedDb,
 }: {
   accessibleWorkspaceIds: SafeId<"workspace">[];
+  grantedScopes: readonly string[] | undefined;
   filters: Pick<
     SummarizeSearchBody,
     | "editedByUserIds"
@@ -897,6 +907,7 @@ const loadSummaryContexts = async ({
       accessibleWorkspaceIds,
       selectedWorkspaceIds,
       types,
+      grantedScopes,
       editedByUserIds: filters.editedByUserIds,
       mimeTypes: filters.mimeTypes,
       updatedFrom: filters.updatedFrom,

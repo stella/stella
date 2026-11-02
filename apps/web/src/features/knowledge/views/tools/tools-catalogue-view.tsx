@@ -22,7 +22,10 @@ import {
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
 import { McpIcon } from "@/components/mcp-icon";
 import {
   ResponsiveActionToolbar,
@@ -118,11 +121,19 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
     const key = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
     return key ? t(key) : entry.displayName;
   };
+  const localizedDescription = (entry: TTool) => {
+    const key = nativeToolDescriptionKey({
+      slug: entry.slug,
+      kind: entry.kind,
+    });
+    return key ? t(key) : entry.description;
+  };
   const filtered = filterToolsCatalogueEntries({
     compareName: compareByLocale(locale),
     entries,
     filter,
     jurisdictionFilter,
+    localizedDescription,
     localizedName,
     query,
   });
