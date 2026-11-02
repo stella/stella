@@ -120,21 +120,23 @@ test(
             let order = 0n;
             for (const step of steps) {
               // db-await-in-loop: each observation must see the preceding committed transition.
-              const outcome = await processDecision({
-                input: observation(step),
-                scopedDb,
-                sourceId,
-                corpus: {
-                  mode: "off",
-                  transfer: {
-                    layout: "packs",
-                    putPacks: () =>
-                      panic("Off-mode sequences must not transfer documents"),
+              const outcome = (
+                await processDecision({
+                  input: observation(step),
+                  scopedDb,
+                  sourceId,
+                  corpus: {
+                    mode: "off",
+                    transfer: {
+                      layout: "packs",
+                      putPacks: () =>
+                        panic("Off-mode sequences must not transfer documents"),
+                    },
                   },
-                },
-                observationOrder: ++order,
-                observedAt: new Date("2026-10-29T08:00:00Z"),
-              });
+                  observationOrder: ++order,
+                  observedAt: new Date("2026-10-29T08:00:00Z"),
+                })
+              ).unwrap();
               expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
               // db-await-in-loop: assert durability after every transition, not just the final state.
               const rows = await db
@@ -204,24 +206,26 @@ test("legacy inline fulltext without persisted proof is adopted before sibling i
   const originalId = createSafeId<"caseLawDecision">();
   const input = observation("weak-full");
   const ingest = async (fulltext: string, observationOrder: bigint) =>
-    await processDecision({
-      input: plainTextIngestionResult({
-        ...input,
-        fulltext,
-        rawHash: fulltext,
-      }),
-      scopedDb,
-      sourceId,
-      corpus: {
-        mode: "off",
-        transfer: {
-          layout: "packs",
-          putPacks: () => panic("Inline fixture must not transfer documents"),
+    (
+      await processDecision({
+        input: plainTextIngestionResult({
+          ...input,
+          fulltext,
+          rawHash: fulltext,
+        }),
+        scopedDb,
+        sourceId,
+        corpus: {
+          mode: "off",
+          transfer: {
+            layout: "packs",
+            putPacks: () => panic("Inline fixture must not transfer documents"),
+          },
         },
-      },
-      observationOrder,
-      observedAt: new Date("2026-10-29T08:00:00Z"),
-    });
+        observationOrder,
+        observedAt: new Date("2026-10-29T08:00:00Z"),
+      })
+    ).unwrap();
   const stored = async () =>
     await db
       .select()
@@ -376,21 +380,23 @@ test(
                 publications.at(step) ??
                 panic("Generated publication index is invalid");
               // db-await-in-loop: observations and their invariants require committed sequence order.
-              const outcome = await processDecision({
-                input,
-                scopedDb,
-                sourceId,
-                corpus: {
-                  mode: "off",
-                  transfer: {
-                    layout: "packs",
-                    putPacks: () =>
-                      panic("Off-mode sequences must not transfer documents"),
+              const outcome = (
+                await processDecision({
+                  input,
+                  scopedDb,
+                  sourceId,
+                  corpus: {
+                    mode: "off",
+                    transfer: {
+                      layout: "packs",
+                      putPacks: () =>
+                        panic("Off-mode sequences must not transfer documents"),
+                    },
                   },
-                },
-                observationOrder: ++order,
-                observedAt: new Date("2026-10-29T08:00:00Z"),
-              });
+                  observationOrder: ++order,
+                  observedAt: new Date("2026-10-29T08:00:00Z"),
+                })
+              ).unwrap();
               expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
               // db-await-in-loop: inspect every persisted intermediate state.
               const rows = await db
