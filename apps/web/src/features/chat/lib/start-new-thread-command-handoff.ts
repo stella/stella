@@ -37,7 +37,7 @@ export const startNewThreadCommandHandoff = async ({
 }: StartNewThreadCommandHandoffArgs) => {
   const message = await buildChatRequestMessage({ files, html });
   if (message.isErr()) {
-    return message;
+    return Result.err(message.error);
   }
   const activeSkill = context.getActiveSkill?.();
   if (activeSkill !== undefined) {
