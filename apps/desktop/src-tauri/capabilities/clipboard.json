@@ -38,6 +38,7 @@
     "allow-clipboard-open-editor",
     "allow-clipboard-copy-item",
     "allow-clipboard-copy-items",
+    "allow-clipboard-copy-selection",
     "allow-clipboard-hide",
     "allow-clipboard-open-stella",
     "allow-account-record-use",

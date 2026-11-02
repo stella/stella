@@ -3294,10 +3294,7 @@ impl ClipboardHandler for HistoryClipboardHandler {
         code: DesktopTelemetryErrorCode::PersistenceFailed,
       });
     }
-    if formats
-      .iter()
-      .any(|format| format.eq_ignore_ascii_case(INTERNAL_CLIPBOARD_FORMAT))
-    {
+    if is_internal_clipboard_write(&formats) {
       manager.clear_suppression();
       return;
     }
@@ -4040,8 +4037,9 @@ fn current_clipboard_export_file() -> Result<Option<PathBuf>, String> {
 }
 
 /// Whether a write carries the internal marker that makes the watcher skip it.
-/// Only content history already holds may be marked; anything else would be
-/// copied without ever reaching history.
+/// Only content history already holds, or a selection copied inside a Clips
+/// window, may be marked; anything else would be copied without ever reaching
+/// history.
 enum ClipboardWriteOrigin {
   History,
   New,
@@ -4080,25 +4078,134 @@ pub(crate) fn write_text_and_html(
   )
 }
 
-fn set_clipboard_contents(
-  clipboard: &ClipboardContext,
-  mut contents: Vec<ClipboardContent>,
-  origin: ClipboardWriteOrigin,
+/// Upper bound for a selection copied inside a Clips window. Clips hold far
+/// less, so only a malformed request reaches it.
+const MAX_SELECTION_COPY_BYTES: usize = 4 * 1024 * 1024;
+
+/// The pasteboard item for a selection copied or cut inside a Clips window.
+fn selection_clipboard_contents(
+  plain_text: String,
+  html: Option<String>,
+) -> Result<Vec<ClipboardContent>, String> {
+  if plain_text.is_empty() {
+    return Err("the copied selection is empty".to_string());
+  }
+  if plain_text.len() > MAX_SELECTION_COPY_BYTES
+    || html
+      .as_ref()
+      .is_some_and(|html| html.len() > MAX_SELECTION_COPY_BYTES)
+  {
+    return Err("the copied selection is too large".to_string());
+  }
+  let mut contents = vec![ClipboardContent::Text(plain_text)];
+  if let Some(html) = html.filter(|html| !html.is_empty()) {
+    contents.push(ClipboardContent::Html(html));
+  }
+  Ok(contents)
+}
+
+/// Writes a selection copied inside a Clips window. It carries the internal
+/// marker: text copied out of a clip or the editor is never a new clip, and
+/// recording it would feed the history its own contents.
+pub(crate) fn write_clips_selection(
+  plain_text: String,
+  html: Option<String>,
 ) -> Result<(), String> {
+  let contents = selection_clipboard_contents(plain_text, html)?;
+  let clipboard = ClipboardContext::new()
+    .map_err(|error| format!("clipboard is unavailable: {error}"))?;
+  set_clipboard_contents(&clipboard, contents, ClipboardWriteOrigin::History)
+}
+
+fn marked_clipboard_contents(
+  mut contents: Vec<ClipboardContent>,
+  origin: &ClipboardWriteOrigin,
+) -> Vec<ClipboardContent> {
   if matches!(origin, ClipboardWriteOrigin::History) {
     contents.push(ClipboardContent::Other(
       INTERNAL_CLIPBOARD_FORMAT.to_string(),
       Vec::new(),
     ));
   }
+  contents
+}
+
+/// Whether the watcher must skip a change: stella wrote it with the marker.
+fn is_internal_clipboard_write(formats: &[String]) -> bool {
+  formats
+    .iter()
+    .any(|format| format.eq_ignore_ascii_case(INTERNAL_CLIPBOARD_FORMAT))
+}
+
+fn set_clipboard_contents(
+  clipboard: &ClipboardContext,
+  contents: Vec<ClipboardContent>,
+  origin: ClipboardWriteOrigin,
+) -> Result<(), String> {
   clipboard
-    .set(contents)
+    .set(marked_clipboard_contents(contents, &origin))
     .map_err(|error| format!("clipboard write failed: {error}"))
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  fn content_formats(contents: &[ClipboardContent]) -> Vec<String> {
+    contents
+      .iter()
+      .map(|content| match content {
+        ClipboardContent::Text(_) => "text".to_string(),
+        ClipboardContent::Html(_) => "html".to_string(),
+        ClipboardContent::Other(format, _) => format.clone(),
+        _ => "other".to_string(),
+      })
+      .collect()
+  }
+
+  #[test]
+  fn a_selection_copied_inside_clips_is_marked_so_the_watcher_skips_it() {
+    let contents = selection_clipboard_contents(
+      "Clause 4".to_string(),
+      Some("<b>Clause 4</b>".to_string()),
+    )
+    .unwrap();
+    let formats = content_formats(&marked_clipboard_contents(
+      contents,
+      &ClipboardWriteOrigin::History,
+    ));
+    assert_eq!(formats, ["text", "html", INTERNAL_CLIPBOARD_FORMAT]);
+    assert!(is_internal_clipboard_write(&formats));
+  }
+
+  #[test]
+  fn new_content_written_by_stella_still_reaches_history() {
+    let formats = content_formats(&marked_clipboard_contents(
+      vec![ClipboardContent::Text("registry result".to_string())],
+      &ClipboardWriteOrigin::New,
+    ));
+    assert!(!is_internal_clipboard_write(&formats));
+  }
+
+  #[test]
+  fn a_plain_selection_has_no_html_and_empty_or_oversized_ones_are_refused() {
+    let plain =
+      selection_clipboard_contents("Clause 4".to_string(), Some(String::new()))
+        .unwrap();
+    assert_eq!(content_formats(&plain), ["text"]);
+    assert!(selection_clipboard_contents(String::new(), None).is_err());
+    assert!(
+      selection_clipboard_contents("x".repeat(MAX_SELECTION_COPY_BYTES + 1), None)
+        .is_err()
+    );
+    assert!(
+      selection_clipboard_contents(
+        "x".to_string(),
+        Some("x".repeat(MAX_SELECTION_COPY_BYTES + 1))
+      )
+      .is_err()
+    );
+  }
 
   #[test]
   fn clipboard_capture_update_excludes_unchanged_history() {
