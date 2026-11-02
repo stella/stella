@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -1705,9 +1705,11 @@ const openControlledTab = async (
   }
   const navigation = createTabNavigationObserver(tabId);
   try {
-    try {
-      await chrome.tabs.update(tabId, { active: true, url: url.href });
-    } catch {
+    const navigated = await Result.tryPromise(
+      async () =>
+        await chrome.tabs.update(tabId, { active: true, url: url.href }),
+    );
+    if (Result.isError(navigated)) {
       // Chrome refused the navigation, so the page never loaded: a new tab
       // is discarded as if stopped.
       await discardCreatedTab();
@@ -1938,6 +1940,43 @@ const runGoBack = async (
   }
 };
 
+/** What the user had in front before a tab was shown, to put back. */
+type Foreground = {
+  /** The window that had focus; null when none did. */
+  focusedWindowId: number | null;
+  /** The tab that was active in the shown tab's window. */
+  tabId: number | null;
+};
+
+/**
+ * Makes the tab active in its window and focuses that window, after noting
+ * what was in front. Any failure, reading or showing, fails the whole step.
+ */
+const showTab = async (tabId: number, windowId: number) =>
+  await Result.tryPromise(async (): Promise<Foreground> => {
+    const [active, focused] = await Promise.all([
+      chrome.tabs.query({ active: true, windowId }),
+      chrome.windows.getLastFocused(),
+    ]);
+    await chrome.tabs.update(tabId, { active: true });
+    await chrome.windows.update(windowId, { focused: true });
+    return {
+      focusedWindowId: focused.focused ? (focused.id ?? null) : null,
+      tabId: active.at(0)?.id ?? null,
+    };
+  });
+
+/** Puts back the tab and window focus `showTab` found. */
+const restoreForeground = async ({ focusedWindowId, tabId }: Foreground) =>
+  await Result.tryPromise(async () => {
+    if (tabId !== null) {
+      await chrome.tabs.update(tabId, { active: true });
+    }
+    if (focusedWindowId !== null) {
+      await chrome.windows.update(focusedWindowId, { focused: true });
+    }
+  });
+
 /** What makes a tab chat's to switch to: who opened it, never a listing. */
 const NOT_A_CHAT_TAB =
   "That tab is not one of chat's tabs. Chat may switch only to a tab it controlled before, or one a page in its tabs opened, that the user has not navigated themselves since. Open the page instead.";
@@ -1998,12 +2037,11 @@ const runSwitchTab = async (
     await budget.refund();
     return cancelled();
   }
-  // The user sees the tab chat will operate, as with `open`. It comes to
-  // the front before anything is committed, so a tab Chrome cannot show
-  // changes nothing.
-  try {
-    await chrome.tabs.update(tabId, { active: true });
-  } catch {
+  // The user sees the tab chat will operate, as with `open`: active in its
+  // window, and that window focused. It comes to the front before anything
+  // is committed, so a tab Chrome cannot show changes nothing.
+  const shown = await showTab(tabId, tab.windowId);
+  if (Result.isError(shown)) {
     await budget.refund();
     return browserControlError(
       BROWSER_CONTROL_ERROR_CODE.executionFailed,
@@ -2011,6 +2049,12 @@ const runSwitchTab = async (
     );
   }
   if (isStopped(signal)) {
+    // Control never moved, so what the user saw before comes back too.
+    if (Result.isError(await restoreForeground(shown.value))) {
+      return outcomeUnknown(
+        "The tab was brought to the front, and Chrome could not put the previous one back; control stayed on the tab chat had.",
+      );
+    }
     await budget.refund();
     return cancelled();
   }

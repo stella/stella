@@ -19,6 +19,8 @@ type TabChange = { status?: string; url?: string };
 type FakeTab = { id: number; status: string; title?: string; url: string };
 type Injection = {
   args?: [{ expectedTopOrigin?: string | null; kind: string }];
+  /** The script itself, as Chrome would run it in each frame. */
+  func?: (operation: unknown) => unknown;
   target: { documentIds?: string[]; frameIds?: number[]; tabId: number };
 };
 type InjectionResult = {
@@ -35,6 +37,7 @@ const CONTROLLER_ID = "controller-1";
 const CONTROLLER_TAB_ID = 1;
 const CONTROLLED_TAB_ID = 2;
 const PAGE_URL = "https://example.com/";
+const WINDOW_ID = 1;
 
 const frameSnapshot = (title: string, url = PAGE_URL) => ({
   elements: [],
@@ -106,6 +109,13 @@ const createFakeChrome = () => {
   };
 
   const hooks = { afterCreate: (): void => undefined };
+
+  // The tab in front of the one window, and the window with focus: the
+  // stella tab, as when the user asks chat for something.
+  const front: { activeTabId: number; focusedWindowId: number | null } = {
+    activeTabId: CONTROLLER_TAB_ID,
+    focusedWindowId: WINDOW_ID,
+  };
 
   // What Chrome's navigation records say each tab's top frame shows.
   const probe = {
@@ -189,10 +199,15 @@ const createFakeChrome = () => {
         if (!tab) {
           throw new TypeError(`No tab ${tabId}`);
         }
-        return { ...tab };
+        return { ...tab, windowId: WINDOW_ID };
       },
       goBack: async () => undefined,
-      query: async () => structuredClone([...tabs.values()]),
+      query: async ({ active }: { active?: boolean } = {}) =>
+        structuredClone(
+          [...tabs.values()].filter(
+            ({ id }) => active !== true || id === front.activeTabId,
+          ),
+        ),
       onUpdated: {
         addListener: (listener: (tabId: number, change: TabChange) => void) => {
           listeners.add(listener);
@@ -204,6 +219,7 @@ const createFakeChrome = () => {
         },
       },
       update: async (tabId: number, { url }: { url?: string }) => {
+        front.activeTabId = tabId;
         if (url === undefined) {
           log.push(`activate:${tabId}`);
           const tab = tabs.get(tabId);
@@ -219,9 +235,22 @@ const createFakeChrome = () => {
         return tab ? { ...tab } : undefined;
       },
     },
+    windows: {
+      getLastFocused: async () => ({
+        focused: front.focusedWindowId !== null,
+        id: front.focusedWindowId ?? WINDOW_ID,
+      }),
+      update: async (windowId: number, { focused }: { focused: boolean }) => {
+        log.push(`focus-window:${windowId}`);
+        if (focused) {
+          front.focusedWindowId = windowId;
+        }
+        return { focused, id: windowId };
+      },
+    },
   };
 
-  return { chrome, emit, handlers, hooks, log, probe, session, tabs };
+  return { chrome, emit, front, handlers, hooks, log, probe, session, tabs };
 };
 
 let fake = createFakeChrome();
@@ -1017,6 +1046,185 @@ describe("chat's tabs", () => {
       snapshot: { revision: "revision-1" },
       tabId: CONTROLLED_TAB_ID,
     });
+  });
+
+  test("switching shows the tab in a focused window, or switches nothing", async () => {
+    const installed = installChatTabs();
+    installed.front.focusedWindowId = null;
+    installed.handlers["snapshot"] = () => [
+      { frameId: 0, result: frameSnapshot("Results", RESULTS_URL) },
+    ];
+    expect(await run(switchTo(RESULTS_TAB_ID))).toMatchObject({
+      status: "success",
+    });
+    expect(installed.log.slice(0, 2)).toEqual([
+      `activate:${RESULTS_TAB_ID}`,
+      `focus-window:${WINDOW_ID}`,
+    ]);
+
+    // A window Chrome cannot focus fails the switch before anything moves.
+    const failing = installChatTabs();
+    const { budget, events } = createBudget();
+    failing.chrome.windows.update = async () => {
+      throw new TypeError("No window with id 1.");
+    };
+    expect(await run(switchTo(RESULTS_TAB_ID), { budget })).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.executionFailed,
+    });
+    expect(events).toEqual(["charge", "refund"]);
+    expect(failing.session["browserContainedTabs"]).toMatchObject({
+      controlledTabId: CONTROLLED_TAB_ID,
+    });
+  });
+
+  /** Stops the command once the switch has focused the tab's window. */
+  const stopOnceShown = (installed: ReturnType<typeof installChatTabs>) => {
+    const stop = new AbortController();
+    const { update } = installed.chrome.windows;
+    installed.chrome.windows.update = async (
+      windowId: number,
+      properties: { focused: boolean },
+    ) => {
+      const updated = await update(windowId, properties);
+      stop.abort();
+      return updated;
+    };
+    return stop.signal;
+  };
+
+  test("a stop after the tab was shown puts the user's tab back in front", async () => {
+    const installed = installChatTabs();
+    const { budget, events } = createBudget();
+    const signal = stopOnceShown(installed);
+
+    expect(
+      await run(switchTo(RESULTS_TAB_ID), { budget, signal }),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.cancelled });
+    expect(installed.front.activeTabId).toBe(CONTROLLER_TAB_ID);
+    expect(installed.log).toEqual([
+      `activate:${RESULTS_TAB_ID}`,
+      `focus-window:${WINDOW_ID}`,
+      `activate:${CONTROLLER_TAB_ID}`,
+      `focus-window:${WINDOW_ID}`,
+    ]);
+    expect(events).toEqual(["charge", "refund"]);
+    expect(installed.session["browserContainedTabs"]).toMatchObject({
+      controlledTabId: CONTROLLED_TAB_ID,
+    });
+  });
+
+  test("a stop whose tab cannot be put back has an unknown outcome", async () => {
+    const installed = installChatTabs();
+    const signal = stopOnceShown(installed);
+    const { update } = installed.chrome.tabs;
+    installed.chrome.tabs.update = async (
+      tabId: number,
+      properties: { url?: string },
+    ) => {
+      if (tabId === CONTROLLER_TAB_ID) {
+        throw new TypeError("No tab with id 1.");
+      }
+      return await update(tabId, properties);
+    };
+
+    expect(await run(switchTo(RESULTS_TAB_ID), { signal })).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
+    });
+    expect(installed.session["browserContainedTabs"]).toMatchObject({
+      controlledTabId: CONTROLLED_TAB_ID,
+    });
+  });
+
+  test("the injected script refuses another top origin before reading the page", async () => {
+    const { handlers } = installChatTabs();
+    const injected: {
+      func: ((operation: unknown) => unknown) | undefined;
+      operation: unknown;
+    } = { func: undefined, operation: undefined };
+    handlers["snapshot"] = (injection) => {
+      injected.func = injection.func;
+      injected.operation = injection.args?.[0];
+      return [];
+    };
+    await run(switchTo(RESULTS_TAB_ID));
+    const { func, operation } = injected;
+    if (func === undefined) {
+      throw new TypeError("No script was injected.");
+    }
+    expect(operation).toMatchObject({
+      expectedTopOrigin: "https://example.com",
+      kind: "snapshot",
+    });
+
+    // A document that fails the test on any read: the script must decide
+    // before it looks at the page at all.
+    const unreadDocument = new Proxy(
+      {},
+      {
+        get: () => {
+          throw new TypeError("The document was read.");
+        },
+      },
+    );
+    const frameWindow = (
+      origin: string,
+      ancestorOrigins: readonly string[],
+      isTop: boolean,
+    ) => {
+      const frame: Record<string, unknown> = {
+        location: {
+          ancestorOrigins: {
+            item: (index: number) => ancestorOrigins[index] ?? null,
+            length: ancestorOrigins.length,
+          },
+        },
+        origin,
+      };
+      frame["top"] = isTop ? frame : {};
+      return frame;
+    };
+    const ISOLATED_WORLD_KEYS = [
+      "stellaSecretValues",
+      "stellaSensitiveFields",
+      "stellaSecretWatch",
+    ];
+    const runInFrame = (frame: Record<string, unknown>) => {
+      Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: frame,
+      });
+      Object.defineProperty(globalThis, "document", {
+        configurable: true,
+        value: unreadDocument,
+      });
+      try {
+        return func(operation);
+      } finally {
+        for (const key of ["window", "document", ...ISOLATED_WORLD_KEYS]) {
+          Reflect.deleteProperty(globalThis, key);
+        }
+      }
+    };
+    const refused = { refused: "top-origin" };
+
+    // The top frame now shows another site.
+    expect(runInFrame(frameWindow("https://other.example", [], true))).toEqual(
+      refused,
+    );
+    // A frame on the approved origin inside another site's page.
+    expect(
+      runInFrame(
+        frameWindow("https://example.com", ["https://other.example"], false),
+      ),
+    ).toEqual(refused);
+    // A frame the browser does not tell its top origin.
+    expect(runInFrame(frameWindow("https://example.com", [], false))).toEqual(
+      refused,
+    );
+    // On the approved origin the script goes on to read the page.
+    expect(() =>
+      runInFrame(frameWindow("https://example.com", [], true)),
+    ).toThrow("The document was read.");
   });
 
   test("a page chat opens over the user's navigation makes the tab chat's again", async () => {
