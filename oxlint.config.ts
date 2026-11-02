@@ -470,6 +470,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-inert-autofocus.fixture.tsx", [
     "no-inert-autofocus/no-inert-autofocus",
   ]),
+  fixtureRuleOverride("one-statement-time-per-row-write.fixture.ts", [
+    "one-statement-time-per-row-write/one-statement-time-per-row-write",
+  ]),
   fixtureRuleOverride("no-optional-chain-null-compare.fixture.ts", [
     "no-optional-chain-null-compare/no-optional-chain-null-compare",
     "no-optional-chain-null-compare/no-optional-chain-absent-match",
@@ -1909,6 +1912,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-section-sign-glyph.ts",
     "./.oxlint-plugins/no-style-substring-match.ts",
     "./.oxlint-plugins/no-inert-autofocus.ts",
+    "./.oxlint-plugins/one-statement-time-per-row-write.ts",
     "./.oxlint-plugins/no-optional-chain-null-compare.ts",
     "./.oxlint-plugins/no-constructed-fetch-object.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
@@ -4533,6 +4537,8 @@ const config = defineConfig({
         "**/e2e/**",
       ],
       rules: {
+        "one-statement-time-per-row-write/one-statement-time-per-row-write":
+          "error",
         "no-optional-chain-null-compare/no-optional-chain-null-compare":
           "error",
       },
