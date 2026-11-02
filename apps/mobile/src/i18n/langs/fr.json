@@ -74,7 +74,8 @@
       "none": "Sans date",
       "today": "Aujourd’hui",
       "tomorrow": "Demain",
-      "nextWeek": "Dans une semaine"
+      "nextWeek": "Dans une semaine",
+      "pick": "Choisir une date"
     },
     "due": {
       "overdue": "En retard",
@@ -140,7 +141,9 @@
     },
     "add": "Ajouter",
     "scanDocument": "Numériser un document",
-    "newTask": "Nouvelle tâche"
+    "newTask": "Nouvelle tâche",
+    "uploadDocument": "Téléverser un document",
+    "uploadFailed": "Le document n’a pas pu être importé. Réessayez."
   },
   "entity": {
     "type": "Type",
@@ -162,7 +165,16 @@
     "preview": "Ouvrir l’aperçu",
     "previewDescription": "Ce fichier s’ouvre dans l’aperçu du système.",
     "unrendered": "Ce document ne peut pas être affiché ici, mais l’aperçu du système pourra peut-être l’ouvrir.",
-    "details": "Détails"
+    "details": "Détails",
+    "zoomOut": "Zoom arrière",
+    "zoomIn": "Zoom avant",
+    "zoomFit": "Ajuster à la largeur",
+    "fit": "Largeur",
+    "appearance": {
+      "system": "Apparence : automatique",
+      "light": "Apparence : claire",
+      "dark": "Apparence : sombre"
+    }
   },
   "signIn": {
     "beta": "Bêta",
@@ -190,7 +202,8 @@
     "server": "Serveur",
     "signOut": "Se déconnecter",
     "deleteAccount": "Supprimer le compte",
-    "deleteAccountHint": "Ouvre votre compte sur le web, où vous pouvez le supprimer avec tout ce qui vous appartient."
+    "deleteAccountHint": "Ouvre votre compte sur le web, où vous pouvez le supprimer avec tout ce qui vous appartient.",
+    "signOutFailed": "La déconnexion n’a pas pu aboutir. Réessayez."
   },
   "header": {
     "search": "Rechercher"
@@ -290,6 +303,29 @@
   "palette": {
     "placeholder": "Rechercher des dossiers et des conversations, ou lancer une commande",
     "noResults": "Aucun résultat pour « {query} »"
+  },
+  "search": {
+    "placeholder": "Rechercher dans stella",
+    "clear": "Effacer la recherche",
+    "cancel": "Annuler",
+    "recent": "Recherches récentes",
+    "clearRecent": "Effacer",
+    "hint": "Recherchez dans vos dossiers, documents, tâches, conversations et la jurisprudence.",
+    "filters": "Filtres",
+    "noResultsTitle": "Aucun résultat",
+    "noResults": "Aucun résultat pour « {query} ». Essayez d’autres mots ou retirez un filtre.",
+    "loadFailed": "La recherche n’a pas pu être effectuée.",
+    "retry": "Réessayer",
+    "type": {
+      "document": "Documents",
+      "matter": "Dossiers",
+      "task": "Tâches",
+      "caseLaw": "Jurisprudence",
+      "chat": "Conversations",
+      "folder": "Classeurs",
+      "message": "E-mails",
+      "link": "Liens"
+    }
   },
   "pane": {
     "showList": "Afficher la liste",

@@ -583,18 +583,19 @@ describe("parseNsDecisionHtml", () => {
           b.type === "heading" && "role" in b && b.role === "decision-title",
       );
       expect(titles.length).toBeGreaterThan(0);
-      // The court's name before the case number is kept, not dropped.
+      // The court's name before the case number is kept, not dropped, and
+      // the letter-spaced title reads as the word it spells.
       expect(documentAst.blocks.slice(0, 3).map((b) => b.plainText)).toEqual([
         "NEJVYŠŠÍ SOUD ČESKÉ REPUBLIKY",
         "29 Odo 975/2006",
-        "U S N E S E N Í",
+        "USNESENÍ",
       ]);
     });
 
-    // An older print page prints each caption line in its own run, and the
-    // parser merges them: the title is every capital after the case number,
-    // not the tail after the first capital standing before a space.
-    test("keeps a whole run-on caption title", () => {
+    // An older print page prints each caption line in its own run: the state
+    // and the formula stay lines of their own, and the decision type between
+    // them is the title.
+    test("reads a caption printed line by line", () => {
       const html = `<html><body>
         <table id="box-table-a"><tbody>
           <tr><td>Soud:</td><td>NS</td></tr>
@@ -614,19 +615,83 @@ describe("parseNsDecisionHtml", () => {
 
       const { documentAst, fulltext } = parseNsDecisionHtml(baseInput(html));
 
-      const [caseNumber, title] = documentAst.blocks;
-      expect(caseNumber).toMatchObject({
-        plainText: "21 Cdo 4994/2007",
-        role: "case-number",
-        type: "paragraph",
-      });
-      expect(title).toMatchObject({ role: "decision-title", type: "heading" });
-      expect(title?.plainText.replaceAll(/\s+/gu, " ")).toBe(
-        "ČESKÁ REPUBLIKA ROZSUDEK JMÉNEM REPUBLIKY",
-      );
+      expect(
+        documentAst.blocks.slice(0, 4).map((block) => ({
+          type: block.type,
+          role: "role" in block ? block.role : undefined,
+          plainText: block.plainText,
+        })),
+      ).toEqual([
+        {
+          type: "paragraph",
+          role: "case-number",
+          plainText: "21 Cdo 4994/2007",
+        },
+        { type: "paragraph", role: "intro", plainText: "ČESKÁ REPUBLIKA" },
+        { type: "heading", role: "decision-title", plainText: "ROZSUDEK" },
+        { type: "paragraph", role: "intro", plainText: "JMÉNEM REPUBLIKY" },
+      ]);
       expect(fulltext).toContain("ČESKÁ REPUBLIKA");
     });
   });
+});
+
+describe("labelled section headings", () => {
+  // The numeral and the title are set on two lines of one centred block; the
+  // spacing around the break is the court editor's, not part of the heading.
+  test.each([
+    ["", ""],
+    [" ", " "],
+    ["  \n  ", "\n   "],
+    ["&nbsp;", " "],
+  ])(
+    "keeps the title's link whatever surrounds the line break (%p, %p)",
+    (before, after) => {
+      const { documentAst } = parseNsDecisionHtml(
+        baseInput(
+          `<html><body><table id="box-table-a"><tr><td>Soud:</td><td>NS</td></tr></table><p align="center"><b>II.</b>${before}<br>${after}<a href="https://example.test/posouzeni">Posouzení věci</a></p><p>Text odůvodnění.</p></body></html>`,
+        ),
+      );
+      const heading = documentAst.blocks.find(
+        (block) => block.plainText === "II. Posouzení věci",
+      );
+      expect(heading?.type).toBe("heading");
+      expect(
+        heading !== undefined &&
+          "inlines" in heading &&
+          JSON.stringify(heading.inlines).includes(
+            '"href":"https://example.test/posouzeni"',
+          ),
+      ).toBe(true);
+    },
+  );
+});
+
+test("a linked title keeps its link when the court doubled a space in it", () => {
+  const { documentAst } = parseNsDecisionHtml(
+    baseInput(
+      `<html><body><table id="box-table-a"><tr><td>Soud:</td><td>NS</td></tr></table><p align="center"><b>II.</b><br><a href="https://example.test/posouzeni">Posouzení  věci</a></p><p>Text odůvodnění.</p></body></html>`,
+    ),
+  );
+  const heading = documentAst.blocks.find(
+    (block) => block.plainText === "II. Posouzení věci",
+  );
+  expect(heading?.type).toBe("heading");
+  expect(JSON.stringify(heading)).toContain(
+    '"href":"https://example.test/posouzeni"',
+  );
+});
+
+test("a centred letter-spaced state line is an opening formula, not a title", () => {
+  const { documentAst } = parseNsDecisionHtml(
+    baseInput(
+      `<html><body><table id="box-table-a"><tr><td>Soud:</td><td>NS</td></tr></table><p align="center">21 Cdo 4994/2007</p><p align="center">Č E S K Á   R E P U B L I K A</p><p align="center">ROZSUDEK</p><p>Nejvyšší soud rozhodl takto:</p></body></html>`,
+    ),
+  );
+  const state = documentAst.blocks.find(
+    (block) => block.plainText.replaceAll(" ", "") === "ČESKÁREPUBLIKA",
+  );
+  expect(state).toMatchObject({ type: "paragraph", role: "intro" });
 });
 
 describe("source table text retention", () => {

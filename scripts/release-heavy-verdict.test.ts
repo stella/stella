@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 import * as v from "valibot";
 
+import { REQUIRED_RECORD_KEYS } from "./ci-required-record";
 import { heavyVerdict, type HeavyVerdictInput } from "./release-heavy-verdict";
 
 const repoRoot = nodePath.resolve(import.meta.dirname, "..");
@@ -193,23 +194,8 @@ test("ci-result publishes the unmet checks as an artifact of its own", () => {
 });
 
 // merge-bar parses the record with a closed key set, so the verdict must
-// travel in its own artifact. This is the key set on main.
-const REQUIRED_SUMMARY_KEYS = [
-  "version",
-  "event",
-  "head_sha",
-  "base_sha",
-  "run_id",
-  "run_attempt",
-  "depth",
-  "coverage_profile",
-  "reused_from_run_id",
-  "basis",
-  "pass_through_reason",
-  "required",
-  "not_required",
-  "verdict",
-];
+// travel in its own artifact.
+const REQUIRED_SUMMARY_KEYS = [...REQUIRED_RECORD_KEYS];
 
 test("the required-jobs record keeps exactly its established key set", () => {
   const ci = readFileSync(

@@ -8,7 +8,13 @@ import type {
   DesktopMatter,
   DesktopTimeEntryMatterCandidate,
 } from "@stll/api-contract/desktop-time-entries";
+import { AiLabel } from "@stll/ui/ai-label";
 import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
 import { CopyButton } from "@stll/ui/copy-button";
 import { AiActionIcon, XIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
@@ -24,7 +30,12 @@ import type {
   ActivitySuggestion,
   EvidenceRow,
 } from "./activity-calendar-logic";
+import { calendarDate } from "./activity-logic";
+import type { ActivityDaySnapshot } from "./activity-types";
+import { ActivitySourceIcon } from "./ActivitySourceIcon";
+import type { CardDraft, DraftFailureKind } from "./billing-draft-logic";
 import { MatterPicker } from "./MatterPicker";
+import { useDurationLabel } from "./use-duration-label";
 
 /** The editable fields of one suggestion. `written` counts stella AI
  * descriptions, so each new one fades in. */
@@ -35,15 +46,15 @@ export type SuggestionEdit = {
   written: number;
 };
 
-/** What the stella AI strip above the narrative shows. */
-export type NarrativeAssistView =
-  | { type: "ask" }
-  | { type: "folded" }
+/** What the stella AI strip above the narrative shows. `hidden` when the
+ * firm has drafting off or its settings cannot be read. */
+export type DraftAssistView =
+  | { type: "hidden" }
+  | { type: "needsMatter" }
+  | { pending: boolean; type: "consent" }
+  | { drafted: boolean; type: "ready" }
   | { type: "writing" }
-  | { type: "failed" }
-  | { type: "hidden" };
-
-export type AssistChoice = "no" | "once" | "always";
+  | { kind: DraftFailureKind; type: "failed" };
 
 type ActivitySuggestionCardProps = {
   suggestion: ActivitySuggestion;
@@ -51,8 +62,12 @@ type ActivitySuggestionCardProps = {
   candidates: readonly DesktopTimeEntryMatterCandidate[];
   editable: boolean;
   timeLabel: string;
-  assist: NarrativeAssistView;
-  onAssist: (choice: AssistChoice) => void;
+  sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
+  assist: DraftAssistView;
+  /** The user's earlier entries the current draft followed. */
+  earlierEntries: CardDraft["earlierEntries"];
+  onDraft: () => void;
+  onAllow: () => void;
   onEdit: (change: Partial<SuggestionEdit>) => void;
   onAccept: () => void;
   onReject: () => void;
@@ -96,8 +111,11 @@ export const ActivitySuggestionCard = ({
   candidates,
   editable,
   timeLabel,
+  sourceAppVisuals,
   assist,
-  onAssist,
+  earlierEntries,
+  onDraft,
+  onAllow,
   onEdit,
   onAccept,
   onReject,
@@ -211,11 +229,12 @@ export const ActivitySuggestionCard = ({
           onChoose={(matter) => onEdit({ matter })}
         />
       </div>
-      <NarrativeAssistStrip
+      <DraftAssistStrip
         view={assist}
-        onChoose={(choice) => {
-          onAssist(choice);
-          // The strip's buttons go away; keep the card's shortcuts in reach.
+        onDraft={onDraft}
+        onAllow={() => {
+          onAllow();
+          // The consent buttons go away; keep the card's shortcuts in reach.
           card.current?.focus();
         }}
       />
@@ -229,6 +248,7 @@ export const ActivitySuggestionCard = ({
         rows={2}
         value={edit.narrative}
       />
+      <EarlierEntries entries={earlierEntries} />
       <div className="flex flex-wrap items-center gap-2">
         <Label className="gap-2 text-xs">
           <Switch
@@ -264,7 +284,7 @@ export const ActivitySuggestionCard = ({
           <ShortcutHint label={shortcutLabel(ACCEPT_KEYS)} />
         </Button>
       </div>
-      <Evidence suggestion={suggestion} />
+      <Evidence suggestion={suggestion} sourceAppVisuals={sourceAppVisuals} />
     </section>
   );
 };
@@ -286,17 +306,35 @@ const ShortcutHint = ({ label }: { label: string }) => (
   </kbd>
 );
 
-const NarrativeAssistStrip = ({
+const DRAFT_FAILURE_MESSAGES = {
+  off: "aiDraftOff",
+  consentRequired: "aiDraftConsentRequired",
+  refused: "aiDraftRefused",
+  modeChanged: "aiDraftModeChanged",
+  tooLarge: "aiDraftTooLarge",
+  failed: "aiDraftFailed",
+} as const satisfies Record<DraftFailureKind, string>;
+
+const DraftAssistStrip = ({
   view,
-  onChoose,
+  onDraft,
+  onAllow,
 }: {
-  view: NarrativeAssistView;
-  onChoose: (choice: AssistChoice) => void;
+  view: DraftAssistView;
+  onDraft: () => void;
+  onAllow: () => void;
 }) => {
   const t = useTranslations("activity");
   switch (view.type) {
     case "hidden":
       return null;
+    case "needsMatter":
+      return (
+        <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+          <AiActionIcon aria-hidden="true" className="size-3.5 shrink-0" />
+          {t("aiDraftNeedsMatter")}
+        </p>
+      );
     case "writing":
       return (
         <p
@@ -304,73 +342,124 @@ const NarrativeAssistStrip = ({
           role="status"
         >
           <AiActionIcon aria-hidden="true" className="size-3.5" />
-          {t("narrativeAiWriting")}
+          {t("aiDraftWriting")}
         </p>
       );
     case "failed":
       return (
         <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
-          <p role="status">{t("narrativeAiFailed")}</p>
-          <WriteWithAiButton onClick={() => onChoose("once")} />
+          <p role="status">{t(DRAFT_FAILURE_MESSAGES[view.kind])}</p>
+          {view.kind === "off" || view.kind === "refused" ? null : (
+            <DraftButton label={t("aiDraftRetry")} onClick={onDraft} />
+          )}
         </div>
       );
-    case "folded":
+    case "ready":
       return (
-        <div>
-          <WriteWithAiButton onClick={() => onChoose("once")} />
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <DraftButton
+            label={view.drafted ? t("aiDraftAgain") : t("aiDraftWrite")}
+            onClick={onDraft}
+          />
+          {view.drafted ? (
+            <span className="text-muted-foreground">
+              <AiLabel
+                disclosure={t("aiDraftDisclosure")}
+                label={t("aiDraftLabel")}
+              />
+            </span>
+          ) : null}
         </div>
       );
-    case "ask":
+    case "consent":
       return (
         <div
           className="bg-muted/60 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-2.5 py-2 text-xs"
-          data-activity-narrative-consent=""
+          data-activity-draft-consent=""
         >
           <p className="flex min-w-0 flex-1 basis-56 items-start gap-1.5 text-pretty">
             <AiActionIcon
               aria-hidden="true"
               className="mt-px size-3.5 shrink-0"
             />
-            {t("narrativeAiPrompt")}
+            {t("aiDraftConsent")}
           </p>
-          <div className="flex gap-1">
-            <Button onClick={() => onChoose("no")} size="xs" variant="ghost">
-              {t("narrativeAiNo")}
-            </Button>
-            <Button
-              onClick={() => onChoose("once")}
-              size="xs"
-              variant="outline"
-            >
-              {t("narrativeAiApprove")}
-            </Button>
-            <Button
-              onClick={() => onChoose("always")}
-              size="xs"
-              variant="outline"
-            >
-              {t("narrativeAiAlways")}
-            </Button>
-          </div>
+          <Button
+            loading={view.pending}
+            onClick={onAllow}
+            size="xs"
+            variant="outline"
+          >
+            {t("aiDraftAllow")}
+          </Button>
         </div>
       );
     default:
       view satisfies never;
-      return panic("Unhandled narrative assist view");
+      return panic("Unhandled stella AI draft view");
   }
 };
 
-const WriteWithAiButton = ({ onClick }: { onClick: () => void }) => {
+const DraftButton = ({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) => (
+  <Button onClick={onClick} size="xs" variant="ghost">
+    <AiActionIcon aria-hidden="true" />
+    {label}
+  </Button>
+);
+
+/** The user's own earlier entries the draft followed, so its wording can be
+ * checked against them. */
+const EarlierEntries = ({
+  entries,
+}: {
+  entries: CardDraft["earlierEntries"];
+}) => {
   const t = useTranslations("activity");
+  const format = useFormatter();
+  const durationLabel = useDurationLabel();
+  if (entries.length === 0) {
+    return null;
+  }
   return (
-    <Button onClick={onClick} size="xs" variant="ghost">
-      <AiActionIcon aria-hidden="true" />
-      {t("narrativeAiWrite")}
-    </Button>
+    <Collapsible>
+      <CollapsibleTrigger
+        render={<Button className="self-start" size="xs" variant="ghost" />}
+      >
+        {t("aiDraftEarlierEntries", { count: entries.length })}
+      </CollapsibleTrigger>
+      <CollapsiblePanel>
+        <ul className="flex flex-col gap-1.5 text-xs">
+          {entries.map((entry) => (
+            <li className="flex flex-col gap-0.5" key={entry.id}>
+              <span className="text-muted-foreground tabular-nums">
+                {format.dateTime(calendarDate(entry.dateWorked), {
+                  dateStyle: "medium",
+                })}
+                {" · "}
+                {durationLabel(entry.durationMinutes * 60_000)}
+              </span>
+              <bdi className="text-pretty">{entry.narrative}</bdi>
+            </li>
+          ))}
+        </ul>
+      </CollapsiblePanel>
+    </Collapsible>
   );
 };
 
-const Evidence = ({ suggestion }: { suggestion: ActivitySuggestion }) => {
+const Evidence = ({
+  suggestion,
+  sourceAppVisuals,
+}: {
+  suggestion: ActivitySuggestion;
+  sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
+}) => {
   const t = useTranslations("activity");
   const titles = titleRows(suggestion);
   const apps = appRows(suggestion);
@@ -386,10 +475,10 @@ const Evidence = ({ suggestion }: { suggestion: ActivitySuggestion }) => {
         <TabsTab value="apps">{t("evidenceApps")}</TabsTab>
       </TabsList>
       <TabsPanel value="titles">
-        <EvidenceRows rows={titles} />
+        <EvidenceRows rows={titles} sourceAppVisuals={sourceAppVisuals} />
       </TabsPanel>
       <TabsPanel value="apps">
-        <EvidenceRows rows={apps} />
+        <EvidenceRows rows={apps} sourceAppVisuals={sourceAppVisuals} />
       </TabsPanel>
     </Tabs>
   );
@@ -397,14 +486,24 @@ const Evidence = ({ suggestion }: { suggestion: ActivitySuggestion }) => {
 
 const EVIDENCE_ROW_LIMIT = 8;
 
-const EvidenceRows = ({ rows }: { rows: readonly EvidenceRow[] }) => {
+const EvidenceRows = ({
+  rows,
+  sourceAppVisuals,
+}: {
+  rows: readonly EvidenceRow[];
+  sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
+}) => {
   const t = useTranslations("activity");
   const format = useFormatter();
   return (
     <ul className="flex flex-col gap-1.5 pt-2 text-xs">
       {rows.slice(0, EVIDENCE_ROW_LIMIT).map((row) => (
         <li className="flex flex-col gap-1" key={row.id}>
-          <div className="flex min-w-0 items-baseline gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <ActivitySourceIcon
+              appIdentifier={row.appIdentifier}
+              sourceAppVisuals={sourceAppVisuals}
+            />
             <bdi className="min-w-0 flex-1 truncate">{row.label}</bdi>
             <span className="text-muted-foreground shrink-0 tabular-nums">
               {t("durationMinutes", {

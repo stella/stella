@@ -1,23 +1,27 @@
-import entry0 from "./scheduled.caseLaw.refreshCoverage";
-import entry1 from "./scheduled.caseLaw.refreshSitemapShards";
-import entry2 from "./scheduled.caseLaw.reportFreshness";
-import entry3 from "./scheduled.requests.sweepReceipts";
-import entry4 from "./statement.caseLaw.backgroundReplayProbe";
-import entry5 from "./statement.caseLaw.coverageSources";
-import entry6 from "./statement.caseLaw.euCompletionPage";
-import entry7 from "./statement.caseLaw.globalSearchHits";
-import entry8 from "./statement.documents.searchHits";
-import entry9 from "./statement.legislation.candidateRows";
+import entry0 from "./scheduled.caseLaw.backfillProvisionState";
+import entry1 from "./scheduled.caseLaw.refreshCoverage";
+import entry2 from "./scheduled.caseLaw.refreshSitemapShards";
+import entry3 from "./scheduled.caseLaw.reportFreshness";
+import entry4 from "./scheduled.legislation.backfillExpressionIds";
+import entry5 from "./scheduled.requests.sweepReceipts";
+import entry6 from "./statement.caseLaw.backgroundReplayProbe";
+import entry7 from "./statement.caseLaw.coverageSources";
+import entry8 from "./statement.caseLaw.euCompletionPage";
+import entry9 from "./statement.caseLaw.globalSearchHits";
+import entry10 from "./statement.documents.searchHits";
+import entry11 from "./statement.legislation.candidateRows";
 
 export default {
-  "scheduled.caseLaw.refreshCoverage": entry0,
-  "scheduled.caseLaw.refreshSitemapShards": entry1,
-  "scheduled.caseLaw.reportFreshness": entry2,
-  "scheduled.requests.sweepReceipts": entry3,
-  "statement.caseLaw.backgroundReplayProbe": entry4,
-  "statement.caseLaw.coverageSources": entry5,
-  "statement.caseLaw.euCompletionPage": entry6,
-  "statement.caseLaw.globalSearchHits": entry7,
-  "statement.documents.searchHits": entry8,
-  "statement.legislation.candidateRows": entry9,
+  "scheduled.caseLaw.backfillProvisionState": entry0,
+  "scheduled.caseLaw.refreshCoverage": entry1,
+  "scheduled.caseLaw.refreshSitemapShards": entry2,
+  "scheduled.caseLaw.reportFreshness": entry3,
+  "scheduled.legislation.backfillExpressionIds": entry4,
+  "scheduled.requests.sweepReceipts": entry5,
+  "statement.caseLaw.backgroundReplayProbe": entry6,
+  "statement.caseLaw.coverageSources": entry7,
+  "statement.caseLaw.euCompletionPage": entry8,
+  "statement.caseLaw.globalSearchHits": entry9,
+  "statement.documents.searchHits": entry10,
+  "statement.legislation.candidateRows": entry11,
 } as const;

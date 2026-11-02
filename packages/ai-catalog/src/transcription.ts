@@ -4,6 +4,8 @@ type TranscriptionDurationPrice = {
   secondsDenominator: number;
 };
 
+type TranscriptionResidency = "eu" | "us";
+
 type TranscriptionRegionalAvailability =
   | { status: "available"; price: TranscriptionDurationPrice }
   | { status: "unavailable" | "unknown" };
@@ -17,7 +19,7 @@ type TranscriptionModelMetadata = {
   vocabularyMechanism:
     "none" | "groq-prompt" | "azure-phrase-list" | "context-hint";
   diarization: "supported" | "unconfirmed";
-  residency: Record<"eu" | "us", TranscriptionRegionalAvailability>;
+  residency: Record<TranscriptionResidency, TranscriptionRegionalAvailability>;
   source: { url: string; checkedAt: string };
 };
 
@@ -164,6 +166,38 @@ export const isTranscriptionModelId = (
   modelId: string,
 ): modelId is TranscriptionModelId =>
   Object.hasOwn(TRANSCRIPTION_MODELS, modelId);
+
+/**
+ * The model a caller gets when it names none: the cheapest one offered in
+ * the organization's region at that region's price, or `undefined` when the
+ * region offers none. Ties keep catalog order.
+ */
+export const defaultTranscriptionModelId = (
+  residency: TranscriptionResidency,
+): TranscriptionModelId | undefined => {
+  let cheapest:
+    | { modelId: TranscriptionModelId; price: TranscriptionDurationPrice }
+    | undefined;
+  for (const modelId of Object.keys(TRANSCRIPTION_MODELS)) {
+    if (!isTranscriptionModelId(modelId)) {
+      continue;
+    }
+    const regional: TranscriptionRegionalAvailability =
+      TRANSCRIPTION_MODELS[modelId].residency[residency];
+    if (regional.status !== "available") {
+      continue;
+    }
+    const { price } = regional;
+    if (
+      cheapest === undefined ||
+      price.usdNumerator * cheapest.price.secondsDenominator <
+        cheapest.price.usdNumerator * price.secondsDenominator
+    ) {
+      cheapest = { modelId, price };
+    }
+  }
+  return cheapest?.modelId;
+};
 
 export const getTranscriptionModel = (modelId: string) =>
   Object.hasOwn(TRANSCRIPTION_MODELS, modelId) &&

@@ -13,8 +13,8 @@ import { readParsedInputStateBackfillEnvironment } from "@/api/env-parsed-input-
 import { deriveCaseLawParsedInputStateBatch } from "@/api/lib/db/transitions";
 import {
   logSchedulerBackfillStatus,
-  SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "@/api/lib/scheduler/backfill-config";
 import {
   type SchedulerTask,
@@ -69,7 +69,7 @@ export const createCaseLawParsedInputStateBackfill =
       tableName: "case_law_decisions",
       initialSize: pageRows,
       config: {
-        ...SCHEDULER_BACKFILL_CONFIG,
+        ...schedulerBackfillConfig(),
         minSize: Math.min(100, pageRows),
         maxSize: pageRows,
       },

@@ -26,9 +26,9 @@ import {
 } from "@/api/handlers/case-law/decisions/get";
 import { listDecisionsPageQuery } from "@/api/handlers/case-law/decisions/list";
 import {
-  candidateDecisionRowsStatement,
   decisionIdsByIdentityQuery,
-  pageDecisionRowsStatement,
+  unresolvedCandidateDecisionRowsStatement,
+  unresolvedPageDecisionRowsStatement,
 } from "@/api/handlers/case-law/decisions/search";
 import {
   getShardConditions,
@@ -411,7 +411,7 @@ export const QUERY_PLAN_REGISTRY = [
     class: "page",
     role: "public-law-reader",
     build: (tx) =>
-      candidateDecisionRowsStatement(tx, {
+      unresolvedCandidateDecisionRowsStatement(tx, {
         body: { country: sampleCountry },
         generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
         ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
@@ -445,7 +445,7 @@ export const QUERY_PLAN_REGISTRY = [
     class: "page",
     role: "public-law-reader",
     build: (tx) =>
-      pageDecisionRowsStatement(tx, {
+      unresolvedPageDecisionRowsStatement(tx, {
         body: { country: sampleCountry },
         generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
         ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,

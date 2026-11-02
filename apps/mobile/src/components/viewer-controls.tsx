@@ -1,0 +1,193 @@
+import type { ComponentProps } from "react";
+
+import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFormatter, useTranslations } from "use-intl";
+
+import { Text } from "@stll/ui/text";
+
+import {
+  FIT_ZOOM,
+  nextAppearance,
+  ZOOM_STEPS,
+  zoomedIn,
+  zoomedOut,
+} from "@/components/document-viewer/zoom";
+import type { ViewerAppearance } from "@/components/document-viewer/zoom";
+import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
+import { useAppColors } from "@/theme";
+
+type GlyphName = ComponentProps<typeof LucideGlyphs>["name"];
+
+const BAR_HEIGHT = 44;
+const BAR_GAP = 12;
+
+/**
+ * How far the bar reaches up from the screen's bottom edge, given the
+ * safe area's bottom inset: what a document leaves free under its end.
+ */
+export const viewerBarClearance = (bottomInset: number): number =>
+  bottomInset + BAR_GAP + BAR_HEIGHT + BAR_GAP;
+
+/** The glyph that shows each appearance on its button. */
+const APPEARANCE_GLYPHS = {
+  system: "sun-moon",
+  light: "sun",
+  dark: "moon",
+} as const satisfies Record<ViewerAppearance, GlyphName>;
+
+/**
+ * The bar floating over a document: − and + walk the zoom steps, the level
+ * between them goes back to the fit, and the last button cycles the pages'
+ * appearance between the app's, light and dark. A Liquid Glass capsule on
+ * iOS 26, a bordered one elsewhere.
+ */
+export const ViewerControls = ({
+  appearance,
+  onAppearance,
+  onZoom,
+  zoom,
+}: {
+  appearance: ViewerAppearance;
+  onAppearance: (appearance: ViewerAppearance) => void;
+  onZoom: (zoom: number) => void;
+  zoom: number;
+}) => {
+  const t = useTranslations("document");
+  const format = useFormatter();
+  const colors = useAppColors();
+  const insets = useSafeAreaInsets();
+  const glass = Platform.OS === "ios" && isLiquidGlassAvailable();
+  const level =
+    zoom === FIT_ZOOM ? t("fit") : format.number(zoom, { style: "percent" });
+
+  const row = (
+    <View style={styles.row}>
+      <ControlButton
+        disabled={zoom <= ZOOM_STEPS[0]}
+        glyph="minus"
+        label={t("zoomOut")}
+        onPress={() => {
+          onZoom(zoomedOut(zoom));
+        }}
+      />
+      <Pressable
+        accessibilityLabel={t("zoomFit")}
+        accessibilityRole="button"
+        accessibilityValue={{ text: level }}
+        className="active:opacity-60"
+        hitSlop={4}
+        onPress={() => {
+          onZoom(FIT_ZOOM);
+        }}
+        style={styles.level}
+      >
+        <Text numberOfLines={1} variant="label">
+          {level}
+        </Text>
+      </Pressable>
+      <ControlButton
+        disabled={zoom >= (ZOOM_STEPS.at(-1) ?? FIT_ZOOM)}
+        glyph="plus"
+        label={t("zoomIn")}
+        onPress={() => {
+          onZoom(zoomedIn(zoom));
+        }}
+      />
+      <View style={[styles.divider, { backgroundColor: colors.border }]} />
+      <ControlButton
+        glyph={APPEARANCE_GLYPHS[appearance]}
+        label={t(`appearance.${appearance}`)}
+        onPress={() => {
+          onAppearance(nextAppearance(appearance));
+        }}
+      />
+    </View>
+  );
+
+  return (
+    <View
+      pointerEvents="box-none"
+      style={[styles.dock, { bottom: insets.bottom + BAR_GAP }]}
+    >
+      {glass ? (
+        <GlassView
+          glassEffectStyle="regular"
+          isInteractive
+          style={styles.capsule}
+        >
+          {row}
+        </GlassView>
+      ) : (
+        <View className="bg-card border-border border" style={styles.capsule}>
+          {row}
+        </View>
+      )}
+    </View>
+  );
+};
+
+const ControlButton = ({
+  disabled = false,
+  glyph,
+  label,
+  onPress,
+}: {
+  disabled?: boolean;
+  glyph: GlyphName;
+  label: string;
+  onPress: () => void;
+}) => {
+  const colors = useAppColors();
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      className="active:opacity-60"
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.button, disabled ? styles.disabled : null]}
+    >
+      <LucideGlyphs color={colors.text} name={glyph} size={20} />
+    </Pressable>
+  );
+};
+
+const styles = StyleSheet.create({
+  dock: {
+    alignItems: "center",
+    left: 0,
+    position: "absolute",
+    right: 0,
+  },
+  capsule: {
+    borderRadius: 24,
+    overflow: "hidden",
+  },
+  row: {
+    alignItems: "center",
+    flexDirection: "row",
+    paddingHorizontal: 4,
+  },
+  button: {
+    alignItems: "center",
+    height: BAR_HEIGHT,
+    justifyContent: "center",
+    width: BAR_HEIGHT,
+  },
+  disabled: {
+    opacity: 0.35,
+  },
+  level: {
+    alignItems: "center",
+    minWidth: 56,
+    paddingHorizontal: 4,
+  },
+  divider: {
+    height: 20,
+    marginHorizontal: 4,
+    width: StyleSheet.hairlineWidth,
+  },
+});

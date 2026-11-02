@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Removes held pull requests from the merge queue on label and reopen events using a pull-request write token.",
+  "reviewedDigest": "6c6119342bf599b968c814ec4dd92c00c2ba443e84355311e38f8715ca78fb65"
+}

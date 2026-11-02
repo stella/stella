@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { REQUIRED_RECORD_KEYS } from "./ci-required-record";
 import { renderResultInputs } from "./ci-result-inputs";
 
 // ci-result's outcome step, run as CI runs it, against a GitHub API served
@@ -573,24 +574,12 @@ test("the required-jobs artifact keeps its exact external schema", () => {
     [...(schema ?? "").matchAll(/(?:\{|,)\s*([a-z_]+):/gu)].map(
       ([, field]) => field,
     ),
-  ).toEqual([
-    "version",
-    "event",
-    "head_sha",
-    "base_sha",
-    "run_id",
-    "run_attempt",
-    "depth",
-    "coverage_profile",
-    "reused_from_run_id",
-    "basis",
-    "pass_through_reason",
-    "required",
-    "job",
-    "conclusion",
-    "not_required",
-    "verdict",
-  ]);
+  ).toEqual(
+    // Each `required` entry is a {job, conclusion} pair.
+    REQUIRED_RECORD_KEYS.flatMap((key) =>
+      key === "required" ? [key, "job", "conclusion"] : [key],
+    ),
+  );
 });
 
 test("metadata mirroring and verified supersession remain fail closed", () => {

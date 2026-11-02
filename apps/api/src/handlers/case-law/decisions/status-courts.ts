@@ -18,6 +18,7 @@ import {
 import { servedCaseLawSearchDocumentFor } from "@/api/lib/case-law/search-sql";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { LegalSearchEngine } from "@/api/lib/legal-search/types";
+import { PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT } from "@/api/lib/public-law-relations";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -225,31 +226,47 @@ const toCount = (value: unknown): number => {
  * index entry of the country and falls back to the heap wherever the pages are
  * not all-visible.
  */
-export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
-  PUBLIC_LAW_SHARED_QUERY.caseLawCourtActivity,
-  async (
-    tx: CaseLawPublicReadTransaction,
-    { country, courts, excludedSourceIds, now }: CourtActivityRead,
-  ): Promise<ReadonlyMap<string, CourtActivity>> => {
-    if (courts.length === 0) {
-      return new Map();
-    }
-    const sinceDay = new Date(now.getTime() - DAY_IN_MS);
-    const sinceWeek = new Date(now.getTime() - WEEK_IN_MS);
-    const scanFrom = new Date(sinceWeek.getTime() - CLOCK_SKEW_MARGIN_MS);
-    const admitted = (sourceId: SQL) =>
-      excludedSourceIds.length === 0
-        ? sql`TRUE`
-        : sql`${sourceId} <> ALL(
+const COURT_ACTIVITY_POPULATIONS = {
+  case_law_published_decisions: {
+    latest: sql`TRUE`,
+    recent: sql`TRUE`,
+  },
+  case_law_population_projections: {
+    latest: sql`latest_decision.publication = 'published'`,
+    recent: sql`recent_decision.publication = 'published'`,
+  },
+} as const;
+
+const createCourtActivityQuery = (
+  population:
+    "case_law_published_decisions" | "case_law_population_projections",
+) => {
+  const { latest, recent } = COURT_ACTIVITY_POPULATIONS[population];
+  return definePublicLawSharedQuery(
+    PUBLIC_LAW_SHARED_QUERY.caseLawCourtActivity,
+    async (
+      tx: CaseLawPublicReadTransaction,
+      { country, courts, excludedSourceIds, now }: CourtActivityRead,
+    ): Promise<ReadonlyMap<string, CourtActivity>> => {
+      if (courts.length === 0) {
+        return new Map();
+      }
+      const sinceDay = new Date(now.getTime() - DAY_IN_MS);
+      const sinceWeek = new Date(now.getTime() - WEEK_IN_MS);
+      const scanFrom = new Date(sinceWeek.getTime() - CLOCK_SKEW_MARGIN_MS);
+      const admitted = (sourceId: SQL) =>
+        excludedSourceIds.length === 0
+          ? sql`TRUE`
+          : sql`${sourceId} <> ALL(
               SELECT value::uuid
               FROM jsonb_array_elements_text(${JSON.stringify([...excludedSourceIds])}::text::jsonb) AS value
             )`;
 
-    const result: unknown = await withSharedStatementTimeout(
-      tx,
-      ACTIVITY_STATEMENT_TIMEOUT_MS,
-      async () =>
-        await tx.execute(sql`
+      const result: unknown = await withSharedStatementTimeout(
+        tx,
+        ACTIVITY_STATEMENT_TIMEOUT_MS,
+        async () =>
+          await tx.execute(sql`
       SELECT
         named.court AS court,
         to_json(latest.updated_at) #>> '{}' AS updated_at,
@@ -259,8 +276,8 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
         WITH ORDINALITY AS named(court, ordinality)
       LEFT JOIN LATERAL (
         SELECT latest_decision.updated_at
-        FROM ${publishedCaseLawDecisions} AS latest_decision
-        WHERE latest_decision.country = ${country}
+        FROM ${sql.raw(population)} AS latest_decision
+        WHERE ${latest} AND latest_decision.country = ${country}
           AND latest_decision.court = named.court
           AND ${admitted(sql`latest_decision.source_id`)}
         ORDER BY latest_decision.updated_at DESC
@@ -270,37 +287,45 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
         SELECT
           count(*) FILTER (WHERE recent_decision.created_at >= ${sinceDay}::timestamptz) AS added_last_day,
           count(*) FILTER (WHERE recent_decision.created_at >= ${sinceWeek}::timestamptz) AS added_last_week
-        FROM ${publishedCaseLawDecisions} AS recent_decision
-        WHERE recent_decision.country = ${country}
+        FROM ${sql.raw(population)} AS recent_decision
+        WHERE ${recent} AND recent_decision.country = ${country}
           AND recent_decision.court = named.court
           AND recent_decision.updated_at >= ${scanFrom}::timestamptz
           AND ${admitted(sql`recent_decision.source_id`)}
       ) recent ON true
       ORDER BY named.ordinality
     `),
-    );
+      );
 
-    const rows = executedRows(result).filter(isRecord);
-    return new Map(
-      rows.flatMap((row) => {
-        const court = row["court"];
-        if (typeof court !== "string") {
-          return [];
-        }
-        const updatedAt = row["updated_at"];
-        return [
-          [
-            court,
-            {
-              addedLastDay: toCount(row["added_last_day"]),
-              addedLastWeek: toCount(row["added_last_week"]),
-              updatedAt: typeof updatedAt === "string" ? updatedAt : null,
-            },
-          ],
-        ] as const;
-      }),
-    );
-  },
+      const rows = executedRows(result).filter(isRecord);
+      return new Map(
+        rows.flatMap((row) => {
+          const court = row["court"];
+          if (typeof court !== "string") {
+            return [];
+          }
+          const updatedAt = row["updated_at"];
+          return [
+            [
+              court,
+              {
+                addedLastDay: toCount(row["added_last_day"]),
+                addedLastWeek: toCount(row["added_last_week"]),
+                updatedAt: typeof updatedAt === "string" ? updatedAt : null,
+              },
+            ],
+          ] as const;
+        }),
+      );
+    },
+  );
+};
+
+export const readCaseLawCourtActivityQuery = createCourtActivityQuery(
+  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT.publishedCaseLawDecisions,
+);
+export const readCaseLawCoverageCourtActivityQuery = createCourtActivityQuery(
+  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT.caseLawPopulationProjections,
 );
 
 /** The newer of two timestamps, either of which may be unknown. */

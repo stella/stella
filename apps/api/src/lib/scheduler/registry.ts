@@ -23,10 +23,6 @@ import {
   reconcileBufferIntents,
 } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import {
-  REFRESH_CASE_LAW_BROWSE_FACETS_TASK,
-  refreshCaseLawBrowseFacetsTask,
-} from "@/api/lib/scheduler/tasks/case-law-browse-facet-refresh";
-import {
   RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
   reconcileCaseLawCorpusUploadIntentsTask,
 } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
@@ -43,6 +39,10 @@ import {
   BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK,
   createCaseLawParsedInputStateBackfill,
 } from "@/api/lib/scheduler/tasks/case-law-parsed-input-state-backfill";
+import {
+  FOLD_CASE_LAW_POPULATION_COUNTS_TASK,
+  foldCaseLawPopulationCountsTask,
+} from "@/api/lib/scheduler/tasks/case-law-population-fold";
 import {
   BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
   backfillCaseLawProvisionState,
@@ -280,7 +280,7 @@ const SCHEDULER_TASKS = {
   [RECONCILE_CASE_LAW_RAW_ROWS_TASK]: reconcileCaseLawRawRowsTask,
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
-  [REFRESH_CASE_LAW_BROWSE_FACETS_TASK]: refreshCaseLawBrowseFacetsTask,
+  [FOLD_CASE_LAW_POPULATION_COUNTS_TASK]: foldCaseLawPopulationCountsTask,
   [REPORT_CASE_LAW_FRESHNESS_TASK]: reportCaseLawFreshnessTask,
   [RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK]:
     reconcileCaseLawDecisionIdentifiersTask,
