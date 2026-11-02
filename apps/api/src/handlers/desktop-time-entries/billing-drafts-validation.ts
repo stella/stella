@@ -6,7 +6,8 @@ import type {
   DesktopBillingDraftClassification,
   DesktopBillingDraftOperation,
   DesktopBillingDraftRequest,
-  DesktopBillingDraftResponse,
+  DesktopBillingGuidedDraftResponse,
+  DesktopBillingPlainDraftResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
 
 const OPERATION_EFFECT = {
@@ -186,9 +187,91 @@ const validateOperations = ({
   return Result.ok(undefined);
 };
 
-/** Validate suggestions against fresh authorized context, including client-round-tripped results. */
+const validateDraftCoverage = (
+  drafts: readonly { entryId: string }[],
+  selected: BillingDraftValidationContext["entries"],
+) => {
+  if (
+    new Set(selected.map(({ entryId }) => entryId)).size !== selected.length
+  ) {
+    return refuse("Selected entry identifiers must be unique");
+  }
+  const draftIds = new Set(drafts.map(({ entryId }) => entryId));
+  if (draftIds.size !== drafts.length || draftIds.size !== selected.length) {
+    return refuse("Drafts must cover each selected entry exactly once");
+  }
+  return Result.ok(undefined);
+};
+
+type ValidateEarlierEntryMatchesOptions = {
+  matchedEarlierEntryIds: readonly string[];
+  entry: BillingDraftValidationContext["entries"][number];
+  earlierEntries: ReadonlyMap<
+    string,
+    BillingDraftValidationContext["earlierEntries"][number]
+  >;
+};
+
+const validateEarlierEntryMatches = ({
+  matchedEarlierEntryIds,
+  entry,
+  earlierEntries,
+}: ValidateEarlierEntryMatchesOptions) => {
+  const matchedIds = new Set(matchedEarlierEntryIds);
+  if (matchedIds.size !== matchedEarlierEntryIds.length) {
+    return refuse("Earlier entry references must be unique");
+  }
+  for (const id of matchedIds) {
+    const earlier = earlierEntries.get(id);
+    if (earlier?.matterId !== entry.matterId) {
+      return refuse(
+        "Earlier entry reference is outside the caller's matter context",
+      );
+    }
+    if (earlier.dateWorked > entry.date) {
+      return refuse("History matches cannot be dated after the selected entry");
+    }
+  }
+  return Result.ok(undefined);
+};
+
+/** Validate plain descriptions against fresh authorized context, including
+ * client-round-tripped results. */
+export const validatePlainBillingDraftResult = (
+  result: DesktopBillingPlainDraftResponse,
+  context: Pick<BillingDraftValidationContext, "entries" | "earlierEntries">,
+) => {
+  const coverage = validateDraftCoverage(result.drafts, context.entries);
+  if (coverage.isErr()) {
+    return coverage;
+  }
+  const entries = new Map(
+    context.entries.map((entry) => [entry.entryId, entry]),
+  );
+  const earlierEntries = new Map(
+    context.earlierEntries.map((entry) => [entry.id, entry]),
+  );
+  for (const draft of result.drafts) {
+    const entry = entries.get(draft.entryId);
+    if (!entry) {
+      return refuse("Draft references an unselected entry");
+    }
+    const matches = validateEarlierEntryMatches({
+      matchedEarlierEntryIds: draft.matchedEarlierEntryIds,
+      entry,
+      earlierEntries,
+    });
+    if (matches.isErr()) {
+      return matches;
+    }
+  }
+  return Result.ok(undefined);
+};
+
+/** Validate guideline-checked suggestions against fresh authorized context,
+ * including client-round-tripped results. */
 export const validateBillingDraftResult = (
-  result: DesktopBillingDraftResponse,
+  result: DesktopBillingGuidedDraftResponse,
   context: BillingDraftValidationContext,
 ) => {
   const entries = new Map(
@@ -228,15 +311,9 @@ export const validateBillingDraftResult = (
     }
   };
 
-  if (entries.size !== context.entries.length) {
-    return refuse("Selected entry identifiers must be unique");
-  }
-  const draftIds = new Set(result.drafts.map((draft) => draft.entryId));
-  if (
-    draftIds.size !== result.drafts.length ||
-    draftIds.size !== entries.size
-  ) {
-    return refuse("Drafts must cover each selected entry exactly once");
+  const coverage = validateDraftCoverage(result.drafts, context.entries);
+  if (coverage.isErr()) {
+    return coverage;
   }
   const checkedIds = new Set(
     result.checkedGuidelines.map((file) => file.fileId),
@@ -273,22 +350,13 @@ export const validateBillingDraftResult = (
         "Draft classification does not match the matter billing format",
       );
     }
-    const matchedIds = new Set(draft.matchedEarlierEntryIds);
-    if (matchedIds.size !== draft.matchedEarlierEntryIds.length) {
-      return refuse("Earlier entry references must be unique");
-    }
-    for (const id of matchedIds) {
-      const earlier = earlierEntries.get(id);
-      if (earlier?.matterId !== entry.matterId) {
-        return refuse(
-          "Earlier entry reference is outside the caller's matter context",
-        );
-      }
-      if (earlier.dateWorked > entry.date) {
-        return refuse(
-          "History matches cannot be dated after the selected entry",
-        );
-      }
+    const matches = validateEarlierEntryMatches({
+      matchedEarlierEntryIds: draft.matchedEarlierEntryIds,
+      entry,
+      earlierEntries,
+    });
+    if (matches.isErr()) {
+      return matches;
     }
     for (const { ruleRef, fix } of draft.flags) {
       const file = guidelines.get(ruleRef.fileId);
