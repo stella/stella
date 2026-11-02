@@ -27,7 +27,9 @@ const project = async (sourceRaw: string) => {
   if (usCourtlistenerRetention.type !== "checked") {
     throw new Error("CourtListener decisions are checked");
   }
-  return await usCourtlistenerRetention.project(sourceRaw);
+  return await usCourtlistenerRetention.project(sourceRaw, {
+    sourceRawObjects: {},
+  });
 };
 
 const retention = async (decision: IngestionResult, blocks?: Block[]) => {

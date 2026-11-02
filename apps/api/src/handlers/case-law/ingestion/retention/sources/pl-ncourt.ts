@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * What the common courts' judgments API served for one judgment.
  *
@@ -9,8 +10,14 @@
  * stores `document-status` instead, and an unreadable listing row stores
  * only its `quarantine` record.
  */
-import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
+import { load } from "@stll/html";
+import {
+  type AnyNode,
+  type Element,
+  isCDATA,
+  isTag,
+  isText,
+} from "@stll/html/nodes";
 
 import {
   RETENTION_PROJECTION_FAILURE,
@@ -108,7 +115,7 @@ export const projectPlNcourtSourceRaw = (
   if (xml === undefined) {
     return { type: "no-text", reason: RETENTION_TEXT_ABSENCE.NOT_PUBLISHED };
   }
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const root = $.root().children().first().get(0);
   if (root === undefined || !isTag(root) || root.name !== "xPart") {
     // The API's `<error>` answer or an HTML page stored as the document.

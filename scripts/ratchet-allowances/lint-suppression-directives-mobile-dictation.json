@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 2,
+  "reason": "The phone uploads a recording by its file location, which React Native's FormData accepts but the DOM typings do not; adding that overload needs a global interface with a method signature, the two forms these rules otherwise forbid."
+}
