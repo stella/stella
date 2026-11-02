@@ -752,6 +752,11 @@ export const validateSchemaIntrospection = async ({
                 {},
               )
             ).resolvedModule;
+            // A published `@stll/` package installed from the registry is a
+            // dependency like any other, not workspace source to walk.
+            if (resolved?.isExternalLibraryImport === true) {
+              return;
+            }
             if (
               resolved === undefined ||
               resolved.resolvedFileName.endsWith(".d.ts")

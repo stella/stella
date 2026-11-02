@@ -54,8 +54,15 @@ export const inspectOfficeFixture = async ({
 }: InspectOfficeFixtureOptions): Promise<
   Result<OfficeFixtureMetadataError[], OfficeFixtureMetadataError>
 > => {
+  // Entries inflate and check their CRC-32 when read, so read every entry
+  // up front: a damaged archive fails as the archive, not as whichever part
+  // the metadata pass happened to open first.
   const loaded = await Result.tryPromise({
-    try: async () => await ZipArchive.read(bytes),
+    try: async () => {
+      const archive = await ZipArchive.read(bytes);
+      await Promise.all(archive.entries().map(async (entry) => entry.bytes()));
+      return archive;
+    },
     catch: () => failure({ filePath, field: "archive", reason: "unreadable" }),
   });
   if (Result.isError(loaded)) {

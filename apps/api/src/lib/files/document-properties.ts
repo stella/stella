@@ -101,19 +101,21 @@ const readPropertyEntry = async (
   }
   // Inflation stops at the declared size, so refusing that size bounds the
   // read.
-  if (entry.size > DOCUMENT_METADATA_ENTRY_MAX_BYTES) {
-    throw new DocumentPropertiesParseError({
-      message: `Property entry ${path} is too large`,
-    });
-  }
-  const read = await Result.tryPromise({
-    try: async () => await entry.text(),
-    catch: (cause) =>
-      new DocumentPropertiesParseError({
-        message: `Property entry ${path} could not be decompressed`,
-        cause,
-      }),
-  });
+  const read =
+    entry.size > DOCUMENT_METADATA_ENTRY_MAX_BYTES
+      ? Result.err(
+          new DocumentPropertiesParseError({
+            message: `Property entry ${path} is too large`,
+          }),
+        )
+      : await Result.tryPromise({
+          try: async () => await entry.text(),
+          catch: (cause) =>
+            new DocumentPropertiesParseError({
+              message: `Property entry ${path} could not be decompressed`,
+              cause,
+            }),
+        });
   if (Result.isError(read)) {
     throw read.error;
   }
