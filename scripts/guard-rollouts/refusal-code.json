@@ -1,0 +1,18 @@
+{
+  "id": "refusal-code",
+  "rules": ["refusal-code/require-refusal-code"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-08T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "refusal-code/require-refusal-code",
+    "apps/api/src"
+  ]
+}

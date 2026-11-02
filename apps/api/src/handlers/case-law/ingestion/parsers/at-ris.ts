@@ -1,8 +1,9 @@
-/** Parse the publisher-structured XML served by Austria's RIS. */
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
 
 import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+/** Parse the publisher-structured XML served by Austria's RIS. */
+import { load } from "@stll/html";
 import {
   type Block,
   type DocumentAst,
@@ -166,7 +167,7 @@ const publisherFieldRole = (
  * the parser below is where an unreadable document is an error.
  */
 export const listRisDocumentContentTypes = (xml: string): readonly string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const content = $("nutzdaten").first();
   const contentTypes = new Set<string>();
   content.find("absatz[ct]").each((_, element) => {
@@ -337,7 +338,7 @@ const titlesHeadMatter = (next: RisItem | undefined): boolean => {
 export const parseRisDecisionXml = (
   input: ParseRisDecisionInput,
 ): Result<ParseRisDecisionOutput, ParseXmlError> => {
-  const $ = cheerio.load(input.xml, { xml: true });
+  const $ = load(input.xml, { xml: true });
   const content = $("nutzdaten").first().get(0);
   if (content === undefined) {
     return Result.err(
