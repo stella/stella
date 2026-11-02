@@ -25,7 +25,7 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { aiErrorStatusBody } from "@/api/lib/ai-error";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import {
   createTanStackAIAnalyticsCallbacks,
   type TanStackAIAnalyticsCallbacks,
@@ -920,10 +920,16 @@ export const createSearchSummaryChatThread = async ({
 
   // Index the freshly seeded summary thread so it is findable in
   // global search. Fire-and-forget: indexing must not fail the create.
-  upsertSearchDocument(threadId).catch(
-    createErrorCapture(
-      handlerErrorContext("createSearchSummaryChatThread.upsertSearchDocument"),
-    ),
+  detached(
+    async () =>
+      upsertSearchDocument(threadId).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "createSearchSummaryChatThread.upsertSearchDocument",
+          ),
+        ),
+      ),
+    "search-summary.index-thread",
   );
 
   return { threadId };
