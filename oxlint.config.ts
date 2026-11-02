@@ -464,6 +464,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-section-sign-glyph.fixture.tsx", [
     "no-section-sign-glyph/no-section-sign-glyph",
   ]),
+  fixtureRuleOverride("no-style-substring-match.fixture.ts", [
+    "no-style-substring-match/no-style-substring-match",
+  ]),
   fixtureRuleOverride("no-inert-autofocus.fixture.tsx", [
     "no-inert-autofocus/no-inert-autofocus",
   ]),
@@ -619,6 +622,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("require-fetch-timeout.fixture.ts", [
     "require-fetch-timeout/require-fetch-timeout",
+  ]),
+  fixtureRuleOverride("no-fetch-response-body-replacement.fixture.ts", [
+    "no-fetch-response-body-replacement/no-fetch-response-body-replacement",
   ]),
   fixtureRuleOverride("require-bounded-request-schema.fixture.ts", [
     "require-bounded-request-schema/require-bounded-request-schema",
@@ -1641,6 +1647,7 @@ const config = defineConfig({
     ],
     "no-nanoid/no-nanoid": "error",
     "no-section-sign-glyph/no-section-sign-glyph": "error",
+    "no-style-substring-match/no-style-substring-match": "error",
     "no-inert-autofocus/no-inert-autofocus": "error",
     "no-hand-built-date-range-filter/no-hand-built-date-range-filter": "error",
     "confine-server-reads/confine-server-reads": "error",
@@ -1900,6 +1907,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
+    "./.oxlint-plugins/no-style-substring-match.ts",
     "./.oxlint-plugins/no-inert-autofocus.ts",
     "./.oxlint-plugins/no-optional-chain-null-compare.ts",
     "./.oxlint-plugins/no-constructed-fetch-object.ts",
@@ -1995,6 +2003,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-api-error-check.ts",
     "./.oxlint-plugins/require-function-replacer.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
+    "./.oxlint-plugins/no-fetch-response-body-replacement.ts",
     "./.oxlint-plugins/require-file-transport-disposition.ts",
     "./.oxlint-plugins/require-escape-like.ts",
     "./.oxlint-plugins/sql-perf.ts",
@@ -5276,6 +5285,8 @@ const config = defineConfig({
       files: ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
       rules: {
         "require-fetch-timeout/require-fetch-timeout": "error",
+        "no-fetch-response-body-replacement/no-fetch-response-body-replacement":
+          "error",
         "require-escape-like/require-escape-like": "error",
       },
     },

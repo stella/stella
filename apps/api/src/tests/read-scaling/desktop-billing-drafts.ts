@@ -208,7 +208,7 @@ export const measureDesktopBillingDraftSettings = async (
         return panic("Desktop settings scaling requires a successful response");
       }
       const { revision, ...settings } = response;
-      expect(revision).toEqual(expect.any(String));
+      expect(typeof revision).toBe("string");
       // The other organization's firm file never makes this one guided.
       expect(settings).toEqual({
         effectiveMode: "plain",

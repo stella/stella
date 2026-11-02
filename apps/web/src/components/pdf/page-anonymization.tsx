@@ -3,6 +3,7 @@ import type { MouseEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useShallow } from "zustand/react/shallow";
 
+import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import { getOverlayRectKey } from "@/lib/anonymize/overlay-rects";
@@ -128,14 +129,20 @@ export const PageAnonymization = ({
           } as const;
 
           if (interactive) {
+            const { backgroundColor, ...placement } = commonStyle;
             return (
-              <button
-                className="absolute rounded-xs opacity-50 hover:opacity-70"
+              <Button
+                className="group/act absolute"
                 key={rectKey}
                 onClick={handlePeekClick}
-                style={commonStyle}
-                type="button"
-              />
+                style={placement}
+                variant="plain"
+              >
+                <span
+                  className="block size-full rounded-xs opacity-50 group-hover/act:opacity-70"
+                  style={{ backgroundColor }}
+                />
+              </Button>
             );
           }
 

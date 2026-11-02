@@ -336,7 +336,7 @@ describe("benchmark check availability", () => {
 
   test.each([
     { oversized: true, reason: "exceeds" },
-    { slow: true, reason: "Fetch timed out" },
+    { slow: true, reason: "Response body stalled" },
   ])(
     "reports bounded transfer failures as inconclusive: %j",
     async (fixture) => {

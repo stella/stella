@@ -1496,7 +1496,11 @@
       "connected": "Paplašinājums savienots",
       "description": "Pēc jūsu lūguma stella var atvērt un lasīt vietnes atsevišķā cilnē.",
       "install": "Instalēt paplašinājumu",
-      "installDescription": "Ar stella paplašinājumu stella pēc jūsu lūguma var atvērt un lasīt vietnes atsevišķā cilnē. Instalējiet to no Chrome interneta veikala."
+      "installDescription": "Ar stella paplašinājumu stella pēc jūsu lūguma var atvērt un lasīt vietnes atsevišķā cilnē. Instalējiet to no Chrome interneta veikala.",
+      "reload": "Pārlādēt cilni",
+      "reloadDescription": "Jūsu stella paplašinājums ir jaunāks par šo cilni. Pārlādējiet cilni, lai to turpinātu izmantot.",
+      "updating": "Gaida paplašinājuma atjauninājumu",
+      "updatingDescription": "Jūsu stella paplašinājums ir vecāka versija. Chrome to atjaunina automātiski, parasti dažu stundu laikā; pēc tam stella atkal varēs jums atvērt un lasīt vietnes."
     },
     "cancelQueuedMessage": "Atcelt rindā gaidošo ziņojumu",
     "caseLawGreeting": "Uzdodiet jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",

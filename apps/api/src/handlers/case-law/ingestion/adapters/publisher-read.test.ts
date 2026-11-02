@@ -39,7 +39,7 @@ const init = (
 ): PublisherReadInit => ({
   adapterKey: ADAPTER_KEYS.CZ_NSS,
   fetchStage: "listing",
-  timeout: { type: "idle", ms: 1000 },
+  timeout: { type: "headers", ms: 1000 },
   ...overrides,
 });
 

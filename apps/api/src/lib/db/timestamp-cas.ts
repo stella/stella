@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import type { AnyColumn, Column, SQL } from "drizzle-orm";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 /**
  * Compare-and-set token for a `timestamp` column.
  *
@@ -56,7 +58,12 @@ export const isTimestampCasToken = (
   if (fields === undefined) {
     return false;
   }
-  const field = (name: string) => Number(fields[name] ?? "0");
+  // An absent optional field is zero; anything unreadable is NaN, which no
+  // range check below accepts.
+  const field = (name: string) =>
+    parseIntegerToken(fields[name] ?? "0", { sign: "unsigned" }).unwrapOr(
+      Number.NaN,
+    );
   const year = field("year");
   const month = field("month");
   const day = field("day");
