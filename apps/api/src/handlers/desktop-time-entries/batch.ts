@@ -108,7 +108,7 @@ export const desktopBatchFingerprint = ({ entries }: DesktopTimeEntryBatch) =>
  * matters whose client bills in LEDES, otherwise the client activity group.
  * Internal entries have no matter, so no matter entry takes that group.
  */
-export const matterClassificationAllowed = (
+const matterClassificationAllowed = (
   classification: DesktopTimeEntryClassification,
   ledes: boolean,
 ) => {
