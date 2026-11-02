@@ -7,6 +7,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { CONTACT_BULK_DELETE_LIMIT } from "@stll/api-contract";
 
 import messages from "@/i18n/langs/en.json";
+import { contactsKeys } from "@/lib/contacts/queries";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const receivedBatches: string[][] = [];
@@ -185,6 +186,12 @@ test("selects three contacts and confirms one bulk request", async () => {
 
 test("keeps blocked contacts selected and resolves deleted or missing contacts", async () => {
   const queryClient = new QueryClient();
+  const contactIds = ["contact-one", "contact-two", "contact-three"];
+  for (const contactId of contactIds) {
+    queryClient.setQueryData(contactsKeys.byId("organization-one", contactId), {
+      id: contactId,
+    });
+  }
   await act(async () => {
     render(
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
@@ -205,4 +212,13 @@ test("keeps blocked contacts selected and resolves deleted or missing contacts",
   expect(await screen.findByText("Contacts not removed: 2")).toBeTruthy();
   expect(screen.getByText("contact-two")).toBeTruthy();
   expect(screen.queryByText("Deleted 1 contact")).toBeNull();
+  // A missing contact's cached detail goes too; only the blocked one stays.
+  expect(
+    contactIds.filter(
+      (contactId) =>
+        queryClient.getQueryData(
+          contactsKeys.byId("organization-one", contactId),
+        ) !== undefined,
+    ),
+  ).toEqual(["contact-two"]);
 });

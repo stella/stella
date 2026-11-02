@@ -144,6 +144,12 @@ function ContactsPage() {
     setDebouncedQuery(value);
   }, 300);
 
+  // A selection the new filter hides must not be deleted unseen.
+  const changeFilter = (next: ContactFilter) => {
+    setFilter(next);
+    setSelectedIds([]);
+  };
+
   const typeFilter = filter === "all" ? undefined : filter;
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -175,7 +181,11 @@ function ContactsPage() {
   const isFirstUseEmpty =
     view.type === "empty" && searchQuery.trim() === "" && filter === "all";
 
-  const columns = useContactColumns({ selectedIds, setSelectedIds });
+  const columns = useContactColumns({
+    canSelect: canDeleteContact,
+    selectedIds,
+    setSelectedIds,
+  });
 
   const table = useTable({
     features: contactTableFeatures,
@@ -229,6 +239,8 @@ function ContactsPage() {
             onValueChange={(value) => {
               setSearchQuery(value);
               updateSearch(value);
+              // A selection the new results hide must not be deleted unseen.
+              setSelectedIds([]);
             }}
             placeholder={t("contacts.search")}
             value={searchQuery}
@@ -239,17 +251,17 @@ function ContactsPage() {
             <FilterButton
               active={filter === "all"}
               label={t("common.all")}
-              onClick={() => setFilter("all")}
+              onClick={() => changeFilter("all")}
             />
             <FilterButton
               active={filter === "person"}
               label={t("contacts.filterPersons")}
-              onClick={() => setFilter("person")}
+              onClick={() => changeFilter("person")}
             />
             <FilterButton
               active={filter === "organization"}
               label={t("contacts.filterOrganizations")}
-              onClick={() => setFilter("organization")}
+              onClick={() => changeFilter("organization")}
             />
           </div>
         </ResponsiveActionToolbarItem>
@@ -432,9 +444,12 @@ const columnHelper = createColumnHelper<ContactTableFeatures, ContactItem>();
 // Single column source of truth: the page table, its loading skeleton, and the
 // route-level pending shell all derive from this, so none can drift.
 const useContactColumns = ({
+  canSelect,
   selectedIds,
   setSelectedIds,
 }: {
+  /** Selection only feeds bulk delete, so it shows only to who may delete. */
+  canSelect: boolean;
   selectedIds: readonly string[];
   setSelectedIds: (ids: readonly string[]) => void;
 }) => {
@@ -442,25 +457,29 @@ const useContactColumns = ({
   return useMemo(
     () =>
       columnHelper.columns([
-        columnHelper.display({
-          id: "select",
-          header: () => null,
-          cell: ({ row }) => (
-            <Checkbox
-              aria-label={t("contacts.selectContact", {
-                name: row.original.displayName,
-              })}
-              checked={selectedIds.includes(row.original.id)}
-              onCheckedChange={(checked) =>
-                setSelectedIds(
-                  checked
-                    ? [...selectedIds, row.original.id]
-                    : selectedIds.filter((id) => id !== row.original.id),
-                )
-              }
-            />
-          ),
-        }),
+        ...(canSelect
+          ? [
+              columnHelper.display({
+                id: "select",
+                header: () => null,
+                cell: ({ row }) => (
+                  <Checkbox
+                    aria-label={t("contacts.selectContact", {
+                      name: row.original.displayName,
+                    })}
+                    checked={selectedIds.includes(row.original.id)}
+                    onCheckedChange={(checked) =>
+                      setSelectedIds(
+                        checked
+                          ? [...selectedIds, row.original.id]
+                          : selectedIds.filter((id) => id !== row.original.id),
+                      )
+                    }
+                  />
+                ),
+              }),
+            ]
+          : []),
         columnHelper.display({
           id: "icon",
           header: () => null,
@@ -536,7 +555,7 @@ const useContactColumns = ({
           cell: ({ row }) => <ContactRowActions contact={row.original} />,
         }),
       ]),
-    [selectedIds, setSelectedIds, t],
+    [canSelect, selectedIds, setSelectedIds, t],
   );
 };
 
@@ -825,8 +844,13 @@ const ContactsToolbarPlaceholder = () => {
 };
 
 function ContactsPendingComponent() {
+  const canDeleteContact = usePermissions({ contact: ["delete"] });
   const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
-  const columns = useContactColumns({ selectedIds, setSelectedIds });
+  const columns = useContactColumns({
+    canSelect: canDeleteContact,
+    selectedIds,
+    setSelectedIds,
+  });
   const table = useTable({
     features: contactTableFeatures,
     data: EMPTY_CONTACTS,

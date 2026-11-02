@@ -72,7 +72,12 @@ export function BulkDeleteContacts({
     const deletedIds = outcomes.flatMap((outcome) =>
       outcome.status === "deleted" ? [outcome.contactId] : [],
     );
-    for (const contactId of deletedIds) {
+    // A contact the server no longer has may still be cached from before
+    // another session deleted it; only a blocked one still exists.
+    const resolvedIds = outcomes.flatMap((outcome) =>
+      outcome.status === "blocked" ? [] : [outcome.contactId],
+    );
+    for (const contactId of resolvedIds) {
       queryClient.removeQueries({
         queryKey: contactsKeys.byId(organizationId, contactId),
       });
@@ -82,9 +87,6 @@ export function BulkDeleteContacts({
     });
     setPending(false);
     setOpen(false);
-    const resolvedIds = outcomes.flatMap((outcome) =>
-      outcome.status === "blocked" ? [] : [outcome.contactId],
-    );
     onResolved(resolvedIds);
     const blockedCount = outcomes.filter(
       ({ status }) => status === "blocked",
