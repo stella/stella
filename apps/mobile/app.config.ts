@@ -17,6 +17,23 @@ import path from "node:path";
 
 const VARIANTS = ["development", "preview", "production"] as const;
 
+/** The interface languages the app ships (`UI_LOCALES` in `@stll/locales`). */
+export const IOS_LOCALIZATIONS = [
+  "ar",
+  "cs",
+  "de",
+  "en",
+  "es",
+  "et",
+  "fr",
+  "hu",
+  "lt",
+  "lv",
+  "pl",
+  "pt-BR",
+  "sk",
+] as const;
+
 /** The store version; `scripts/fingerprint.ts` hashes its release line. */
 export const APP_VERSION = "0.1.0";
 
@@ -281,6 +298,10 @@ const appConfigBase = ({
       // matter's documents.
       NSCameraUsageDescription:
         "stella scans paper documents with the camera to add them to a matter.",
+      // iOS runs an app only in a language its bundle declares: without the
+      // list the app's locale is English on every phone, so the catalogs it
+      // ships for the device's language never load.
+      CFBundleLocalizations: [...IOS_LOCALIZATIONS],
     },
   },
   android: {
