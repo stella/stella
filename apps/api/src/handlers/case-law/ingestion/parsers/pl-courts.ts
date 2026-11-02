@@ -1,3 +1,5 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: footnoteIds is supplied only by the PL-SN and UOKIK PDF readers; other callers retain sanitizeUrl and their existing link output.
 // parser-output-unchanged: [cz-nss] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
 // parser-output-unchanged: [cz-uohs] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
 // parser-output-unchanged: [pl-sn] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
@@ -26,18 +28,20 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
+
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import {
   type AnyNode,
   cloneNode,
-  Element,
+  createElement,
+  type Element,
   hasChildren,
   isComment,
   isTag,
   isText,
-} from "domhandler";
-
-import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+} from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: imports byte-identical HTML stripping from its pure parser module instead of adapter I/O utilities.
 import type {
@@ -103,6 +107,8 @@ type ParsePlDecisionInput = {
    * the unwrapped reading their stored documents were made with.
    */
   superscripts?: boolean | undefined;
+  /** IDs of footnotes actually parsed from this document; all other links keep URL sanitization. */
+  footnoteIds?: readonly string[] | undefined;
   /**
    * Whose markup conventions the HTML follows. Omitted, the HTML is read as
    * any publisher's.
@@ -199,6 +205,7 @@ type ParserState = {
   pendingMarker: Inline[] | undefined;
   listMarkers: WeakMap<Element, WeakMap<Element, string | null>>;
   listItemBoundaries: WeakMap<Element, boolean>;
+  footnoteHrefs: ReadonlySet<string>;
 };
 
 const hasHtmlTags = (content: string): boolean =>
@@ -247,9 +254,11 @@ type CreateStateOptions = {
   markup: PlDecisionMarkup | undefined;
   caseNumber: string;
   fallbackDecisionTitle: string | undefined;
+  footnoteIds: readonly string[] | undefined;
 };
 
 const createState = ({
+  footnoteIds,
   superscripts,
   markup,
   caseNumber,
@@ -267,6 +276,7 @@ const createState = ({
   fallbackDecisionTitle,
   normalizedCaseNumber: caseNumber.replace(/\s+/gu, " ").trim(),
   panelNames: [],
+  footnoteHrefs: new Set(footnoteIds?.map((noteId) => `#${noteId}`)),
   superscripts,
   markup,
   pendingMarker: undefined,
@@ -414,7 +424,8 @@ const walkInlines = (
       readMarkupInlines(
         state,
         walkInlinesShared($, el, {
-          sanitizeHref: sanitizeUrl,
+          sanitizeHref: (href) =>
+            state.footnoteHrefs.has(href) ? href : sanitizeUrl(href),
           anonymized: false,
           superscripts: state.superscripts,
         }),
@@ -1009,7 +1020,7 @@ const parseListItemContent = ({
   let start = 0;
   const readInline = (end: number): void => {
     if (end > start) {
-      const segment = new Element(
+      const segment = createElement(
         item.name,
         item.attribs,
         children.slice(start, end),
@@ -1553,8 +1564,9 @@ const enforcePlainTextExpansionBudget = (
 export const parsePlDecisionContent = (
   input: ParsePlDecisionInput,
 ): ParsePlDecisionOutput => {
-  const loadHtml = input.loadHtml ?? cheerio.load;
+  const loadHtml = input.loadHtml ?? load;
   const state = createState({
+    footnoteIds: input.footnoteIds,
     superscripts: input.superscripts === true,
     markup: input.markup,
     caseNumber: input.caseNumber,

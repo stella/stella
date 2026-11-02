@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -109,7 +109,8 @@ const entity = fc
 test(
   "company and search share identity and preserve the documented name fallback",
   () => {
-    fc.assert(
+    assertProperty(
+      "company and search share identity and preserve the documented name fallback",
       fc.property(entity, registryExtras, (raw, extras) => {
         const enriched = { extraFields: extras, ...raw };
         const parsed = expectRegistryOutcome(() => parseCompany(enriched));
@@ -148,7 +149,7 @@ test(
           expect(parsed.status.type).toBe("unknown");
         }
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 80 }),
+      { seed: propertySeed(), numRuns: 80 },
     );
   },
   propertyTestTimeout(10_000),
@@ -157,7 +158,8 @@ test(
 test(
   "localized address parsing keeps postal and country atoms and source city",
   () => {
-    fc.assert(
+    assertProperty(
+      "localized address parsing keeps postal and country atoms and source city",
       fc.property(address, registryExtras, (raw, extras) => {
         const enriched = { extraFields: extras, ...raw };
         const parsed = expectRegistryOutcome(() => parseAddress(enriched));
@@ -178,7 +180,7 @@ test(
           expectNullableString(value);
         }
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 80 }),
+      { seed: propertySeed(), numRuns: 80 },
     );
   },
   propertyTestTimeout(10_000),
@@ -187,7 +189,8 @@ test(
 test(
   "client responses validate generated missing, null and wrong nested field types",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "client responses validate generated missing, null and wrong nested field types",
       fc.asyncProperty(entity, async (raw) => {
         const baseline = await expectRegistryResponse(
           { totalResults: 1, companies: [raw] },
@@ -234,7 +237,7 @@ test(
           },
         );
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 5 }),
+      { seed: propertySeed(), numRuns: 5 },
     );
   },
   propertyTestTimeout(10_000),
