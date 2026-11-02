@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "EU_ECJ",
   "key": "eu-ecj",
-  "parserVersion": 21,
+  "parserVersion": 22,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "The sentence introducing the ruling (On those grounds, THE COURT hereby rules:) loses the holding role where the Court sets it on several lines: the General Court's unmarked opening row and the oldest layout's bare paragraphs."
+    "reason": "The sentence introducing the ruling (On those grounds, THE COURT hereby rules:) loses the holding role where the Court sets it on several lines: the General Court's unmarked opening row and the oldest layout's bare paragraphs. Derive the case number from every case-law CELEX document form by its court letter, so a Civil Service Tribunal order (62013FO0060) reads F-60/13 instead of the raw CELEX; the case number has no separate feature storage."
   }
 }
