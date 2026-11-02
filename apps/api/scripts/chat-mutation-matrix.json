@@ -922,7 +922,7 @@
       "replace": "buffer += decoder.decode(value);",
       "scenario": {
         "file": "src/lib/tanstack-ai-provider-wire.test.ts",
-        "test": "reads a stream cut anywhere as it reads it whole mistral text"
+        "test": "reads a stream cut anywhere as it reads it whole mistral text matches the whole read at any cut"
       },
       "oracle": "chat.provider-wire.split"
     },

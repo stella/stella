@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 
-import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   REVIEW_PARTY_NAME_MAX_LENGTH,
   REVIEW_PARTY_ROLE_MAX_LENGTH,
@@ -72,7 +72,10 @@ const reviewPerspectiveSchema = v.union([
       v.maxLength(REVIEW_PARTY_ROLE_MAX_LENGTH),
     ),
     name: v.nullable(
-      v.pipe(v.string(), v.maxLength(REVIEW_PARTY_NAME_MAX_LENGTH)),
+      displayNameSchema({
+        maxLength: REVIEW_PARTY_NAME_MAX_LENGTH,
+        allowEmpty: true,
+      }),
     ),
   }),
 ]);

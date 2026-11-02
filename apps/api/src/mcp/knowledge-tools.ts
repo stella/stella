@@ -3,6 +3,7 @@ import { deepEquals } from "bun";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
+import { displayNameSchema } from "@stll/api-contract/display-name";
 import { BLOCK_DIRECTIVE_KINDS } from "@stll/template-conditions";
 
 import { listCategoriesHandler } from "@/api/handlers/clauses/categories";
@@ -1580,9 +1581,7 @@ const savePlaybookArgsSchema = nullAsAbsent(
       ),
       name: v.optional(
         v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(256),
+          displayNameSchema(),
           v.description("Playbook name; required when creating"),
         ),
       ),
