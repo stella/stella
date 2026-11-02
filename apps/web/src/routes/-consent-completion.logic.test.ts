@@ -1,10 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ConsentClientIdentity } from "@/components/oauth-consent/client-identity.logic";
 import { queryView } from "@/lib/query-view.logic";
 import {
   consentCompletion,
   isConsentAllowDisabled,
 } from "@/routes/-consent-completion.logic";
+
+const stellaCli: ConsentClientIdentity = {
+  type: "verified",
+  brand: "stella_cli",
+  name: "stella CLI",
+  publisher: "stella",
+};
 
 describe("consent completion", () => {
   test.each([
@@ -18,6 +26,7 @@ describe("consent completion", () => {
       const completion = consentCompletion({
         accept: true,
         redirectUrl,
+        client: stellaCli,
         organizationName: "Novák & Partners",
       });
       expect(completion.status).toBe("redirect");
@@ -41,6 +50,7 @@ describe("consent completion", () => {
       consentCompletion({
         accept: true,
         redirectUrl,
+        client: stellaCli,
         organizationName: "Firm",
       }),
     ).toEqual({ status: "connected", redirectUrl });
@@ -52,15 +62,49 @@ describe("consent completion", () => {
       consentCompletion({
         accept: false,
         redirectUrl,
+        client: stellaCli,
         organizationName: "Firm",
       }),
     ).toEqual({ status: "redirect", redirectUrl });
   });
 
+  test.each<ConsentClientIdentity>([
+    {
+      type: "verified",
+      brand: "claude_code",
+      name: "Claude Code",
+      publisher: "Anthropic",
+    },
+    { type: "verified", brand: "codex", name: "Codex", publisher: "OpenAI" },
+    { type: "verified_unbranded", name: "Desktop tool" },
+    { type: "unverified", name: "stella CLI" },
+    { type: "unknown", name: "App" },
+  ])(
+    "does not disclose the organization to another loopback client ($name)",
+    (client) => {
+      const redirectUrl = "http://127.0.0.1:4567/callback?code=grant";
+      const completion = consentCompletion({
+        accept: true,
+        redirectUrl,
+        client,
+        organizationName: "Firm",
+      });
+      expect(completion.status).toBe("redirect");
+      const url = new URL(completion.redirectUrl);
+      expect(url.searchParams.get("code")).toBe("grant");
+      expect(url.searchParams.has("organization_name")).toBe(false);
+    },
+  );
+
   test("omits an unknown organization", () => {
     const redirectUrl = "http://127.0.0.1:4567/callback?code=grant";
     expect(
-      consentCompletion({ accept: true, redirectUrl, organizationName: null }),
+      consentCompletion({
+        accept: true,
+        redirectUrl,
+        client: stellaCli,
+        organizationName: null,
+      }),
     ).toEqual({ status: "redirect", redirectUrl });
   });
 });

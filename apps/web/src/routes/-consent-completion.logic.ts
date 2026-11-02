@@ -1,3 +1,4 @@
+import type { ConsentClientIdentity } from "@/components/oauth-consent/client-identity.logic";
 import { isLoopbackRedirectUri } from "@/components/oauth-consent/oauth-destination.logic";
 import { queryViewError } from "@/lib/query-view.logic";
 import type { QueryView } from "@/lib/query-view.logic";
@@ -25,13 +26,27 @@ export const isConsentAllowDisabled = <TSession, TError>({
 type ConsentCompletionOptions = {
   accept: boolean;
   redirectUrl: string;
+  client: ConsentClientIdentity;
   organizationName: string | null;
 };
+
+/**
+ * Only the server-verified stella CLI shows the organization on its completion
+ * page; another loopback client may hold no scope that reveals it.
+ */
+const completionOrganizationName = (
+  client: ConsentClientIdentity,
+  organizationName: string | null,
+): string | null =>
+  client.type === "verified" && client.brand === "stella_cli"
+    ? organizationName
+    : null;
 
 /** Only the provider's approved redirect determines where completion is shown. */
 export const consentCompletion = ({
   accept,
   redirectUrl,
+  client,
   organizationName,
 }: ConsentCompletionOptions):
   | { status: "redirect"; redirectUrl: string }
@@ -41,8 +56,12 @@ export const consentCompletion = ({
   }
   if (isLoopbackRedirectUri(redirectUrl)) {
     const url = new URL(redirectUrl);
-    if (organizationName) {
-      url.searchParams.set("organization_name", organizationName);
+    const shownOrganization = completionOrganizationName(
+      client,
+      organizationName,
+    );
+    if (shownOrganization) {
+      url.searchParams.set("organization_name", shownOrganization);
     }
     return { status: "redirect", redirectUrl: url.toString() };
   }

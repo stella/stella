@@ -238,6 +238,7 @@ function ConsentPage() {
     const completion = consentCompletion({
       accept,
       redirectUrl,
+      client: identity,
       organizationName,
     });
     switch (completion.status) {

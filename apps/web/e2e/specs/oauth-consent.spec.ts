@@ -250,7 +250,8 @@ test("OAuth consent skips loopback completion and keeps hosted completion", asyn
       if (destination === "hosted") {
         expect(Date.now() - clickedAt).toBeGreaterThanOrEqual(800);
       } else {
-        expect(callbackParams.get("organization_name")).not.toBeNull();
+        // Only the verified stella CLI is told the organization's name.
+        expect(callbackParams.has("organization_name")).toBe(false);
         expect(renderedHeadings).not.toContain(
           `Connected to Consent browser test ${id}`,
         );
