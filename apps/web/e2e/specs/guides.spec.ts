@@ -8,6 +8,7 @@ import { GUIDE_ANCHORS } from "../../src/features/guides/guide-anchors";
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { apiGet } from "../helpers/api";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import {
   createTestWorkspace,
   deleteTestWorkspace,
@@ -129,12 +130,16 @@ const finishGuide = async (page: Page) => {
 
 const startGuide = async (page: Page, title: string) => {
   const helpButton = page.getByRole("button", { name: HELP_BUTTON_NAME });
-  await expect(helpButton).toBeVisible({ timeout: 30_000 });
+  await expect(helpButton).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await helpButton.click();
   const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });
   const card = drawer.locator("li").filter({ hasText: title });
   const start = card.getByRole("button", { name: /^(?:Start again|Start)$/u });
-  await expect(start).toBeEnabled({ timeout: 30_000 });
+  await expect(start).toBeEnabled({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await start.click();
   await expect(drawer).toHaveCount(0);
 };
@@ -274,13 +279,15 @@ test("Guide checklist stays stable until matter availability resolves", async ({
       waitUntil: "commit",
     });
     const helpButton = page.getByRole("button", { name: HELP_BUTTON_NAME });
-    await expect(helpButton).toBeVisible({ timeout: 30_000 });
+    await expect(helpButton).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await helpButton.click();
     const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });
     await expect(drawer.locator('[aria-busy="true"]')).toBeVisible();
     await expect(
       drawer.locator("li").filter({ hasText: "Work with documents" }),
-    ).toBeVisible({ timeout: 30_000 });
+    ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
   } finally {
     if (workspace) {
       await deleteTestWorkspace(request, workspace.id);
@@ -466,7 +473,7 @@ for (const availability of [
       });
       await expect(
         page.getByRole("button", { name: HELP_BUTTON_NAME }),
-      ).toBeVisible({ timeout: 30_000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
       browserErrors.expectCaptured(/Failed to load resource:.*503/u);
       await page.route(availability.path, async (route) => {
         await route.fulfill({
@@ -478,7 +485,7 @@ for (const availability of [
       const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });
       await expect(drawer.getByRole("alert")).toContainText(
         messages.errors.actionFailed,
-        { timeout: 30_000 },
+        { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
       );
       await expect(
         drawer.locator("li").filter({ hasText: availability.title }),
