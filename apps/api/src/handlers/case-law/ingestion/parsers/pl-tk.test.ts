@@ -20,12 +20,15 @@ import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-ext
 import {
   listPlTkPageFields,
   parsePlTkPage,
-  parsePlTkText,
+  parsePlTkText as uncheckedParsePlTkText,
   parsePolishDate,
   readPlTkCasePage,
   readPlTkRuling,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlTkText = guardParser(uncheckedParsePlTkText);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 

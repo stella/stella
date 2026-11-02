@@ -69,6 +69,7 @@ import {
   isExcludedHtmlTag,
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { createBlockAnchorAllocator } from "@/api/lib/legal-search/parsers/block-anchors";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 
@@ -968,6 +969,7 @@ const continuesOnNextPage = (open: string, next: string): boolean =>
 /** The blocks read so far, the paragraph still open, and where the reading is. */
 type BlockBuilder = {
   readonly blocks: Block[];
+  readonly makeAnchor: ReturnType<typeof createBlockAnchorAllocator>;
   section: Section;
   blockCount: number;
   paragraph: MarkupLine | null;
@@ -998,7 +1000,7 @@ const flushParagraph = (builder: BlockBuilder): void => {
   })();
   builder.blocks.push({
     id: nextBlockId(builder),
-    anchorId: `p${builder.blockCount}`,
+    anchorId: builder.makeAnchor(`p${builder.blockCount}`),
     type: "paragraph",
     ...(role === null ? {} : { role }),
     inlines: line.inlines,
@@ -1020,7 +1022,12 @@ const pushHeading = (
   anchorId = `h${builder.blocks.length + 1}`,
 ): void => {
   builder.blocks.push(
-    headingBlock({ id: nextBlockId(builder), anchorId, level, line }),
+    headingBlock({
+      id: nextBlockId(builder),
+      anchorId: builder.makeAnchor(anchorId),
+      level,
+      line,
+    }),
   );
 };
 
@@ -1075,6 +1082,20 @@ const readPartMarker = (builder: BlockBuilder, line: MarkupLine): boolean => {
     (line.fontSize > TITLE_FONT_SIZE || isSkDecisionTitle(line.text))
   ) {
     flushParagraph(builder);
+    const previous = builder.blocks.at(-1);
+    if (previous?.type === "heading" && previous.role === "decision-title") {
+      const joined = joinLines(
+        {
+          inlines: previous.inlines,
+          text: previous.plainText,
+          fontSize: line.fontSize,
+        },
+        line,
+      );
+      previous.inlines = joined.inlines;
+      previous.plainText = joined.text;
+      return true;
+    }
     pushHeading(builder, line, 1, "h-title");
     return true;
   }
@@ -1135,7 +1156,7 @@ const readClosingMarker = (
     builder.blockCount += 1;
     builder.blocks.push({
       id: nextBlockId(builder),
-      anchorId: `p${builder.blockCount}`,
+      anchorId: builder.makeAnchor(`p${builder.blockCount}`),
       type: "paragraph",
       role: "closing",
       inlines: line.inlines,
@@ -1280,6 +1301,71 @@ const readParagraphLine = (
   openParagraph(builder, line);
 };
 
+/** A finished sentence, then the gap before whatever the source ran on. */
+const SENTENCE_THEN_GAP = /[.!?][“”"»)]{0,3}(?<gap>\s+)/gu;
+
+/** The word a sentence-ending full stop follows. */
+const LAST_WORD_BEFORE = /([\p{L}\d]+)$/u;
+
+/**
+ * Abbreviations a number follows (`čl. 2.`, `ods. 3.`): their full stop
+ * ends no sentence, so a number after one is a citation, not a paragraph.
+ */
+const NUMBERED_ABBREVIATIONS: ReadonlySet<string> = new Set([
+  "bod",
+  "č",
+  "čl",
+  "nar",
+  "napr",
+  "ods",
+  "písm",
+  "porov",
+  "resp",
+  "s",
+  "sp",
+  "str",
+  "tzv",
+  "zák",
+  "zb",
+  "zn",
+]);
+
+/**
+ * Where the source lost a line break: it ran the court's next numbered point
+ * onto the sentence before it (`… porušené boli. 2. Zrušuje …`), or a part
+ * marker onto the sentence that ends the part (`… osobou. Odôvodnenie:`).
+ * Only the number that comes next counts, after a word an abbreviation's
+ * full stop does not end. Restoring the break leaves the paragraph decision
+ * to the reading of whole lines.
+ */
+const lostBreakOffsets = (
+  text: string,
+  builder: Pick<BlockBuilder, "section" | "nextCourtNumber">,
+): number[] => {
+  const offsets: number[] = [];
+  let markerAt: number | undefined;
+  for (const match of text.matchAll(SENTENCE_THEN_GAP)) {
+    const at = match.index + match[0].length;
+    const word = LAST_WORD_BEFORE.exec(text.slice(0, match.index))?.[1] ?? "";
+    const opening = openingNumberOf(text.slice(at));
+    if (
+      (builder.section === "holding" || builder.section === "reasoning") &&
+      opening === builder.nextCourtNumber &&
+      word.length >= 2 &&
+      !NUMBERED_ABBREVIATIONS.has(word.toLowerCase())
+    ) {
+      offsets.push(at);
+    }
+    const tail = text.slice(at);
+    if (isSkReasoningMarker(tail) || isSkStandaloneInstructionMarker(tail)) {
+      markerAt = at;
+    }
+  }
+  return markerAt === undefined
+    ? offsets
+    : [...offsets.filter((offset) => offset < markerAt), markerAt];
+};
+
 /**
  * Group the lines into blocks.
  *
@@ -1291,20 +1377,32 @@ const readParagraphLine = (
 const classifyLines = (lines: readonly MarkupLine[]): Block[] => {
   const builder: BlockBuilder = {
     blocks: [],
+    makeAnchor: createBlockAnchorAllocator(),
     section: "preamble",
     blockCount: 0,
     paragraph: null,
     nextCourtNumber: 1,
   };
-  const reading: Reading = {
-    lines,
-    openings: lines.map(({ text }) => openingNumberOf(text)),
-  };
+  // A line split where the source lost a break is read as the lines it was.
+  const readLines = [...lines];
+  const openings = readLines.map(({ text }) => openingNumberOf(text));
+  const reading: Reading = { lines: readLines, openings };
   let index = 0;
-  while (index < lines.length) {
-    const line = lines[index];
+  while (index < readLines.length) {
+    const line = readLines[index];
     if (line === undefined || PAGE_NUMBER_PATTERN.test(line.text)) {
       index += 1;
+      continue;
+    }
+    const lostBreaks = lostBreakOffsets(line.text, builder);
+    if (lostBreaks.length > 0) {
+      const parts = splitLineAt(line, lostBreaks);
+      readLines.splice(index, 1, ...parts);
+      openings.splice(
+        index,
+        1,
+        ...parts.map(({ text }) => openingNumberOf(text)),
+      );
       continue;
     }
     if (line.text.length === 0) {

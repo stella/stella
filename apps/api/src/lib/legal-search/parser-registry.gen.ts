@@ -106,27 +106,27 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.HU_BHGY]: 25,
 
-  [ADAPTER_KEYS.PL_COURTS]: 20,
+  [ADAPTER_KEYS.PL_COURTS]: 21,
 
-  [ADAPTER_KEYS.PL_KIO]: 13,
+  [ADAPTER_KEYS.PL_KIO]: 14,
 
-  [ADAPTER_KEYS.PL_KIS]: 14,
+  [ADAPTER_KEYS.PL_KIS]: 15,
 
-  [ADAPTER_KEYS.PL_NCOURT]: 20,
+  [ADAPTER_KEYS.PL_NCOURT]: 21,
 
   [ADAPTER_KEYS.PL_NSA]: 10,
 
-  [ADAPTER_KEYS.PL_SN]: 12,
+  [ADAPTER_KEYS.PL_SN]: 13,
 
   [ADAPTER_KEYS.PL_TK]: 11,
 
   [ADAPTER_KEYS.PL_UODO]: 16,
 
-  [ADAPTER_KEYS.PL_UOKIK]: 14,
+  [ADAPTER_KEYS.PL_UOKIK]: 15,
 
-  [ADAPTER_KEYS.SK_COURTS]: 25,
+  [ADAPTER_KEYS.SK_COURTS]: 26,
 
-  [ADAPTER_KEYS.SK_US]: 22,
+  [ADAPTER_KEYS.SK_US]: 23,
 
   [ADAPTER_KEYS.UK_FCL]: 5,
 } as const satisfies Record<AdapterKey, number>;
@@ -234,27 +234,27 @@ export const PARSER_VERSION_SCOPES = {
 
   [ADAPTER_KEYS.HU_BHGY]: { version: PARSER_VERSIONS[ADAPTER_KEYS.HU_BHGY], scope: {"type":"all","reason":"Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage. Read a partial or interim judgment's operative introduction and the kind printed below a header table as opening the operative part; a header label needs its colon; paragraph roles and the decision type have no separate feature storage. Type the reasons printed after the ruling as argumentation, not as the document's tail, in the sections derived from the AST."} },
 
-  [ADAPTER_KEYS.PL_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS], scope: {"type":"all","reason":"Re-read common-court opening recitals as whole sentences when the editor lays them out across adjacent lines."} },
+  [ADAPTER_KEYS.PL_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS], scope: {"type":"all","reason":"Re-read common-court opening recitals as whole sentences when the editor lays them out across adjacent lines. A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."} },
 
-  [ADAPTER_KEYS.PL_KIO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIO], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
+  [ADAPTER_KEYS.PL_KIO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIO], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters; A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."} },
 
-  [ADAPTER_KEYS.PL_KIS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS], scope: {"type":"all","reason":"Re-read word-processor HTML so single printed line breaks stay inside their sentence and blank lines alone end paragraphs."} },
+  [ADAPTER_KEYS.PL_KIS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS], scope: {"type":"all","reason":"Re-read word-processor HTML so single printed line breaks stay inside their sentence and blank lines alone end paragraphs. A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."} },
 
-  [ADAPTER_KEYS.PL_NCOURT]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NCOURT], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Re-read portal statute links against their anchor text: links whose provisions the anchor does not print lose them, links naming another act or a bare paragraph become plain text, and the metadata lists what was dropped. Also revalidates publisher head-matter ordering across the complete document AST."} },
+  [ADAPTER_KEYS.PL_NCOURT]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NCOURT], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Re-read portal statute links against their anchor text: links whose provisions the anchor does not print lose them, links naming another act or a bare paragraph become plain text, and the metadata lists what was dropped. Also revalidates publisher head-matter ordering across the complete document AST; A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."} },
 
   [ADAPTER_KEYS.PL_NSA]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NSA], scope: {"type":"all","reason":"Classify the thesis heading as publisher head matter when rebuilding the stored dataset sections; AST roles have no separate feature storage."} },
 
-  [ADAPTER_KEYS.PL_SN]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_SN], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
+  [ADAPTER_KEYS.PL_SN]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_SN], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters; A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."} },
 
   [ADAPTER_KEYS.PL_TK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_TK], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
 
   [ADAPTER_KEYS.PL_UODO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UODO], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
 
-  [ADAPTER_KEYS.PL_UOKIK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own."} },
+  [ADAPTER_KEYS.PL_UOKIK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK], scope: {"type":"all","reason":"A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."} },
 
-  [ADAPTER_KEYS.SK_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own. Revalidate deferred stored PDF payloads through the shared typed corpus-validation result; invalid textless structure is a classified no-document outcome, while readable source text and AST retain the same parser. Preserve PDF paragraph gaps, lettered items and the bounded first-page metadata table when rebuilding document text and block boundaries from captured PDF bytes. Rows without captured PDF bytes yield a metadata-only replay outcome and retain their applied parser version; populated historical rows require an explicit PDF capture refresh. Metadata-derived titles require extracted document blocks. Paragraph-gap thresholds derive from font metrics rather than the frequency of observed gaps. Recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes; AST roles and labels have no separate feature storage. Read words the court sets letter-spaced as words, keeping the wider gap between two of them as the word boundary; paragraph text has no separate feature storage."} },
+  [ADAPTER_KEYS.SK_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; the parsed decision has no feature storage of its own. Revalidate deferred stored PDF payloads through the shared typed corpus-validation result; invalid textless structure is a classified no-document outcome, while readable source text and AST retain the same parser. Preserve PDF paragraph gaps, lettered items and the bounded first-page metadata table when rebuilding document text and block boundaries from captured PDF bytes. Rows without captured PDF bytes yield a metadata-only replay outcome and retain their applied parser version; populated historical rows require an explicit PDF capture refresh. Metadata-derived titles require extracted document blocks. Paragraph-gap thresholds derive from font metrics rather than the frequency of observed gaps. Paragraph text and block boundaries are recomputed from stored PDFs through the shared hard-wrap reader, preserving first-line and hanging indentation, line pitch and short final lines; multiline titles and all block anchors are rebuilt with document-unique identities; none has feature storage of its own. Recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes; AST roles and labels have no separate feature storage. Read words the court sets letter-spaced as words, keeping the wider gap between two of them as the word boundary; paragraph text has no separate feature storage."} },
 
-  [ADAPTER_KEYS.SK_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_US], scope: {"type":"all","reason":"Recompute paragraph text and line breaks from stored markup: retain a line break when its newline survives whitespace trimming and drop it when the newline is removed; paragraph AST has no separate feature storage. Normalize repeated block identities and publisher head-matter order before reading stored decisions; AST identities and roles have no independent feature storage. Recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes; AST roles and labels have no separate feature storage. Read files that set word gaps as no-break spaces at their text-layer seams: a plain space inside a word joins it, and one after a finished sentence before a numbered point restores the lost line break; paragraph AST has no separate feature storage."} },
+  [ADAPTER_KEYS.SK_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_US], scope: {"type":"all","reason":"Recompute paragraph text and line breaks from stored markup: retain a line break when its newline survives whitespace trimming and drop it when the newline is removed; paragraph AST has no separate feature storage. Normalize repeated block identities and publisher head-matter order before reading stored decisions; AST identities and roles have no independent feature storage. Multiline preamble titles and document-unique block anchors are rebuilt from stored markup, alongside paragraph text, paragraph numbers and anonymization markers before whitespace trimming, including unpainted non-breaking-space redaction runs and uneven letter-spaced chunks witnessed by intact words; none has feature storage of its own. Recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes; AST roles and labels have no separate feature storage. Read files that set word gaps as no-break spaces at their text-layer seams: a plain space inside a word joins it, and one after a finished sentence before a numbered point restores the lost line break; paragraph AST has no separate feature storage. In files with plain word gaps too, the court's next numbered point or a part marker run onto a finished sentence opens its own line again, so ruling points and the reasoning are read apart; paragraph roles have no separate feature storage."} },
 
   [ADAPTER_KEYS.UK_FCL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.UK_FCL], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Date a tribunal decision by its decision date, so a document named a decision is read rather than refused."} },
 } as const satisfies ParserVersionScopes<typeof PARSER_VERSIONS>;

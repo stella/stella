@@ -13,7 +13,7 @@ import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
 import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import {
-  parsePlUokikDocument,
+  parsePlUokikDocument as uncheckedParsePlUokikDocument,
   PL_UOKIK_RULING_UNREAD,
   plUokikDocumentLines,
   readPlUokikRulingHeader,
@@ -23,6 +23,9 @@ import {
   buildValidationHtml,
   validateAst,
 } from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlUokikDocument = guardParser(uncheckedParsePlUokikDocument);
 
 /** A 2011 decision whose embedded fonts name no weight. */
 const DOK_9_2011 = new URL(

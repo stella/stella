@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
+import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 

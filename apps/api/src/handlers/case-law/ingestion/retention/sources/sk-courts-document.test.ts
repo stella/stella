@@ -3,11 +3,14 @@ import { describe, expect, test } from "bun:test";
 
 import { RETENTION_PROJECTION_FAILURE } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { projectSkCourtsDocument } from "@/api/handlers/case-law/ingestion/retention/sources/sk-courts-document";
-import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
+import { parseSkDecisionPdf as uncheckedParseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
 import {
   validateAst,
   type ValidationResult,
 } from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseSkDecisionPdf = guardParser(uncheckedParseSkDecisionPdf);
 
 const CASE_NUMBER = "8C/12/2025";
 const COURT = "Okresný súd Bratislava I";

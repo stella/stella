@@ -8,12 +8,15 @@ import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   extractPlSnLines,
-  parsePlSnDecisionPdf,
+  parsePlSnDecisionPdf as uncheckedParsePlSnDecisionPdf,
   PL_PDF_PARAGRAPH_START,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import provenance from "./__fixtures__/pl-sn-ii-cskp-1456-22.pdf.provenance.json";
+
+const parsePlSnDecisionPdf = guardParser(uncheckedParsePlSnDecisionPdf);
 
 const CASE_NUMBER = "II CSKP 1456/22";
 const FIXTURE = new URL(

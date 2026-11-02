@@ -12,11 +12,16 @@ import { fileURLToPath } from "node:url";
 
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { PROCESSED_FIELD_EVIDENCE_READERS } from "@/api/tests/helpers/processed-field-evidence";
 
-import { parseNsDecisionHtml } from "./cz-ns";
-import { parseNssDecisionHtml } from "./cz-nss";
-import { parseUsDecisionHtml } from "./cz-us";
+import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "./cz-ns";
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "./cz-nss";
+import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "./cz-us";
+
+const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);
+const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
+const parseUsDecisionHtml = guardParser(uncheckedParseUsDecisionHtml);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 const API_FIXTURES = "src/handlers/case-law/ingestion/parsers/__fixtures__/";

@@ -8,13 +8,16 @@ import {
   buildValidationHtml,
   validateAst,
 } from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseUsDecisionHtml } from "./cz-us";
+import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "./cz-us";
 import {
   expectMarkerRetention,
   injectMarkupMarkers,
   markerPlan,
 } from "./marker-injection.test-helper";
+
+const parseUsDecisionHtml = guardParser(uncheckedParseUsDecisionHtml);
 
 const metadata = {
   caseNumber: "property-fixture",

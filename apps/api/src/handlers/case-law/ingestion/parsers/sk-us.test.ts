@@ -3,9 +3,12 @@ import { describe, expect, test } from "bun:test";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren, plainTextOf } from "@stll/legal-ast/document-ast";
 
-import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
+import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseSkUsDocumentXhtml = guardParser(uncheckedParseSkUsDocumentXhtml);
 
 const FIXTURES = new URL("../adapters/__fixtures__/", import.meta.url);
 
@@ -43,6 +46,25 @@ const roleOf = (block: Block): string | undefined =>
   "role" in block ? block.role : undefined;
 
 describe("the document the court renders as markup", () => {
+  test("a preamble title spanning large-font lines is one reader heading", () => {
+    const { documentAst } = parse(
+      '<html><body><span style="font-size: 22px">NÁLEZ<br/><br/>Ústavného súdu Slovenskej republiky</span><br/>' +
+        '<span style="font-size: 12px">rozhodol:<br/>Návrhu vyhovuje.<br/>Odôvodnenie:<br/>Prvý dôvod.</span></body></html>',
+    );
+    expect(
+      documentAst.blocks.filter(
+        (block) => block.type === "heading" && block.role === "decision-title",
+      ),
+    ).toMatchObject([
+      {
+        anchorId: "h-title",
+        plainText: "NÁLEZ Ústavného súdu Slovenskej republiky",
+      },
+    ]);
+    const anchors = documentAst.blocks.map(({ anchorId }) => anchorId);
+    expect(new Set(anchors).size).toBe(anchors.length);
+  });
+
   test("reads its parts from the words the court prints, not from tags", async () => {
     const payload = await readGzipJson(
       new URL("sk-us-content.json.gz", FIXTURES),

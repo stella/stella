@@ -10,7 +10,7 @@ import { describe, expect, test } from "bun:test";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import {
-  assemblePlUokikDecision,
+  assemblePlUokikDecision as uncheckedAssemblePlUokikDecision,
   parsePlUokikDetail,
   PL_UOKIK_FILE_STATUS,
   plUokikRawPartsOf,
@@ -23,6 +23,9 @@ import { plUokikRetention } from "@/api/handlers/case-law/ingestion/retention/so
 import { readGzipJson } from "@/api/lib/gzip-json";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const assemblePlUokikDecision = guardParser(uncheckedAssemblePlUokikDecision);
 
 const FIXTURES = new URL("../../adapters/__fixtures__/", import.meta.url);
 const PDF_FIXTURE = new URL(

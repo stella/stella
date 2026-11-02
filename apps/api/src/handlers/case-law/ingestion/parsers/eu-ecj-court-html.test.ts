@@ -11,7 +11,10 @@
 import { describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 
-import { parseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
+import { parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);
 
 const FIXTURE = new URL(
   "__fixtures__/eu-ecj-court-html/62026CO0122.cs.html.gz",

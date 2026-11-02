@@ -7,10 +7,13 @@ import {
   blocksToPlainText,
   extractNsMetadata,
   extractRawChunks,
-  parseNsDecisionHtml,
+  parseNsDecisionHtml as uncheckedParseNsDecisionHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import type { ParseNsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);
 
 // ── Helpers ─────────────────────────────────────────────────
 

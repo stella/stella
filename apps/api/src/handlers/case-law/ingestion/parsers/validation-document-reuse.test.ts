@@ -3,8 +3,14 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import * as cheerio from "cheerio";
 
 import * as astValidation from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { ecjDocumentHtml, parseEcjDecisionHtml } from "./eu-ecj";
+import {
+  ecjDocumentHtml,
+  parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml,
+} from "./eu-ecj";
+
+const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
