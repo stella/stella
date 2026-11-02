@@ -81,6 +81,19 @@ export type DocumentProcessingMode = (typeof DOCUMENT_PROCESSING_MODES)[number];
 export const DEFAULT_DOCUMENT_PROCESSING_MODE =
   "off" as const satisfies DocumentProcessingMode;
 
+export const AI_BILLING_DRAFTS_MODE = {
+  DISABLED: "disabled",
+  ENABLED: "enabled",
+} as const;
+export const AI_BILLING_DRAFTS_MODES = [
+  AI_BILLING_DRAFTS_MODE.DISABLED,
+  ...Object.values(AI_BILLING_DRAFTS_MODE).filter(
+    (mode) => mode !== AI_BILLING_DRAFTS_MODE.DISABLED,
+  ),
+] as const;
+/** Drafting is on until an administrator turns it off; no setup is needed. */
+export const DEFAULT_AI_BILLING_DRAFTS_MODE = AI_BILLING_DRAFTS_MODE.ENABLED;
+
 export const DEFAULT_TIME_MINIMUM_UNIT_MINUTES = 6;
 export const DEFAULT_TIME_EDIT_WINDOW_DAYS = 90;
 export const DEFAULT_TIME_NARRATIVE_REQUIRED = true;
@@ -184,6 +197,10 @@ export const organizationSettings = p.pgTable(
       .notNull()
       .unique()
       .references(() => organization.id, { onDelete: "cascade" }),
+    aiBillingDraftsMode: p
+      .text("ai_billing_drafts_mode", { enum: AI_BILLING_DRAFTS_MODES })
+      .notNull()
+      .default(DEFAULT_AI_BILLING_DRAFTS_MODE),
     personalApiKeyPolicy: p
       .text("personal_api_key_policy", { enum: PERSONAL_API_KEY_POLICIES })
       .notNull()
@@ -342,6 +359,13 @@ export const organizationSettings = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "organization_settings_ai_billing_drafts_mode_check",
+      sql`${table.aiBillingDraftsMode} IN (${sql.join(
+        AI_BILLING_DRAFTS_MODES.map((mode) => sql.raw(`'${mode}'`)),
+        sql`, `,
+      )})`,
+    ),
     p.check(
       "organization_settings_personal_api_key_policy_check",
       sql`${table.personalApiKeyPolicy} IN (${sql.join(

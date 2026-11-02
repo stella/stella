@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { produce } from "immer";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -125,11 +126,8 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
   const setScrollTo = useOptionalPDFStore((s) => s.setScrollTo);
 
   return (
-    <button
-      className={cn(
-        CITATION_CHIP_CLASSES,
-        isActive && "bg-primary/25 hover:bg-primary/25",
-      )}
+    <Button
+      className="align-baseline"
       onClick={() => {
         detached(
           (async () => {
@@ -169,10 +167,17 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
       onMouseEnter={() => {
         createBoundingBoxes();
       }}
-      type="button"
+      variant="plain"
     >
-      p.&nbsp;{citation.pageNumber}
-    </button>
+      <span
+        className={cn(
+          CITATION_CHIP_CLASSES,
+          isActive && "bg-primary/25 hover:bg-primary/25",
+        )}
+      >
+        p.&nbsp;{citation.pageNumber}
+      </span>
+    </Button>
   );
 };
 
@@ -209,8 +214,8 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
     <Tooltip
       content={trimmed || undefined}
       render={
-        <button
-          className={cn(CITATION_CHIP_CLASSES, "max-w-[16rem] truncate")}
+        <Button
+          className="max-w-[16rem] align-baseline"
           data-block-id={citation.blockId}
           onClick={() => {
             // Inspector peek path reads `pendingBlockScroll` from the
@@ -232,10 +237,14 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
               }),
             );
           }}
-          type="button"
+          variant="plain"
         >
-          “{preview}”
-        </button>
+          <span
+            className={cn(CITATION_CHIP_CLASSES, "block max-w-full truncate")}
+          >
+            “{preview}”
+          </span>
+        </Button>
       }
     />
   );

@@ -1455,10 +1455,12 @@
           "click": "Hacer clic",
           "fill": "Introducir texto",
           "open": "Abrir sitio web",
+          "openNewTab": "Abrir sitio web en una pestaña nueva",
           "pressKey": "Pulsar tecla",
           "select": "Seleccionar opción",
           "snapshot": "Leer página",
-          "snapshotContinue": "Seguir leyendo la página"
+          "snapshotContinue": "Seguir leyendo la página",
+          "switchTab": "Cambiar a la pestaña"
         },
         "askAgain": "Volver a preguntar",
         "autoApproveReads": "Aprobar automáticamente la lectura de páginas",
@@ -1496,7 +1498,11 @@
       "connected": "Extensión conectada",
       "description": "stella puede abrir y leer sitios web en otra pestaña cuando se lo pidas.",
       "install": "Instalar extensión",
-      "installDescription": "La extensión de stella permite abrir y leer sitios web en otra pestaña cuando se lo pidas. Se instala desde Chrome Web Store."
+      "installDescription": "La extensión de stella permite abrir y leer sitios web en otra pestaña cuando se lo pidas. Se instala desde Chrome Web Store.",
+      "reload": "Recargar esta pestaña",
+      "reloadDescription": "Tu extensión de stella es más reciente que esta pestaña. Recarga la pestaña para seguir usándola.",
+      "updating": "Actualización de la extensión pendiente",
+      "updatingDescription": "Tu extensión de stella es una versión anterior. Chrome la actualiza automáticamente, normalmente en unas horas; después, stella podrá volver a abrir y leer sitios web por ti."
     },
     "cancelQueuedMessage": "Cancelar mensaje en cola",
     "caseLawGreeting": "Pregunta sobre esta decisión — el texto completo está disponible aquí.",
@@ -5446,6 +5452,12 @@
         "work_obligation": "obligación laboral",
         "workspace_contact": "contacto del asunto",
         "workspace_member": "miembro del asunto"
+      },
+      "billingDrafts": {
+        "description": "Redacte descripciones a partir de las actividades seleccionadas y los archivos de conocimiento del despacho o del cliente. Cada usuario también da su consentimiento. Adjunte las directrices del despacho antes de activar los borradores.",
+        "firm": "Directrices del despacho",
+        "ledes": "Facturación electrónica (LEDES)",
+        "title": "Borradores de facturación con IA"
       },
       "documentProcessing": {
         "description": "Reconoce automáticamente texto en PDF escaneados para que se pueda buscar en su contenido.",

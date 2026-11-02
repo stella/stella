@@ -32,7 +32,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   copyEntities,
   ENTITY_SNAPSHOT_COLUMNS,
-  EVERY_LIVE_VERSION_SELECT,
+  EVERY_VERSION_SELECT,
   remapFileIds,
 } from "./copy-utils";
 import { openDesktopEditSessionHandler } from "./open-desktop-edit-session";
@@ -181,7 +181,7 @@ if (!databaseUrl || !runPostgresTests) {
           const source = await setup.db.query.entities.findFirst({
             where: { id: { eq: documentId } },
             columns: ENTITY_SNAPSHOT_COLUMNS,
-            with: EVERY_LIVE_VERSION_SELECT,
+            with: EVERY_VERSION_SELECT,
           });
           if (!source) {
             throw new TypeError("Expected seeded document");
@@ -441,7 +441,7 @@ if (!databaseUrl || !runPostgresTests) {
             const after = await setup.db.query.entities.findFirst({
               where: { id: { eq: documentId } },
               columns: ENTITY_SNAPSHOT_COLUMNS,
-              with: EVERY_LIVE_VERSION_SELECT,
+              with: EVERY_VERSION_SELECT,
             });
             expect(after).toBeDefined();
             if (owner === "version-write" || owner === "restore") {
@@ -663,7 +663,7 @@ if (!databaseUrl || !runPostgresTests) {
             const target = await setup.db.query.entities.findFirst({
               where: { workspaceId: { eq: targetWorkspaceId } },
               columns: ENTITY_SNAPSHOT_COLUMNS,
-              with: EVERY_LIVE_VERSION_SELECT,
+              with: EVERY_VERSION_SELECT,
             });
             expect(target?.name).toBe("Original.txt");
             expect(target?.versions).toHaveLength(1);

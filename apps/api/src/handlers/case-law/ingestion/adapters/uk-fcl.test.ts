@@ -5,10 +5,13 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { fetchUkFclDecision, UK_FCL_COURTS, ukFclAdapter } from "./uk-fcl";
 import { readUkFclFeed } from "./uk-fcl-feed";
+
+const testFetchState = createTestFetch();
 
 const feed = await Bun.file(
   new URL("__fixtures__/uk-fcl.atom.xml", import.meta.url),
@@ -19,9 +22,9 @@ const document = await Bun.file(
 const entry =
   readUkFclFeed(feed, 50).unwrap().entries.at(0) ??
   panic("Expected a UK feed fixture entry");
-const originalFetch = globalThis.fetch;
+
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   setSystemTime();
 });
 
@@ -43,10 +46,12 @@ test("next links alone determine pagination and other origins fail before a requ
     ).unwrap().next,
   ).toBeNull();
   let requests = 0;
-  globalThis.fetch = asFetchMock(async () => {
-    requests++;
-    return new Response(feed);
-  });
+  testFetchState.set(
+    asFetchMock(async () => {
+      requests++;
+      return new Response(feed);
+    }),
+  );
   const refused = await ukFclAdapter.fetchPage(
     JSON.stringify({
       type: "tip",
@@ -65,11 +70,13 @@ test("next links alone determine pagination and other origins fail before a requ
 
 test("daily watermark includes ties and advances after the complete page", async () => {
   const calls: string[] = [];
-  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    const url = input instanceof Request ? input.url : input.toString();
-    calls.push(url);
-    return new Response(url.endsWith("/data.xml") ? document : feed);
-  });
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      calls.push(url);
+      return new Response(url.endsWith("/data.xml") ? document : feed);
+    }),
+  );
   const frontier = entry.updated;
   const page = await ukFclAdapter.fetchPage(
     JSON.stringify({
@@ -91,12 +98,14 @@ test("daily watermark includes ties and advances after the complete page", async
 });
 
 test("failed detail requests hold the page checkpoint", async () => {
-  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    const url = input instanceof Request ? input.url : input.toString();
-    return new Response(url.endsWith("/data.xml") ? "" : feed, {
-      status: url.endsWith("/data.xml") ? 404 : 200,
-    });
-  });
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      return new Response(url.endsWith("/data.xml") ? "" : feed, {
+        status: url.endsWith("/data.xml") ? 404 : 200,
+      });
+    }),
+  );
   const page = await ukFclAdapter.fetchPage(
     JSON.stringify({
       type: "tip",
@@ -129,24 +138,26 @@ const sweep = (
 
 test("backfill snapshots the daily frontier and walks the listed continuation before the next court", async () => {
   const calls: URL[] = [];
-  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    const url = new URL(
-      input instanceof Request ? input.url : input.toString(),
-    );
-    calls.push(url);
-    if (url.pathname.endsWith("/data.xml")) {
-      return new Response(document);
-    }
-    if (url.searchParams.get("order") === "-transformation") {
-      return new Response(feed);
-    }
-    return new Response(
-      feed.replace(
-        "</feed>",
-        '<link rel="next" href="/atom.xml?court=uksc&amp;page=2"/></feed>',
-      ),
-    );
-  });
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      );
+      calls.push(url);
+      if (url.pathname.endsWith("/data.xml")) {
+        return new Response(document);
+      }
+      if (url.searchParams.get("order") === "-transformation") {
+        return new Response(feed);
+      }
+      return new Response(
+        feed.replace(
+          "</feed>",
+          '<link rel="next" href="/atom.xml?court=uksc&amp;page=2"/></feed>',
+        ),
+      );
+    }),
+  );
   const first = (await ukFclAdapter.fetchPage(null, {})).unwrap();
   expect(first.decisions).toHaveLength(1);
   expect(calls[0]?.searchParams.getAll("court")).toEqual(UK_FCL_COURTS);
@@ -159,18 +170,20 @@ test("backfill snapshots the daily frontier and walks the listed continuation be
     url: `${origin}/atom.xml?court=uksc&page=2`,
   });
   calls.length = 0;
-  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    calls.push(
-      new URL(input instanceof Request ? input.url : input.toString()),
-    );
-    return new Response(
-      (input instanceof Request ? input.url : input.toString()).endsWith(
-        "/data.xml",
-      )
-        ? document
-        : feed,
-    );
-  });
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request) => {
+      calls.push(
+        new URL(input instanceof Request ? input.url : input.toString()),
+      );
+      return new Response(
+        (input instanceof Request ? input.url : input.toString()).endsWith(
+          "/data.xml",
+        )
+          ? document
+          : feed,
+      );
+    }),
+  );
   const second = (await ukFclAdapter.fetchPage(first.nextCursor, {})).unwrap();
   expect(calls.at(0)?.searchParams.get("page")).toBe("2");
   expect(JSON.parse(second.nextCursor ?? "null")).toMatchObject({
@@ -183,15 +196,17 @@ test("backfill snapshots the daily frontier and walks the listed continuation be
 
 test("the final backfill slice resumes daily discovery from its original frontier", async () => {
   setSystemTime(new Date("2026-10-01T00:00:00Z"));
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request) =>
-      new Response(
-        (input instanceof Request ? input.url : input.toString()).endsWith(
-          "/data.xml",
-        )
-          ? document
-          : feed,
-      ),
+  testFetchState.set(
+    asFetchMock(
+      async (input: string | URL | Request) =>
+        new Response(
+          (input instanceof Request ? input.url : input.toString()).endsWith(
+            "/data.xml",
+          )
+            ? document
+            : feed,
+        ),
+    ),
   );
   const page = (
     await ukFclAdapter.fetchPage(
@@ -214,16 +229,18 @@ test("daily pagination retains its old frontier until every tied entry is read",
     .replace(boundary, () => newest)
     .replace("</feed>", '<link rel="next" href="/atom.xml?page=2"/></feed>');
   let calls = 0;
-  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    calls++;
-    return new Response(
-      (input instanceof Request ? input.url : input.toString()).endsWith(
-        "/data.xml",
-      )
-        ? document
-        : firstFeed,
-    );
-  });
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request) => {
+      calls++;
+      return new Response(
+        (input instanceof Request ? input.url : input.toString()).endsWith(
+          "/data.xml",
+        )
+          ? document
+          : firstFeed,
+      );
+    }),
+  );
   const first = (
     await ukFclAdapter.fetchPage(
       JSON.stringify({
@@ -241,15 +258,17 @@ test("daily pagination retains its old frontier until every tied entry is read",
     pending: newest,
   });
   const tiedFeed = feed.replace(boundary, () => frontier);
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request) =>
-      new Response(
-        (input instanceof Request ? input.url : input.toString()).endsWith(
-          "/data.xml",
-        )
-          ? document
-          : tiedFeed,
-      ),
+  testFetchState.set(
+    asFetchMock(
+      async (input: string | URL | Request) =>
+        new Response(
+          (input instanceof Request ? input.url : input.toString()).endsWith(
+            "/data.xml",
+          )
+            ? document
+            : tiedFeed,
+        ),
+    ),
   );
   const second = (await ukFclAdapter.fetchPage(first.nextCursor, {})).unwrap();
   expect(second.decisions).toHaveLength(1);
@@ -258,10 +277,12 @@ test("daily pagination retains its old frontier until every tied entry is read",
     frontier: newest,
     pending: newest,
   });
-  globalThis.fetch = asFetchMock(async () => {
-    calls++;
-    return new Response(emptyFeed);
-  });
+  testFetchState.set(
+    asFetchMock(async () => {
+      calls++;
+      return new Response(emptyFeed);
+    }),
+  );
   const quiet = (await ukFclAdapter.fetchPage(second.nextCursor, {})).unwrap();
   expect(quiet.nextCursor).toBe(second.nextCursor);
   expect(quiet.decisions).toEqual([]);
@@ -278,31 +299,35 @@ test("a full unlinked page and failed later details cannot produce a checkpoint"
   ).join("");
   const full = feed.replace(match, () => entries);
   let details = 0;
-  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    if (
-      (input instanceof Request ? input.url : input.toString()).endsWith(
-        "/data.xml",
-      )
-    ) {
-      details++;
-    }
-    return new Response(full);
-  });
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request) => {
+      if (
+        (input instanceof Request ? input.url : input.toString()).endsWith(
+          "/data.xml",
+        )
+      ) {
+        details++;
+      }
+      return new Response(full);
+    }),
+  );
   expect((await ukFclAdapter.fetchPage(sweep(), {})).isErr()).toBe(true);
   expect(details).toBe(0);
   const second = match.replaceAll(
     "d-00000000-0000-4000-8000-000000000001",
     "synthetic-second",
   );
-  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    const url = input instanceof Request ? input.url : input.toString();
-    if (!url.endsWith("/data.xml")) {
-      return new Response(feed.replace(match, () => match + second));
-    }
-    return url.includes("synthetic-second")
-      ? new Response("", { status: 404 })
-      : new Response(document);
-  });
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (!url.endsWith("/data.xml")) {
+        return new Response(feed.replace(match, () => match + second));
+      }
+      return url.includes("synthetic-second")
+        ? new Response("", { status: 404 })
+        : new Response(document);
+    }),
+  );
   expect((await ukFclAdapter.fetchPage(sweep(), {})).isErr()).toBe(true);
 });
 
@@ -324,8 +349,8 @@ test.each([
           () => `<uk:court>${court}</uk:court>`,
         )
         .replaceAll("uksc/2026/900001", () => `${slug}/2026/900001`);
-    globalThis.fetch = asFetchMock(
-      async () => new Response(transform(document)),
+    testFetchState.set(
+      asFetchMock(async () => new Response(transform(document))),
     );
     const result = (
       await fetchUkFclDecision({
@@ -343,10 +368,12 @@ test.each(["2026-00-extra", "2026-", "2026-999", "2000-00"])(
   "reconciliation rejects malformed slice %s",
   async (value) => {
     let requests = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      requests++;
-      return new Response(emptyFeed);
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        requests++;
+        return new Response(emptyFeed);
+      }),
+    );
     expect(
       await rejectionOf(
         ukFclAdapter.reconciliation.listSlicePage({ slice: value, page: 0 }),
@@ -361,10 +388,12 @@ test.each(["2026-00-extra", "2026-", "2026-999", "2000-00"])(
 
 test("empty backfill work stays bounded and retains the original frontier", async () => {
   let requests = 0;
-  globalThis.fetch = asFetchMock(async () => {
-    requests++;
-    return new Response(emptyFeed);
-  });
+  testFetchState.set(
+    asFetchMock(async () => {
+      requests++;
+      return new Response(emptyFeed);
+    }),
+  );
   const page = (await ukFclAdapter.fetchPage(sweep(), {})).unwrap();
   const next: unknown = JSON.parse(page.nextCursor ?? "null");
   expect(requests).toBe(16);
@@ -401,10 +430,12 @@ test.each([
   "invalid crawl state returns a typed failure: $message",
   async ({ cursor, message }) => {
     let requests = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      requests++;
-      return new Response(feed);
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        requests++;
+        return new Response(feed);
+      }),
+    );
     const outcome = await ukFclAdapter.fetchPage(cursor, {});
     expect(outcome.isErr()).toBe(true);
     if (outcome.isErr()) {
@@ -422,10 +453,12 @@ test.each([
   "decision input failures return typed errors before fetching",
   async ({ sourceFeed, identity, error }) => {
     let requests = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      requests++;
-      return new Response(document);
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        requests++;
+        return new Response(document);
+      }),
+    );
     expect(
       await fetchUkFclDecision({
         feed: sourceFeed,
@@ -439,7 +472,7 @@ test.each([
 test.each(["sweep", "tip"] as const)(
   "%s listing failures withhold a checkpoint and preserve the parser error",
   async (type) => {
-    globalThis.fetch = asFetchMock(async () => new Response("invalid"));
+    testFetchState.set(asFetchMock(async () => new Response("invalid")));
     const cursor =
       type === "sweep"
         ? sweep()
@@ -459,7 +492,9 @@ test.each(["sweep", "tip"] as const)(
 );
 
 test("reconciliation retains typed detail errors at its promise boundary", async () => {
-  globalThis.fetch = asFetchMock(async () => new Response("", { status: 404 }));
+  testFetchState.set(
+    asFetchMock(async () => new Response("", { status: 404 })),
+  );
   expect(
     await rejectionOf(
       ukFclAdapter.reconciliation.buildDecision({
