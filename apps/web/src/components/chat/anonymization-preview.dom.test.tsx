@@ -9,8 +9,6 @@ const { useState } = await import("react");
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
-const { ANIMATED_PREVIEW_CARD_DELAY_MS } =
-  await import("@stll/ui/animated-preview");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const { ChatAnonymizedToggle } =
   await import("@/features/chat/components/chat-anonymized-toggle");
@@ -19,8 +17,6 @@ const { AnonymizationPreviewCard } =
 
 afterEach(cleanup);
 afterAll(unregisterDomEnvironment);
-
-const OPEN_TIMEOUT_MS = ANIMATED_PREVIEW_CARD_DELAY_MS * 4;
 
 // The shield as the composer dock composes it: the toggle is the card's
 // trigger and drops its own on/off tooltip.
@@ -98,12 +94,9 @@ describe("anonymization shield preview", () => {
     hover(shield);
     expect(card()).toBeNull();
 
-    await waitFor(
-      () => {
-        expect(card()).not.toBeNull();
-      },
-      { timeout: OPEN_TIMEOUT_MS },
-    );
+    await waitFor(() => {
+      expect(card()).not.toBeNull();
+    });
   });
 
   test("keyboard focus on the shield opens the preview and keeps focus on the shield", async () => {
@@ -114,12 +107,9 @@ describe("anonymization shield preview", () => {
       shield.focus();
     });
 
-    await waitFor(
-      () => {
-        expect(card()).not.toBeNull();
-      },
-      { timeout: OPEN_TIMEOUT_MS },
-    );
+    await waitFor(() => {
+      expect(card()).not.toBeNull();
+    });
     expect(document.activeElement).toBe(shield);
   });
 
@@ -130,12 +120,9 @@ describe("anonymization shield preview", () => {
 
     expect(description(shield)).toBe(off);
     hover(shield);
-    await waitFor(
-      () => {
-        expect(card()?.textContent).toContain(off);
-      },
-      { timeout: OPEN_TIMEOUT_MS },
-    );
+    await waitFor(() => {
+      expect(card()?.textContent).toContain(off);
+    });
 
     fireEvent.click(shield);
 
@@ -148,12 +135,9 @@ describe("anonymization shield preview", () => {
   test("the stages show the data found, the placeholders sent and answered, and the names restored", async () => {
     const { shield } = renderShield(true);
     hover(shield);
-    await waitFor(
-      () => {
-        expect(card()).not.toBeNull();
-      },
-      { timeout: OPEN_TIMEOUT_MS },
-    );
+    await waitFor(() => {
+      expect(card()).not.toBeNull();
+    });
     const preview = card();
     if (!preview) {
       throw new Error("preview did not open");
