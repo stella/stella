@@ -3,6 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { isActionAdmissionCode } from "@stll/api-contract/action-admission";
+import { displayNameSchema } from "@stll/api-contract/display-name";
 
 import type { Transaction } from "@/api/db/root";
 import { entities, templates } from "@/api/db/schema";
@@ -244,9 +245,7 @@ const createTemplateArgsSchema = nullAsAbsent(
       ),
       name: v.optional(
         v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(256),
+          displayNameSchema(),
           v.description(
             "Display name; required when creating, optional when it renames an existing template",
           ),

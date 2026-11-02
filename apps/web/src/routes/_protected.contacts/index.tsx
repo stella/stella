@@ -93,6 +93,7 @@ import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { routePresentation } from "@/routes/-route-presentation";
 import { BulkDeleteContacts } from "@/routes/_protected.contacts/-components/bulk-delete";
+import { ContactNameLink } from "@/routes/_protected.contacts/-components/contact-name-link";
 import { PersonDetailsFields } from "@/routes/_protected.contacts/-components/person-details-fields";
 import {
   birthDateDraft,
@@ -494,16 +495,10 @@ const useContactColumns = ({
           id: "name",
           header: t("common.name"),
           cell: ({ row, getValue }) => (
-            <Link
-              className="block max-w-xs truncate font-medium hover:underline"
-              dir="auto"
-              onClick={(event) => event.stopPropagation()}
-              params={{ contactId: row.original.id }}
-              title={getValue()}
-              to="/contacts/$contactId"
-            >
-              {getValue()}
-            </Link>
+            <ContactNameLink
+              contactId={row.original.id}
+              displayName={getValue()}
+            />
           ),
         }),
         columnHelper.display({

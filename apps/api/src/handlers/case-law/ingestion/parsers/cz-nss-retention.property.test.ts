@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import { load } from "@stll/html";
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -26,7 +26,7 @@ const metadata = {
   decisionType: undefined,
   sourceUrl: undefined,
 };
-const config = () => propertyConfig({ seed: propertySeed(), numRuns: 20 });
+
 const wrappers = fc.array(fc.constantFrom("div", "section", "blockquote"), {
   maxLength: 4,
 });
@@ -34,9 +34,10 @@ const wrappers = fc.array(fc.constantFrom("div", "section", "blockquote"), {
 test(
   "Czech administrative body markers retain their source order",
   () => {
-    fc.assert(
+    assertProperty(
+      "Czech administrative body markers retain their source order",
       fc.property(markerPlan, wrappers, (plan, ancestors) => {
-        const fixture = cheerio.load(nssUnitDecisionHtml);
+        const fixture = load(nssUnitDecisionHtml);
         for (const tag of ancestors) {
           fixture("body").wrapInner(`<${tag}></${tag}>`);
         }
@@ -63,7 +64,7 @@ test(
           true,
         );
       }),
-      config(),
+      { seed: propertySeed(), numRuns: 20 },
     );
   },
   propertyTestTimeout(30_000),
