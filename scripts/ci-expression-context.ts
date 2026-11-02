@@ -233,7 +233,10 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
     required: "false",
     selection_required: "false",
     specs: "[]",
+    suite_specs: "[]",
   },
+  "browser-suite-plan": { legs: "[]" },
+  "browser-suite-fallback": { legs: "[]" },
   generate: { input_hash: "" },
   "heavy-plan": {
     heavy_jobs: "[]",
