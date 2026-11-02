@@ -212,15 +212,7 @@
     "reason": "Existing savePlaybookArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
-    "id": "apps/api/src/mcp/knowledge-tools.ts::savePlaybookArgsSchema::maxLength:256::1",
-    "reason": "Existing savePlaybookArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
     "id": "apps/api/src/mcp/knowledge-tools.ts::savePlaybookArgsSchema::minLength:1::1",
-    "reason": "Existing savePlaybookArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/knowledge-tools.ts::savePlaybookArgsSchema::minLength:1::2",
     "reason": "Existing savePlaybookArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
@@ -356,31 +348,7 @@
     "reason": "Existing lookupBusinessRegistryArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
-    "id": "apps/api/src/mcp/matter-tools.ts::saveContactArgsSchema::maxLength:256::1",
-    "reason": "Existing saveContactArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/matter-tools.ts::saveContactArgsSchema::maxLength:256::2",
-    "reason": "Existing saveContactArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/matter-tools.ts::saveContactArgsSchema::maxLength:512::1",
-    "reason": "Existing saveContactArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/matter-tools.ts::saveContactArgsSchema::maxLength:512::2",
-    "reason": "Existing saveContactArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/matter-tools.ts::saveContactArgsSchema::minLength:1::1",
-    "reason": "Existing saveContactArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
     "id": "apps/api/src/mcp/matter-tools.ts::saveMatterArgsSchema::maxLength:128::1",
-    "reason": "Existing saveMatterArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/matter-tools.ts::saveMatterArgsSchema::maxLength:256::1",
     "reason": "Existing saveMatterArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
@@ -389,10 +357,6 @@
   },
   {
     "id": "apps/api/src/mcp/matter-tools.ts::saveMatterArgsSchema::minLength:1::1",
-    "reason": "Existing saveMatterArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/matter-tools.ts::saveMatterArgsSchema::minLength:1::2",
     "reason": "Existing saveMatterArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
@@ -564,15 +528,7 @@
     "reason": "Existing templateFieldSourceInputSchema MCP input bound; shared LIMITS migration pending."
   },
   {
-    "id": "apps/api/src/mcp/template-tools.ts::createTemplateArgsSchema::maxLength:256::1",
-    "reason": "Existing createTemplateArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
     "id": "apps/api/src/mcp/template-tools.ts::createTemplateArgsSchema::minLength:1::1",
-    "reason": "Existing createTemplateArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/template-tools.ts::createTemplateArgsSchema::minLength:1::2",
     "reason": "Existing createTemplateArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {

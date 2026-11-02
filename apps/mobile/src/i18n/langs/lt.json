@@ -34,6 +34,14 @@
     "composerPlaceholder": "Klauskite stellos",
     "send": "Siųsti",
     "stop": "Sustabdyti",
+    "dictate": "Diktuoti",
+    "dictationCancel": "Atšaukti diktavimą",
+    "dictationFinish": "Baigti diktuoti",
+    "dictationListening": "Klausausi… {elapsed} iš {limit}",
+    "dictationTranscribing": "Transkribuojama…",
+    "dictationDenied": "Diktavimui reikia mikrofono. Leiskite jį stella programai nustatymuose.",
+    "dictationFailed": "Įrašo nepavyko transkribuoti. Bandykite dar kartą.",
+    "dictationSilent": "Kalbos negirdėti.",
     "sendFailed": "Žinutės išsiųsti nepavyko. Bandykite dar kartą.",
     "answerWorking": "Dirbu…",
     "answerStopped": "Sustabdyta.",
@@ -174,6 +182,17 @@
       "system": "Išvaizda: automatinė",
       "light": "Išvaizda: šviesi",
       "dark": "Išvaizda: tamsi"
+    },
+    "edit": {
+      "saved": "Išsaugota",
+      "saving": "Saugoma…",
+      "notSaved": "Dar neišsaugota",
+      "done": "Atlikta",
+      "openFailed": "Šio dokumento dabar negalima redaguoti",
+      "takenOver": "Šį dokumentą dabar redaguoja kažkas kitas. Jūsų pakeitimai po paskutinio išsaugojimo nebuvo išlaikyti.",
+      "finishFailed": "Jūsų pakeitimai išsaugoti, bet iš jų dar nesukurta nauja versija. Dar kartą bakstelėkite Atlikta arba išeikite: kitas redagavimas tęsis nuo jų.",
+      "stay": "Likti",
+      "leave": "Išeiti"
     }
   },
   "signIn": {
@@ -222,9 +241,7 @@
     "share": "Bendrinti"
   },
   "more": {
-    "soon": "Netrukus",
-    "timers": "Laikmačiai",
-    "voiceInput": "Balso įvestis"
+    "timers": "Laikmačiai"
   },
   "writes": {
     "consentNeeded": "Kad galėtumėte keisti duomenis programėlėje, stella reikia jūsų leidimo. Prisijunkite iš naujo, kad jį suteiktumėte.",

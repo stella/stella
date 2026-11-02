@@ -12,6 +12,7 @@ import {
   nativeEntries,
   nativeRuleId,
 } from "./.oxlint-plugins/no-native-ui-registry.ts";
+import { GLOBALLY_MOUNTED_UI } from "./.oxlint-plugins/no-route-context-in-panel-tabs.ts";
 import { PUBLIC_LAW_MIXED_MODULES } from "./.oxlint-plugins/public-law-decision-surface-modules.ts";
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
@@ -63,6 +64,11 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
   files: [`.oxlint-plugins/__fixtures__/${file}`],
   rules: Object.fromEntries(rules.map((rule) => [rule, "error"] as const)),
 });
+
+export const NO_RENDER_PHASE_UPDATE_GOVERNED_PATHS = [
+  "apps",
+  "packages",
+] as const;
 
 // Only the rows that declare an enforcement kind reach the lint rule; the rest
 // document an owner that no rule can yet prove.
@@ -315,6 +321,13 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("calendar-day.fixture.scheduler.ts", [
     "calendar-day/no-wall-clock-scheduler-decision",
   ]),
+  ...[
+    "refusal-code.fixture.ts",
+    "refusal-code.fixture.legacy.ts",
+    "refusal-code.fixture.stale.ts",
+  ].map((file) =>
+    fixtureRuleOverride(file, ["refusal-code/require-refusal-code"]),
+  ),
   fixtureRuleOverride("require-cn-for-classname-composition.fixture.tsx", [
     "require-cn-for-classname-composition/require-cn-for-classname-composition",
   ]),
@@ -469,6 +482,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-inert-autofocus.fixture.tsx", [
     "no-inert-autofocus/no-inert-autofocus",
+  ]),
+  fixtureRuleOverride("one-statement-time-per-row-write.fixture.ts", [
+    "one-statement-time-per-row-write/one-statement-time-per-row-write",
   ]),
   fixtureRuleOverride("no-optional-chain-null-compare.fixture.ts", [
     "no-optional-chain-null-compare/no-optional-chain-null-compare",
@@ -756,6 +772,12 @@ const noZodImport = {
 const noFastXmlParserImport = {
   name: "fast-xml-parser",
   message: "Read XML with 'saxes'.",
+};
+
+const noCheerioImport = {
+  name: "cheerio",
+  message:
+    "Use @stll/html for string loading or @stll/html for types; the main entry bundles byte decoders (encoding-sniffer and whatwg-encoding).",
 };
 
 const noClassicTypeScriptImport = {
@@ -1657,6 +1679,7 @@ const config = defineConfig({
     "no-unowned-icon/no-unowned-icon": "error",
     "no-direct-entity-glyph/no-direct-entity-glyph": "error",
     "no-direct-lucide-import/no-direct-lucide-import": "error",
+    "no-raw-property-assert/no-raw-property-assert": "error",
     "no-raw-user-avatar-primitive/no-raw-user-avatar-primitive": "error",
     "no-shadowed-user-name-helpers/no-shadowed-user-name-helpers": "error",
     "no-hand-rolled-user-identity/no-hand-rolled-user-identity": "error",
@@ -1896,6 +1919,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
     "./.oxlint-plugins/no-ambient-nondeterminism.ts",
     "./.oxlint-plugins/calendar-day.ts",
+    "./.oxlint-plugins/refusal-code.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-layout-motion-classes.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
@@ -1911,6 +1935,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-section-sign-glyph.ts",
     "./.oxlint-plugins/no-style-substring-match.ts",
     "./.oxlint-plugins/no-inert-autofocus.ts",
+    "./.oxlint-plugins/one-statement-time-per-row-write.ts",
     "./.oxlint-plugins/no-optional-chain-null-compare.ts",
     "./.oxlint-plugins/no-constructed-fetch-object.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
@@ -1918,6 +1943,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-unowned-icon.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
+    "./.oxlint-plugins/no-raw-property-assert.ts",
     "./.oxlint-plugins/no-test-support-import.ts",
     "./.oxlint-plugins/retention-source-independence.ts",
     "./.oxlint-plugins/retention-oracle-owner.ts",
@@ -1949,6 +1975,7 @@ const config = defineConfig({
     "./.oxlint-plugins/query-data-requires-state.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
     "./.oxlint-plugins/no-route-context-in-panel-tabs.ts",
+    "./.oxlint-plugins/no-render-phase-update.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
@@ -2168,6 +2195,17 @@ const config = defineConfig({
 
   overrides: [
     {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-render-phase-update.fixture.tsx",
+        ...NO_RENDER_PHASE_UPDATE_GOVERNED_PATHS.map(
+          (directory) => `${directory}/**/*.{ts,tsx}`,
+        ),
+      ],
+      rules: {
+        "no-render-phase-update/no-render-phase-update": "error",
+      },
+    },
+    {
       // Page-level narrative copy owns a readable measure. Reusable component
       // internals and task-shaped surfaces are outside this narrow enrolment.
       files: [
@@ -2347,6 +2385,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -3511,6 +3550,17 @@ const config = defineConfig({
       },
     },
     {
+      // A client refusal names a stable `code`: clients localize refusals by
+      // code and drop the English message and hint of a codeless one.
+      // Existing sites are budgeted in scripts/refusal-code-ledger.json,
+      // which only shrinks.
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**"],
+      rules: {
+        "refusal-code/require-refusal-code": "error",
+      },
+    },
+    {
       // Scheduler tasks decide on the slot they were due for (`ctx.dueAt`),
       // not on the wall clock when the runner got to them: a late tick would
       // otherwise see the next day and skip or repeat the slot.
@@ -4315,6 +4365,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4337,6 +4388,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4362,6 +4414,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4393,6 +4446,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4538,6 +4592,8 @@ const config = defineConfig({
         "**/e2e/**",
       ],
       rules: {
+        "one-statement-time-per-row-write/one-statement-time-per-row-write":
+          "error",
         "no-optional-chain-null-compare/no-optional-chain-null-compare":
           "error",
       },
@@ -4565,6 +4621,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4598,6 +4655,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4639,6 +4697,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4862,6 +4921,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4900,6 +4960,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4933,6 +4994,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4974,6 +5036,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -5026,6 +5089,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -5076,6 +5140,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -5229,15 +5294,7 @@ const config = defineConfig({
       // belongs to shared providers, including for tabs owned outside inspector.
       files: [
         ".oxlint-plugins/__fixtures__/no-route-context-in-panel-tabs.fixture.tsx",
-        "apps/web/src/**/*inspector*.tsx",
-        "apps/web/src/components/inspector/**/*.tsx",
-        "apps/web/src/components/inspector/**/*.ts",
-        "apps/web/src/features/knowledge/playbook-editor/playbook-draft-view.tsx",
-        "apps/web/src/features/knowledge/views/tools/tool-detail-panel-view.tsx",
-        "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx",
-        "apps/web/src/components/workspaces/matter-metadata-sheet.tsx",
-        "apps/web/src/components/workspaces/hooks/use-start-workflow.ts",
-        "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts",
+        ...GLOBALLY_MOUNTED_UI,
       ],
       rules: {
         "no-route-context-in-panel-tabs/no-route-context-in-panel-tabs":
@@ -5906,6 +5963,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -5937,6 +5995,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -5972,6 +6031,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -5994,6 +6054,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -6019,6 +6080,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -6548,6 +6610,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -6605,6 +6668,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -6680,6 +6744,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,

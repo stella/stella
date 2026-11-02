@@ -41,6 +41,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { AI_FAILURE_ERROR_KEYS } from "@/lib/errors/ai-failure";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import { ClientOperationError } from "@/lib/errors/client";
+import { INVOICE_ISSUE_ERROR_KEYS } from "@/lib/errors/invoice-issue";
 import {
   ACTION_ADMISSION_ERROR_KEYS,
   STATUS_ERROR_KEYS,
@@ -238,6 +239,7 @@ const CODE_ERROR_KEYS = {
   [IDEMPOTENCY_KEY_REUSED_CODE]: "errors.apiCodes.idempotencyKeyReused",
   ...AI_FAILURE_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
+  ...INVOICE_ISSUE_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",
   [MATTER_CONTACT_CAPACITY_CODE.reached]:
