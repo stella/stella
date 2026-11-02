@@ -3745,6 +3745,16 @@ test("an API image step that tees its log keeps the command's exit status", () =
 const annotateStep = jobSteps(apiImageJob).find(
   ({ name }) => name === "Annotate image failure",
 );
+const annotateScript = readFileSync(
+  new URL("annotate-api-image-failure.sh", import.meta.url),
+  "utf-8",
+);
+
+test("the API image job annotates failures through its script", () => {
+  expect(annotateStep?.run?.trim()).toBe(
+    "bash scripts/annotate-api-image-failure.sh",
+  );
+});
 
 const annotate = (logs: { build?: string; smoke?: string }) => {
   const runnerTemp = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-annotate-"));
@@ -3762,7 +3772,7 @@ const annotate = (logs: { build?: string; smoke?: string }) => {
       );
     }
     const run = Bun.spawnSync({
-      cmd: ["bash", "-e", "-c", annotateStep?.run ?? "exit 1"],
+      cmd: ["bash", "-e", "-c", annotateScript],
       env: {
         PATH: process.env["PATH"] ?? "",
         PLATFORM: "linux/arm64",
