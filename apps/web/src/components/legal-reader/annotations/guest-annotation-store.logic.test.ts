@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import type { CreateAnnotationInput } from "@/components/legal-reader/annotations/annotation-types";
 import {
@@ -176,7 +176,8 @@ describe("guest annotation store", () => {
       targetType: fc.constantFrom("decision" as const, "statute" as const),
     });
 
-    fc.assert(
+    assertProperty(
+      "a mark is only ever read back on the document it was left on",
       fc.property(
         fc.uniqueArray(targetArbitrary, {
           minLength: 1,
@@ -217,7 +218,7 @@ describe("guest annotation store", () => {
           expect(store.items).toHaveLength(placed.length);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });
