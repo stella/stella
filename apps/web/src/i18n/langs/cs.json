@@ -2989,6 +2989,8 @@
       "matterContactCapacityReached": "Tento spis dosáhl limitu kontaktů. Před přidáním dalšího kontaktu odeberte jedno propojení s kontaktem.",
       "mcpAuthorizationApprovalRequired": "Než se budete moci připojit, správce musí tento konektor schválit.",
       "notOrganizationMember": "Nejste členem této organizace.",
+      "organizationDataBoxLimitReached": "Tato organizace dosáhla limitu datových schránek. Než přidáte další, jednu odeberte.",
+      "organizationDataBoxesChanged": "Datové schránky organizace se mezitím změnily. Načtěte stránku znovu a akci zopakujte.",
       "organizationLastOwner": "Organizace musí mít vlastníka. Nejprve převeďte vlastnictví.",
       "organizationMemberLimitReached": "Tato organizace dosáhla limitu členů.",
       "providerKeyRejected": "Poskytovatel odmítl klíč API.",

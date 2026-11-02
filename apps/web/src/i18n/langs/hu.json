@@ -2989,6 +2989,8 @@
       "matterContactCapacityReached": "Ez az ügy elérte a kapcsolatok számának felső határát. Új kapcsolat hozzáadása előtt szüntesse meg az egyik kapcsolat ügyhöz rendelését.",
       "mcpAuthorizationApprovalRequired": "A csatlakozás előtt egy rendszergazdának jóvá kell hagynia ezt a csatlakozót.",
       "notOrganizationMember": "Ön nem tagja ennek a szervezetnek.",
+      "organizationDataBoxLimitReached": "Ez a szervezet elérte az adatfiókok maximális számát. Új adatfiók hozzáadása előtt távolítson el egyet.",
+      "organizationDataBoxesChanged": "A szervezet adatfiókjai időközben megváltoztak. Töltse be újra az oldalt, és próbálja újra.",
       "organizationLastOwner": "A szervezetnek kell, hogy legyen tulajdonosa. Először adja át a tulajdonjogot.",
       "organizationMemberLimitReached": "Ez a szervezet elérte a tagok korlátját.",
       "providerKeyRejected": "A szolgáltató elutasította az API-kulcsot.",

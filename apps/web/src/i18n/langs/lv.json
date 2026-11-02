@@ -2989,6 +2989,8 @@
       "matterContactCapacityReached": "Šī lieta ir sasniegusi kontaktu skaita ierobežojumu. Pirms pievienojat vēl vienu kontaktu, noņemiet vienu kontakta piesaisti.",
       "mcpAuthorizationApprovalRequired": "Lai varētu izveidot savienojumu, administratoram šis savienotājs ir jāapstiprina.",
       "notOrganizationMember": "Jūs neesat šīs organizācijas dalībnieks.",
+      "organizationDataBoxLimitReached": "Šī organizācija ir sasniegusi datu pastkastu limitu. Pirms jaunas pievienošanas noņemiet vienu datu pastkasti.",
+      "organizationDataBoxesChanged": "Organizācijas datu pastkastes pa to laiku ir mainījušās. Pārlādējiet lapu un mēģiniet vēlreiz.",
       "organizationLastOwner": "Organizācijai ir jābūt īpašniekam. Vispirms nododiet īpašumtiesības.",
       "organizationMemberLimitReached": "Šī organizācija ir sasniegusi dalībnieku limitu.",
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",

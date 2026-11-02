@@ -2989,6 +2989,8 @@
       "matterContactCapacityReached": "This matter has reached its contact limit. Remove a contact link before adding another.",
       "mcpAuthorizationApprovalRequired": "An administrator must approve this connector before you can connect.",
       "notOrganizationMember": "You are not a member of this organization.",
+      "organizationDataBoxLimitReached": "This organization has reached its data box limit. Remove a data box before adding another.",
+      "organizationDataBoxesChanged": "The organization's data boxes changed in the meantime. Reload the page and try again.",
       "organizationLastOwner": "An organization needs an owner. Transfer ownership first.",
       "organizationMemberLimitReached": "This organization has reached its member limit.",
       "providerKeyRejected": "The provider rejected the API key.",

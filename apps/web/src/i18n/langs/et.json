@@ -2989,6 +2989,8 @@
       "matterContactCapacityReached": "See toimik on saavutanud kontaktide arvu ülempiiri. Enne uue kontakti lisamist eemaldage üks kontaktiseos.",
       "mcpAuthorizationApprovalRequired": "Enne ühendamist peab administraator selle ühenduse heaks kiitma.",
       "notOrganizationMember": "Te ei ole selle organisatsiooni liige.",
+      "organizationDataBoxLimitReached": "See organisatsioon on jõudnud andmepostkastide piirini. Eemaldage üks andmepostkast enne uue lisamist.",
+      "organizationDataBoxesChanged": "Organisatsiooni andmepostkastid on vahepeal muutunud. Laadige leht uuesti ja proovige uuesti.",
       "organizationLastOwner": "Organisatsioonil peab olema omanik. Andke esmalt omandiõigus üle.",
       "organizationMemberLimitReached": "See organisatsioon on jõudnud liikmete piirangu täitumiseni.",
       "providerKeyRejected": "Teenusepakkuja lükkas API-võtme tagasi.",

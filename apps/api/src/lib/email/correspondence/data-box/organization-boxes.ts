@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import {
   ORGANIZATION_DATA_BOX_LIMIT,
+  ORGANIZATION_DATA_BOX_REFUSAL_CODE,
   type UpdateOrganizationDataBoxesResponse,
 } from "@stll/api-contract/data-box";
 import { classifyFailure } from "@stll/errors";
@@ -139,6 +140,7 @@ export const organizationDataBoxesChangeResult = (
       return Result.err(
         new HandlerError({
           status: 400,
+          code: ORGANIZATION_DATA_BOX_REFUSAL_CODE.limitReached,
           message: `An organization lists at most ${ORGANIZATION_DATA_BOX_LIMIT} data boxes; remove one first`,
         }),
       );
@@ -146,6 +148,7 @@ export const organizationDataBoxesChangeResult = (
       return Result.err(
         new HandlerError({
           status: 409,
+          code: ORGANIZATION_DATA_BOX_REFUSAL_CODE.changedConcurrently,
           message:
             "The organization's data boxes changed concurrently; read them again and retry",
         }),

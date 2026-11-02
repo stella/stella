@@ -2989,6 +2989,8 @@
       "matterContactCapacityReached": "Ši byla pasiekė kontaktų skaičiaus ribą. Prieš pridėdami kitą kontaktą, pašalinkite vieną kontaktų susiejimą.",
       "mcpAuthorizationApprovalRequired": "Kad galėtumėte prisijungti, administratorius turi patvirtinti šią jungtį.",
       "notOrganizationMember": "Nesate šios organizacijos narys.",
+      "organizationDataBoxLimitReached": "Ši organizacija pasiekė duomenų dėžučių ribą. Prieš pridėdami kitą, pašalinkite vieną duomenų dėžutę.",
+      "organizationDataBoxesChanged": "Organizacijos duomenų dėžutės per tą laiką pasikeitė. Įkelkite puslapį iš naujo ir bandykite dar kartą.",
       "organizationLastOwner": "Organizacija turi turėti savininką. Pirmiausia perduokite nuosavybę.",
       "organizationMemberLimitReached": "Ši organizacija pasiekė narių ribą.",
       "providerKeyRejected": "Teikėjas atmetė API raktą.",

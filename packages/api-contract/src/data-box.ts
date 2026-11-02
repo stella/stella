@@ -21,6 +21,12 @@ export const STORED_DATA_BOX_ID_PATTERN = /^[a-z0-9]{7}$/u;
 /** At most this many of the organization's own boxes are recorded. */
 export const ORGANIZATION_DATA_BOX_LIMIT = 20;
 
+/** Why a change to the organization's own boxes was refused. */
+export const ORGANIZATION_DATA_BOX_REFUSAL_CODE = {
+  limitReached: "organization_data_box_limit_reached",
+  changedConcurrently: "organization_data_boxes_changed",
+} as const;
+
 /**
  * How a message's direction was derived from the organization's own boxes:
  * sent from one is outgoing, sent to one is incoming. A message neither (or

@@ -2989,6 +2989,8 @@
       "matterContactCapacityReached": "Este caso atingiu o limite de contatos. Remova um vínculo com um contato antes de adicionar outro.",
       "mcpAuthorizationApprovalRequired": "Um administrador precisa aprovar este conector antes que você possa se conectar.",
       "notOrganizationMember": "Você não é membro desta organização.",
+      "organizationDataBoxLimitReached": "Esta organização atingiu o limite de caixas de dados. Remova uma antes de adicionar outra.",
+      "organizationDataBoxesChanged": "As caixas de dados da organização mudaram nesse meio-tempo. Recarregue a página e tente novamente.",
       "organizationLastOwner": "Uma organização precisa de um proprietário. Transfira a propriedade primeiro.",
       "organizationMemberLimitReached": "Esta organização atingiu o limite de membros.",
       "providerKeyRejected": "O provedor rejeitou a chave de API.",

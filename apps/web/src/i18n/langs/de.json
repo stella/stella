@@ -2989,6 +2989,8 @@
       "matterContactCapacityReached": "Diese Akte hat die Höchstzahl an Kontakten erreicht. Entfernen Sie eine Kontaktverknüpfung, bevor Sie einen weiteren Kontakt hinzufügen.",
       "mcpAuthorizationApprovalRequired": "Ein Administrator muss diesen Connector genehmigen, bevor Sie eine Verbindung herstellen können.",
       "notOrganizationMember": "Sie sind kein Mitglied dieser Organisation.",
+      "organizationDataBoxLimitReached": "Diese Organisation hat die Höchstzahl an Databoxen erreicht. Entfernen Sie eine Databox, bevor Sie eine weitere hinzufügen.",
+      "organizationDataBoxesChanged": "Die Databoxen der Organisation wurden zwischenzeitlich geändert. Laden Sie die Seite neu und versuchen Sie es erneut.",
       "organizationLastOwner": "Eine Organisation braucht einen Eigentümer. Übertragen Sie zuerst die Eigentümerschaft.",
       "organizationMemberLimitReached": "Diese Organisation hat ihr Mitgliederlimit erreicht.",
       "providerKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt.",

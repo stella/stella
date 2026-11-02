@@ -2989,6 +2989,8 @@
       "matterContactCapacityReached": "Ta sprawa osiągnęła limit kontaktów. Usuń jedno powiązanie z kontaktem przed dodaniem kolejnego.",
       "mcpAuthorizationApprovalRequired": "Administrator musi zatwierdzić ten konektor, zanim będzie można się połączyć.",
       "notOrganizationMember": "Nie jesteś członkiem tej organizacji.",
+      "organizationDataBoxLimitReached": "Ta organizacja osiągnęła limit skrzynek danych. Usuń jedną, zanim dodasz kolejną.",
+      "organizationDataBoxesChanged": "Skrzynki danych organizacji zmieniły się w międzyczasie. Odśwież stronę i spróbuj ponownie.",
       "organizationLastOwner": "Organizacja musi mieć właściciela. Najpierw przekaż własność.",
       "organizationMemberLimitReached": "Ta organizacja osiągnęła limit członków.",
       "providerKeyRejected": "Dostawca odrzucił klucz API.",

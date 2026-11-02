@@ -614,19 +614,19 @@ export const installPgliteCorrespondenceSources = async (
   }
   // Reinstall this routine's policies from its migration so fixtures exercise
   // the shipped policy definitions as well as the private role and functions.
-  await db.execute(
-    sql`DROP POLICY correspondence_source_maintenance ON public.correspondence_sources`,
-  );
-  await db.execute(
-    sql`DROP POLICY correspondence_source_maintenance ON public.correspondence`,
-  );
-  await db.execute(
-    sql`DROP POLICY correspondence_source_entity_maintenance ON public.correspondence_sources`,
-  );
-  await db.execute(
-    sql`DROP POLICY correspondence_source_entity_maintenance ON public.correspondence`,
-  );
+  // Every policy the migration creates replaces the one schema push made.
   for (const statement of maintenance) {
+    const policy =
+      /^CREATE POLICY (?<name>[a-z_]+) ON (?<table>public\.[a-z_]+)/u.exec(
+        executableSql(statement),
+      )?.groups;
+    if (policy?.["name"] !== undefined && policy["table"] !== undefined) {
+      await db.execute(
+        sql.raw(
+          `DROP POLICY IF EXISTS ${policy["name"]} ON ${policy["table"]}`,
+        ),
+      );
+    }
     await db.execute(sql.raw(statement));
   }
 };

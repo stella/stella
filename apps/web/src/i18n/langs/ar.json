@@ -2989,6 +2989,8 @@
       "matterContactCapacityReached": "بلغ هذا الملف القانوني الحد الأقصى لعدد جهات الاتصال. أزل ربط إحدى جهات الاتصال قبل إضافة جهة اتصال أخرى.",
       "mcpAuthorizationApprovalRequired": "يجب على المسؤول الموافقة على هذا الموصل قبل أن تتمكن من الاتصال.",
       "notOrganizationMember": "أنت لست عضوًا في هذه المؤسسة.",
+      "organizationDataBoxLimitReached": "وصلت هذه المؤسسة إلى الحد الأقصى لصناديق البيانات. أزل صندوق بيانات قبل إضافة آخر.",
+      "organizationDataBoxesChanged": "تغيّرت صناديق بيانات المؤسسة في الأثناء. أعد تحميل الصفحة وحاول مرة أخرى.",
       "organizationLastOwner": "يجب أن يكون للمؤسسة مالك. انقل الملكية أولًا.",
       "organizationMemberLimitReached": "بلغت هذه المؤسسة الحد الأقصى للأعضاء.",
       "providerKeyRejected": "رفض مزود الخدمة مفتاح API.",
