@@ -3745,6 +3745,16 @@ test("an API image step that tees its log keeps the command's exit status", () =
 const annotateStep = jobSteps(apiImageJob).find(
   ({ name }) => name === "Annotate image failure",
 );
+const annotateScript = readFileSync(
+  new URL("annotate-api-image-failure.sh", import.meta.url),
+  "utf-8",
+);
+
+test("the API image job annotates failures through its script", () => {
+  expect(annotateStep?.run?.trim()).toBe(
+    "bash scripts/annotate-api-image-failure.sh",
+  );
+});
 
 const annotate = (logs: { build?: string; smoke?: string }) => {
   const runnerTemp = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-annotate-"));
@@ -3762,7 +3772,7 @@ const annotate = (logs: { build?: string; smoke?: string }) => {
       );
     }
     const run = Bun.spawnSync({
-      cmd: ["bash", "-e", "-c", annotateStep?.run ?? "exit 1"],
+      cmd: ["bash", "-e", "-c", annotateScript],
       env: {
         PATH: process.env["PATH"] ?? "",
         PLATFORM: "linux/arm64",
@@ -4421,6 +4431,28 @@ test("a selected Playwright leg fails before loading an empty spec list", () => 
   expect(result.exitCode).toBe(1);
   expect(result.stderr.toString()).toContain("Selected E2E leg has no specs");
   expect(result.stdout.toString()).toBe("");
+});
+
+test("a selected leg planned only for a hosted browser suite skips the web run", () => {
+  const step = jobSteps(ciJobs["e2e-production-shard"]).find(
+    ({ name }) => name === "Run Playwright shard",
+  );
+  const runs = (mode: string, specs: string, suiteSpecs: string) =>
+    evaluate(step?.if ?? panic("Missing Playwright shard condition"), {
+      values: {
+        "steps.e2e-stack.outcome": "success",
+        "matrix.shard": 1,
+        "needs.ci-plan.outputs.e2e_production_mode": mode,
+        "needs.ci-plan.outputs.e2e_production_specs": specs,
+        "needs.ci-plan.outputs.e2e_production_suite_specs": suiteSpecs,
+      },
+    });
+  const suite = JSON.stringify(["apps/api/e2e/citation-graph.spec.mts"]);
+  const web = JSON.stringify(["apps/web/e2e/specs/guides.spec.ts"]);
+  expect(runs("selected", "[]", suite)).toBe(false);
+  expect(runs("selected", web, suite)).toBe(true);
+  expect(runs("selected", "[]", "[]")).toBe(true);
+  expect(runs("full", "[]", "[]")).toBe(true);
 });
 
 test("production shards keep full-depth core coverage and exclude unrelated fast PRs", () => {
@@ -7015,6 +7047,7 @@ test.each([
           JSON.stringify({
             matrix: JSON.parse(matrix),
             specs: JSON.parse(specs),
+            suiteSpecs: [],
           }),
         );
       }
@@ -7051,11 +7084,66 @@ test.each([
           `matrix=${full ? '{"shard":[1,2,"network-baseline"]}' : matrix}`,
           `mode=${full ? "full" : "selected"}`,
           `specs=${full ? "[]" : specs}`,
+          "suite_specs=[]",
           `selection_required=${required}`,
           `required=${required}`,
           "",
         ].join("\n"),
       );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test.each([
+  { suiteSpecs: ["apps/api/e2e/citation-graph.spec.mts"], unknown: "false" },
+  { suiteSpecs: [], unknown: "true" },
+])(
+  "the e2e planner requires its legs for hosted suite specs or an unknown change set: %j",
+  ({ suiteSpecs, unknown }) => {
+    const planner = jobSteps(ciJobs["ci-plan"]).find(
+      (step) => step.name === "Plan changed PR e2e shards",
+    );
+    const directory = mkdtempSync(nodePath.join(tmpdir(), "e2e-plan-"));
+    const output = nodePath.join(directory, "output");
+    const selectedPlan = nodePath.join(directory, "selection.json");
+    try {
+      writeFileSync(
+        selectedPlan,
+        JSON.stringify({ matrix: { shard: [1] }, specs: [], suiteSpecs }),
+      );
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          "-e",
+          "-c",
+          `bun() {
+          [[ "$*" == 'scripts/e2e-spec-shards-core.ts all' ]] || return 1
+          printf '%s' '{"shard":[1,2,"network-baseline"]}'
+        }
+        ${planner?.run ?? panic("Missing e2e shard planner")}`,
+        ],
+        {
+          env: {
+            PATH: Bun.env["PATH"] ?? "",
+            E2E_PRODUCTION_REQUIRED: "false",
+            ROUTE_SMOKE_REQUIRED: "false",
+            EVENT_NAME: "pull_request",
+            GITHUB_OUTPUT: output,
+            SELECTED_MODE: "selected",
+            SELECTED_PLAN_PATH: selectedPlan,
+            SELECTOR_OUTCOME: unknown === "true" ? "skipped" : "success",
+            SCOPE_UNKNOWN: unknown,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      const lines = readFileSync(output, "utf-8").split("\n");
+      expect(lines).toContain(`suite_specs=${JSON.stringify(suiteSpecs)}`);
+      expect(lines).toContain("required=true");
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -7552,6 +7640,7 @@ type BrowserPlanOptions = {
   packageChecksRequired?: string;
   browserScopeRequired?: string;
   uiPlaygroundSpecs?: string;
+  browserSuiteLegs?: string;
 };
 type HeavyGatePlanOptions = {
   event: Event;
@@ -7598,6 +7687,7 @@ const browserPlanOutput = ({
   packageChecksRequired = "true",
   browserScopeRequired = "true",
   uiPlaygroundSpecs = "[]",
+  browserSuiteLegs = "[]",
 }: BrowserPlanOptions) => {
   const { outputs } = v.parse(
     v.object({ outputs: v.record(v.string(), v.string()) }),
@@ -7619,6 +7709,7 @@ const browserPlanOutput = ({
         "steps.depth.outputs.suite_depth": depth,
         "steps.depth.outputs.queue_depth": queueDepth,
         "steps.ui-playground-plan.outputs.specs": uiPlaygroundSpecs,
+        "steps.browser-suite-plan.outputs.legs": browserSuiteLegs,
       },
     }),
   );
@@ -7643,6 +7734,29 @@ test("a PR that selects UI playground specs requires the browser job", () => {
   ).toBe("true");
   expect(plan("false", "[]")).toBe("false");
   expect(plan("true", "[]")).toBe("true");
+});
+
+test("a PR that changes specs of a whole-suite browser leg requires the browser job", () => {
+  const legs = JSON.stringify([
+    { suite: "ui", specs: ["apps/extension/e2e/bridge.spec.ts"] },
+  ]);
+  expect(
+    browserPlanOutput({
+      event: "pull_request",
+      depth: "fast",
+      desktopRequired: "false",
+      browserSuiteLegs: legs,
+    }),
+  ).toBe("true");
+  expect(
+    browserPlanOutput({
+      event: "pull_request",
+      depth: "fast",
+      desktopRequired: "false",
+      browserSuiteLegs: legs,
+      browserScopeRequired: "false",
+    }),
+  ).toBe("false");
 });
 
 test("Playwright image-only changes admit browser suites in merge groups", () => {

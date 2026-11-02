@@ -5453,6 +5453,12 @@
         "workspace_contact": "matter contact",
         "workspace_member": "matter member"
       },
+      "billingDrafts": {
+        "description": "Draft billing narratives from selected activity and firm or client knowledge files. Each user also gives consent. Drafts are checked against the guidelines once firm guidelines are attached.",
+        "firm": "Firm guidelines",
+        "ledes": "Electronic billing (LEDES)",
+        "title": "AI billing drafts"
+      },
       "documentProcessing": {
         "description": "Automatically recognize text in scanned PDFs so their contents can be searched.",
         "title": "Document text recognition",
@@ -6392,6 +6398,10 @@
     "deleteWorkspaceConfirmDescription": "Are you sure you want to delete this matter? This action cannot be undone.",
     "deletedItem": "Deleted: {name}",
     "deletingWorkspace": "Deleting matter",
+    "documentSwitcher": {
+      "searchPlaceholder": "Find a document…",
+      "trigger": "Switch document"
+    },
     "documentsCount": "{count, plural, one {# document} other {# documents}}",
     "dropToUploadFiles": "Drop to upload files",
     "duplicateMatter": "Duplicate matter",

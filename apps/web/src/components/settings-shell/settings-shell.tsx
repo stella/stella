@@ -20,7 +20,7 @@ import { cn } from "@stll/ui/utils";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { settingsNavSections } from "@/components/settings-shell/settings-nav";
 import { env } from "@/env";
-import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
+import { useTimeBillingChromeEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
@@ -46,7 +46,7 @@ type SettingsShellProps = {
 export const SettingsShell = ({ children }: SettingsShellProps) => {
   const t = useTranslations();
   const memoryEnabled = useCallerFeatureEnabled(CALLER_FEATURE.aiMemory);
-  const timeBilling = useTimeBillingPreviewEnabled();
+  const timeBilling = useTimeBillingChromeEnabled();
   const roleQuery = useQuery(roleOptions);
   const roleView = queryView(roleQuery);
   useQueryViewError(roleView, "SettingsShell.role:query");

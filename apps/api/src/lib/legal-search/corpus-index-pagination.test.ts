@@ -47,6 +47,9 @@ import {
   testRevisionOf,
   testRevisionsFor,
 } from "@/api/tests/helpers/corpus-projection-revisions";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 /**
  * Grouping passage hits back into document hits. A passage-granular generation
@@ -174,13 +177,15 @@ beforeEach(() => {
       { status: 200 },
     );
   };
-  globalThis.fetch = Object.assign(stub, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   mock.restore();
 });
 
@@ -1350,9 +1355,11 @@ describe("only the passages a page emits are highlighted", () => {
         { status: 200 },
       );
     };
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
     const page = await readPage(2);
     expect(
       hits.filter(({ document_id }) => document_id === "doc-a").length,
@@ -1458,9 +1465,11 @@ describe("only the passages a page emits are highlighted", () => {
           }),
         );
       };
-      globalThis.fetch = Object.assign(stub, {
-        preconnect: originalFetch.preconnect,
-      });
+      testFetchState.set(
+        Object.assign(stub, {
+          preconnect: originalFetch.preconnect,
+        }),
+      );
       const page = await readPage(20);
       expect(scanRequestCount()).toBe(1);
       expect(snippetRequests()).toHaveLength(1 + supersededCount);
@@ -1506,9 +1515,11 @@ describe("only the passages a page emits are highlighted", () => {
       }
       return engine(input, init);
     };
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
     // The batch consumes the shared budget; missing passages do not
     // receive a fresh timeout for their fallback requests.
     expect(await rejectionOf(readPage(6))).toMatchObject({
@@ -1577,36 +1588,38 @@ describe("only the passages a page emits are highlighted", () => {
       },
     ];
     const scanStub = globalThis.fetch;
-    globalThis.fetch = Object.assign(
-      async (
-        input: Parameters<typeof fetch>[0],
-        init?: Parameters<typeof fetch>[1],
-      ): Promise<Response> => {
-        const body: Record<string, unknown> =
-          typeof init?.body === "string" ? JSON.parse(init.body) : {};
-        if (body["snippet_fields"] === undefined) {
-          return await scanStub(input, init);
-        }
-        requestBodies.push(body);
-        // The engine answers a revision-narrowed clause with that copy only.
-        const query = String(body["query"]);
-        const answered = copies.filter(({ hit, revision }) =>
-          ["document_id", "chunk_id"].some((field) =>
-            query.includes(
-              `(${field}:"${field === "document_id" ? hit.document_id : hit.chunk_id}" AND projection_revision:"${revision}")`,
+    testFetchState.set(
+      Object.assign(
+        async (
+          input: Parameters<typeof fetch>[0],
+          init?: Parameters<typeof fetch>[1],
+        ): Promise<Response> => {
+          const body: Record<string, unknown> =
+            typeof init?.body === "string" ? JSON.parse(init.body) : {};
+          if (body["snippet_fields"] === undefined) {
+            return await scanStub(input, init);
+          }
+          requestBodies.push(body);
+          // The engine answers a revision-narrowed clause with that copy only.
+          const query = String(body["query"]);
+          const answered = copies.filter(({ hit, revision }) =>
+            ["document_id", "chunk_id"].some((field) =>
+              query.includes(
+                `(${field}:"${field === "document_id" ? hit.document_id : hit.chunk_id}" AND projection_revision:"${revision}")`,
+              ),
             ),
-          ),
-        );
-        return new Response(
-          JSON.stringify({
-            num_hits: answered.length,
-            hits: answered.map(({ hit }) => hit),
-            snippets: answered.map(({ text }) => ({ text: [text] })),
-          }),
-          { status: 200 },
-        );
-      },
-      { preconnect: originalFetch.preconnect },
+          );
+          return new Response(
+            JSON.stringify({
+              num_hits: answered.length,
+              hits: answered.map(({ hit }) => hit),
+              snippets: answered.map(({ text }) => ({ text: [text] })),
+            }),
+            { status: 200 },
+          );
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
 
     const page = await readPage();
@@ -1739,19 +1752,23 @@ describe("an engine refusal reaches the caller as a mapped status", () => {
     // request alone reaches the second read site with a page already scanned.
     snippetResponseBody = null;
     const stubbedFetch = globalThis.fetch;
-    globalThis.fetch = Object.assign(
-      async (
-        input: Parameters<typeof fetch>[0],
-        init?: Parameters<typeof fetch>[1],
-      ): Promise<Response> => {
-        const body: Record<string, unknown> =
-          typeof init?.body === "string" ? JSON.parse(init.body) : {};
-        if (body["snippet_fields"] !== undefined) {
-          return new Response("engine refused the highlight", { status: 503 });
-        }
-        return await stubbedFetch(input, init);
-      },
-      { preconnect: originalFetch.preconnect },
+    testFetchState.set(
+      Object.assign(
+        async (
+          input: Parameters<typeof fetch>[0],
+          init?: Parameters<typeof fetch>[1],
+        ): Promise<Response> => {
+          const body: Record<string, unknown> =
+            typeof init?.body === "string" ? JSON.parse(init.body) : {};
+          if (body["snippet_fields"] !== undefined) {
+            return new Response("engine refused the highlight", {
+              status: 503,
+            });
+          }
+          return await stubbedFetch(input, init);
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
 
     const failure = await readPageFailure();
