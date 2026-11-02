@@ -1,9 +1,8 @@
-import { useRef } from "react";
 import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { cn } from "@stll/ui/utils";
+import { ResizeSeparator } from "@stll/ui/separator";
 
 type SearchColumnResizeHandleProps = {
   className?: string;
@@ -19,71 +18,14 @@ type SearchColumnResizeHandleProps = {
 const SEARCH_RESIZE_KEYBOARD_STEP_PX = 16;
 
 /**
- * Drag strip between two columns, mirroring the inspector pane's resize
- * handle. A 4px grab zone straddling the adjacent column border via
- * negative margins, so it adds no visible width of its own. Also a
- * focusable `separator`: arrow keys move it by a fixed step in the pressed
- * physical direction, feeding the same clamped `onResize` path as a drag
- * (a synthetic clientX offset from the handle's own position).
+ * Drag strip between two search columns, mirroring the inspector pane's
+ * resize handle; arrow keys move it by a fixed step.
  */
-export const SearchColumnResizeHandle = ({
-  className,
-  label,
-  value,
-  max,
-  min,
-  onResize,
-}: SearchColumnResizeHandleProps) => {
-  const isDraggingRef = useRef(false);
-
-  return (
-    <div
-      aria-label={label}
-      aria-orientation="vertical"
-      aria-valuemax={max}
-      aria-valuemin={min}
-      aria-valuenow={Math.round(value)}
-      className={cn(
-        "hover:bg-border active:bg-border focus-visible:bg-border focus-visible:ring-ring z-10 -mx-0.5 w-1 shrink-0 cursor-col-resize focus-visible:ring-1 focus-visible:outline-none",
-        className,
-      )}
-      onKeyDown={(event) => {
-        let step: number;
-        switch (event.key) {
-          case "ArrowLeft":
-            step = -SEARCH_RESIZE_KEYBOARD_STEP_PX;
-            break;
-          case "ArrowRight":
-            step = SEARCH_RESIZE_KEYBOARD_STEP_PX;
-            break;
-          default:
-            return;
-        }
-        event.preventDefault();
-        const rect = event.currentTarget.getBoundingClientRect();
-        onResize(rect.left + rect.width / 2 + step);
-      }}
-      onPointerDown={(event) => {
-        event.preventDefault();
-        isDraggingRef.current = true;
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }}
-      onPointerMove={(event) => {
-        if (isDraggingRef.current) {
-          onResize(event.clientX);
-        }
-      }}
-      onPointerUp={() => {
-        isDraggingRef.current = false;
-      }}
-      onPointerCancel={() => {
-        isDraggingRef.current = false;
-      }}
-      role="separator"
-      tabIndex={0}
-    />
-  );
-};
+export const SearchColumnResizeHandle = (
+  props: SearchColumnResizeHandleProps,
+) => (
+  <ResizeSeparator keyboardStep={SEARCH_RESIZE_KEYBOARD_STEP_PX} {...props} />
+);
 
 type SearchFooterHintProps = {
   translationKey:

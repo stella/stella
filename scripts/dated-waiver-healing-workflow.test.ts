@@ -348,7 +348,7 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   expect(check?.run).toBe(
     'bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files" --changed-files "$DATED_WAIVER_CHANGED_FILES" --base-files "$RUNNER_TEMP/dated-waiver-base-files"',
   );
-  for (const step of expiry.steps) {
+  for (const step of guardSteps) {
     expect(step.env?.["GH_TOKEN"]).toBeUndefined();
     expect(step["continue-on-error"]).not.toBe(true);
   }

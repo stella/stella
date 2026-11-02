@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, mock, spyOn, test } from "bun:test";
 import JSZip from "jszip";
 
 import { writeZipEntry } from "@stll/docx-utils";
@@ -33,7 +33,10 @@ import {
 } from "@/api/tests/helpers/image-fixtures";
 import { legacyWordFile } from "@/api/tests/helpers/legacy-word-fixture";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 describe("PDF derivative policy", () => {
   test("does not generate derivatives for natively renderable OOXML files", () => {
@@ -118,16 +121,20 @@ const withConverterFetch = async <T>(
   convert: () => Promise<T>,
 ): Promise<{ result: T; urls: string[] }> => {
   const urls: string[] = [];
-  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-    asFetchMock(async (input: string | URL | Request) => {
-      urls.push(requestUrl(input));
-      return respond();
-    }),
+  const fetchSpy = Object.assign(
+    mock(
+      asFetchMock(async (input: string | URL | Request) => {
+        urls.push(requestUrl(input));
+        return respond();
+      }),
+    ),
+    { preconnect: globalThis.fetch.preconnect },
   );
+  testFetchState.set(fetchSpy);
   try {
     return { result: await convert(), urls };
   } finally {
-    fetchSpy.mockRestore();
+    testFetchState.restore();
   }
 };
 
@@ -395,17 +402,23 @@ const uploadedFileName = async (
   convert: () => ReturnType<typeof convertToPdf>,
 ): Promise<string | undefined> => {
   const bodies: string[] = [];
-  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-    asFetchMock(async (_input: string | URL | Request, init?: RequestInit) => {
-      bodies.push(await new Response(init?.body).text());
-      return new Response(new TextEncoder().encode("%PDF-1.7 converted"));
-    }),
+  const fetchSpy = Object.assign(
+    mock(
+      asFetchMock(
+        async (_input: string | URL | Request, init?: RequestInit) => {
+          bodies.push(await new Response(init?.body).text());
+          return new Response(new TextEncoder().encode("%PDF-1.7 converted"));
+        },
+      ),
+    ),
+    { preconnect: globalThis.fetch.preconnect },
   );
+  testFetchState.set(fetchSpy);
   const warn = spyOn(logger, "warn").mockImplementation(() => {});
   try {
     await convert();
   } finally {
-    fetchSpy.mockRestore();
+    testFetchState.restore();
     warn.mockRestore();
   }
   expect(bodies).toHaveLength(1);

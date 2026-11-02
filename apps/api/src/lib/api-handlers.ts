@@ -5,6 +5,8 @@ import * as v from "valibot";
 
 import type { ModelTask } from "@stll/ai-catalog";
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import type { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract/mcp";
+import type { ORGANIZATION_CREATE_SCOPE } from "@stll/api-contract/organization-create";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { PermissionInput } from "@stll/permissions";
 
@@ -39,6 +41,8 @@ import {
 import type { WorkspaceStatusAccess } from "@/api/lib/auth";
 import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
 import type { AccountAccess } from "@/api/lib/auth/account-access";
+import { hasAccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
+import type { AccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type {
@@ -214,6 +218,11 @@ export type { McpToolName };
  *   `assistant_chat`.
  * - `notification_inbox`: the caller's own notifications (list, mark one
  *   read). Mark-all and announcements stay `internal` under `native_tool_ui`.
+ * - `cross_matter_search`: the search screen's results across the matters the
+ *   caller can open, by text, result type, editor, file type and date. The
+ *   curated `search` and `search_across_matters` tools are separate, narrower
+ *   knowledge searches; facets, preview and the AI helpers stay `internal`
+ *   under `search_ui`.
  */
 type McpCapabilityReason =
   | "template_authoring_ui"
@@ -234,7 +243,10 @@ type McpCapabilityReason =
   | "correspondence"
   | "personal_history"
   | "assistant_memory"
-  | "notification_inbox";
+  | "notification_inbox"
+  | "organization_management"
+  | "organization_admin"
+  | "cross_matter_search";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from
@@ -336,6 +348,8 @@ export type McpExposure =
   | {
       type: "capability";
       reason: McpCapabilityReason;
+      /** Curated wrapper that delegates to this capability. */
+      by?: McpToolName;
       consumesServices: ServiceClassification;
       confirmation?: "required";
       readClass?: McpReadClass;
@@ -580,14 +594,26 @@ export const getSafeHandlerAccessMetadata = (handler: unknown) =>
     ? safeHandlerAccountAccess.get(handler)
     : undefined;
 
+type AccountCapabilityScope =
+  | (typeof ACCOUNT_EXPORT_SCOPES)[keyof typeof ACCOUNT_EXPORT_SCOPES]
+  | typeof ORGANIZATION_CREATE_SCOPE;
+
+type SessionCapabilityAuthority =
+  | { mcp: Extract<McpExposure, { type: "internal" }>; accountScope?: never }
+  | {
+      mcp: Exclude<McpExposure, { type: "internal" }>;
+      accountScope: AccountCapabilityScope;
+    };
+
 export type SessionHandlerConfig = InputSchema &
+  SessionCapabilityAuthority &
   WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
   CapabilityAccess &
   CapabilityTransportDisposition & {
     accountAccess: AccountAccess;
-    mcp: McpExposure;
+    idempotency?: { type: "replay" };
     /**
      * Session handlers run outside an organization scope, so they can only
      * state that a successful call announces no resource sets.
@@ -598,6 +624,7 @@ export type SessionHandlerConfig = InputSchema &
 type SessionHandlerContext<
   TConfig extends SessionHandlerConfig = SessionHandlerConfig,
 > = RouteContext<TConfig> & {
+  accountAuthority?: AccountCapabilityAuthority;
   user: {
     id: SafeId<"user">;
     email: string;
@@ -2284,6 +2311,19 @@ export const createSafeSessionHandler = <
       ctx: SessionHandlerContext<TConfig>,
     ): Promise<SafeHandlerResult<TResult>> =>
       await withSafeHandlerExceptionScope(ctx, async () => {
+        if (
+          config.accountScope !== undefined &&
+          ctx.accountAuthority !== undefined &&
+          !hasAccountCapabilityAuthority(
+            ctx.accountAuthority,
+            config.accountScope,
+          )
+        ) {
+          return toSafeStatusResponse(403, {
+            code: "missing_scope",
+            message: `This operation requires ${config.accountScope} consent.`,
+          });
+        }
         if (requiresAccountCheck(config.accountAccess)) {
           const accountAccess = checkAccountOperation(
             ctx.user.email,

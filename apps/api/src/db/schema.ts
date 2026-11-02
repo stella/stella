@@ -2,6 +2,7 @@
 export * from "./registration-budget-schema";
 export * from "./schema/synthetic-session";
 export * from "./schema/account-exports";
+export * from "./schema/organization-creation-requests";
 export * from "./schema/contacts";
 export * from "./schema/backfill-state";
 export * from "./schema/case-law-replay";
@@ -12,6 +13,7 @@ export * from "./schema/properties";
 export * from "./schema/entities";
 export * from "./schema/templates";
 export * from "./schema/billing";
+export * from "./schema/billing-drafts";
 export * from "./schema/billing-arrangements";
 export * from "./schema/workspace-admin";
 export * from "./schema/clauses";
