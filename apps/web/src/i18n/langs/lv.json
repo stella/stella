@@ -5454,7 +5454,7 @@
         "workspace_member": "lietas dalībnieks"
       },
       "billingDrafts": {
-        "description": "Veidojiet darba aprakstus no atlasītajām darbībām un biroja vai klienta zināšanu failiem. Katrs lietotājs arī dod savu piekrišanu. Pirms melnrakstu ieslēgšanas pievienojiet biroja vadlīnijas.",
+        "description": "Veidojiet darba aprakstus no atlasītajām darbībām un biroja vai klienta zināšanu failiem. Katrs lietotājs arī dod savu piekrišanu. Kad biroja vadlīnijas ir pievienotas, melnraksti tiek pārbaudīti atbilstoši tām.",
         "firm": "Biroja vadlīnijas",
         "ledes": "Elektroniskie norēķini (LEDES)",
         "title": "AI norēķinu melnraksti"

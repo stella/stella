@@ -5454,7 +5454,7 @@
         "workspace_member": "ügy tagja"
       },
       "billingDrafts": {
-        "description": "Készítsen munkaleírásokat a kiválasztott tevékenységekből és az iroda vagy az ügyfél tudásfájljaiból. Minden felhasználó külön hozzájárulást ad. A vázlatok engedélyezése előtt csatolja az iroda irányelveit.",
+        "description": "Készítsen munkaleírásokat a kiválasztott tevékenységekből és az iroda vagy az ügyfél tudásfájljaiból. Minden felhasználó külön hozzájárulást ad. Az iroda irányelveinek csatolása után a vázlatokat ezek alapján ellenőrzi a rendszer.",
         "firm": "Irodai irányelvek",
         "ledes": "Elektronikus számlázás (LEDES)",
         "title": "AI számlázási vázlatok"

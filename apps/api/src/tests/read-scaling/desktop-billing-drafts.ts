@@ -4,7 +4,10 @@ import { eq, inArray, sql } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
+  agentSkillResources,
+  agentSkills,
   billingDraftUserSettings,
+  billingGuidelineFiles,
   featureEnrolments,
   organizationSettings,
 } from "@/api/db/schema";
@@ -39,6 +42,10 @@ export const measureDesktopBillingDraftSettings = async (
   const unrelatedUsers = Array.from({ length: size }, () =>
     mintAuthProviderId<"user">(),
   );
+  // Another organization's firm guideline file, so a mode read that dropped
+  // its organization predicate would answer guided.
+  const decoySkillId = createSafeId<"agentSkill">();
+  const decoyResourceId = createSafeId<"agentSkillResource">();
   const request = new Request(
     "https://api.example.test/v1/desktop/billing-drafts/settings",
   );
@@ -108,9 +115,36 @@ export const measureDesktopBillingDraftSettings = async (
         consentAt: new Date("2026-10-01T12:00:00.000Z"),
       },
     ]);
+    await db.insert(agentSkills).values({
+      id: decoySkillId,
+      organizationId: otherOrganizationId,
+      userId,
+      scope: "team",
+      origin: "authored",
+      slug: "billing-rules",
+      name: "Other organization billing rules",
+      description: "Rules",
+      contentHash: "a".repeat(64),
+      body: "Rules",
+    });
+    await db.insert(agentSkillResources).values({
+      id: decoyResourceId,
+      organizationId: otherOrganizationId,
+      skillId: decoySkillId,
+      path: "references/firm.md",
+      content: "# Narratives",
+      sizeBytes: 12,
+    });
+    await db.insert(billingGuidelineFiles).values({
+      organizationId: otherOrganizationId,
+      resourceId: decoyResourceId,
+      clientId: null,
+    });
     await db.execute(sql`GRANT SELECT ON TABLE
       pg_temp."user", pg_temp."member", pg_temp."feature_enrolments",
-      pg_temp."organization_settings", pg_temp."billing_draft_user_settings"
+      pg_temp."organization_settings", pg_temp."billing_draft_user_settings",
+      pg_temp."billing_guideline_files", pg_temp."agent_skill_resources",
+      pg_temp."agent_skills"
       TO stella`);
 
     const signer = await createDesktopDeviceSigner();
@@ -173,8 +207,11 @@ export const measureDesktopBillingDraftSettings = async (
       if (response instanceof HttpStatusResponse) {
         return panic("Desktop settings scaling requires a successful response");
       }
-      expect(response).toEqual({
-        organizationMode: "enabled",
+      const { revision, ...settings } = response;
+      expect(typeof revision).toBe("string");
+      // The other organization's firm file never makes this one guided.
+      expect(settings).toEqual({
+        effectiveMode: "plain",
         consent: "granted",
         preference: "Keep the target narrative concise",
       });
@@ -207,6 +244,13 @@ export const measureDesktopBillingDraftSettings = async (
           otherOrganizationId,
         ]),
       );
+    await db
+      .delete(billingGuidelineFiles)
+      .where(eq(billingGuidelineFiles.organizationId, otherOrganizationId));
+    await db
+      .delete(agentSkillResources)
+      .where(eq(agentSkillResources.id, decoyResourceId));
+    await db.delete(agentSkills).where(eq(agentSkills.id, decoySkillId));
     await db
       .delete(featureEnrolments)
       .where(eq(featureEnrolments.organizationId, organizationId));

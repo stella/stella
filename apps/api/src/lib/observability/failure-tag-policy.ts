@@ -178,6 +178,7 @@ export const TAGGED_FAILURE_REASON = {
   DevProcessSignalError: "tagged_failure",
   DevProcessSurvivedError: "tagged_failure",
   DevRunnerConfigError: "tagged_failure",
+  DispatchRefusedError: "tagged_failure",
   DockerApiError: "tagged_failure",
   DockerEndpointError: "tagged_failure",
   DockerKeeperError: "tagged_failure",

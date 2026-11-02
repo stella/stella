@@ -20,7 +20,11 @@ import { EDITABLE_AGENT_SKILL_ORIGINS } from "@/api/lib/agent-skills/origin";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { BILLING_GUIDELINE_MAX_FILES_PER_CLIENT } from "@/api/lib/billing/billing-guidelines";
+import {
+  BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
+  BILLING_GUIDELINE_MAX_FIRM_FILES,
+  billingGuidelineScopeCap,
+} from "@/api/lib/billing/billing-guidelines";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, uniqueItems } from "@/api/lib/custom-schema";
@@ -41,11 +45,6 @@ const permissions = {
   organizationSettings: ["update"],
 } satisfies HandlerConfig["permissions"];
 const CONFIGURATION_FAILURES = {
-  firm_guideline_required: {
-    status: 400,
-    message:
-      "Attach a firm billing guideline file before enabling AI billing drafts",
-  },
   invalid_client: { status: 404, message: "Client not found" },
   invalid_files: {
     status: 400,
@@ -118,28 +117,14 @@ const loadBillingFileBindings = async ({
             : isNull(billingGuidelineFiles.clientId),
         ),
       ),
-    BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
+    billingGuidelineScopeCap(clientId),
   );
-  const oldFiles =
-    bindings.type === "complete"
-      ? bindings.rows
-      : panic("Billing guideline bindings exceed their configured cap", {
-          organizationId,
-          clientId,
-        });
-  const firmFiles = clientId
-    ? await tx
-        .select({ resourceId: billingGuidelineFiles.resourceId })
-        .from(billingGuidelineFiles)
-        .where(
-          and(
-            eq(billingGuidelineFiles.organizationId, organizationId),
-            isNull(billingGuidelineFiles.clientId),
-          ),
-        )
-        .limit(1)
-    : oldFiles;
-  return { oldFiles, firmFiles };
+  return bindings.type === "complete"
+    ? bindings.rows
+    : panic("Billing guideline bindings exceed their configured cap", {
+        organizationId,
+        clientId,
+      });
 };
 
 const billingDraftConfigurationBodySchema = v.strictObject({
@@ -241,7 +226,7 @@ const updateBillingDraftConfiguration = createSafeRootHandler(
     const organizationId = session.activeOrganizationId;
     if (
       !body.clientId &&
-      ((body.resourceIds?.length ?? 0) > 1 ||
+      ((body.resourceIds?.length ?? 0) > BILLING_GUIDELINE_MAX_FIRM_FILES ||
         body.timeBillingFormat !== undefined)
     ) {
       return Result.err(
@@ -301,21 +286,13 @@ const updateBillingDraftConfiguration = createSafeRootHandler(
           }
           previousClientFormat = client.format;
         }
-        const { oldFiles, firmFiles } = await loadBillingFileBindings({
+        // Enabling needs no guideline file: until a firm file is bound,
+        // consenting members draft plain descriptions.
+        const oldFiles = await loadBillingFileBindings({
           tx,
           organizationId,
           ...(body.clientId === undefined ? {} : { clientId: body.clientId }),
         });
-        const nextFirmFiles = body.clientId
-          ? firmFiles
-          : (body.resourceIds ?? firmFiles);
-        if (
-          (body.mode ?? settingsRow?.mode ?? DEFAULT_AI_BILLING_DRAFTS_MODE) ===
-            AI_BILLING_DRAFTS_MODE.ENABLED &&
-          nextFirmFiles.length === 0
-        ) {
-          return { type: "firm_guideline_required" } as const;
-        }
         if (
           enforceWritePrecondition({
             type: "updatedAt",

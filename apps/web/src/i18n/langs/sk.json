@@ -5454,7 +5454,7 @@
         "workspace_member": "člen spisu"
       },
       "billingDrafts": {
-        "description": "Navrhujte opisy práce z vybranej aktivity a znalostných súborov kancelárie alebo klienta. Každý používateľ tiež udeľuje súhlas. Pred zapnutím návrhov pripojte pravidlá kancelárie.",
+        "description": "Navrhujte opisy práce z vybranej aktivity a znalostných súborov kancelárie alebo klienta. Každý používateľ tiež udeľuje súhlas. Po pripojení pravidiel kancelárie sa návrhy kontrolujú podľa nich.",
         "firm": "Pravidlá kancelárie",
         "ledes": "Elektronická fakturácia (LEDES)",
         "title": "AI návrhy výkazov práce"

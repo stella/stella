@@ -44,6 +44,11 @@ import {
   payloadCarriesDocument,
 } from "@/api/lib/case-law/stored-payload";
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
+import {
+  timestampCasToken,
+  timestampMatchesCasToken,
+} from "@/api/lib/db/timestamp-cas";
 import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
@@ -177,7 +182,7 @@ export type ReplayDecisionRow = {
   contentHash: string | null;
   parserVersion: number | null;
   /** Exact revision compared under the fixed-point row lock, not a batch identity. */
-  updateToken: string;
+  updateToken: TimestampCasToken;
   sourceRawS3Key: string;
   sourceRawContentType: string | null;
   corpusMirrorStatus: (typeof CASE_LAW_CORPUS_MIRROR_STATUS)[keyof typeof CASE_LAW_CORPUS_MIRROR_STATUS];
@@ -576,7 +581,7 @@ export const buildReplayPageQuery = (
       sourceHash: caseLawDecisions.sourceHash,
       contentHash: caseLawDecisions.contentHash,
       parserVersion: caseLawDecisions.parserVersion,
-      updateToken: sql<string>`${caseLawDecisions.updatedAt}::text`,
+      updateToken: timestampCasToken(caseLawDecisions.updatedAt),
       sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
       sourceRawContentType: caseLawDecisions.sourceRawContentType,
       corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
@@ -1238,7 +1243,10 @@ const alreadyProvedReplayInput = async ({
               eq(caseLawDecisions.id, row.id),
               eq(caseLawDecisions.sourceId, sourceId),
               eq(caseLawDecisions.sourceRawS3Key, row.sourceRawS3Key),
-              sql`${caseLawDecisions.updatedAt}::text = ${row.updateToken}`,
+              timestampMatchesCasToken(
+                caseLawDecisions.updatedAt,
+                row.updateToken,
+              ),
               eq(caseLawDecisions.parserVersion, parserVersion),
               eq(caseLawDecisions.sourceHash, result.rawHash),
               eq(caseLawDecisions.sourceHashVersion, sourceFingerprintVersion),

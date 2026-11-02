@@ -11,7 +11,6 @@ const MODEL_REQUESTS_WITHOUT_CHAT_CONTENT = [
   "apps/api/src/handlers/case-law/polarity/llm-classifier.ts",
   "apps/api/src/handlers/clauses/rewrite.ts",
   "apps/api/src/handlers/contacts/extract-procuracao.ts",
-  "apps/api/src/handlers/desktop-time-entries/narrative-model.ts",
   "apps/api/src/handlers/document-reviews/reference-positions.ts",
   "apps/api/src/handlers/entities/placements/suggest.ts",
   "apps/api/src/handlers/playbooks/derive-ask.ts",
@@ -75,9 +74,11 @@ export default {
     names: MODEL_REQUEST_NAMES,
     allowed: [
       {
-        path: "apps/api/src/handlers/desktop-time-entries/billing-drafts.ts",
+        // The one model caller under desktop-time-entries: billing drafts
+        // and the narrative route reach the model only through it.
+        path: "apps/api/src/handlers/desktop-time-entries/drafting-model.ts",
         reason:
-          "Sends selected activity evidence, own bounded time history and authorized guideline files; carries no chat transcript. Both consent gates are checked live.",
+          "Sends selected activity evidence, window titles, own bounded time history and, once the organization binds them, authorized guideline files; carries no chat transcript. Takes only a DraftingAdmission and reads the organization's switch and the member's consent again before every provider request.",
       },
       {
         path: "apps/api/src/handlers/chat/messages/revisions/span-edit.ts",

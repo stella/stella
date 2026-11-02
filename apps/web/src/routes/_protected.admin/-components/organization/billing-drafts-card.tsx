@@ -201,11 +201,7 @@ export const BillingDraftsCard = () => {
           <Field className="flex-row items-center gap-2">
             <Checkbox
               checked={config.data.mode === "enabled"}
-              disabled={
-                mutation.isPending ||
-                (config.data.mode === "disabled" &&
-                  !config.data.files.some((file) => file.clientId === null))
-              }
+              disabled={mutation.isPending}
               onCheckedChange={(enabled) =>
                 mutation.mutate({ mode: enabled ? "enabled" : "disabled" })
               }
