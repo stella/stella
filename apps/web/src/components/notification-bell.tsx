@@ -308,9 +308,9 @@ const NotificationRow = ({ notification, onRead }: NotificationRowProps) => {
   return (
     <li>
       {target === null ? (
-        <button className={rowClassName} onClick={onRead} type="button">
-          {body}
-        </button>
+        <Button className="block w-full" onClick={onRead} variant="plain">
+          <span className={rowClassName}>{body}</span>
+        </Button>
       ) : (
         <NotificationLink
           className={rowClassName}

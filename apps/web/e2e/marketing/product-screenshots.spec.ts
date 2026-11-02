@@ -17,6 +17,10 @@ import {
   settleMarketingAgentThread,
 } from "./agent-thread";
 import { TIME_TRACKING_ENTRIES_SELECTOR } from "./capture-readiness";
+import {
+  collectCaptureText,
+  findCaptureTextViolations,
+} from "./capture-text-guard";
 import { CAPTURE_DPR } from "./captures";
 import { getMarketingDecisionPaths } from "./case-law-reader";
 import {
@@ -540,6 +544,21 @@ test("capture landing product screenshots", async ({
           [data-sonner-toaster], [data-testid="devtools"], [data-dev-chrome] { display: none !important; }
         `,
       });
+
+      // Placeholder or fixture text fails the capture before it is shot: a
+      // hard stop, so an update run can never write it into a baseline.
+      const violations = findCaptureTextViolations(
+        await page.evaluate(collectCaptureText, { checkLayout: true }),
+      );
+      expect(
+        violations,
+        `${capture.name}: banned marketing text ${violations
+          .map(
+            ({ element, matchedText }) =>
+              `${JSON.stringify(matchedText)} in ${element}`,
+          )
+          .join(", ")}`,
+      ).toEqual([]);
 
       const themeSuffix = theme === "dark" ? "-dark" : "";
       // Soft, so one run reports every drifted capture; a hard assertion

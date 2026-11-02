@@ -22,7 +22,13 @@ import {
   CollapsibleTrigger,
 } from "@stll/ui/collapsible";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
-import { CheckIcon, GlobeIcon, PencilIcon, XIcon } from "@stll/ui/icons";
+import {
+  BrowserControlIcon,
+  CheckIcon,
+  GlobeIcon,
+  PencilIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { cn } from "@stll/ui/utils";
@@ -1087,7 +1093,9 @@ const browserActionTranslationKey = (command: BrowserControlCommand) => {
     case BROWSER_CONTROL_ACTION.goBack:
       return "common.goBack";
     case BROWSER_CONTROL_ACTION.open:
-      return "chat.approval.browser.actions.open";
+      return command.newTab === true
+        ? "chat.approval.browser.actions.openNewTab"
+        : "chat.approval.browser.actions.open";
     case BROWSER_CONTROL_ACTION.pressKey:
       return "chat.approval.browser.actions.pressKey";
     case BROWSER_CONTROL_ACTION.select:
@@ -1096,6 +1104,8 @@ const browserActionTranslationKey = (command: BrowserControlCommand) => {
       return (command.textOffset ?? 0) > 0
         ? "chat.approval.browser.actions.snapshotContinue"
         : "chat.approval.browser.actions.snapshot";
+    case BROWSER_CONTROL_ACTION.switchTab:
+      return "chat.approval.browser.actions.switchTab";
     default:
       command satisfies never;
       return panic("Unhandled browser-control action");
@@ -1231,6 +1241,12 @@ const ToolApprovalLeadingIcon = ({
 
   if (toolName === "web_search" || toolName === "fetch_url") {
     return <GlobeIcon className="text-muted-foreground size-4 shrink-0" />;
+  }
+
+  if (toolName === BROWSER_CONTROL_TOOL_NAME) {
+    return (
+      <BrowserControlIcon className="text-muted-foreground size-4 shrink-0" />
+    );
   }
 
   return <PencilIcon className="text-muted-foreground size-4 shrink-0" />;

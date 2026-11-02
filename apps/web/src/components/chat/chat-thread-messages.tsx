@@ -366,132 +366,145 @@ export const ChatThreadMessages = ({
   // Rendered per message in both the flat and sticky layouts, so the message
   // body markup stays identical across surfaces; only the surrounding turn
   // grouping differs when `stickyUserMessages` is on.
-  const renderMessageNode = (message: ChatUIMessage, index: number) => (
-    <ChatRenderErrorBoundary
-      fallback={<MessageRenderFallback message={message} />}
-      key={message.id}
-      resetOn={message.parts}
-      surface="chat-message"
-    >
-      <Message
-        className={cn(
-          "transition-opacity duration-200",
-          approvalPendingMessageId &&
-            approvalPendingMessageId !== message.id &&
-            "opacity-40",
-        )}
-        from={message.role}
-        data-chat-message-id={message.id}
+  const renderMessageNode = (message: ChatUIMessage, index: number) =>
+    // A turn can persist an assistant message that shows nothing (only
+    // hidden reasoning, for example) ahead of the one holding its tool card
+    // and answer. Rendered, it is an empty block whose spacing opens a gap
+    // under the question. The last message always renders: its footer
+    // carries retry and stop.
+    message.role === "assistant" &&
+    index !== messages.length - 1 &&
+    message.metadata?.contextNotice === undefined &&
+    !hasVisibleAssistantParts(message.parts) ? null : (
+      <ChatRenderErrorBoundary
+        fallback={<MessageRenderFallback message={message} />}
+        key={message.id}
+        resetOn={message.parts}
+        surface="chat-message"
       >
-        <MessageContent
+        <Message
           className={cn(
-            message.parts.some(
-              (part) =>
-                part.type === "ui-resource" &&
-                uiResourceRenderer(part.resource.mimeType) ===
-                  "generated-visual",
-            ) && "w-full",
+            "transition-opacity duration-200",
+            approvalPendingMessageId &&
+              approvalPendingMessageId !== message.id &&
+              "opacity-40",
           )}
+          from={message.role}
+          data-chat-message-id={message.id}
         >
-          <MessageBodyRender
-            render={() => {
-              const policy = CHAT_MESSAGE_RENDER_POLICY[message.role];
-              switch (policy) {
-                case "activity":
-                  return renderActivityMessage(message.parts);
-                case "assistant":
-                  return (
-                    <ChatAnswerDecisionProvider
-                      message={message}
-                      isAwaitingUser={awaitedAssistantMessageId === message.id}
-                    >
-                      <AssistantMessageParts
-                        activeFileName={activeFileName}
-                        activeOrganizationId={activeOrganizationId}
-                        assistantTextDensity={assistantTextDensity}
+          <MessageContent
+            className={cn(
+              message.parts.some(
+                (part) =>
+                  part.type === "ui-resource" &&
+                  uiResourceRenderer(part.resource.mimeType) ===
+                    "generated-visual",
+              ) && "w-full",
+            )}
+          >
+            <MessageBodyRender
+              render={() => {
+                const policy = CHAT_MESSAGE_RENDER_POLICY[message.role];
+                switch (policy) {
+                  case "activity":
+                    return renderActivityMessage(message.parts);
+                  case "assistant":
+                    return (
+                      <ChatAnswerDecisionProvider
+                        message={message}
                         isAwaitingUser={
                           awaitedAssistantMessageId === message.id
                         }
-                        isGenerating={generationActive}
-                        isLatestAssistantMessage={
-                          message.id === retryableAssistantMessageId
-                        }
-                        message={message}
-                        onAskUserEditAndRerun={onAskUserEditAndRerun}
-                        onAskUserEditingChange={onAskUserEditingChange}
-                        onAskUserSubmit={onAskUserSubmit}
-                        onCreateDocumentResolve={onCreateDocumentResolve}
-                        onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
-                        onOpenCreatedDocument={onOpenCreatedDocument}
-                        onOpenPlaybook={onOpenPlaybook}
-                        shouldShowToolCalls={shouldShowToolCalls}
-                        streamdownComponents={streamdownComponents}
-                        workspaceId={workspaceId}
-                        threadRef={threadRef}
-                      />
-                      <ChatTurnDuration timing={message.metadata?.turnTiming} />
-                      <div
-                        className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
-                        data-chat-answer-footer
-                        data-chat-copy-exclude
                       >
-                        <AssistantMessageActions
-                          exportArtifact={findCreateDocumentArtifactForMessage(
-                            messages,
-                            index,
-                          )}
-                          canFork={canForkAssistantMessage({
-                            isGenerating: generationActive,
-                            messageId: message.id,
-                            messages,
-                          })}
-                          canRetry={canRetryAssistantMessage({
-                            error,
-                            isGenerating: generationActive,
-                            messageId: message.id,
-                            messages,
-                          })}
-                          contextMatterIds={branchSource?.contextMatterIds}
+                        <AssistantMessageParts
+                          activeFileName={activeFileName}
+                          activeOrganizationId={activeOrganizationId}
+                          assistantTextDensity={assistantTextDensity}
+                          isAwaitingUser={
+                            awaitedAssistantMessageId === message.id
+                          }
+                          isGenerating={generationActive}
+                          isLatestAssistantMessage={
+                            message.id === retryableAssistantMessageId
+                          }
                           message={message}
-                          onResend={onResend}
+                          onAskUserEditAndRerun={onAskUserEditAndRerun}
+                          onAskUserEditingChange={onAskUserEditingChange}
+                          onAskUserSubmit={onAskUserSubmit}
+                          onCreateDocumentResolve={onCreateDocumentResolve}
+                          onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
+                          onOpenCreatedDocument={onOpenCreatedDocument}
+                          onOpenPlaybook={onOpenPlaybook}
+                          shouldShowToolCalls={shouldShowToolCalls}
+                          streamdownComponents={streamdownComponents}
+                          workspaceId={workspaceId}
                           threadRef={threadRef}
                         />
-                        <AssistantAnswerMetadata
-                          message={message}
-                          workspaceId={workspaceId}
-                          threadId={threadRef?.threadId}
-                          disabled={
-                            generationActive || !!awaitedAssistantMessageId
-                          }
-                          onAnswerEdited={onAnswerEdited}
+                        <ChatTurnDuration
+                          timing={message.metadata?.turnTiming}
                         />
-                      </div>
-                    </ChatAnswerDecisionProvider>
-                  );
-                case "text":
-                  return (
-                    <EditableUserMessage
-                      actions={userMessageEdit}
-                      isGenerating={generationActive}
-                      message={message}
-                    >
-                      <TextMessageParts
+                        <div
+                          className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+                          data-chat-answer-footer
+                          data-chat-copy-exclude
+                        >
+                          <AssistantMessageActions
+                            exportArtifact={findCreateDocumentArtifactForMessage(
+                              messages,
+                              index,
+                            )}
+                            canFork={canForkAssistantMessage({
+                              isGenerating: generationActive,
+                              messageId: message.id,
+                              messages,
+                            })}
+                            canRetry={canRetryAssistantMessage({
+                              error,
+                              isGenerating: generationActive,
+                              messageId: message.id,
+                              messages,
+                            })}
+                            contextMatterIds={branchSource?.contextMatterIds}
+                            message={message}
+                            onResend={onResend}
+                            threadRef={threadRef}
+                          />
+                          <AssistantAnswerMetadata
+                            message={message}
+                            workspaceId={workspaceId}
+                            threadId={threadRef?.threadId}
+                            disabled={
+                              generationActive || !!awaitedAssistantMessageId
+                            }
+                            onAnswerEdited={onAnswerEdited}
+                          />
+                        </div>
+                      </ChatAnswerDecisionProvider>
+                    );
+                  case "text":
+                    return (
+                      <EditableUserMessage
+                        actions={userMessageEdit}
+                        isGenerating={generationActive}
                         message={message}
-                        messages={messages}
-                        index={index}
-                      />
-                    </EditableUserMessage>
-                  );
-                default:
-                  policy satisfies never;
-                  return panic("Unhandled chat message render policy");
-              }
-            }}
-          />
-        </MessageContent>
-      </Message>
-    </ChatRenderErrorBoundary>
-  );
+                      >
+                        <TextMessageParts
+                          message={message}
+                          messages={messages}
+                          index={index}
+                        />
+                      </EditableUserMessage>
+                    );
+                  default:
+                    policy satisfies never;
+                    return panic("Unhandled chat message render policy");
+                }
+              }}
+            />
+          </MessageContent>
+        </Message>
+      </ChatRenderErrorBoundary>
+    );
 
   return (
     // Sent messages persist a same-matter mention without its matter; the
@@ -1790,6 +1803,29 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
 
 // Share visibility with the renderer so hidden skill misses and searches
 // folded into the sources row cannot produce an empty process disclosure.
+/**
+ * Whether any part of an assistant message draws something: a step, card or
+ * answer text, or a finished web search or fetch, which shows in the sources
+ * tray instead of as a step.
+ */
+const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
+  toAssistantPartRenderEntries(parts).some((entry) => {
+    if (entry.type !== "standard") {
+      return true;
+    }
+    const { part } = entry;
+    if (part.type === "text") {
+      return part.content.trim().length > 0;
+    }
+    if (
+      part.type === "tool-call" &&
+      (part.name === "web_search" || part.name === "fetch_url")
+    ) {
+      return true;
+    }
+    return isVisibleProcessEntry(entry);
+  });
+
 const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
   if (entry.type !== "standard") {
     return true;

@@ -10,6 +10,7 @@ import type { Transaction } from "@/api/db/root";
 import { abortableTx, safeDbFromScoped } from "@/api/db/safe-db";
 import {
   auditLogs,
+  billingDraftUserSettings,
   contacts,
   desktopEditHandoffs,
   desktopEditSessions,
@@ -374,6 +375,38 @@ if (!databaseUrl || !runPostgresTests) {
           userId,
           report: { ...report, desktopId: Bun.randomUUIDv7() },
         });
+        await Promise.all(
+          [
+            {
+              organizationId,
+              userId,
+              preference: "Concise",
+              consentAt: new Date(),
+            },
+            {
+              organizationId,
+              userId: actorUserId,
+              preference: "Detailed",
+              consentAt: new Date(),
+            },
+            {
+              organizationId: otherOrganizationId,
+              userId,
+              preference: "Other firm",
+              consentAt: new Date(),
+            },
+          ].map(
+            async (settings) =>
+              await createScopedDb(
+                markRlsDatabase(db),
+                [],
+                settings.organizationId,
+                settings.userId,
+              )(async (tx) => {
+                await tx.insert(billingDraftUserSettings).values(settings);
+              }),
+          ),
+        );
         const historyLookupKey = Bun.randomUUIDv7();
         await db.insert(searchHistoryEntries).values(
           [
@@ -441,6 +474,27 @@ if (!databaseUrl || !runPostgresTests) {
                 eq(desktopPresence.organizationId, otherOrganizationId),
               ),
           ),
+        ).toBe(1);
+        expect(
+          await scopedDb(
+            async (tx) => await tx.$count(billingDraftUserSettings),
+          ),
+        ).toBe(0);
+        expect(
+          await createScopedDb(
+            markRlsDatabase(db),
+            [],
+            organizationId,
+            actorUserId,
+          )(async (tx) => await tx.$count(billingDraftUserSettings)),
+        ).toBe(1);
+        expect(
+          await createScopedDb(
+            markRlsDatabase(db),
+            [],
+            otherOrganizationId,
+            userId,
+          )(async (tx) => await tx.$count(billingDraftUserSettings)),
         ).toBe(1);
         const remainingHistory = await db
           .select({

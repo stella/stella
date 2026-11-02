@@ -1,3 +1,3 @@
-import { SCHEDULER_BACKFILL_CONFIG } from "@/api/lib/scheduler/backfill-config";
+import { schedulerBackfillConfig } from "@/api/lib/scheduler/backfill-config";
 
-export default SCHEDULER_BACKFILL_CONFIG.batchStatementTimeoutMs;
+export default schedulerBackfillConfig().batchStatementTimeoutMs;

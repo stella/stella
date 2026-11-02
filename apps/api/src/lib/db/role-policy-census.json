@@ -761,6 +761,86 @@
   },
   {
     "schema": "public",
+    "table": "billing_draft_user_settings",
+    "policy": "user_delete",
+    "command": "DELETE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "billing_draft_user_settings",
+    "policy": "user_insert",
+    "command": "INSERT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "(((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)))"
+  },
+  {
+    "schema": "public",
+    "table": "billing_draft_user_settings",
+    "policy": "user_select",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "billing_draft_user_settings",
+    "policy": "user_update",
+    "command": "UPDATE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)))",
+    "withCheck": "(((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)))"
+  },
+  {
+    "schema": "public",
+    "table": "billing_guideline_files",
+    "policy": "admin_delete",
+    "command": "DELETE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (EXISTS ( SELECT 1\n   FROM member m\n  WHERE ((m.organization_id = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (m.user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND (m.role = ANY (ARRAY['owner'::text, 'admin'::text]))))))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "billing_guideline_files",
+    "policy": "admin_insert",
+    "command": "INSERT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "(((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (EXISTS ( SELECT 1\n   FROM member m\n  WHERE ((m.organization_id = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (m.user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND (m.role = ANY (ARRAY['owner'::text, 'admin'::text]))))))"
+  },
+  {
+    "schema": "public",
+    "table": "billing_guideline_files",
+    "policy": "admin_update",
+    "command": "UPDATE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (EXISTS ( SELECT 1\n   FROM member m\n  WHERE ((m.organization_id = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (m.user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND (m.role = ANY (ARRAY['owner'::text, 'admin'::text]))))))",
+    "withCheck": "(((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (EXISTS ( SELECT 1\n   FROM member m\n  WHERE ((m.organization_id = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)) AND (m.user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND (m.role = ANY (ARRAY['owner'::text, 'admin'::text]))))))"
+  },
+  {
+    "schema": "public",
+    "table": "billing_guideline_files",
+    "policy": "organization_select",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
     "table": "buffer_object_cleanup_intents",
     "policy": "buffer_object_cleanup_delete",
     "command": "DELETE",

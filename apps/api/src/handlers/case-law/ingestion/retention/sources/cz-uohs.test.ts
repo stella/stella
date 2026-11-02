@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
@@ -18,11 +18,13 @@ import {
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { czUohsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { czUohsRetention } from "./cz-uohs";
 
 const buildCzUohsDecision = guardParser(uncheckedBuildCzUohsDecision);
+const testFetchState = createTestFetch();
 
 const ADAPTER_FIXTURES = new URL(
   "../../adapters/__fixtures__/",
@@ -42,11 +44,6 @@ const records = () => parseCzUohsListing(CZ_UOHS_SYNTHETIC_LISTING);
  * compared against `sourceRaw`. The projection says so per decision.
  */
 describe("cz-uohs retention: the text lives in a separate document", () => {
-  const originalFetch = globalThis.fetch;
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
   test("the enrolled synthetic decision builds a document its raw cannot state", async () => {
     const decision = await czUohsFixture().buildDecision();
     expect(hasUsableAst(decision.documentAst)).toBe(true);
@@ -62,7 +59,7 @@ describe("cz-uohs retention: the text lives in a separate document", () => {
   ] as const) {
     test(`a decision served as the recorded ${fixture} names it as a separate document`, async () => {
       const bytes = await Bun.file(new URL(fixture, ADAPTER_FIXTURES)).bytes();
-      globalThis.fetch = asFetchMock(async () => new Response(bytes));
+      testFetchState.set(asFetchMock(async () => new Response(bytes)));
       const [record] = records();
       const decision = await buildCzUohsDecision(
         record ?? panic("the synthetic export lost its first record"),
@@ -76,8 +73,8 @@ describe("cz-uohs retention: the text lives in a separate document", () => {
   }
 
   test("a record the export lists without documents has no text", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => new Response(czUohsSyntheticPdf()),
+    testFetchState.set(
+      asFetchMock(async () => new Response(czUohsSyntheticPdf())),
     );
     const record =
       records().find((candidate) => candidate.dokument.length === 0) ??

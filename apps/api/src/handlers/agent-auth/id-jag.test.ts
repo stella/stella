@@ -52,8 +52,11 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 // These tests drive the ID-JAG path end to end against the same
 // better-auth instance + database the API uses at runtime. The external
@@ -113,7 +116,9 @@ beforeAll(async () => {
   issuerPrivateKey = privateKey;
   issuerKid = "test-issuer-key";
   issuerPublicJwk = { ...(await exportJWK(publicKey)), kid: issuerKid };
+});
 
+beforeEach(() => {
   // Stub only the issuer JWKS URL; everything else hits the real fetch.
   const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
     if (typeof input === "string") {
@@ -134,17 +139,17 @@ beforeAll(async () => {
     }
     return await realFetch(input, init);
   };
-  globalThis.fetch = asFetchMock(fetchStub);
+  testFetchState.set(asFetchMock(fetchStub));
 });
 
 afterAll(async () => {
   await server.stop();
-  globalThis.fetch = realFetch;
   disableFeature();
   await releaseAgentAuthTestDb();
 });
 
 afterEach(async () => {
+  testFetchState.restore();
   await rootDb
     .delete(agentTrustedIssuer)
     .where(eq(agentTrustedIssuer.issuer, ISSUER));

@@ -59,14 +59,8 @@ const PARITY_FIXTURES = {
   (documentUrl: URL) => EnrolledAdapterFixture
 >;
 
-export const buildCaseLawFixture = async (fixture: EnrolledAdapterFixture) => {
-  const originalFetch = globalThis.fetch;
-  try {
-    return await guardParser(fixture.buildDecision)();
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-};
+export const buildCaseLawFixture = async (fixture: EnrolledAdapterFixture) =>
+  await guardParser(fixture.buildDecision)();
 
 export const parserParityOutput = async (
   entry: ParserParityEntry,

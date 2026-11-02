@@ -574,7 +574,7 @@ describe("browser client capability", () => {
       status: "connected",
     });
     expect(resolveBrowserExtensionCapability(undefined).status).toBe(
-      "unsupported-browser",
+      "unsupported-device",
     );
   });
 });
