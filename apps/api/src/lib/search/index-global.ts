@@ -2254,8 +2254,8 @@ export const rebuildSupplementalSearchIndex = async (
   await rebuildSupplementalSearchDocuments(
     organizationId,
     rootDb,
-    async (run) =>
-      await withOwnerOrganizationScope(rootDb, organizationId, run),
+    async (database, run) =>
+      await withOwnerOrganizationScope(database, organizationId, run),
   );
 };
 
@@ -2266,16 +2266,18 @@ type KeysetPage<Id extends string> = { last: Id | null; more: boolean };
  * (the owner connection) wraps each page in its own transaction.
  */
 type PageScope = <T>(
-  run: (database: SearchDocumentDatabase) => Promise<T>,
+  database: SearchDocumentDatabase,
+  run: (pageDatabase: SearchDocumentDatabase) => Promise<T>,
 ) => Promise<T>;
 
 // One keyset page of an organization's contacts, rebuilt as one batch.
 const rebuildContactPage = async (
   organizationId: SafeId<"organization">,
   after: SafeId<"contact"> | null,
+  database: SearchDocumentDatabase,
   inPage: PageScope,
 ): Promise<KeysetPage<SafeId<"contact">>> =>
-  await inPage(async (pageDatabase) => {
+  await inPage(database, async (pageDatabase) => {
     const page = await pageDatabase
       .select({ id: contacts.id })
       .from(contacts)
@@ -2303,9 +2305,10 @@ const rebuildContactPage = async (
 const rebuildWorkspacePage = async (
   organizationId: SafeId<"organization">,
   after: SafeId<"workspace"> | null,
+  database: SearchDocumentDatabase,
   inPage: PageScope,
 ): Promise<KeysetPage<SafeId<"workspace">>> =>
-  await inPage(async (pageDatabase) => {
+  await inPage(database, async (pageDatabase) => {
     const page = await pageDatabase
       .select({ id: workspaces.id })
       .from(workspaces)
@@ -2334,7 +2337,7 @@ const rebuildWorkspacePage = async (
 export const rebuildSupplementalSearchDocuments = async (
   organizationId: SafeId<"organization">,
   database: SearchDocumentDatabase,
-  inPage: PageScope = async (run) => await run(database),
+  inPage: PageScope = async (pageDatabase, run) => await run(pageDatabase),
 ): Promise<void> => {
   let contactPage: KeysetPage<SafeId<"contact">> = { last: null, more: true };
   while (contactPage.more) {
@@ -2342,6 +2345,7 @@ export const rebuildSupplementalSearchDocuments = async (
     contactPage = await rebuildContactPage(
       organizationId,
       contactPage.last,
+      database,
       inPage,
     );
   }
@@ -2355,6 +2359,7 @@ export const rebuildSupplementalSearchDocuments = async (
     workspacePage = await rebuildWorkspacePage(
       organizationId,
       workspacePage.last,
+      database,
       inPage,
     );
   }

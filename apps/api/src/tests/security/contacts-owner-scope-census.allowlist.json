@@ -19,6 +19,12 @@
       "oauthClient.contacts": 1
     }
   },
+  "apps/api/src/db/billing-drafts-constraint-validation.ts::names-contacts-table": {
+    "reason": "Migration-time DDL catalog: names the table for a constraint or index the online migration phase validates; it reads and writes no contact row.",
+    "sites": {
+      "BILLING_DRAFTS_CONSTRAINTS.tableName": 1
+    }
+  },
   "apps/api/src/db/contact-vat-id-repair.ts::names-contacts-table": {
     "reason": "Online repair of a committed migration on the migration session: each batch statement on the interpolated table name follows a `set_config` naming one organization from the organization walk, inside the step transaction; completion is the validated check, a catalog read.",
     "sites": {
@@ -119,6 +125,18 @@
       "updateContactHandler.outcome.rows": 1
     }
   },
+  "apps/api/src/handlers/desktop-time-entries/batch.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "loadBatchMatters.with": 1
+    }
+  },
+  "apps/api/src/handlers/desktop-time-entries/billing-drafts-context.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "loadBillingDraftMatters.formats": 1
+    }
+  },
   "apps/api/src/handlers/desktop-time-entries/candidates.ts::names-contacts-table": {
     "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
     "sites": {
@@ -129,6 +147,19 @@
     "reason": "Local development route: cleans the session organization through its `scopedDb`, scoped to that organization.",
     "sites": {
       "cleanOrganization": 1
+    }
+  },
+  "apps/api/src/handlers/organization-settings/billing-drafts/get.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "readBillingDraftConfiguration.client": 1
+    }
+  },
+  "apps/api/src/handlers/organization-settings/billing-drafts/update.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "updateBillingDraftConfiguration.result.client": 1,
+      "updateBillingDraftConfiguration.result.updatedClients": 1
     }
   },
   "apps/api/src/handlers/time-entries/report/get.ts::names-contacts-table": {
