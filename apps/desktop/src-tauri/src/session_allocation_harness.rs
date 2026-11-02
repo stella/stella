@@ -110,9 +110,11 @@ impl Fixture {
   }
 
   pub fn retry(&self) {
-    self
-      .runtime
-      .block_on(retry_session(self.manager.clone(), "allocation"));
+    // Pinned here, so the runtime never boxes the retry future: debug-build
+    // Tokio boxes any future past its size threshold, which would count the
+    // future's size rather than the retry's own allocations.
+    let retry = std::pin::pin!(retry_session(self.manager.clone(), "allocation"));
+    self.runtime.block_on(retry);
   }
 
   pub fn reads(&self) -> usize {
