@@ -24,6 +24,8 @@
       "Plan Postgres test shards",
       "Plan UI playground geometry specs",
       "Plan changed PR e2e shards",
+      "Plan changed browser suite specs",
+      "Plan every browser suite spec",
       "Plan query performance scope",
       "Plan release marketing screenshots",
       "Preserve GitHub API tooling across source checkouts",

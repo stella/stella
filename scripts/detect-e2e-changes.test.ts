@@ -663,6 +663,7 @@ describe("detect-e2e-changes", () => {
                 SELECTED_PLAN_PATH: selectedPlan,
                 E2E_PRODUCTION_REQUIRED: required,
                 ROUTE_SMOKE_REQUIRED: routeSmoke,
+                SCOPE_UNKNOWN: "false",
                 FULL_MATRIX: fullMatrix,
               };
               // The harness supplies every variable the step declares, so a
@@ -703,6 +704,8 @@ describe("detect-e2e-changes", () => {
                 `matrix=${expectedMatrix}`,
                 `mode=${usesSelection ? "selected" : "full"}`,
                 `specs=${usesSelection ? selectedSpecs : "[]"}`,
+                // The fixture plans no hosted browser suite specs.
+                "suite_specs=[]",
                 `selection_required=${String(!emptySelection)}`,
                 `required=${emptySelection ? "false" : required}`,
               ]);
