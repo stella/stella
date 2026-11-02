@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { panic, Result } from "better-result";
@@ -113,6 +114,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -2475,7 +2477,11 @@ const plUokikFetchPage = async (
     position.parkedOn !== undefined &&
     position.parkedOn >= todayUtc()
   ) {
-    return Result.ok({ decisions: [], nextCursor: encoded });
+    return Result.ok({
+      decisions: [],
+      publisherRequest: PUBLISHER_REQUEST.NONE,
+      nextCursor: encoded,
+    });
   }
   const located = await readPastAnchor(position, encoded, signal);
   if (Result.isError(located)) {
@@ -2488,6 +2494,7 @@ const plUokikFetchPage = async (
     });
     return Result.ok({
       decisions: [],
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlUokikCursor({
         phase: position.phase,
         read: Math.max(0, position.read - LOST_ANCHOR_REWIND_ROWS),
@@ -2540,6 +2547,7 @@ const plUokikFetchPage = async (
             },
           }),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encoded,
     });
   }
@@ -2568,6 +2576,7 @@ const plUokikFetchPage = async (
           },
         }),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlUokikCursor(
       reachedTop
         ? {
