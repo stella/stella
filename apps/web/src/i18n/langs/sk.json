@@ -820,12 +820,14 @@
       "effectiveFrom": "Platná od",
       "effectiveRateRequired": "Pre tento spis, osobu a dátum nie je nastavená platná sadzba. Pridajte sadzbu alebo zaznamenajte čas ako nefakturovateľný.",
       "effectiveTo": "Platná do",
+      "firstTableIsDefault": "Prvá tabuľka sadzieb v spise je predvolená.",
       "hourlyRate": "Hodinová sadzba",
       "logNonBillable": "Zaznamenať ako nefakturovateľný",
       "noRateEntries": "Zatiaľ žiadne sadzby",
       "noRateFound": "Sadzba nie je nakonfigurovaná",
       "noRateTables": "Zatiaľ žiadne tabuľky sadzieb",
       "ongoing": "Priebežná",
+      "onlyDefaultApplies": "Sadzby sa uplatnia len z predvolenej tabuľky spisu.",
       "override": "Prepísať",
       "perHour": "/hod",
       "rateCount": "{count, plural, one {# sadzba} few {# sadzby} other {# sadzieb} many {# sadzby}}",
@@ -6458,7 +6460,8 @@
       "errored": "Chyba",
       "formatNotSupported": "Formát nie je podporovaný",
       "selectAValue": "Vyberte hodnotu",
-      "selectValues": "Vyberte hodnoty"
+      "selectValues": "Vyberte hodnoty",
+      "wholeNumberOnly": "Zadajte celé číslo"
     },
     "files": {
       "addFilePropertyToUpload": "Pridajte vlastnosť typu súbor na nahrávanie súborov",

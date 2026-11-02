@@ -820,12 +820,14 @@
       "effectiveFrom": "Spēkā no",
       "effectiveRateRequired": "Šai lietai, personai un datumam nav noteikta spēkā esoša likme. Pievienojiet likmi vai reģistrējiet laiku kā neapmaksājamu.",
       "effectiveTo": "Spēkā līdz",
+      "firstTableIsDefault": "Lietas pirmā likmju tabula ir noklusējuma tabula.",
       "hourlyRate": "Stundas likme",
       "logNonBillable": "Reģistrēt kā neapmaksājamu",
       "noRateEntries": "Likmju ierakstu vēl nav",
       "noRateFound": "Likme nav konfigurēta",
       "noRateTables": "Likmju tabulu vēl nav",
       "ongoing": "Notiekošs",
+      "onlyDefaultApplies": "Tiek piemērotas tikai lietas noklusējuma tabulas likmes.",
       "override": "Ignorēt",
       "perHour": "/h",
       "rateCount": "{count, plural, zero {# likmes} one {# likme} other {# likmes}}",
@@ -6458,7 +6460,8 @@
       "errored": "Kļūda",
       "formatNotSupported": "Formāts netiek atbalstīts",
       "selectAValue": "Izvēlieties vērtību",
-      "selectValues": "Izvēlieties vērtības"
+      "selectValues": "Izvēlieties vērtības",
+      "wholeNumberOnly": "Ievadiet veselu skaitli"
     },
     "files": {
       "addFilePropertyToUpload": "Pievienojiet faila rekvizītu, lai augšupielādētu failus",

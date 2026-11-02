@@ -820,12 +820,14 @@
       "effectiveFrom": "Effective from",
       "effectiveRateRequired": "No effective rate is set for this matter, person and date. Add a rate or log this time as non-billable.",
       "effectiveTo": "Effective to",
+      "firstTableIsDefault": "The matter's first rate table is its default.",
       "hourlyRate": "Hourly rate",
       "logNonBillable": "Log as non-billable",
       "noRateEntries": "No rate entries yet",
       "noRateFound": "No rate configured",
       "noRateTables": "No rate tables yet",
       "ongoing": "Ongoing",
+      "onlyDefaultApplies": "Rates apply only from the matter's default table.",
       "override": "Override",
       "perHour": "/hr",
       "rateCount": "{count, plural, one {# rate} other {# rates}}",
@@ -6458,7 +6460,8 @@
       "errored": "Errored",
       "formatNotSupported": "Format not supported",
       "selectAValue": "Select a value",
-      "selectValues": "Select values"
+      "selectValues": "Select values",
+      "wholeNumberOnly": "Enter a whole number"
     },
     "files": {
       "addFilePropertyToUpload": "Add a file property to upload files",

@@ -820,12 +820,14 @@
       "effectiveFrom": "Gültig ab",
       "effectiveRateRequired": "Für diese Akte, diese Person und dieses Datum ist kein gültiger Stundensatz hinterlegt. Fügen Sie einen Stundensatz hinzu oder erfassen Sie die Zeit als nicht abrechenbar.",
       "effectiveTo": "Gültig bis",
+      "firstTableIsDefault": "Die erste Tariftabelle der Akte ist ihre Standardtabelle.",
       "hourlyRate": "Stundensatz",
       "logNonBillable": "Als nicht abrechenbar erfassen",
       "noRateEntries": "Noch keine Tarifeinträge",
       "noRateFound": "Kein Tarif konfiguriert",
       "noRateTables": "Noch keine Tariftabellen",
       "ongoing": "Laufend",
+      "onlyDefaultApplies": "Tarife gelten nur aus der Standardtabelle der Akte.",
       "override": "Überschreiben",
       "perHour": "/Std.",
       "rateCount": "{count, plural, one {# Tarif} other {# Tarife}}",
@@ -6458,7 +6460,8 @@
       "errored": "Fehler",
       "formatNotSupported": "Format nicht unterstützt",
       "selectAValue": "Wert auswählen",
-      "selectValues": "Werte auswählen"
+      "selectValues": "Werte auswählen",
+      "wholeNumberOnly": "Ganze Zahl eingeben"
     },
     "files": {
       "addFilePropertyToUpload": "Fügen Sie eine Dateieigenschaft zum Hochladen hinzu",

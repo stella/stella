@@ -820,12 +820,14 @@
       "effectiveFrom": "Applicable à partir du",
       "effectiveRateRequired": "Aucun taux applicable n’est défini pour ce dossier, cette personne et cette date. Ajoutez un taux ou enregistrez ce temps comme non facturable.",
       "effectiveTo": "Applicable jusqu'au",
+      "firstTableIsDefault": "Le premier barème du dossier est son barème par défaut.",
       "hourlyRate": "Taux horaire",
       "logNonBillable": "Enregistrer comme non facturable",
       "noRateEntries": "Aucune entrée tarifaire",
       "noRateFound": "Aucun tarif configuré",
       "noRateTables": "Aucun barème",
       "ongoing": "En cours",
+      "onlyDefaultApplies": "Seuls les tarifs du barème par défaut du dossier s'appliquent.",
       "override": "Remplacer",
       "perHour": "/h",
       "rateCount": "{count, plural, one {# tarif} other {# tarifs} many {# tarifs}}",
@@ -6458,7 +6460,8 @@
       "errored": "Erreur",
       "formatNotSupported": "Format non pris en charge",
       "selectAValue": "Sélectionner une valeur",
-      "selectValues": "Sélectionner des valeurs"
+      "selectValues": "Sélectionner des valeurs",
+      "wholeNumberOnly": "Saisir un nombre entier"
     },
     "files": {
       "addFilePropertyToUpload": "Ajoutez une propriété de fichier pour importer des fichiers",

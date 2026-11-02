@@ -820,12 +820,14 @@
       "effectiveFrom": "Kehtiv alates",
       "effectiveRateRequired": "Selle toimiku, isiku ja kuupäeva jaoks pole kehtivat tunnihinda määratud. Lisage tunnihind või registreerige aeg mittearveldatavana.",
       "effectiveTo": "Kehtiv kuni",
+      "firstTableIsDefault": "Toimiku esimene määratabel on vaiketabel.",
       "hourlyRate": "Tunnimäär",
       "logNonBillable": "Registreeri mittearveldatavana",
       "noRateEntries": "Määrakandeid pole veel",
       "noRateFound": "Määr seadistamata",
       "noRateTables": "Määratabeleid pole veel",
       "ongoing": "Kestev",
+      "onlyDefaultApplies": "Kehtivad ainult toimiku vaiketabeli määrad.",
       "override": "Ülekiri",
       "perHour": "/tunnis",
       "rateCount": "{count, plural, one {# määr} other {# määra}}",
@@ -6458,7 +6460,8 @@
       "errored": "Viga",
       "formatNotSupported": "Formaat ei ole toetatud",
       "selectAValue": "Valige väärtus",
-      "selectValues": "Valige väärtused"
+      "selectValues": "Valige väärtused",
+      "wholeNumberOnly": "Sisestage täisarv"
     },
     "files": {
       "addFilePropertyToUpload": "Lisage failide üleslaadimiseks failide omadus",

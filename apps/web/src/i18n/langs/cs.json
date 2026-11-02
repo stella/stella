@@ -820,12 +820,14 @@
       "effectiveFrom": "Platnost od",
       "effectiveRateRequired": "Pro tento spis, osobu a datum není nastavena platná sazba. Přidejte sazbu nebo zaznamenejte čas jako nefakturovatelný.",
       "effectiveTo": "Platnost do",
+      "firstTableIsDefault": "První tabulka sazeb ve spisu je výchozí.",
       "hourlyRate": "Hodinová sazba",
       "logNonBillable": "Zaznamenat jako nefakturovatelný",
       "noRateEntries": "Zatím žádné sazby",
       "noRateFound": "Není nastavena žádná sazba",
       "noRateTables": "Zatím žádné tabulky sazeb",
       "ongoing": "Průběžně",
+      "onlyDefaultApplies": "Sazby se uplatní jen z výchozí tabulky spisu.",
       "override": "Přepsat",
       "perHour": "/h",
       "rateCount": "{count, plural, one {# sazba} few {# sazby} other {# sazeb} many {# sazby}}",
@@ -6458,7 +6460,8 @@
       "errored": "Chyba",
       "formatNotSupported": "Formát není podporován",
       "selectAValue": "Vyberte hodnotu",
-      "selectValues": "Vyberte hodnoty"
+      "selectValues": "Vyberte hodnoty",
+      "wholeNumberOnly": "Zadejte celé číslo"
     },
     "files": {
       "addFilePropertyToUpload": "Přidejte vlastnost typu soubor pro nahrávání souborů",

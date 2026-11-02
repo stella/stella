@@ -820,12 +820,14 @@
       "effectiveFrom": "Vigente a partir de",
       "effectiveRateRequired": "Não há uma taxa vigente para este caso, esta pessoa e esta data. Adicione uma taxa ou registre o tempo como não faturável.",
       "effectiveTo": "Vigente até",
+      "firstTableIsDefault": "A primeira tabela de taxas do caso é a padrão.",
       "hourlyRate": "Valor por hora",
       "logNonBillable": "Registrar como não faturável",
       "noRateEntries": "Ainda não há entradas de taxas",
       "noRateFound": "Nenhuma taxa configurada",
       "noRateTables": "Ainda não há tabelas de taxas",
       "ongoing": "Em andamento",
+      "onlyDefaultApplies": "Só se aplicam as taxas da tabela padrão do caso.",
       "override": "Substituir",
       "perHour": "/hora",
       "rateCount": "{count, plural, one {# taxa} many {# taxas} other {# taxas}}",
@@ -6458,7 +6460,8 @@
       "errored": "Erro",
       "formatNotSupported": "Formato não suportado",
       "selectAValue": "Selecione um valor",
-      "selectValues": "Selecione valores"
+      "selectValues": "Selecione valores",
+      "wholeNumberOnly": "Insira um número inteiro"
     },
     "files": {
       "addFilePropertyToUpload": "Adicione uma propriedade de arquivo para fazer upload de arquivos",

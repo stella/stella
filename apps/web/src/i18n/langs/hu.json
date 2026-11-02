@@ -820,12 +820,14 @@
       "effectiveFrom": "Érvényes (kezdet)",
       "effectiveRateRequired": "Ehhez az ügyhöz, személyhez és dátumhoz nincs érvényes óradíj. Adjon hozzá óradíjat, vagy rögzítse az időt nem számlázhatóként.",
       "effectiveTo": "Érvényes (vég)",
+      "firstTableIsDefault": "Az ügy első díjtáblázata az alapértelmezett.",
       "hourlyRate": "Óradíj",
       "logNonBillable": "Rögzítés nem számlázhatóként",
       "noRateEntries": "Még nincsenek díjtételek",
       "noRateFound": "Nincs beállított díjszabás",
       "noRateTables": "Még nincsenek díjtáblázatok",
       "ongoing": "Folyamatban",
+      "onlyDefaultApplies": "Csak az ügy alapértelmezett díjtáblázatának díjai érvényesek.",
       "override": "Felülírás",
       "perHour": "/óra",
       "rateCount": "{count, plural, one {# díjtétel} other {# díjtétel}}",
@@ -6458,7 +6460,8 @@
       "errored": "Hiba",
       "formatNotSupported": "Formátum nem támogatott",
       "selectAValue": "Válasszon értéket",
-      "selectValues": "Válasszon értékeket"
+      "selectValues": "Válasszon értékeket",
+      "wholeNumberOnly": "Adjon meg egy egész számot"
     },
     "files": {
       "addFilePropertyToUpload": "Adjon hozzá fájltulajdonságot a fájlok feltöltéséhez",
