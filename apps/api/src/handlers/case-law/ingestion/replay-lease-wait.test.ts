@@ -1,21 +1,22 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  acquireReplayLease,
   REPLAY_LEASE_RETRY_PAUSE_MS,
+  runWithReplayLease,
 } from "@/api/handlers/case-law/ingestion/replay";
 
-// Stands in for the lease itself: the wait reads nothing from it.
-const LEASE = { source: "acquired" };
+// What the operation returns once it ran under the lease; the wait reads
+// nothing from it.
+const RAN = { source: "ran" };
 
 // Refuses the first `refusals` attempts, the way an ingestion that takes the
 // lease per reconciliation unit refuses everyone until it reaches a gap.
-const refusingAcquire = (refusals: number) => {
+const refusingRun = (refusals: number) => {
   let attempts = 0;
   return {
-    acquire: async () => {
+    run: async () => {
       attempts += 1;
-      return await Promise.resolve(attempts > refusals ? LEASE : null);
+      return await Promise.resolve(attempts > refusals ? RAN : null);
     },
     attempts: () => attempts,
   };
@@ -36,14 +37,14 @@ const recordingSleep = () => {
 
 const THIRTY_MINUTES_MS = 30 * 60 * 1000;
 
-describe("waiting for a source's ingestion lease", () => {
-  test("takes a free lease without pausing", async () => {
-    const { acquire, attempts } = refusingAcquire(0);
+describe("waiting for a source's ingestion lease to run one operation", () => {
+  test("runs at once on a free lease without pausing", async () => {
+    const { run, attempts } = refusingRun(0);
     const { pauses, sleep } = recordingSleep();
     let announced = 0;
 
-    const acquisition = await acquireReplayLease({
-      acquire,
+    const acquisition = await runWithReplayLease({
+      run,
       waitBudgetMs: THIRTY_MINUTES_MS,
       onWaitStart: () => {
         announced += 1;
@@ -52,8 +53,8 @@ describe("waiting for a source's ingestion lease", () => {
     });
 
     expect(acquisition).toEqual({
-      type: "acquired",
-      lease: LEASE,
+      type: "completed",
+      value: RAN,
       waitedMs: 0,
     });
     expect(attempts()).toBe(1);
@@ -62,12 +63,12 @@ describe("waiting for a source's ingestion lease", () => {
   });
 
   test("retries on a fixed pause until the holder releases", async () => {
-    const { acquire, attempts } = refusingAcquire(3);
+    const { run, attempts } = refusingRun(3);
     const { pauses, sleep } = recordingSleep();
     let announced = 0;
 
-    const acquisition = await acquireReplayLease({
-      acquire,
+    const acquisition = await runWithReplayLease({
+      run,
       waitBudgetMs: THIRTY_MINUTES_MS,
       onWaitStart: () => {
         announced += 1;
@@ -76,8 +77,8 @@ describe("waiting for a source's ingestion lease", () => {
     });
 
     expect(acquisition).toEqual({
-      type: "acquired",
-      lease: LEASE,
+      type: "completed",
+      value: RAN,
       waitedMs: 3 * REPLAY_LEASE_RETRY_PAUSE_MS,
     });
     expect(attempts()).toBe(4);
@@ -91,12 +92,12 @@ describe("waiting for a source's ingestion lease", () => {
   });
 
   test("gives up once the budget is spent, and pauses no longer than it", async () => {
-    const { acquire, attempts } = refusingAcquire(Number.POSITIVE_INFINITY);
+    const { run, attempts } = refusingRun(Number.POSITIVE_INFINITY);
     const { pauses, sleep } = recordingSleep();
     const waitBudgetMs = 30_000;
 
-    const acquisition = await acquireReplayLease({
-      acquire,
+    const acquisition = await runWithReplayLease({
+      run,
       waitBudgetMs,
       sleep,
     });
@@ -111,12 +112,12 @@ describe("waiting for a source's ingestion lease", () => {
   });
 
   test("attempts once and reports the holder when the budget is zero", async () => {
-    const { acquire, attempts } = refusingAcquire(Number.POSITIVE_INFINITY);
+    const { run, attempts } = refusingRun(Number.POSITIVE_INFINITY);
     const { pauses, sleep } = recordingSleep();
     let announced = 0;
 
-    const acquisition = await acquireReplayLease({
-      acquire,
+    const acquisition = await runWithReplayLease({
+      run,
       waitBudgetMs: 0,
       onWaitStart: () => {
         announced += 1;

@@ -170,6 +170,8 @@
     "reauthenticationRequired": "A művelet folytatásához jelentkezzen be újra.",
     "resendCode": "Kód újraküldése erre: <email>{emailAddress}</email>",
     "selectOrganization": "Válasszon szervezetet",
+    "sessionExpired": "A munkamenete lejárt",
+    "sessionExpiredDescription": "Jelentkezzen be egy új lapon. A beírt tartalom ezen az oldalon marad.",
     "signIn": "Bejelentkezés",
     "signInBeforeInvitation": "A szervezeti meghívó elfogadásához először be kell jelentkeznie.",
     "signInWithPassword": "Bejelentkezés jelszóval",
@@ -891,6 +893,24 @@
       "title": "Javaslatok a tevékenysége alapján",
       "unnamedRecord": "Ügyirat"
     },
+    "timeReport": {
+      "billableHours": "Számlázható órák",
+      "billableShare": "Számlázható arány",
+      "change": "Változás: {value}",
+      "changePoints": "Változás százalékpontban: {value}",
+      "collapse": "{name} összecsukása",
+      "empty": "Rögzítsen időt a jelentés kitöltéséhez.",
+      "expand": "{name} kibontása",
+      "internal": "Belső",
+      "pendingEntries": "Jóváhagyásra vár",
+      "period": "Időszak",
+      "privacy": "Ez a jelentés csak a rögzített időbejegyzéseket használja. Az asztali tevékenység minden eszközön helyben marad.",
+      "title": "Csapatmunkaidő-jelentés",
+      "tooLargeToLoad": "A jelentés túl nagy a betöltéshez. Rövidítse le az időszakot, vagy jelenítsen meg heteket vagy hónapokat oszlopként.",
+      "tooManyCells": "A jelentés túl nagy ahhoz, hogy itt megjelenjen. Rövidítse le az időszakot, jelenítsen meg heteket vagy hónapokat oszlopként, vagy exportálja CSV-be.",
+      "total": "Összesen",
+      "unbilledValue": "Ki nem számlázott számlázható érték"
+    },
     "timerActive": "Időmérő fut",
     "timesheets": "Munkaidő-nyilvántartás",
     "total": "Összesen",
@@ -928,6 +948,7 @@
     "desktopUnavailable": "Csatlakoztassa vagy frissítse a stella desktop alkalmazást.",
     "featureUnavailable": "Ez a funkció nem érhető el.",
     "ocrUnavailable": "Az OCR nem érhető el.",
+    "openSettings": "Beállítások megnyitása",
     "translationMissing": "Nincs beállítva fordítási szolgáltatás."
   },
   "caseLaw": {
@@ -1104,9 +1125,9 @@
     "loadingMore": "Betöltés folyamatban...",
     "marginFilter": {
       "label": "Hivatkozott rendelkezések szűrője",
-      "paragraph": "{count, plural, =0 {Nincs hivatkozott rendelkezés itt: ¶{paragraph}} one {# hivatkozott rendelkezés itt: ¶{paragraph}} other {# hivatkozott rendelkezés itt: ¶{paragraph}}}",
-      "selection": "{count, plural, =0 {A kijelölésben nincs hivatkozott rendelkezés} one {# hivatkozott rendelkezés a kijelölésben} other {# hivatkozott rendelkezés a kijelölésben}}",
-      "unnumberedParagraph": "{count, plural, =0 {Ebben a bekezdésben nincs hivatkozott rendelkezés} one {# hivatkozott rendelkezés ebben a bekezdésben} other {# hivatkozott rendelkezés ebben a bekezdésben}}"
+      "paragraph": "{count, plural, one {# hivatkozott rendelkezés itt: ¶{paragraph}} other {# hivatkozott rendelkezés itt: ¶{paragraph}}}",
+      "selection": "{count, plural, one {# hivatkozott rendelkezés a kijelölésben} other {# hivatkozott rendelkezés a kijelölésben}}",
+      "unnumberedParagraph": "{count, plural, one {# hivatkozott rendelkezés ebben a bekezdésben} other {# hivatkozott rendelkezés ebben a bekezdésben}}"
     },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# határozat már el volt mentve ide} other {# határozat már el volt mentve ide}}",
@@ -1337,9 +1358,30 @@
       "none": "Nincs beállítás"
     },
     "skillNeedsUnavailableTools": "A csevegésben nem jelenik meg. Olyan eszközt igényel, amely ott nem érhető el: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Elrejti az ügyfélneveket, számlaszámokat, címeket és más személyes adatokat, mielőtt az ügy tartalma AI-szolgáltatókhoz kerülne. Az ügyféloldalon visszafordítható; az eredeti szöveg soha nem hagyja el a munkaterületét.",
+      "ares": "Cseh cégek keresése IČO vagy cégnév alapján a nyilvános ARES-nyilvántartásban (a gazdasági szereplők közigazgatási nyilvántartása, a cégnyilvántartás cseh megfelelője).",
+      "boe": "Spanyol egységes szerkezetű jogszabályok, napi hivatalos közlöny és BORME (cégközlöny) a Boletín Oficial del Estado hivatalos nyílt adatos API-jából.",
+      "brreg": "Norvég cégek keresése organisasjonsnummer vagy cégnév alapján a Brreg Enhetsregisteret nyilvános, nyílt API-ján.",
+      "companiesHouse": "Brit cégek keresése Companies House-cégjegyzékszám vagy cégnév alapján a Companies House nyilvános adat-API-ján. Ingyenes API-kulcsot igényel.",
+      "createDocx": "Word-dokumentumokat hoz létre a csevegésből formázással, táblázatokkal, fejlécekkel és beágyazott stílusokkal. Az eredmény letölthető, és Wordben, LibreOffice-ban és Pagesben szerkeszthető.",
+      "denue": "Mexikói telephelyek és gazdasági egységek keresése DENUE-telephelyazonosító, név vagy cégnév alapján az INEGI hivatalos DENUE API-ján. A DENUE telephelyjegyzék, nem a Registro Público de Comercio társasági jogi nyilvántartás. Ingyenes INEGI API-tokent igényel.",
+      "edgar": "Amerikai tőzsdei társaságok keresése Central Index Key (CIK) alapján a SEC EDGAR beadvány-API-ján.",
+      "gcis": "Tajvani cégek keresése 統一編號 (tongbian, adóazonosító) vagy cégnév alapján a gazdasági minisztérium (MoEA) Commerce Industrial Services portáljának nyílt adatos API-ján.",
+      "infosoud": "Cseh bírósági ügyek keresése és tárgyalási naptár az infosoud.gov.cz oldalról. Ügyszám, bíróság vagy fél alapján lekérheti a tárgyalási időpontokat és az ügy állását.",
+      "krs": "Lengyel cégek keresése KRS-szám alapján az igazságügyi minisztérium Krajowy Rejestr Sądowy (KRS) nyílt API-ján. Kiterjed a Rejestr Przedsiębiorców (kereskedelmi társaságok) és a Rejestr Stowarzyszeń (egyesületek és alapítványok) nyilvántartásra.",
+      "orsr": "Szlovák cégek keresése IČO vagy cégnév alapján az igazságügyi minisztérium által működtetett Obchodný register Slovenskej republiky JSON API-ján.",
+      "prh": "Finn cégek keresése Y-tunnus vagy cégnév alapján a Patentti- ja rekisterihallitus (PRH) AvoinData v3 nyílt API-ján.",
+      "rechercheEntreprises": "Francia cégek keresése SIREN, SIRET vagy cégnév alapján a recherche-entreprises.api.gouv.fr nyílt API-n (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Szlovák keresés IČO vagy név alapján a Szlovák Köztársaság Statisztikai Hivatala által vezetett Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO) nyilvántartásban. Kiterjed minden jogi személyre és vállalkozóra, így az egyéni vállalkozókra, egyesületekre, alapítványokra és a cégnyilvántartáson kívüli közszervekre is.",
+      "vies": "Uniós adószámok ellenőrzése az Európai Bizottság héa-információcsere-rendszerének (VIES) REST API-ján. Megerősíti, hogy a szám nyilvántartásba van-e véve a szállító tagállamában, és visszaadja a bejegyzett vállalkozás nevét és címét, ha a tagállam közzéteszi azokat.",
+      "webSearch": "Keres a nyilvános weben, és elolvassa az egyes oldalakat. Ha van beállított joghatóság, a lekérdezések először az elsődleges forrásokat érik el (bíróságok, jogszabály-portálok), egyébként a nyílt webet. Beszélgetésenként kapcsolható be."
+    },
     "toolNames": {
       "anonymize": "Anonimizálás",
       "createDocx": "DOCX létrehozása",
+      "gcis": "GCIS cégnyilvántartás",
+      "vies": "Uniós adószám-ellenőrzés (VIES)",
       "webSearch": "Webes keresés"
     },
     "unavailable": "Még nem elérhető"
@@ -1450,11 +1492,15 @@
     "audioContent": "Generált hang",
     "browserExtension": {
       "connect": "Bővítmény csatlakoztatása",
-      "connectDescription": "Ezen a lapon kattintson a stella bővítmény ikonjára a böngésző eszköztárán. Ha a rendszer kéri, engedélyezze a webhelyekhez való hozzáférést, majd csatlakoztassa ezt a lapot.",
+      "connectDescription": "Kattintson a stella bővítmény ikonjára a böngésző eszköztárán, engedélyezze kérésre a webhelyekhez való hozzáférést, majd csatlakoztassa a stellát. Egy csatlakozás az összes stella-lapjára érvényes.",
       "connected": "Bővítmény csatlakoztatva",
       "description": "A stella kérésére külön lapon nyithat meg és olvashat el weboldalakat.",
       "install": "Bővítmény telepítése",
-      "installDescription": "A stella bővítménnyel a stella kérésére külön lapon nyithat meg és olvashat el weboldalakat. A Chrome Webáruházból telepítheti."
+      "installDescription": "A stella bővítménnyel a stella kérésére külön lapon nyithat meg és olvashat el weboldalakat. A Chrome Webáruházból telepítheti.",
+      "reload": "Lap újratöltése",
+      "reloadDescription": "A stella bővítménye újabb, mint ez a lap. Töltse újra a lapot, hogy továbbra is használhassa.",
+      "updating": "A bővítmény frissítésre vár",
+      "updatingDescription": "A stella bővítménye régebbi verzió. A Chrome automatikusan frissíti, általában néhány órán belül; utána a stella ismét megnyithat és elolvashat weboldalakat Önnek."
     },
     "cancelQueuedMessage": "Sorba állított üzenet visszavonása",
     "caseLawGreeting": "Kérdezzen erről a határozatról — a teljes szöveg itt elérhető.",
@@ -2392,7 +2438,6 @@
     "unverifiedCitationHint": "Ezt az idézetet nem sikerült a forrásdokumentumhoz párosítani.",
     "uploadFiles": "Fájlok feltöltése",
     "urlIdentifier": "Azonosító (slug)",
-    "urlIdentifierPlaceholder": "szervezetem",
     "user": "Felhasználó",
     "value": "Érték",
     "vatId": "Áfaazonosító",
@@ -2443,6 +2488,7 @@
     "scopeMemoryWrite": "Az asszisztens emlékeinek létrehozása és módosítása",
     "scopeOfflineAccess": "A bejelentkezés fenntartása ismételt jóváhagyás nélkül",
     "scopeOnboarding": "A szervezet praxisának joghatóságainak beállítása",
+    "scopeOrganizationCreate": "Új szervezetek létrehozása, amelyeknek Ön lesz a tulajdonosa",
     "scopeProfile": "Hozzáférés a profiladataihoz",
     "scopeRead": "A dokumentumok, ügyek és kapcsolatok olvasása",
     "scopeReadAnonymized": "A dokumentumok és ügyek anonimizált változatainak olvasása",
@@ -2888,6 +2934,7 @@
       "aiOutputModerated": "Az AI-szolgáltató moderálta a kimenetet. Fogalmazza át a kérést, vagy válasszon másik modellt.",
       "aiProviderTaskUnsupported": "A beállított AI-szolgáltató nem képes erre a feladatra. Válasszon olyat, amelyik képes rá.",
       "aiUnknown": "Az AI-kérés sikertelen volt. Próbálja újra.",
+      "alreadyOrganizationMember": "Ez a személy már tagja ennek a szervezetnek.",
       "clauseDirectivesInvalid": "Egy kapcsolt záradék érvénytelen direktívákat tartalmaz. Javítsa a záradékot a sablon kitöltése előtt.",
       "clauseDirectivesInvalidDetails": "A(z) {slotName} mezőben lévő {clauseName} záradék érvénytelen direktívákat tartalmaz. Nyissa meg a záradékszerkesztőt, javítsa ki a megadott bekezdéseket, és töltse ki újra a sablont.",
       "clauseDirectivesOverrideInvalidDetails": "A(z) {clauseName} záradék felülírt szövege a(z) {slotName} mezőben érvénytelen direktívákat tartalmaz. Javítsa ki a szöveget ehhez a kitöltéshez, majd próbálja újra.",
@@ -2903,12 +2950,19 @@
       "idempotencyInProgress": "A kérés feldolgozása még folyamatban van. Várjon egy kicsit, majd próbálja újra.",
       "idempotencyKeyReused": "Az adatok az előző próbálkozás óta megváltoztak. Állítsa alaphelyzetbe az űrlapot, majd próbálja újra.",
       "internalServerError": "Hiba történt. Próbálja újra.",
+      "invitationAlreadyPending": "Ennek a személynek már van függőben lévő meghívója. Küldje el újra a Függőben lévő meghívók résznél.",
+      "invitationEmailUnverified": "A meghívó megválaszolásához erősítse meg az e-mail-címét.",
+      "invitationLimitReached": "Ez a szervezet elérte a meghívók korlátját. Először vonjon vissza egy függőben lévő meghívót.",
+      "invitationOtherRecipient": "Ezt a meghívót egy másik e-mail-címre küldték.",
+      "invitationRoleNotAllowed": "Ezzel a szerepkörrel nem hívhat meg senkit. Válasszon másik szerepkört.",
       "legalSourceEntityLimitReached": "Ez az ügy elérte az elemek korlátját, ezért a dokumentum nem hozható létre.",
       "legalSourceFilePropertyMissing": "Ebből az ügyből hiányzik egy fájltulajdonság, ezért a dokumentum nem hozható létre.",
       "matterContactCapacityExceeded": "Ez az ügy több kapcsolatot tartalmaz, mint amennyi megjeleníthető. A többi kapcsolat megjelenítéséhez szüntesse meg néhány látható kapcsolat ügyhöz rendelését.",
       "matterContactCapacityReached": "Ez az ügy elérte a kapcsolatok számának felső határát. Új kapcsolat hozzáadása előtt szüntesse meg az egyik kapcsolat ügyhöz rendelését.",
       "mcpAuthorizationApprovalRequired": "A csatlakozás előtt egy rendszergazdának jóvá kell hagynia ezt a csatlakozót.",
       "notOrganizationMember": "Ön nem tagja ennek a szervezetnek.",
+      "organizationLastOwner": "A szervezetnek kell, hogy legyen tulajdonosa. Először adja át a tulajdonjogot.",
+      "organizationMemberLimitReached": "Ez a szervezet elérte a tagok korlátját.",
       "providerKeyRejected": "A szolgáltató elutasította az API-kulcsot.",
       "providerRateLimited": "Elérte a szolgáltató kérési korlátját. Próbálja újra rövidesen.",
       "thirdPartyBoundaryRefusal": "A kérés a megengedett munkaterület-környezeten kívüli tartalmat próbált használni.",
@@ -2969,7 +3023,6 @@
     "failedToVerifyOtp": "Nem sikerült ellenőrizni a kódot",
     "matterNotFound": "Ügy nem található",
     "partyAlreadyExists": "A kontakt már rendelkezik ezzel a szereppel az ügyben",
-    "slugAlreadyTaken": "Ez a slug már foglalt",
     "uploadFailed": "Feltöltés sikertelen"
   },
   "feedback": {
@@ -3035,6 +3088,7 @@
     },
     "compareChangeSummary": "Változások típus szerint",
     "compareCreated": "A nyomon követett változtatások dokumentuma létrehozva",
+    "compareDocxOnly": "Összehasonlítás (csak DOCX)",
     "compareFailed": "Az összehasonlítás nem sikerült",
     "compareNeedsTwoVersions": "Töltsön fel egy másik DOCX-verziót az összehasonlításhoz.",
     "compareNoChanges": "Nem találtunk támogatott eltéréseket.",
@@ -3090,6 +3144,7 @@
     "selectVersion": "Válasszon verziót",
     "setLabel": "Címke beállítása",
     "showDiff": "Eltérések megjelenítése",
+    "showText": "Szöveg megjelenítése",
     "showVersionList": "Verzióelőzmények megjelenítése",
     "uploadDate": "Feltöltés dátuma",
     "uploadNewVersion": "Új verzió feltöltése",
@@ -4049,6 +4104,28 @@
       "skippedReasonOutsideSkillFolder": "A készség mappáján kívül",
       "skippedReasonUnsupportedExtension": "Nem támogatott fájltípus",
       "skippedReasonUnsupportedFolder": "Nem erőforrásmappában van",
+      "starter": {
+        "compare": {
+          "body": "Hasonlítsa össze a dokumentum két verzióját, és sorolja fel az összes lényeges változást a helyük megjelölésével.",
+          "description": "Sorolja fel a két verzió közötti összes lényeges változást",
+          "name": "Verziók összehasonlítása"
+        },
+        "draft": {
+          "body": "Fogalmazzon meg mértéktartó választ erre a levélre. Őrizze meg a szakszerű hangnemet, térjen ki minden felvetett pontra, és jelezze a nyitott kérdéseket, amelyeket meg kell erősítenem.",
+          "description": "Fogalmazzon meg szakszerű választ egy levélre",
+          "name": "Válasz megfogalmazása"
+        },
+        "risks": {
+          "body": "Vizsgálja át ezt a dokumentumot jogi kockázatok, hiányzó védelmi kikötések és nem egyértelmű kikötések szempontjából. Minden megállapításnál hivatkozzon a konkrét kikötésre.",
+          "description": "Tárja fel a jogi kockázatokat és a nem egyértelmű kikötéseket",
+          "name": "Kockázatok feltárása"
+        },
+        "summarize": {
+          "body": "Foglalja össze ezt a dokumentumot. Térjen ki a felekre, a fő kötelezettségekre, a határidőkre, a pénzügyi feltételekre, valamint az esetleges megszüntetési vagy felelősségi kikötésekre.",
+          "description": "Kapjon strukturált összefoglalót a fő feltételekről",
+          "name": "Dokumentum összefoglalása"
+        }
+      },
       "uploadHelp": "Használjon SKILL.md fájlt vagy olyan .zip mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/utvonal/keszseghez",
       "version": "Verzió: {version}"
@@ -4722,7 +4799,15 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Alapértelmezett beállítások használatban"
     },
+    "creationEvaluationLimitReached": "Már mind a {limit} szervezeti próbaidőszakot felhasználta. Egy szervezet törlése nem tesz újra elérhetővé próbaidőszakot. Használjon meglévő szervezetet, vagy forduljon az ügyfélszolgálathoz fizetős hozzáférésért.",
+    "creationInvalidName": "Adjon meg egy érvényes szervezetnevet (legfeljebb {maxLength} karakter).",
+    "creationNotAllowed": "Ezzel a fiókkal nem hozhatók létre szervezetek.",
+    "creationOutcomeUnknown": "Előfordulhat, hogy a kérés létrehozott egy szervezetet. Próbálja újra az eredmény ellenőrzéséhez.",
+    "creationRateLimited": "Az utóbbi időben túl sok szervezet jött létre. Próbálja újra később.",
+    "creationRefused": "Nem sikerült létrehozni a szervezetet. Ellenőrizze az adatokat, és próbálja újra.",
+    "creationSlugConflict": "Ez a szervezeti cím már használatban van. Válasszon másik nevet vagy címet.",
     "invitations": {
+      "cancelConfirmDescription": "A(z) {email} címre küldött meghívólink nem fog tovább működni. A személy ismételt meghívásához küldjön új meghívót.",
       "cancelInvitation": "Meghívó visszavonása",
       "emailAddressLabel": "E-mail cím",
       "emailAddressPlaceholder": "felhasznalo@example.com",
@@ -4730,12 +4815,14 @@
       "inviteMember": "Tag meghívása",
       "inviteMemberDescription": "Meghívó küldése a szervezetébe",
       "invited": "Meghívva",
+      "keepInvitation": "Meghívó megtartása",
       "noInvitationsFound": "Nincsenek meghívók",
       "resendInvitation": "Meghívó újraküldése",
       "sendInvitation": "Meghívó küldése",
       "statuses": {
         "accepted": "Elfogadva",
         "canceled": "Visszavonva",
+        "expired": "Lejárt",
         "pending": "Függőben",
         "rejected": "Elutasítva"
       }
@@ -4769,6 +4856,8 @@
       "typeEmailToConfirm": "A megerősítéshez írja be ezt: {email}",
       "updateRole": "Szerepkör frissítése"
     },
+    "newOrganization": "Új szervezet",
+    "newOrganizationDescription": "Hozzon létre egy szervezetet, amelynek Ön lesz a tulajdonosa.",
     "roles": {
       "admin": "Adminisztrátor",
       "descriptions": {
@@ -4784,6 +4873,9 @@
       "owner": "Tulajdonos"
     },
     "settingsDescription": "Szervezet nevének és slugjának szerkesztése",
+    "startOver": "Újrakezdés",
+    "startOverDescription": "Előfordulhat, hogy az eredeti kérés már létrehozott egy szervezetet. Az újrakezdés előtt ellenőrizze a szervezeteit; egy új kérés újabb szervezetet hozhat létre.",
+    "startOverTitle": "Új létrehozási kérést indít?",
     "switchOrganization": "Szervezet váltása"
   },
   "publicTools": {
@@ -4960,6 +5052,7 @@
     "caseLawEmptyState": "Kezdjen el gépelni a bírósági határozatok közötti kereséshez.",
     "caseLawMatchingDecisions": "{count, plural, one {# egyező határozat} other {# egyező határozat}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ egyező határozat} other {#+ egyező határozat}}",
+    "chatCoveragePartial": "Nem minden csevegésben történt teljes keresés.",
     "continueInChat": "Folytatás a csevegésben",
     "dateFrom": "Mettől",
     "dateTo": "Meddig",
@@ -5096,8 +5189,8 @@
       "desktopDocumentsTitle": "Dokumentumszerkesztés asztali alkalmazásokban",
       "desktopDownloadMac": "Letöltés macOS-re",
       "desktopDownloadOtherMac": "Windowst használ? Letöltés Windowsra",
-      "desktopDownloadOtherWindows": "Vagy töltse le az .msi telepítőt IT által felügyelt telepítésekhez",
       "desktopDownloadWindows": "Letöltés Windowsra",
+      "desktopDownloadWindowsArm": "ARM-alapú Windowst használ? Az ARM-verzió letöltése",
       "desktopHeroTitle": "A vágólapja mindig kéznél van",
       "desktopInstallMacStep": "Nyissa meg a DMG-fájlt, és húzza a stella desktop alkalmazást az Alkalmazások mappába.",
       "desktopInstallOpenStep": "Nyissa meg egyszer a stella desktop alkalmazást. A vágólap azonnal megjelenik, később pedig a macOS menüsorából vagy a Windows értesítési területéről érhető el.",
@@ -5318,6 +5411,7 @@
         "legal_list_item": "jogi lista tétele",
         "legal_list_verification": "jogi lista ellenőrzése",
         "legal_resolve": "jogi hivatkozás keresése",
+        "legislation_matter_link": "jogszabály ügyhöz kapcsolása",
         "machine_api_key": "gépi API-kulcs",
         "mcp_connection": "MCP-kapcsolat",
         "mcp_gateway_tool": "MCP-átjáró eszköze",
@@ -5379,6 +5473,7 @@
         "title": "Memóriakinyerés",
         "toggleLabel": "Memóriabejegyzések javaslata a csevegési előzmények alapján, a háttérben"
       },
+      "pastInvitations": "Korábbi meghívók",
       "pendingInvitations": "Függőben lévő meghívók",
       "practiceJurisdictions": "Joghatóságok",
       "practiceJurisdictionsDescription": "Válassza ki az Önre vonatkozó joghatóságokat.",
@@ -5771,6 +5866,7 @@
       "open": "Nyitott"
     },
     "subtasks": "Alfeladatok",
+    "taskCompleted": "Feladat befejezve",
     "title": "Feladatok",
     "untitled": "Névtelen feladat",
     "workTypeValues": {
@@ -6216,8 +6312,7 @@
   "validation": {
     "invalidEmail": "Adjon meg egy érvényes e-mail-címet.",
     "organizationNameRequired": "A szervezet neve kötelező",
-    "slugFormat": "A slug csak kisbetűket, számokat és kötőjeleket tartalmazhat",
-    "slugRequired": "A slug kötelező"
+    "slugFormat": "A slug csak kisbetűket, számokat és kötőjeleket tartalmazhat"
   },
   "verify": {
     "history": "{history, select, refiled {Nyomtatáskor a(z) <bdi>{reference}</bdi> hivatkozási szám szerepelt rajta; a dokumentum most a(z) <bdi>{currentReference}</bdi> szám alatt szerepel a(z) <bdi>{matterName}</bdi> ügyben.} superseded {Ez a hivatkozási szám a(z) {version, number}. verzióra mutat; a jelenlegi verzió a(z) {currentVersion, number}.} other {Nyomtatáskor a(z) <bdi>{reference}</bdi> hivatkozási szám szerepelt rajta; a dokumentum most a(z) <bdi>{currentReference}</bdi> szám alatt szerepel a(z) <bdi>{matterName}</bdi> ügyben. Ez a hivatkozási szám a(z) {version, number}. verzióra mutat; a jelenlegi verzió a(z) {currentVersion, number}.}}",
@@ -6284,6 +6379,7 @@
     },
     "createNewWorkspace": "Új ügy létrehozása",
     "defaultName": "Névtelen",
+    "deleteFromMatter": "Törlés az ügyből…",
     "deleteItem": "Elem törlése",
     "deleteItems": "{count, plural, one {# elem} other {# elem}} törlése",
     "deleteItemsDescription": "Biztosan törölni szeretne {count, plural, one {# elemet} other {# elemet}}? Ez a művelet nem vonható vissza.",
@@ -6379,6 +6475,7 @@
       "downloadSearchablePdf": "Kereshető PDF",
       "downloadWithComments": "Letöltés megjegyzésekkel",
       "emptyFile": "A fájl üres.",
+      "fileTooLarge": "A fájl nagyobb, mint {limit, number} MB.",
       "includeReferenceNumber": "Hivatkozási szám hozzáadása",
       "itemLimitReached": "Ez az ügy elérte az elemek korlátját.",
       "maxEntitiesReached": "Elérte a maximális elemszámot",
@@ -6668,11 +6765,14 @@
         "empty": "Ebben az ügyben még nincs tevékenység.",
         "fields": {
           "dueDate": "határidő",
+          "name": "név",
           "parentFolder": "szülőmappa",
           "priority": "prioritás",
           "property": "tulajdonság",
           "schedule": "ütemezés",
-          "sortOrder": "sorrend"
+          "sortOrder": "sorrend",
+          "status": "státusz",
+          "type": "típus"
         },
         "filterLabel": "Tevékenység szűrése",
         "filters": {
@@ -6722,8 +6822,18 @@
           "team": "ügycsapat",
           "translation": "fordítás"
         },
+        "taskLinks": {
+          "added": "Összekapcsolta ezt: {name}, ezzel:",
+          "addedUnnamed": "Összekapcsolt egy elemet ezzel:",
+          "removed": "Leválasztotta ezt: {name}, erről:",
+          "removedUnnamed": "Leválasztott egy elemet erről:"
+        },
         "title": "Tevékenység",
         "updatedFields": "Frissítve: {fields}",
+        "versions": {
+          "added": "Hozzáadta a(z) {version}. verziót ehhez:",
+          "deleted": "Törölte a(z) {version}. verziót innen:"
+        },
         "views": {
           "list": "Listanézet",
           "timeline": "Idővonalnézet"

@@ -882,6 +882,33 @@ describe("desktop proof replay ownership", () => {
   }, 60_000);
 });
 
+describe("organization opaque slug alphabet ownership", () => {
+  test("allows the alphabet in the owner and rejects it in a slug handler", async () => {
+    const door = OWNERSHIP.find(({ id }) => id === "organization-opaque-slug");
+    if (!door || door.enforcement.kind !== "literal-pattern") {
+      throw new TypeError(
+        "Opaque slug generation requires literal confinement",
+      );
+    }
+    const source =
+      'const OPAQUE_SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";';
+    const ruleOptionsForRoot = () => ({ entries: [door] });
+
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        sourcePath: "packages/auth-model/src/contract.ts",
+        ruleOptionsForRoot,
+      }),
+    ).toEqual([]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        sourcePath: "apps/api/src/handlers/organizations/slug/update.ts",
+        ruleOptionsForRoot,
+      }),
+    ).toEqual([1]);
+  });
+});
+
 describe("MCP OAuth channel literal ownership", () => {
   test("allows channel literals in the owner and rejects them in unrelated web files", async () => {
     const door = OWNERSHIP.find(({ id }) => id === "mcp-oauth-channel");

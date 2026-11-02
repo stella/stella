@@ -22,6 +22,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { normalizeEntityName } from "@/api/lib/entities/entity-name";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import {
   AGENDA_ITEM_KIND,
@@ -371,7 +372,7 @@ export const createTaskEntityHandler = async function* ({
         kind: "task",
         listItemType,
         parentId: body.parentId ?? null,
-        name: body.name,
+        name: normalizeEntityName(body.name),
         createdBy: userId,
         agendaKind,
         status: taskStatus,

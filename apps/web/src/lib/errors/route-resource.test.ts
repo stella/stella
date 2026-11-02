@@ -8,6 +8,7 @@ import { APIError } from "@/lib/errors/api";
 import { routeResourceResult } from "@/lib/errors/route-resource";
 import {
   assertRouteNotFoundCensus,
+  type LayoutNotFoundExemption,
   type RouteNotFoundCensusEntry,
   type RouteParamExemption,
 } from "@/lib/errors/route-resource-census";
@@ -202,6 +203,14 @@ const PARAM_EXEMPTIONS = [
   },
 ] as const satisfies readonly RouteParamExemption[];
 
+const LAYOUT_NOT_FOUND_EXEMPTIONS = [
+  {
+    path: "/_protected/settings",
+    reason:
+      "A stale settings link lands on the profile page and stays in settings.",
+  },
+] as const satisfies readonly LayoutNotFoundExemption[];
+
 test("every parameterized route and child-bearing layout has a not-found policy", async () => {
   const routesDirectory = nodePath.join(import.meta.dir, "../../routes");
   const files = await collectRouteFiles(routesDirectory);
@@ -234,6 +243,7 @@ test("every parameterized route and child-bearing layout has a not-found policy"
       routes: entries,
       resourcePaths: RESOURCE_PATHS,
       exemptions: PARAM_EXEMPTIONS,
+      layoutExemptions: LAYOUT_NOT_FOUND_EXEMPTIONS,
       routerSource,
     }),
   ).not.toThrow();
@@ -262,6 +272,7 @@ test("the census rejects an unguarded resource route and a layout override", () 
       routes: unguardedResource,
       resourcePaths: new Set(["/matters/$matterId"]),
       exemptions: [],
+      layoutExemptions: [],
       routerSource: "defaultNotFoundComponent: DefaultNotFoundComponent",
     }),
   ).toThrow(/load resources through/u);
@@ -270,9 +281,19 @@ test("the census rejects an unguarded resource route and a layout override", () 
       routes: redirectingLayout,
       resourcePaths: new Set(),
       exemptions: [],
+      layoutExemptions: [],
       routerSource: "defaultNotFoundComponent: DefaultNotFoundComponent",
     }),
   ).toThrow(/must inherit/u);
+  expect(() =>
+    assertRouteNotFoundCensus({
+      routes: [],
+      resourcePaths: new Set(),
+      exemptions: [],
+      layoutExemptions: [{ path: "/matters", reason: "gone" }],
+      routerSource: "defaultNotFoundComponent: DefaultNotFoundComponent",
+    }),
+  ).toThrow(/no longer names a layout/u);
 });
 
 async function collectRouteFiles(directory: string): Promise<string[]> {

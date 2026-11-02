@@ -136,6 +136,7 @@ test("a granted member enrolled in time billing sees the feature enabled", async
   expect(body).toStrictEqual({
     features: {
       "activity-timeline": { status: "enabled" },
+      "desktop-dictation": { status: "hidden" },
       "local-agents": { status: "hidden" },
     },
   });
@@ -149,6 +150,7 @@ test("a granted member without time billing sees the activity timeline hidden", 
   expect(body).toStrictEqual({
     features: {
       "activity-timeline": { status: "hidden" },
+      "desktop-dictation": { status: "hidden" },
       "local-agents": { status: "hidden" },
     },
   });
@@ -173,6 +175,7 @@ test("callers outside the grant see the feature hidden", async () => {
     expect(await readAs({ caller })).toStrictEqual({
       features: {
         "activity-timeline": { status: "hidden" },
+        "desktop-dictation": { status: "hidden" },
         "local-agents": { status: "hidden" },
       },
     });

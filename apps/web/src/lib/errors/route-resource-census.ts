@@ -12,10 +12,17 @@ export type RouteParamExemption = {
   reason: string;
 };
 
+/** A child-bearing layout that keeps its own not-found answer, and why. */
+export type LayoutNotFoundExemption = {
+  path: string;
+  reason: string;
+};
+
 type AssertRouteNotFoundCensusOptions = {
   routes: readonly RouteNotFoundCensusEntry[];
   resourcePaths: ReadonlySet<string>;
   exemptions: readonly RouteParamExemption[];
+  layoutExemptions: readonly LayoutNotFoundExemption[];
   routerSource: string;
 };
 
@@ -24,6 +31,7 @@ export const assertRouteNotFoundCensus = ({
   routes,
   resourcePaths,
   exemptions,
+  layoutExemptions,
   routerSource,
 }: AssertRouteNotFoundCensusOptions): void => {
   if (
@@ -39,8 +47,29 @@ export const assertRouteNotFoundCensus = ({
     }
   }
 
+  const exemptLayouts = new Set(layoutExemptions.map(({ path }) => path));
+  for (const { path, reason } of layoutExemptions) {
+    if (reason.trim() === "") {
+      panic(`The layout exemption ${path} must include a reason`);
+    }
+    const layout = routes.find((route) => route.path === path);
+    if (
+      layout === undefined ||
+      !layout.hasChildren ||
+      !layout.source.includes("notFoundComponent:")
+    ) {
+      panic(
+        `The layout exemption ${path} no longer names a layout with its own not-found component`,
+      );
+    }
+  }
+
   for (const route of routes) {
-    if (route.hasChildren && route.source.includes("notFoundComponent:")) {
+    if (
+      route.hasChildren &&
+      route.source.includes("notFoundComponent:") &&
+      !exemptLayouts.has(route.path)
+    ) {
       panic(
         `${route.file} has children and must inherit the shared not-found component`,
       );
