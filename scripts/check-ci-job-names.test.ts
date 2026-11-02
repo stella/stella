@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   checkCiJobNames,
@@ -13,12 +14,17 @@ const SCRIPT = path.join(import.meta.dir, "check-ci-job-names.ts");
 // `${{ <body> }}`, built so the test source holds no template placeholder.
 const expression = (body: string) => `\${{ ${body} }}`;
 const workflowJobs = () => {
-  const workflow = Bun.YAML.parse(
-    readFileSync(
-      path.join(import.meta.dir, "../.github/workflows/ci.yml"),
-      "utf-8",
+  const workflow = v.parse(
+    v.object({
+      jobs: v.record(v.string(), v.record(v.string(), v.unknown())),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        path.join(import.meta.dir, "../.github/workflows/ci.yml"),
+        "utf-8",
+      ),
     ),
-  ) as { jobs: Record<string, Record<string, unknown>> };
+  );
   return workflow.jobs;
 };
 

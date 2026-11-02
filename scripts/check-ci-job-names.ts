@@ -76,7 +76,9 @@ const union = (...sets: (readonly Literal[])[]) => [...new Set(sets.flat())];
 const parse = (tokens: readonly Token[]): Values => {
   let index = 0;
   // Any token this reader does not expect leaves the expression unknown.
-  let malformed = false;
+  // Set from the nested readers below, so it lives in an object: a plain
+  // local would read as never assigned at the final check.
+  const state = { malformed: false };
   const peek = (value: string) => {
     const token = tokens[index];
     return token?.type === "operator" && token.value === value;
@@ -85,7 +87,7 @@ const parse = (tokens: readonly Token[]): Values => {
     if (peek(value)) {
       index += 1;
     } else {
-      malformed = true;
+      state.malformed = true;
     }
   };
   const or = (): Values => {
@@ -94,7 +96,7 @@ const parse = (tokens: readonly Token[]): Values => {
       index += 1;
       const right = and();
       // `a || b` is a when a is truthy, otherwise b.
-      if (left !== null && left.some((value) => !truthy(value))) {
+      if (left?.some((value) => !truthy(value)) === true) {
         left = right === null ? null : union(left.filter(truthy), right);
       }
     }
@@ -144,7 +146,7 @@ const parse = (tokens: readonly Token[]): Values => {
           token?.type !== "identifier" &&
           !(token?.type === "operator" && token.value === "*")
         ) {
-          malformed = true;
+          state.malformed = true;
         }
         index += 1;
         value = null;
@@ -162,7 +164,7 @@ const parse = (tokens: readonly Token[]): Values => {
     const token = tokens[index];
     index += 1;
     if (token === undefined) {
-      malformed = true;
+      state.malformed = true;
       return null;
     }
     if (token.type === "string" || token.type === "number") {
@@ -170,7 +172,7 @@ const parse = (tokens: readonly Token[]): Values => {
     }
     if (token.type === "operator") {
       if (token.value !== "(") {
-        malformed = true;
+        state.malformed = true;
         return null;
       }
       const value = or();
@@ -202,7 +204,7 @@ const parse = (tokens: readonly Token[]): Values => {
     return PREDICATES.has(name) ? BOOLEAN : null;
   };
   const value = or();
-  return malformed || index !== tokens.length ? null : value;
+  return state.malformed || index !== tokens.length ? null : value;
 };
 
 const render = (value: Literal) => {
@@ -311,7 +313,7 @@ export const jobNamePatterns = (key: string, job: Job): NameVerdict => {
 type Step = string | "ANY" | "STAR";
 const steps = (pattern: NamePattern): Step[] =>
   pattern.flatMap((piece): Step[] =>
-    piece.type === "any" ? ["ANY", "STAR"] : [...piece.text],
+    piece.type === "any" ? ["ANY", "STAR"] : Array.from(piece.text),
   );
 
 /** Whether some name matches both patterns. */
