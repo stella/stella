@@ -12,17 +12,25 @@ import {
 } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  agentSkillResources,
+  agentSkills,
   auditLogs,
+  billingDraftUserSettings,
+  billingGuidelineFiles,
   cellMetadata,
+  contacts,
   desktopEditSessions,
   documentProcessingRuns,
   entities,
   entityVersions,
   extractedContent,
+  featureEnrolments,
   fields,
+  organizationSettings,
   properties,
   workspaces,
 } from "@/api/db/schema";
+import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
 import { mcpWebHandoff } from "@/api/db/schema/mcp-web-handoff";
 import { createSafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
@@ -98,6 +106,14 @@ export const prepareEntityReadScalingTables = async (db: GatedTestDb) =>
     oauthConsent,
     mcpWebHandoff,
     auditLogs,
+    organizationSettings,
+    billingDraftUserSettings,
+    featureEnrolments,
+    desktopDeviceProofReplays,
+    contacts,
+    agentSkills,
+    agentSkillResources,
+    billingGuidelineFiles,
   ]);
 
 export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {
@@ -114,6 +130,7 @@ export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {
     id: userId,
     name: "Read actor",
     email: `${userId}@example.test`,
+    emailVerified: true,
   });
   await db.insert(workspaces).values({
     id: workspaceId,

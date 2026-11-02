@@ -2,11 +2,10 @@ import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
-  beforeAll,
   beforeEach,
   describe,
   expect,
-  spyOn,
+  mock,
   test,
 } from "bun:test";
 
@@ -24,7 +23,11 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
+
+const testFetchState = createTestFetch();
 
 const original = {
   requirePersonalKey: env.REQUIRE_PERSONAL_AI_KEY,
@@ -47,21 +50,26 @@ const organization = {
   },
 } as const satisfies OrgAIConfig;
 
-const createRequestSpy = () =>
-  spyOn(globalThis, "fetch").mockImplementation(
-    Object.assign(
-      async () =>
-        new Response(
-          JSON.stringify({
-            model: "jev-test",
-            answers: { eligible: { type: "noul", noul: 0.99 } },
-            usage: { input_tokens: 10, output_tokens: 1 },
-          }),
-          { headers: { "content-type": "application/json" } },
-        ),
-      { preconnect: globalThis.fetch.preconnect },
+const createRequestSpy = () => {
+  const fetchMock = Object.assign(
+    mock(
+      asFetchMock(
+        async () =>
+          new Response(
+            JSON.stringify({
+              model: "jev-test",
+              answers: { eligible: { type: "noul", noul: 0.99 } },
+              usage: { input_tokens: 10, output_tokens: 1 },
+            }),
+            { headers: { "content-type": "application/json" } },
+          ),
+      ),
     ),
+    { preconnect: globalThis.fetch.preconnect },
   );
+  testFetchState.set(fetchMock);
+  return fetchMock;
+};
 
 let fetch: ReturnType<typeof createRequestSpy>;
 
@@ -71,12 +79,12 @@ const setup = () => ({
   fetch,
 });
 
-beforeAll(() => {
+testFetchState.beforeAll(() => {
   fetch = createRequestSpy();
 });
 
 afterAll(() => {
-  fetch.mockRestore();
+  testFetchState.restore();
 });
 
 let runtime: ReturnType<typeof setup>;

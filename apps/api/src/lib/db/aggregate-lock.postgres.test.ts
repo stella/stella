@@ -202,6 +202,12 @@ const advisoryAcquisitions = () => {
         id: { organizationId },
         tx,
       }),
+    billingDraftSettings: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "billingDraftSettings",
+        id: { organizationId },
+        tx,
+      }),
     billingCodeCapacity: async (tx: AggregateAcquireTransaction) =>
       await withAggregateLock({
         aggregate: "billingCodeCapacity",

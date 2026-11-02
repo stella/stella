@@ -34,8 +34,8 @@ import {
   sitemapHasLanguageAlternatesFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import {
-  lockCaseLawRemovalSnapshots,
   lockCaseLawSitemapRefreshCursor,
+  lockCaseLawSitemapSnapshot,
   tryLockCaseLawSitemapMonth,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
@@ -583,7 +583,10 @@ const drainMonth = async (
     if (!(await tryLockCaseLawSitemapMonth({ tx, month: target }))) {
       return { status: "held" };
     }
-    await lockCaseLawRemovalSnapshots(tx);
+    // Skip an already held month before waiting on the sitemap snapshot
+    // fence, which removal also takes. Hold it from the count's snapshot
+    // through publication.
+    await lockCaseLawSitemapSnapshot(tx);
     const [progress] = await tx
       .select()
       .from(caseLawSitemapDrainProgress)

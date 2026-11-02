@@ -1,12 +1,10 @@
 import {
   afterAll,
-  afterEach,
   beforeEach,
   describe,
   expect,
   type Mock,
   mock,
-  spyOn,
   test,
 } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -17,7 +15,12 @@ import * as v from "valibot";
 import { sha256Base64Url } from "@stll/sha256/bun";
 import { createTestState } from "@stll/test-state";
 
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
 import type { LoopbackCallback } from "../../../../packages/cli/src/auth/loopback-listener.ts";
+
+const testFetchState = createTestFetch();
 
 /**
  * stella's own native clients signing in end to end against the real server
@@ -46,7 +49,12 @@ const { initAgentAuthTestDb, releaseAgentAuthTestDb } =
   await import("@/api/tests/helpers/mock-agent-auth-db");
 const { signInHuman } = await import("@/api/tests/helpers/human-session");
 const { rootDb } = await import("@/api/db/root");
-const { workspaceMembers, workspaces } = await import("@/api/db/schema");
+const { chatMessages, chatThreads, workspaceMembers, workspaces } =
+  await import("@/api/db/schema");
+const { toPersistedChatMessageContentV3 } =
+  await import("@/api/handlers/chat/chat-message-parts");
+const { upsertChatThreadSearchDocument } =
+  await import("@/api/lib/search/index-chat");
 const { createSafeId, toSafeId } = await import("@/api/lib/branded-types");
 const { readSignedQuery } = await import("@/api/tests/helpers/oauth-grant");
 const { installScriptedProvider } =
@@ -58,6 +66,7 @@ const { CLI_CLIENT_METADATA_PATH, buildCliClientMetadataDocument } =
   await import("@stll/cli/client-metadata-document");
 const {
   MOBILE_CLIENT_METADATA_PATH,
+  MOBILE_IDENTITY_SCOPES,
   MOBILE_SCOPES,
   buildMobileClientMetadataDocument,
   mobileRedirectUri,
@@ -283,7 +292,7 @@ testState.beforeAll(async () => {
 });
 
 afterAll(async () => {
-  fetchSpy.mockRestore();
+  testFetchState.restore();
   await api.stop();
   await Promise.all(
     configDirs.map(async (dir) => {
@@ -294,13 +303,11 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-    Object.assign(serveInProcess, { preconnect: fetch.preconnect }),
+  fetchSpy = Object.assign(
+    mock(Object.assign(serveInProcess, { preconnect: fetch.preconnect })),
+    { preconnect: globalThis.fetch.preconnect },
   );
-});
-
-afterEach(() => {
-  mock.restore();
+  testFetchState.set(asFetchMock(fetchSpy));
 });
 
 describe("stella CLI client document", () => {
@@ -558,6 +565,58 @@ describe("stella mobile client document", () => {
     } finally {
       provider.restore();
     }
+  });
+
+  test("the app's search finds the person's chats only with the chat scope", async () => {
+    const browser = await signInWithOrganization("mobile-search@example.test");
+    const threadId = createSafeId<"chatThread">();
+    await rootDb.insert(chatThreads).values({
+      id: threadId,
+      organizationId: toSafeId<"organization">(browser.organizationId),
+      userId: toSafeId<"user">(browser.userId),
+      title: "Lease renewal",
+    });
+    await rootDb.insert(chatMessages).values({
+      id: createSafeId<"chatMessage">(),
+      threadId,
+      userId: toSafeId<"user">(browser.userId),
+      role: "user",
+      content: toPersistedChatMessageContentV3({
+        data: [{ content: "Summarize the lease renewal terms", type: "text" }],
+      }),
+    });
+    await upsertChatThreadSearchDocument(threadId);
+    const searchChats = async (token: string) => {
+      const response = await serveInProcess(new URL("/v1/search", SERVER_URL), {
+        method: "POST",
+        headers: { ...bearer(token), "content-type": "application/json" },
+        // Browsing by type alone needs no text-search configuration here.
+        body: JSON.stringify({
+          query: "",
+          types: ["chat"],
+          workspaceIds: [],
+          kinds: [],
+          editedByUserIds: [],
+          mimeTypes: [],
+        }),
+      });
+      expect(response.status).toBe(200);
+      return v.parse(
+        v.looseObject({ hits: v.array(v.looseObject({ id: v.string() })) }),
+        await response.json(),
+      ).hits;
+    };
+
+    const readOnly = await mobileSignIn(browser, [
+      ...MOBILE_IDENTITY_SCOPES,
+      "stella:read",
+    ]);
+    expect(await searchChats(readOnly.access.token)).toEqual([]);
+
+    const { access } = await mobileSignIn(browser);
+    expect(await searchChats(access.token)).toMatchObject([
+      { id: `chat:${threadId}`, type: "chat" },
+    ]);
   });
 
   test("no client but the app is granted the REST API", async () => {

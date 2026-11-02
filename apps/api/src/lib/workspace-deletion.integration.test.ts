@@ -509,6 +509,12 @@ afterAll(async () => {
 
 describe("workspace deletion", () => {
   test("atomically removes the complete target while preserving unrelated chats", async () => {
+    let projectionOwnerReads = 0;
+    const flushWorkspaceSearchRepairs = async () => {
+      projectionOwnerReads += 1;
+      await testDb.select({ id: organization.id }).from(organization).limit(1);
+      return { failed: 0, repaired: 0 };
+    };
     const [compactionBefore, threadBefore] = await Promise.all([
       testDb
         .select({
@@ -548,10 +554,11 @@ describe("workspace deletion", () => {
         recordAuditEvent,
         workspaceId: fixture.targetWorkspaceId,
       },
-      { database, enqueueCleanup: async () => {} },
+      { database, enqueueCleanup: async () => {}, flushWorkspaceSearchRepairs },
     );
 
     expect(Result.isOk(result)).toBe(true);
+    expect(projectionOwnerReads).toBeGreaterThan(0);
     if (Result.isOk(result)) {
       expect(result.value).toEqual({ status: "deleted" });
     }
@@ -760,7 +767,11 @@ describe("workspace deletion", () => {
         recordAuditEvent,
         workspaceId,
       },
-      { database, enqueueCleanup: async () => {} },
+      {
+        database,
+        enqueueCleanup: async () => {},
+        flushWorkspaceSearchRepairs: async () => ({ failed: 0, repaired: 0 }),
+      },
     );
 
     expect(Result.isError(result)).toBe(true);
@@ -792,6 +803,59 @@ describe("workspace deletion", () => {
         .where(eq(bufferObjectCleanupIntents.id, writerIntentId)),
     ).toEqual([{ status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING }]);
   });
+
+  test("reports a committed deletion when the search flush afterwards fails", async () => {
+    const workspaceId = createSafeId<"workspace">();
+    await testDb.insert(workspaces).values({
+      id: workspaceId,
+      organizationId: fixture.organizationId,
+      name: "Flush failure matter",
+      reference: "FLUSH-FAIL-1",
+      status: "active",
+    });
+    await testDb.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId,
+      userId: fixture.actorUserId,
+    });
+    const database: WorkspaceDeletionDatabase = {
+      transaction: async (callback) =>
+        await testDb.transaction(
+          async (tx) => await callback(asTestRaw<Transaction>(tx)),
+        ),
+    };
+    const flushedWorkspaceIds: string[][] = [];
+
+    const result = await executeAuthorizedWorkspaceDeletion(
+      {
+        actorUserId: fixture.actorUserId,
+        organizationId: fixture.organizationId,
+        recordAuditEvent: async () => {},
+        workspaceId,
+      },
+      {
+        database,
+        enqueueCleanup: async () => {},
+        flushWorkspaceSearchRepairs: async (workspaceIds) => {
+          flushedWorkspaceIds.push([...workspaceIds]);
+          throw new Error("search repair flush unavailable");
+        },
+      },
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value).toEqual({ status: "deleted" });
+    }
+    expect(flushedWorkspaceIds).toEqual([[workspaceId]]);
+    expect(
+      await testDb
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId)),
+    ).toEqual([]);
+  });
+
   test("refuses a matter with billing records and leaves it untouched", async () => {
     const database: WorkspaceDeletionDatabase = {
       transaction: async (callback) =>
@@ -915,7 +979,11 @@ describe("workspace deletion", () => {
           },
           workspaceId,
         },
-        { database, enqueueCleanup: async () => {} },
+        {
+          database,
+          enqueueCleanup: async () => {},
+          flushWorkspaceSearchRepairs: async () => ({ failed: 0, repaired: 0 }),
+        },
       );
 
       expect(Result.isError(result)).toBe(true);
