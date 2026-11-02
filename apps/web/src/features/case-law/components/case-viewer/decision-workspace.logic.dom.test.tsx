@@ -302,7 +302,12 @@ const installWorkspaceServer = () => {
         return Response.json(aiAvailableResponse());
       }
       if (path.endsWith("/workspaces/navigation")) {
-        return Response.json({ items: [], nextCursor: null, workspaces: [] });
+        return Response.json({
+          items: [],
+          nextCursor: null,
+          workspaces: [],
+          features: { timeBilling: false },
+        });
       }
       if (/\/chat\/threads\/[^/]+\/messages$/u.test(path)) {
         return Response.json({ message: "Not found" }, { status: 404 });
