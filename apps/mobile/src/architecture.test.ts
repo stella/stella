@@ -129,16 +129,14 @@ describe("the app's builds", () => {
     },
   );
 
-  // iOS opens an app only in a language its bundle declares, so every
-  // interface language the app ships must be declared, and nothing else.
+  // iOS opens an app only in a language its bundle declares, so every build
+  // declares every interface language the app ships, and nothing else.
   test.each(configs)(
     "$variant declares every interface language to iOS",
     ({ config }) => {
       const declared: unknown =
         config.ios?.infoPlist?.["CFBundleLocalizations"];
-      // Containing all of them at the same length means exactly them.
-      expect(declared).toEqual(expect.arrayContaining([...UI_LOCALES]));
-      expect(declared).toHaveLength(UI_LOCALES.length);
+      expect(declared).toEqual([...UI_LOCALES]);
     },
   );
 

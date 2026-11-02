@@ -10,29 +10,17 @@ import type { ConfigPlugin, ExportedConfig } from "expo/config-plugins";
 import { cpSync, existsSync, rmSync } from "node:fs";
 import path from "node:path";
 
+// The interface languages come from `@stll/locales` itself, so iOS is told
+// exactly the languages the app ships.
+import { UI_LOCALES } from "@stll/locales/languages";
+
 // Evaluated by Node through Expo's config loader, which cannot follow a
-// workspace package's extensionless TypeScript imports; so this file imports
-// only npm packages, and `src/architecture.test.ts` pins every value below to
-// `@stll/api-contract/mobile-client`.
+// workspace package's extensionless TypeScript imports. So this file imports
+// npm packages and only workspace modules that import nothing (as
+// `@stll/locales/languages`), and `src/architecture.test.ts` pins every value
+// below to `@stll/api-contract/mobile-client`.
 
 const VARIANTS = ["development", "preview", "production"] as const;
-
-/** The interface languages the app ships (`UI_LOCALES` in `@stll/locales`). */
-export const IOS_LOCALIZATIONS = [
-  "ar",
-  "cs",
-  "de",
-  "en",
-  "es",
-  "et",
-  "fr",
-  "hu",
-  "lt",
-  "lv",
-  "pl",
-  "pt-BR",
-  "sk",
-] as const;
 
 /** The store version; `scripts/fingerprint.ts` hashes its release line. */
 export const APP_VERSION = "0.1.0";
@@ -301,7 +289,7 @@ const appConfigBase = ({
       // iOS runs an app only in a language its bundle declares: without the
       // list the app's locale is English on every phone, so the catalogs it
       // ships for the device's language never load.
-      CFBundleLocalizations: [...IOS_LOCALIZATIONS],
+      CFBundleLocalizations: [...UI_LOCALES],
     },
   },
   android: {
