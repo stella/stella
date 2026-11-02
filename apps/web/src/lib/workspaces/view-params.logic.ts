@@ -1,3 +1,8 @@
+import {
+  type CachedWorkspaceView,
+  isWorkspaceViewAvailable,
+} from "@/lib/workspaces/queries/views.logic";
+
 /** The `$viewId` slug that names no view: the matter route resolves it to the
  * matter's first available view, its Overview unless the views were
  * reordered. A navigation that keeps the reader in a matter passes the view on
@@ -23,13 +28,14 @@ export const workspaceViewRouteIds = (
   viewId === DEFAULT_WORKSPACE_VIEW_ID ? [workspaceId] : [workspaceId, viewId];
 
 /** Whether a matter's views hold the `$viewId` a URL names. The default slug
- * always resolves, to the matter's first available view. */
+ * resolves to the matter's first available view, so it needs one. */
 export const workspaceViewsInclude = (
-  views: readonly { id: string }[],
+  views: readonly CachedWorkspaceView[],
   viewId: string,
 ): boolean =>
-  viewId === DEFAULT_WORKSPACE_VIEW_ID ||
-  views.some((view) => view.id === viewId);
+  viewId === DEFAULT_WORKSPACE_VIEW_ID
+    ? views.some(isWorkspaceViewAvailable)
+    : views.some((view) => view.id === viewId);
 
 export type WorkspaceViewParams = { workspaceId: string; viewId: string };
 
