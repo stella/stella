@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -8,10 +9,14 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import assert from "node:assert/strict";
 import * as v from "valibot";
 
-import { desktopBillingDraftRequestSchema } from "@stll/api-contract/desktop-billing-drafts";
+import {
+  DESKTOP_BILLING_DRAFT_REFUSAL_CODE,
+  desktopBillingDraftRequestSchema,
+} from "@stll/api-contract/desktop-billing-drafts";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -26,6 +31,10 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import {
+  BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
+  BILLING_GUIDELINE_MAX_FIRM_FILES,
+} from "@/api/lib/billing/billing-guidelines";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -35,6 +44,10 @@ import {
 } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
+import {
+  billingDraftGateRefusal,
+  loadBillingDraftGate,
+} from "./billing-draft-mode";
 import { loadBillingDraftContext } from "./billing-drafts-context";
 
 const today = Temporal.PlainDate.from("2026-10-09");
@@ -270,18 +283,32 @@ afterAll(async () => {
   await releaseTestDb();
 });
 
+// As the endpoint drafts: the gate refuses first, then the context loads with
+// the caller's own preference.
 const loadBody = async (
   body: unknown,
   allowedMatterIds = [ids.wsA1, ids.wsA2],
-) =>
-  await loadBillingDraftContext({
-    safeDb: asTestRaw<SafeDb>(
-      createSafeDb(db, allowedMatterIds, ids.orgA, ids.userA1),
-    ),
-    organizationId: ids.orgA,
-    userId: ids.userA1,
-    body: v.parse(desktopBillingDraftRequestSchema, body),
+) => {
+  const safeDb = asTestRaw<SafeDb>(
+    createSafeDb(db, allowedMatterIds, ids.orgA, ids.userA1),
+  );
+  const account = { safeDb, organizationId: ids.orgA, userId: ids.userA1 };
+  return await Result.gen(async function* () {
+    const gate = yield* Result.await(loadBillingDraftGate(account));
+    const refusal = billingDraftGateRefusal(gate);
+    if (refusal) {
+      return Result.err(refusal);
+    }
+    const context = yield* Result.await(
+      loadBillingDraftContext({
+        ...account,
+        body: v.parse(desktopBillingDraftRequestSchema, body),
+        preference: gate.preference,
+      }),
+    );
+    return Result.ok(context);
   });
+};
 
 const load = async (
   matterId = ids.wsA1,
@@ -346,23 +373,30 @@ test("mixed-case duplicate matter UUIDs normalize before the scoped context quer
   ).toHaveLength(1);
 });
 
-test("organization disablement prevents any AI continuation", async () => {
+test("the organization's off switch refuses a consenting user before any context, firm file or not", async () => {
   await db
     .update(organizationSettings)
     .set({ aiBillingDraftsMode: "disabled" })
     .where(eq(organizationSettings.organizationId, ids.orgA));
-  const result = await load();
-  let modelCalled = false;
-  result.map(() => {
-    modelCalled = true;
-    return true;
-  });
-  expect(modelCalled).toBe(false);
-  expect(result.isErr()).toBe(true);
-  if (result.isErr()) {
-    expect(result.error.message).toContain(
-      "organization enablement and personal consent",
-    );
+  for (const firmBound of [true, false]) {
+    if (!firmBound) {
+      await db
+        .delete(billingGuidelineFiles)
+        .where(
+          and(
+            eq(billingGuidelineFiles.organizationId, ids.orgA),
+            isNull(billingGuidelineFiles.clientId),
+          ),
+        );
+    }
+    const result = await load();
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toMatchObject({
+        status: 403,
+        code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.organizationOff,
+      });
+    }
   }
 });
 
@@ -376,30 +410,20 @@ test("revoked personal consent prevents any AI continuation", async () => {
         eq(billingDraftUserSettings.userId, ids.userA1),
       ),
     );
+  // The endpoint test in billing-drafts.db.test.ts proves no model runs.
   const result = await load();
-  let modelCalled = false;
-  result.map(() => {
-    modelCalled = true;
-    return true;
-  });
-  expect(modelCalled).toBe(false);
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
-    expect(result.error.message).toContain(
-      "organization enablement and personal consent",
-    );
+    expect(result.error).toMatchObject({
+      status: 403,
+      code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.consentRequired,
+    });
   }
 });
 
 test("an inaccessible selected matter is refused by scoped queries before any AI continuation", async () => {
   for (const matterId of [ids.wsA2, ids.wsB1]) {
     const result = await load(matterId, [ids.wsA1]);
-    let modelCalled = false;
-    result.map(() => {
-      modelCalled = true;
-      return true;
-    });
-    expect(modelCalled).toBe(false);
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error.message).toBe("Selected matter is unavailable");
@@ -409,6 +433,7 @@ test("an inaccessible selected matter is refused by scoped queries before any AI
 
 test("guideline context joins only firm and selected client files with rule sections and live billing metadata", async () => {
   const context = (await load()).unwrap();
+  assert.ok(context.mode === "guided");
   expect(context.guidelines.map(({ fileId }) => fileId).toSorted()).toEqual(
     [guidelineIds.firm, guidelineIds.client].toSorted(),
   );
@@ -550,7 +575,7 @@ test("billing guideline knowledge text remains editable only by firm managers", 
   expect(updated).toEqual([{ id: guidelineIds.firm }]);
 });
 
-test("missing firm guidance refuses drafting even when selected client guidance is attached", async () => {
+test("without a firm guideline file a consenting user gets plain descriptions, also with client guidance attached", async () => {
   await db
     .delete(billingGuidelineFiles)
     .where(
@@ -567,11 +592,92 @@ test("missing firm guidance refuses drafting even when selected client guidance 
   expect(clientFiles.map(({ resourceId }) => resourceId)).toEqual([
     guidelineIds.client,
   ]);
-  const result = await load();
-  expect(result.isErr()).toBe(true);
-  if (result.isErr()) {
-    expect(result.error.message).toBe(
-      "A firm billing guideline file is required",
+  // The earlier entry carries LEDES codes; a plain description never sees them.
+  await db
+    .update(timeEntries)
+    .set({ taskCode: "L110", activityCode: "A101" })
+    .where(eq(timeEntries.id, historyIds.today));
+  try {
+    const context = (await load()).unwrap();
+    expect(context.mode).toBe("plain");
+    expect(context).not.toHaveProperty("guidelines");
+    expect(context.matters.map(({ matterId }) => matterId)).toEqual([ids.wsA1]);
+    expect(
+      context.earlierEntries.find(({ id }) => id === historyIds.today),
+    ).toEqual({
+      id: historyIds.today,
+      matterId: ids.wsA1,
+      dateWorked: today.toString(),
+      durationMinutes: 30,
+      narrative: "Reviewed agreement",
+    });
+  } finally {
+    await db
+      .update(timeEntries)
+      .set({ taskCode: null, activityCode: null })
+      .where(eq(timeEntries.id, historyIds.today));
+  }
+});
+
+test("a selected client with every file its scope allows loads with the firm file, and a second firm file is never bound", async () => {
+  const firm = (
+    await db
+      .select({ skillId: agentSkillResources.skillId })
+      .from(agentSkillResources)
+      .where(eq(agentSkillResources.id, guidelineIds.firm))
+      .limit(1)
+  ).at(0);
+  assert.ok(firm);
+  // The client already has one file; fill its scope to the cap.
+  const extra = Array.from(
+    { length: BILLING_GUIDELINE_MAX_FILES_PER_CLIENT - 1 },
+    (_, index) => ({
+      id: createSafeId<"agentSkillResource">(),
+      organizationId: ids.orgA,
+      skillId: firm.skillId,
+      path: `references/client-${index}.md`,
+      content: `# Client rule ${index}`,
+      sizeBytes: 16,
+    }),
+  );
+  await db.insert(agentSkillResources).values(extra);
+  await db.insert(billingGuidelineFiles).values(
+    extra.map(({ id }) => ({
+      organizationId: ids.orgA,
+      resourceId: id,
+      clientId: ids.contactA,
+    })),
+  );
+  try {
+    const context = (await load()).unwrap();
+    assert.ok(context.mode === "guided");
+    expect(context.guidelines).toHaveLength(
+      BILLING_GUIDELINE_MAX_FIRM_FILES + BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
+    );
+    expect(
+      (
+        await Result.tryPromise(
+          async () =>
+            await db.insert(billingGuidelineFiles).values({
+              organizationId: ids.orgA,
+              resourceId: guidelineIds.unselectedClient,
+              clientId: null,
+            }),
+        )
+      ).isErr(),
+    ).toBe(true);
+  } finally {
+    await db.delete(billingGuidelineFiles).where(
+      inArray(
+        billingGuidelineFiles.resourceId,
+        extra.map(({ id }) => id),
+      ),
+    );
+    await db.delete(agentSkillResources).where(
+      inArray(
+        agentSkillResources.id,
+        extra.map(({ id }) => id),
+      ),
     );
   }
 });
