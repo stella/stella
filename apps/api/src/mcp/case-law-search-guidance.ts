@@ -29,7 +29,7 @@ export const CASE_LAW_SEARCH_GUIDANCE_RAISES_MANY_REQUIRED_TERMS = {
   v1: true,
 } as const satisfies Record<CaseLawSearchGuidanceMode, boolean>;
 
-type SearchCaseLawTexts = {
+export type SearchCaseLawTexts = {
   description: string;
   queries: string;
   limit: string;

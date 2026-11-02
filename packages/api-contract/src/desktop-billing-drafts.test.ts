@@ -14,12 +14,16 @@ import {
   desktopBillingDraftOperationSchema,
   type DesktopBillingDraftRequest,
   desktopBillingDraftRequestSchema,
-  type DesktopBillingDraftResponse,
   desktopBillingDraftResponseSchema,
   desktopBillingDraftReviewSchema,
   type DesktopBillingDraftSettingsRequest,
   desktopBillingDraftSettingsRequestSchema,
   desktopBillingDraftSettingsResponseSchema,
+  type DesktopBillingGuidedDraftResponse,
+  desktopBillingGuidedDraftResponseSchema,
+  desktopBillingPlainDraftModelResponseSchema,
+  type DesktopBillingPlainDraftResponse,
+  desktopBillingPlainDraftResponseSchema,
 } from "./desktop-billing-drafts";
 import { keepUnicodePatternSource } from "./json-schema-regex";
 import { UUID_RUNTIME_ONLY_ACTIONS } from "./uuid";
@@ -35,6 +39,7 @@ const entry = {
 } satisfies DesktopBillingDraftRequest["entries"][number];
 
 const response = {
+  mode: "guided",
   drafts: [
     {
       entryId: "entry_1",
@@ -56,7 +61,24 @@ const response = {
     },
   ],
   checkedGuidelines: [{ fileId: "firm-rules", fileName: "Billing guidelines" }],
-} satisfies DesktopBillingDraftResponse;
+} satisfies DesktopBillingGuidedDraftResponse;
+
+const plainResponse = {
+  mode: "plain",
+  drafts: [
+    {
+      entryId: "entry_1",
+      narrative: "Reviewed agreement",
+      matchedEarlierEntryIds: ["earlier-entry"],
+    },
+  ],
+} satisfies DesktopBillingPlainDraftResponse;
+
+/** The model answers without a mode; the server names it. */
+const modelShape = <TResponse extends { mode: string }>({
+  mode: _mode,
+  ...shape
+}: TResponse) => shape;
 
 const RUNTIME_ONLY_ACTIONS: ReadonlySet<unknown> = new Set([
   ...API_DATE_RUNTIME_ONLY_CHECKS,
@@ -128,13 +150,17 @@ test("billing draft request keys remain limited to selected evidence and steerin
 });
 
 test("billing draft responses emit finite direct JSON schemas for native response validation", () => {
+  const unsupportedKeywords = ["$ref", "allOf", "oneOf", "not"];
   for (const schema of [
-    desktopBillingDraftResponseSchema,
+    desktopBillingGuidedDraftResponseSchema,
+    desktopBillingPlainDraftResponseSchema,
+    desktopBillingDraftModelResponseSchema,
+    desktopBillingPlainDraftModelResponseSchema,
     desktopBillingDraftSettingsResponseSchema,
   ]) {
     const jsonSchema = toBillingDraftJsonSchema(schema);
     const serialized = JSON.stringify(jsonSchema);
-    for (const unsupported of ["$ref", "allOf", "oneOf", "not"]) {
+    for (const unsupported of unsupportedKeywords) {
       expect(serialized).not.toContain(`"${unsupported}":`);
     }
     expect(jsonSchema).toMatchObject({
@@ -142,15 +168,30 @@ test("billing draft responses emit finite direct JSON schemas for native respons
       additionalProperties: false,
     });
   }
+  const union = toBillingDraftJsonSchema(desktopBillingDraftResponseSchema);
+  for (const unsupported of unsupportedKeywords) {
+    expect(JSON.stringify(union)).not.toContain(`"${unsupported}":`);
+  }
+  expect(union).toMatchObject({
+    anyOf: [
+      { type: "object", additionalProperties: false },
+      { type: "object", additionalProperties: false },
+    ],
+  });
 });
 
 test("billing drafting settings accept only personal consent and bounded preferences", () => {
+  const revision = "2026-10-30 13:03:04.123456+01";
   for (const patch of [
-    { consent: "granted" },
-    { consent: "revoked" },
-    { preference: "Use concise Czech narratives" },
-    { preference: null },
-    { consent: "granted", preference: "Client-friendly wording" },
+    { type: "withdraw_consent" },
+    { type: "grant_consent", revision: null },
+    { type: "grant_consent", revision },
+    {
+      type: "set_preference",
+      revision,
+      preference: "Use concise Czech narratives",
+    },
+    { type: "set_preference", revision: null, preference: null },
   ] satisfies DesktopBillingDraftSettingsRequest[]) {
     expect(v.parse(desktopBillingDraftSettingsRequestSchema, patch)).toEqual(
       patch,
@@ -158,25 +199,127 @@ test("billing drafting settings accept only personal consent and bounded prefere
   }
   for (const patch of [
     {},
-    { consent: "pending" },
-    { organizationMode: "enabled" },
-    { consent: "granted", userId: "another-user" },
-    { preference: "" },
-    { preference: "x".repeat(DESKTOP_BILLING_DRAFT_LIMITS.steerLength + 1) },
-    { preference: "text\u0000text" },
+    { consent: "granted" },
+    { consent: "revoked" },
+    { type: "pending" },
+    { type: "grant_consent" },
+    { type: "grant_consent", revision: "" },
+    { type: "grant_consent", revision, organizationMode: "enabled" },
+    { type: "grant_consent", revision, userId: "another-user" },
+    { type: "grant_consent", revision, preference: "Combined" },
+    { type: "set_preference", revision, preference: "" },
+    { type: "set_preference", preference: "Missing revision" },
+    {
+      type: "set_preference",
+      revision,
+      preference: "x".repeat(DESKTOP_BILLING_DRAFT_LIMITS.steerLength + 1),
+    },
+    { type: "set_preference", revision, preference: "text\u0000text" },
   ]) {
     expect(
       v.safeParse(desktopBillingDraftSettingsRequestSchema, patch).success,
     ).toBe(false);
   }
-  for (const organizationMode of ["enabled", "disabled"] as const) {
+  for (const effectiveMode of ["off", "plain", "guided"] as const) {
     for (const consent of ["granted", "revoked"] as const) {
-      const settings = { organizationMode, consent, preference: null };
-      expect(
-        v.parse(desktopBillingDraftSettingsResponseSchema, settings),
-      ).toEqual(settings);
+      for (const stored of [null, revision]) {
+        const settings = {
+          revision: stored,
+          effectiveMode,
+          consent,
+          preference: null,
+        };
+        expect(
+          v.parse(desktopBillingDraftSettingsResponseSchema, settings),
+        ).toEqual(settings);
+      }
     }
   }
+  // The organization's raw switch is not part of the answer: the effective
+  // mode already says whether anything is drafted.
+  for (const settings of [
+    {
+      revision,
+      organizationMode: "enabled",
+      consent: "granted",
+      preference: null,
+    },
+    {
+      revision,
+      effectiveMode: "enabled",
+      consent: "granted",
+      preference: null,
+    },
+  ]) {
+    expect(
+      v.safeParse(desktopBillingDraftSettingsResponseSchema, settings).success,
+    ).toBe(false);
+  }
+});
+
+test("a consent withdrawal cannot be made conditional on a revision", () => {
+  for (const revision of [null, "2026-10-30 13:03:04.123456+01"]) {
+    expect(
+      v.safeParse(desktopBillingDraftSettingsRequestSchema, {
+        type: "withdraw_consent",
+        revision,
+      }).success,
+    ).toBe(false);
+  }
+  expect(
+    v.safeParse(desktopBillingDraftSettingsRequestSchema, {
+      type: "withdraw_consent",
+    }).success,
+  ).toBe(true);
+});
+
+test("a plain description result has no classification, guideline flag or operation fields", () => {
+  expect(v.parse(desktopBillingDraftResponseSchema, plainResponse)).toEqual(
+    plainResponse,
+  );
+  const draft = plainResponse.drafts.at(0);
+  assert.ok(draft);
+  for (const guidedField of [
+    { classification: { type: "activity_group", activityGroup: "client" } },
+    {
+      classification: { type: "ledes", taskCode: "L120", activityCode: "A104" },
+    },
+    { flags: [] },
+    { operations: [] },
+  ]) {
+    const value = { ...plainResponse, drafts: [{ ...draft, ...guidedField }] };
+    expect(v.safeParse(desktopBillingDraftResponseSchema, value).success).toBe(
+      false,
+    );
+    expect(
+      v.safeParse(
+        desktopBillingPlainDraftModelResponseSchema,
+        modelShape(value),
+      ).success,
+    ).toBe(false);
+  }
+  for (const invalid of [
+    { ...plainResponse, checkedGuidelines: [] },
+    { ...response, mode: "plain" },
+    modelShape(response),
+    modelShape(plainResponse),
+  ]) {
+    expect(
+      v.safeParse(desktopBillingDraftResponseSchema, invalid).success,
+    ).toBe(false);
+  }
+  expect(
+    v.parse(
+      desktopBillingPlainDraftModelResponseSchema,
+      modelShape(plainResponse),
+    ),
+  ).toEqual(modelShape(plainResponse));
+  const request = {
+    entries: [entry],
+    steer: "Shorter",
+    previousResult: plainResponse,
+  };
+  expect(v.parse(desktopBillingDraftRequestSchema, request)).toEqual(request);
 });
 
 test("steering round trips the bounded structured result without server session state", () => {
@@ -295,19 +438,20 @@ test("billing matter UUIDs normalize casing at the contract boundary", () => {
   };
   expect(
     v
-      .parse(desktopBillingDraftResponseSchema, moved)
+      .parse(desktopBillingGuidedDraftResponseSchema, moved)
       .drafts.at(0)
       ?.operations.at(0),
   ).toMatchObject({ targetMatterId: entry.matterId });
 
-  const previousResult = v.parse(desktopBillingDraftRequestSchema, {
+  const { previousResult } = v.parse(desktopBillingDraftRequestSchema, {
     entries: [entry],
     steer: "Keep the same proposal",
     previousResult: moved,
   });
-  expect(
-    previousResult.previousResult?.drafts.at(0)?.operations.at(0),
-  ).toMatchObject({ targetMatterId: entry.matterId });
+  assert.ok(previousResult?.mode === "guided");
+  expect(previousResult.drafts.at(0)?.operations.at(0)).toMatchObject({
+    targetMatterId: entry.matterId,
+  });
 });
 
 test("billing draft request and review dates are real calendar days in CE years", () => {
@@ -381,9 +525,9 @@ test("draft operations carry reviewable payloads and classification branches rem
       })),
     };
     expect(v.parse(desktopBillingDraftResponseSchema, value)).toEqual(value);
-    expect(v.parse(desktopBillingDraftModelResponseSchema, value)).toEqual(
-      value,
-    );
+    expect(
+      v.parse(desktopBillingDraftModelResponseSchema, modelShape(value)),
+    ).toEqual(modelShape(value));
   }
   for (const operation of [
     { type: "split", parts: [part] },
@@ -421,12 +565,14 @@ test("draft guideline counts and billing codes remain within persistence bounds"
   );
   expect(
     v.safeParse(desktopBillingDraftResponseSchema, {
+      mode: "guided",
       drafts,
       checkedGuidelines,
     }).success,
   ).toBe(true);
   expect(
     v.safeParse(desktopBillingDraftResponseSchema, {
+      mode: "guided",
       drafts,
       checkedGuidelines: [
         ...checkedGuidelines,
@@ -440,6 +586,7 @@ test("draft guideline counts and billing codes remain within persistence bounds"
   ]) {
     expect(
       v.safeParse(desktopBillingDraftResponseSchema, {
+        mode: "guided",
         drafts: drafts.map((draft) => ({ ...draft, classification: invalid })),
         checkedGuidelines,
       }).success,
@@ -475,9 +622,9 @@ test("the review returns the model result beside only the cited entry fields", (
 });
 
 test("model grammar preserves shape while canonical validation enforces every response bound", () => {
-  expect(v.parse(desktopBillingDraftModelResponseSchema, response)).toEqual(
-    response,
-  );
+  expect(
+    v.parse(desktopBillingDraftModelResponseSchema, modelShape(response)),
+  ).toEqual(modelShape(response));
   const draft = response.drafts.at(0);
   assert.ok(draft);
   for (const invalidDraft of [
@@ -524,7 +671,8 @@ test("model grammar preserves shape while canonical validation enforces every re
   ]) {
     const value = { ...response, drafts: [invalidDraft] };
     expect(
-      v.safeParse(desktopBillingDraftModelResponseSchema, value).success,
+      v.safeParse(desktopBillingDraftModelResponseSchema, modelShape(value))
+        .success,
     ).toBe(true);
     expect(v.safeParse(desktopBillingDraftResponseSchema, value).success).toBe(
       false,
@@ -556,7 +704,8 @@ test("model grammar preserves shape while canonical validation enforces every re
   ]) {
     const value = { ...response, drafts: [invalidDraft] };
     expect(
-      v.safeParse(desktopBillingDraftModelResponseSchema, value).success,
+      v.safeParse(desktopBillingDraftModelResponseSchema, modelShape(value))
+        .success,
     ).toBe(false);
     expect(v.safeParse(desktopBillingDraftResponseSchema, value).success).toBe(
       false,

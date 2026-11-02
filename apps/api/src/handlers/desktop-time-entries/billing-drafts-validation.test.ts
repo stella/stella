@@ -4,12 +4,14 @@ import { describe, expect, test } from "bun:test";
 import type {
   DesktopBillingDraftClassification,
   DesktopBillingDraftOperation,
-  DesktopBillingDraftResponse,
+  DesktopBillingGuidedDraftResponse,
+  DesktopBillingPlainDraftResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
 
 import {
   type BillingDraftValidationContext,
   validateBillingDraftResult,
+  validatePlainBillingDraftResult,
 } from "./billing-drafts-validation";
 
 const fixture = () => {
@@ -34,7 +36,8 @@ const fixture = () => {
       { fileId: "rules", fileName: "Billing rules", sections: ["Narratives"] },
     ],
   };
-  const result: DesktopBillingDraftResponse = {
+  const result: DesktopBillingGuidedDraftResponse = {
+    mode: "guided",
     drafts: context.entries.map(({ entryId }) => ({
       entryId,
       narrative: "Reviewed agreement",
@@ -57,7 +60,10 @@ const fixture = () => {
   return { context, result };
 };
 
-const draftFor = (result: DesktopBillingDraftResponse, entryId: string) => {
+const draftFor = (
+  result: DesktopBillingGuidedDraftResponse,
+  entryId: string,
+) => {
   const draft = result.drafts.find(
     (candidate) => candidate.entryId === entryId,
   );
@@ -504,4 +510,46 @@ test("structural proposals stand alone regardless of scalar operation kind or or
       }
     }
   }
+});
+
+test("plain descriptions cover each selected entry once and cite only earlier entries of its matter", () => {
+  const { context } = fixture();
+  const plain = (
+    drafts: DesktopBillingPlainDraftResponse["drafts"],
+  ): DesktopBillingPlainDraftResponse => ({ mode: "plain", drafts });
+  const described = (entryId: string, matchedEarlierEntryIds: string[]) => ({
+    entryId,
+    narrative: "Reviewed agreement",
+    matchedEarlierEntryIds,
+  });
+  expect(
+    validatePlainBillingDraftResult(
+      plain([described("one", ["earlier"]), described("two", [])]),
+      context,
+    ).isOk(),
+  ).toBe(true);
+  for (const drafts of [
+    [described("one", [])],
+    [described("one", []), described("one", [])],
+    [described("one", []), described("unselected", [])],
+    [described("one", ["other-matter"]), described("two", [])],
+    [described("one", ["unknown"]), described("two", [])],
+    [described("one", ["earlier", "earlier"]), described("two", [])],
+  ]) {
+    expect(
+      validatePlainBillingDraftResult(plain(drafts), context).isErr(),
+    ).toBe(true);
+  }
+  const later = {
+    ...context,
+    earlierEntries: [
+      { id: "earlier", matterId: "matter", dateWorked: "2026-10-10" },
+    ],
+  };
+  expect(
+    validatePlainBillingDraftResult(
+      plain([described("one", ["earlier"]), described("two", [])]),
+      later,
+    ).isErr(),
+  ).toBe(true);
 });
