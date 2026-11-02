@@ -9,9 +9,17 @@ defaults:
 # update when this commit's native fingerprint matches the variant's latest
 # TestFlight build, or a new TestFlight build first when it does not.
 #
-# Plan only: the job summary names the workflow to run, and nothing here
-# publishes, builds or holds a secret. Release Mobile iOS and Publish Mobile
-# Update stay manual and reviewed.
+# Preview releases itself: after a merge, the last job starts the preview
+# release the plan names, so internal testers run every merge. Nothing here
+# builds, publishes or holds a secret; it only dispatches Release Mobile iOS
+# or Publish Mobile Update on main, which hold the signing secrets in their
+# own environments. Production stays a manual, reviewed release, and the job
+# summary names the workflow to run for it.
+#
+# A merge that lands while a preview build runs is planned against the build
+# before it, so it may ask for a build too; each release workflow keeps one
+# run pending per variant, so that costs at most one more build, which
+# carries the newest commit.
 #
 # Each fingerprint is computed at its own commit with that commit's packages,
 # installed cold as in the release jobs, under its own variant (a variant's
@@ -76,6 +84,8 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+    outputs:
+      preview: ${{ steps.plan.outputs.preview }}
     env:
       PREVIEW_SHA: ${{ fromJSON(needs.builds.outputs.builds).preview.sha }}
       PREVIEW_URL: ${{ fromJSON(needs.builds.outputs.builds).preview.url }}
@@ -148,11 +158,61 @@ jobs:
         timeout-minutes: 10
         run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter '@stll/mobile...' --filter '!stella'
 
-      - name: Plan
+      - id: plan
+        name: Plan
         working-directory: apps/mobile
         run: |
           mkdir -p "$RUNNER_TEMP/plan"
           for variant in preview production; do
             APP_VARIANT="$variant" bun scripts/fingerprint.ts ios --json > "$RUNNER_TEMP/plan/head-$variant.json"
           done
-          bun scripts/release-plan.ts "$RUNNER_TEMP/plan" >> "$GITHUB_STEP_SUMMARY"
+          bun scripts/release-plan.ts "$RUNNER_TEMP/plan" "$GITHUB_OUTPUT" >> "$GITHUB_STEP_SUMMARY"
+
+  release-preview:
+    name: Release preview
+    needs: plan
+    # Merges only; a manual run of the plan just reports.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write # dispatches the release workflow, nothing else
+    steps:
+      - name: Start the preview release this merge needs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          PREVIEW_PLAN: ${{ needs.plan.outputs.preview }}
+        with:
+          retries: 3
+          script: |
+            // The plan proved the iOS fingerprint, so an update goes to iOS.
+            const releases = {
+              update: {
+                workflow_id: "publish-mobile-update.yml",
+                inputs: { variant: "preview", platform: "ios" },
+              },
+              build: {
+                workflow_id: "release-mobile-ios.yml",
+                inputs: { variant: "preview" },
+              },
+              "first-build": {
+                workflow_id: "release-mobile-ios.yml",
+                inputs: { variant: "preview" },
+              },
+            };
+            const plan = process.env.PREVIEW_PLAN;
+            const release = Object.hasOwn(releases, plan) ? releases[plan] : undefined;
+            if (release === undefined) {
+              core.setFailed(`The release plan named no preview release: "${plan}"`);
+              return;
+            }
+            const { owner, repo } = context.repo;
+            await github.rest.actions.createWorkflowDispatch({
+              owner,
+              repo,
+              ref: "main",
+              ...release,
+            });
+            await core.summary
+              .addRaw(`Started ${release.workflow_id} (preview) on main.\n`)
+              .write();

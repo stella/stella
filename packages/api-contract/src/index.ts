@@ -127,6 +127,7 @@ export {
   CHAT_TURN_INTENT,
   REQUEST_ID_HEADER,
 } from "./chat";
+export type { ChatTurnIntent } from "./chat";
 export {
   CLAUSE_WARNINGS_HEADER,
   UNDECIDED_CONDITIONS_HEADER,
@@ -360,9 +361,11 @@ export {
   IDEMPOTENCY_KEY_REUSED_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_MESSAGE_EDIT_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
+  PREVIEW_UNAVAILABLE_ERROR_CODE,
   FILE_SECURITY_REMEDIATION,
   MEMBER_REMOVAL_BUSY_CODE,
   normalizeApiError,
@@ -379,6 +382,7 @@ export type {
   ApiValidationConstraint,
   ApiValidationErrorValue,
   ApiValidationIssue,
+  ChatMessageEditErrorCode,
   FileSecurityRemediation,
   NormalizedApiError,
 } from "./error";

@@ -230,6 +230,7 @@ describe("outbound transport ownership", () => {
       'void globalThis["Math"];',
       "const { Math: math } = globalThis;",
       'void import("node:path");',
+      'import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";',
       "void import(`node:path`);",
       "function load(require: Loader) { return require(modulePath); }",
       'type Module = typeof import("node:http");',

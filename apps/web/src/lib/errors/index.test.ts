@@ -1,3 +1,4 @@
+import { organizationClient } from "better-auth/client/plugins";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -632,6 +633,22 @@ describe("toAuthClientError", () => {
       "YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION",
       "You are not a member of this organization.",
     ],
+    [
+      "USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION",
+      messages.errors.apiCodes.alreadyOrganizationMember,
+    ],
+    [
+      "USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION",
+      messages.errors.apiCodes.invitationAlreadyPending,
+    ],
+    [
+      "INVITATION_LIMIT_REACHED",
+      messages.errors.apiCodes.invitationLimitReached,
+    ],
+    [
+      "YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE",
+      messages.errors.apiCodes.invitationRoleNotAllowed,
+    ],
   ])("localizes the known auth client code %s", (code, expected) => {
     const error = toAuthClientError({
       code,
@@ -642,6 +659,25 @@ describe("toAuthClientError", () => {
 
     expect(AuthClientError.is(error)).toBe(true);
     expect(error.message).toBe(expected);
+  });
+
+  test("every organization code has a message of its own", () => {
+    const codes = Object.keys(organizationClient().$ERROR_CODES);
+
+    expect(codes.length).toBeGreaterThan(0);
+    for (const code of codes) {
+      const error = toAuthClientError({
+        code,
+        message: "Raw auth error",
+        status: 400,
+        statusText: "Bad Request",
+      });
+
+      expect({ code, known: AuthClientError.is(error) }).toEqual({
+        code,
+        known: true,
+      });
+    }
   });
 });
 

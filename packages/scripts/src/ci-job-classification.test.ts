@@ -59,6 +59,7 @@ import {
   CLASSIFICATION_EXCLUSIONS,
   parseDocument,
 } from "../../../scripts/ci-job-classification/yaml";
+import { withoutCiEventContext } from "./without-ci-event-context";
 
 const ORDINARY = CLASSIFICATIONS[0];
 const SUPPORT = CLASSIFICATIONS[1];
@@ -209,7 +210,7 @@ test("the classification CLI accepts an explicit check flag and source directory
       "--base",
       "HEAD",
     ],
-    { stdout: "pipe", stderr: "pipe" },
+    { env: withoutCiEventContext(), stdout: "pipe", stderr: "pipe" },
   );
   expect(new TextDecoder().decode(result.stderr)).toBe("");
   expect(result.exitCode).toBe(0);
@@ -2092,7 +2093,7 @@ test("the CLI emits a sensitive annotation and machine output until review is up
           base,
         ],
         {
-          env: { ...process.env, GITHUB_OUTPUT: outputPath },
+          env: { ...withoutCiEventContext(), GITHUB_OUTPUT: outputPath },
           stdout: "pipe",
           stderr: "pipe",
         },
@@ -2232,7 +2233,7 @@ test("a reviewed publish change in a reachable composite action stays sensitive"
         base,
       ],
       {
-        env: { ...process.env, GITHUB_OUTPUT: outputPath },
+        env: { ...withoutCiEventContext(), GITHUB_OUTPUT: outputPath },
         stdout: "pipe",
         stderr: "pipe",
       },
@@ -2290,7 +2291,12 @@ test("the CLI defaults its root and base when invoked without arguments", () => 
         process.execPath,
         path.join(repositoryRoot, "scripts/check-ci-job-classification.ts"),
       ],
-      { cwd: root, stdout: "pipe", stderr: "pipe" },
+      {
+        cwd: root,
+        env: withoutCiEventContext(),
+        stdout: "pipe",
+        stderr: "pipe",
+      },
     );
     expect(result.exitCode).toBe(0);
     expect(new TextDecoder().decode(result.stdout)).toBe(
@@ -2311,7 +2317,7 @@ test("the CLI defaults its root and base when invoked without arguments", () => 
       ],
       {
         cwd: root,
-        env: { ...process.env, GITHUB_OUTPUT: outputPath },
+        env: { ...withoutCiEventContext(), GITHUB_OUTPUT: outputPath },
         stdout: "pipe",
         stderr: "pipe",
       },
@@ -2406,7 +2412,7 @@ for (const scenario of [
               base,
             ],
             {
-              env: { ...process.env, GITHUB_OUTPUT: output },
+              env: { ...withoutCiEventContext(), GITHUB_OUTPUT: output },
               stdout: "pipe",
               stderr: "pipe",
             },
@@ -2491,7 +2497,7 @@ test("downgrading a priority decision with an unchanged digest is a sensitive ch
         base,
       ],
       {
-        env: { ...process.env, GITHUB_OUTPUT: output },
+        env: { ...withoutCiEventContext(), GITHUB_OUTPUT: output },
         stdout: "pipe",
         stderr: "pipe",
       },
@@ -2528,7 +2534,7 @@ test("downgrading a priority decision with an unchanged digest is a sensitive ch
         base,
       ],
       {
-        env: { ...process.env, GITHUB_OUTPUT: removedOutput },
+        env: { ...withoutCiEventContext(), GITHUB_OUTPUT: removedOutput },
         stdout: "pipe",
         stderr: "pipe",
       },
