@@ -1,4 +1,4 @@
--- requires: 20261031235300_entity_feature_gate_registry
+-- requires: 20261101221634_entity_feature_gate_registry
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 
