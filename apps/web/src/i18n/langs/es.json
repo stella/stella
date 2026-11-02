@@ -5366,7 +5366,7 @@
       "auditLogsExporting": "Exportando...",
       "auditLogsFrom": "Desde",
       "auditLogsLoading": "Cargando registros...",
-      "auditLogsMoreChanges": "+{count, plural, one {# más} other {# más}}",
+      "auditLogsMoreChanges": "+{count, plural, one {# más} other {# más} many {# más}}",
       "auditLogsNoChanges": "No se registraron cambios en los campos.",
       "auditLogsPerformer": "Realizado por",
       "auditLogsPerformerAll": "Personas y automatizaciones",

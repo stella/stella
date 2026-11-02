@@ -5366,7 +5366,7 @@
       "auditLogsExporting": "Exportation...",
       "auditLogsFrom": "Date de début",
       "auditLogsLoading": "Chargement des journaux...",
-      "auditLogsMoreChanges": "+{count, plural, one {# autre} other {# autres}}",
+      "auditLogsMoreChanges": "+{count, plural, one {# autre} other {# autres} many {# autres}}",
       "auditLogsNoChanges": "Aucune modification de champ enregistrée.",
       "auditLogsPerformer": "Effectué par",
       "auditLogsPerformerAll": "Personnes et automatisations",
