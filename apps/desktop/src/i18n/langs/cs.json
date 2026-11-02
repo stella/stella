@@ -525,9 +525,9 @@
     "aiSteerRemember": "Zapamatovat pro příště",
     "billingDraftsPreference": "Vaše preference pro návrhy",
     "billingDraftsForgetPreference": "Zapomenout preferenci",
-    "aiStructureSplit": "{count, plural, one {stella AI navrhuje rozdělit záznam na # část} few {stella AI navrhuje rozdělit záznam na # části} many {stella AI navrhuje rozdělit záznam na # části} other {stella AI navrhuje rozdělit záznam na # částí}}",
+    "aiStructureSplit": "{count, plural, one {stella AI navrhuje rozdělit záznam na # část} few {stella AI navrhuje rozdělit záznam na # části} other {stella AI navrhuje rozdělit záznam na # částí}}",
     "aiStructureMove": "stella AI navrhuje přesunout {duration} do spisu {matter}",
-    "aiStructureCreate": "{count, plural, one {Vytvořit # záznam} few {Vytvořit # záznamy} many {Vytvořit # záznamu} other {Vytvořit # záznamů}}",
+    "aiStructureCreate": "{count, plural, one {Vytvořit # záznam} few {Vytvořit # záznamy} other {Vytvořit # záznamů}}",
     "aiStructureMoveAccept": "Přesunout",
     "aiFlagSplit": "Rozdělit záznam"
   },

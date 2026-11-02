@@ -525,9 +525,9 @@
     "aiSteerRemember": "Įsiminti kitam kartui",
     "billingDraftsPreference": "Jūsų juodraščių nuostata",
     "billingDraftsForgetPreference": "Pamiršti nuostatą",
-    "aiStructureSplit": "{count, plural, one {stella AI siūlo padalyti šį įrašą į # dalį} few {stella AI siūlo padalyti šį įrašą į # dalis} many {stella AI siūlo padalyti šį įrašą į # dalies} other {stella AI siūlo padalyti šį įrašą į # dalių}}",
+    "aiStructureSplit": "{count, plural, one {stella AI siūlo padalyti šį įrašą į # dalį} few {stella AI siūlo padalyti šį įrašą į # dalis} other {stella AI siūlo padalyti šį įrašą į # dalių}}",
     "aiStructureMove": "stella AI siūlo perkelti {duration} į bylą {matter}",
-    "aiStructureCreate": "{count, plural, one {Sukurti # įrašą} few {Sukurti # įrašus} many {Sukurti # įrašo} other {Sukurti # įrašų}}",
+    "aiStructureCreate": "{count, plural, one {Sukurti # įrašą} few {Sukurti # įrašus} other {Sukurti # įrašų}}",
     "aiStructureMoveAccept": "Perkelti",
     "aiFlagSplit": "Padalyti įrašą"
   },
