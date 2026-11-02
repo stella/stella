@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, lte } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
@@ -11,7 +11,6 @@ import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user } from "@/api/db/auth-schema";
-import { workspaceCheck } from "@/api/db/rls";
 import type { SafeDb } from "@/api/db/safe-db";
 import { auditLogs } from "@/api/db/schema";
 import {
@@ -25,6 +24,7 @@ import {
   auditStoredChangesPresentSql,
   projectAuditReadChanges,
 } from "@/api/lib/audit-log-details";
+import { auditLogMatterReadable } from "@/api/lib/audit-log-matter-access";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   paginationCursorSchema,
@@ -129,7 +129,7 @@ export const toAuditLogConditions = ({
 }): SQL[] => {
   const conditions: SQL[] = [
     eq(auditLogs.organizationId, organizationId),
-    sql`(${auditLogs.workspaceId} IS NULL OR ${workspaceCheck})`,
+    auditLogMatterReadable,
   ];
 
   if (filter.workspaceId) {

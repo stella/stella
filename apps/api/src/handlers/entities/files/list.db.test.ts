@@ -21,6 +21,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -114,7 +115,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await db.delete(organization).where(eq(organization.id, organizationId));
+  await deleteOrganizationsForTest(db, [organizationId]);
   await releaseTestDb();
 });
 
