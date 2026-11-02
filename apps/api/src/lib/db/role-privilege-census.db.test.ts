@@ -1,5 +1,6 @@
-import type { SQL } from "bun";
-import { describe, expect, test } from "bun:test";
+import { panic } from "better-result";
+import type { SQL, TransactionSQL } from "bun";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -14,6 +15,7 @@ import {
   type Census,
   readExpectedCensus,
   readRolePrivilegeCensus,
+  rolePrivileges,
 } from "./role-privilege-census";
 
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -344,10 +346,24 @@ const readSearchPathDependentReferences = async (
   return [...findings.values()];
 };
 
-const withMigratedDatabase = async (
-  run: (database: SQL, census: Census) => Promise<void>,
-) => {
-  await withIsolatedPostgresCluster(
+// The migration chain runs once per suite. Each test then works inside a
+// transaction that is always rolled back, so every test starts from the same
+// migrated catalog, and the census of that catalog is read only once.
+let censusDatabase: SQL | undefined;
+let baselineCensus: Census | undefined;
+let fixture: Promise<unknown> | undefined;
+const fixtureReady = Promise.withResolvers<undefined>();
+const releaseFixture = Promise.withResolvers<undefined>();
+class CensusRollbackError extends Error {
+  override name = "CensusRollbackError";
+}
+
+// timeout: applying the complete migration chain provisions the shared census fixture.
+beforeAll(async () => {
+  if (!runPostgresTests) {
+    return;
+  }
+  fixture = withIsolatedPostgresCluster(
     {
       prefix: "role-census",
       database: "stella",
@@ -356,8 +372,8 @@ const withMigratedDatabase = async (
     },
     async (scratchUrl) => {
       await withGatedTestClients(scratchUrl, async ({ openClient }) => {
-        const database = openClient().sql;
-        const connection = await database.reserve();
+        const migratedDatabase = openClient().sql;
+        const connection = await migratedDatabase.reserve();
         try {
           await runMigrations({
             connection,
@@ -368,14 +384,45 @@ const withMigratedDatabase = async (
         } finally {
           await connection.release();
         }
-        await run(database, await readRolePrivilegeCensus(database));
+        baselineCensus = await readRolePrivilegeCensus(migratedDatabase);
+        censusDatabase = migratedDatabase;
+        fixtureReady.resolve();
+        await releaseFixture.promise;
       });
     },
   );
+  void fixture.catch(fixtureReady.reject);
+  await fixtureReady.promise;
+}, 120_000);
+
+afterAll(async () => {
+  if (!runPostgresTests) {
+    return;
+  }
+  releaseFixture.resolve(undefined);
+  await fixture;
+});
+
+const withMigratedDatabase = async (
+  run: (transaction: TransactionSQL, baseline: Census) => Promise<void>,
+) => {
+  const migratedDatabase =
+    censusDatabase ?? panic("Census database is not ready");
+  const baseline = baselineCensus ?? panic("Census baseline is not ready");
+  await migratedDatabase
+    .begin(async (transaction) => {
+      await run(transaction, baseline);
+      throw new CensusRollbackError();
+    })
+    .catch((error: unknown) => {
+      if (!(error instanceof CensusRollbackError)) {
+        throw error;
+      }
+    });
 };
 
 describePostgres("database role privilege census", () => {
-  // timeout: verifies the catalog after applying every migration in an isolated cluster.
+  // timeout: walking every security definer body and its trigger graph can exceed the default test budget.
   test("pins every live security definer function to trusted schemas", async () => {
     await withMigratedDatabase(async (database) => {
       const functions = await database.unsafe<
@@ -472,7 +519,7 @@ describePostgres("database role privilege census", () => {
         },
       ]);
       expect(
-        await database.begin(async (tx) => {
+        await database.savepoint(async (tx) => {
           await tx.unsafe(
             "CREATE TEMP TABLE search_path_probe_log (id integer) ON COMMIT DROP",
           );
@@ -486,7 +533,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: initializing PostgreSQL and applying the complete migration chain is the behavior under test.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("matches every migrated role and effective privilege", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, actual) => {
@@ -504,7 +551,7 @@ describePostgres("database role privilege census", () => {
         has_function_privilege('stella_public_law_reader', 'public.stella_chat_run_text_boundaries()', 'EXECUTE') AS reader`),
       ).toEqual([{ runtime: true, reader: false }]);
       const denied = await rejectionOf(
-        database.begin(async (tx) => {
+        database.savepoint(async (tx) => {
           await tx.unsafe("SET LOCAL ROLE stella_public_law_reader");
           await tx.unsafe("SELECT public.stella_chat_run_text_boundaries()");
         }),
@@ -513,266 +560,482 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports disabled row-level security", async () => {
-    const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
-      assertCompleteCensus(expected, baseline);
-      try {
-        await database.unsafe(
-          `ALTER TABLE public.account_audit_logs DISABLE ROW LEVEL SECURITY`,
-        );
-        const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
-          "stella table:public.account_audit_logs:RLS_ENABLED:false",
-        );
-      } finally {
-        await database.unsafe(
-          `ALTER TABLE public.account_audit_logs ENABLE ROW LEVEL SECURITY`,
-        );
-      }
+      await database.unsafe(
+        `ALTER TABLE public.account_audit_logs DISABLE ROW LEVEL SECURITY`,
+      );
+      const mutated = await readRolePrivilegeCensus(database);
+      expect(() => assertCompleteCensus(baseline, mutated)).toThrow(
+        "stella table:public.account_audit_logs:RLS_ENABLED:false",
+      );
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports a sequence UPDATE grant", async () => {
-    const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
-      assertCompleteCensus(expected, baseline);
       const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
-      try {
+      await database.unsafe(
+        `CREATE ROLE "${role}" NOLOGIN; GRANT UPDATE ON SEQUENCE public.corpus_index_projection_revisions_revision_seq TO "${role}"`,
+      );
+      const mutated = await readRolePrivilegeCensus(database);
+      expect(() => assertCompleteCensus(baseline, mutated)).toThrow(
+        `${role} sequence:public.corpus_index_projection_revisions_revision_seq:UPDATE:EFFECTIVE`,
+      );
+    });
+  }, 120_000);
+
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("reports a database CREATE grant to an existing restricted role", async () => {
+    await withMigratedDatabase(async (database, baseline) => {
+      await database.unsafe(
+        `GRANT CREATE ON DATABASE stella TO stella_public_law_reader`,
+      );
+      const mutated = await readRolePrivilegeCensus(database);
+      expect(() => assertCompleteCensus(baseline, mutated)).toThrow(
+        "stella_public_law_reader database:stella:CREATE:EFFECTIVE",
+      );
+    });
+  }, 120_000);
+
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("reports a changed grantor for a PUBLIC grant", async () => {
+    await withMigratedDatabase(async (database) => {
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const firstGrantor = `stella_census_grantor_a_${suffix}`;
+      const secondGrantor = `stella_census_grantor_b_${suffix}`;
+      const table = `stella_census_fixture_${suffix}`;
+      await database.unsafe(`
+        CREATE ROLE "${firstGrantor}" NOLOGIN;
+        CREATE ROLE "${secondGrantor}" NOLOGIN;
+        CREATE TABLE public."${table}" (id integer);
+        REVOKE ALL ON TABLE public."${table}" FROM PUBLIC;
+        GRANT SELECT ON TABLE public."${table}" TO "${firstGrantor}", "${secondGrantor}" WITH GRANT OPTION;
+        SET LOCAL SESSION AUTHORIZATION "${firstGrantor}";
+        GRANT SELECT ON TABLE public."${table}" TO PUBLIC;
+        RESET SESSION AUTHORIZATION;
+      `);
+      const firstCensus = await readRolePrivilegeCensus(database);
+      expect(firstCensus.public).toContain(
+        `table:public.${table}:SELECT:GRANTOR:${firstGrantor}:GRANTABLE:false`,
+      );
+
+      await database.unsafe(`
+        SET LOCAL SESSION AUTHORIZATION "${firstGrantor}";
+        REVOKE SELECT ON TABLE public."${table}" FROM PUBLIC;
+        RESET SESSION AUTHORIZATION;
+        SET LOCAL SESSION AUTHORIZATION "${secondGrantor}";
+        GRANT SELECT ON TABLE public."${table}" TO PUBLIC;
+        RESET SESSION AUTHORIZATION;
+      `);
+      const secondCensus = await readRolePrivilegeCensus(database);
+      expect(secondCensus.public).toContain(
+        `table:public.${table}:SELECT:GRANTOR:${secondGrantor}:GRANTABLE:false`,
+      );
+      expect(() => assertCompleteCensus(firstCensus, secondCensus)).toThrow(
+        `public table:public.${table}:SELECT:GRANTOR:${secondGrantor}:GRANTABLE:false`,
+      );
+
+      // A grantor outside the audited roles, here the migrating superuser,
+      // is still named rather than dropped with its grant.
+      await database.unsafe(`
+        SET LOCAL SESSION AUTHORIZATION "${secondGrantor}";
+        REVOKE SELECT ON TABLE public."${table}" FROM PUBLIC;
+        RESET SESSION AUTHORIZATION;
+        GRANT SELECT ON TABLE public."${table}" TO PUBLIC;
+      `);
+      const thirdCensus = await readRolePrivilegeCensus(database);
+      expect(thirdCensus.public).toContain(
+        `table:public.${table}:SELECT:GRANTOR:census_admin:GRANTABLE:false`,
+      );
+      expect(
+        thirdCensus.roles.some((entry) => entry.role === "census_admin"),
+      ).toBeFalse();
+    });
+  }, 120_000);
+
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("treats a PUBLIC grant as effective for every role", async () => {
+    await withMigratedDatabase(async (database, baseline) => {
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const role = `stella_census_fixture_${suffix}`;
+      const table = `stella_census_fixture_${suffix}`;
+      const effective = `table:public.${table}:SELECT:EFFECTIVE`;
+      await database.unsafe(`
+        CREATE ROLE "${role}" NOLOGIN;
+        CREATE TABLE public."${table}" (id integer);
+        REVOKE ALL ON TABLE public."${table}" FROM PUBLIC;
+        GRANT SELECT ON TABLE public."${table}" TO PUBLIC;
+      `);
+      expect(
         await database.unsafe(
-          `CREATE ROLE "${role}" NOLOGIN; GRANT UPDATE ON SEQUENCE public.corpus_index_projection_revisions_revision_seq TO "${role}"`,
-        );
-        const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
-          `${role} sequence:public.corpus_index_projection_revisions_revision_seq:UPDATE:GRANTABLE:false`,
-        );
-      } finally {
-        await database.unsafe(
-          `DROP OWNED BY "${role}"; DROP ROLE IF EXISTS "${role}"`,
-        );
-      }
+          `SELECT has_table_privilege('${role}', 'public."${table}"', 'SELECT') AS allowed`,
+        ),
+      ).toEqual([{ allowed: true }]);
+      const publicGrant = await readRolePrivilegeCensus(database);
+      expect(publicGrant.public).toContain(effective);
+      // PUBLIC's privilege holds for every role, so no role repeats it, and
+      // neither PUBLIC nor any role repeats it once per column.
+      expect(
+        publicGrant.roles
+          .filter(({ privileges }) => privileges.includes(effective))
+          .map((entry) => entry.role),
+      ).toEqual([]);
+      expect(publicGrant.public).not.toContain(
+        `column:public.${table}.id:SELECT:EFFECTIVE`,
+      );
+      expect(() => assertCompleteCensus(baseline, publicGrant)).toThrow(
+        `public ${effective}`,
+      );
+
+      await database.unsafe(`
+        REVOKE SELECT ON TABLE public."${table}" FROM PUBLIC;
+        GRANT SELECT ON TABLE public."${table}" TO "${role}";
+      `);
+      const directGrant = await readRolePrivilegeCensus(database);
+      expect(directGrant.public).not.toContain(effective);
+      expect(rolePrivileges(directGrant, role)).toContain(effective);
+      expect(() => assertCompleteCensus(publicGrant, directGrant)).toThrow(
+        `- public ${effective}`,
+      );
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
-  test("reports a role granted CREATEDB", async () => {
-    const expected = readExpectedCensus();
-    await withMigratedDatabase(async (database, baseline) => {
-      assertCompleteCensus(expected, baseline);
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("refuses to read a role that is missing from the census", async () => {
+    await withMigratedDatabase(async (database) => {
       const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
-      try {
-        await database.unsafe(`CREATE ROLE "${role}" CREATEDB NOLOGIN`);
-        const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
-          `${role} attribute:CREATEDB:true`,
-        );
-      } finally {
-        await database.unsafe(`DROP ROLE IF EXISTS "${role}"`);
-      }
+      await database.unsafe(`CREATE ROLE "${role}" NOLOGIN`);
+      const present = await readRolePrivilegeCensus(database);
+      expect(rolePrivileges(present, role)).toEqual([]);
+
+      await database.unsafe(`DROP ROLE "${role}"`);
+      const dropped = await readRolePrivilegeCensus(database);
+      expect(() => rolePrivileges(dropped, role)).toThrow(
+        `Role ${role} is missing from the privilege census`,
+      );
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
-  test("reports a role granted REPLICATION", async () => {
-    const expected = readExpectedCensus();
-    await withMigratedDatabase(async (database, baseline) => {
-      assertCompleteCensus(expected, baseline);
-      const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
-      try {
-        await database.unsafe(`CREATE ROLE "${role}" REPLICATION NOLOGIN`);
-        const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
-          `${role} attribute:REPLICATION:true`,
-        );
-      } finally {
-        await database.unsafe(`DROP ROLE IF EXISTS "${role}"`);
-      }
-    });
-  }, 120_000);
-
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
-  test("reports a membership changed to WITH ADMIN OPTION", async () => {
-    const expected = readExpectedCensus();
-    await withMigratedDatabase(async (database, baseline) => {
-      assertCompleteCensus(expected, baseline);
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("does not inherit privileges through a membership that disables INHERIT and SET", async () => {
+    await withMigratedDatabase(async (database) => {
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
       const parent = `stella_census_parent_${suffix}`;
       const member = `stella_census_member_${suffix}`;
-      try {
-        await database.unsafe(`
-          CREATE ROLE "${parent}" NOLOGIN;
-          CREATE ROLE "${member}" NOLOGIN;
-          GRANT "${parent}" TO "${member}";
-        `);
-        const withoutAdminOption = await readRolePrivilegeCensus(database);
-        await database.unsafe(
-          `GRANT "${parent}" TO "${member}" WITH ADMIN OPTION`,
-        );
-        const withAdminOption = await readRolePrivilegeCensus(database);
-        expect(() =>
-          assertCompleteCensus(withoutAdminOption, withAdminOption),
-        ).toThrow(
-          `${member} membership:${parent}:ADMIN_OPTION:true:INHERIT_OPTION:true:SET_OPTION:true`,
-        );
-      } finally {
-        await database.unsafe(`
-          REVOKE "${parent}" FROM "${member}";
-          DROP ROLE IF EXISTS "${member}";
-          DROP ROLE IF EXISTS "${parent}";
-        `);
-      }
+      const effective = "table:public.account:SELECT:EFFECTIVE";
+      await database.unsafe(`
+        CREATE ROLE "${parent}" NOLOGIN;
+        CREATE ROLE "${member}" NOLOGIN;
+        GRANT SELECT ON TABLE public.account TO "${parent}", "${member}";
+        GRANT "${parent}" TO "${member}" WITH INHERIT FALSE, SET FALSE;
+      `);
+      const beforeRevoke = await readRolePrivilegeCensus(database);
+      expect(rolePrivileges(beforeRevoke, member)).toContain(effective);
+
+      await database.unsafe(
+        `REVOKE SELECT ON TABLE public.account FROM "${member}"`,
+      );
+      const afterRevoke = await readRolePrivilegeCensus(database);
+      expect(rolePrivileges(afterRevoke, member)).not.toContain(effective);
+      expect(() => assertCompleteCensus(beforeRevoke, afterRevoke)).toThrow(
+        `${member} ${effective}`,
+      );
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
-  test("reports a column-level grant", async () => {
-    const expected = readExpectedCensus();
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("inherits privileges through a membership that enables INHERIT", async () => {
+    await withMigratedDatabase(async (database) => {
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const parent = `stella_census_parent_${suffix}`;
+      const member = `stella_census_member_${suffix}`;
+      const effective = "table:public.account:SELECT:EFFECTIVE";
+      await database.unsafe(`
+        CREATE ROLE "${parent}" NOLOGIN;
+        CREATE ROLE "${member}" NOLOGIN;
+        GRANT SELECT ON TABLE public.account TO "${parent}", "${member}";
+        GRANT "${parent}" TO "${member}" WITH INHERIT TRUE, SET FALSE;
+      `);
+      await database.unsafe(
+        `REVOKE SELECT ON TABLE public.account FROM "${member}"`,
+      );
+      const afterRevoke = await readRolePrivilegeCensus(database);
+      expect(rolePrivileges(afterRevoke, member)).toContain(effective);
+    });
+  }, 120_000);
+
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("reports predefined-role privileges without an object ACL", async () => {
+    await withMigratedDatabase(async (database) => {
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const owner = `stella_census_owner_${suffix}`;
+      const reader = `stella_census_reader_${suffix}`;
+      const table = `stella_census_fixture_${suffix}`;
+      await database.unsafe(`
+        CREATE ROLE "${owner}" NOLOGIN;
+        CREATE ROLE "${reader}" NOLOGIN;
+        CREATE TABLE public."${table}" (id integer);
+        ALTER TABLE public."${table}" OWNER TO "${owner}";
+        REVOKE SELECT ON TABLE public."${table}" FROM "${owner}", PUBLIC;
+        GRANT pg_read_all_data TO "${reader}";
+      `);
+      const acl = await database.unsafe<{ hasSelectAcl: boolean }[]>(`
+        SELECT EXISTS (
+          SELECT 1 FROM pg_catalog.pg_class class
+          CROSS JOIN LATERAL pg_catalog.aclexplode(class.relacl) acl
+          WHERE class.oid = 'public."${table}"'::regclass
+            AND acl.privilege_type = 'SELECT'
+        ) AS "hasSelectAcl"
+      `);
+      expect(acl.at(0)?.hasSelectAcl).toBeFalse();
+
+      const census = await readRolePrivilegeCensus(database);
+      expect(rolePrivileges(census, reader)).toContain(
+        `table:public.${table}:SELECT:EFFECTIVE`,
+      );
+    });
+  }, 120_000);
+
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("reports inherited grant options from roles outside the audited set", async () => {
+    await withMigratedDatabase(async (database) => {
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const parent = `external_census_parent_${suffix}`;
+      const member = `stella_census_member_${suffix}`;
+      const grantable = "table:public.account:SELECT:EFFECTIVE_GRANTABLE";
+      const censusAsParent = async () =>
+        database.savepoint(async (transaction) => {
+          await transaction.unsafe(
+            `SET LOCAL SESSION AUTHORIZATION "${parent}"`,
+          );
+          const census = await readRolePrivilegeCensus(transaction);
+          await transaction.unsafe("RESET SESSION AUTHORIZATION");
+          return census;
+        });
+      await database.unsafe(`
+        CREATE ROLE "${parent}" NOLOGIN;
+        CREATE ROLE "${member}" NOLOGIN;
+        GRANT SELECT ON TABLE public.account TO "${parent}";
+        GRANT "${parent}" TO "${member}" WITH INHERIT TRUE, SET FALSE;
+      `);
+      const withoutGrantOption = await censusAsParent();
+      expect(rolePrivileges(withoutGrantOption, member)).not.toContain(
+        grantable,
+      );
+
+      await database.unsafe(
+        `GRANT SELECT ON TABLE public.account TO "${parent}" WITH GRANT OPTION`,
+      );
+      const withGrantOption = await censusAsParent();
+      expect(rolePrivileges(withGrantOption, member)).toContain(grantable);
+      expect(() =>
+        assertCompleteCensus(withoutGrantOption, withGrantOption),
+      ).toThrow(`${member} ${grantable}`);
+    });
+  }, 120_000);
+
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("records SET-only privileges separately from effective privileges", async () => {
+    await withMigratedDatabase(async (database) => {
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const parent = `stella_census_parent_${suffix}`;
+      const member = `stella_census_member_${suffix}`;
+      await database.unsafe(`
+        CREATE ROLE "${parent}" NOLOGIN;
+        CREATE ROLE "${member}" NOLOGIN;
+        GRANT SELECT ON TABLE public.account TO "${parent}";
+        GRANT "${parent}" TO "${member}" WITH INHERIT FALSE, SET TRUE;
+      `);
+      const census = await readRolePrivilegeCensus(database);
+      expect(rolePrivileges(census, member)).toContain(
+        "table:public.account:SELECT:SET_REACHABLE",
+      );
+      expect(rolePrivileges(census, member)).not.toContain(
+        "table:public.account:SELECT:EFFECTIVE",
+      );
+    });
+  }, 120_000);
+
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("records SET-only privileges through roles outside the audited set", async () => {
+    await withMigratedDatabase(async (database) => {
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const parent = `external_census_parent_${suffix}`;
+      const member = `stella_census_member_${suffix}`;
+      const setReachable = "table:public.account:SELECT:SET_REACHABLE";
+      const censusAsParent = async () =>
+        database.savepoint(async (transaction) => {
+          await transaction.unsafe(
+            `SET LOCAL SESSION AUTHORIZATION "${parent}"`,
+          );
+          const census = await readRolePrivilegeCensus(transaction);
+          await transaction.unsafe("RESET SESSION AUTHORIZATION");
+          return census;
+        });
+      await database.unsafe(`
+        CREATE ROLE "${parent}" NOLOGIN;
+        CREATE ROLE "${member}" NOLOGIN;
+        GRANT SELECT ON TABLE public.account TO "${parent}";
+        GRANT "${parent}" TO "${member}" WITH INHERIT FALSE, SET TRUE;
+      `);
+      const withSet = await censusAsParent();
+      expect(withSet.roles.some((entry) => entry.role === parent)).toBeFalse();
+      expect(rolePrivileges(withSet, member)).toContain(setReachable);
+
+      await database.unsafe(
+        `GRANT "${parent}" TO "${member}" WITH INHERIT FALSE, SET FALSE`,
+      );
+      const withoutSet = await censusAsParent();
+      expect(rolePrivileges(withoutSet, member)).not.toContain(setReachable);
+    });
+  }, 120_000);
+
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("reports a role granted CREATEDB", async () => {
     await withMigratedDatabase(async (database, baseline) => {
-      assertCompleteCensus(expected, baseline);
       const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
-      try {
-        await database.unsafe(
-          `CREATE ROLE "${role}" NOLOGIN; GRANT SELECT (id) ON TABLE public.account TO "${role}"`,
-        );
-        const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
-          `${role} column:public.account.id:SELECT:GRANTABLE:false`,
-        );
-      } finally {
-        await database.unsafe(
-          `DROP OWNED BY "${role}"; DROP ROLE IF EXISTS "${role}"`,
-        );
-      }
+      await database.unsafe(`CREATE ROLE "${role}" CREATEDB NOLOGIN`);
+      const mutated = await readRolePrivilegeCensus(database);
+      expect(() => assertCompleteCensus(baseline, mutated)).toThrow(
+        `${role} attribute:CREATEDB:true`,
+      );
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
-  test("reports an aggregate EXECUTE grant", async () => {
-    const expected = readExpectedCensus();
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("reports a role granted REPLICATION", async () => {
     await withMigratedDatabase(async (database, baseline) => {
-      assertCompleteCensus(expected, baseline);
+      const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      await database.unsafe(`CREATE ROLE "${role}" REPLICATION NOLOGIN`);
+      const mutated = await readRolePrivilegeCensus(database);
+      expect(() => assertCompleteCensus(baseline, mutated)).toThrow(
+        `${role} attribute:REPLICATION:true`,
+      );
+    });
+  }, 120_000);
+
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("reports a membership changed to WITH ADMIN OPTION", async () => {
+    await withMigratedDatabase(async (database) => {
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const parent = `stella_census_parent_${suffix}`;
+      const member = `stella_census_member_${suffix}`;
+      await database.unsafe(`
+        CREATE ROLE "${parent}" NOLOGIN;
+        CREATE ROLE "${member}" NOLOGIN;
+        GRANT "${parent}" TO "${member}";
+      `);
+      const withoutAdminOption = await readRolePrivilegeCensus(database);
+      await database.unsafe(
+        `GRANT "${parent}" TO "${member}" WITH ADMIN OPTION`,
+      );
+      const withAdminOption = await readRolePrivilegeCensus(database);
+      expect(() =>
+        assertCompleteCensus(withoutAdminOption, withAdminOption),
+      ).toThrow(
+        `${member} membership:${parent}:ADMIN_OPTION:true:INHERIT_OPTION:true:SET_OPTION:true`,
+      );
+    });
+  }, 120_000);
+
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("reports a column-level grant", async () => {
+    await withMigratedDatabase(async (database, baseline) => {
+      const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      await database.unsafe(
+        `CREATE ROLE "${role}" NOLOGIN; GRANT SELECT (id) ON TABLE public.account TO "${role}"`,
+      );
+      const mutated = await readRolePrivilegeCensus(database);
+      expect(() => assertCompleteCensus(baseline, mutated)).toThrow(
+        `${role} column:public.account.id:SELECT:EFFECTIVE`,
+      );
+    });
+  }, 120_000);
+
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("reports an aggregate EXECUTE grant", async () => {
+    await withMigratedDatabase(async (database, baseline) => {
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
       const role = `stella_census_fixture_${suffix}`;
       const aggregate = `stella_census_fixture_${suffix}`;
-      try {
-        await database.unsafe(`
-          CREATE ROLE "${role}" NOLOGIN;
-          CREATE AGGREGATE public."${aggregate}" (integer) (
-            SFUNC = pg_catalog.int4pl,
-            STYPE = integer,
-            INITCOND = '0'
-          );
-          REVOKE ALL ON FUNCTION public."${aggregate}"(integer) FROM PUBLIC;
-          GRANT EXECUTE ON FUNCTION public."${aggregate}"(integer) TO "${role}"
-        `);
-        const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
-          `${role} function:public.${aggregate}(integer):EXECUTE:GRANTABLE:false`,
+      await database.unsafe(`
+        CREATE ROLE "${role}" NOLOGIN;
+        CREATE AGGREGATE public."${aggregate}" (integer) (
+          SFUNC = pg_catalog.int4pl,
+          STYPE = integer,
+          INITCOND = '0'
         );
-      } finally {
-        await database.unsafe(`
-          DROP AGGREGATE IF EXISTS public."${aggregate}"(integer);
-          DROP OWNED BY "${role}";
-          DROP ROLE IF EXISTS "${role}"
-        `);
-      }
+        REVOKE ALL ON FUNCTION public."${aggregate}"(integer) FROM PUBLIC;
+        GRANT EXECUTE ON FUNCTION public."${aggregate}"(integer) TO "${role}"
+      `);
+      const mutated = await readRolePrivilegeCensus(database);
+      expect(() => assertCompleteCensus(baseline, mutated)).toThrow(
+        `${role} function:public.${aggregate}(integer):EXECUTE:EFFECTIVE`,
+      );
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports policies for a column-only grantee", async () => {
-    const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
-      assertCompleteCensus(expected, baseline);
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
       const role = `stella_census_fixture_${suffix}`;
       const table = `stella_census_fixture_${suffix}`;
       const policy = `stella_census_fixture_${suffix}`;
-      try {
-        await database.unsafe(`
-          CREATE ROLE "${role}" NOLOGIN;
-          CREATE TABLE public."${table}" (id integer PRIMARY KEY);
-          ALTER TABLE public."${table}" ENABLE ROW LEVEL SECURITY;
-          CREATE POLICY "${policy}" ON public."${table}" FOR SELECT TO "${role}" USING (true);
-          GRANT SELECT (id) ON TABLE public."${table}" TO "${role}"
-        `);
-        const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
-          `${role} table:public.${table}:POLICY:${policy}`,
-        );
-      } finally {
-        await database.unsafe(`
-          DROP TABLE IF EXISTS public."${table}";
-          DROP OWNED BY "${role}";
-          DROP ROLE IF EXISTS "${role}"
-        `);
-      }
+      await database.unsafe(`
+        CREATE ROLE "${role}" NOLOGIN;
+        CREATE TABLE public."${table}" (id integer PRIMARY KEY);
+        ALTER TABLE public."${table}" ENABLE ROW LEVEL SECURITY;
+        CREATE POLICY "${policy}" ON public."${table}" FOR SELECT TO "${role}" USING (true);
+        GRANT SELECT (id) ON TABLE public."${table}" TO "${role}"
+      `);
+      const mutated = await readRolePrivilegeCensus(database);
+      expect(() => assertCompleteCensus(baseline, mutated)).toThrow(
+        `${role} table:public.${table}:POLICY:${policy}`,
+      );
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports a new row-level security policy", async () => {
-    const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
-      assertCompleteCensus(expected, baseline);
       const policy = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
-      try {
-        await database.unsafe(
-          `CREATE POLICY "${policy}" ON public.account_audit_logs AS PERMISSIVE FOR SELECT TO stella USING (false)`,
-        );
-        const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
-          `stella table:public.account_audit_logs:POLICY:${policy}`,
-        );
-      } finally {
-        await database.unsafe(
-          `DROP POLICY IF EXISTS "${policy}" ON public.account_audit_logs`,
-        );
-      }
+      await database.unsafe(
+        `CREATE POLICY "${policy}" ON public.account_audit_logs AS PERMISSIVE FOR SELECT TO stella USING (false)`,
+      );
+      const mutated = await readRolePrivilegeCensus(database);
+      expect(() => assertCompleteCensus(baseline, mutated)).toThrow(
+        `stella table:public.account_audit_logs:POLICY:${policy}`,
+      );
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports a changed row-level security USING predicate", async () => {
-    const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
-      assertCompleteCensus(expected, baseline);
-      try {
-        await database.unsafe(
-          `ALTER POLICY account_audit_logs_select ON public.account_audit_logs USING (true)`,
-        );
-        const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
-          "POLICY:account_audit_logs_select:COMMAND:SELECT:ROLES:public:PERMISSIVE:PERMISSIVE:USING:true:WITH_CHECK:NULL",
-        );
-      } finally {
-        await database.unsafe(
-          `ALTER POLICY account_audit_logs_select ON public.account_audit_logs USING (user_id = (SELECT current_setting('app.user_id', true)))`,
-        );
-      }
+      await database.unsafe(
+        `ALTER POLICY account_audit_logs_select ON public.account_audit_logs USING (true)`,
+      );
+      const mutated = await readRolePrivilegeCensus(database);
+      expect(() => assertCompleteCensus(baseline, mutated)).toThrow(
+        "POLICY:account_audit_logs_select:COMMAND:SELECT:ROLES:public:PERMISSIVE:PERMISSIVE:USING:true:WITH_CHECK:NULL",
+      );
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports a changed row-level security WITH CHECK predicate", async () => {
-    const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
-      assertCompleteCensus(expected, baseline);
-      try {
-        await database.unsafe(
-          `ALTER POLICY account_audit_logs_insert ON public.account_audit_logs WITH CHECK (true)`,
-        );
-        const mutated = await readRolePrivilegeCensus(database);
-        expect(() => assertCompleteCensus(expected, mutated)).toThrow(
-          "POLICY:account_audit_logs_insert:COMMAND:INSERT:ROLES:stella:PERMISSIVE:PERMISSIVE:USING:NULL:WITH_CHECK:true",
-        );
-      } finally {
-        await database.unsafe(
-          `ALTER POLICY account_audit_logs_insert ON public.account_audit_logs WITH CHECK (user_id = (SELECT current_setting('app.user_id', true)))`,
-        );
-      }
+      await database.unsafe(
+        `ALTER POLICY account_audit_logs_insert ON public.account_audit_logs WITH CHECK (true)`,
+      );
+      const mutated = await readRolePrivilegeCensus(database);
+      expect(() => assertCompleteCensus(baseline, mutated)).toThrow(
+        "POLICY:account_audit_logs_insert:COMMAND:INSERT:ROLES:stella:PERMISSIVE:PERMISSIVE:USING:NULL:WITH_CHECK:true",
+      );
     });
   }, 120_000);
 });
