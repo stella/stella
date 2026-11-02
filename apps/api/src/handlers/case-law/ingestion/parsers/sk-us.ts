@@ -301,7 +301,17 @@ type FooterCandidate = {
    * may hold only the closing lines.
    */
   readonly last: boolean;
+  /**
+   * The page opens a new part of the document with the court's docket on a
+   * line of its own (a separate opinion): the page before it may hold only
+   * the closing lines of the part it ends.
+   */
+  readonly opensPart: boolean;
 };
+
+/** The court's docket alone on a line: `III. ÚS 86/05`, `PL. ÚS 1/2021-45`. */
+const DOCKET_LINE =
+  /^(?:PL|[IVX]{1,4})\.\s?ÚS\s\d{1,4}\/\d{2,4}(?:-\d{1,4})?$/u;
 
 const PAGE_SEQUENCE = {
   /** No page of a decision holds less text than this. */
@@ -347,6 +357,7 @@ const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
         form: "alone",
         length: text.length,
         last: index === lastText,
+        opensPart: false,
       });
     } else if (leading !== null) {
       candidates.push({
@@ -358,6 +369,7 @@ const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
         form: "leading",
         length: leading[0].length,
         last: false,
+        opensPart: DOCKET_LINE.test(text.slice(leading[0].length).trim()),
       });
     } else if (trailing !== null) {
       candidates.push({
@@ -367,6 +379,7 @@ const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
         form: "trailing",
         length: trailing.length,
         last: index === lastText,
+        opensPart: false,
       });
     }
     offset += text.length;
@@ -409,6 +422,7 @@ const pageRuns = (
         step.length === 0 ||
         previous.number !== candidate.number - 1 ||
         (!candidate.last &&
+          !candidate.opensPart &&
           candidate.offset - previous.offset < PAGE_SEQUENCE.minPageChars)
       ) {
         continue;
@@ -513,6 +527,7 @@ const pageSequence = (
     const gap = candidate.offset - last.offset;
     if (
       candidate.last ||
+      (candidate.opensPart && gap <= PAGE_SEQUENCE.maxPageChars) ||
       (gap >= PAGE_SEQUENCE.minPageChars && gap <= PAGE_SEQUENCE.maxPageChars)
     ) {
       run.push(candidate);

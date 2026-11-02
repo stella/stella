@@ -164,6 +164,21 @@ describe("the page numbers the markup keeps from the file", () => {
     );
   });
 
+  test("a separate opinion opening a fresh page leaves the page before it short (III. ÚS 86/05)", async () => {
+    const blocks = await parsedFixture("sk-us-iii-us-86-05", "III. ÚS 86/05");
+    const texts = paragraphs(blocks).map(textOf);
+    // Page 21 holds only the decision's closing lines; page 22 opens the
+    // separate opinion with the docket. Every page number still leaves.
+    expect(texts.filter((text) => /^\d{1,2} \p{Ll}/u.test(text))).toEqual([]);
+    expect(
+      texts.some((text) =>
+        text.includes(
+          "Podľa jej vyjadrenia sa o tejto skutočnosti dozvedela až s veľkým časovým odstupom",
+        ),
+      ),
+    ).toBe(true);
+  });
+
   test("a page number closing a page's last line leaves the text (PL. ÚS 1/2021)", async () => {
     const blocks = await parsedFixture("sk-us-pl-us-1-2021", "PL. ÚS 1/2021");
     const first = paragraphs(blocks).find((block) => block.number === 1);
