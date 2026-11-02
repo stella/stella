@@ -2,7 +2,11 @@ import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  stripSearchParams,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 import { useShallow } from "zustand/shallow";
@@ -86,6 +90,10 @@ const searchSchema = routeSearchSchema({
 export const Route = createFileRoute("/_protected/workspaces/")({
   staticData: { presentation: routePresentation({ type: "inherit" }) },
   validateSearch: searchSchema,
+  // Active is the default view, so `/workspaces` stays the canonical address.
+  search: {
+    middlewares: [stripSearchParams({ status: "active" })],
+  },
   loaderDeps: ({ search }) => ({ status: search.status }),
   loader: async ({ context, deps }) => {
     // Prime the workspaces query the page suspends on so the fetch starts
