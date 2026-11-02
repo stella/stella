@@ -17,6 +17,7 @@ const { cleanup, render } = await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { ChatApprovalContext } =
   await import("@/components/chat/chat-approval-context");
 const { ChatEditorProvider } =
@@ -53,30 +54,23 @@ const renderWithProviders = (children: ReactNode) => {
     <ChatThreadTestRouter>
       <QueryClientProvider client={queryClient}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <ChatMattersContext
-            value={{ createDocumentMattersView: { type: "empty" } }}
-          >
-            <ChatApprovalContext value={testChatApprovalContextValue}>
-              <ChatEditorProvider>{children}</ChatEditorProvider>
-            </ChatApprovalContext>
-          </ChatMattersContext>
+          <FormattingProvider locale="en" timeZone="UTC">
+            <ChatMattersContext
+              value={{ createDocumentMattersView: { type: "empty" } }}
+            >
+              <ChatApprovalContext value={testChatApprovalContextValue}>
+                <ChatEditorProvider>{children}</ChatEditorProvider>
+              </ChatApprovalContext>
+            </ChatMattersContext>
+          </FormattingProvider>
         </IntlProvider>
       </QueryClientProvider>
     </ChatThreadTestRouter>,
   );
 };
 
-const renderAssistant = (sourceDocuments?: readonly ChatSourceDocument[]) => {
-  const message = {
-    id: "assistant-answer",
-    role: "assistant",
-    parts: [{ type: "text", content: "Answer text" }],
-    ...(sourceDocuments === undefined
-      ? {}
-      : { metadata: { sourceDocuments: [...sourceDocuments] } }),
-  } satisfies ChatUIMessage;
-
-  return renderWithProviders(
+const renderMessage = (message: ChatUIMessage) =>
+  renderWithProviders(
     <ChatThreadMessages
       activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
       approvalPendingMessageId={null}
@@ -90,9 +84,36 @@ const renderAssistant = (sourceDocuments?: readonly ChatSourceDocument[]) => {
       }}
     />,
   );
-};
 
-test("assistant footer places actions before a divider and wrapping citations", async () => {
+const renderAssistant = (sourceDocuments?: readonly ChatSourceDocument[]) =>
+  renderMessage({
+    id: "assistant-answer",
+    role: "assistant",
+    parts: [{ type: "text", content: "Answer text" }],
+    ...(sourceDocuments === undefined
+      ? {}
+      : { metadata: { sourceDocuments: [...sourceDocuments] } }),
+  });
+
+/** What each direct child of the footer row is. */
+const footerItems = (footer: Element) =>
+  [...footer.children].map((child) => {
+    if (!(child instanceof HTMLElement)) {
+      return "unexpected";
+    }
+    if (Object.hasOwn(child.dataset, "chatAnswerActions")) {
+      return "actions";
+    }
+    if (Object.hasOwn(child.dataset, "chatTurnDuration")) {
+      return "duration";
+    }
+    if (Object.hasOwn(child.dataset, "chatAnswerCitations")) {
+      return "citations";
+    }
+    return "unexpected";
+  });
+
+test("assistant footer places an unlinked source after the actions", async () => {
   const view = renderAssistant([
     {
       entityId: "decision-1",
@@ -108,30 +129,60 @@ test("assistant footer places actions before a divider and wrapping citations", 
     throw new Error("Expected an assistant answer footer");
   }
   expect(footer.classList.contains("flex-wrap")).toBe(true);
-  expect(
-    [...footer.children].map((child) => {
-      if (!(child instanceof HTMLElement)) {
-        return "unexpected";
-      }
-      if (Object.hasOwn(child.dataset, "chatAnswerActions")) {
-        return "actions";
-      }
-      if (Object.hasOwn(child.dataset, "chatAnswerCitationsDivider")) {
-        return "divider";
-      }
-      if (Object.hasOwn(child.dataset, "chatAnswerCitations")) {
-        return "citations";
-      }
-      return "unexpected";
-    }),
-  ).toEqual(["actions", "divider", "citations"]);
+  expect(footerItems(footer)).toEqual(["actions", "citations"]);
   const citations = footer.querySelector("[data-chat-answer-citations]");
   expect(citations?.classList.contains("contents")).toBe(true);
   expect(
-    citations?.querySelector("button")?.classList.contains("max-w-full"),
+    view
+      .getByText("Pl.ÚS 38/06")
+      .closest("button")
+      ?.classList.contains("max-w-full"),
   ).toBe(true);
-  expect(citations?.textContent).toContain("Pl.ÚS 38/06");
   expect(view.getByRole("button", { name: "Retry" })).toBeTruthy();
+});
+
+test("assistant footer holds the turn's duration and consulted sources in the actions' row", async () => {
+  const view = renderMessage({
+    id: "assistant-answer",
+    role: "assistant",
+    parts: [{ type: "text", content: "Answer text" }],
+    metadata: {
+      sourceDocuments: [
+        {
+          entityId: "decision-1",
+          kind: "decision",
+          mimeType: null,
+          title: "Pl.ÚS 38/06",
+          workspaceId: "workspace-1",
+        },
+      ],
+      turnTiming: { status: "finished", durationMs: 19_000 },
+    },
+  });
+  await act(async () => {});
+  const footer = view.container.querySelector("[data-chat-answer-footer]");
+  if (footer === null) {
+    throw new Error("Expected an assistant answer footer");
+  }
+  expect(footerItems(footer)).toEqual(["actions", "duration", "citations"]);
+  expect(footer.textContent).toContain("Worked for 19s");
+
+  // The disclosure's root leaves its trigger in the row; a wrapper with a box
+  // would take the row's items and break the line.
+  const trigger = view.getByRole("button", { name: "Also consulted (1)" });
+  const citations = footer.querySelector("[data-chat-answer-citations]");
+  expect(citations?.classList.contains("contents")).toBe(true);
+  expect(
+    citations
+      ?.querySelector('[data-slot="collapsible"]')
+      ?.classList.contains("contents"),
+  ).toBe(true);
+  // The divider travels with the trigger, so it never ends a wrapped line.
+  expect(
+    trigger.parentElement?.querySelector(
+      "[data-chat-answer-citations-divider]",
+    ),
+  ).toBeTruthy();
 });
 
 test("assistant footer omits the divider when there are no citations", async () => {
