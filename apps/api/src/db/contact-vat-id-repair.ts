@@ -12,13 +12,14 @@
  * never blocks a deploy, and the next repair phase moves it.
  */
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+import type { Verdict } from "@stll/db-load-gate/health";
 
 import {
   EU_VAT_ID_SQL_COMPACT,
   EU_VAT_ID_SQL_PATTERN,
 } from "@/api/lib/billing/invoice-prefill.logic";
 
+import { loadGateHealthConfig } from "../env-online-index";
 import { createBackfillRuntime } from "./backfill-runtime";
 import type {
   MigrationOwnedOnlineRepair,
@@ -109,7 +110,7 @@ const moveUntilEmpty = async (
     name: CONTACT_VAT_ID_REPAIR_NAME,
     tableName: TABLE_NAME,
     initialSize: BATCH,
-    config: defaultConfig,
+    config: loadGateHealthConfig(),
     connection,
     readVerdict,
     clock,

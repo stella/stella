@@ -164,6 +164,7 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: (world) => `/workspaces/${world.workspace.id}/invoices/new`,
   },
   staticRoute("/time/approvals"),
+  staticRoute("/time/report"),
 ];
 
 // These routes need richer domain setup than cheap route smoke should own.

@@ -118,21 +118,9 @@ export const isOnboardingSnapshot = (
  * would contradict it, so the list cannot outlive the truth.
  */
 export const NEVER_REQUESTED = {
-  mac: [
-    "screenRecording",
-    "microphone",
-    "camera",
-    "keystrokes",
-    "fullDiskAccess",
-  ],
-  other: ["screenRecording", "microphone", "camera", "keystrokes"],
-  windows: [
-    "screenRecording",
-    "microphone",
-    "camera",
-    "keystrokes",
-    "administrator",
-  ],
+  mac: ["screenRecording", "camera", "keystrokes", "fullDiskAccess"],
+  other: ["screenRecording", "camera", "keystrokes"],
+  windows: ["screenRecording", "camera", "keystrokes", "administrator"],
 } as const;
 
 export type NeverRequested =

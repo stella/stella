@@ -16,6 +16,7 @@ import {
   type WorkspaceNavigationCaller,
   workspacesKeys,
 } from "@/lib/workspaces/queries.logic";
+import { rememberTimeBillingAccess } from "@/lib/workspaces/time-billing-access-memory";
 
 export {
   DEFAULT_MATTER_ACTIVITY_FILTERS,
@@ -178,6 +179,10 @@ export const workspacesNavigationOptions = (
         statusScope: WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE,
       });
 
+      rememberTimeBillingAccess(
+        caller.organizationId,
+        page.features.timeBilling,
+      );
       return { workspaces: page.workspaces, features: page.features };
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,

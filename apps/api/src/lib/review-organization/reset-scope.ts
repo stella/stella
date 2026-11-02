@@ -33,6 +33,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   invitation: "Membership: invitations belong to the organization's roster.",
   audit_logs: "Audit trail: append-only, and it records the reset itself.",
   organization_settings: "Organization settings, not reviewer content.",
+  billing_draft_user_settings:
+    "Per-user billing draft consent and preferences, not reviewer content.",
   organization_access_states: "Organization access state, set by operators.",
   organization_configured_access: "Organization access, set by operators.",
   feature_enrolments:
@@ -47,6 +49,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   action_cost_calls: "Usage ledger: action cost history.",
   action_cost_records: "Usage ledger: action cost history.",
   hosted_checkout_claims: "Billing state, never reviewer content.",
+  organization_creation_requests:
+    "Account-owned creation replay receipts; retaining them prevents duplicate organizations after a content reset.",
   organization_professional_use_acceptances:
     "The organization's professional-use acceptance; written once, never reviewer content.",
   legal_list_verification_budgets: "Usage ledger: verification budget.",

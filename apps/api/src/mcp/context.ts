@@ -200,7 +200,10 @@ export type McpRequestContext = {
     listCaseLawProvisionDecisions?: typeof listCaseLawProvisionDecisions;
     /** Reads a provision's citing set once per agent search. */
     readCaseLawProvisionScope?: (
-      scope: Omit<Parameters<typeof readCaseLawProvisionScope>[1], "idSetMax">,
+      scope: Omit<
+        Parameters<typeof readCaseLawProvisionScope>[1],
+        "idSetMax" | "linkScanMax"
+      >,
     ) => ReturnType<typeof readCaseLawProvisionScope>;
     /** Whether any recorded link names the provision's act. */
     readProvisionWorkLinked?: (

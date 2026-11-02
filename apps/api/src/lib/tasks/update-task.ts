@@ -27,6 +27,7 @@ import type {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { normalizeEntityName } from "@/api/lib/entities/entity-name";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import type { AgendaItemKind } from "@/api/lib/entity-constants";
 import {
@@ -193,7 +194,7 @@ const taskUpdateValues = ({
   body,
   listItemType,
 }: TaskUpdateValuesOptions) => ({
-  ...(body.name !== undefined && { name: body.name }),
+  ...(body.name !== undefined && { name: normalizeEntityName(body.name) }),
   ...(agendaKind !== null && { agendaKind }),
   ...(body.status !== undefined && { status: body.status }),
   ...(body.priority !== undefined && { priority: body.priority }),

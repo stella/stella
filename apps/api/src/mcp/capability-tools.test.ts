@@ -1031,12 +1031,22 @@ describe("account export capability authority", () => {
   };
 
   test("catalog binds session capabilities to explicit account grants", () => {
-    expect(entries.map(({ id }) => id).toSorted()).toEqual([
-      "account-exports.create",
-      "account-exports.download.get",
-      "account-exports.get",
-      "account-exports.status.get",
-    ]);
+    const accountEntries = capabilityCatalog.filter(
+      (entry) => entry.accountScope !== undefined,
+    );
+    expect(accountEntries.map(({ id }) => id).toSorted()).toEqual(
+      capabilityCatalog
+        .filter((entry) => entry.handlerKind === "session")
+        .map(({ id }) => id)
+        .toSorted(),
+    );
+    expect(
+      accountEntries.find(({ id }) => id === "organizations.create")
+        ?.accountScope,
+    ).toBe("stella:organization_create");
+    for (const entry of accountEntries) {
+      expect(entry.accountScope).toBe(entry.scope);
+    }
     expect(
       entries.filter(({ access }) => access === "write").map(({ id }) => id),
     ).toEqual(["account-exports.create"]);
@@ -1754,7 +1764,9 @@ describe("describe_capability", () => {
       credential: { type: "oauth_client", clientId: "catalog-schema-probe" },
       grantedScopes: [
         ...baseContext.grantedScopes,
-        ...Object.values(ACCOUNT_EXPORT_SCOPES),
+        ...capabilityCatalog.flatMap((entry) =>
+          entry.accountScope === undefined ? [] : [entry.accountScope],
+        ),
       ],
     } satisfies AuthorizedMcpRequestContext;
     const drift: string[] = [];
@@ -2282,7 +2294,7 @@ describe("capability executor workspace resolution", () => {
 });
 
 describe("handlerCtx capability authorization lifetime", () => {
-  test("RPC submission headers do not become capability replay keys", async () => {
+  test("non-replay capabilities discard submission keys after the RPC body is consumed", async () => {
     const request = new Request("http://localhost/mcp", {
       method: "POST",
       body: JSON.stringify({ method: "tools/call" }),
@@ -2293,7 +2305,7 @@ describe("handlerCtx capability authorization lifetime", () => {
     });
     expect(await request.json()).toEqual({ method: "tools/call" });
     const handlerCtx = await capabilityHandlerContext({
-      capabilityId: "playbooks.create",
+      capabilityId: "playbooks.list",
       context: createContext(),
       input: { body: {}, params: {}, query: {} },
       request,
@@ -2302,6 +2314,44 @@ describe("handlerCtx capability authorization lifetime", () => {
     expect(handlerCtx.request.headers.get("Idempotency-Key")).toBeNull();
     expect(handlerCtx.request.headers.get("X-Request-Id")).toBe("rpc-request");
     expect(request.headers.get("Idempotency-Key")).toBe("rpc-submission");
+  });
+
+  test("every replay-capable create preserves its retry key through the MCP context", async () => {
+    const replayCapabilities: string[] = [];
+    for (const entry of capabilityCatalog.filter(({ id }) =>
+      id.endsWith(".create"),
+    )) {
+      const endpoint = await loadCapabilityEndpoint(entry.id);
+      expect(endpoint).not.toBeNull();
+      if (endpoint === null) {
+        continue;
+      }
+      const request = new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { "Idempotency-Key": "same-submission" },
+      });
+      const handlerCtx = await capabilityHandlerContext({
+        capabilityId: entry.id,
+        ...(endpoint.config.idempotency === undefined
+          ? {}
+          : { idempotency: endpoint.config.idempotency }),
+        context: createContext(),
+        input: { body: {}, params: {}, query: {} },
+        request,
+        workspaceId: undefined,
+      });
+      if (endpoint.config.idempotency?.type === "replay") {
+        replayCapabilities.push(entry.id);
+        expect(handlerCtx.request.headers.get("Idempotency-Key")).toBe(
+          "same-submission",
+        );
+      } else {
+        expect(handlerCtx.request.headers.get("Idempotency-Key")).toBeNull();
+      }
+      expect(request.headers.get("Idempotency-Key")).toBe("same-submission");
+    }
+    expect(replayCapabilities.length).toBeGreaterThan(1);
+    expect(replayCapabilities).toContain("organizations.create");
   });
 
   test("replay-enabled handlers receive the per-call transport key after the RPC body is consumed", async () => {
@@ -2669,6 +2719,46 @@ describe("capability executor upload purpose gate", () => {
         await invoke(["stella:matters_write", "stella:documents_write"]),
       ).valid,
     ).toBe(true);
+  });
+
+  // The executor refuses an uncovered purpose before dispatch; the handler
+  // checks the same consent against the scopes the MCP session carries.
+  test("the upload handler holds an MCP call to its purpose's consent too", async () => {
+    const reserved: unknown[] = [];
+    const reservationDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
+      async (run: (tx: unknown) => unknown) =>
+        await run({
+          insert: () => ({
+            values: async (row: unknown) => {
+              reserved.push(row);
+            },
+          }),
+        }),
+    );
+    const endpoint = await loadCapabilityEndpoint("uploads.create");
+    const invoke = async (grantedScopes: string[]) =>
+      await endpoint?.handler(
+        await capabilityHandlerContext({
+          capabilityId: "uploads.create",
+          context: createContext({
+            grantedScopes,
+            safeDb: toSafeDbMock(reservationDb),
+          }),
+          input: { body: skillPackBody, params: {}, query: {} },
+          request: new Request("http://localhost/mcp", { method: "POST" }),
+          workspaceId: toSafeId<"workspace">("ws_1"),
+        }),
+      );
+
+    expect(await invoke(["stella:matters_write"])).toMatchObject({
+      code: 403,
+      response: { message: "This upload needs the stella:skills scope" },
+    });
+    expect(reserved).toEqual([]);
+    expect(
+      await invoke(["stella:matters_write", "stella:skills"]),
+    ).toMatchObject({ uploadId: expect.any(String) });
+    expect(reserved).toMatchObject([{ purpose: "agent_skill" }]);
   });
 
   test("finalize takes the purpose from the stored upload, not from the caller", async () => {
@@ -3835,9 +3925,9 @@ describe("capability executor deployment feature gate", () => {
           !isFeatureEnabled(snapshot, entry.featureId, context),
       )
       .map(({ id }) => id);
-    // Account exports also require account consent, which this caller lacks.
+    // Account capabilities require their declared consent, which this caller lacks.
     const accountConsentIds = capabilityCatalog
-      .filter((entry) => entry.id.startsWith("account-exports."))
+      .filter((entry) => entry.accountScope !== undefined)
       .map(({ id }) => id);
     expect(
       [

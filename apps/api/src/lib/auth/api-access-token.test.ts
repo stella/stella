@@ -255,6 +255,67 @@ describe("which routes an API access token opens", () => {
     ]);
   });
 
+  test("search results open at the read scope", () => {
+    const search = { method: "POST", route: "/v1/search" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...search, scopes: ["stella:read"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...search,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:read"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+  });
+
+  test("search filter values open at the read scope", () => {
+    const facets = { method: "POST", route: "/v1/search/facets" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...facets, scopes: ["stella:read"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...facets,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:read"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+  });
+
+  test("the caller's recent searches open at the read scope", () => {
+    const history = { method: "GET", route: "/v1/search-history" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...history, scopes: ["stella:read"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...history,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:read"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+  });
+
+  test("the other search routes stay closed", () => {
+    for (const [method, route] of [
+      ["POST", "/v1/search/preview"],
+      ["POST", "/v1/search/refine"],
+      ["POST", "/v1/search/summary"],
+      ["POST", "/v1/search/summary/chat"],
+      ["GET", "/v1/saved-searches"],
+      ["POST", "/v1/saved-searches"],
+      ["PATCH", "/v1/saved-searches/:savedSearchId"],
+      ["DELETE", "/v1/saved-searches/:savedSearchId"],
+      ["POST", "/v1/search-history"],
+      ["DELETE", "/v1/search-history"],
+      ["DELETE", "/v1/search-history/:entryId"],
+      ["GET", "/v1/search-history/import-clock"],
+      ["POST", "/v1/search-history/import"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({ method, route, scopes: MOBILE_SCOPES }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
+  });
+
   test("a request no route matched is refused", () => {
     expect(
       admitApiAccessTokenRoute({
