@@ -350,12 +350,13 @@ describe("pglite role grants mirror the committed migrations", () => {
     expect(
       migrationPairs.has("stella_public_law_reader:case_law_decisions"),
     ).toBe(false);
-    // Expand phase: the previous release still reads the base table.
+    // Both readers read decisions through the views; the contract migration
+    // revokes the base table, and the parser has to apply that REVOKE.
     expect(migrationPairs.has("stella_caselaw_reader:case_law_decisions")).toBe(
-      true,
+      false,
     );
     expect(harnessPairs.has("stella_caselaw_reader:case_law_decisions")).toBe(
-      true,
+      false,
     );
     for (const view of [
       "case_law_published_decisions",
@@ -374,21 +375,25 @@ describe("pglite role grants mirror the committed migrations", () => {
       "stella_ingestion:case_law_sources:stored_total:UPDATE";
     expect(migrationColumns.has(storedTotalGrant)).toBe(true);
     expect(harnessColumns.has(storedTotalGrant)).toBe(true);
+    // The multi-line column REVOKE in the contract migration has to undo
+    // the earlier column grants on the base table.
     expect(
       migrationColumns.has(
         "stella_public_law_reader:case_law_decisions:case_number:SELECT",
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       harnessColumns.has(
         "stella_public_law_reader:case_law_decisions:case_number:SELECT",
       ),
-    ).toBe(true);
-    expect(
-      migrationColumns.has(
-        "stella_public_law_reader:case_law_published_decisions:case_number:SELECT",
-      ),
-    ).toBe(true);
+    ).toBe(false);
+    for (const columns of [migrationColumns, harnessColumns]) {
+      expect(
+        columns.has(
+          "stella_public_law_reader:case_law_published_decisions:case_number:SELECT",
+        ),
+      ).toBe(true);
+    }
   });
 });
 
