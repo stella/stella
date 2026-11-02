@@ -498,7 +498,7 @@
     "aiDraftModeChanged": "Fakturačné pravidlá vašej kancelárie sa zmenili. Navrhnite znova.",
     "aiDraftTooLarge": "Tento záznam obsahuje viac podrobností, než jeden návrh zvládne.",
     "aiDraftFailed": "stella AI tento popis nenavrhla.",
-    "aiDraftEarlierEntries": "{count, plural, one {Nadväzuje na # skorší záznam} few {Nadväzuje na # skoršie záznamy} many {Nadväzuje na # skoršieho záznamu} other {Nadväzuje na # skorších záznamov}}",
+    "aiDraftEarlierEntries": "{count, plural, one {Nadväzuje na # skorší záznam} few {Nadväzuje na # skoršie záznamy} other {Nadväzuje na # skorších záznamov}}",
     "aiDraftLabel": "AI",
     "aiDraftDisclosure": "Návrhy AI sú odporúčania, ktoré stella vytvára z kontrolovaného záznamu, vašich skorších záznamov v spise a fakturačných pravidiel kancelárie, ak ich pridala. Každý záznam pred vytvorením skontrolujte.",
     "billingDraftsTitle": "Návrhy stella AI",

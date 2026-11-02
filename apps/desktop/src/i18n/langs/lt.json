@@ -498,7 +498,7 @@
     "aiDraftModeChanged": "Jūsų kontoros atsiskaitymo gairės pasikeitė. Parenkite iš naujo.",
     "aiDraftTooLarge": "Šiame įraše yra daugiau informacijos, nei gali panaudoti vienas juodraštis.",
     "aiDraftFailed": "stella AI nepavyko parengti šio aprašo.",
-    "aiDraftEarlierEntries": "{count, plural, one {Remiasi # ankstesniu įrašu} few {Remiasi # ankstesniais įrašais} many {Remiasi # ankstesnio įrašo} other {Remiasi # ankstesnių įrašų}}",
+    "aiDraftEarlierEntries": "{count, plural, one {Remiasi # ankstesniu įrašu} few {Remiasi # ankstesniais įrašais} other {Remiasi # ankstesnių įrašų}}",
     "aiDraftLabel": "DI",
     "aiDraftDisclosure": "DI juodraščiai yra pasiūlymai, kuriuos stella sukuria pagal peržiūrimą įrašą, jūsų ankstesnius įrašus byloje ir, jei kontora jas pridėjo, jos atsiskaitymo gaires. Prieš kurdami peržiūrėkite kiekvieną įrašą.",
     "billingDraftsTitle": "stella AI juodraščiai",
