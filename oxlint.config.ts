@@ -321,6 +321,13 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("calendar-day.fixture.scheduler.ts", [
     "calendar-day/no-wall-clock-scheduler-decision",
   ]),
+  ...[
+    "refusal-code.fixture.ts",
+    "refusal-code.fixture.legacy.ts",
+    "refusal-code.fixture.stale.ts",
+  ].map((file) =>
+    fixtureRuleOverride(file, ["refusal-code/require-refusal-code"]),
+  ),
   fixtureRuleOverride("require-cn-for-classname-composition.fixture.tsx", [
     "require-cn-for-classname-composition/require-cn-for-classname-composition",
   ]),
@@ -1902,6 +1909,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
     "./.oxlint-plugins/no-ambient-nondeterminism.ts",
     "./.oxlint-plugins/calendar-day.ts",
+    "./.oxlint-plugins/refusal-code.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-layout-motion-classes.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
@@ -3525,6 +3533,17 @@ const config = defineConfig({
       ],
       rules: {
         "calendar-day/no-utc-user-day": "off",
+      },
+    },
+    {
+      // A client refusal names a stable `code`: clients localize refusals by
+      // code and drop the English message and hint of a codeless one.
+      // Existing sites are budgeted in scripts/refusal-code-ledger.json,
+      // which only shrinks.
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**"],
+      rules: {
+        "refusal-code/require-refusal-code": "error",
       },
     },
     {
