@@ -31,15 +31,15 @@ const readsClock = (value: unknown): boolean => {
     return false;
   }
   const { tag, quasi } = value;
-  if (!isNode(tag) || tag.type !== "Identifier" || tag["name"] !== "sql") {
+  if (!isNode(tag) || tag.type !== "Identifier" || tag.name !== "sql") {
     return false;
   }
-  if (!isNode(quasi) || !Array.isArray(quasi["quasis"])) {
+  if (!isNode(quasi) || !Array.isArray(quasi.quasis)) {
     return false;
   }
-  return quasi["quasis"].some((element) => {
+  return quasi.quasis.some((element) => {
     // A template element's value is a plain { raw, cooked } record.
-    const text: unknown = isNode(element) ? element["value"] : undefined;
+    const text: unknown = isNode(element) ? element.value : undefined;
     return (
       typeof text === "object" &&
       text !== null &&
@@ -50,13 +50,16 @@ const readsClock = (value: unknown): boolean => {
   });
 };
 
-const propertyName = (node: Node): string | undefined => {
-  const key = node["key"];
-  if (node["computed"] === true || !isNode(key)) {
+const propertyName = (node: unknown): string | undefined => {
+  if (!isNode(node)) {
     return undefined;
   }
-  return key.type === "Identifier" && typeof key["name"] === "string"
-    ? key["name"]
+  const key = node.key;
+  if (node.computed === true || !isNode(key)) {
+    return undefined;
+  }
+  return key.type === "Identifier" && typeof key.name === "string"
+    ? key.name
     : undefined;
 };
 
@@ -70,14 +73,14 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const check = (object: unknown) => {
-          if (!isNode(object) || !Array.isArray(object["properties"])) {
+          if (!isNode(object) || !Array.isArray(object.properties)) {
             return;
           }
-          const clockReads = object["properties"].filter(
+          const clockReads = object.properties.filter(
             (property) =>
               isNode(property) &&
               property.type === "Property" &&
-              readsClock(property["value"]),
+              readsClock(property.value),
           );
           for (const property of clockReads.slice(1)) {
             context.report({ node: property, messageId: "twoInstants" });
