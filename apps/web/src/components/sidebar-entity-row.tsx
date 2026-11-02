@@ -73,7 +73,7 @@ export const SidebarEntityRow = ({
       ? [
           {
             icon: <Trash2Icon />,
-            label: t("common.delete"),
+            label: t("workspaces.deleteFromMatter"),
             onClick: () => onDelete(returnFocus.current),
             variant: "destructive" as const,
           },

@@ -21,6 +21,11 @@ import {
 } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
 import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ArrowUpIcon,
@@ -111,6 +116,7 @@ import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
   canRetryChatRequest,
+  isChatMessageEditRefusal,
 } from "@/components/chat/chat-user-actions";
 import { ConnectConnectorCard } from "@/components/chat/connect-connector-card";
 import { ContextNotice } from "@/components/chat/context-notice";
@@ -129,6 +135,11 @@ import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { useLiveElapsedMs } from "@/components/chat/use-live-elapsed";
 import { useSteadyValue } from "@/components/chat/use-steady-value";
+import {
+  EditableUserMessage,
+  useUserMessageEdit,
+} from "@/components/chat/user-message-edit";
+import type { UserMessageEditActions } from "@/components/chat/user-message-edit";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { DocumentIcon } from "@/components/document-icon";
@@ -140,6 +151,7 @@ import {
 } from "@/components/references/reference.logic";
 import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
 import {
+  CHAT_REQUEST_ERROR_TRANSLATION_KEYS,
   type ChatRequestError,
   findChatRequestError,
 } from "@/features/chat/chat-request-error";
@@ -308,6 +320,7 @@ export const ChatThreadMessages = ({
   queuedMessageActions,
   streamdownComponents,
   threadRef,
+  userMessageEdit,
   workspaceId,
 }: ChatThreadMessagesProps) => {
   const { activeOrganizationId } = useChatApproval();
@@ -356,6 +369,19 @@ export const ChatThreadMessages = ({
   // body markup stays identical across surfaces; only the surrounding turn
   // grouping differs when `stickyUserMessages` is on.
   const renderMessageNode = (message: ChatUIMessage, index: number) => {
+    // A turn can persist an assistant message that shows nothing (only
+    // hidden reasoning, for example) ahead of the one holding its tool card
+    // and answer. Rendered, it is an empty block whose spacing opens a gap
+    // under the question. The last message always renders: its footer
+    // carries retry and stop.
+    if (
+      message.role === "assistant" &&
+      index !== messages.length - 1 &&
+      message.metadata?.contextNotice === undefined &&
+      !hasVisibleAssistantParts(message.parts)
+    ) {
+      return null;
+    }
     // Only an answer offers message actions. Its whole box, gaps between its
     // parts included, is the right-click target for what its "…" opens.
     const canFork =
@@ -478,11 +504,17 @@ export const ChatThreadMessages = ({
                       );
                     case "text":
                       return (
-                        <TextMessageParts
+                        <EditableUserMessage
+                          actions={userMessageEdit}
+                          isGenerating={generationActive}
                           message={message}
-                          messages={messages}
-                          index={index}
-                        />
+                        >
+                          <TextMessageParts
+                            message={message}
+                            messages={messages}
+                            index={index}
+                          />
+                        </EditableUserMessage>
                       );
                     default:
                       policy satisfies never;
@@ -538,9 +570,11 @@ export const ChatThreadMessages = ({
                   approvalPendingMessageId={approvalPendingMessageId}
                   headerIndex={turn.index}
                   headerMessage={turn.header}
+                  isGenerating={generationActive}
                   key={turn.header.id}
                   messages={messages}
                   scrollRef={scrollRef}
+                  userMessageEdit={userMessageEdit}
                 >
                   {turn.body.map((item) =>
                     renderMessageNode(item.message, item.index),
@@ -579,8 +613,10 @@ type StickyUserTurnProps = {
   approvalPendingMessageId: string | null;
   headerIndex: number;
   headerMessage: PersistedChatMessage;
+  isGenerating: boolean;
   messages: readonly PersistedChatMessage[];
   scrollRef: RefObject<HTMLDivElement | null> | null;
+  userMessageEdit: UserMessageEditActions | undefined;
   children: ReactNode;
 };
 
@@ -597,11 +633,18 @@ const StickyUserTurn = ({
   approvalPendingMessageId,
   headerIndex,
   headerMessage,
+  isGenerating,
   messages,
   scrollRef,
+  userMessageEdit,
   children,
 }: StickyUserTurnProps) => {
   const t = useTranslations();
+  const messageEdit = useUserMessageEdit({
+    actions: userMessageEdit,
+    isGenerating,
+    message: headerMessage,
+  });
   const sentinelRef = useRef<HTMLDivElement>(null);
   const stickyHeaderRef = useRef<HTMLDivElement>(null);
   const [isStuck, setIsStuck] = useState(false);
@@ -744,11 +787,13 @@ const StickyUserTurn = ({
               pointer-events-none so plain text falls through to this jump
               target, and only its interactive children re-enable clicks. */}
           {isStuck && (
-            <button
+            // An invisible hit area: a plain button paints nothing, so no
+            // fill shows over the pinned header.
+            <Button
               aria-label={t("chat.jumpToMessage")}
-              className="absolute inset-0 z-0 cursor-pointer"
+              className="absolute inset-0 z-0"
               onClick={handleScrollBack}
-              type="button"
+              variant="plain"
             />
           )}
           <Message
@@ -764,7 +809,7 @@ const StickyUserTurn = ({
             from="user"
             data-chat-message-id={headerMessage.id}
           >
-            <MessageContent>
+            <MessageContent className={cn(messageEdit.editing && "hidden")}>
               <div className="group-data-[stuck=true]/sticky:hidden">
                 <UserAttachments parts={fileParts} />
               </div>
@@ -776,6 +821,9 @@ const StickyUserTurn = ({
               )}
               <div
                 className={cn(
+                  // Anchors the idle edit action, which sits in this text box
+                  // as it does in the flat layout's `EditableUserMessage`.
+                  "relative",
                   "group-data-[stuck=true]/sticky:max-h-11 group-data-[stuck=true]/sticky:overflow-hidden",
                   // Fade the clipped overflow so a long pinned message dissolves
                   // instead of ending in a hard mid-glyph cut. The absolute-length
@@ -795,8 +843,10 @@ const StickyUserTurn = ({
                     />
                   ) : null,
                 )}
+                {!messageEdit.editing && messageEdit.editor}
               </div>
             </MessageContent>
+            {messageEdit.editing && messageEdit.editor}
           </Message>
         </div>
       </div>
@@ -1096,13 +1146,6 @@ type ChatErrorTranslationKey =
   | "chat.sendError"
   | (typeof CHAT_REQUEST_ERROR_TRANSLATION_KEYS)[ChatRequestError["kind"]];
 
-const CHAT_REQUEST_ERROR_TRANSLATION_KEYS = {
-  preparation_failed: "chat.sendErrorPreparationFailed",
-  connection_failed: "chat.sendErrorConnectionFailed",
-  timed_out: "chat.sendErrorTimedOut",
-  not_started: "chat.sendErrorNotStarted",
-} as const satisfies Record<ChatRequestError["kind"], TranslationKey>;
-
 const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
   const requestError = findChatRequestError(error);
   if (requestError !== undefined) {
@@ -1142,7 +1185,9 @@ export const ChatErrorMessage = ({
     (refusal.status === 400 || refusal.status === 422) &&
     !isDisplayableAPIError(refusal);
   let errorMessage = refusal?.message ?? t(chatErrorTranslationKey(error));
-  if (!canRetryChatRequest(error)) {
+  if (isChatMessageEditRefusal(error)) {
+    errorMessage = t("chat.editMessageRefused");
+  } else if (!canRetryChatRequest(error)) {
     errorMessage = t("chat.sendErrorContinuationRejected");
   } else if (rejectedInput) {
     errorMessage = t("errors.api.validation");
@@ -1450,6 +1495,8 @@ type ChatThreadMessagesProps = {
   /** The thread being rendered. Enables the per-message export action; omitted
    *  on embedded surfaces that don't offer export. */
   threadRef?: ChatThreadRef | undefined;
+  /** Editing the user's sent messages; omitted, no message offers it. */
+  userMessageEdit?: UserMessageEditActions | undefined;
   workspaceId?: string | undefined;
 };
 
@@ -1765,6 +1812,29 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
 
 // Share visibility with the renderer so hidden skill misses and searches
 // folded into the sources row cannot produce an empty process disclosure.
+/**
+ * Whether any part of an assistant message draws something: a step, card or
+ * answer text, or a finished web search or fetch, which shows in the sources
+ * tray instead of as a step.
+ */
+const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
+  toAssistantPartRenderEntries(parts).some((entry) => {
+    if (entry.type !== "standard") {
+      return true;
+    }
+    const { part } = entry;
+    if (part.type === "text") {
+      return part.content.trim().length > 0;
+    }
+    if (
+      part.type === "tool-call" &&
+      (part.name === "web_search" || part.name === "fetch_url")
+    ) {
+      return true;
+    }
+    return isVisibleProcessEntry(entry);
+  });
+
 const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
   if (entry.type !== "standard") {
     return true;
@@ -2209,57 +2279,61 @@ const AssistantProcessGroup = ({
           unitDisplay: "narrow",
         });
   return (
-    <details
+    <div
       data-slot="chat-step-list"
       className={cn(
         "max-w-[min(44rem,100%)] rounded-md",
         isOpen && "border-border/70 bg-muted/20 border",
         appearedLive && "motion-safe:animate-text-fade",
       )}
-      onToggle={(event) => {
-        setIsOpen(event.currentTarget.open);
-      }}
-      open={isOpen}
     >
-      <summary
-        className={cn(
-          "inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5",
-          "rounded-md px-2.5 py-1.5 text-xs",
-          !isOpen &&
-            "border-border/70 bg-background/70 hover:bg-muted/40 border shadow-sm",
-          "text-muted-foreground",
-          "[&::-webkit-details-marker]:hidden",
-        )}
-      >
-        <DirectionalIcon
-          className={cn(
-            "size-3.5 shrink-0 transition-transform",
-            isOpen && "rotate-90",
-          )}
-          flip={!isOpen}
-          icon={ChevronRightIcon}
-        />
-        <span className="text-xs font-medium">
-          <SwapText
-            className={cn(shownStepKey !== null && CHAT_PENDING_TEXT_CLASS)}
-            text={label}
-          />
-        </span>
-        {elapsed !== null && (
-          <>
-            <span aria-hidden="true" className="text-foreground-placeholder">
-              ·
+      <Collapsible onOpenChange={setIsOpen} open={isOpen}>
+        <CollapsibleTrigger render={<Button variant="plain" />}>
+          <span
+            className={cn(
+              "inline-flex min-h-8 items-center gap-1.5",
+              "rounded-md px-2.5 py-1.5 text-xs",
+              !isOpen &&
+                "border-border/70 bg-background/70 hover:bg-muted/40 border shadow-sm",
+              "text-muted-foreground",
+            )}
+          >
+            <DirectionalIcon
+              className={cn(
+                "size-3.5 shrink-0 transition-transform",
+                isOpen && "rotate-90",
+              )}
+              flip={!isOpen}
+              icon={ChevronRightIcon}
+            />
+            <span className="text-xs font-medium">
+              <SwapText
+                className={cn(shownStepKey !== null && CHAT_PENDING_TEXT_CLASS)}
+                text={label}
+              />
             </span>
-            {/* The timer ticks plainly: a fade every second is motion for
+            {elapsed !== null && (
+              <>
+                <span
+                  aria-hidden="true"
+                  className="text-foreground-placeholder"
+                >
+                  ·
+                </span>
+                {/* The timer ticks plainly: a fade every second is motion for
                 its own sake. */}
-            <span className="text-foreground-ghost tabular-nums">
-              {elapsed}
-            </span>
-          </>
-        )}
-      </summary>
-      <div className="flex flex-col gap-1 px-2.5 pb-2.5">{children}</div>
-    </details>
+                <span className="text-foreground-ghost tabular-nums">
+                  {elapsed}
+                </span>
+              </>
+            )}
+          </span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel>
+          <div className="flex flex-col gap-1 px-2.5 pb-2.5">{children}</div>
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
   );
 };
 
@@ -2328,33 +2402,29 @@ const AssistantThinkingPart = ({
   // time, and a trailing chevron that shows on hover, so every step in a
   // run lines up and reads at one size.
   return (
-    <details
-      className="group/reasoning my-0.5 max-w-xl text-sm"
-      onToggle={(event) => {
-        setIsOpen(event.currentTarget.open);
-      }}
-      open={isOpen}
-    >
-      <summary
-        className={cn(
-          "flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg ps-2",
-          "text-muted-foreground hover:bg-muted/35 hover:text-foreground-muted",
-          "[&::-webkit-details-marker]:hidden",
-        )}
-      >
-        <AssistantThinkingHeader
-          isExpanded={isOpen}
-          isStreaming={isStreaming}
-          reasoningTokenCount={reasoningTokenCount}
-        />
-      </summary>
-      <AssistantThinkingBody
-        components={components}
-        isStreaming={isStreaming}
-        restorationPairs={restorationPairs}
-        text={text}
-      />
-    </details>
+    <div className="group/reasoning my-0.5 max-w-xl text-sm">
+      <Collapsible onOpenChange={setIsOpen} open={isOpen}>
+        <CollapsibleTrigger
+          render={<Button className="flex w-full" variant="plain" />}
+        >
+          <span className="text-muted-foreground hover:bg-muted/35 hover:text-foreground-muted flex min-h-11 w-full items-center gap-2 rounded-lg ps-2">
+            <AssistantThinkingHeader
+              isExpanded={isOpen}
+              isStreaming={isStreaming}
+              reasoningTokenCount={reasoningTokenCount}
+            />
+          </span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel>
+          <AssistantThinkingBody
+            components={components}
+            isStreaming={isStreaming}
+            restorationPairs={restorationPairs}
+            text={text}
+          />
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
   );
 };
 

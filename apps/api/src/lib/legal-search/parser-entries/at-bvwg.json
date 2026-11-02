@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "AT_BVWG",
   "key": "at-bvwg",
-  "parserVersion": 10,
+  "parserVersion": 11,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Read RIS decisions from their element vocabulary: protected dashes, ampersands, angle brackets, tabs and line breaks print their characters, superscripts, underline and links keep their inlines, list items are paragraphs of their own, letter-spaced words read as words, and wrapped transcript lines join at the publisher's paragraph breaks."
+    "reason": "Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles."
   }
 }

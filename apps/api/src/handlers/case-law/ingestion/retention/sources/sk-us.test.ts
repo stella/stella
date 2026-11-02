@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
@@ -15,7 +15,10 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { isRecord } from "@/api/lib/type-guards";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const fetchFixture = createTestFetch();
 
 const ADAPTER_FIXTURES = new URL(
   "../../adapters/__fixtures__/",
@@ -68,22 +71,24 @@ const crawledDecision = async (
   fixture: (typeof RECORDED)[number],
 ): Promise<IngestionResult> => {
   const content = await recordedContent(fixture.url);
-  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    const url = new URL(input instanceof Request ? input.url : String(input));
-    if (url.pathname === "/o/v1/dms/content") {
-      return new Response(JSON.stringify({ content }), {
-        headers: { "Content-Type": "application/json" },
+  fetchFixture.set(
+    asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname === "/o/v1/dms/content") {
+        return new Response(JSON.stringify({ content }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.pathname.startsWith("/docDownload/")) {
+        return new Response(new TextEncoder().encode("%PDF-1.4\n"), {
+          headers: { "Content-Type": "application/pdf" },
+        });
+      }
+      return new Response(`unexpected request: ${url.toString()}`, {
+        status: 500,
       });
-    }
-    if (url.pathname.startsWith("/docDownload/")) {
-      return new Response(new TextEncoder().encode("%PDF-1.4\n"), {
-        headers: { "Content-Type": "application/pdf" },
-      });
-    }
-    return new Response(`unexpected request: ${url.toString()}`, {
-      status: 500,
-    });
-  });
+    }),
+  );
   const built = await buildSkUsDecision(fixture.listing, {
     context: ABSENT_PAGE,
   });
@@ -94,11 +99,6 @@ const crawledDecision = async (
 };
 
 describe("sk-us retention projection", () => {
-  const originalFetch = globalThis.fetch;
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
   test.each(RECORDED.map((fixture) => [fixture.name, fixture] as const))(
     "the parsed decision keeps the rendered text: %s",
     async (_name, fixture) => {

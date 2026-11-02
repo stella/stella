@@ -55,7 +55,11 @@ type InviteMemberVars = {
   resend?: boolean;
 };
 
-export const useInviteMember = () => {
+/**
+ * `isShownInline` is asked when a failure arrives, not when the request
+ * starts: a form closed in between can no longer show it, so a toast does.
+ */
+export const useInviteMember = (isShownInline: () => boolean = () => false) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
@@ -81,7 +85,9 @@ export const useInviteMember = () => {
         fingerprintKey: "useInviteMember:failure",
         scope: { type: "handler", handlerId: "useInviteMember:failure" },
       });
-      notifyUserError(error, getTranslator()("errors.actionFailed"));
+      if (!isShownInline()) {
+        notifyUserError(error, getTranslator()("errors.actionFailed"));
+      }
     },
   });
 };
@@ -98,10 +104,6 @@ export const useCancelInvitation = () => {
       });
 
       if (result.error) {
-        notifyUserError(
-          toAuthClientError(result.error),
-          t("errors.actionFailed"),
-        );
         throw toAuthClientError(result.error);
       }
 

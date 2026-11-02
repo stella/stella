@@ -40,6 +40,19 @@
     "answerNeedsInput": "Diese Antwort braucht Ihre Eingabe. Setzen Sie sie in stella im Web fort.",
     "answerFailed": "Die Antwort konnte nicht abgeschlossen werden.",
     "composerMenu": "Menü für Anhänge und Werkzeuge öffnen",
+    "attachFile": "Datei anhängen",
+    "attachment": "Anhang",
+    "fileTooLarge": "Datei überschreitet das Limit von {maxSize}",
+    "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
+    "unsupportedFileType": "Nicht unterstützter Dateityp",
+    "uploadFailed": "Datei konnte nicht verarbeitet werden",
+    "scanDocument": "Dokument scannen",
+    "removeAttachment": "{name} entfernen",
+    "attachmentReading": "Wird vorbereitet…",
+    "attachmentUploading": "Wird hochgeladen…",
+    "pickFailed": "Die Dateiauswahl konnte nicht geöffnet werden. Versuchen Sie es erneut.",
+    "sendFileRefused": "Eine Datei konnte nicht gesendet werden, daher wurde die Nachricht nicht gesendet. Entfernen Sie die Datei und versuchen Sie es erneut.",
+    "sendFileNotAnonymizable": "Diese Unterhaltung ist anonymisiert, und stella konnte eine der Dateien nicht anonymisieren, daher wurde nichts gesendet. Entfernen Sie die Datei und versuchen Sie es erneut.",
     "pickTitle": "Unterhaltung wählen",
     "pickDescription": "Wählen Sie einen Verlauf aus der Liste oder beginnen Sie mit + einen neuen."
   },
@@ -61,7 +74,8 @@
       "none": "Kein Datum",
       "today": "Heute",
       "tomorrow": "Morgen",
-      "nextWeek": "In einer Woche"
+      "nextWeek": "In einer Woche",
+      "pick": "Datum wählen"
     },
     "due": {
       "overdue": "Überfällig",
@@ -76,7 +90,14 @@
     "statusFailed": "Die Aufgabe konnte nicht geändert werden. Versuchen Sie es erneut.",
     "pickTitle": "Aufgabe wählen",
     "pickDescription": "Wählen Sie eine Aufgabe aus der Liste, um sie hier zu sehen.",
-    "openMatter": "Akte öffnen"
+    "openMatter": "Akte öffnen",
+    "assignedTo": "Zugewiesen an",
+    "nobody": "Nicht zugewiesen",
+    "assign": "Zuweisen",
+    "doneAssigning": "Fertig",
+    "someone": "Jemand",
+    "membersFailed": "Die Mitglieder der Akte konnten nicht geladen werden.",
+    "assignFailed": "Die Aufgabe konnte nicht zugewiesen werden. Versuchen Sie es erneut."
   },
   "matters": {
     "emptyTitle": "Noch keine Akten",
@@ -120,7 +141,9 @@
     },
     "add": "Hinzufügen",
     "scanDocument": "Dokument scannen",
-    "newTask": "Neue Aufgabe"
+    "newTask": "Neue Aufgabe",
+    "uploadDocument": "Dokument hochladen",
+    "uploadFailed": "Das Dokument konnte nicht hochgeladen werden. Versuchen Sie es erneut."
   },
   "entity": {
     "type": "Typ",
@@ -142,7 +165,16 @@
     "preview": "Vorschau öffnen",
     "previewDescription": "Diese Datei wird in der Systemvorschau geöffnet.",
     "unrendered": "Dieses Dokument kann hier nicht angezeigt werden, die Systemvorschau kann es aber eventuell öffnen.",
-    "details": "Details"
+    "details": "Details",
+    "zoomOut": "Verkleinern",
+    "zoomIn": "Vergrößern",
+    "zoomFit": "An Breite anpassen",
+    "fit": "Breite",
+    "appearance": {
+      "system": "Darstellung: automatisch",
+      "light": "Darstellung: hell",
+      "dark": "Darstellung: dunkel"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -170,7 +202,8 @@
     "server": "Server",
     "signOut": "Abmelden",
     "deleteAccount": "Konto löschen",
-    "deleteAccountHint": "Öffnet Ihr Konto im Web, wo Sie es mit allem, was Ihnen gehört, löschen können."
+    "deleteAccountHint": "Öffnet Ihr Konto im Web, wo Sie es mit allem, was Ihnen gehört, löschen können.",
+    "signOutFailed": "Die Abmeldung konnte nicht abgeschlossen werden. Versuchen Sie es erneut."
   },
   "header": {
     "search": "Suchen"
@@ -184,6 +217,7 @@
     "headnote": "Leitsatz",
     "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
     "openSource": "Originalquelle öffnen",
+    "openFailed": "Der Link konnte nicht geöffnet werden.",
     "loadFailed": "Die Rechtsprechung konnte nicht geladen werden.",
     "share": "Teilen"
   },
@@ -269,6 +303,29 @@
   "palette": {
     "placeholder": "Akten und Chats suchen oder einen Befehl ausführen",
     "noResults": "Nichts passt zu „{query}“"
+  },
+  "search": {
+    "placeholder": "stella durchsuchen",
+    "clear": "Suche löschen",
+    "cancel": "Abbrechen",
+    "recent": "Letzte Suchen",
+    "clearRecent": "Löschen",
+    "hint": "Durchsuchen Sie Akten, Dokumente, Aufgaben, Chats und Rechtsprechung.",
+    "filters": "Filter",
+    "noResultsTitle": "Keine Ergebnisse",
+    "noResults": "Nichts passt zu „{query}“. Versuchen Sie andere Wörter oder entfernen Sie einen Filter.",
+    "loadFailed": "Die Suche konnte nicht ausgeführt werden.",
+    "retry": "Erneut versuchen",
+    "type": {
+      "document": "Dokumente",
+      "matter": "Akten",
+      "task": "Aufgaben",
+      "caseLaw": "Rechtsprechung",
+      "chat": "Chats",
+      "folder": "Ordner",
+      "message": "E-Mails",
+      "link": "Links"
+    }
   },
   "pane": {
     "showList": "Liste einblenden",

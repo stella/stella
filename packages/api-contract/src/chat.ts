@@ -143,9 +143,18 @@ export const CHAT_TOOL_SCOPE = {
   suggestTemplateFields: "suggest-template-fields",
 } as const;
 
+/**
+ * What a turn that rewrites stored history asks for: `regenerate` answers the
+ * latest user message again; `edit` replaces one of the user's own messages
+ * (named by `truncateAfterMessageId`) and drops every later turn.
+ */
 export const CHAT_TURN_INTENT = {
+  edit: "edit",
   regenerate: "regenerate",
 } as const;
+
+export type ChatTurnIntent =
+  (typeof CHAT_TURN_INTENT)[keyof typeof CHAT_TURN_INTENT];
 
 /**
  * Response header naming the server turn a chat request runs, so the page can
@@ -290,7 +299,7 @@ type ChatSendRequestBase = {
   runId: string;
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
-  turnIntent?: (typeof CHAT_TURN_INTENT)["regenerate"];
+  turnIntent?: ChatTurnIntent;
   toolScope?: (typeof CHAT_TOOL_SCOPE)["suggestTemplateFields"];
   truncateAfterMessageId?: SafeId<"chatMessage">;
   userContext?: {
