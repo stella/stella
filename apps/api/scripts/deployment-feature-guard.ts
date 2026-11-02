@@ -220,13 +220,19 @@ const loadMountedRoutes = async (
     }
   }
   const { apiRoutes } = await import("../src/api-routes");
-  const { deploymentFeatureGateFlag, localDevelopmentGate } =
-    await import("../src/lib/deployment-feature-route");
+  const {
+    deploymentFeatureGateExceptionFlag,
+    deploymentFeatureGateFlag,
+    localDevelopmentGate,
+  } = await import("../src/lib/deployment-feature-route");
   return apiRoutes.map((entry) => ({
     method: entry.method,
     path: entry.path,
+    // A gate with one admitted exception still stands for its flag.
     gateFlags: entry.middleware.flatMap((middleware) => {
-      const flag = deploymentFeatureGateFlag(middleware);
+      const flag =
+        deploymentFeatureGateFlag(middleware) ??
+        deploymentFeatureGateExceptionFlag(middleware);
       return flag === undefined ? [] : [flag];
     }),
     localDevelopment: entry.middleware.includes(localDevelopmentGate),
