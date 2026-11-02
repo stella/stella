@@ -1,4 +1,4 @@
--- requires: 20261101221334_data_box_correspondence
+-- requires: 20261101221834_correspondence_source_maintenance
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';
 -- The registered online constraint repairs validate through the contention

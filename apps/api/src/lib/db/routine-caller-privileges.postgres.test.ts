@@ -15,7 +15,7 @@ const restrictedFunctions = parseMigrationStatements(
   readFileSync(
     path.join(
       migrationsFolder,
-      "20261101221734_correspondence_source_maintenance/migration.sql",
+      "20261101221834_correspondence_source_maintenance/migration.sql",
     ),
     "utf-8",
   ),
