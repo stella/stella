@@ -3655,6 +3655,8 @@ mod tests {
 
   #[tokio::test]
   async fn account_recovery_keeps_an_unreadable_store_intact() {
+    // The refusal is a localized message.
+    crate::i18n::init_en();
     let sandbox =
       std::env::temp_dir().join(format!("desktop-journal-{}", uuid::Uuid::new_v4()));
     crate::local_store::create_private_dir(&sandbox).unwrap();
