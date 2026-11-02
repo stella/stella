@@ -492,6 +492,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/autofix-protected-paths.ts",
   ],
   "ci-checks-rest/Test type-aware autofix": [
+    "scripts/autofix-type-aware-precheck.ts",
     "scripts/autofix-type-aware.test.ts",
     "scripts/ci-check-pool-registry.ts",
   ],
@@ -892,4 +893,27 @@ test("derived capability inputs retain API readers and shell bodies retain lockf
       }),
     ).toContain(check);
   }
+});
+
+test("i18n sync follows locale catalogs and its source lock on pull requests", () => {
+  const check = "ci-checks-rest/Check i18n sync";
+  for (const changed of [
+    "apps/web/src/i18n/langs/en.json",
+    "apps/web/src/i18n/langs/fr.json",
+    "apps/web/src/i18n/i18n-source-lock.json",
+    "packages/transactional/i18n/langs/de.json",
+    "TERMINOLOGY.md",
+  ]) {
+    expect(
+      selectRootChecks({ changed: [changed], graph, pathChange: "content" }),
+      changed,
+    ).toContain(check);
+  }
+  expect(
+    selectRootChecks({
+      changed: ["docs/architecture.md"],
+      graph,
+      pathChange: "content",
+    }),
+  ).not.toContain(check);
 });

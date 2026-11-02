@@ -346,6 +346,8 @@ test("the workflow publishes computed deadlines and an over-budget shard fails w
   }
   const result = Bun.spawnSync([
     process.execPath,
+    "--preload",
+    path.join(import.meta.dir, "offline-network-preload.ts"),
     path.join(import.meta.dir, "e2e-shard-deadline.ts"),
     "--check",
     "2",
