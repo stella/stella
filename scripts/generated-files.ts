@@ -1919,6 +1919,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/*/tsconfig*.json",
       "scripts/package-api-report.ts",
       "scripts/package-api-report-write.ts",
+      "scripts/offline-check-startup.ts",
       "scripts/generated-artifacts.ts",
       "packages/scripts/src/generated-artifact-format.ts",
       "bunfig.toml",

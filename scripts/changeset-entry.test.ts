@@ -40,10 +40,13 @@ test.each([
   ["'minor'", "minor"],
   ["major # breaking", "major"],
   ['"patch" # comment', "patch"],
-])("YAML bump %s reads as %s like the Changesets reader", (bump, type) => {
-  const entry = `---\n"@stll/ui": ${bump}\n---\nRelease summary.`;
-  expect(parseChangesetReleases(entry)).toEqual([{ name: "@stll/ui", type }]);
-});
+] as const)(
+  "YAML bump %s reads as %s like the Changesets reader",
+  (bump, type) => {
+    const entry = `---\n"@stll/ui": ${bump}\n---\nRelease summary.`;
+    expect(parseChangesetReleases(entry)).toEqual([{ name: "@stll/ui", type }]);
+  },
+);
 
 test("empty changesets and summaries never authorize a release", () => {
   expect(parseChangesetReleases("")).toEqual([]);
