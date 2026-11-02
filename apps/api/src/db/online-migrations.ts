@@ -36,6 +36,7 @@ import type {
   OnlineIndexReplacement,
 } from "./online-migration-entry";
 import { ONLINE_MIGRATION_ENTRIES } from "./online-migration-registry";
+import type { OnlineRepairRehearsalRecord } from "./online-migration-rehearsal-guard";
 
 // Catalog work keeps a short lock budget; every statement that locks a table
 // runs through the gate in `online-ddl.ts`, which lifts it and watches the
@@ -212,6 +213,8 @@ type OnlineMigrationMode =
 
 type OnlineMigrationOptions = {
   repairs: readonly OnlineRepair[];
+  /** Actual migrator checks and calls; startup validation contributes no proof. */
+  observeRepair?: ((record: OnlineRepairRehearsalRecord) => void) | undefined;
   log?: (record: {
     event: "online_repair_pending";
     repair: string;
@@ -406,6 +409,7 @@ const walkOnlineMigrations = async ({
     connection,
     mode,
     repairs: options.repairs,
+    observeRepair: options.observeRepair,
     log:
       options.log ??
       ((record) => process.stderr.write(`${JSON.stringify(record)}\n`)),
@@ -550,6 +554,7 @@ type OnlineRepairWalkOptions = {
   mode: OnlineMigrationMode;
   repairs: readonly OnlineRepair[];
   log: NonNullable<OnlineMigrationOptions["log"]>;
+  observeRepair: OnlineMigrationOptions["observeRepair"];
   offset?: number;
 };
 
@@ -558,6 +563,7 @@ const processOnlineRepairAt = async ({
   mode,
   repairs,
   log,
+  observeRepair,
   offset = 0,
 }: OnlineRepairWalkOptions): Promise<OnlineMigrationOutcome> => {
   const repair = repairs.at(offset);
@@ -582,10 +588,16 @@ const processOnlineRepairAt = async ({
       connection,
       mode,
       repairs,
+      observeRepair,
       log,
       offset: offset + 1,
     });
   }
+  observeRepair?.({
+    type: "checked",
+    name: repair.name,
+    completion: completion.type,
+  });
   if (completion.type !== "complete") {
     const step = {
       event: "migrate.online_step_duration",
@@ -601,15 +613,15 @@ const processOnlineRepairAt = async ({
         | Extract<OnlineMigrationOutcome, { type: "deferred" }>
       > => {
         const attempt = await Result.tryPromise({
-          try: async () =>
-            await repair.repair(
+          try: async () => {
+            const tables = createOnlineTableGate({
               connection,
-              createOnlineTableGate({
-                connection,
-                gate: mode.indexGate,
-                reserveObserver: mode.reserveObserver,
-              }),
-            ),
+              gate: mode.indexGate,
+              reserveObserver: mode.reserveObserver,
+            });
+            observeRepair?.({ type: "attempted", name: repair.name });
+            return await repair.repair(connection, tables);
+          },
           catch: (cause: unknown) => cause,
         });
         await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
@@ -657,6 +669,7 @@ const processOnlineRepairAt = async ({
     mode,
     repairs,
     log,
+    observeRepair,
     offset: offset + 1,
   });
 };

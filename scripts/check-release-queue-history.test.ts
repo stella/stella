@@ -1151,6 +1151,8 @@ const VERSION_READERS: Record<string, string> = {
     "VERSION names the final tag after exact-SHA RC proof; never the previous release",
   "scripts/prepare-maintenance-release.ts":
     "new version derives from the newest final tag; VERSION identifies untagged notes to fold",
+  "scripts/rehearse-migration-upgrade.sh":
+    "checkout image build label; base release comes from the committed production promotion record",
   "scripts/verify-release-candidate-tree.mjs":
     "VERSION changed against the release merge base and is a supported stable version",
   "scripts/verify-release-tree-proof.sh": "VERSION modified in the PR",
