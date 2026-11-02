@@ -195,13 +195,6 @@ runs:
         STELLA_MARKETING_CAPTURE: "1"
       run: bun --filter @stll/api db:seed-dev
 
-    # Every step above prepares the stack. The release health gate excuses a
-    # screenshot failure only when it happened after this marker and before
-    # the capture step below finished (see release-heavy-verdict.jq).
-    - name: Mark screenshot comparison started
-      shell: bash
-      run: touch "$RUNNER_TEMP/marketing-comparison-started"
-
     - name: Capture marketing screenshots
       shell: bash
       env:
@@ -214,13 +207,13 @@ runs:
         else
           # A baseline difference is a report, not a failure: the verdict
           # passes a screenshot-only failure with a warning (the diff images
-          # stay in the artifact) and fails on anything else.
+          # stay in the artifact). Any other failure fails this step, and a
+          # failed screenshots job blocks the release.
           status=0
           export PLAYWRIGHT_JSON_OUTPUT_FILE="$GITHUB_WORKSPACE/apps/web/.cache/marketing-report.json"
           bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:marketing || status=$?
           bun "$GITHUB_WORKSPACE/scripts/marketing-screenshot-verdict.ts" "$PLAYWRIGHT_JSON_OUTPUT_FILE" "$status"
         fi
-        rm -f "$RUNNER_TEMP/marketing-comparison-started"
 
     - name: Stop production web server
       if: always() && steps.e2e-stack.outcome == 'success'

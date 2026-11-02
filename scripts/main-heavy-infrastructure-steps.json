@@ -1080,10 +1080,8 @@
       "Setup Bun for the failure digest",
       "Upload failure digest",
       "Upload required-jobs record",
-      "Upload required-violations record",
       "Write CI outcome inputs",
-      "Write required-jobs record",
-      "Write required-violations record"
+      "Write required-jobs record"
     ],
     "steps": ["Fetch GitHub API tooling", "Post Fetch GitHub API tooling"]
   }

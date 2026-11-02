@@ -5976,6 +5976,9 @@ jobs:
   # main with `-f branch=<this branch>`), which is also why the comparison
   # tolerance can stay tight:
   # baselines and comparison render on the same image.
+  # A screenshot difference passes this job with a warning
+  # (scripts/marketing-screenshot-verdict.ts); any failure of this job
+  # blocks the release.
 
   marketing-screenshots:
     # A bounded poll can expire while web-build is still waiting for a runner;
@@ -7464,11 +7467,6 @@ jobs:
           # every exit, so its verdict is this step's exit status.
           RECORDED_NEEDS=""
           required_jobs='[]'
-          # The unmet checks the full-depth verdict found, published beside
-          # (never inside) the required-jobs record as `ci-required-violations`
-          # so a reader can tell a failure it may excuse from one it may not.
-          violations=""
-          violations_evaluated=false
           reused_from_run_id=""
           # Set by each exit that passes without evaluating any job.
           pass_through_reason=""
@@ -7507,19 +7505,9 @@ jobs:
                 verdict: (if $status == "0" then "success" else "failure" end)}' <<< "$RECORDED_NEEDS") || return 1
             echo "required_summary=$record" >> "${GITHUB_OUTPUT:-}"
           }
-          record_required_violations() {
-            local violations_record
-            violations_record=$(jq -nce --arg run "${GITHUB_RUN_ID:-}" --arg attempt "${GITHUB_RUN_ATTEMPT:-}" \
-              --arg head "${HEAD_SHA:-}" --arg evaluated "$violations_evaluated" --arg violations "${violations:-}" '
-              def nonempty: if . == "" then null else . end;
-              def count: if test("^[1-9][0-9]*$") then tonumber else null end;
-              {run_id: ($run | count), run_attempt: ($attempt | count), head_sha: ($head | nonempty),
-                evaluated: ($evaluated == "true"), violations: ($violations | nonempty)}') || return 1
-            echo "required_violations=$violations_record" >> "${GITHUB_OUTPUT:-}"
-          }
-          # Neither record depends on the other's serialization. Install this
-          # before reading inputs so an evaluator failure still has a record.
-          trap 'status=$?; record_required_violations || echo "::error::The required-violations record could not be written."; record_required_jobs "$status" || echo "::error::The required-jobs record could not be written."' EXIT
+          # Install this before reading inputs so an evaluator failure still
+          # has a record.
+          trap 'status=$?; record_required_jobs "$status" || echo "::error::The required-jobs record could not be written."' EXIT
           # Every job in `needs`, so a job added there is evaluated without a
           # hand-kept list; the planner tests require every job to be in
           # `needs`. The previous step wrote job results and plan outputs.
@@ -7986,7 +7974,6 @@ jobs:
                   | select($result != "success") | "\($suite) (planned, \($result))"]
                 | join(", ")' <<< "$NEEDS")
               violations="${violations}${violations:+${folded_violations:+, }}${folded_violations}"
-              violations_evaluated=true
               if [[ -n "$violations" ]]; then
                 echo "::error::CI checks did not succeed: $violations"
                 exit 1
@@ -8177,34 +8164,6 @@ jobs:
           name: ci-required-summary
           overwrite: true
           path: ${{ runner.temp }}/ci-required-summary/ci-required-summary.json
-          retention-days: 90
-          if-no-files-found: error
-
-      # The unmet checks behind the verdict, as an artifact of their own: the
-      # required-jobs record above has a fixed key set that other readers
-      # parse strictly. The release health gate reads both.
-      - name: Write required-violations record
-        if: always() && steps.outcome.outcome != 'skipped'
-        continue-on-error: true
-        env:
-          REQUIRED_VIOLATIONS: ${{ steps.outcome.outputs.required_violations }}
-          RECORD_PATH: ${{ runner.temp }}/ci-required-violations/ci-required-violations.json
-        run: |
-          if [[ -z "$REQUIRED_VIOLATIONS" ]]; then
-            echo "::error::Evaluate CI outcome wrote no required-violations record."
-            exit 1
-          fi
-          mkdir -p "$(dirname "$RECORD_PATH")"
-          printf '%s\n' "$REQUIRED_VIOLATIONS" > "$RECORD_PATH"
-
-      - name: Upload required-violations record
-        if: always() && steps.outcome.outcome != 'skipped'
-        continue-on-error: true
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ci-required-violations
-          overwrite: true
-          path: ${{ runner.temp }}/ci-required-violations/ci-required-violations.json
           retention-days: 90
           if-no-files-found: error
 
