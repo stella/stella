@@ -35,10 +35,10 @@ import {
   projectionPieces,
 } from "@stll/legal-ast/projection-digest";
 
-import { parseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
-import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
-import { parseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { parseFindokDecisionXml as uncheckedParseFindokDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-findok";
+import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
+import { parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
+import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
@@ -47,6 +47,12 @@ import { parsePersistedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseFindokDecisionXml = guardParser(uncheckedParseFindokDecisionXml);
+const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);
+const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);
+const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 
 // Each eu-ecj fixture gunzips and parses one of the largest documents in
 // the repo; the whole corpus runs in one test.
