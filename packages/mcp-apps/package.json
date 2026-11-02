@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
-    "@modelcontextprotocol/ext-apps": "^2.0.3",
+    "@modelcontextprotocol/ext-apps": "^2.0.4",
     "@stll/agent-input": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/collation": "workspace:*",
@@ -39,7 +39,7 @@
     "@stll/legal-ast": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/sha256": "workspace:*",
-    "@stll/time": "0.4.1",
+    "@stll/time": "0.4.2",
     "@stll/ui": "workspace:*",
     "@tanstack/charts": "catalog:",
     "better-result": "catalog:",
