@@ -275,18 +275,22 @@ const citingSentence = (citationText: string, context: string): string => {
     .replace(/(?<![\d/])\d{1,2}\.(?=\s+\d)/gu, maskPeriods)
     .replace(/\b(?:např|odst|Sb|rozh|obč|r)\./giu, maskPeriods);
   // Masking preserves UTF-16 offsets; return the original wording for cues.
+  // A span the segmenter still splits (a line break or `!` inside it, or
+  // leading whitespace) reads as every sentence it overlaps.
+  let from: number | null = null;
+  let to = end;
   for (const sentence of sentenceSegmenter.segment(masked)) {
-    if (
-      sentence.index <= start &&
-      sentence.index + sentence.segment.length >= end
-    ) {
-      return text.slice(
-        sentence.index,
-        sentence.index + sentence.segment.length,
-      );
+    const sentenceEnd = sentence.index + sentence.segment.length;
+    if (sentenceEnd <= start) {
+      continue;
+    }
+    from ??= sentence.index;
+    to = sentenceEnd;
+    if (sentenceEnd >= end) {
+      break;
     }
   }
-  return panic("Located citation has no containing sentence");
+  return text.slice(from ?? start, to);
 };
 
 /**
