@@ -1,8 +1,9 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "../packages/collation/src/collation";
 import { writeApproval } from "./ci-job-classification/decisions";
 import {
   generateClassification,
@@ -212,6 +213,7 @@ export const checkJobClassification = (root: string, base?: string) =>
           throw new ReviewRequiredError({
             message: head.result.error.message,
             privilegedJobs,
+            staleJobs: head.result.error.staleJobs,
           });
         }
         throw head.result.error;
@@ -353,6 +355,7 @@ export const checkMergeGroupJobClassification = ({
         ? `${refusal}\n${exact.error.message}`
         : exact.error.message,
       privilegedJobs: exact.error.privilegedJobs,
+      staleJobs: exact.error.staleJobs,
       ...(refusal ? { refusal } : {}),
     }),
   );
@@ -383,7 +386,15 @@ const escapeAnnotation = (value: string) =>
 // commits touch a classification input, refreshes, and fails when it
 // changed the decisions file or review remains.
 type Mode = "check" | "write" | "pre-push";
-type CliOptions = { root: string; base?: string; mode: Mode };
+type CliOptions = {
+  root: string;
+  base?: string;
+  mode: Mode;
+  /** Explicit merge-group members (entries ahead, then the PR), in order. */
+  group?: MergeGroupMember[];
+  /** Print one machine-readable report instead of annotations. */
+  json: boolean;
+};
 const MODE_FLAGS: Readonly<Record<string, Mode>> = {
   "--check": "check",
   "--write": "write",
@@ -392,9 +403,11 @@ const MODE_FLAGS: Readonly<Record<string, Mode>> = {
 const usageError = () =>
   new AdmissionError({
     message:
-      "usage: bun scripts/check-ci-job-classification.ts [--check|--write|--pre-push] [ROOT] [--base REF]",
+      "usage: bun scripts/check-ci-job-classification.ts [--check|--write|--pre-push] [ROOT] [--base REF] [--group N:SHA,...] [--json]",
   });
-const parsePositional = (args: string[]): Omit<CliOptions, "mode"> => {
+const parsePositional = (
+  args: string[],
+): Omit<CliOptions, "mode" | "group" | "json"> => {
   const [first, second, third, ...rest] = args;
   if (rest.length > 0) {
     throw usageError();
@@ -416,7 +429,23 @@ const parsePositional = (args: string[]): Omit<CliOptions, "mode"> => {
   }
   throw usageError();
 };
-const parseCli = (args: string[]): CliOptions => {
+const GROUP_MEMBER = /^([1-9][0-9]*):([0-9a-f]{40})$/u;
+
+// `--group 7601:<sha>,7694:<sha>` names the merge-group members in queue order
+// so a caller can check a composed tree before the PR is queued.
+const parseGroup = (value: string): MergeGroupMember[] =>
+  value.split(",").map((entry) => {
+    const match = GROUP_MEMBER.exec(entry);
+    const [, number, head] = match ?? [];
+    if (number === undefined || head === undefined) {
+      throw new AdmissionError({
+        message: `Invalid --group member "${entry}"; use PR_NUMBER:FULL_SHA`,
+      });
+    }
+    return { number: Number(number), head };
+  });
+
+export const parseCli = (args: string[]): CliOptions => {
   const modes = args.flatMap((arg) => {
     const mode = MODE_FLAGS[arg];
     return mode === undefined ? [] : [mode];
@@ -424,9 +453,40 @@ const parseCli = (args: string[]): CliOptions => {
   if (modes.length > 1) {
     throw usageError();
   }
+  const rest: string[] = [];
+  let group: MergeGroupMember[] | undefined;
+  let json = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? "";
+    if (MODE_FLAGS[arg] !== undefined) {
+      continue;
+    }
+    if (arg === "--json") {
+      json = true;
+      continue;
+    }
+    if (arg === "--group") {
+      const value = args[index + 1];
+      if (value === undefined || group !== undefined) {
+        throw usageError();
+      }
+      group = parseGroup(value);
+      index += 1;
+      continue;
+    }
+    rest.push(arg);
+  }
+  const mode = modes[0] ?? "check";
+  if ((group !== undefined || json) && mode !== "check") {
+    throw new AdmissionError({
+      message: "--group and --json apply to --check only",
+    });
+  }
   return {
-    ...parsePositional(args.filter((arg) => MODE_FLAGS[arg] === undefined)),
-    mode: modes[0] ?? "check",
+    ...parsePositional(rest),
+    mode,
+    json,
+    ...(group === undefined ? {} : { group }),
   };
 };
 
@@ -530,14 +590,122 @@ const currentMergeGroup = (): MergeGroup => {
   throw new AdmissionError({ message: "Merge group is absent from the queue" });
 };
 
-const runCheck = (root: string, base: string) => {
-  const result = isMergeGroupEvent()
+// Every named member head must be present: composition reads each one, and a
+// missing head must stop the check rather than read as "not approved".
+const presentGroup = (root: string, group: MergeGroupMember[]): MergeGroup => {
+  const missing = group.filter(
+    ({ head }) =>
+      Bun.spawnSync(["git", "-C", root, "cat-file", "-e", `${head}^{commit}`], {
+        stdout: "ignore",
+        stderr: "ignore",
+      }).exitCode !== 0,
+  );
+  if (missing.length > 0) {
+    throw new AdmissionError({
+      message: `Fetch these merge-group heads first: ${missing.map(({ number, head }) => `#${String(number)} ${head}`).join(", ")}`,
+    });
+  }
+  return { members: group };
+};
+
+/** Stale candidates a `--write` refresh records without a reviewer. */
+export const mechanicalRefreshKeys = (root: string, base: string): string[] => {
+  const headInputs = readClassificationInputs(root);
+  const baseRevision = generateBase(root, base);
+  return mechanicalRefreshes({
+    head: generateWithJobs(headInputs),
+    headDecisions: headInputs.decisions,
+    base: baseRevision.generation,
+    baseDecisions: baseRevision.inputs.decisions,
+  })
+    .map(({ key }) => key)
+    .toSorted(compareCodeUnit);
+};
+
+type CheckReport =
+  | { status: "ok"; privileged: string[] }
+  | {
+      status: "stale";
+      stale: string[];
+      mechanical: string[];
+      privileged: string[];
+      refusal?: string;
+    }
+  | { status: "error"; message: string };
+
+type RunCheckOptions = { group?: MergeGroupMember[]; json: boolean };
+
+const classify = (root: string, base: string, group?: MergeGroupMember[]) => {
+  if (group !== undefined) {
+    return checkMergeGroupJobClassification({
+      root,
+      base,
+      readMergeGroup: () => presentGroup(root, group),
+    });
+  }
+  return isMergeGroupEvent()
     ? checkMergeGroupJobClassification({
         root,
         base,
         readMergeGroup: currentMergeGroup,
       })
     : checkJobClassification(root, base);
+};
+
+// Exit 0 = admissible, 1 = review or re-approval needed, 2 = the check could
+// not run (bad input, missing heads, unreadable tree).
+const runJsonCheck = (
+  root: string,
+  base: string,
+  group?: MergeGroupMember[],
+) => {
+  const result = Result.try({
+    try: () => classify(root, base, group),
+    catch: (cause) =>
+      new AdmissionError({
+        message: cause instanceof Error ? cause.message : "Check failed",
+      }),
+  }).andThen((inner) => inner);
+  const report = ((): CheckReport => {
+    if (result.isOk()) {
+      return { status: "ok", privileged: result.value.privilegedJobs };
+    }
+    if (result.error instanceof ReviewRequiredError) {
+      const stale = result.error.staleJobs;
+      const mechanical = mechanicalRefreshKeys(root, base).filter((key) =>
+        stale.includes(key),
+      );
+      return {
+        status: "stale",
+        stale,
+        mechanical,
+        privileged: result.error.privilegedJobs,
+        ...(result.error.refusal === undefined
+          ? {}
+          : { refusal: result.error.refusal }),
+      };
+    }
+    return { status: "error", message: result.error.message };
+  })();
+  process.stdout.write(`${JSON.stringify(report)}\n`);
+  switch (report.status) {
+    case "ok":
+      return 0;
+    case "stale":
+      return 1;
+    case "error":
+      return 2;
+    default:
+      report satisfies never;
+      return panic("Unhandled classification report");
+  }
+};
+
+const runCheck = (root: string, base: string, options: RunCheckOptions) => {
+  if (options.json) {
+    return runJsonCheck(root, base, options.group);
+  }
+  const result = classify(root, base, options.group);
   let privilegedJobs: string[] = [];
   if (result.isErr() && result.error instanceof ReviewRequiredError) {
     privilegedJobs = result.error.privilegedJobs;
@@ -589,7 +757,10 @@ const runCli = (options: CliOptions) => {
   const root = path.resolve(options.root);
   const base = options.base ?? gitMergeBase(root);
   if (options.mode === "check") {
-    return runCheck(root, base);
+    return runCheck(root, base, {
+      json: options.json,
+      ...(options.group === undefined ? {} : { group: options.group }),
+    });
   }
   if (options.mode === "pre-push" && !pushTouchesClassification(root, base)) {
     return 0;
@@ -614,7 +785,7 @@ const runCli = (options: CliOptions) => {
     );
     return 1;
   }
-  return runCheck(root, base);
+  return runCheck(root, base, { json: false });
 };
 
 if (import.meta.main) {
@@ -632,7 +803,15 @@ if (import.meta.main) {
       appendFileSync(githubOutput, "privileged_classification_change=true\n");
     }
     process.stderr.write(`${cli.error.message}\n`);
-    process.exitCode = 1;
+    // A JSON caller reads "could not run" from the report and exit 2.
+    if (Bun.argv.includes("--json")) {
+      process.stdout.write(
+        `${JSON.stringify({ status: "error", message: cli.error.message })}\n`,
+      );
+      process.exitCode = 2;
+    } else {
+      process.exitCode = 1;
+    }
   } else {
     process.exitCode = cli.value;
   }

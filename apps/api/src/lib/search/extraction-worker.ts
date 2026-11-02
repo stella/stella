@@ -19,7 +19,6 @@
 
 import { toMarkdownBytes } from "@firecrawl/anydoc";
 import { Result } from "better-result";
-import { load } from "cheerio";
 
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import {
@@ -29,6 +28,7 @@ import {
 } from "@stll/api-contract/email-mime-types";
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
+import { load } from "@stll/html";
 
 import {
   dataBoxMessageText,

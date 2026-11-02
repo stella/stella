@@ -1,5 +1,3 @@
-import * as cheerio from "cheerio";
-
 import {
   chatSourceScopeKey,
   isChatMentionCategory,
@@ -15,6 +13,7 @@ import {
 } from "@stll/api-contract";
 import type { ChatSourceScope } from "@stll/api-contract";
 import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
+import { load } from "@stll/html";
 
 import type { ChatMention, ChatMentionHref } from "@/api/lib/chat/references";
 import { createHtmlSanitizer } from "@/api/lib/markdown/sanitize-html";
@@ -164,7 +163,7 @@ const replaceMentionsWithAnchors = (
   mentions: ChatMention[];
   sourceScopes: ChatSourceScope[];
 } => {
-  const $ = cheerio.load(html, undefined, false);
+  const $ = load(html, undefined, false);
   const mentions: ChatMention[] = [];
   const sourceScopes: ChatSourceScope[] = [];
 

@@ -118,5 +118,13 @@
   {
     "name": "exactMirror route guard",
     "reason": "Elysia's exactMirror response normalization is gone with Elysia; the HTTP core parses every response through its route schema, which the response schema tests cover."
+  },
+  {
+    "name": "MCP kit published export map guard",
+    "reason": "Folded unchanged into the standalone package published export map guard, which runs the same command for packages/mcp-kit under the same condition; one step per package pushed the workflow past its size limit."
+  },
+  {
+    "name": "Fetch and scan engine published export map guard",
+    "reason": "Folded unchanged into the standalone package published export map guard, which runs the same commands for packages/fetch and packages/scan-engine under the same condition; one step per package pushed the workflow past its size limit."
   }
 ]

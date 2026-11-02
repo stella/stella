@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { foldToAscii } from "@stll/text-normalize";
 
 import { ABSENT_PLACEHOLDERS, isAbsentPlaceholder } from "./absent";
@@ -85,7 +85,8 @@ const valueOf = (
 
 describe("values drawn from data", () => {
   test("every value reads back through case, diacritic and punctuation noise", () => {
-    fc.assert(
+    assertProperty(
+      "every value reads back through case, diacritic and punctuation noise",
       fc.property(vocabularyArb, fc.nat(), noiseArb, (entries, pick, noise) => {
         const entry = entries[pick % entries.length];
         fc.pre(entry !== undefined);
@@ -95,12 +96,13 @@ describe("values drawn from data", () => {
           ),
         ).toBe(entry.value);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("every alias reads as its entry's value through the same noise", () => {
-    fc.assert(
+    assertProperty(
+      "every alias reads as its entry's value through the same noise",
       fc.property(
         aliasedVocabularyArb,
         fc.nat(),
@@ -114,12 +116,13 @@ describe("values drawn from data", () => {
           ).toBe(entry.value);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a value with words added reads as it when no other entry fits inside", () => {
-    fc.assert(
+    assertProperty(
+      "a value with words added reads as it when no other entry fits inside",
       fc.property(
         vocabularyArb,
         fc.nat(),
@@ -141,12 +144,13 @@ describe("values drawn from data", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a placeholder is no value whatever the vocabulary holds", () => {
-    fc.assert(
+    assertProperty(
+      "a placeholder is no value whatever the vocabulary holds",
       fc.property(
         vocabularyArb,
         fc.constantFrom(...ABSENT_PLACEHOLDERS),
@@ -156,7 +160,7 @@ describe("values drawn from data", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 });

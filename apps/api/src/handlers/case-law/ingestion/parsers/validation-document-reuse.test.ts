@@ -1,6 +1,7 @@
 import { Glob } from "bun";
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
-import * as cheerio from "cheerio";
+
+import { load } from "@stll/html";
 
 import * as astValidation from "@/api/lib/legal-search/parsers/validate-ast";
 
@@ -69,7 +70,7 @@ const validationResultsMatch = (call: CapturedValidation): boolean => {
   const { document: _document, ...options } = call.options ?? {};
   const reused = astValidation.validateAst(call.source, call.blocks, {
     ...options,
-    document: cheerio.load(call.documentHtml),
+    document: load(call.documentHtml),
   });
   const fresh = astValidation.validateAst(call.source, call.blocks, options);
   return Bun.deepEquals(reused, fresh);
@@ -115,7 +116,7 @@ describe("validation document reuse", () => {
         inlines: [{ type: "text", text: `PUBLIC HEADING ${secret}` }],
       },
     ];
-    const mutated = cheerio.load(xhtml);
+    const mutated = load(xhtml);
     mutated("span").last().text("anonymizované");
 
     expect(
@@ -126,7 +127,7 @@ describe("validation document reuse", () => {
   test("rejects a caller that mutates its document before validation", () => {
     const sourceHtml = "<body><p>original source words</p></body>";
     const { call } = captureValidation(() => {
-      const document = cheerio.load(sourceHtml);
+      const document = load(sourceHtml);
       document("p").text("replacement words");
       return astValidation.validateAst(
         sourceHtml,

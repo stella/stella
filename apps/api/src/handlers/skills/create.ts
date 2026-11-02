@@ -18,6 +18,7 @@ import { hashSkillContent } from "@/api/lib/agent-skills/content-hash";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { displayNameSchema } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -27,7 +28,7 @@ import { uniqueSlug } from "./slug";
 
 const createSkillBodySchema = v.object({
   scope: v.picklist(AGENT_SKILL_SCOPES),
-  name: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  name: displayNameSchema({ maxLength: 64 }),
   description: v.pipe(
     v.string(),
     v.minLength(1),

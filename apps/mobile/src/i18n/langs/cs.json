@@ -182,6 +182,17 @@
       "system": "Vzhled: automaticky",
       "light": "Vzhled: světlý",
       "dark": "Vzhled: tmavý"
+    },
+    "edit": {
+      "saved": "Uloženo",
+      "saving": "Ukládání…",
+      "notSaved": "Zatím neuloženo",
+      "done": "Hotovo",
+      "openFailed": "Tento dokument teď nelze upravit",
+      "takenOver": "Tento dokument teď upravuje někdo jiný. Změny od posledního uložení se nezachovaly.",
+      "finishFailed": "Změny jsou uložené, ale zatím z nich nevznikla nová verze. Klepněte znovu na Hotovo, nebo odejděte: příští úprava na ně naváže.",
+      "stay": "Zůstat",
+      "leave": "Odejít"
     }
   },
   "signIn": {
