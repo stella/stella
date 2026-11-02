@@ -1,9 +1,18 @@
+import type { DataBoxEnvelope, DataBoxStatedEnvelope } from "./data-box";
 import type { SafeId } from "./safe-id";
 
 export const CORRESPONDENCE_MAX_BODY_CHARACTERS = 2_000_000;
 
-export const CORRESPONDENCE_CHANNELS = ["email"] as const;
+export const CORRESPONDENCE_CHANNELS = ["email", "data_box"] as const;
 export type CorrespondenceChannel = (typeof CORRESPONDENCE_CHANNELS)[number];
+
+/**
+ * A data-box message carries its envelope; its sender and recipient
+ * addresses are box IDs. Only an uploaded `.zfo` file files one.
+ */
+export type CorrespondenceChannelContent =
+  | { channel: "email"; dataBox: null }
+  | { channel: "data_box"; dataBox: DataBoxEnvelope };
 
 export const CORRESPONDENCE_DIRECTIONS = ["in", "out"] as const;
 export type CorrespondenceDirection =
@@ -58,6 +67,7 @@ export type CorrespondenceDropsPage = {
   limit: number;
 };
 
+/** An email address, or a box ID on the data-box channel. */
 export type CorrespondenceAddress = {
   address: string;
   name: string | null;
@@ -99,9 +109,9 @@ export type CorrespondenceDeliveryProvenance = {
 );
 
 /**
- * A message read from an email file in the matter. Its headers are the file's
- * assertions; only a DKIM signature over the file's own bytes is verified.
- * The uploader is the record's filer.
+ * A message read from an email file or a data-box `.zfo` file in the matter.
+ * Its headers or envelope are the file's assertions; only a DKIM signature
+ * over an email file's own bytes is verified. The uploader is the filer.
  */
 type CorrespondenceUploadProvenance = {
   source: "upload";
@@ -148,9 +158,16 @@ export type CorrespondenceFiler =
     };
 
 /** The parser's output. The authenticated filer is supplied separately. */
-export type ParsedCorrespondence = CorrespondenceProvenance & {
+export type ParsedCorrespondence = CorrespondenceProvenance &
+  Omit<CorrespondenceMessageContent, "direction"> &
+  (
+    | { channel: "email"; dataBox: null; direction: CorrespondenceDirection }
+    | { channel: "data_box"; dataBox: DataBoxStatedEnvelope; direction: null }
+  );
+
+/** A record's content other than its provenance and channel. */
+export type CorrespondenceMessageContent = {
   direction: CorrespondenceDirection;
-  channel: CorrespondenceChannel;
   messageId: string | null;
   contentHash: string;
   from: CorrespondenceAddress;
@@ -165,17 +182,18 @@ export type ParsedCorrespondence = CorrespondenceProvenance & {
   bodyHtml: string | null;
 };
 
-type CorrespondenceListRecord = CorrespondenceProvenance & {
-  id: SafeId<"correspondence">;
-  subject: string;
-  from: CorrespondenceAddress;
-  to: CorrespondenceAddress[];
-  cc: CorrespondenceAddress[];
-  receivedAt: string;
-  sentAt: string | null;
-  handlingState: CorrespondenceHandlingState;
-  assigneeId: string | null;
-};
+type CorrespondenceListRecord = CorrespondenceProvenance &
+  CorrespondenceChannelContent & {
+    id: SafeId<"correspondence">;
+    subject: string;
+    from: CorrespondenceAddress;
+    to: CorrespondenceAddress[];
+    cc: CorrespondenceAddress[];
+    receivedAt: string;
+    sentAt: string | null;
+    handlingState: CorrespondenceHandlingState;
+    assigneeId: string | null;
+  };
 
 export type CorrespondenceListResponse = {
   items: CorrespondenceListRecord[];
@@ -183,10 +201,27 @@ export type CorrespondenceListResponse = {
   limit: number;
 };
 
+/** A contact whose data boxes include the box ID. */
+export type CorrespondenceContactMatch = {
+  contactId: SafeId<"contact">;
+  displayName: string;
+};
+
+/** A bounded contact preview; hasMore reports matches omitted from the preview. */
+export type CorrespondenceDataBoxContactMatches = {
+  matches: CorrespondenceContactMatch[];
+  hasMore: boolean;
+};
+
+/** Read-only matches of the envelope's box IDs to the organization's contacts. */
+export type CorrespondenceDataBoxContacts = {
+  sender: CorrespondenceDataBoxContactMatches;
+  recipient: CorrespondenceDataBoxContactMatches;
+};
+
 export type CorrespondenceDetailResponse = {
   record: CorrespondenceListRecord & {
     direction: CorrespondenceDirection;
-    channel: CorrespondenceChannel;
     messageId: string | null;
     inReplyTo: string | null;
     references: string[];
@@ -203,6 +238,8 @@ export type CorrespondenceDetailResponse = {
     byteSize: number;
     scanVerdict: CorrespondenceScanVerdict;
   }[];
+  /** Null on the email channel. */
+  dataBoxContacts: CorrespondenceDataBoxContacts | null;
 };
 
 export type CorrespondenceAddressResponse = {

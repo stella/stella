@@ -8,6 +8,7 @@ export { default as constraints_chat_content_v3_constraints } from "./online-mig
 export { default as constraints_client_invoice_constraints } from "./online-migration-entries/constraints-client-invoice-constraints";
 export { default as constraints_corpus_projection_cleanup_stall_constraints } from "./online-migration-entries/constraints-corpus-projection-cleanup-stall-constraints";
 export { default as constraints_corpus_projection_delete_receipt_constraints } from "./online-migration-entries/constraints-corpus-projection-delete-receipt-constraints";
+export { default as constraints_data_box_constraints } from "./online-migration-entries/constraints-data-box-constraints";
 export { default as constraints_decision_date_ceiling_constraints } from "./online-migration-entries/constraints-decision-date-ceiling-constraints";
 export { default as constraints_email_undeliverable_constraints } from "./online-migration-entries/constraints-email-undeliverable-constraints";
 export { default as constraints_import_provenance_constraints } from "./online-migration-entries/constraints-import-provenance-constraints";
@@ -62,6 +63,7 @@ export { default as indexes_chat_run_log_entries_text_start_idx } from "./online
 export { default as indexes_chat_thread_compactions_memory_unmined_org_idx } from "./online-migration-entries/indexes-chat-thread-compactions-memory-unmined-org-idx";
 export { default as indexes_chat_turns_org_run_id_uidx } from "./online-migration-entries/indexes-chat-turns-org-run-id-uidx";
 export { default as indexes_client_invoice_unique_indexes } from "./online-migration-entries/indexes-client-invoice-unique-indexes";
+export { default as indexes_contacts_data_box_ids_idx } from "./online-migration-entries/indexes-contacts-data-box-ids-idx";
 export { default as indexes_contacts_org_id_unique } from "./online-migration-entries/indexes-contacts-org-id-unique";
 export { default as indexes_correspondence_attachments_ws_entity_idx } from "./online-migration-entries/indexes-correspondence-attachments-ws-entity-idx";
 export { default as indexes_correspondence_ws_source_entity_uidx } from "./online-migration-entries/indexes-correspondence-ws-source-entity-uidx";
@@ -123,6 +125,7 @@ export { default as repairs_client_invoice_tenant_key } from "./online-migration
 export { default as repairs_contact_vat_id_repair } from "./online-migration-entries/repairs-contact-vat-id-repair";
 export { default as repairs_corpus_projection_cleanup_stall_repair } from "./online-migration-entries/repairs-corpus-projection-cleanup-stall-repair";
 export { default as repairs_corpus_projection_delete_receipt_repair } from "./online-migration-entries/repairs-corpus-projection-delete-receipt-repair";
+export { default as repairs_data_box_constraint_validations } from "./online-migration-entries/repairs-data-box-constraint-validations";
 export { default as repairs_decision_date_ceiling_repair } from "./online-migration-entries/repairs-decision-date-ceiling-repair";
 export { default as repairs_document_review_finding_decision_backfill } from "./online-migration-entries/repairs-document-review-finding-decision-backfill";
 export { default as repairs_email_undeliverable_constraint_validation } from "./online-migration-entries/repairs-email-undeliverable-constraint-validation";

@@ -699,6 +699,7 @@ type AuxiliaryRowIdentityOptions = Extract<
   {
     aggregate:
       | "accountDeletionRequest"
+      | "correspondence"
       | "desktopMembership"
       | "memory"
       | "searchProjectionRepair";
@@ -709,6 +710,13 @@ const auxiliaryRowResource = (
   options: AuxiliaryRowIdentityOptions,
 ): RowResource => {
   switch (options.aggregate) {
+    case "correspondence":
+      return byIdWithin(
+        "correspondence",
+        options.id.id,
+        "workspace_id",
+        options.id.workspaceId,
+      );
     case "accountDeletionRequest":
       return {
         table: "account_deletion_requests",
@@ -771,6 +779,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.userId,
       );
     case "accountDeletionRequest":
+    case "correspondence":
     case "desktopMembership":
     case "memory":
     case "searchProjectionRepair":
@@ -1215,6 +1224,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.id.userId,
           options.id.idempotencyKey,
         ],
+      };
+    case "organizationDataBoxes":
+      return {
+        first: sql`hashtext('data-box-direction')`,
+        second: sql`hashtext(${options.id.organizationId})`,
+        order: [options.aggregate, options.id.organizationId],
       };
     case "sampleCase":
       return {

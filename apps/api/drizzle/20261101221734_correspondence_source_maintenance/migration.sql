@@ -1,0 +1,268 @@
+-- requires: 20261101221634_entity_feature_gate_registry
+SET LOCAL lock_timeout = '1s';--> statement-breakpoint
+SET LOCAL statement_timeout = '5s';--> statement-breakpoint
+
+DO $role$
+DECLARE maintenance_role oid;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'stella_correspondence_source') THEN
+    CREATE ROLE stella_correspondence_source NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
+  END IF;
+  SELECT oid INTO maintenance_role FROM pg_catalog.pg_roles
+  WHERE rolname = 'stella_correspondence_source'
+    AND NOT (rolcanlogin OR rolinherit OR rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolreplication);
+  IF maintenance_role IS NULL OR EXISTS (
+    SELECT 1 FROM pg_catalog.pg_auth_members WHERE member = maintenance_role
+      OR (roleid = maintenance_role AND (member <> current_user::regrole OR inherit_option OR set_option))
+  ) THEN
+    RAISE EXCEPTION 'Correspondence source maintenance requires a private non-bypass role';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_class WHERE relowner = maintenance_role)
+    OR EXISTS (SELECT 1 FROM pg_catalog.pg_proc WHERE proowner = maintenance_role
+      AND (pronamespace <> 'public'::regnamespace OR proname NOT IN
+        ('next_correspondence_source', 'register_uploaded_correspondence_source',
+          'remove_correspondence_source', 'remove_entity_correspondence_sources'))) THEN
+    RAISE EXCEPTION 'Correspondence source maintenance may own only its lifecycle routines';
+  END IF;
+END
+$role$;--> statement-breakpoint
+-- stella-migration-safety: reviewed grant-privileges - Temporary role administration installs private lifecycle routines; inheritance remains disabled and SET is revoked before commit.
+GRANT stella_correspondence_source TO CURRENT_USER WITH INHERIT FALSE, SET TRUE;--> statement-breakpoint
+GRANT USAGE, CREATE ON SCHEMA public TO stella_correspondence_source;--> statement-breakpoint
+GRANT SELECT (organization_id, workspace_id, correspondence_id, entity_id) ON public.correspondence_sources TO stella_correspondence_source;--> statement-breakpoint
+GRANT INSERT (organization_id, workspace_id, correspondence_id, entity_id), DELETE ON public.correspondence_sources TO stella_correspondence_source;--> statement-breakpoint
+GRANT SELECT (organization_id, workspace_id, id, source_entity_id), UPDATE (source_entity_id, updated_at), DELETE ON public.correspondence TO stella_correspondence_source;--> statement-breakpoint
+
+GRANT EXECUTE ON FUNCTION public.stella_authorized_workspace_ids(text, text) TO stella_correspondence_source;--> statement-breakpoint
+GRANT SELECT (entity_feature_gate) ON public.correspondence_sources, public.correspondence TO stella_correspondence_source;--> statement-breakpoint
+
+-- Entity deletion is authorized on the parent row. Its trigger scopes cleanup
+-- from OLD, including when a workspace cascade has already removed the workspace.
+CREATE POLICY correspondence_source_entity_maintenance ON public.correspondence_sources
+AS PERMISSIVE FOR ALL TO stella_correspondence_source
+USING (workspace_id = nullif(current_setting('app.correspondence_source_workspace_id', true), '')::uuid
+  AND entity_id = nullif(current_setting('app.correspondence_source_entity_id', true), '')::uuid)
+WITH CHECK (false);--> statement-breakpoint
+CREATE POLICY correspondence_source_entity_maintenance ON public.correspondence
+AS PERMISSIVE FOR ALL TO stella_correspondence_source
+USING (workspace_id = nullif(current_setting('app.correspondence_source_workspace_id', true), '')::uuid
+  AND source_entity_id = nullif(current_setting('app.correspondence_source_entity_id', true), '')::uuid)
+WITH CHECK (false);--> statement-breakpoint
+
+CREATE POLICY correspondence_source_maintenance ON public.correspondence_sources
+AS PERMISSIVE FOR SELECT TO stella_correspondence_source
+USING (organization_id = nullif(current_setting('app.correspondence_source_organization_id', true), '')
+  AND workspace_id = nullif(current_setting('app.correspondence_source_workspace_id', true), '')::uuid
+  AND correspondence_id = nullif(current_setting('app.correspondence_source_record_id', true), '')::uuid);--> statement-breakpoint
+-- Registration inserts exactly the uploaded record's own source, scoped from
+-- the inserted record by its trigger, whichever role inserted the record.
+CREATE POLICY correspondence_source_registration ON public.correspondence_sources
+AS PERMISSIVE FOR INSERT TO stella_correspondence_source
+WITH CHECK (organization_id = nullif(current_setting('app.correspondence_source_organization_id', true), '')
+  AND workspace_id = nullif(current_setting('app.correspondence_source_workspace_id', true), '')::uuid
+  AND correspondence_id = nullif(current_setting('app.correspondence_source_record_id', true), '')::uuid
+  AND entity_id = nullif(current_setting('app.correspondence_source_entity_id', true), '')::uuid);--> statement-breakpoint
+CREATE POLICY correspondence_source_maintenance ON public.correspondence
+AS PERMISSIVE FOR ALL TO stella_correspondence_source
+USING (organization_id = nullif(current_setting('app.correspondence_source_organization_id', true), '')
+  AND workspace_id = nullif(current_setting('app.correspondence_source_workspace_id', true), '')::uuid
+  AND id = nullif(current_setting('app.correspondence_source_record_id', true), '')::uuid)
+WITH CHECK (organization_id = nullif(current_setting('app.correspondence_source_organization_id', true), '')
+  AND workspace_id = nullif(current_setting('app.correspondence_source_workspace_id', true), '')::uuid
+  AND id = nullif(current_setting('app.correspondence_source_record_id', true), '')::uuid);--> statement-breakpoint
+
+-- Attach the lifecycle in the transaction that makes its routines private: the
+-- source table's gate write trigger (previous migration) gates every row at
+-- insert, and entity deletion never runs these routines as the caller.
+CREATE TRIGGER register_uploaded_correspondence_source
+AFTER INSERT ON "correspondence" FOR EACH ROW
+EXECUTE FUNCTION public.register_uploaded_correspondence_source();--> statement-breakpoint
+-- Run before the entity FK checks: unlink this copy, transition its record,
+-- then permit deletion.
+CREATE TRIGGER remove_entity_correspondence_sources
+BEFORE DELETE ON "entities" FOR EACH ROW
+EXECUTE FUNCTION public.remove_entity_correspondence_sources();--> statement-breakpoint
+-- stella-migration-safety: reviewed drop-constraint - replace the first-file cascade with a restricting FK after installing the source deletion protocol; uploaded email deletion remains handled by the same protocol
+ALTER TABLE "correspondence" DROP CONSTRAINT "correspondence_source_entity_workspace_fk";--> statement-breakpoint
+-- squawk-ignore adding-foreign-key-constraint -- NOT VALID keeps the live-table validation scan out of the DDL lock window
+ALTER TABLE "correspondence" ADD CONSTRAINT "correspondence_source_entity_workspace_fk" FOREIGN KEY ("source_entity_id", "workspace_id") REFERENCES "entities"("id", "workspace_id") ON DELETE restrict NOT VALID;--> statement-breakpoint
+
+-- stella-migration-safety: reviewed change-owner - Only the source lifecycle trigger moves to a non-login, non-bypass role with row-scoped policies; application execution stays revoked.
+ALTER FUNCTION public.remove_correspondence_source() OWNER TO stella_correspondence_source;--> statement-breakpoint
+-- stella-migration-safety: reviewed change-owner - The entity deletion trigger uses only its trusted OLD row to unlink that source, without depending on caller visibility of correspondence.
+ALTER FUNCTION public.remove_entity_correspondence_sources() OWNER TO stella_correspondence_source;--> statement-breakpoint
+-- stella-migration-safety: reviewed change-owner - Source registration inserts only the inserted record's own source row from its trusted NEW row, independent of the inserting role's source-table policies.
+ALTER FUNCTION public.register_uploaded_correspondence_source() OWNER TO stella_correspondence_source;--> statement-breakpoint
+SET LOCAL ROLE stella_correspondence_source;--> statement-breakpoint
+
+-- stella-migration-safety: reviewed security-definer - Private non-bypass role, fixed search path and forced row security; the inserted source is exactly the uploaded record's own organization, matter, id and file from NEW, and the scope is restored before returning.
+CREATE OR REPLACE FUNCTION public.register_uploaded_correspondence_source() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp SET row_security = on AS $$
+DECLARE
+  previous_organization_id text := current_setting('app.correspondence_source_organization_id', true);
+  previous_workspace_id text := current_setting('app.correspondence_source_workspace_id', true);
+  previous_record_id text := current_setting('app.correspondence_source_record_id', true);
+  previous_entity_id text := current_setting('app.correspondence_source_entity_id', true);
+BEGIN
+  IF NEW.source = 'upload' THEN
+    PERFORM set_config('app.correspondence_source_organization_id', NEW.organization_id, true),
+      set_config('app.correspondence_source_workspace_id', NEW.workspace_id::text, true),
+      set_config('app.correspondence_source_record_id', NEW.id::text, true),
+      set_config('app.correspondence_source_entity_id', NEW.source_entity_id::text, true);
+    INSERT INTO public.correspondence_sources (organization_id, workspace_id, correspondence_id, entity_id)
+    VALUES (NEW.organization_id, NEW.workspace_id, NEW.id, NEW.source_entity_id);
+    PERFORM set_config('app.correspondence_source_organization_id', coalesce(previous_organization_id, ''), true),
+      set_config('app.correspondence_source_workspace_id', coalesce(previous_workspace_id, ''), true),
+      set_config('app.correspondence_source_record_id', coalesce(previous_record_id, ''), true),
+      set_config('app.correspondence_source_entity_id', coalesce(previous_entity_id, ''), true);
+  END IF;
+  RETURN NEW;
+END;
+$$;--> statement-breakpoint
+CREATE FUNCTION public.next_correspondence_source(deleted_source public.correspondence_sources)
+RETURNS uuid LANGUAGE sql SET search_path = pg_catalog SET row_security = on AS $$
+  SELECT entity_id FROM public.correspondence_sources
+  WHERE organization_id = (deleted_source).organization_id
+    AND workspace_id = (deleted_source).workspace_id
+    AND correspondence_id = (deleted_source).correspondence_id
+  ORDER BY entity_id LIMIT 1
+$$;--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.next_correspondence_source(public.correspondence_sources) FROM PUBLIC;--> statement-breakpoint
+
+-- stella-migration-safety: reviewed security-definer - returns one boolean for a source the caller can see in an active authorized workspace of its own organization (NULL when not admitted), never ids, counts or content; fixed search_path, row security on, session settings restored, PUBLIC revoked and EXECUTE only to stella; rollback: drop the function with the migration
+CREATE FUNCTION public.correspondence_has_other_sources(p_workspace_id uuid, p_entity_id uuid)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp SET row_security = on AS $$
+DECLARE
+  caller_organization text := nullif(current_setting('app.organization_id', true), '');
+  caller_user text := nullif(current_setting('app.user_id', true), '');
+  enabled_features jsonb := coalesce(nullif(current_setting('app.enabled_features', true), ''), '[]')::jsonb;
+  source_record_id uuid;
+  has_others boolean;
+  previous_organization text := current_setting('app.correspondence_source_organization_id', true);
+  previous_workspace text := current_setting('app.correspondence_source_workspace_id', true);
+  previous_record text := current_setting('app.correspondence_source_record_id', true);
+  previous_entity text := current_setting('app.correspondence_source_entity_id', true);
+BEGIN
+  IF p_workspace_id IS NULL OR p_entity_id IS NULL OR caller_organization IS NULL OR caller_user IS NULL
+    OR NOT EXISTS (SELECT 1 FROM public.stella_authorized_workspace_ids(caller_organization, caller_user)
+      WHERE workspace_id = p_workspace_id AND workspace_status = 'active') THEN
+    RETURN NULL;
+  END IF;
+  PERFORM set_config('app.correspondence_source_organization_id', '', true),
+    set_config('app.correspondence_source_workspace_id', p_workspace_id::text, true),
+    set_config('app.correspondence_source_record_id', '', true),
+    set_config('app.correspondence_source_entity_id', p_entity_id::text, true);
+  -- Admit only the caller-visible source (or its unenrolled legacy pointer).
+  SELECT candidate.record_id INTO source_record_id FROM (
+    SELECT s.correspondence_id AS record_id, s.entity_feature_gate, 0 AS priority
+    FROM public.correspondence_sources s
+    WHERE s.organization_id = caller_organization AND s.workspace_id = p_workspace_id AND s.entity_id = p_entity_id
+    UNION ALL
+    SELECT c.id, c.entity_feature_gate, 1
+    FROM public.correspondence c
+    WHERE c.organization_id = caller_organization AND c.workspace_id = p_workspace_id AND c.source_entity_id = p_entity_id
+  ) candidate
+  WHERE candidate.entity_feature_gate = 'open'
+    OR (candidate.entity_feature_gate = 'legal-lists' AND enabled_features ? 'legal-lists')
+  ORDER BY candidate.priority LIMIT 1;
+  IF source_record_id IS NOT NULL THEN
+    PERFORM set_config('app.correspondence_source_organization_id', caller_organization, true),
+      set_config('app.correspondence_source_record_id', source_record_id::text, true),
+      set_config('app.correspondence_source_entity_id', '', true);
+    SELECT EXISTS (
+      SELECT 1 FROM public.correspondence_sources s
+      WHERE s.organization_id = caller_organization AND s.workspace_id = p_workspace_id
+        AND s.correspondence_id = source_record_id AND s.entity_id <> p_entity_id
+    ) INTO has_others;
+  END IF;
+  PERFORM set_config('app.correspondence_source_organization_id', coalesce(previous_organization, ''), true),
+    set_config('app.correspondence_source_workspace_id', coalesce(previous_workspace, ''), true),
+    set_config('app.correspondence_source_record_id', coalesce(previous_record, ''), true),
+    set_config('app.correspondence_source_entity_id', coalesce(previous_entity, ''), true);
+  -- NULL means the visible source was not admitted, never "no survivors".
+  RETURN has_others;
+END;
+$$;--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.correspondence_has_other_sources(uuid, uuid) FROM PUBLIC;--> statement-breakpoint
+
+-- stella-migration-safety: reviewed security-definer - Private non-bypass role, fixed search path and forced row security; scope comes only from the deleted source row and is restored before returning.
+CREATE OR REPLACE FUNCTION public.remove_correspondence_source() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp SET row_security = on AS $$
+DECLARE
+  next_source uuid;
+  previous_organization_id text := current_setting('app.correspondence_source_organization_id', true);
+  previous_workspace_id text := current_setting('app.correspondence_source_workspace_id', true);
+  previous_record_id text := current_setting('app.correspondence_source_record_id', true);
+  previous_entity_id text := current_setting('app.correspondence_source_entity_id', true);
+BEGIN
+  PERFORM set_config('app.correspondence_source_organization_id', OLD.organization_id, true),
+    set_config('app.correspondence_source_workspace_id', OLD.workspace_id::text, true),
+    set_config('app.correspondence_source_record_id', OLD.correspondence_id::text, true),
+    set_config('app.correspondence_source_entity_id', '', true);
+  PERFORM 1 FROM public.correspondence
+  WHERE organization_id = OLD.organization_id
+    AND workspace_id = OLD.workspace_id AND id = OLD.correspondence_id
+  FOR UPDATE;
+  IF FOUND THEN
+    next_source := public.next_correspondence_source(OLD);
+    IF next_source IS NOT NULL THEN
+      UPDATE public.correspondence
+      SET source_entity_id = next_source, updated_at = now()
+      WHERE organization_id = OLD.organization_id
+        AND workspace_id = OLD.workspace_id AND id = OLD.correspondence_id
+        AND source_entity_id = OLD.entity_id;
+    END IF;
+  END IF;
+  -- Custom GUCs cannot appear in this owner's function SET clauses. Restore
+  -- successful calls explicitly; a failed statement rolls back its local GUCs.
+  PERFORM set_config('app.correspondence_source_organization_id', coalesce(previous_organization_id, ''), true),
+    set_config('app.correspondence_source_workspace_id', coalesce(previous_workspace_id, ''), true),
+    set_config('app.correspondence_source_record_id', coalesce(previous_record_id, ''), true),
+    set_config('app.correspondence_source_entity_id', coalesce(previous_entity_id, ''), true);
+  RETURN OLD;
+END;
+$$;--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.remove_correspondence_source() FROM PUBLIC;--> statement-breakpoint
+
+-- stella-migration-safety: reviewed security-definer - The private role can only select/delete rows linked to the exact OLD entity and matter; nested record maintenance saves and restores this scope.
+CREATE OR REPLACE FUNCTION public.remove_entity_correspondence_sources() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp SET row_security = on AS $$
+DECLARE
+  previous_organization_id text := current_setting('app.correspondence_source_organization_id', true);
+  previous_workspace_id text := current_setting('app.correspondence_source_workspace_id', true);
+  previous_record_id text := current_setting('app.correspondence_source_record_id', true);
+  previous_entity_id text := current_setting('app.correspondence_source_entity_id', true);
+BEGIN
+  PERFORM set_config('app.correspondence_source_organization_id', '', true),
+    set_config('app.correspondence_source_workspace_id', OLD.workspace_id::text, true),
+    set_config('app.correspondence_source_record_id', '', true),
+    set_config('app.correspondence_source_entity_id', OLD.id::text, true);
+  DELETE FROM public.correspondence_sources
+  WHERE workspace_id = OLD.workspace_id AND entity_id = OLD.id;
+  -- Surviving copies have already repointed their record in the nested trigger.
+  -- A final source (including an unenrolled legacy pointer) still names this
+  -- deleted document. This entity trigger exclusively owns record deletion.
+  DELETE FROM public.correspondence
+  WHERE workspace_id = OLD.workspace_id AND source_entity_id = OLD.id;
+  PERFORM set_config('app.correspondence_source_organization_id', coalesce(previous_organization_id, ''), true),
+    set_config('app.correspondence_source_workspace_id', coalesce(previous_workspace_id, ''), true),
+    set_config('app.correspondence_source_record_id', coalesce(previous_record_id, ''), true),
+    set_config('app.correspondence_source_entity_id', coalesce(previous_entity_id, ''), true);
+  RETURN OLD;
+END;
+$$;--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.remove_entity_correspondence_sources() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.correspondence_has_other_sources(uuid, uuid) TO stella;--> statement-breakpoint
+-- The source trigger routine runs for every correspondence writer as its
+-- owner; it stays executable for the roles that write correspondence, not
+-- through PUBLIC. Its owner grants this before giving up the role.
+REVOKE EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() TO stella, stella_entity_gate;--> statement-breakpoint
+RESET ROLE;--> statement-breakpoint
+REVOKE CREATE ON SCHEMA public FROM stella_correspondence_source;--> statement-breakpoint
+-- stella-migration-safety: reviewed grant-privileges - Disable runtime switching to the private lifecycle role after installing its trigger-only entry point.
+GRANT stella_correspondence_source TO CURRENT_USER WITH SET FALSE;

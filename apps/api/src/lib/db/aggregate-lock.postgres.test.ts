@@ -237,6 +237,12 @@ const advisoryAcquisitions = () => {
         },
         tx,
       }),
+    organizationDataBoxes: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "organizationDataBoxes",
+        id: { organizationId },
+        tx,
+      }),
     personalCatalog: async (tx: AggregateAcquireTransaction) =>
       await withAggregateLock({
         aggregate: "personalCatalog",

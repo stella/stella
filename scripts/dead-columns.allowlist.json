@@ -1,10 +1,5 @@
 [
   {
-    "table": "organization_settings",
-    "column": "documentStampEnabled",
-    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
-  },
-  {
     "table": "buffer_object_cleanup_intents",
     "column": "writerUserId",
     "reason": "not app-code dead: default expression pulls the PostgreSQL session var and the column only appears inside the RLS policy predicate built alongside the table in schema/entities.ts, which this check excludes as the definitions. Allowlisted rather than a scanner fix -- picking it up would require reading inside the excluded schema files, defeating the point of the exclusion."

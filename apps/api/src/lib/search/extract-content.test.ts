@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import {
@@ -7,6 +8,7 @@ import {
   PPTX_MIME_TYPE,
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
+import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
@@ -52,6 +54,15 @@ describe("resolveExtractionMimeType", () => {
     ).toBe("application/vnd.ms-outlook");
   });
 
+  test("recovers the data-box message MIME type from a generic stored file", () => {
+    expect(
+      resolveExtractionMimeType({
+        fileName: "zprava.ZFO",
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe(DATA_BOX_MESSAGE_MIME_TYPE);
+  });
+
   test("recovers direct text MIME types from generic stored files", () => {
     expect(
       resolveExtractionMimeType({
@@ -86,6 +97,23 @@ describe("extractFileText", () => {
     );
 
     expect(text).toBe("hello\nworld");
+  });
+
+  test("extracts a data-box message's envelope, not an unreadable one", async () => {
+    const zfo = await zfoFile();
+    const text = await extractFixtureText(
+      new Uint8Array(zfo).buffer,
+      DATA_BOX_MESSAGE_MIME_TYPE,
+    );
+    expect(text).toContain(FIXTURE_MESSAGE.annotation);
+    expect(text).toContain("12 C 345/2026");
+
+    expect(
+      await extractFixtureText(
+        toArrayBuffer("not a data-box message"),
+        DATA_BOX_MESSAGE_MIME_TYPE,
+      ),
+    ).toBeNull();
   });
 
   test("extracts PDF text through anydoc, including Form XObject text", async () => {

@@ -244,6 +244,25 @@ describe("workspace realtime policy", () => {
     ]);
   });
 
+  test("organization settings events refresh correspondence across matters", () => {
+    const event = parseEvent({
+      type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+      resourceType: RESOURCE_TYPE.ORGANIZATION,
+    });
+    expect(event).not.toBeNull();
+    if (event === null) {
+      return;
+    }
+    for (const workspaceId of [WORKSPACE_ID, "workspace-2"]) {
+      expect(
+        getWorkspaceRealtimeQueryActions(event, workspaceId),
+      ).toContainEqual({
+        type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+        queryKey: ["correspondence"],
+      });
+    }
+  });
+
   test("maps every migrated resource domain to a server-owned query root", () => {
     const cases = [
       [RESOURCE_TYPE.AGENT_SKILL, ["skills"]],

@@ -4,7 +4,11 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import JSZip from "jszip";
 
-import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
+import {
+  EML_MIME_TYPE,
+  MSG_MIME_TYPE,
+} from "@stll/api-contract/email-mime-types";
 import { writeZipEntry } from "@stll/docx-utils";
 
 import type { rootDb } from "@/api/db/root";
@@ -945,46 +949,60 @@ describe("the extraction's database", () => {
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
   });
 
-  test("hands only an email document to the correspondence job", async () => {
-    seedSource("pdf");
-
-    const outcome = await executeNativeExtraction({
-      fileField: fileContent,
-      lifecycleSignal: new AbortController().signal,
-      run,
-    });
-
-    expect(outcome).toBe("persisted");
-    expect(enqueueUploadedMailMock).not.toHaveBeenCalled();
-  });
-
-  test("hands an email document to the correspondence job by file", async () => {
-    seedSource("eml");
-    const emailContent = {
-      ...fileContent,
-      fileName: "letter.eml",
-      mimeType: EML_MIME_TYPE,
-    } satisfies FieldContent;
-
-    const outcome = await executeNativeExtraction({
-      fileField: emailContent,
-      lifecycleSignal: new AbortController().signal,
-      run,
-    });
-
-    expect(outcome).toBe("persisted");
-    expect(enqueueUploadedMailMock.mock.calls).toEqual([
-      [
-        {
-          file: {
-            sourceFileId: fileContent.id,
-            storageMimeType: EML_MIME_TYPE,
-            mimeType: EML_MIME_TYPE,
-          },
-          scope: { organizationId, workspaceId, entityId },
+  test.each([
+    ["pdf", PDF_MIME_TYPE],
+    ["eml", EML_MIME_TYPE],
+    ["msg", MSG_MIME_TYPE],
+    ["zfo", DATA_BOX_MESSAGE_MIME_TYPE],
+  ])(
+    "hands every projected %s generation to correspondence reconciliation",
+    async (extension, mimeType) => {
+      seedSource(extension);
+      const outcome = await executeNativeExtraction({
+        fileField: {
+          ...fileContent,
+          fileName: `letter.${extension}`,
+          mimeType,
         },
-      ],
-    ]);
+        lifecycleSignal: new AbortController().signal,
+        run,
+      });
+      expect(outcome).toBe("persisted");
+      expect(enqueueUploadedMailMock.mock.calls).toEqual([
+        [
+          {
+            file: {
+              sourceFileId: fileContent.id,
+              storageMimeType: mimeType,
+              mimeType,
+            },
+            scope: { organizationId, workspaceId, entityId },
+          },
+        ],
+      ]);
+    },
+  );
+
+  test("a PDF derivative reconciles the original current file generation", async () => {
+    seedSource("pdf");
+    const originalFileId = "original-image";
+    const outcome = await executeNativeExtraction({
+      fileField: {
+        ...fileContent,
+        id: originalFileId,
+        fileName: "scan.png",
+        mimeType: "image/png",
+        pdfFileId: fileContent.id,
+      },
+      lifecycleSignal: new AbortController().signal,
+      run: { ...run, sourceFileId: originalFileId },
+    });
+    expect(outcome).toBe("persisted");
+    expect(enqueueUploadedMailMock.mock.calls.at(0)?.[0].file).toEqual({
+      sourceFileId: originalFileId,
+      storageMimeType: PDF_MIME_TYPE,
+      mimeType: PDF_MIME_TYPE,
+    });
   });
 
   test("a failed hand-off leaves the document indexed", async () => {
