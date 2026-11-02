@@ -15,6 +15,7 @@ const CURATED_WRITE_CAPABILITIES = {
   configure_template_fields: {
     noCapabilityReason: "This native tool owns template configuration.",
   },
+  create_organization: ["organizations.create"],
   create_reader_annotation: {
     noCapabilityReason: "This native tool owns reader annotations.",
   },
@@ -159,6 +160,12 @@ const SHAPE_EXCLUSIONS: readonly ShapeExclusion[] = [
     capability: "matters.update",
     field: "leadUserId",
     reason: "Matter leads are managed with membership.",
+  },
+  {
+    capability: "matters.update",
+    field: "billingNarrativeLanguage",
+    reason:
+      "The narrative language only steers activity billing drafts and is set through the matter capability.",
   },
   {
     capability: "contacts.create",

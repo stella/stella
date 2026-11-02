@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Fault drivers for publisher reads.
  *
@@ -30,8 +31,6 @@
  * the interception in an accessor that wraps whatever the fixture installs.
  */
 
-import { panic, Result } from "better-result";
-
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
 import {
@@ -42,7 +41,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import { isRecord } from "@/api/lib/type-guards";
-import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+import { withTestFetchInterceptor } from "@/api/tests/helpers/test-fetch";
 
 export const READ_FAULTS = [
   "status-500",
@@ -135,32 +134,15 @@ export const faultedResponse = async (
 const withInterceptedFetch = async <T>(
   intercept: (stage: string, served: Delegate) => Promise<Response>,
   build: () => Promise<T>,
-): Promise<T> => {
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "fetch");
-  let inner = globalThis.fetch;
-  const wrapper = asFetchMock(
-    async (input: FetchInput, init?: RequestInit) =>
+): Promise<T> =>
+  await withTestFetchInterceptor(
+    async (input, init, delegate) =>
       await intercept(
         fetchStageOf(input, init),
-        async () => await inner(input, init),
+        async () => await delegate(input, init),
       ),
+    build,
   );
-  Object.defineProperty(globalThis, "fetch", {
-    configurable: true,
-    get: () => wrapper,
-    set: (value: typeof fetch) => {
-      inner = value;
-    },
-  });
-  try {
-    return await build();
-  } finally {
-    if (descriptor !== undefined) {
-      Object.defineProperty(globalThis, "fetch", descriptor);
-    }
-    globalThis.fetch = inner;
-  }
-};
 
 /** The stages a build reads, in first-request order. */
 export const recordFetchStages = async <T>(
