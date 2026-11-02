@@ -75,6 +75,7 @@
         "./capabilities/contacts.sanctions.reviews.update.json",
         "./capabilities/contacts.search.json",
         "./capabilities/contacts.update.json",
+        "./capabilities/dictation.transcribe.json",
         "./capabilities/document-translations.prepare.json",
         "./capabilities/document-translations.runs.create.json",
         "./capabilities/document-translations.runs.get.json",
@@ -172,6 +173,10 @@
         "./capabilities/legislation.boe.text-block.get.json",
         "./capabilities/legislation.borme.summary.get.json",
         "./capabilities/legislation.get.json",
+        "./capabilities/legislation.matter-links.batch.create.json",
+        "./capabilities/legislation.matter-links.create.json",
+        "./capabilities/legislation.matter-links.delete.json",
+        "./capabilities/legislation.matter-links.list.json",
         "./capabilities/legislation.search.json",
         "./capabilities/lists.columns.create.json",
         "./capabilities/lists.create.json",
@@ -224,6 +229,7 @@
         "./capabilities/matters.justifications.list.json",
         "./capabilities/matters.list.json",
         "./capabilities/matters.members.add.json",
+        "./capabilities/matters.members.list.json",
         "./capabilities/matters.members.remove.json",
         "./capabilities/matters.search-preview.get.json",
         "./capabilities/matters.unarchive.json",
@@ -247,6 +253,8 @@
         "./capabilities/organization-settings.ai-availability.get.json",
         "./capabilities/organization-settings.anonymization-blacklist.get.json",
         "./capabilities/organization-settings.anonymization-blacklist.update.json",
+        "./capabilities/organization-settings.billing-drafts.get.json",
+        "./capabilities/organization-settings.billing-drafts.update.json",
         "./capabilities/organization-settings.correspondence.allowed-senders.create.json",
         "./capabilities/organization-settings.correspondence.allowed-senders.delete.json",
         "./capabilities/organization-settings.correspondence.allowed-senders.list.json",
@@ -259,6 +267,8 @@
         "./capabilities/organization-settings.preview.json",
         "./capabilities/organization-settings.sanctions-monitoring.update.json",
         "./capabilities/organization-settings.update.json",
+        "./capabilities/organizations.create.json",
+        "./capabilities/organizations.slug.update.json",
         "./capabilities/playbooks.applicable.run.json",
         "./capabilities/playbooks.approve.json",
         "./capabilities/playbooks.create.json",
@@ -304,6 +314,7 @@
         "./capabilities/search-history.clear.json",
         "./capabilities/search-history.delete.json",
         "./capabilities/search-history.list.json",
+        "./capabilities/search.results.list.json",
         "./capabilities/seller-profiles.archive.json",
         "./capabilities/seller-profiles.create.json",
         "./capabilities/seller-profiles.default.update.json",
@@ -436,6 +447,7 @@
         "./capabilities/time-entries.me.suggestions.list.json",
         "./capabilities/time-entries.members.daily-target.update.json",
         "./capabilities/time-entries.pdf.export.json",
+        "./capabilities/time-entries.report.get.json",
         "./capabilities/time-entries.split.json",
         "./capabilities/time-entries.suggestions.decisions.create.json",
         "./capabilities/time-entries.suggestions.list.json",
@@ -506,6 +518,11 @@
           "space": "type"
         },
         {
+          "name": "LOOPBACK_REDIRECT_PATH",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "buildCliClientMetadataDocument",
           "kind": "variable",
           "space": "value"
@@ -541,8 +558,10 @@
   },
   "declarations": {
     "./src/api-fetch.d.ts": "export declare const localCliClientHeaders: (version: string) => Headers;\nexport declare const apiFetch: (input: string | URL, init?: RequestInit) => Promise<Response>;\n",
-    "./src/auth/client-metadata-document.d.ts": "export declare const CLI_CLIENT_METADATA_PATH: \"/v1/mcp/oauth/cli-client-metadata.json\";\nexport type CliClientMetadataDocument = {\n    readonly client_id: string;\n    readonly client_name: string;\n    readonly application_type: \"native\";\n    readonly grant_types: readonly [\n        \"authorization_code\",\n        \"refresh_token\"\n    ];\n    readonly redirect_uris: readonly string[];\n    readonly response_types: readonly [\n        \"code\"\n    ];\n    readonly scope: string;\n    readonly token_endpoint_auth_method: \"none\";\n};\nexport declare const cliClientMetadataUrl: (issuer: string) => string | undefined;\nexport declare const buildCliClientMetadataDocument: (clientId: string) => CliClientMetadataDocument;\n",
+    "./src/auth/client-metadata-document.d.ts": "import { LOOPBACK_REDIRECT_PATH } from \"./constants.js\";\nexport { LOOPBACK_REDIRECT_PATH };\nexport declare const CLI_CLIENT_METADATA_PATH: \"/v1/mcp/oauth/cli-client-metadata.json\";\nexport type CliClientMetadataDocument = {\n    readonly client_id: string;\n    readonly client_name: string;\n    readonly application_type: \"native\";\n    readonly grant_types: readonly [\n        \"authorization_code\",\n        \"refresh_token\"\n    ];\n    readonly redirect_uris: readonly string[];\n    readonly response_types: readonly [\n        \"code\"\n    ];\n    readonly scope: string;\n    readonly token_endpoint_auth_method: \"none\";\n};\nexport declare const cliClientMetadataUrl: (issuer: string) => string | undefined;\nexport declare const buildCliClientMetadataDocument: (clientId: string) => CliClientMetadataDocument;\n",
+    "./src/auth/constants.d.ts": "import { CLI_KNOWN_SCOPES, CLI_REQUIRED_RESOURCE_SCOPES } from \"../generated/mcp-contract.js\";\nexport { CLI_KNOWN_SCOPES, CLI_REQUIRED_RESOURCE_SCOPES };\nexport declare const getMcpResourceUrl: (serverUrl: string) => string;\nexport declare const AUTHORIZATION_SERVER_METADATA_PATHS: readonly [\n    \"/.well-known/oauth-authorization-server\",\n    \"/api/auth/.well-known/oauth-authorization-server\"\n];\nexport declare const LOOPBACK_REDIRECT_PATH = \"/callback\";\nexport declare const LOOPBACK_REDIRECT_URI: string;\nexport declare const CLI_IDENTITY_SCOPES: readonly [\n    \"openid\",\n    \"profile\",\n    \"email\",\n    \"offline_access\"\n];\ntype CliResourceScope = (typeof CLI_REQUIRED_RESOURCE_SCOPES)[number];\nexport declare const CLI_DEFAULT_RESOURCE_SCOPES: readonly CliResourceScope[];\nexport declare const CLI_NON_DEFAULT_RESOURCE_SCOPES: readonly CliResourceScope[];\nexport declare const CLI_DEFAULT_SCOPES: readonly string[];\nexport declare const CLI_REQUIRED_SCOPES: readonly [\n    \"openid\",\n    \"stella:read\"\n];\nexport declare const CLIENT_NAME = \"stella-cli\";\nexport declare const SERVER_URL_ENV_VAR = \"STELLA_SERVER_URL\";\nexport declare const API_KEY_ENV_VAR = \"STELLA_API_KEY\";\nexport declare const LOGIN_TIMEOUT_MS: number;\nexport declare const AUTH_FETCH_TIMEOUT_MS = 10000;\n",
     "./src/capability-catalog-data.d.ts": "export declare const readCapabilityCatalog: (directory?: URL) => unknown[];\nexport declare const checkCapabilityRegistry: (entries: readonly unknown[], toolNames: ReadonlySet<string>) => void;\n",
-    "./src/cli.d.ts": "#!/usr/bin/env bun\nexport {};\n"
+    "./src/cli.d.ts": "#!/usr/bin/env bun\nexport {};\n",
+    "./src/generated/mcp-contract.d.ts": "export declare const MCP_CAPABILITY_EXECUTORS: {\n    readonly read: \"read_capability\";\n    readonly write: \"write_capability\";\n};\nexport declare const MCP_HTTP_PATH: \"/mcp/advanced\";\nexport declare const MCP_DISCOVERY_PATH: \"/.well-known/oauth-protected-resource/mcp/advanced\";\nexport declare const MCP_TOOL_NAME_MAX_LENGTH = 71;\nexport declare const MCP_TOOL_NAME_PATTERN_SOURCE: \"^[a-z][a-z0-9_-]{0,70}$\";\nexport declare const MCP_TOOL_NAME_PATTERN_FLAGS: \"u\";\nexport declare const CLI_KNOWN_SCOPES: readonly [\n    \"openid\",\n    \"profile\",\n    \"email\",\n    \"offline_access\",\n    \"stella:search\",\n    \"stella:read\",\n    \"stella:law_read\",\n    \"stella:templates\",\n    \"stella:documents_write\",\n    \"stella:matters_write\",\n    \"stella:contacts_write\",\n    \"stella:chat\",\n    \"stella:memory_write\",\n    \"stella:knowledge_write\",\n    \"stella:billing_write\",\n    \"stella:admin_read\",\n    \"stella:admin_write\",\n    \"stella:account_export_read\",\n    \"stella:account_export_write\",\n    \"stella:organization_create\",\n    \"stella:onboarding\",\n    \"stella:skills\",\n    \"stella:feedback\",\n    \"stella:external_mcps\"\n];\nexport declare const CLI_REQUIRED_RESOURCE_SCOPES: readonly [\n    \"stella:search\",\n    \"stella:read\",\n    \"stella:law_read\",\n    \"stella:templates\",\n    \"stella:documents_write\",\n    \"stella:matters_write\",\n    \"stella:contacts_write\",\n    \"stella:chat\",\n    \"stella:memory_write\",\n    \"stella:knowledge_write\",\n    \"stella:billing_write\",\n    \"stella:admin_read\",\n    \"stella:admin_write\",\n    \"stella:account_export_read\",\n    \"stella:account_export_write\",\n    \"stella:organization_create\",\n    \"stella:onboarding\",\n    \"stella:skills\",\n    \"stella:feedback\",\n    \"stella:external_mcps\"\n];\nexport declare const MCP_ERROR_CODES: readonly [\n    \"action_period_exhausted\",\n    \"action_concurrency_busy\",\n    \"action_not_enabled\",\n    \"limiter_store_unavailable\",\n    \"action_admission_configuration_incomplete\",\n    \"action_admission_org_state_unreadable\",\n    \"action_admission_lease_lost\",\n    \"action_feature_disabled\",\n    \"verification_active_limit_reached\",\n    \"verification_daily_limit_reached\",\n    \"validation_error\",\n    \"result_too_large\",\n    \"missing_scope\",\n    \"feature_disabled\",\n    \"not_found\",\n    \"confirmation_required\",\n    \"permission_denied\",\n    \"usage_limited\",\n    \"conflict\",\n    \"rate_limited\",\n    \"upstream_unavailable\",\n    \"public_read_timeout\",\n    \"search_index_unavailable\",\n    \"unknown_tool\",\n    \"internal_error\"\n];\nexport type McpErrorCode = (typeof MCP_ERROR_CODES)[number];\nexport declare const VERIFICATION_RUN_CAP_CODES: {\n    readonly active: \"verification_active_limit_reached\";\n    readonly daily: \"verification_daily_limit_reached\";\n};\nexport type VerificationRunCapCode = (typeof VERIFICATION_RUN_CAP_CODES)[keyof typeof VERIFICATION_RUN_CAP_CODES];\nexport declare const ACTION_ADMISSION_REFUSALS: {\n    readonly action_period_exhausted: {\n        readonly status: 403;\n        readonly message: \"This action is paused for your organization.\";\n        readonly hint: \"Contact your administrator for help. Do not retry this call immediately.\";\n        readonly retryable: false;\n    };\n    readonly action_concurrency_busy: {\n        readonly status: 429;\n        readonly message: \"Other work is in progress. Please try again shortly.\";\n        readonly hint: \"Wait for active work to finish, then retry this call.\";\n        readonly retryable: true;\n    };\n    readonly action_not_enabled: {\n        readonly status: 403;\n        readonly message: \"This action is not enabled for your organization.\";\n        readonly hint: \"Contact your administrator to enable this action before retrying.\";\n        readonly retryable: false;\n    };\n    readonly limiter_store_unavailable: {\n        readonly status: 503;\n        readonly message: \"Limiter/admission store is unavailable. Retry later.\";\n        readonly hint: \"Wait for the service to recover, then retry this call.\";\n        readonly retryable: true;\n    };\n    readonly action_admission_configuration_incomplete: {\n        readonly status: 503;\n        readonly message: \"Action admission configuration is incomplete.\";\n        readonly hint: \"Contact the service administrator to complete the configuration.\";\n        readonly retryable: false;\n    };\n    readonly action_admission_org_state_unreadable: {\n        readonly status: 503;\n        readonly message: \"Organization access state could not be read.\";\n        readonly hint: \"Wait for the service to recover, then retry this call.\";\n        readonly retryable: true;\n    };\n    readonly action_admission_lease_lost: {\n        readonly status: 503;\n        readonly message: \"The action reservation expired.\";\n        readonly hint: \"Retry this call to reserve capacity again.\";\n        readonly retryable: true;\n    };\n    readonly action_feature_disabled: {\n        readonly status: 503;\n        readonly message: \"This feature is temporarily turned off.\";\n        readonly hint: \"Do not retry this call until the feature is turned back on.\";\n        readonly retryable: false;\n    };\n};\nexport type ActionAdmissionCode = keyof typeof ACTION_ADMISSION_REFUSALS;\nexport declare const MCP_CLI_TOOL_SCOPES: readonly [\n    \"read\",\n    \"law_read\",\n    \"contacts_write\",\n    \"matters_write\",\n    \"chat\",\n    \"memory_write\",\n    \"documents_write\",\n    \"knowledge_write\",\n    \"search\",\n    \"onboarding\",\n    \"templates\",\n    \"billing_write\",\n    \"admin_read\",\n    \"admin_write\",\n    \"organization_create\",\n    \"feedback\"\n];\nexport declare const MCP_SCOPE_IMPLICATIONS: readonly [\n    {\n        readonly grant: \"stella:read\";\n        readonly scope: \"stella:law_read\";\n    }\n];\nexport type McpCliToolScope = (typeof MCP_CLI_TOOL_SCOPES)[number];\n"
   }
 }

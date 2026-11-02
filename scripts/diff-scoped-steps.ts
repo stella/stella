@@ -230,6 +230,9 @@ export const DIFF_SCOPED_STEPS = {
   "ci.yml:ci-checks-policy#Select measured ratchet base from the target branch":
     operational("Selects the base tree the ratchet measures."),
   "ci.yml:ci-checks-policy#Run policy checks": operational(CHECK_POOL),
+  "ci.yml:ci-checks-policy#Published package API reports": fullTree(
+    "Regenerates every published package's report; the base supplies the previous reports and the changesets since.",
+  ),
   "ci.yml:ci-checks-policy#Ratchet guard": fullTree(
     "Measures both full trees; the base only supplies the comparison.",
   ),
