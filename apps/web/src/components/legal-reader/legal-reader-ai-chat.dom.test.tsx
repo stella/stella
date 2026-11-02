@@ -40,7 +40,12 @@ globalThis.fetch = Object.assign(
     }
     // The composer's matter picker: a member with no matters yet.
     if (url.pathname.endsWith("/workspaces/navigation")) {
-      return Response.json({ items: [], nextCursor: null, workspaces: [] });
+      return Response.json({
+        items: [],
+        nextCursor: null,
+        workspaces: [],
+        features: { timeBilling: false },
+      });
     }
     return Response.json({});
   },

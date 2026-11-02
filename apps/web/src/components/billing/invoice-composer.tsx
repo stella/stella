@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 
 import { INVOICE_DUE_DAY_PRESETS, INVOICE_LANGUAGES } from "@stll/api-contract";
 import type { InvoiceLanguage } from "@stll/api-contract";
+import type { InvoiceIssueBlocker } from "@stll/api-contract/billing";
 import type { InvoiceTotals, VatTreatment } from "@stll/invoicing";
 import { displayLanguageName } from "@stll/locales";
 import { Button } from "@stll/ui/button";
@@ -62,6 +63,8 @@ import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { INVOICE_ISSUE_BLOCKER_FIXES } from "@/lib/errors/invoice-issue";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
@@ -400,6 +403,7 @@ export const InvoiceComposer = ({
         )}
         {step === "issue" && (
           <IssueStep
+            blockers={prefill.issueBlockers}
             buyerName={prefill.buyer.buyerName}
             currency={currency}
             dueDate={dueDate}
@@ -411,6 +415,7 @@ export const InvoiceComposer = ({
       <ComposerFooter
         currency={currency}
         canSave={hasItems && vat.reason !== "no_vat_rate"}
+        canIssue={prefill.issueBlockers.length === 0}
         hasItems={hasItems}
         onSave={send}
         onStep={setStep}
@@ -543,7 +548,16 @@ export const useComposerSubmit = ({
           };
         },
         savedDraft: (created, error) => {
-          notifyUserError(error, t("billing.invoiceComposer.issueFailed"));
+          const issueFailed = t("billing.invoiceComposer.issueFailed");
+          // A refusal that names its reason leads with it; the person still
+          // learns that the draft they composed was kept.
+          notifyUserError(
+            error,
+            issueFailed,
+            userErrorFromThrown(error, issueFailed) === issueFailed
+              ? {}
+              : { description: issueFailed },
+          );
           return {
             id: created.id,
             workspaceId,
@@ -1217,6 +1231,8 @@ const DetailsStep = ({
 };
 
 type IssueStepProps = {
+  /** Why issuing would be refused; empty when it can succeed. */
+  blockers: readonly InvoiceIssueBlocker[];
   buyerName: string | null;
   currency: string;
   dueDate: string | null;
@@ -1225,6 +1241,7 @@ type IssueStepProps = {
 };
 
 const IssueStep = ({
+  blockers,
   buyerName,
   currency,
   dueDate,
@@ -1235,12 +1252,40 @@ const IssueStep = ({
   const format = useFormatter();
   return (
     <Frame>
-      <FrameHeader>
-        <FrameTitle>{t("billing.invoiceComposer.readyTitle")}</FrameTitle>
-        <FrameDescription>
-          {t("billing.invoiceComposer.readyDescription")}
-        </FrameDescription>
-      </FrameHeader>
+      {blockers.length === 0 ? (
+        <FrameHeader>
+          <FrameTitle>{t("billing.invoiceComposer.readyTitle")}</FrameTitle>
+          <FrameDescription>
+            {t("billing.invoiceComposer.readyDescription")}
+          </FrameDescription>
+        </FrameHeader>
+      ) : (
+        <FrameHeader>
+          <FrameTitle>{t("billing.invoiceComposer.notReadyTitle")}</FrameTitle>
+          <FrameDescription>
+            {t("billing.invoiceComposer.notReadyDescription")}
+          </FrameDescription>
+          <ul className="flex flex-col gap-2 text-sm">
+            {blockers.map((blocker) => {
+              const fix = INVOICE_ISSUE_BLOCKER_FIXES[blocker];
+              return (
+                <li className="flex items-start gap-2" key={blocker}>
+                  <InfoIcon
+                    aria-hidden
+                    className="text-muted-foreground mt-0.5 size-4 shrink-0"
+                  />
+                  <span className="flex flex-col gap-0.5">
+                    <span>{t(fix.messageKey)}</span>
+                    <Link className="underline underline-offset-4" to={fix.to}>
+                      {t(fix.settingsLabelKey)}
+                    </Link>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </FrameHeader>
+      )}
       <FramePanel>
         <DetailsGrid>
           <DetailsItem label={t("billing.invoiceComposer.buyer")}>
@@ -1274,6 +1319,8 @@ type ComposerFooterProps = {
   hasItems: boolean;
   /** False while nothing is billable or no VAT rate is in force. */
   canSave: boolean;
+  /** False while a precondition of issuing is missing; a draft still saves. */
+  canIssue: boolean;
   pending: boolean;
   onStep: (step: ComposerStep) => void;
   onSave: (issue: boolean) => void;
@@ -1285,6 +1332,7 @@ const ComposerFooter = ({
   currency,
   hasItems,
   canSave,
+  canIssue,
   pending,
   onStep,
   onSave,
@@ -1323,7 +1371,10 @@ const ComposerFooter = ({
           >
             {t("billing.invoiceComposer.saveDraft")}
           </Button>
-          <Button disabled={!canSave || pending} onClick={() => onSave(true)}>
+          <Button
+            disabled={!canSave || !canIssue || pending}
+            onClick={() => onSave(true)}
+          >
             {t("billing.invoiceComposer.issueInvoice")}
           </Button>
         </>

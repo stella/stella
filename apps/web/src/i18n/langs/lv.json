@@ -649,6 +649,8 @@
       "noExpenses": "Šajā lietā nav apstiprinātu izdevumu, par kuriem vēl nav izrakstīts rēķins.",
       "noTime": "Šajā lietā nav apstiprināta laika, par kuru vēl nav izrakstīts rēķins.",
       "noVat": "Bez PVN",
+      "notReadyDescription": "Melnrakstu varat saglabāt jau tagad un izrakstīt, kad tas būs iestatīts.",
+      "notReadyTitle": "Vēl nav gatavs izrakstīšanai",
       "nothingToBill": "Pagaidām nav par ko izrakstīt rēķinu. Apstipriniet šīs lietas laika ierakstus vai izdevumus, lai tos iekļautu rēķinā.",
       "openInvoice": "Atvērt rēķinu",
       "otherCurrency": "{count, plural, zero {# pozīciju ir reģistrētas} one {# pozīcija ir reģistrēta} other {# pozīcijas ir reģistrētas}} citā valūtā, nevis {currency}, un paliek atsevišķam rēķinam.",
@@ -2957,6 +2959,8 @@
       "invitationLimitReached": "Šī organizācija ir sasniegusi uzaicinājumu limitu. Vispirms atceliet kādu gaidošu uzaicinājumu.",
       "invitationOtherRecipient": "Šis uzaicinājums tika nosūtīts uz citu e-pasta adresi.",
       "invitationRoleNotAllowed": "Jūs nevarat uzaicināt personu ar šo lomu. Izvēlieties citu lomu.",
+      "invoiceNumberSeriesMissing": "Iestatiet rēķinu noklusējuma numuru sēriju organizācijas iestatījumu sadaļā Numuru sērijas un pēc tam izrakstiet rēķinu.",
+      "invoiceSellerProfileMissing": "Pievienojiet pārdevēja profilu organizācijas iestatījumu sadaļā Norēķinu profili un pēc tam izrakstiet rēķinu.",
       "legalSourceEntityLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums, tāpēc dokumentu nevarēja izveidot.",
       "legalSourceFilePropertyMissing": "Šajā lietā trūkst faila rekvizīta, tāpēc dokumentu nevarēja izveidot.",
       "matterContactCapacityExceeded": "Šajā lietā ir vairāk kontaktu, nekā iespējams parādīt. Noņemiet redzamās kontaktu piesaistes, lai parādītu pārējos kontaktus.",
@@ -5454,7 +5458,7 @@
         "workspace_member": "lietas dalībnieks"
       },
       "billingDrafts": {
-        "description": "Veidojiet darba aprakstus no atlasītajām darbībām un biroja vai klienta zināšanu failiem. Katrs lietotājs arī dod savu piekrišanu. Pirms melnrakstu ieslēgšanas pievienojiet biroja vadlīnijas.",
+        "description": "Veidojiet darba aprakstus no atlasītajām darbībām un biroja vai klienta zināšanu failiem. Katrs lietotājs arī dod savu piekrišanu. Kad biroja vadlīnijas ir pievienotas, melnraksti tiek pārbaudīti atbilstoši tām.",
         "firm": "Biroja vadlīnijas",
         "ledes": "Elektroniskie norēķini (LEDES)",
         "title": "AI norēķinu melnraksti"
@@ -6398,6 +6402,10 @@
     "deleteWorkspaceConfirmDescription": "Vai tiešām vēlaties dzēst šo lietu? Šo darbību nevar atsaukt.",
     "deletedItem": "Izdzēsts: {name}",
     "deletingWorkspace": "Dzēš lietu",
+    "documentSwitcher": {
+      "searchPlaceholder": "Atrast dokumentu…",
+      "trigger": "Pārslēgt dokumentu"
+    },
     "documentsCount": "{count, plural, zero {# dokumentu} one {# dokuments} other {# dokumenti}}",
     "dropToUploadFiles": "Nometiet, lai augšupielādētu failus",
     "duplicateMatter": "Dublēt lietu",

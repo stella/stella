@@ -34,6 +34,14 @@
     "composerPlaceholder": "Pergunte à stella",
     "send": "Enviar",
     "stop": "Parar",
+    "dictate": "Ditar",
+    "dictationCancel": "Cancelar ditado",
+    "dictationFinish": "Concluir ditado",
+    "dictationListening": "Ouvindo… {elapsed} de {limit}",
+    "dictationTranscribing": "Transcrevendo…",
+    "dictationDenied": "O ditado precisa do microfone. Permita para o stella em Ajustes.",
+    "dictationFailed": "Não foi possível transcrever a gravação. Tente de novo.",
+    "dictationSilent": "Nenhuma fala foi ouvida.",
     "sendFailed": "Não foi possível enviar sua mensagem. Tente novamente.",
     "answerWorking": "Trabalhando…",
     "answerStopped": "Interrompido.",
@@ -174,6 +182,17 @@
       "system": "Aparência: automática",
       "light": "Aparência: clara",
       "dark": "Aparência: escura"
+    },
+    "edit": {
+      "saved": "Salvo",
+      "saving": "Salvando…",
+      "notSaved": "Ainda não salvo",
+      "done": "Concluído",
+      "openFailed": "Este documento não pode ser editado agora",
+      "takenOver": "Outra pessoa está editando este documento agora. Suas alterações desde o último salvamento não foram mantidas.",
+      "finishFailed": "Suas alterações estão salvas, mas ainda não viraram uma nova versão. Toque em Concluído de novo ou saia: a próxima edição continua a partir delas.",
+      "stay": "Ficar",
+      "leave": "Sair"
     }
   },
   "signIn": {
@@ -222,9 +241,7 @@
     "share": "Compartilhar"
   },
   "more": {
-    "soon": "Em breve",
-    "timers": "Cronômetros",
-    "voiceInput": "Entrada por voz"
+    "timers": "Cronômetros"
   },
   "writes": {
     "consentNeeded": "Para fazer alterações pelo app, a stella precisa da sua permissão. Entre novamente para concedê-la.",
