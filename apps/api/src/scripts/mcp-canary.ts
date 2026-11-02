@@ -1570,7 +1570,7 @@ export const runReleaseLoadProbe = async (
       await fetcher(jobsUrl, {
         method: "POST",
         headers: smokeHeaders,
-        timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+        timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
       }),
     );
     if (
@@ -1590,7 +1590,7 @@ export const runReleaseLoadProbe = async (
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ query: "contract", country: "CZ", limit: 5 }),
-        timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+        timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
       }),
     );
     const decisionIds = v.is(
@@ -1631,7 +1631,7 @@ export const runReleaseLoadProbe = async (
       await fetcher(jobsUrl, {
         method: "GET",
         headers: smokeHeaders,
-        timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+        timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
       }),
     );
     const ran =

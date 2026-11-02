@@ -231,7 +231,6 @@ type DeclaredSchedulerJobId = (typeof DECLARED_SCHEDULER_JOBS)[number]["id"];
 const RELEASE_LOAD_JOB_IDS = [
   "caseLaw.reportFreshness.fiveMinute",
   "caseLaw.refreshSitemapShards.hourly",
-  "caseLaw.refreshBrowseFacets.hourly",
   "caseLaw.refreshSourceArrivals.threeHourly",
   "legislation.refreshSitemapShards.hourly",
   "legislation.refreshFacetCounts.hourly",
