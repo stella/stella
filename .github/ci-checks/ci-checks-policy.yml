@@ -121,6 +121,18 @@ checks:
       bun test scripts/check-tracked-file-sizes.test.ts
       bun scripts/check-tracked-file-sizes.ts
 
+  # Every ci.yml job's display name resolves to a fixed set of names, and no
+  # two jobs can render the same name.
+  - name: CI job names
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_129
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-policy/CI job names')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_129 != 'true') }}
+    run: |
+      bun test scripts/check-ci-job-names.test.ts
+      bun scripts/check-ci-job-names.ts
+
   # Network fetches retry through scripts/retry.sh and carry a step
   # timeout; the allowlist may only shrink against the measured base.
   - name: CI network step retries and timeouts
