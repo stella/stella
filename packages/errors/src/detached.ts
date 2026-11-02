@@ -2,6 +2,7 @@
 // Fire-and-forget work, shared by the API and web apps. Both route a detached
 // rejection to their own error-capture channel; that channel is the only part
 // that differs, so it is injected and the helper itself lives here once.
+// parser-output-unchanged: refusing a function operand only reroutes a detached rejection; no parser result is written through this helper.
 import { TaggedError } from "better-result";
 
 /** Receives a detached rejection with the call site's label. */
