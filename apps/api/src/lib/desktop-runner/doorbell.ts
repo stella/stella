@@ -69,15 +69,12 @@ const bestEffort = (
   operation: () => Promise<unknown>,
   onFailure: (error: unknown) => void,
 ) => {
-  detached(
-    (async () => {
-      const done = await Result.tryPromise(operation);
-      if (done.isErr()) {
-        onFailure(done.error);
-      }
-    })(),
-    "desktop-runner.doorbell",
-  );
+  detached(async () => {
+    const done = await Result.tryPromise(operation);
+    if (done.isErr()) {
+      onFailure(done.error);
+    }
+  }, "desktop-runner.doorbell");
 };
 
 const PUBLISH_TIMEOUT_MS = 2000;
@@ -183,7 +180,10 @@ export const createRedisDoorbell = ({
           observeSubscribeFailure(renewed.error);
           subscription.cancelRetry = scheduleRetry(
             () => {
-              detached(renew(attempt + 1, false), "desktop-runner.doorbell");
+              detached(
+                async () => await renew(attempt + 1, false),
+                "desktop-runner.doorbell",
+              );
             },
             Math.min(SUBSCRIBE_RETRY_MS * 2 ** attempt, SUBSCRIBE_RETRY_CAP_MS),
           );
@@ -198,7 +198,10 @@ export const createRedisDoorbell = ({
         await renew(0, true);
         if (!stopped()) {
           stopReconnects.stop = subscriber.onReconnect(() => {
-            detached(renew(0, false), "desktop-runner.doorbell");
+            detached(
+              async () => await renew(0, false),
+              "desktop-runner.doorbell",
+            );
           });
         }
       }, observeSubscribeFailure);

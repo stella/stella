@@ -499,7 +499,7 @@ const heartbeat = (state: SessionState) => {
   state.missedPings = 0;
   state.phase.socket.ping();
   detached(
-    step(state, "heartbeat", async () => await renew(state)),
+    async () => await step(state, "heartbeat", async () => await renew(state)),
     "desktop-runner.heartbeat",
   );
 };
@@ -682,26 +682,23 @@ const onSocketClosed = (state: SessionState) => {
     state.context.timers.clearInterval(interval);
   }
   const previous = state.chain;
-  detached(
-    (async () => {
-      await previous;
-      if (!state.claimed) {
-        return;
-      }
-      const released = await Result.tryPromise(
-        async () =>
-          await releaseRunnerSession(state.context.db, {
-            binding: state.binding,
-            sessionId: state.sessionId,
-          }),
-      );
-      if (released.isErr()) {
-        // Routing ignores the runner once its heartbeat goes stale.
-        observeFailure(released.error, { sink: RELEASE_SINK });
-      }
-    })(),
-    "desktop-runner.release",
-  );
+  detached(async () => {
+    await previous;
+    if (!state.claimed) {
+      return;
+    }
+    const released = await Result.tryPromise(
+      async () =>
+        await releaseRunnerSession(state.context.db, {
+          binding: state.binding,
+          sessionId: state.sessionId,
+        }),
+    );
+    if (released.isErr()) {
+      // Routing ignores the runner once its heartbeat goes stale.
+      observeFailure(released.error, { sink: RELEASE_SINK });
+    }
+  }, "desktop-runner.release");
 };
 
 export type RunnerSession = {
@@ -779,11 +776,12 @@ export const createRunnerSession = ({
       state.queuedFrames += 1;
       state.queuedBytes += bytes;
       detached(
-        step(state, "frame", async () => {
-          state.queuedFrames -= 1;
-          state.queuedBytes -= bytes;
-          await handleFrame(state, message);
-        }),
+        async () =>
+          await step(state, "frame", async () => {
+            state.queuedFrames -= 1;
+            state.queuedBytes -= bytes;
+            await handleFrame(state, message);
+          }),
         "desktop-runner.frame",
       );
     },
@@ -792,7 +790,7 @@ export const createRunnerSession = ({
     },
     drain: () => {
       state.backpressured = false;
-      detached(deliver(state), "desktop-runner.drain");
+      detached(async () => await deliver(state), "desktop-runner.drain");
     },
     close: () => {
       onSocketClosed(state);

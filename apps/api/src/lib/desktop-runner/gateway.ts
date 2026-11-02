@@ -242,11 +242,12 @@ export const createDesktopRunnerGateway = (
     const delay = timing.sweepIntervalMs * (0.75 + 0.5 * random());
     sweepTimer = setTimeout(() => {
       detached(
-        sweep().finally(() => {
-          if (!draining) {
-            scheduleSweep();
-          }
-        }),
+        async () =>
+          await sweep().finally(() => {
+            if (!draining) {
+              scheduleSweep();
+            }
+          }),
         "desktop-runner.sweep",
       );
     }, delay);
@@ -322,7 +323,10 @@ export const createDesktopRunnerGateway = (
       stopListening = await options.doorbell.listen(
         options.instanceId,
         (sessionId) => {
-          detached(deliverTo(sessionId), "desktop-runner.ring");
+          detached(
+            async () => await deliverTo(sessionId),
+            "desktop-runner.ring",
+          );
         },
       );
       scheduleSweep();
