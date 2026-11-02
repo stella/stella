@@ -36,6 +36,7 @@ import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-que
 import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
 import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
+import { timeEntryReportRoute } from "@/api/handlers/time-entries/report/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { visualSandboxRoute } from "@/api/handlers/visual-sandbox/routes";
 import { wellKnownRoute } from "@/api/handlers/well-known/routes";
@@ -139,6 +140,7 @@ const ROOT_ROUTE_TABLES: Readonly<Record<string, readonly RouteEntry[]>> = {
   memberTimeTargetsRoute,
   memoriesRoute,
   myTimeEntriesRoute,
+  timeEntryReportRoute,
   notificationsRoute,
   operatorRoute,
   pdfSigningSessionsRoute,

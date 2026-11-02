@@ -72,6 +72,7 @@ import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
+import { organizationsRoute } from "@/api/handlers/organizations/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
@@ -101,6 +102,7 @@ import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-que
 import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
 import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
+import { timeEntryReportRoute } from "@/api/handlers/time-entries/report/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { uploadsRoute } from "@/api/handlers/uploads/routes";
@@ -193,6 +195,7 @@ export const apiRoutes = mount([
   timeApprovalQueueRoute,
   internalTimeEntriesRoute,
   myTimeEntriesRoute,
+  timeEntryReportRoute,
   memberTimeTargetsRoute,
   timeTimersRoute,
   servedIfLoaded(localDevRoutes?.devPublicRoute),
@@ -245,6 +248,7 @@ export const apiRoutes = mount([
       sharepointRoute,
       catalogueRoute,
       organizationSettingsRoute,
+      organizationsRoute,
       apiKeysRoute,
       desktopRegistryRoute,
       aiConfigPublicRoute,

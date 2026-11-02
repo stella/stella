@@ -32,6 +32,15 @@ mod desktop_telemetry;
 mod device_preference;
 mod device_proof;
 mod diagnostics;
+mod dictation;
+#[cfg(dictation)]
+mod dictation_audio;
+#[cfg(dictation)]
+mod dictation_engine;
+#[cfg(dictation)]
+mod dictation_input;
+#[cfg(dictation)]
+mod dictation_worker;
 #[cfg(test)]
 mod e2e;
 mod feature_access;
@@ -95,6 +104,18 @@ use tokio::sync::Mutex;
 pub fn run_codex_token_helper() -> Option<i32> {
   let args = std::env::args_os().collect::<Vec<_>>();
   codex_managed_token_broker::run_token_helper(&args)
+}
+
+/// Runs the speech worker when the process was started as one, and returns
+/// its exit code; `None` for an ordinary launch.
+pub fn run_dictation_worker() -> Option<i32> {
+  #[cfg(dictation)]
+  {
+    let args = std::env::args_os().collect::<Vec<_>>();
+    dictation_worker::run_if_requested(&args)
+  }
+  #[cfg(not(dictation))]
+  None
 }
 
 pub fn run() {
@@ -161,6 +182,7 @@ pub fn run() {
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
     .manage(clipboard_window::ClipboardEditorSessions::default())
     .manage(clipboard_window::ClipboardStartupTrace::default())
+    .manage(dictation::DictationState::load())
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),
     ))
@@ -255,6 +277,9 @@ pub fn run() {
                 let snapshot = manager.lock().await.get_snapshot();
                 tray::refresh(&app, &snapshot);
               });
+            }
+            feature_gate::DesktopFeature::Dictation => {
+              dictation::apply_feature_gate(app, enabled);
             }
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);

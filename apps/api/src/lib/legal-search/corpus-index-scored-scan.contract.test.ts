@@ -759,8 +759,9 @@ describe.skipIf(!runEngineTests)(
           }
           // Equal-count buckets have no tie order in the engine contract.
           // Compare every facet's complete bucket contents across the flip.
+          const { country, court, year } = result.value;
           return Object.fromEntries(
-            Object.entries(result.value).map(([name, buckets]) => [
+            Object.entries({ country, court, year }).map(([name, buckets]) => [
               name,
               buckets.toSorted((left, right) =>
                 getCollator("en").compare(left.value, right.value),

@@ -559,6 +559,10 @@ describe("policy coverage", () => {
     // rls-table-grants.test.ts).
     "desktop_runners",
     "desktop_runner_runs",
+    // Account-owned creation receipts exist before membership; organization_id
+    // is a cascade pointer. Owner-only RLS and revoked request-role grants are
+    // asserted in rls-table-grants.test.ts instead of tenant CRUD policies.
+    "organization_creation_requests",
     // A notification is addressed to a person, not to a matter: recipient and
     // organization are what admit the row, and its nullable workspace_id is a
     // link pointer the client resolves through the ordinary authorized routes,

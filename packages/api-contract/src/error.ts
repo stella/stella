@@ -13,6 +13,7 @@ export const API_VALIDATION_CONSTRAINTS = [
   "required",
   "maxLength",
   "minLength",
+  "maxBytes",
   "invalid",
 ] as const;
 
@@ -23,7 +24,7 @@ export type ApiValidationIssue = {
   /** Dotted path inside the request part, e.g. `name` or `items.0.title`. */
   field: string;
   constraint: ApiValidationConstraint;
-  /** The bound a length constraint was checked against. */
+  /** The bound a length or byte-size constraint was checked against. */
   limit?: number | undefined;
 };
 
@@ -103,6 +104,13 @@ export type ChatMessageEditErrorCode =
  * model. Shared so every client can explain it instead of a generic failure.
  */
 export const ENCRYPTED_CONTENT_ERROR_CODE = "encrypted_content" as const;
+
+/**
+ * A stored file has nothing to show: no viewer renders its type and no PDF
+ * rendition exists. The file itself is fine and still downloads, so a client
+ * offers the download instead of a retry.
+ */
+export const PREVIEW_UNAVAILABLE_ERROR_CODE = "preview_unavailable" as const;
 
 export const API_FILE_SECURITY_REJECTED_ERROR_CODE =
   "file_security_rejected" as const;

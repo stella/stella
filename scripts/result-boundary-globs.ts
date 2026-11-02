@@ -27,6 +27,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "apps/api/src/db/online-migration-entries/**/*.ts",
   "packages/playwright-tools/src/**/*.ts",
   "packages/render-probe/src/**/*.{ts,tsx}",
   "apps/web/src/features/law-search-history/**/*.ts",
@@ -53,6 +54,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-response-budget.ts",
   "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts",
   "apps/api/src/lib/auth/**/*.ts",
+  "apps/api/src/handlers/organizations/**/*.ts",
   "apps/api/src/handlers/account-exports/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
   "apps/api/src/handlers/ai-config/**/*.ts",
@@ -91,6 +93,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/number-series/**/*.ts",
   "apps/api/src/handlers/vat-rates/**/*.ts",
   "apps/api/src/handlers/organization-settings/**/*.ts",
+  "apps/api/src/handlers/organizations/**/*.ts",
   "apps/api/src/handlers/public-knowledge/**/*.ts",
   "apps/api/src/handlers/reports/**/*.ts",
   "apps/api/src/handlers/saved-time-narratives/**/*.ts",
@@ -202,6 +205,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/queries/**/*.{ts,tsx}",
   "apps/web/src/routes/-protected-app/**/*.{ts,tsx}",
   "apps/web/src/routes/_protected.admin/**/*.{ts,tsx}",
+  "apps/web/src/routes/_protected.time_.report/**/*.{ts,tsx}",
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
@@ -273,6 +277,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Browser startup captures detector installation failures in its outer Result.
   "apps/web/src/lib/analytics/web-hang/web-hang-detector.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
+  // Better Auth organization hooks reject invalid slug operations through APIError.
+  "apps/api/src/lib/auth/organization-slug-hooks.ts",
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
   "apps/api/src/lib/auth/request-budget-hooks.ts",
@@ -368,6 +374,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   // a checkout without installed packages gets one actionable line; it cannot
   // import the Result library, which is one of the packages that may be missing.
   "packages/cli/src/cli.ts",
+  // Protected CLI startup must reject before check work when its network-denying preload is absent.
+  "packages/scripts/src/offline-check-startup.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",

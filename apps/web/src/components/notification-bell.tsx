@@ -26,6 +26,8 @@ import {
 import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { MatterRefLink } from "@/components/matter-ref-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -48,8 +50,9 @@ import { useUnreadFaviconDot } from "@/lib/unread-favicon-dot";
 import { useUserEventsSSE } from "@/lib/user-events-sse";
 
 /**
- * Unread awareness for the signed-in person: mentions, finished exports,
- * flow-run outcomes and announcements, read or unread and nothing else.
+ * Unread awareness for the signed-in person: mentions, task assignments,
+ * finished exports, flow-run outcomes and announcements, read or unread and
+ * nothing else.
  * Deliberately not a work surface — anything with a deadline or an owner
  * belongs to My Work, not here.
  */
@@ -305,9 +308,9 @@ const NotificationRow = ({ notification, onRead }: NotificationRowProps) => {
   return (
     <li>
       {target === null ? (
-        <button className={rowClassName} onClick={onRead} type="button">
-          {body}
-        </button>
+        <Button className="block w-full" onClick={onRead} variant="plain">
+          <span className={rowClassName}>{body}</span>
+        </Button>
       ) : (
         <NotificationLink
           className={rowClassName}
@@ -366,6 +369,7 @@ const NotificationLink = ({
   target: { entityId, entityType, workspaceId },
 }: NotificationLinkProps) => {
   const legalListsEnabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
+  const openTask = useInspectorTabsStore((state) => state.openTask);
   switch (entityType) {
     // Today's only producer is a mention on a list item, and the item's own
     // id addresses no route: Lists is the surface the comment lives on.
@@ -397,6 +401,27 @@ const NotificationLink = ({
               params={{ exportId: entityId, workspaceId }}
               to="/workspaces/$workspaceId/reports/$exportId"
             />
+          }
+        >
+          {children}
+        </PopoverClose>
+      );
+    // A task has no route of its own: the link opens its matter, and the task
+    // opens in the inspector over it, the way the matter's own agenda opens one.
+    case NOTIFICATION_ENTITY_TYPE.TASK:
+      return (
+        <PopoverClose
+          render={
+            <MatterRefLink
+              className={className}
+              onClick={() => {
+                onRead();
+                openTask({ taskId: entityId, workspaceId });
+              }}
+              workspaceId={workspaceId}
+            >
+              {children}
+            </MatterRefLink>
           }
         >
           {children}
@@ -435,6 +460,7 @@ const NotificationLink = ({
  */
 const NOTIFICATION_MESSAGE_KEY = {
   [NOTIFICATION_KIND.MENTION]: "notifications.kind.mention",
+  [NOTIFICATION_KIND.TASK_ASSIGNED]: "notifications.kind.taskAssigned",
   [NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED]:
     "notifications.kind.reportExportSucceeded",
   [NOTIFICATION_KIND.REPORT_EXPORT_FAILED]:
@@ -488,6 +514,11 @@ const NotificationMessage = ({
   switch (kind) {
     case NOTIFICATION_KIND.MENTION:
       return t.rich("notifications.kind.mention", {
+        actorName: parameter(metadata, "actorName"),
+        bdi,
+      });
+    case NOTIFICATION_KIND.TASK_ASSIGNED:
+      return t.rich("notifications.kind.taskAssigned", {
         actorName: parameter(metadata, "actorName"),
         bdi,
       });
