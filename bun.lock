@@ -644,6 +644,7 @@
         "y-prosemirror": "catalog:",
         "y-protocols": "catalog:",
         "yjs": "catalog:",
+        "zod": "^4.6.6",
         "zustand": "^5.0.15",
       },
       "devDependencies": {
@@ -1739,6 +1740,7 @@
     "happy-dom@21.0.4": "patches/happy-dom@21.0.4.patch",
     "@tanstack/ai-gemini@0.36.0": "patches/@tanstack%2Fai-gemini@0.36.0.patch",
     "@astrojs/mdx@8.0.0": "patches/@astrojs%2Fmdx@8.0.0.patch",
+    "@emnapi/runtime@1.9.1": "patches/@emnapi%2Fruntime@1.9.1.patch",
     "@tanstack/ai-mistral@0.6.14": "patches/@tanstack%2Fai-mistral@0.6.14.patch",
     "@stll/regex-set@1.0.5": "patches/@stll%2Fregex-set@1.0.5.patch",
     "@mcp-ui/client@7.1.1": "patches/@mcp-ui%2Fclient@7.1.1.patch",

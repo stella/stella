@@ -19,6 +19,8 @@ import {
 // this process-wide value so test files can restore it safely.
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
+  VITE_DOCUMENTS_BUCKET: "stella",
+  VITE_DOCUMENTS_ENDPOINT: "http://localhost:9000",
 });
 
 // DOM tests never reach a real server; a request they leave unmocked fails

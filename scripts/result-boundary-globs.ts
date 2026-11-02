@@ -205,6 +205,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/routes/_protected.time_.report/**/*.{ts,tsx}",
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
+  "apps/web/src/security/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
   "apps/web/src/testing/**/*.{ts,tsx}",
   "packages/agent-input/src/**/*.ts",
