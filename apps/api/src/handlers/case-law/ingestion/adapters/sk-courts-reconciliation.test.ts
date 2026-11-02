@@ -29,7 +29,6 @@ import {
   skCourtsAdapter,
   skCourtsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { storeDecisionTextFields } from "@/api/lib/case-law/decision-text";
 import { toUtcDateString } from "@/api/lib/dates";
@@ -38,7 +37,11 @@ import {
   listingIdentityKey,
   parseListingIdentityKey,
 } from "@/api/lib/legal-search/ingestion-types";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const reconciliation = requireReconciliation(skCourtsAdapter);
 
@@ -96,7 +99,6 @@ const GALANTA_DETAIL = {
 
 type MockResponse = { body: string; status?: number };
 
-const originalFetch = globalThis.fetch;
 const requestedUrls: string[] = [];
 
 /** The list endpoint and the per-decision record share a path prefix. */
@@ -107,8 +109,8 @@ const mockJustice = (routes: {
   list?: MockResponse;
   detail?: MockResponse;
 }): void => {
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request): Promise<Response> => {
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request): Promise<Response> => {
       const url = (() => {
         if (typeof input === "string") {
           return input;
@@ -142,7 +144,7 @@ const mockJustice = (routes: {
           headers: { "Content-Type": "application/json" },
         }),
       );
-    },
+    }),
   );
 };
 
@@ -160,7 +162,7 @@ const sliceRejection = async (slice: string): Promise<unknown> =>
   );
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   requestedUrls.length = 0;
   setSystemTime();
 });

@@ -172,7 +172,7 @@ Icons: **lucide-react**.
 ### Key Components
 
 Accordion, AlertDialog, Avatar, Badge, Breadcrumb, Button, Checkbox,
-Combobox, Dialog, Field, Form, Input, InputGroup, InputOTP, Label,
+Collapsible, Combobox, Dialog, Field, Form, Input, InputGroup, InputOTP, Label,
 Menu, Pagination, Popover, PreviewCard, ScrollArea, Select,
 Separator, Sheet, Skeleton, Table, Tabs, Textarea, Toast, Tooltip,
 TruncatedText.
@@ -276,6 +276,9 @@ When a screen needs a look the components lack, add it once here and in
 | Action inside running text                                         | `Button size="inline"` (`variant="link"` underlined by default)                        |
 | Long reference that wraps with running text                        | `ButtonTextRun`                                                                        |
 | Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options                            |
+| Filter tabs, view modes, density                                   | `ToggleGroup` + `ToggleGroupItem` (a segmented tray)                                   |
+| A button that stays pressed                                        | `Toggle`                                                                               |
+| Setting row with a switch                                          | `SwitchField` (`label`, `description`); `Switch size="sm"`                             |
 | Keyboard shortcut                                                  | `Kbd keys={["mod", "K"]}` (platform spelling); `MenuShortcut`, `TooltipPopup shortcut` |
 | Menu row that navigates                                            | `MenuLinkItem` (an `<a>`)                                                              |
 | Fact with no value                                                 | `DetailsItem` with empty children (draws a dash)                                       |

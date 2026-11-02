@@ -61,8 +61,11 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { CORPUS_BM25_RATIO_POWER } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+const testFetchState = createTestFetch();
 
 const V8 = CORPUS_INDEX_MANIFESTS.case_law_v8;
 const V9 = CORPUS_INDEX_MANIFESTS.case_law_v9;
@@ -148,7 +151,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   await client.close();
 });
 
@@ -684,84 +687,88 @@ test("global browse counts stay unchanged after a jurisdiction flips and before 
     },
   ];
   let requests = 0;
-  globalThis.fetch = Object.assign(
-    async (
-      input: Parameters<typeof fetch>[0],
-      init?: Parameters<typeof fetch>[1],
-    ) => {
-      requests += 1;
-      const url = new URL(input instanceof Request ? input.url : input);
-      const body: unknown = JSON.parse(v.parse(v.string(), init?.body));
-      const elastic = url.pathname.includes("/_elastic/");
-      const indexIds = url.pathname.split("/").at(-2)?.split(",") ?? [];
-      let selected = documents.filter(({ index }) => indexIds.includes(index));
-      if (elastic) {
-        const parsed = v.parse(
-          v.object({
-            query: v.object({
-              bool: v.object({
-                must: v.array(
-                  v.object({ query_string: v.object({ query: v.string() }) }),
-                ),
-                filter: v.array(
-                  v.object({
-                    query_string: v.object({
-                      query: v.string(),
-                      lenient: v.literal(true),
+  testFetchState.set(
+    Object.assign(
+      async (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) => {
+        requests += 1;
+        const url = new URL(input instanceof Request ? input.url : input);
+        const body: unknown = JSON.parse(v.parse(v.string(), init?.body));
+        const elastic = url.pathname.includes("/_elastic/");
+        const indexIds = url.pathname.split("/").at(-2)?.split(",") ?? [];
+        let selected = documents.filter(({ index }) =>
+          indexIds.includes(index),
+        );
+        if (elastic) {
+          const parsed = v.parse(
+            v.object({
+              query: v.object({
+                bool: v.object({
+                  must: v.array(
+                    v.object({ query_string: v.object({ query: v.string() }) }),
+                  ),
+                  filter: v.array(
+                    v.object({
+                      query_string: v.object({
+                        query: v.string(),
+                        lenient: v.literal(true),
+                      }),
                     }),
-                  }),
-                ),
+                  ),
+                }),
               }),
             }),
-          }),
-          body,
-        );
-        expect(parsed.query.bool.must.at(0)?.query_string.query).toContain(
-          `${V8.projection.openingField}:true`,
-        );
-        expect(parsed.query.bool.filter.at(0)?.query_string.query).toBe(
-          `(NOT jurisdiction:"CZE" OR ${PROJECTION_GENERATION_FIELD}:"case_law_v9")`,
-        );
-        selected = selected.filter(
-          (document) =>
-            document.jurisdiction !== "CZE" ||
-            document[PROJECTION_GENERATION_FIELD] === V9.generation,
-        );
-      } else {
-        expect(v.parse(v.object({ query: v.string() }), body).query).toContain(
-          `${V8.projection.openingField}:true`,
-        );
-      }
-      const buckets = (field: "jurisdiction" | "court" | "year") => {
-        const counts = new Map<string | number, number>();
-        for (const document of selected) {
-          counts.set(document[field], (counts.get(document[field]) ?? 0) + 1);
+            body,
+          );
+          expect(parsed.query.bool.must.at(0)?.query_string.query).toContain(
+            `${V8.projection.openingField}:true`,
+          );
+          expect(parsed.query.bool.filter.at(0)?.query_string.query).toBe(
+            `(NOT jurisdiction:"CZE" OR ${PROJECTION_GENERATION_FIELD}:"case_law_v9")`,
+          );
+          selected = selected.filter(
+            (document) =>
+              document.jurisdiction !== "CZE" ||
+              document[PROJECTION_GENERATION_FIELD] === V9.generation,
+          );
+        } else {
+          expect(
+            v.parse(v.object({ query: v.string() }), body).query,
+          ).toContain(`${V8.projection.openingField}:true`);
         }
-        return {
-          buckets: [...counts]
-            .map(([key, doc_count]) => ({ key, doc_count }))
-            .toSorted((left, right) =>
-              field === "year"
-                ? Number(right.key) - Number(left.key)
-                : right.doc_count - left.doc_count ||
-                  getCollator("en").compare(
-                    String(left.key),
-                    String(right.key),
-                  ),
-            ),
-          doc_count_error_upper_bound: 0,
-          sum_other_doc_count: 0,
+        const buckets = (field: "jurisdiction" | "court" | "year") => {
+          const counts = new Map<string | number, number>();
+          for (const document of selected) {
+            counts.set(document[field], (counts.get(document[field]) ?? 0) + 1);
+          }
+          return {
+            buckets: [...counts]
+              .map(([key, doc_count]) => ({ key, doc_count }))
+              .toSorted((left, right) =>
+                field === "year"
+                  ? Number(right.key) - Number(left.key)
+                  : right.doc_count - left.doc_count ||
+                    getCollator("en").compare(
+                      String(left.key),
+                      String(right.key),
+                    ),
+              ),
+            doc_count_error_upper_bound: 0,
+            sum_other_doc_count: 0,
+          };
         };
-      };
-      return Response.json({
-        aggregations: {
-          country: buckets("jurisdiction"),
-          court: buckets("court"),
-          year: buckets("year"),
-        },
-      });
-    },
-    { preconnect: originalFetch.preconnect },
+        return Response.json({
+          aggregations: {
+            country: buckets("jurisdiction"),
+            court: buckets("court"),
+            year: buckets("year"),
+          },
+        });
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
   );
   const facets = async () => {
     const target = await read(undefined);
@@ -851,36 +858,38 @@ test.each([
     ];
     let hits = current;
     let requests = 0;
-    globalThis.fetch = Object.assign(
-      async (
-        input: Parameters<typeof fetch>[0],
-        init?: Parameters<typeof fetch>[1],
-      ) => {
-        requests += 1;
-        const body: Record<string, unknown> =
-          typeof init?.body === "string" ? JSON.parse(init.body) : {};
-        const url = new URL(input instanceof Request ? input.url : input);
-        if (url.pathname.includes("/_elastic/")) {
-          const offset = Number(body["from"] ?? 0);
-          const window = hits.slice(offset, offset + Number(body["size"]));
+    testFetchState.set(
+      Object.assign(
+        async (
+          input: Parameters<typeof fetch>[0],
+          init?: Parameters<typeof fetch>[1],
+        ) => {
+          requests += 1;
+          const body: Record<string, unknown> =
+            typeof init?.body === "string" ? JSON.parse(init.body) : {};
+          const url = new URL(input instanceof Request ? input.url : input);
+          if (url.pathname.includes("/_elastic/")) {
+            const offset = Number(body["from"] ?? 0);
+            const window = hits.slice(offset, offset + Number(body["size"]));
+            return Response.json({
+              hits: {
+                total: { value: hits.length, relation: "eq" },
+                hits: window.map((hit, index) => ({
+                  _source: hit,
+                  sort: [10 - offset - index],
+                })),
+              },
+            });
+          }
+          const offset = Number(body["start_offset"] ?? 0);
           return Response.json({
-            hits: {
-              total: { value: hits.length, relation: "eq" },
-              hits: window.map((hit, index) => ({
-                _source: hit,
-                sort: [10 - offset - index],
-              })),
-            },
+            num_hits: hits.length,
+            hits: hits.slice(offset, offset + Number(body["max_hits"])),
+            snippets: [],
           });
-        }
-        const offset = Number(body["start_offset"] ?? 0);
-        return Response.json({
-          num_hits: hits.length,
-          hits: hits.slice(offset, offset + Number(body["max_hits"])),
-          snippets: [],
-        });
-      },
-      { preconnect: originalFetch.preconnect },
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
     const search = async () => {
       const hitDispositions = createCorpusHitDispositionCounter();

@@ -71,7 +71,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-index";
-import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   DOCUMENT_FETCH_BUDGET_MS,
   hasPendingDeferredDocuments,
@@ -680,61 +680,57 @@ const runOneCycle = async (
     adapterKey === ADAPTER_KEYS.CZ_REGIONAL ? daysAgoCursor(7) : null;
 
   const configuredSource = await ensureSource(adapterKey, name, initialCursor);
-  const sourceLease = await acquireCaseLawSourceIngestionLease({
-    scopedDb: ingestionDb,
-    sourceId: configuredSource.id,
-  });
-  if (!sourceLease) {
+  // The owner releases the lease in its own `finally`, whatever the cycle
+  // does; a failed release fails the cycle rather than leave the source
+  // leased unnoticed until the lease expires.
+  const leased = await withCaseLawSourceIngestionLease(
+    { scopedDb: ingestionDb, sourceId: configuredSource.id },
+    async (sourceLease) => {
+      const { source } = sourceLease;
+      const cursorBefore = source.syncCursor;
+
+      logInfo(`[${adapterKey}] Ingesting (cursor: ${cursorBefore ?? "start"})`);
+
+      const startedAt = new Date();
+      const t0 = performance.now();
+      const adapter = getAdapter(adapterKey);
+      const execution = await executeIngestionCycle({
+        cursorBefore,
+        describeFailure: (error) => ({
+          stopKind: ingestionStopKindOf(error),
+          message: `[${errorTag(error)}] ${error instanceof Error ? error.message : String(error)}`,
+        }),
+        recordPages: (pages) => {
+          pagesSinceStart += pages;
+        },
+        runPipeline: async () =>
+          await runIngestionPipeline({
+            source,
+            sourceLease,
+            scopedDb: ingestionDb,
+            acquireStoredTotalAdmission:
+              getStoredTotalMaintenance().acquireAdmission,
+            dbSlot: dbWriteSemaphore,
+            cycle: {
+              budgetMs: adapter?.maxCycleMs ?? MAX_CYCLE_MS,
+              abortEarlyOn: [drainController.signal],
+            },
+            ...(bounds.maxPages !== undefined && { maxPages: bounds.maxPages }),
+            ...(bounds.maxDecisions !== undefined && {
+              maxDecisions: bounds.maxDecisions,
+            }),
+          }),
+      });
+      return { source, cursorBefore, startedAt, t0, execution };
+    },
+  );
+  if (leased === null) {
     logInfo(`[${adapterKey}] Source is leased by another ingestion worker`);
     return {
       type: "lease_busy",
     };
   }
-  const { source } = sourceLease;
-  const cursorBefore = source.syncCursor;
-
-  logInfo(`[${adapterKey}] Ingesting (cursor: ${cursorBefore ?? "start"})`);
-
-  const startedAt = new Date();
-  const t0 = performance.now();
-
-  let execution: Awaited<ReturnType<typeof executeIngestionCycle>>;
-  try {
-    const adapter = getAdapter(adapterKey);
-    execution = await executeIngestionCycle({
-      cursorBefore,
-      describeFailure: (error) => ({
-        stopKind: ingestionStopKindOf(error),
-        message: `[${errorTag(error)}] ${error instanceof Error ? error.message : String(error)}`,
-      }),
-      recordPages: (pages) => {
-        pagesSinceStart += pages;
-      },
-      runPipeline: async () =>
-        await runIngestionPipeline({
-          source,
-          sourceLease,
-          scopedDb: ingestionDb,
-          acquireStoredTotalAdmission:
-            getStoredTotalMaintenance().acquireAdmission,
-          dbSlot: dbWriteSemaphore,
-          cycle: {
-            budgetMs: adapter?.maxCycleMs ?? MAX_CYCLE_MS,
-            abortEarlyOn: [drainController.signal],
-          },
-          ...(bounds.maxPages !== undefined && { maxPages: bounds.maxPages }),
-          ...(bounds.maxDecisions !== undefined && {
-            maxDecisions: bounds.maxDecisions,
-          }),
-        }),
-    });
-  } finally {
-    try {
-      await sourceLease.release();
-    } catch (error) {
-      logError(`[${adapterKey}] Failed to release source lease:`, error);
-    }
-  }
+  const { source, cursorBefore, startedAt, t0, execution } = leased;
 
   if (drainController.signal.aborted) {
     return { type: "drained" };

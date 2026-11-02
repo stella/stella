@@ -61,6 +61,7 @@ const advance = (kind: HealthSignalKind, duration: number | null = 1000) =>
     state: state(),
     verdict: verdict(kind),
     lastDurationMs: duration,
+    config: defaultConfig,
     clock,
   });
 const kinds = ["normal", "degraded", "unknown", "stop"] as const;
@@ -86,14 +87,14 @@ const expectLogged = (
 
 describe("fail-closed start decisions", () => {
   test("empty indicators cannot start", () => {
-    const result = decideStart(combine([]), "index_build");
+    const result = decideStart(combine([]), "index_build", defaultConfig);
     expect(result.decision).toBe("wait");
     expectLogged(result);
   });
   for (const kind of kinds) {
     for (const work of ["index_build", "backfill_batch"] as const) {
       test(`${work} with ${kind}`, () => {
-        const result = decideStart(verdict(kind), work);
+        const result = decideStart(verdict(kind), work, defaultConfig);
         expect(result.decision).toBe(
           kind === "normal" ||
             (kind === "degraded" && work === "backfill_batch")
@@ -170,7 +171,10 @@ describe("critical readings cancel only consecutively", () => {
   ] as const;
   for (const { values, expected } of cases) {
     test(`${values.join(",")} => ${expected}`, () => {
-      const result = decideWhileRunning(values.map((value) => reading(value)));
+      const result = decideWhileRunning(
+        values.map((value) => reading(value)),
+        defaultConfig,
+      );
       expect(result.decision).toBe(expected);
       expectLogged(result);
     });
@@ -189,11 +193,16 @@ describe("critical readings cancel only consecutively", () => {
   });
   test("unknown resets the critical streak", () => {
     expect(
-      decideWhileRunning([reading(10), reading(null), reading(20)]).decision,
+      decideWhileRunning(
+        [reading(10), reading(null), reading(20)],
+        defaultConfig,
+      ).decision,
     ).toBe("continue");
     expect(
-      decideWhileRunning([reading(10), reading(null), reading(20), reading(30)])
-        .decision,
+      decideWhileRunning(
+        [reading(10), reading(null), reading(20), reading(30)],
+        defaultConfig,
+      ).decision,
     ).toBe("cancel");
   });
   test("unknown, non-EBS and non-finite observations cannot cancel", () => {
@@ -203,9 +212,9 @@ describe("critical readings cancel only consecutively", () => {
       reading(Infinity),
       { ...reading(10), indicator: "long_transaction" as const },
     ]) {
-      expect(decideWhileRunning([reading(10), signal]).decision).toBe(
-        "continue",
-      );
+      expect(
+        decideWhileRunning([reading(10), signal], defaultConfig).decision,
+      ).toBe("continue");
     }
   });
   test("for every history cancellation happens on the second real hard-floor reading, independently of progress", () => {
@@ -253,6 +262,7 @@ describe("adaptive batch bounds and durable hold", () => {
       state: { ...state(), smoothedDurationMs: 1000 },
       verdict: verdict("normal"),
       lastDurationMs: 2000,
+      config: defaultConfig,
       clock,
     });
     expect(result.state.smoothedDurationMs).toBe(1400);
@@ -279,6 +289,7 @@ describe("adaptive batch bounds and durable hold", () => {
         state: current,
         verdict: verdict("normal"),
         lastDurationMs: 1,
+        config: defaultConfig,
         clock,
       });
       expect(result.size).toBe(
@@ -293,6 +304,7 @@ describe("adaptive batch bounds and durable hold", () => {
       state: state(),
       verdict: verdict("normal"),
       lastDurationMs: 5000,
+      config: defaultConfig,
       clock,
       outcome: "statement_timeout",
     });
@@ -308,6 +320,7 @@ describe("adaptive batch bounds and durable hold", () => {
         state: current,
         verdict: verdict(index % 2 === 0 ? "stop" : "unknown"),
         lastDurationMs: null,
+        config: defaultConfig,
         clock: () => now,
       });
       expect(result.action).toBe("hold");
@@ -323,6 +336,7 @@ describe("adaptive batch bounds and durable hold", () => {
       state: current,
       verdict: verdict("normal"),
       lastDurationMs: null,
+      config: defaultConfig,
       clock,
     });
     expect(resumed.state.heldSince).toBeNull();
@@ -384,6 +398,7 @@ describe("adaptive batch bounds and durable hold", () => {
         state: { ...state(), sleepMs: defaultConfig.minSleepMs },
         verdict: verdict("normal"),
         lastDurationMs: null,
+        config: defaultConfig,
         clock,
       }).sleepMs,
     ).toBe(defaultConfig.minSleepMs);
@@ -392,6 +407,7 @@ describe("adaptive batch bounds and durable hold", () => {
         state: { ...state(), sleepMs: defaultConfig.maxSleepMs },
         verdict: verdict("degraded"),
         lastDurationMs: null,
+        config: defaultConfig,
         clock,
       }).sleepMs,
     ).toBe(defaultConfig.maxSleepMs);
@@ -448,8 +464,8 @@ describe("adaptive batch bounds and durable hold", () => {
         }),
       ).toBe(false);
     }
-    expect(isHeldTooLong({ heldSince: null }, 1000)).toBe(false);
-    expect(isHeldTooLong({ heldSince: 1000 }, 999)).toBe(false);
+    expect(isHeldTooLong({ heldSince: null }, 1000, defaultConfig)).toBe(false);
+    expect(isHeldTooLong({ heldSince: 1000 }, 999, defaultConfig)).toBe(false);
   });
   test("busy-only extension and duplicated windows never consume held budget", () => {
     fc.assert(
@@ -657,7 +673,7 @@ test("explicitly unconfigured signals are logged and neutral for all other healt
   const disabled = reading(null, "not_configured");
   const onlyDisabled = combine([disabled]);
   expect(onlyDisabled.kind).toBe("normal");
-  const start = decideStart(onlyDisabled, "index_build");
+  const start = decideStart(onlyDisabled, "index_build", defaultConfig);
   expect(start.decision).toBe("start");
   expect(start.verdict.signals).toEqual([disabled]);
   expectLogged(start);
@@ -666,8 +682,10 @@ test("explicitly unconfigured signals are logged and neutral for all other healt
     const combined = combine([disabled, healthyOrBlocking]);
     expect(combined.kind).toBe(kind);
     expect(combine([healthyOrBlocking, disabled]).kind).toBe(kind);
-    expectLogged(decideStart(combined, "index_build"));
+    expectLogged(decideStart(combined, "index_build", defaultConfig));
     expect(combined.signals).toEqual([disabled, healthyOrBlocking]);
   }
-  expect(decideWhileRunning([disabled, disabled]).decision).toBe("continue");
+  expect(decideWhileRunning([disabled, disabled], defaultConfig).decision).toBe(
+    "continue",
+  );
 });
