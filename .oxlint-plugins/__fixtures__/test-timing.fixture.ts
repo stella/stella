@@ -106,3 +106,23 @@ await waitForExternalState({ description: "marker", read: () => existsSync("mark
 
 // expect-clean: test-timing/no-file-existence-wait
 await waitForExternalState({ description: "marker gone", read: () => !existsSync("marker") });
+// --- no-literal-wait-timeout ---
+
+declare const waitFor: (
+  check: () => void,
+  options?: { timeout?: number },
+) => Promise<void>;
+declare const ready: () => void;
+
+// a per-call timeout on a DOM condition wait
+
+// oxlint-disable-next-line test-timing/no-literal-wait-timeout
+await waitFor(ready, { timeout: 1000 });
+
+// a DOM wait under the shared hang guard
+// expect-clean: test-timing/no-literal-wait-timeout
+await waitFor(ready);
+
+// real-time: the subject polls its status on its own interval
+// expect-clean: test-timing/no-literal-wait-timeout
+await waitFor(ready, { timeout: 5000 });

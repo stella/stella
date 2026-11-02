@@ -72,6 +72,18 @@
 //   Allowed: `waitForFileContent`, whose `parse` accepts only complete
 //     content (`() => true` states that existence is the whole
 //     announcement, as for an empty marker).
+// no-literal-wait-timeout
+//   Testing Library condition waits run under the suite's shared hang guard,
+//   so every per-call timeout is redundant. Playwright waits instead keep
+//   explicit, reviewable budgets as named constants; only bare numeric values
+//   and numeric expressions are rejected there.
+//   Flagged:
+//     Testing Library `waitFor`, `waitForElementToBeRemoved`, and `findBy*` /
+//       `findAllBy*` calls with any `timeout` option, unless
+//       `// real-time: <reason>` says why the subject outlasts the hang guard
+//     Playwright `expect.poll`, `toPass`, and retrying (web-first)
+//       assertions with a bare numeric `timeout` option (including numeric
+//       expressions); generic matchers such as `toEqual` compare values
 //
 // Existing sites are budgeted per file, enclosing function and spelling in
 // scripts/test-timing-ledger.json (no line numbers, a reason per row). A hit
@@ -100,6 +112,7 @@ const REAL_TIME_WAIT_RULE = "no-real-time-wait";
 const POLLING_LOOP_RULE = "no-polling-loop";
 const TIMEOUT_RULE = "no-unreasoned-timeout";
 const FILE_EXISTENCE_WAIT_RULE = "no-file-existence-wait";
+const LITERAL_WAIT_TIMEOUT_RULE = "no-literal-wait-timeout";
 const LEDGER_PATH = "scripts/test-timing-ledger.json";
 
 const { tracker: budgetTracker, staleMessage: STALE_MESSAGE } =
@@ -204,6 +217,17 @@ const hasTaggedComment = (lookup: TaggedLookup): boolean => {
       return true;
     }
     boundary = commentLineStart;
+  }
+  return false;
+};
+
+const hasTaggedCommentInAncestors = (lookup: TaggedLookup): boolean => {
+  let node = lookup.node;
+  while (isAstNode(node)) {
+    if (hasTaggedComment({ ...lookup, node })) {
+      return true;
+    }
+    node = node.parent;
   }
   return false;
 };
@@ -821,11 +845,13 @@ const PLAYWRIGHT_TEST_ROOTS: ReadonlySet<string> = new Set([
 
 // The identifier a member/call chain starts from: `test` in
 // `test.info().setTimeout`, `testInfo` in `testInfo.setTimeout`.
-const chainRoot = (node: unknown): string | null => {
+const chainRootIdentifier = (
+  node: unknown,
+): (AstNode & { type: "Identifier"; name: string }) | null => {
   let current = unwrapExpression(node);
   while (isAstNode(current)) {
     if (isIdentifier(current)) {
-      return current.name;
+      return current;
     }
     if (current.type === "MemberExpression") {
       current = unwrapExpression(current.object);
@@ -837,6 +863,9 @@ const chainRoot = (node: unknown): string | null => {
   }
   return null;
 };
+
+const chainRoot = (node: unknown): string | null =>
+  chainRootIdentifier(node)?.name ?? null;
 
 // A Playwright test-level timeout or retry change.
 const raisedPlaywrightTimeout = (call: AstNode): RaisedTimeout | null => {
@@ -904,6 +933,140 @@ const raisedTimeout = (
     );
   }
   return name === null ? raisedPlaywrightTimeout(call) : null;
+};
+
+const memberChainNames = (node: unknown): string[] => {
+  const names: string[] = [];
+  let current = unwrapExpression(node);
+  while (isAstNode(current) && current.type === "MemberExpression") {
+    const name = memberPropertyName(current);
+    if (name === null) {
+      return [];
+    }
+    names.unshift(name);
+    current = unwrapExpression(current.object);
+  }
+  if (isIdentifier(current)) {
+    names.unshift(current.name);
+  } else if (isAstNode(current) && current.type === "CallExpression") {
+    names.unshift(...memberChainNames(current.callee));
+  }
+  return names;
+};
+
+// A DOM wait may outlast the shared hang guard when its subject runs on the
+// real clock; `reasonable` marks the sites that can say so with a reason.
+type LiteralWaitTimeout = {
+  node: AstNode;
+  pattern: string;
+  reasonable: boolean;
+};
+
+const literalTimeoutOption = (
+  options: unknown,
+  pattern: string,
+  mode: "any" | "bare-number",
+): LiteralWaitTimeout | null => {
+  const object = unwrapExpression(options);
+  if (!isAstNode(object) || object.type !== "ObjectExpression") {
+    return null;
+  }
+  const timeout = optionValue(object, "timeout");
+  const node = unwrapExpression(timeout);
+  if (!isAstNode(node)) {
+    return null;
+  }
+  if (mode === "any") {
+    return { node, pattern, reasonable: true };
+  }
+  const isBareNumber = (candidate: unknown): boolean => {
+    const expression = unwrapExpression(candidate);
+    if (!isAstNode(expression)) {
+      return false;
+    }
+    return (
+      (expression.type === "Literal" && typeof expression.value === "number") ||
+      (expression.type === "BinaryExpression" &&
+        typeof expression.operator === "string" &&
+        Object.hasOwn(ARITHMETIC, expression.operator) &&
+        isBareNumber(expression.left) &&
+        isBareNumber(expression.right))
+    );
+  };
+  return isBareNumber(node) ? { node, pattern, reasonable: false } : null;
+};
+
+// Playwright's retrying assertions, whose last argument is their options.
+// Generic matchers such as `toEqual` take an expected value there instead.
+const RETRYING_MATCHERS: ReadonlySet<string> = new Set([
+  "toBeAttached",
+  "toBeChecked",
+  "toBeDisabled",
+  "toBeEditable",
+  "toBeEmpty",
+  "toBeEnabled",
+  "toBeFocused",
+  "toBeHidden",
+  "toBeInViewport",
+  "toBeOK",
+  "toBeVisible",
+  "toContainClass",
+  "toContainText",
+  "toHaveAccessibleDescription",
+  "toHaveAccessibleErrorMessage",
+  "toHaveAccessibleName",
+  "toHaveAttribute",
+  "toHaveCSS",
+  "toHaveClass",
+  "toHaveCount",
+  "toHaveId",
+  "toHaveJSProperty",
+  "toHaveRole",
+  "toHaveScreenshot",
+  "toHaveText",
+  "toHaveTitle",
+  "toHaveURL",
+  "toHaveValue",
+  "toHaveValues",
+  "toMatchAriaSnapshot",
+  "toPass",
+]);
+
+const literalWaitTimeout = (
+  context: ScopeContext,
+  call: AstNode,
+): LiteralWaitTimeout | null => {
+  const args = Array.isArray(call.arguments) ? call.arguments : [];
+  const names = memberChainNames(call.callee);
+  const method = names.at(-1);
+  if (method === undefined) {
+    return null;
+  }
+  if (method === "waitFor" || method === "waitForElementToBeRemoved") {
+    return literalTimeoutOption(args.at(1), method, "any");
+  }
+  if (/^find(?:All)?By\p{Lu}/u.test(method)) {
+    return literalTimeoutOption(args.at(2), method, "any");
+  }
+  // The chain's root binding, so an aliased `expect` import still counts.
+  const expectBinding = resolveImportedExpressionForEnforcement(
+    context,
+    chainRootIdentifier(call.callee),
+  );
+  const playwrightExpect =
+    expectBinding?.imported === "expect" &&
+    (expectBinding.source === "@playwright/test" ||
+      /(?:^|\/)helpers\/test$/u.test(expectBinding.source));
+  if (playwrightExpect && method === "poll" && names.length === 2) {
+    return literalTimeoutOption(args.at(1), "expect.poll", "bare-number");
+  }
+  if (playwrightExpect && RETRYING_MATCHERS.has(method)) {
+    // toHaveJSProperty compares any value, objects included, so only a third
+    // argument is its options; the other matchers take options last.
+    const options = method === "toHaveJSProperty" ? args.at(2) : args.at(-1);
+    return literalTimeoutOption(options, method, "bare-number");
+  }
+  return null;
 };
 
 type WaitSite = { node: ESTree.Node; wait: Wait };
@@ -1212,7 +1375,7 @@ export default eslintCompatPlugin({
                 pattern: TIMEOUT_REASON,
                 text: context.sourceCode.text,
               }) ||
-              hasTaggedComment({
+              hasTaggedCommentInAncestors({
                 comments,
                 node,
                 pattern: TIMEOUT_REASON,
@@ -1257,6 +1420,53 @@ export default eslintCompatPlugin({
             if (isFileExistenceWait(context, node)) {
               context.report({ node: call, messageId: "existence" });
             }
+          },
+        };
+      },
+    },
+    [LITERAL_WAIT_TIMEOUT_RULE]: {
+      meta: {
+        type: "problem",
+        schema: [],
+        messages: {
+          timeout:
+            "`{{pattern}}` uses a disallowed per-call timeout. DOM condition waits use the suite's shared hang guard unless `// real-time: <reason>` says why the subject outlasts it; Playwright waits express numeric budgets as named constants.",
+        },
+      },
+      createOnce(context) {
+        let comments: readonly SourceComment[] | null = null;
+        return {
+          before() {
+            comments = null;
+          },
+          CallExpression(call) {
+            const node: unknown = call;
+            if (!isAstNode(node)) {
+              return;
+            }
+            const timeout = literalWaitTimeout(context, node);
+            if (timeout === null) {
+              return;
+            }
+            comments ??= context.sourceCode
+              .getAllComments()
+              .filter(isSourceComment);
+            if (
+              timeout.reasonable &&
+              hasTaggedCommentInAncestors({
+                comments,
+                node: timeout.node,
+                pattern: REAL_TIME_REASON,
+                text: context.sourceCode.text,
+              })
+            ) {
+              return;
+            }
+            context.report({
+              node: timeout.node,
+              messageId: "timeout",
+              data: { pattern: timeout.pattern },
+            });
           },
         };
       },
