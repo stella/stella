@@ -714,7 +714,7 @@
     },
     "packages/ai-catalog": {
       "name": "@stll/ai-catalog",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "dependencies": {
         "valibot": "catalog:",
       },
@@ -871,7 +871,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "dependencies": {
         "@ag-ui/core": "1.0.3",
         "@stll/ai-catalog": "workspace:^",
@@ -921,7 +921,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "6.5.0",
+      "version": "6.5.1",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1073,7 +1073,7 @@
     },
     "packages/fetch": {
       "name": "@stll/fetch",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "dependencies": {
         "better-result": "catalog:",
       },
@@ -1376,7 +1376,7 @@
     },
     "packages/scan-engine": {
       "name": "@stll/scan-engine",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@stll/fetch": "workspace:^",
         "better-result": "catalog:",
@@ -1405,7 +1405,6 @@
         "@stll/permissions": "workspace:*",
         "@stll/portable-path": "workspace:*",
         "@stll/sha256": "workspace:*",
-        "@stll/skills": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "0.4.1",
         "better-result": "catalog:",
@@ -1584,7 +1583,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.62.0",
+      "version": "0.63.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1683,7 +1682,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.15.4",
+      "version": "0.15.5",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",

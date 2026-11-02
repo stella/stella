@@ -30,6 +30,7 @@ import {
   parseSource,
   walk,
 } from "../packages/scripts/src/syntax-tree.ts";
+import { assertOfflineCheckPreload } from "./offline-check-startup";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const ICON_MODULE = "packages/ui/src/icons.ts";
@@ -592,5 +593,6 @@ const main = (): void => {
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
   main();
 }

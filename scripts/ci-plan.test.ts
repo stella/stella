@@ -8925,7 +8925,8 @@ test("only the resolver chooses a run's comparison base", () => {
           continue;
         }
         // The patch id names an entry's own change, so it alone diffs
-        // against the previous queue entry.
+        // against the previous queue entry; per-entry checks read that base
+        // from its entry_base_sha output.
         if (
           file === ".github/workflows/ci.yml" &&
           line.trim().startsWith("GROUP_BASE_SHA:")

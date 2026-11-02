@@ -1,5 +1,15 @@
 # @stll/ui
 
+## 0.63.0
+
+### Minor Changes
+
+- Add `BrowserControlIcon` to `@stll/ui/icons`: a browser window for stella acting in the user's own browser, distinct from the globe used for web search and page fetches.
+
+- Remove the `reading`, `readingStrong`, `readingEmphasis` and `readingStrongEmphasis` text roles and the serif and italic text faces.
+
+- Separator adds `ResizeSeparator`, a focusable strip that resizes the column beside it by pointer and arrow keys, and the sidebar adds `SidebarIdentityButton` for the footer's sign-in trigger.
+
 ## 0.62.0
 
 ### Minor Changes
