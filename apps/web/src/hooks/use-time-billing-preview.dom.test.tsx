@@ -33,8 +33,12 @@ const { GlobalTimer } = await import("@/features/time-timers/global-timer");
 const {
   isTimeBillingPreviewEnabled,
   isTimeBillingRouteEnabled,
+  useTimeBillingChromeEnabled,
   useTimeBillingPreviewEnabled,
 } = await import("@/hooks/use-time-billing-preview");
+const { browserStorage } = await import("@/lib/account/browser-storage");
+const { rememberTimeBillingAccess } =
+  await import("@/lib/workspaces/time-billing-access-memory");
 const { Route: BetaRoute } =
   await import("@/routes/_protected.settings/account.beta");
 
@@ -138,9 +142,18 @@ const newQueryClient = () => {
 
 const OfferProbe = () =>
   React.createElement(
-    "output",
-    { "data-testid": "offer" },
-    String(useTimeBillingPreviewEnabled()),
+    React.Fragment,
+    null,
+    React.createElement(
+      "output",
+      { "data-testid": "offer" },
+      String(useTimeBillingChromeEnabled()),
+    ),
+    React.createElement(
+      "output",
+      { "data-testid": "requests" },
+      String(useTimeBillingPreviewEnabled()),
+    ),
   );
 
 const BetaPage = BetaRoute.options.component;
@@ -188,6 +201,58 @@ const settle = async () => {
     await sleep(20);
   });
 };
+
+const neverAnswers = () => {
+  globalThis.fetch = Object.assign(
+    async () => await Promise.withResolvers<Response>().promise,
+    { preconnect: () => undefined },
+  );
+};
+
+describe("time billing while the server decision is on its way", () => {
+  afterEach(() => browserStorage("local")?.clear());
+
+  test("a caller who has it keeps it across a reload", () => {
+    rememberTimeBillingAccess(CALLER.organizationId, true);
+    neverAnswers();
+    const view = renderShell(newQueryClient());
+    expect(view.getByTestId("offer").textContent).toBe("true");
+  });
+
+  test("requests wait for the server even when a grant is remembered", () => {
+    rememberTimeBillingAccess(CALLER.organizationId, true);
+    neverAnswers();
+    const view = renderShell(newQueryClient());
+    expect(view.getByTestId("requests").textContent).toBe("false");
+  });
+
+  test("a caller who was refused stays refused", () => {
+    rememberTimeBillingAccess(CALLER.organizationId, false);
+    neverAnswers();
+    const view = renderShell(newQueryClient());
+    expect(view.getByTestId("offer").textContent).toBe("false");
+  });
+
+  test("another organization's answer does not carry over", () => {
+    rememberTimeBillingAccess("org-b", true);
+    neverAnswers();
+    const view = renderShell(newQueryClient());
+    expect(view.getByTestId("offer").textContent).toBe("false");
+  });
+
+  test("the server's answer replaces what was remembered", async () => {
+    rememberTimeBillingAccess(CALLER.organizationId, true);
+    serve({ offered: false, enrolled: true });
+    const view = renderShell(newQueryClient());
+    await waitFor(() =>
+      expect(view.getByTestId("offer").textContent).toBe("false"),
+    );
+    cleanup();
+    neverAnswers();
+    const reloaded = renderShell(newQueryClient());
+    expect(reloaded.getByTestId("offer").textContent).toBe("false");
+  });
+});
 
 describe("time billing access follows the caller's server decision", () => {
   test("the kill switch hides surfaces, avoids timer requests, and hides enrolment", async () => {
