@@ -116,6 +116,7 @@ import type {
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { seedCaseLaw } from "./seed-case-law";
+import type { CaseLawSeedProfile } from "./seed-case-law";
 import {
   assertSeedLocaleMatches,
   SEED_CONTENT_BY_LOCALE,
@@ -193,6 +194,8 @@ const SEEDS_HEAVY_MATTER = SEED_LOCALE === PRIMARY_MARKETING_LOCALE;
 const SUPPLIER_AGREEMENT = SEED_CONTENT.supplierAgreement;
 const EXPORT_REVIEW_COPY = SEED_CONTENT.exportReview;
 const EXPORT_REVIEW_DOC_NAMES = buildExportReviewDocNames(EXPORT_REVIEW_COPY);
+const caseLawSeedProfile: CaseLawSeedProfile =
+  process.env["STELLA_MARKETING_CAPTURE"] === "1" ? "recorded" : "development";
 
 // ─── Mock file generators ───────────────────────────────
 
@@ -3935,7 +3938,7 @@ export async function seed(organizationId?: string, userId?: string) {
   await seedRequiredCaseLaw(
     async () => {
       if (seedsSharedCorpus(ORG_ID)) {
-        await seedCaseLaw();
+        await seedCaseLaw(caseLawSeedProfile);
       }
     },
     async () =>

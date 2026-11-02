@@ -22,7 +22,7 @@ import { provisionHeadingLine } from "@stll/decision-reader/reader-outline";
 import type { ProvisionHeadingLine } from "@stll/decision-reader/reader-outline";
 import type { ReaderMarkRange } from "@stll/decision-reader/reader-search";
 import type { Block } from "@stll/legal-ast/document-ast";
-import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { cn } from "@stll/ui/utils";
 
@@ -60,7 +60,7 @@ type StatuteTextProps = {
   masthead: StatuteMastheadData | null;
   provisionCitationCounts: ReadonlyMap<string, number>;
   /** The publisher's scheme its anchors nest provision lists in. */
-  statuteLists: StatuteListScheme;
+  statuteAnchors: StatuteAnchorScheme;
   statuteTitle: string;
   /** A Work with a single consolidation has no history to offer. */
   versionCount: number;
@@ -128,7 +128,7 @@ export const StatuteText = ({
   language,
   masthead,
   provisionCitationCounts,
-  statuteLists,
+  statuteAnchors,
   statuteTitle,
   versionCount,
   versionValidFrom,
@@ -195,7 +195,7 @@ export const StatuteText = ({
               landing={block.anchorId === landingAnchorId}
               provisionAccessory={detailsAction}
               rangesByPieceId={NO_RANGES}
-              statuteLists={statuteLists}
+              statuteAnchors={statuteAnchors}
             />
           );
         })}
@@ -245,7 +245,7 @@ type StatuteBlockProps = {
   provisionAccessory?:
     ((provision: ProvisionHeadingLine) => ReactNode) | undefined;
   rangesByPieceId: Record<string, ReaderMarkRange[]>;
-  statuteLists: StatuteListScheme;
+  statuteAnchors: StatuteAnchorScheme;
 };
 
 /**
@@ -260,7 +260,7 @@ export const StatuteBlock = ({
   landing = false,
   provisionAccessory,
   rangesByPieceId,
-  statuteLists,
+  statuteAnchors,
 }: StatuteBlockProps) => {
   // The unit case law cites and a drafting history is about: the
   // designation the heading states, wherever the publisher put it.
@@ -291,7 +291,7 @@ export const StatuteBlock = ({
           : undefined
       }
       rangesByPieceId={rangesByPieceId}
-      statuteLists={statuteLists}
+      statuteAnchors={statuteAnchors}
       variant="statute"
     />
   );

@@ -11,6 +11,7 @@
  */
 
 import { STATUTE_ACTS } from "@stll/api-contract/statute-acts";
+import { SLOV_LEX_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
 import { priorWindowed, succession } from "./provision-citation-profile";
 import type {
@@ -422,7 +423,7 @@ export const SK_PROFILE = {
   maxActGapChars: 60,
 
   anchor: {
-    join: ".",
+    join: SLOV_LEX_ANCHORS.segmentSeparator,
     render: {
       section: (value) => `paragraf-${value}`,
       article: (value) => `clanok-${value}`,
