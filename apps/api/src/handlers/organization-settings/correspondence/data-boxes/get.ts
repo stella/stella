@@ -51,6 +51,7 @@ const UNPROJECTED_DATA_BOX_SETTINGS_COLUMNS = [
   "templatePacksHidden", // Template preferences belong to general settings.
   "memoryExtractionEnabledAt", // Extraction scheduling is internal state.
   "memoryExtractionScheduledAt", // Extraction scheduling is internal state.
+  "aiBillingDraftsMode", // Billing draft policy belongs to billing draft settings.
   "updatedAt", // Settings bookkeeping is not part of the data-box inventory.
 ] as const satisfies readonly (keyof OrganizationSettingsRow)[];
 
