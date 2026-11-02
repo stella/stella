@@ -1,6 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import { deepEquals } from "bun";
-import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
@@ -77,8 +77,10 @@ export type EntityFieldSnapshot = {
 /**
  * The version columns a move carries across unchanged. A stamp and its
  * verification code are frozen the moment they are printed, so re-homing a
- * document must reproduce the row, not mint a replacement for it. Picked from
- * the table so each column keeps the type the schema gives it.
+ * document must reproduce the row, not mint a replacement for it. A tombstone
+ * (`deletedAt`/`deletedBy`) is part of that row: a deleted version keeps its
+ * tombstone wherever the document goes. Picked from the table so
+ * each column keeps the type the schema gives it.
  */
 type CarriedVersionColumns = Pick<
   typeof entityVersions.$inferSelect,
@@ -94,6 +96,8 @@ type CarriedVersionColumns = Pick<
   | "collaborationContributorUserIds"
   | "detectedLanguage"
   | "createdAt"
+  | "deletedAt"
+  | "deletedBy"
 >;
 
 /**
@@ -114,6 +118,8 @@ const CARRIED_VERSION_COLUMNS = {
   collaborationContributorUserIds: true,
   detectedLanguage: true,
   createdAt: true,
+  deletedAt: true,
+  deletedBy: true,
 } as const satisfies Record<keyof CarriedVersionColumns, true>;
 
 export type EntityVersionSnapshot = CarriedVersionColumns & {
@@ -123,7 +129,7 @@ export type EntityVersionSnapshot = CarriedVersionColumns & {
 /**
  * One source entity and the versions to write for it. A copy loads the current
  * version alone and mints a fresh identity for it; a move loads the whole
- * non-deleted history, so both run through one insert path.
+ * history, tombstones included, so both run through one insert path.
  */
 export type EntitySnapshot = {
   id: SafeId<"entity">;
@@ -186,18 +192,36 @@ export const CURRENT_VERSION_SELECT = {
 } as const;
 
 /**
- * A move re-homes the document itself, so it reads the whole surviving
- * history, oldest first. Tombstoned versions stay behind with the source rows.
+ * A move re-homes the document itself, so it reads the whole history, oldest
+ * first. Tombstoned versions are part of that history: the move writes them
+ * on the target with their `deletedAt`/`deletedBy` unchanged, so they stay
+ * hidden from reads there exactly as they were at the source, and the caller
+ * then deletes the source rows. Every move query selects versions through
+ * this select or {@link movedVersionRows}, never by `deletedAt`.
  */
-export const EVERY_LIVE_VERSION_SELECT = {
+export const EVERY_VERSION_SELECT = {
   versions: {
     columns: CARRIED_VERSION_COLUMNS,
-    where: { deletedAt: { isNull: true } },
     orderBy: { versionNumber: "asc" },
     limit: LIMITS.versionsPerEntity,
     with: { fields: VERSION_FIELDS_SELECT },
   },
 } as const;
+
+/**
+ * The `entity_versions` rows a move of `sourceIds` carries, as a SQL
+ * predicate: every version, tombstones included. The SQL-builder twin of
+ * {@link EVERY_VERSION_SELECT}, so the limit checks and row locks cover the
+ * same rows the snapshot reads.
+ */
+const movedVersionRows = (
+  sourceWorkspaceId: SafeId<"workspace">,
+  sourceIds: SafeId<"entity">[],
+) =>
+  and(
+    eq(entityVersions.workspaceId, sourceWorkspaceId),
+    inArray(entityVersions.entityId, sourceIds),
+  );
 
 type EntityRowWithCurrentVersion = Omit<EntitySnapshot, "versions"> & {
   currentVersion: EntityVersionSnapshot | null;
@@ -747,7 +771,11 @@ const targetVersionValues = ({
           version.collaborationContributorUserIds,
         detectedLanguage: version.detectedLanguage,
         createdAt: version.createdAt,
-      };
+        deletedAt: version.deletedAt,
+        deletedBy: version.deletedBy,
+        // Total over the carried columns: one added there must be written here.
+      } satisfies CarriedVersionColumns &
+        Pick<typeof entityVersions.$inferInsert, "workspaceId" | "entityId">;
     default:
       transfer satisfies never;
       return panic("Unhandled entity transfer");
@@ -910,13 +938,7 @@ export const validateMoveSourceReadLimits = async ({
   const overVersionLimit = await tx
     .select({ entityId: entityVersions.entityId })
     .from(entityVersions)
-    .where(
-      and(
-        eq(entityVersions.workspaceId, sourceWorkspaceId),
-        inArray(entityVersions.entityId, sourceIds),
-        isNull(entityVersions.deletedAt),
-      ),
-    )
+    .where(movedVersionRows(sourceWorkspaceId, sourceIds))
     .groupBy(entityVersions.entityId)
     .having(sql`${count()} > ${LIMITS.versionsPerEntity}`)
     .limit(1);
@@ -927,8 +949,7 @@ export const validateMoveSourceReadLimits = async ({
     .where(
       and(
         eq(fields.workspaceId, sourceWorkspaceId),
-        inArray(entityVersions.entityId, sourceIds),
-        isNull(entityVersions.deletedAt),
+        movedVersionRows(sourceWorkspaceId, sourceIds),
       ),
     )
     .groupBy(fields.entityVersionId)
@@ -1012,28 +1033,21 @@ const validateMoveSourceRows = async ({
     .for("update", { noWait: true });
   // Annotations and derived field content can change without an entity write.
   // Lock those owners as well before reading the full carried state.
-  const liveVersions = await tx
+  const movedVersions = await tx
     .select({ id: entityVersions.id })
     .from(entityVersions)
-    .where(
-      and(
-        eq(entityVersions.workspaceId, sourceWorkspaceId),
-        inArray(entityVersions.entityId, sourceIds),
-        isNull(entityVersions.deletedAt),
-      ),
-    )
+    .where(movedVersionRows(sourceWorkspaceId, sourceIds))
     .orderBy(asc(entityVersions.id))
     .limit(expectedVersionIds.size + 1)
     .for("update", { noWait: true });
-  const liveFields = await tx
+  const movedFields = await tx
     .select({ id: fields.id })
     .from(fields)
     .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
     .where(
       and(
         eq(fields.workspaceId, sourceWorkspaceId),
-        inArray(entityVersions.entityId, sourceIds),
-        isNull(entityVersions.deletedAt),
+        movedVersionRows(sourceWorkspaceId, sourceIds),
       ),
     )
     .orderBy(asc(fields.id))
@@ -1068,7 +1082,7 @@ const validateMoveSourceRows = async ({
       id: { in: sourceIds },
     },
     columns: ENTITY_SNAPSHOT_COLUMNS,
-    with: EVERY_LIVE_VERSION_SELECT,
+    with: EVERY_VERSION_SELECT,
     limit: sourceIds.length,
   });
   let membershipMatches = true;
@@ -1091,10 +1105,10 @@ const validateMoveSourceRows = async ({
   }
   if (
     !membershipMatches ||
-    liveVersions.length !== expectedVersionIds.size ||
-    liveVersions.some(({ id }) => !expectedVersionIds.has(id)) ||
-    liveFields.length !== expectedFieldIds.size ||
-    liveFields.some(({ id }) => !expectedFieldIds.has(id)) ||
+    movedVersions.length !== expectedVersionIds.size ||
+    movedVersions.some(({ id }) => !expectedVersionIds.has(id)) ||
+    movedFields.length !== expectedFieldIds.size ||
+    movedFields.some(({ id }) => !expectedFieldIds.has(id)) ||
     !sourceSnapshotsMatch(sourceSnapshot, currentEntities)
   ) {
     return Result.err(
