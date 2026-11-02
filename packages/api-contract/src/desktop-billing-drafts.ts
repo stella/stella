@@ -194,7 +194,7 @@ const createBillingDraftResponseSchemas = (profile: "canonical" | "model") => {
     }),
   });
 
-  const desktopBillingDraftResponseSchema = v.strictObject({
+  const guidedResponseEntries = {
     drafts: array(desktopBillingDraftSchema, {
       min: 1,
       max: DESKTOP_BILLING_DRAFT_LIMITS.entries,
@@ -203,7 +203,23 @@ const createBillingDraftResponseSchemas = (profile: "canonical" | "model") => {
       v.strictObject({ fileId: identifier, fileName: name }),
       { max: DESKTOP_BILLING_DRAFT_LIMITS.guidelines },
     ),
+  };
+
+  // A description only: no classification, guideline flags or operations.
+  const desktopBillingPlainDraftSchema = v.strictObject({
+    entryId: identifier,
+    narrative,
+    matchedEarlierEntryIds: array(identifier, {
+      max: DESKTOP_BILLING_DRAFT_LIMITS.matchedEarlierEntries,
+    }),
   });
+
+  const plainResponseEntries = {
+    drafts: array(desktopBillingPlainDraftSchema, {
+      min: 1,
+      max: DESKTOP_BILLING_DRAFT_LIMITS.entries,
+    }),
+  };
 
   return {
     desktopBillingDraftClassificationSchema,
@@ -211,9 +227,14 @@ const createBillingDraftResponseSchemas = (profile: "canonical" | "model") => {
     desktopBillingDraftFlagSchema,
     desktopBillingDraftOperationSchema,
     desktopBillingDraftSchema,
-    desktopBillingDraftResponseSchema,
+    guidedResponseEntries,
+    plainResponseEntries,
   };
 };
+
+const canonicalBillingDraftSchemas =
+  createBillingDraftResponseSchemas("canonical");
+const modelBillingDraftSchemas = createBillingDraftResponseSchemas("model");
 
 export const {
   desktopBillingDraftClassificationSchema,
@@ -221,12 +242,45 @@ export const {
   desktopBillingDraftFlagSchema,
   desktopBillingDraftOperationSchema,
   desktopBillingDraftSchema,
-  desktopBillingDraftResponseSchema,
-} = createBillingDraftResponseSchemas("canonical");
+} = canonicalBillingDraftSchemas;
 
-/** Compact model grammar; every generated result must pass the canonical schema. */
-export const desktopBillingDraftModelResponseSchema =
-  createBillingDraftResponseSchemas("model").desktopBillingDraftResponseSchema;
+/** Drafts checked against the organization's bound billing guideline files,
+ * with billing classifications, guideline flags and reviewable operations. */
+export const desktopBillingGuidedDraftResponseSchema = v.strictObject({
+  mode: v.literal("guided"),
+  ...canonicalBillingDraftSchemas.guidedResponseEntries,
+});
+
+/** Descriptions drafted without guideline files: no classification, flags,
+ * operations or checked guidelines exist in this shape. */
+export const desktopBillingPlainDraftResponseSchema = v.strictObject({
+  mode: v.literal("plain"),
+  ...canonicalBillingDraftSchemas.plainResponseEntries,
+});
+
+// A union, not a variant: native response validation reads `anyOf` and
+// refuses `oneOf`. The `mode` literal still discriminates both branches.
+export const desktopBillingDraftResponseSchema = v.union([
+  desktopBillingGuidedDraftResponseSchema,
+  desktopBillingPlainDraftResponseSchema,
+]);
+
+/** The `mode` a draft result names, derived from both branches. */
+export const desktopBillingDraftModeSchema = v.picklist([
+  desktopBillingGuidedDraftResponseSchema.entries.mode.literal,
+  desktopBillingPlainDraftResponseSchema.entries.mode.literal,
+]);
+
+/** Compact model grammar; every generated result must pass the canonical
+ * schema once the server names its mode. */
+export const desktopBillingDraftModelResponseSchema = v.strictObject(
+  modelBillingDraftSchemas.guidedResponseEntries,
+);
+
+/** Compact model grammar for plain descriptions. */
+export const desktopBillingPlainDraftModelResponseSchema = v.strictObject(
+  modelBillingDraftSchemas.plainResponseEntries,
+);
 
 /** The caller's own earlier entries a draft cites, so the review can show
  * what "consistent with" refers to without a second request. */
@@ -276,20 +330,55 @@ export const desktopBillingDraftRequestSchema = v.pipe(
   ),
 );
 
-export const desktopBillingDraftSettingsRequestSchema = v.pipe(
-  v.strictObject({
-    consent: v.optional(v.picklist(["granted", "revoked"])),
-    preference: v.optional(v.nullable(steeringTextSchema)),
-  }),
-  v.check(
-    (request) =>
-      request.consent !== undefined || request.preference !== undefined,
-    "A consent or preference update is required",
-  ),
+/** Opaque server revision of the caller's own settings; `null` before the
+ * first write. */
+const billingDraftSettingsRevisionSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(64),
 );
 
+/** A withdrawal carries no revision, so it applies whatever the caller last
+ * read. A grant or a preference change applies only to the revision it was
+ * made on. */
+/** The one settings change a member can always make. */
+export const desktopBillingDraftWithdrawalSchema = v.strictObject({
+  type: v.literal("withdraw_consent"),
+});
+
+export const desktopBillingDraftSettingsRequestSchema = v.variant("type", [
+  desktopBillingDraftWithdrawalSchema,
+  v.strictObject({
+    type: v.literal("grant_consent"),
+    revision: v.nullable(billingDraftSettingsRevisionSchema),
+  }),
+  v.strictObject({
+    type: v.literal("set_preference"),
+    revision: v.nullable(billingDraftSettingsRevisionSchema),
+    preference: v.nullable(steeringTextSchema),
+  }),
+]);
+
+/** What drafting the caller gets: `off` while the organization has AI
+ * billing drafts switched off, `plain` descriptions while no firm guideline
+ * file is bound, `guided` drafts checked against the bound files. */
+export const desktopBillingDraftEffectiveModeSchema = v.picklist([
+  "off",
+  "plain",
+  "guided",
+]);
+
+/** Refusal codes a client branches on instead of reading messages. */
+export const DESKTOP_BILLING_DRAFT_REFUSAL_CODE = {
+  organizationOff: "billing_drafts_off",
+  consentRequired: "billing_draft_consent_required",
+  /** The firm guideline binding changed while the request was prepared. */
+  modeChanged: "billing_draft_mode_changed",
+} as const;
+
 export const desktopBillingDraftSettingsResponseSchema = v.strictObject({
-  organizationMode: v.picklist(["enabled", "disabled"]),
+  revision: v.nullable(billingDraftSettingsRevisionSchema),
+  effectiveMode: desktopBillingDraftEffectiveModeSchema,
   consent: v.picklist(["granted", "revoked"]),
   preference: v.nullable(
     v.pipe(
@@ -300,11 +389,27 @@ export const desktopBillingDraftSettingsResponseSchema = v.strictObject({
   ),
 });
 
+/** Every write leaves the caller's row in place, so its answer always names
+ * a revision. */
+export const desktopBillingDraftSettingsUpdateResponseSchema = v.strictObject({
+  ...desktopBillingDraftSettingsResponseSchema.entries,
+  revision: billingDraftSettingsRevisionSchema,
+});
+
 export type DesktopBillingDraftRequest = v.InferOutput<
   typeof desktopBillingDraftRequestSchema
 >;
 export type DesktopBillingDraftResponse = v.InferOutput<
   typeof desktopBillingDraftResponseSchema
+>;
+export type DesktopBillingDraftMode = v.InferOutput<
+  typeof desktopBillingDraftModeSchema
+>;
+export type DesktopBillingGuidedDraftResponse = v.InferOutput<
+  typeof desktopBillingGuidedDraftResponseSchema
+>;
+export type DesktopBillingPlainDraftResponse = v.InferOutput<
+  typeof desktopBillingPlainDraftResponseSchema
 >;
 export type DesktopBillingDraftReview = v.InferOutput<
   typeof desktopBillingDraftReviewSchema
@@ -317,6 +422,9 @@ export type DesktopBillingDraftOperation = v.InferOutput<
 >;
 export type DesktopBillingDraftClassification = v.InferOutput<
   typeof desktopBillingDraftClassificationSchema
+>;
+export type DesktopBillingDraftEffectiveMode = v.InferOutput<
+  typeof desktopBillingDraftEffectiveModeSchema
 >;
 export type DesktopBillingDraftSettingsRequest = v.InferOutput<
   typeof desktopBillingDraftSettingsRequestSchema
