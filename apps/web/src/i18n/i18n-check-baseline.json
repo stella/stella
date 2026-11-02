@@ -681,6 +681,9 @@
     "navigation.contacts": [
       "fr"
     ],
+    "navigation.knowledge": [
+      "fr"
+    ],
     "navigation.shortcutCategories.navigation": [
       "de",
       "fr"
@@ -935,6 +938,9 @@
     ],
     "workspaces.parties.personalLabel": [
       "es"
+    ],
+    "workspaces.pdf.evidence": [
+      "fr"
     ],
     "workspaces.pdf.selection.pageLocator": [
       "es",

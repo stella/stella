@@ -232,6 +232,7 @@ export const FAILURE_TAGS = [
   "HarnessStartError",
   "HealthCheckError",
   "HeavyWorkSlotError",
+  "HostedCustomerErasureTerminalError",
   "HostedEventNeedsOperator",
   "HostedEventOrderingConflict",
   "HostedProviderContractMismatch",

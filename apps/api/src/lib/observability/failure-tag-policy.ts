@@ -243,6 +243,7 @@ export const TAGGED_FAILURE_REASON = {
   HarnessStartError: "tagged_failure",
   HealthCheckError: "tagged_failure",
   HeavyWorkSlotError: "tagged_failure",
+  HostedCustomerErasureTerminalError: "tagged_failure",
   HostedEventNeedsOperator: "tagged_failure",
   HostedEventOrderingConflict: "tagged_failure",
   HostedProviderContractMismatch: "tagged_failure",
