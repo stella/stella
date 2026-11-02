@@ -13,7 +13,7 @@ import { AUDIT_PERFORMER_FILTER } from "@stll/api-contract/audit-log";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { auditLogs, workspaces } from "@/api/db/schema";
+import { auditLogs, entities, workspaces } from "@/api/db/schema";
 import { createMembershipSafeDb, createSafeDb } from "@/api/db/scoped";
 import {
   AUDIT_ACTION,
@@ -42,6 +42,7 @@ let ids: TestIds;
 let safeDb: SafeDb;
 
 const seededWorkspaceIds: SafeId<"workspace">[] = [];
+const seededEntityIds: SafeId<"entity">[] = [];
 
 const seededAuditLogIds: SafeId<"auditLog">[] = [];
 
@@ -137,6 +138,9 @@ afterAll(async () => {
   await testDb
     .delete(auditLogs)
     .where(inArray(auditLogs.id, seededAuditLogIds));
+  if (seededEntityIds.length > 0) {
+    await testDb.delete(entities).where(inArray(entities.id, seededEntityIds));
+  }
   if (seededWorkspaceIds.length > 0) {
     await testDb
       .delete(workspaces)
@@ -340,6 +344,70 @@ describe("audit log compliance filter", () => {
     } finally {
       await testDb.delete(auditLogs).where(eq(auditLogs.id, serviceRowId));
     }
+  });
+
+  test("a live document resolves its name only inside an authorized matter", async () => {
+    const readable = toSafeId<"entity">(Bun.randomUUIDv7());
+    const hidden = toSafeId<"entity">(Bun.randomUUIDv7());
+    await testDb.insert(entities).values([
+      {
+        id: readable,
+        workspaceId: ids.wsA1,
+        kind: "task",
+        name: "Readable audit entity",
+        status: "open",
+      },
+      {
+        id: hidden,
+        workspaceId: ids.wsA2,
+        kind: "task",
+        name: "Hidden audit entity",
+        status: "open",
+      },
+    ]);
+    seededEntityIds.push(readable, hidden);
+    const recorder = createBackgroundAuditRecorder({
+      organizationId: ids.orgA,
+      workspaceId: null,
+      userId: ids.userA1,
+      execution: {
+        performer: { type: "user", id: ids.userA1 },
+        trigger: { type: "direct" },
+      },
+    });
+    for (const resourceId of [readable, hidden]) {
+      await recorder(asTestRaw<Transaction>(testDb), {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        resourceId,
+      });
+    }
+    const seeded = await testDb
+      .select({ id: auditLogs.id })
+      .from(auditLogs)
+      .where(inArray(auditLogs.resourceId, [readable, hidden]));
+    seededAuditLogIds.push(...seeded.map(({ id }) => id));
+
+    const reader = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    );
+    const page = await readPage({}, reader);
+    expect(
+      page.items.find((item) => item.resourceId === readable)?.resource,
+    ).toEqual({
+      kind: AUDIT_RESOURCE_TYPE.ENTITY,
+      id: readable,
+      name: "Readable audit entity",
+      available: true,
+    });
+    expect(
+      page.items.find((item) => item.resourceId === hidden)?.resource,
+    ).toEqual({
+      kind: AUDIT_RESOURCE_TYPE.ENTITY,
+      id: hidden,
+      name: null,
+      available: false,
+    });
   });
 
   test("resource names never cross organization or matter access", async () => {

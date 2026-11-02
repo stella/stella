@@ -168,10 +168,10 @@
     {
       "name": "list_audit_log",
       "nameChars": 14,
-      "descriptionChars": 122,
-      "inputSchemaChars": 1122,
-      "totalChars": 1258,
-      "estimatedTokens": 513
+      "descriptionChars": 165,
+      "inputSchemaChars": 1052,
+      "totalChars": 1231,
+      "estimatedTokens": 499
     },
     {
       "name": "list_capabilities",
@@ -561,9 +561,9 @@
       "name": "search_case_law",
       "nameChars": 15,
       "descriptionChars": 499,
-      "inputSchemaChars": 5147,
-      "totalChars": 5661,
-      "estimatedTokens": 2316
+      "inputSchemaChars": 5153,
+      "totalChars": 5667,
+      "estimatedTokens": 2319
     },
     {
       "name": "search_legislation",
@@ -631,7 +631,7 @@
     }
   ],
   "totals": {
-    "characters": 132996,
-    "estimatedTokens": 52856
+    "characters": 132975,
+    "estimatedTokens": 52845
   }
 }

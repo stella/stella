@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Lai turpinātu šo darbību, pierakstieties vēlreiz.",
     "resendCode": "Nosūtīt kodu vēlreiz uz <email>{emailAddress}</email>",
     "selectOrganization": "Izvēlieties organizāciju",
+    "sessionExpired": "Jūsu sesija ir beigusies",
+    "sessionExpiredDescription": "Pierakstieties jaunā cilnē. Ievadītais paliek šajā lapā.",
     "signIn": "Pieslēgties",
     "signInBeforeInvitation": "Lai pieņemtu uzaicinājumu organizācijā, vispirms jāpieslēdzas.",
     "signInWithPassword": "Pierakstīties ar paroli",
@@ -891,6 +893,24 @@
       "title": "Ieteikumi, balstoti uz jūsu aktivitāti",
       "unnamedRecord": "Lietas ieraksts"
     },
+    "timeReport": {
+      "billableHours": "Apmaksājamās stundas",
+      "billableShare": "Apmaksājamā laika daļa",
+      "change": "Izmaiņas: {value}",
+      "changePoints": "Izmaiņas procentpunktos: {value}",
+      "collapse": "Sakļaut {name}",
+      "empty": "Reģistrējiet laiku, lai aizpildītu šo pārskatu.",
+      "expand": "Izvērst {name}",
+      "internal": "Iekšējs",
+      "pendingEntries": "Gaida apstiprinājumu",
+      "period": "Periods",
+      "privacy": "Šajā pārskatā tiek izmantoti tikai reģistrētie laika ieraksti. Darbības dati datorā paliek katrā ierīcē.",
+      "title": "Komandas laika pārskats",
+      "tooLargeToLoad": "Šis pārskats ir pārāk liels, lai to ielādētu. Saīsiniet periodu vai rādiet kolonnās nedēļas vai mēnešus.",
+      "tooManyCells": "Šis pārskats ir pārāk liels, lai to parādītu šeit. Saīsiniet periodu, rādiet kolonnās nedēļas vai mēnešus vai eksportējiet to CSV formātā.",
+      "total": "Kopā",
+      "unbilledValue": "Neizrakstītā apmaksājamā summa"
+    },
     "timerActive": "Taimeris darbojas",
     "timesheets": "Darba laika uzskaite",
     "total": "Kopā",
@@ -928,6 +948,7 @@
     "desktopUnavailable": "Savienojiet vai atjauniniet stella desktop.",
     "featureUnavailable": "Šī funkcija nav pieejama.",
     "ocrUnavailable": "OCR nav pieejams.",
+    "openSettings": "Atvērt iestatījumus",
     "translationMissing": "Nav konfigurēts neviens tulkošanas pakalpojums."
   },
   "caseLaw": {
@@ -1104,9 +1125,9 @@
     "loadingMore": "Ielādē vairāk...",
     "marginFilter": {
       "label": "Citēto normu filtrs",
-      "paragraph": "{count, plural, =0 {¶{paragraph} nav citētu normu} one {¶{paragraph} citēta # norma} zero {¶{paragraph} citētas # normu} other {¶{paragraph} citētas # normas}}",
-      "selection": "{count, plural, =0 {Atlasē nav citētu normu} one {Atlasē citēta # norma} zero {Atlasē citētas # normu} other {Atlasē citētas # normas}}",
-      "unnumberedParagraph": "{count, plural, =0 {Šajā rindkopā nav citētu normu} one {Šajā rindkopā citēta # norma} zero {Šajā rindkopā citētas # normu} other {Šajā rindkopā citētas # normas}}"
+      "paragraph": "{count, plural, one {¶{paragraph} citēta # norma} zero {¶{paragraph} citētas # normu} other {¶{paragraph} citētas # normas}}",
+      "selection": "{count, plural, one {Atlasē citēta # norma} zero {Atlasē citētas # normu} other {Atlasē citētas # normas}}",
+      "unnumberedParagraph": "{count, plural, one {Šajā rindkopā citēta # norma} zero {Šajā rindkopā citētas # normu} other {Šajā rindkopā citētas # normas}}"
     },
     "matterLinks": {
       "alreadySaved": "{count, plural, zero {# nolēmumu jau bija saglabāti šeit} one {# nolēmums jau bija saglabāts šeit} other {# nolēmumi jau bija saglabāti šeit}}",
@@ -1337,9 +1358,30 @@
       "none": "Nav jāiestata"
     },
     "skillNeedsUnavailableTools": "Tērzēšanā netiek piedāvāta. Nepieciešams rīks, kas tur nav pieejams: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Paslēpj klientu vārdus, kontu numurus, adreses un citus personas datus pirms lietas satura kopīgošanas ar AI pakalpojumu sniedzējiem. Atgriezeniski klienta pusē; sākotnējais teksts nekad neatstāj jūsu darbvietu.",
+      "ares": "Čehijas uzņēmumu meklēšana pēc IČO vai nosaukuma publiskajā ARES reģistrā (ekonomikas dalībnieku administratīvais reģistrs, Čehijas komercreģistra analogs).",
+      "boe": "Spānijas konsolidētie tiesību akti, ikdienas oficiālais izdevums un BORME (komercreģistra biļetens) no Boletín Oficial del Estado oficiālās atvērto datu API.",
+      "brreg": "Norvēģijas uzņēmumu meklēšana pēc organisasjonsnummer vai nosaukuma Brreg Enhetsregisteret publiskajā atvērtajā API.",
+      "companiesHouse": "Apvienotās Karalistes uzņēmumu meklēšana pēc Companies House reģistrācijas numura vai nosaukuma Companies House publisko datu API. Nepieciešama bezmaksas API atslēga.",
+      "createDocx": "Izveido Word dokumentus no tērzēšanas ar formatējumu, tabulām, galvenēm un iegultiem stiliem. Rezultātu var lejupielādēt un rediģēt programmās Word, LibreOffice un Pages.",
+      "denue": "Meksikas uzņēmējdarbības vietu un saimniecisko vienību meklēšana pēc DENUE vietas identifikatora, nosaukuma vai juridiskā nosaukuma INEGI oficiālajā DENUE API. DENUE ir uzņēmējdarbības vietu katalogs, nevis uzņēmumu tiesību reģistrs Registro Público de Comercio. Nepieciešama bezmaksas INEGI API pilnvara.",
+      "edgar": "ASV biržā kotētu uzņēmumu meklēšana pēc Central Index Key (CIK) SEC EDGAR iesniegumu API.",
+      "gcis": "Taivānas uzņēmumu meklēšana pēc 統一編號 (tongbian, nodokļu identifikators) vai nosaukuma Ekonomikas lietu ministrijas (MoEA) portāla Commerce Industrial Services atvērto datu API.",
+      "infosoud": "Čehijas tiesas lietu meklēšana un tiesas sēžu kalendārs no infosoud.gov.cz. Meklējiet pēc lietas numura, tiesas vai puses, lai iegūtu sēžu datumus un lietas statusu.",
+      "krs": "Polijas uzņēmumu meklēšana pēc KRS numura Tieslietu ministrijas Krajowy Rejestr Sądowy (KRS) atvērtajā API. Aptver Rejestr Przedsiębiorców (komercsabiedrības) un Rejestr Stowarzyszeń (biedrības un nodibinājumi).",
+      "orsr": "Slovākijas uzņēmumu meklēšana pēc IČO vai nosaukuma Tieslietu ministrijas uzturētā Obchodný register Slovenskej republiky JSON API.",
+      "prh": "Somijas uzņēmumu meklēšana pēc Y-tunnus vai nosaukuma Patentti- ja rekisterihallitus (PRH) atvērtajā API AvoinData v3.",
+      "rechercheEntreprises": "Francijas uzņēmumu meklēšana pēc SIREN, SIRET vai nosaukuma atvērtajā API recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Slovākijas meklēšana pēc IČO vai nosaukuma reģistrā Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO), ko uztur Slovākijas Republikas Statistikas birojs. Aptver visas juridiskās personas un uzņēmējus, arī individuālos komersantus, biedrības, nodibinājumus un publiskās iestādes ārpus komercreģistra.",
+      "vies": "PVN reģistrācijas numuru pārbaude visā ES, izmantojot Eiropas Komisijas PVN informācijas apmaiņas sistēmas (VIES) REST API. Apstiprina, vai numurs ir reģistrēts piegādātāja dalībvalstī, un atgriež reģistrētā komersanta nosaukumu un adresi, ja dalībvalsts tos izpauž.",
+      "webSearch": "Meklē publiskajā tīmeklī un lasa atsevišķas lapas. Ja ir iestatīta jurisdikcija, vaicājumi vispirms tiek virzīti uz primārajiem avotiem (tiesām, tiesību aktu portāliem), pretējā gadījumā uz atvērto tīmekli. Iespējo katrai sarunai atsevišķi."
+    },
     "toolNames": {
       "anonymize": "Anonimizēt",
       "createDocx": "Izveidot DOCX",
+      "gcis": "GCIS uzņēmumu reģistrs",
+      "vies": "ES PVN numura pārbaude (VIES)",
       "webSearch": "Tīmekļa meklēšana"
     },
     "unavailable": "Vēl nav pieejams"
@@ -1413,10 +1455,12 @@
           "click": "Noklikšķināt",
           "fill": "Ievadīt tekstu",
           "open": "Atvērt vietni",
+          "openNewTab": "Atvērt vietni jaunā cilnē",
           "pressKey": "Nospiest taustiņu",
           "select": "Atlasīt opciju",
           "snapshot": "Lasīt lapu",
-          "snapshotContinue": "Turpināt lasīt lapu"
+          "snapshotContinue": "Turpināt lasīt lapu",
+          "switchTab": "Pārslēgties uz cilni"
         },
         "askAgain": "Jautāt vēlreiz",
         "autoApproveReads": "Automātiski apstiprināt lapu lasīšanu",
@@ -1450,11 +1494,15 @@
     "audioContent": "Ģenerēts audio",
     "browserExtension": {
       "connect": "Savienot paplašinājumu",
-      "connectDescription": "Šajā cilnē noklikšķiniet uz stella paplašinājuma ikonas pārlūka rīkjoslā. Ja tiek prasīts, atļaujiet piekļuvi vietnēm un savienojiet šo cilni.",
+      "connectDescription": "Noklikšķiniet uz stella paplašinājuma ikonas pārlūka rīkjoslā, ja tiek prasīts, atļaujiet piekļuvi vietnēm un savienojiet stella. Viens savienojums der visām jūsu stella cilnēm.",
       "connected": "Paplašinājums savienots",
       "description": "Pēc jūsu lūguma stella var atvērt un lasīt vietnes atsevišķā cilnē.",
       "install": "Instalēt paplašinājumu",
-      "installDescription": "Ar stella paplašinājumu stella pēc jūsu lūguma var atvērt un lasīt vietnes atsevišķā cilnē. Instalējiet to no Chrome interneta veikala."
+      "installDescription": "Ar stella paplašinājumu stella pēc jūsu lūguma var atvērt un lasīt vietnes atsevišķā cilnē. Instalējiet to no Chrome interneta veikala.",
+      "reload": "Pārlādēt cilni",
+      "reloadDescription": "Jūsu stella paplašinājums ir jaunāks par šo cilni. Pārlādējiet cilni, lai to turpinātu izmantot.",
+      "updating": "Gaida paplašinājuma atjauninājumu",
+      "updatingDescription": "Jūsu stella paplašinājums ir vecāka versija. Chrome to atjaunina automātiski, parasti dažu stundu laikā; pēc tam stella atkal varēs jums atvērt un lasīt vietnes."
     },
     "cancelQueuedMessage": "Atcelt rindā gaidošo ziņojumu",
     "caseLawGreeting": "Uzdodiet jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",
@@ -2888,6 +2936,7 @@
       "aiOutputModerated": "AI pakalpojumu sniedzējs moderēja izvadi. Pārfrāzējiet pieprasījumu vai izvēlieties citu modeli.",
       "aiProviderTaskUnsupported": "Konfigurētais AI pakalpojumu sniedzējs nevar izpildīt šo uzdevumu. Izvēlieties tādu, kas to spēj.",
       "aiUnknown": "AI pieprasījums neizdevās. Mēģiniet vēlreiz.",
+      "alreadyOrganizationMember": "Šī persona jau ir šīs organizācijas dalībnieks.",
       "clauseDirectivesInvalid": "Saistītā klauzulā ir nederīgas direktīvas. Pirms veidnes aizpildīšanas izlabojiet klauzulu.",
       "clauseDirectivesInvalidDetails": "Klauzulā {clauseName} laukā {slotName} ir nederīgas direktīvas. Atveriet klauzulu redaktoru, izlabojiet norādītās rindkopas un vēlreiz aizpildiet veidni.",
       "clauseDirectivesOverrideInvalidDetails": "Klauzulas {clauseName} aizstātais teksts laukā {slotName} satur nederīgas direktīvas. Izlabojiet šīs aizpildīšanas aizstāto tekstu un mēģiniet vēlreiz.",
@@ -2903,12 +2952,19 @@
       "idempotencyInProgress": "Šis pieprasījums vēl tiek apstrādāts. Nedaudz uzgaidiet un mēģiniet vēlreiz.",
       "idempotencyKeyReused": "Dati kopš iepriekšējā mēģinājuma ir mainījušies. Atiestatiet veidlapu un mēģiniet vēlreiz.",
       "internalServerError": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
+      "invitationAlreadyPending": "Šai personai jau ir gaidošs uzaicinājums. Nosūtiet to atkārtoti sadaļā Gaidošie uzaicinājumi.",
+      "invitationEmailUnverified": "Lai atbildētu uz šo uzaicinājumu, apstipriniet savu e-pasta adresi.",
+      "invitationLimitReached": "Šī organizācija ir sasniegusi uzaicinājumu limitu. Vispirms atceliet kādu gaidošu uzaicinājumu.",
+      "invitationOtherRecipient": "Šis uzaicinājums tika nosūtīts uz citu e-pasta adresi.",
+      "invitationRoleNotAllowed": "Jūs nevarat uzaicināt personu ar šo lomu. Izvēlieties citu lomu.",
       "legalSourceEntityLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums, tāpēc dokumentu nevarēja izveidot.",
       "legalSourceFilePropertyMissing": "Šajā lietā trūkst faila rekvizīta, tāpēc dokumentu nevarēja izveidot.",
       "matterContactCapacityExceeded": "Šajā lietā ir vairāk kontaktu, nekā iespējams parādīt. Noņemiet redzamās kontaktu piesaistes, lai parādītu pārējos kontaktus.",
       "matterContactCapacityReached": "Šī lieta ir sasniegusi kontaktu skaita ierobežojumu. Pirms pievienojat vēl vienu kontaktu, noņemiet vienu kontakta piesaisti.",
       "mcpAuthorizationApprovalRequired": "Lai varētu izveidot savienojumu, administratoram šis savienotājs ir jāapstiprina.",
       "notOrganizationMember": "Jūs neesat šīs organizācijas dalībnieks.",
+      "organizationLastOwner": "Organizācijai ir jābūt īpašniekam. Vispirms nododiet īpašumtiesības.",
+      "organizationMemberLimitReached": "Šī organizācija ir sasniegusi dalībnieku limitu.",
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",
       "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",
       "thirdPartyBoundaryRefusal": "Pieprasījums mēģināja izmantot saturu ārpus atļautā darbvietas konteksta.",
@@ -3034,6 +3090,7 @@
     },
     "compareChangeSummary": "Izmaiņas pēc veida",
     "compareCreated": "Izveidots izsekoto izmaiņu dokuments",
+    "compareDocxOnly": "Salīdzināt (tikai DOCX)",
     "compareFailed": "Salīdzināšana neizdevās",
     "compareNeedsTwoVersions": "Lai salīdzinātu, augšupielādējiet citu DOCX versiju.",
     "compareNoChanges": "Netika atrastas atbalstītas atšķirības.",
@@ -3089,6 +3146,7 @@
     "selectVersion": "Atlasiet versiju",
     "setLabel": "Iestatīt apzīmējumu",
     "showDiff": "Rādīt atšķirības",
+    "showText": "Rādīt tekstu",
     "showVersionList": "Rādīt versiju vēsturi",
     "uploadDate": "Augšupielādes datums",
     "uploadNewVersion": "Augšupielādēt jaunu versiju",
@@ -4048,6 +4106,28 @@
       "skippedReasonOutsideSkillFolder": "Ārpus prasmes mapes",
       "skippedReasonUnsupportedExtension": "Neatbalstīts faila tips",
       "skippedReasonUnsupportedFolder": "Nav resursu mapē",
+      "starter": {
+        "compare": {
+          "body": "Salīdziniet divas šī dokumenta versijas un uzskaitiet visas būtiskās izmaiņas, norādot to atrašanās vietu.",
+          "description": "Uzskaitiet visas būtiskās izmaiņas starp divām versijām",
+          "name": "Salīdzināt versijas"
+        },
+        "draft": {
+          "body": "Sagatavojiet izsvērtu atbildi uz šo vēstuli. Saglabājiet profesionālu toni, aplūkojiet katru minēto punktu un norādiet atklātos jautājumus, kas man jāapstiprina.",
+          "description": "Sagatavojiet profesionālu atbildi uz vēstuli",
+          "name": "Sagatavot atbildi"
+        },
+        "risks": {
+          "body": "Pārbaudiet šo dokumentu, meklējot juridiskos riskus, trūkstošus aizsardzības noteikumus un neskaidras klauzulas. Pie katra konstatējuma norādiet konkrēto klauzulu.",
+          "description": "Atrodiet juridiskos riskus un neskaidras klauzulas",
+          "name": "Atrast riskus"
+        },
+        "summarize": {
+          "body": "Apkopojiet šo dokumentu. Ietveriet puses, galvenās saistības, datumus, finanšu noteikumus un visas klauzulas par izbeigšanu vai atbildību.",
+          "description": "Iegūstiet strukturētu galveno noteikumu kopsavilkumu",
+          "name": "Apkopot dokumentu"
+        }
+      },
       "uploadHelp": "Izmantojiet SKILL.md failu vai .zip mapi ar SKILL.md un izvēles tikai lasāmiem resursiem.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cels/uz/prasmi",
       "version": "Versija: {version}"
@@ -4729,6 +4809,7 @@
     "creationRefused": "Organizāciju neizdevās izveidot. Pārbaudiet datus un mēģiniet vēlreiz.",
     "creationSlugConflict": "Šī organizācijas adrese jau tiek izmantota. Izvēlieties citu nosaukumu vai adresi.",
     "invitations": {
+      "cancelConfirmDescription": "Uz {email} nosūtītā uzaicinājuma saite vairs nedarbosies. Lai uzaicinātu šo personu vēlreiz, nosūtiet jaunu uzaicinājumu.",
       "cancelInvitation": "Atcelt uzaicinājumu",
       "emailAddressLabel": "E-pasta adrese",
       "emailAddressPlaceholder": "lietotajs@example.com",
@@ -4736,6 +4817,7 @@
       "inviteMember": "Uzaicināt dalībnieku",
       "inviteMemberDescription": "Nosūtīt uzaicinājumu pievienoties jūsu organizācijai",
       "invited": "Uzaicināts",
+      "keepInvitation": "Paturēt uzaicinājumu",
       "noInvitationsFound": "Uzaicinājumi nav atrasti",
       "resendInvitation": "Nosūtīt uzaicinājumu atkārtoti",
       "sendInvitation": "Nosūtīt uzaicinājumu",
@@ -4972,6 +5054,7 @@
     "caseLawEmptyState": "Sāciet rakstīt, lai meklētu tiesu nolēmumus.",
     "caseLawMatchingDecisions": "{count, plural, zero {# atbilstošu nolēmumu} one {# atbilstošs nolēmums} other {# atbilstoši nolēmumi}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, zero {#+ atbilstošu nolēmumu} one {#+ atbilstošs nolēmums} other {#+ atbilstoši nolēmumi}}",
+    "chatCoveragePartial": "Ne visas tērzēšanas sarunas tika pārmeklētas pilnībā.",
     "continueInChat": "Turpināt tērzēšanā",
     "dateFrom": "No",
     "dateTo": "Līdz",
@@ -5108,8 +5191,8 @@
       "desktopDocumentsTitle": "Dokumentu rediģēšana datorā",
       "desktopDownloadMac": "Lejupielādēt operētājsistēmai macOS",
       "desktopDownloadOtherMac": "Izmantojat Windows? Lejupielādēt operētājsistēmai Windows",
-      "desktopDownloadOtherWindows": "Vai iegūstiet .msi instalētāju IT pārvaldītām izvietošanām",
       "desktopDownloadWindows": "Lejupielādēt operētājsistēmai Windows",
+      "desktopDownloadWindowsArm": "Windows ierīcē ar ARM? Lejupielādēt ARM versiju",
       "desktopHeroTitle": "Jūsu starpliktuve ir gatava, kad tā vajadzīga",
       "desktopInstallMacStep": "Atveriet DMG un ievelciet stella desktop mapē Applications.",
       "desktopInstallOpenStep": "Vienreiz atveriet stella desktop. Starpliktuve parādīsies uzreiz un turpmāk būs pieejama macOS izvēļņu joslā vai Windows sistēmas teknē.",
@@ -5340,6 +5423,7 @@
         "legal_list_item": "juridiskā saraksta ieraksts",
         "legal_list_verification": "juridiskā saraksta pārbaude",
         "legal_resolve": "juridiskas atsauces meklēšana",
+        "legislation_matter_link": "tiesību akta saite ar lietu",
         "machine_api_key": "iekārtas API atslēga",
         "mcp_connection": "MCP savienojums",
         "mcp_gateway_tool": "MCP vārtejas rīks",
@@ -5378,6 +5462,12 @@
         "work_obligation": "darba pienākums",
         "workspace_contact": "lietas kontaktpersona",
         "workspace_member": "lietas dalībnieks"
+      },
+      "billingDrafts": {
+        "description": "Veidojiet darba aprakstus no atlasītajām darbībām un biroja vai klienta zināšanu failiem. Katrs lietotājs arī dod savu piekrišanu. Pirms melnrakstu ieslēgšanas pievienojiet biroja vadlīnijas.",
+        "firm": "Biroja vadlīnijas",
+        "ledes": "Elektroniskie norēķini (LEDES)",
+        "title": "AI norēķinu melnraksti"
       },
       "documentProcessing": {
         "description": "Automātiski atpazīstiet tekstu skenētos PDF, lai to saturs būtu meklējams.",
@@ -5794,6 +5884,7 @@
       "open": "Atvērts"
     },
     "subtasks": "Apakšuzdevumi",
+    "taskCompleted": "Uzdevums pabeigts",
     "title": "Uzdevumi",
     "untitled": "Uzdevums bez nosaukuma",
     "workTypeValues": {
@@ -6306,6 +6397,7 @@
     },
     "createNewWorkspace": "Izveidot jaunu lietu",
     "defaultName": "Bez nosaukuma",
+    "deleteFromMatter": "Dzēst no lietas…",
     "deleteItem": "Dzēst vienību",
     "deleteItems": "Dzēst {count, plural, zero {# vienību} one {# vienību} other {# vienības}}",
     "deleteItemsDescription": "Vai tiešām vēlaties dzēst {count, plural, zero {# vienību} one {# vienību} other {# vienības}}? Šo darbību nevar atsaukt.",
@@ -6401,6 +6493,7 @@
       "downloadSearchablePdf": "Meklējams PDF",
       "downloadWithComments": "Lejupielādēt ar komentāriem",
       "emptyFile": "Fails ir tukšs.",
+      "fileTooLarge": "Fails ir lielāks par {limit, number} MB.",
       "includeReferenceNumber": "Iekļaut atsauces numuru",
       "itemLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums.",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",
@@ -6690,11 +6783,14 @@
         "empty": "Šajā lietā vēl nav darbību.",
         "fields": {
           "dueDate": "termiņš",
+          "name": "nosaukums",
           "parentFolder": "vecākmape",
           "priority": "prioritāte",
           "property": "rekvizīts",
           "schedule": "grafiks",
-          "sortOrder": "secība"
+          "sortOrder": "secība",
+          "status": "statuss",
+          "type": "tips"
         },
         "filterLabel": "Filtrēt darbības",
         "filters": {
@@ -6744,8 +6840,18 @@
           "team": "lietas komanda",
           "translation": "tulkojums"
         },
+        "taskLinks": {
+          "added": "Sasaistīja {name} ar",
+          "addedUnnamed": "Sasaistīja vienību ar",
+          "removed": "Atsaistīja {name} no",
+          "removedUnnamed": "Atsaistīja vienību no"
+        },
         "title": "Darbības",
         "updatedFields": "Atjaunināts: {fields}",
+        "versions": {
+          "added": "Pievienoja {version}. versiju:",
+          "deleted": "Izdzēsa {version}. versiju:"
+        },
         "views": {
           "list": "Saraksta skats",
           "timeline": "Laika skalas skats"

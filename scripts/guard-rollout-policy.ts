@@ -49,13 +49,15 @@ const loadedFiles = new Map<string, GuardRollout>();
 for (const file of readdirSync(
   new URL("guard-rollouts/", import.meta.url),
 ).toSorted()) {
-  if (!file.endsWith(".json")) {
-    continue;
-  }
   const source = `${GUARD_ROLLOUT_DIRECTORY}/${file}`;
+  // Every entry must be a rollout: discovery reads only JSON, so a rollout
+  // written in another format (such as a .ts module) would otherwise be
+  // skipped without a trace.
   const id = /^([a-z][a-z0-9]*(?:-[a-z][a-z0-9]*)*)\.json$/u.exec(file)?.[1];
   if (id === undefined) {
-    panic(`guard rollout file must be <kebab-case-id>.json: ${source}`);
+    panic(
+      `${GUARD_ROLLOUT_DIRECTORY} holds only <kebab-case-id>.json rollouts; rename or remove ${source}`,
+    );
   }
   const url = new URL(`guard-rollouts/${file}`, import.meta.url);
   let rollout: unknown;
