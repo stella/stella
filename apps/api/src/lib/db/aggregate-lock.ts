@@ -167,6 +167,7 @@ const CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE = 0x0f_10_cc_b3;
 const CHAT_OWNER_STORED_CONTENT_EGRESS_LOCK_NAMESPACE = 0x0f_10_cc_b4;
 const ORGANIZATION_OBJECT_INTENT_LOCK_NAMESPACE = 0x0f_10_cc_b0;
 const READER_ANNOTATION_LOCK_NAMESPACE = 0x0f_10_cc_af;
+const BILLING_DRAFT_SETTINGS_LOCK_NAMESPACE = 0x0f_10_cc_b6;
 
 const chatOwnerStoredContentEgressKey = ({
   organizationId,
@@ -1248,6 +1249,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.id.organizationId,
           options.id.userId,
         ],
+      };
+    case "billingDraftSettings":
+      return {
+        first: sql`${BILLING_DRAFT_SETTINGS_LOCK_NAMESPACE}::integer`,
+        second: sql`hashtext(${options.id.organizationId})`,
+        order: [options.aggregate, options.id.organizationId],
       };
     case "fileComparisonCapacity":
       return {

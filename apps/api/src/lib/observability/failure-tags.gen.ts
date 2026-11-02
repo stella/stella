@@ -37,6 +37,8 @@ export const FAILURE_TAGS = [
   "BetterAuthSignInReplayError",
   "BilingualAIContractError",
   "BilingualFormattingError",
+  "BillingDraftValidationError",
+  "BodyByteLimitError",
   "BufferIntentOwnershipError",
   "BufferIntentWorkspaceUnavailableError",
   "CanaryRateLimitError",

@@ -2,12 +2,11 @@ import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { defaultConfig } from "@stll/db-load-gate/health";
-
 import {
   BackfillHeldError,
   createScriptBackfillRuntime,
 } from "@/api/db/backfill-runtime";
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import { CASE_LAW_POPULATION_FOLD_BATCH_LIMIT } from "@/api/lib/case-law/population-count-limits";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
@@ -27,7 +26,6 @@ export const FOLD_CASE_LAW_POPULATION_COUNTS_TASK =
 const RUN_BUDGET_MS = 45_000;
 // Leave room for a governed indicator read and one bounded write transaction.
 const BATCH_START_RESERVE_MS = 10_000;
-const MAX_BATCHES_PER_RUN = RUN_BUDGET_MS / defaultConfig.minSleepMs;
 
 type PopulationFoldOptions = {
   createRuntime?: typeof createScriptBackfillRuntime;
@@ -54,13 +52,15 @@ export const createCaseLawPopulationFoldTask =
       signal,
       AbortSignal.timeout(RUN_BUDGET_MS),
     ]);
+    const healthConfig = loadGateHealthConfig();
+    const maxBatchesPerRun = RUN_BUDGET_MS / healthConfig.minSleepMs;
     const runtime = createRuntime({
       db,
       name: SCHEDULER_BACKFILL_IDS.populationCounts,
       tableName: "case_law_population_deltas",
       initialSize: CASE_LAW_POPULATION_FOLD_BATCH_LIMIT,
       config: {
-        ...defaultConfig,
+        ...healthConfig,
         minSize: 128,
         maxSize: CASE_LAW_POPULATION_FOLD_BATCH_LIMIT,
         batchStatementTimeoutMs: 5000,
@@ -73,7 +73,7 @@ export const createCaseLawPopulationFoldTask =
     const outcome = await Result.tryPromise({
       try: async () => {
         try {
-          for (let batch = 0; batch < MAX_BATCHES_PER_RUN; batch += 1) {
+          for (let batch = 0; batch < maxBatchesPerRun; batch += 1) {
             if (clock() + BATCH_START_RESERVE_MS >= deadline) {
               scheduleContinuation(dueAt.claimedAtDate());
               return;
