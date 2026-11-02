@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { createDetached } from "@stll/errors";
+import { detached } from "@/api/lib/analytics/capture";
 
 type ObservationBufferOptions<T> = {
   capacity: number;
@@ -23,9 +23,6 @@ export const createObservationBuffer = <T>({
   let scheduled: ReturnType<typeof setTimeout> | undefined;
   let inFlight = 0;
   const FLUSH_DELAY_MS = 25;
-  const detached = createDetached((error) =>
-    onFailure(error, pending.length + inFlight),
-  );
   const flush = async (): Promise<void> => {
     if (scheduled !== undefined) {
       clearTimeout(scheduled);
@@ -67,7 +64,9 @@ export const createObservationBuffer = <T>({
     }
     scheduled = setTimeout(() => {
       scheduled = undefined;
-      detached(flush(), "action-cost.flush");
+      detached(flush, "action-cost.flush", (error) => {
+        onFailure(error, pending.length + inFlight);
+      });
     }, FLUSH_DELAY_MS);
   };
   return { enqueue, flush };

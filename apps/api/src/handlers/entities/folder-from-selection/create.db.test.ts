@@ -13,6 +13,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { TREE_PARENT_CYCLE_ERROR_CODE } from "@/api/lib/db/tree-parent-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -34,7 +35,7 @@ beforeAll(
 
 afterAll(async () => {
   if (orgIds.length > 0) {
-    await db.delete(organization).where(inArray(organization.id, orgIds));
+    await deleteOrganizationsForTest(db, orgIds);
   }
   if (userIds.length > 0) {
     await db.delete(user).where(inArray(user.id, userIds));

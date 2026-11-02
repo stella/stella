@@ -526,6 +526,23 @@ test("highlights the first registry result and copies it with Enter from the sea
   await expect(searchBox(page)).toBeFocused();
 });
 
+test("starts every registry result at the top of its card", async ({
+  page,
+}) => {
+  await openClipboard(page);
+  await activateRegistry(page, "Privileged");
+  const card = page.locator(
+    '[data-registry-result="company-1"] [data-registry-card]',
+  );
+  const name = card.getByRole("heading", { name: "Stella Example s.r.o." });
+  await expect(name).toBeVisible();
+  const cardBox = await card.boundingBox();
+  const nameBox = await name.boundingBox();
+  // A short result must not sink to the middle of a tall card, or names in
+  // neighbouring cards stop lining up. The card's own top padding is 12px.
+  expect((nameBox?.y ?? 0) - (cardBox?.y ?? 0)).toBeCloseTo(12, 0);
+});
+
 test("retains the explicitly requested query across browser sign-in and native focus return", async ({
   page,
 }) => {
@@ -1016,11 +1033,16 @@ for (const language of ["en", "ar"] as const) {
       browserName,
       page,
     }) => {
+      const messages = language === "ar" ? arMessages : enMessages;
       await openClipboard(page);
       await searchBox(page).fill("Privileged");
       // WebKit follows macOS keyboard access: Option+Tab includes buttons.
       await searchBox(page).press(browserName === "webkit" ? "Alt+Tab" : "Tab");
-      // The scope icon stays out of the tab order; the groups rail follows.
+      const searchOptions = page.getByRole("button", {
+        name: messages.clipboard.searchOptions,
+      });
+      await expect(searchOptions).toBeFocused();
+      await searchOptions.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
       await expect(
         page.locator('[data-clipboard-group-id="__no_group__"]'),
       ).toBeFocused();
