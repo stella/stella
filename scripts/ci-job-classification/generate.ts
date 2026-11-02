@@ -436,6 +436,7 @@ const reviewJobs = ({
         )
         .join("\n")}`,
       privilegedJobs,
+      staleJobs: Object.keys(entries).toSorted(compareCodeUnit),
     });
   }
 };

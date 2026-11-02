@@ -3,7 +3,7 @@ import fc from "fast-check";
 import JSZip from "jszip";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -58,7 +58,8 @@ const roundTrip = async (
 test(
   "text written through the owner reads back unchanged at every piece boundary",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "text written through the owner reads back unchanged at every piece boundary",
       fc.asyncProperty(textAtBoundary, compression, async (text, method) => {
         const bytes = await roundTrip(
           (zip, value) => writeZipEntry(zip, "word/document.xml", value),
@@ -71,7 +72,7 @@ test(
         const archive = await loadDocxArchive(bytes);
         expect(await archive.readEntryString("word/document.xml")).toBe(text);
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 40 }),
+      { seed: propertySeed(), numRuns: 40 },
     );
   },
   propertyTestTimeout(20_000),
