@@ -1304,8 +1304,12 @@ const readParagraphLine = (
 /** A finished sentence, then the gap before whatever the source ran on. */
 const SENTENCE_THEN_GAP = /[.!?][“”"»)]{0,3}(?<gap>\s+)/gu;
 
-/** The word a sentence-ending full stop follows. */
-const LAST_WORD_BEFORE = /([\p{L}\d]+)$/u;
+/**
+ * The word a sentence-ending full stop follows, read from a bounded tail:
+ * an abbreviation is a few letters, and a longer word is no abbreviation.
+ */
+const LAST_WORD_LENGTH = 32;
+const LAST_WORD_BEFORE = /[\p{L}\d]{1,32}$/u;
 
 /**
  * Abbreviations a number follows (`čl. 2.`, `ods. 3.`): their full stop
@@ -1346,7 +1350,10 @@ const lostBreakOffsets = (
   let markerAt: number | undefined;
   for (const match of text.matchAll(SENTENCE_THEN_GAP)) {
     const at = match.index + match[0].length;
-    const word = LAST_WORD_BEFORE.exec(text.slice(0, match.index))?.[1] ?? "";
+    const word =
+      LAST_WORD_BEFORE.exec(
+        text.slice(Math.max(0, match.index - LAST_WORD_LENGTH), match.index),
+      )?.[0] ?? "";
     const opening = openingNumberOf(text.slice(at));
     if (
       (builder.section === "holding" || builder.section === "reasoning") &&
