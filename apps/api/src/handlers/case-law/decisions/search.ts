@@ -299,7 +299,7 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -2778,7 +2778,8 @@ const TERM_COVERAGE_FAILURE_SINK = failureSink({
  * The answer to a failed term coverage read. A refusal the corpus index read
  * answered with (an expired request budget, an unavailable index) is returned
  * as its own envelope, which every route and tool reads with its own code;
- * any other failure is the coverage read's.
+ * any other failure is the coverage read's. Each 5xx answer observes its
+ * cause on the request itself.
  */
 const termCoverageFailure = (error: HandlerError<502 | 503>) => {
   // An expired budget is read first: it is never the index being down.
@@ -2787,10 +2788,10 @@ const termCoverageFailure = (error: HandlerError<502 | 503>) => {
     // The index refusal observes its own cause.
     return searchIndexUnavailableResponse(error);
   }
-  observeFailure(error, { sink: TERM_COVERAGE_FAILURE_SINK });
+  const answer = { sink: TERM_COVERAGE_FAILURE_SINK, cause: error };
   return timedOut
-    ? publicReadTimeoutResponse()
-    : status(error.status, { message: error.message });
+    ? publicReadTimeoutResponse(answer)
+    : observedStatus(answer, error.status, { message: error.message });
 };
 
 export const searchCorpusIndexDecisions = async ({

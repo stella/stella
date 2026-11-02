@@ -323,6 +323,7 @@ import {
   enrichRequestContext,
   getRequestContext,
 } from "@/api/lib/observability/request-context";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecycle-hooks";
 import type { NewMembership } from "@/api/lib/organization-lifecycle-hooks";
 import {
@@ -3074,6 +3075,22 @@ export const AUTH_REJECTION_BODY = {
   { code: string; message: string }
 >;
 
+const SESSION_READ_FAILED = failureSink({
+  event: "auth.session_read_failed",
+  expected: [],
+});
+
+/**
+ * The 500 a request gets when its session or membership could not be read,
+ * built from the read's failure so the request records why.
+ */
+export const authUnavailableAnswer = (cause: unknown) =>
+  observedStatus(
+    { sink: SESSION_READ_FAILED, cause },
+    500,
+    AUTH_REJECTION_BODY[500],
+  );
+
 /**
  * The rejection a signed-in account gets until it accepts the
  * professional-use statement; the web app answers it with the prompt.
@@ -3088,14 +3105,17 @@ const PROFESSIONAL_USE_REJECTION_BODY = {
  * body of its own; an app token refused a route gets the shared 403, never
  * the professional-use prompt.
  */
-type ValidateAuthRejection = {
-  ok: false;
-  statusCode: Exclude<AuthRejectionStatus, 404>;
-  body?: typeof PROFESSIONAL_USE_REJECTION_BODY;
-};
+type ValidateAuthRefusal =
+  | {
+      statusCode: 401 | 403;
+      body?: typeof PROFESSIONAL_USE_REJECTION_BODY;
+    }
+  | { statusCode: 500; cause: unknown };
+
+type ValidateAuthRejection = { ok: false } & ValidateAuthRefusal;
 
 const rejectValidateAuth = (
-  rejection: Omit<ValidateAuthRejection, "ok">,
+  rejection: ValidateAuthRefusal,
 ): ValidateAuthRejection => ({ ok: false, ...rejection });
 
 /**
@@ -3135,7 +3155,7 @@ export const authenticateSession = async (
   });
 
   if (Result.isError(sessionResult)) {
-    return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
+    return { ok: false, answer: authUnavailableAnswer(sessionResult.error) };
   }
 
   const session = sessionResult.value?.session;
@@ -3162,7 +3182,7 @@ export const authenticateSession = async (
     });
   });
   if (Result.isError(liveResult)) {
-    return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
+    return { ok: false, answer: authUnavailableAnswer(liveResult.error) };
   }
   if (liveResult.value === null) {
     return { ok: false, answer: status(401, AUTH_REJECTION_BODY[401]) };
@@ -3665,8 +3685,7 @@ type ResolvedIdentity = {
 };
 
 type IdentityResolution =
-  | { ok: true; identity: ResolvedIdentity }
-  | Omit<ValidateAuthRejection, "body">;
+  { ok: true; identity: ResolvedIdentity } | ValidateAuthRejection;
 
 const resolveSessionIdentity = async ({
   getSession,
@@ -3686,7 +3705,11 @@ const resolveSessionIdentity = async ({
     });
 
   if (Result.isError(sessionResult)) {
-    return { ok: false, statusCode: 500 };
+    return {
+      ok: false,
+      statusCode: 500,
+      cause: sessionResult.error,
+    };
   }
   const session = sessionResult.value?.session;
   const user = sessionResult.value?.user;
@@ -3701,7 +3724,11 @@ const resolveSessionIdentity = async ({
   }
 
   if (Result.isError(memberAuthorizationResult)) {
-    return { ok: false, statusCode: 500 };
+    return {
+      ok: false,
+      statusCode: 500,
+      cause: memberAuthorizationResult.error,
+    };
   }
 
   const authorization = memberAuthorizationResult.value;
@@ -3741,7 +3768,7 @@ const resolveAccessTokenIdentity = async ({
   });
   if (Result.isError(authenticated)) {
     if (authenticated.error.reason === "unavailable") {
-      return { ok: false, statusCode: 500 };
+      return { ok: false, statusCode: 500, cause: authenticated.error };
     }
     responseHeaders["www-authenticate"] = 'Bearer error="invalid_token"';
     return { ok: false, statusCode: 401 };
@@ -3772,7 +3799,7 @@ const resolveAccessTokenIdentity = async ({
       }),
   );
   if (Result.isError(authorizationResult)) {
-    return { ok: false, statusCode: 500 };
+    return { ok: false, statusCode: 500, cause: authorizationResult.error };
   }
   const authorization = authorizationResult.value;
   if (
@@ -3868,7 +3895,7 @@ const resolveValidateAuth = async ({
           responseHeaders,
         });
   if (!resolved.ok) {
-    return rejectValidateAuth({ statusCode: resolved.statusCode });
+    return resolved;
   }
   const {
     authorization,
@@ -4145,10 +4172,13 @@ export const createMemberAuthenticator = ({
     if (!result.ok) {
       return {
         ok: false,
-        answer: status(
-          result.statusCode,
-          result.body ?? AUTH_REJECTION_BODY[result.statusCode],
-        ),
+        answer:
+          result.statusCode === 500
+            ? authUnavailableAnswer(result.cause)
+            : status(
+                result.statusCode,
+                result.body ?? AUTH_REJECTION_BODY[result.statusCode],
+              ),
       };
     }
     const stepUp = handoffStepUpRefusal({
