@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import { load } from "@stll/html";
 import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
@@ -83,7 +83,8 @@ describe("removed page labels preserve source word boundaries", () => {
         maxLength: 4,
       })
       .map((characters) => characters.join(""));
-    fc.assert(
+    assertProperty(
+      "source and AST words agree at arbitrary marker positions and boundary whitespace",
       fc.property(
         source,
         fc.nat(),
@@ -116,7 +117,7 @@ describe("removed page labels preserve source word boundaries", () => {
           expect(conservesText(text, parsed.text.units)).toBe(true);
         },
       ),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 
