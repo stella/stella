@@ -25,6 +25,7 @@ type CompatibilityOverrides = {
   readonly legacy?: boolean;
   readonly legacyApiContractVersion?: number;
   readonly maximum?: string;
+  readonly onRequest?: (pathname: string) => void;
   readonly minimum?: string;
   readonly protocol?: number;
   readonly revision?: number;
@@ -35,6 +36,7 @@ const startCompatibilityServer = (overrides: CompatibilityOverrides = {}) =>
   Bun.serve({
     fetch(request) {
       const url = new URL(request.url);
+      overrides.onRequest?.(url.pathname);
       if (
         url.pathname !== "/.well-known/oauth-protected-resource/mcp/advanced"
       ) {
@@ -311,6 +313,30 @@ describe("deployed API compatibility", () => {
 
       expect(exitCode).not.toBe(0);
       expect(stderr).toContain("stella:read");
+    } finally {
+      await server.stop();
+    }
+  });
+
+  test("protocol incompatibility stops the compatibility command before any MCP execution", async () => {
+    const requests: string[] = [];
+    const server = startCompatibilityServer({
+      protocol: 999,
+      onRequest: (pathname) => {
+        requests.push(pathname);
+      },
+    });
+    try {
+      const { exitCode, stderr, stdout } = await runCompatibilityCli(
+        server.url.origin,
+      );
+      expect(exitCode).not.toBe(0);
+      expect(stderr).toContain("Server protocol is incompatible");
+      expect(stderr).toContain("999");
+      expect(stdout).not.toContain("Compatible:");
+      expect(requests).toEqual([
+        "/.well-known/oauth-protected-resource/mcp/advanced",
+      ]);
     } finally {
       await server.stop();
     }
