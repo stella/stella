@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { entityVersions } from "@/api/db/schema";
@@ -160,8 +160,8 @@ export const carryVerificationCodes = async (
 
   // FOR UPDATE holds the source rows for the rest of the transaction, so no
   // concurrent writer can replace a code between this read and the clear. A
-  // tombstoned version resolves to nothing by design, so its code is left
-  // where it is rather than given a live row to resolve to.
+  // tombstoned version moves with its tombstone, so its code travels too and
+  // keeps resolving to nothing on the target exactly as it did here.
   const sourceRows = await tx
     .select({
       id: entityVersions.id,
@@ -175,7 +175,6 @@ export const carryVerificationCodes = async (
           transfers.map(({ sourceVersionId }) => sourceVersionId),
         ),
         isNotNull(entityVersions.verificationCode),
-        isNull(entityVersions.deletedAt),
       ),
     )
     .for("update");
@@ -191,17 +190,11 @@ export const carryVerificationCodes = async (
     return;
   }
 
-  // The same predicate the codes were read under, so the clear is the exact
-  // set that was locked: live rows, keyed by id.
+  // Exactly the rows the codes were read and locked under, keyed by id.
   await tx
     .update(entityVersions)
     .set({ verificationCode: null })
-    .where(
-      and(
-        inArray(entityVersions.id, [...codeBySourceId.keys()]),
-        isNull(entityVersions.deletedAt),
-      ),
-    );
+    .where(inArray(entityVersions.id, [...codeBySourceId.keys()]));
 
   await tx.execute(sql`
     UPDATE ${entityVersions} AS target

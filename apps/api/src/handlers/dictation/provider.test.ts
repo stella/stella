@@ -76,8 +76,8 @@ describe("transcription request contract", () => {
       redirect: "follow",
       timeout: { type: "headers", ms: 60_000 },
     } as const;
-    globalThis.fetch = transport;
     try {
+      globalThis.fetch = transport;
       expect(globalThis.fetch.preconnect).toBeTypeOf("function");
       for (const host of ["eu.openrouter.ai", "us.openrouter.ai"]) {
         const target = `https://${host}/api/v1/audio/transcriptions`;
