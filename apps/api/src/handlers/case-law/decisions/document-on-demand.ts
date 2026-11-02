@@ -38,6 +38,8 @@
 
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
 
+import { declareFailureClass, type FailureReason } from "@stll/errors";
+
 import type {
   ImmediatePublisherSlotResult,
   PublisherPacingOutcome,
@@ -72,13 +74,34 @@ const READ_BUDGET_LABEL = "caseLaw.deferredDocumentRead";
 /** Concurrent read-through fetches allowed at a time. */
 const CONCURRENT_FETCH_LIMIT = 2;
 
-class DocumentPacingOutcome extends TaggedError("DocumentPacingOutcome")<{
-  message: string;
-  outcome: DocumentReadDeferral;
-}> {}
-
 export type DocumentReadDeferral =
   PublisherPacingOutcome | "ownership-busy" | "ownership-lost";
+
+/**
+ * Each deferral leaves the read metadata-only by design: the shared gate
+ * or another replica's claim holds the fetch, or the gate's store did not
+ * answer. None of them is a fault of the read.
+ */
+const DOCUMENT_READ_DEFERRAL_REASON = {
+  "pacing-deferred": "work_capacity_unavailable",
+  "pacing-unavailable": "limiter_store_unavailable",
+  "ownership-busy": "work_capacity_unavailable",
+  "ownership-lost": "work_capacity_unavailable",
+} as const satisfies Record<DocumentReadDeferral, FailureReason>;
+
+export class DocumentPacingOutcome extends TaggedError(
+  "DocumentPacingOutcome",
+)<{
+  message: string;
+  outcome: DocumentReadDeferral;
+}> {
+  static {
+    declareFailureClass(
+      this,
+      ({ outcome }) => DOCUMENT_READ_DEFERRAL_REASON[outcome],
+    );
+  }
+}
 
 const CAPTURE_SOURCE = "case-law-document-on-demand";
 

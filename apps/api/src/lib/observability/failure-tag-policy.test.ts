@@ -6,6 +6,7 @@ import { compareCodeUnit } from "@stll/collation";
 import type { FailureGrade, FailureReason } from "@stll/errors";
 import { failureGradeOf } from "@stll/errors";
 
+import { DocumentPacingOutcome } from "@/api/handlers/case-law/decisions/document-on-demand";
 import {
   PL_KIO_DOCUMENT_REJECTION,
   PlKioHtmlBudgetError,
@@ -211,3 +212,24 @@ test("numeric and publisher budget rejections retain their boundary outcomes", (
     });
   }
 });
+
+test.each([
+  { outcome: "pacing-deferred", reason: "work_capacity_unavailable" },
+  { outcome: "pacing-unavailable", reason: "limiter_store_unavailable" },
+  { outcome: "ownership-busy", reason: "work_capacity_unavailable" },
+  { outcome: "ownership-lost", reason: "work_capacity_unavailable" },
+] as const)(
+  "a deferred document read ($outcome) grades as $reason",
+  ({ outcome, reason }) => {
+    const error = new DocumentPacingOutcome({
+      message: `Document fetch ${outcome}`,
+      outcome,
+    });
+    for (const observed of [error, new UnhandledException({ cause: error })]) {
+      expect(gradeFailure(readEvidence(observed), sink)).toMatchObject({
+        reason,
+        grade: "transient",
+      });
+    }
+  },
+);
