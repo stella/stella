@@ -111,7 +111,7 @@ const network: RouteNetworkMetrics = {
   transactions: { "GET /v1/entities": 1 },
   missingTransactionCounts: {},
   responseSizes: { "GET /v1/entities": 2048 },
-  missingResponseSizeCounts: {},
+  responseSizeFailures: {},
   requestCosts: {
     "GET /v1/entities": [
       { dbQueries: 3, transactions: 1, responseBytes: 2048 },
