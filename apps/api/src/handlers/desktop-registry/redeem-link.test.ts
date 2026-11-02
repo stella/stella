@@ -11,6 +11,7 @@ import { createHttpApp } from "@/api/http/app";
 import { PRIVATE_CACHE_CONTROL, responseCachePolicy } from "@/api/http/cache";
 import { routes } from "@/api/http/route";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
@@ -85,6 +86,15 @@ const createRedemptionFixture = async (
             : identity.organizationId,
       });
       return Result.ok({
+        featureAccessSnapshot: buildFeatureAccessSnapshot({
+          organizationId: linkedIdentity.organizationId,
+          userId: linkedIdentity.userId,
+          identity: {
+            email: `${linkedIdentity.userId}@example.test`,
+            emailVerified: true,
+          },
+          enrolments: [],
+        }),
         ...linkedIdentity,
         memberRole: sessionMemberRole("member"),
         keyId: "existing-key",

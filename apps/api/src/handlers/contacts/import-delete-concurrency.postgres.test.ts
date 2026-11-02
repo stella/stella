@@ -64,7 +64,6 @@ if (!runPostgresTests || databaseUrl === undefined) {
               taxIdScheme: "none",
               rows: [
                 {
-                  id: createSafeId<"contact">(),
                   type: "person",
                   displayName,
                   external: { source: "address-book", id: "contact-1" },
@@ -177,6 +176,10 @@ if (!runPostgresTests || databaseUrl === undefined) {
             organizationId,
             contactId,
             recordAuditEvent: auditRecorderDouble(),
+            flushWorkspaceSearchRepairs: async () => ({
+              failed: 0,
+              repaired: 0,
+            }),
           }),
         );
         pending.push(deletion);

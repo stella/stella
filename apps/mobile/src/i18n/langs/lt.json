@@ -74,7 +74,8 @@
       "none": "Be datos",
       "today": "Šiandien",
       "tomorrow": "Rytoj",
-      "nextWeek": "Po savaitės"
+      "nextWeek": "Po savaitės",
+      "pick": "Pasirinkti datą"
     },
     "due": {
       "overdue": "Pavėluotos",
@@ -164,7 +165,16 @@
     "preview": "Atidaryti peržiūrą",
     "previewDescription": "Šis failas atidaromas sistemos peržiūroje.",
     "unrendered": "Šio dokumento čia parodyti negalima, bet sistemos peržiūra gali jį atidaryti.",
-    "details": "Išsami informacija"
+    "details": "Išsami informacija",
+    "zoomOut": "Mažinti",
+    "zoomIn": "Didinti",
+    "zoomFit": "Pritaikyti pločiui",
+    "fit": "Plotis",
+    "appearance": {
+      "system": "Išvaizda: automatinė",
+      "light": "Išvaizda: šviesi",
+      "dark": "Išvaizda: tamsi"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -192,7 +202,8 @@
     "server": "Serveris",
     "signOut": "Atsijungti",
     "deleteAccount": "Ištrinti paskyrą",
-    "deleteAccountHint": "Atveria jūsų paskyrą žiniatinklyje, kur galite ją ištrinti kartu su viskuo, kas jūsų."
+    "deleteAccountHint": "Atveria jūsų paskyrą žiniatinklyje, kur galite ją ištrinti kartu su viskuo, kas jūsų.",
+    "signOutFailed": "Nepavyko atsijungti. Bandykite dar kartą."
   },
   "header": {
     "search": "Ieškoti"
@@ -292,6 +303,29 @@
   "palette": {
     "placeholder": "Ieškokite bylų ir pokalbių arba paleiskite komandą",
     "noResults": "Niekas neatitinka „{query}“"
+  },
+  "search": {
+    "placeholder": "Ieškoti stella",
+    "clear": "Išvalyti paiešką",
+    "cancel": "Atšaukti",
+    "recent": "Naujausios paieškos",
+    "clearRecent": "Išvalyti",
+    "hint": "Ieškokite bylose, dokumentuose, užduotyse, pokalbiuose ir teismų praktikoje.",
+    "filters": "Filtrai",
+    "noResultsTitle": "Rezultatų nėra",
+    "noResults": "Niekas neatitinka „{query}“. Pabandykite kitus žodžius arba pašalinkite filtrą.",
+    "loadFailed": "Paieškos atlikti nepavyko.",
+    "retry": "Bandyti dar kartą",
+    "type": {
+      "document": "Dokumentai",
+      "matter": "Bylos",
+      "task": "Užduotys",
+      "caseLaw": "Teismų praktika",
+      "chat": "Pokalbiai",
+      "folder": "Aplankai",
+      "message": "El. laiškai",
+      "link": "Nuorodos"
+    }
   },
   "pane": {
     "showList": "Rodyti sąrašą",

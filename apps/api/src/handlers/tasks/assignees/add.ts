@@ -18,6 +18,11 @@ import {
   lockTaskAssignmentMembers,
   writeTaskAssignments,
 } from "@/api/lib/tasks/assignment-membership";
+import {
+  fileTaskAssignedNotifications,
+  taskAssignedNotifications,
+} from "@/api/lib/tasks/assignment-notifications";
+import type { FileTaskAssignedNotifications } from "@/api/lib/tasks/assignment-notifications";
 import { includes } from "@/api/lib/type-guards";
 
 const addAssigneeBodySchema = v.object({
@@ -32,8 +37,11 @@ const isTaskAssigneeRole = (value: string): value is TaskAssigneeRole =>
 export type AddAssigneeHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  /** The authenticated caller, who is never notified of their own action. */
+  actorUserId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: v.InferOutput<typeof addAssigneeBodySchema>;
+  fileNotifications?: FileTaskAssignedNotifications;
 };
 
 // Shared task-assignee add logic reused by the HTTP handler and the
@@ -41,8 +49,10 @@ export type AddAssigneeHandlerProps = {
 export const addAssigneeHandler = async function* ({
   safeDb,
   workspaceId,
+  actorUserId,
   recordAuditEvent,
   body,
+  fileNotifications = fileTaskAssignedNotifications,
 }: AddAssigneeHandlerProps) {
   const role = body.role ?? "assignee";
   if (!isTaskAssigneeRole(role)) {
@@ -51,7 +61,7 @@ export const addAssigneeHandler = async function* ({
     );
   }
 
-  yield* Result.await(
+  const notifications = yield* Result.await(
     resultTx(safeDb, async (tx) => {
       const members = await lockTaskAssignmentMembers({
         tx,
@@ -89,7 +99,7 @@ export const addAssigneeHandler = async function* ({
         );
       }
 
-      await writeTaskAssignments({
+      const written = await writeTaskAssignments({
         tx,
         workspaceId,
         assignments: [{ entityId: body.taskId, userId: body.userId, role }],
@@ -106,10 +116,17 @@ export const addAssigneeHandler = async function* ({
           role,
         },
       });
-      return Result.ok(undefined);
+      return Result.ok(
+        await taskAssignedNotifications(tx, {
+          actorUserId,
+          workspaceId,
+          written,
+        }),
+      );
     }),
   );
 
+  fileNotifications(notifications);
   return Result.ok({ success: true });
 };
 
@@ -128,10 +145,11 @@ const addAssignee = createSafeHandler(
     mcp: { type: "covered", by: "save_task" },
     body: addAssigneeBodySchema,
   },
-  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
+  async function* ({ workspaceId, user, body, safeDb, recordAuditEvent }) {
     return yield* addAssigneeHandler({
       safeDb,
       workspaceId,
+      actorUserId: user.id,
       recordAuditEvent,
       body,
     });

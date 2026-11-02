@@ -114,6 +114,10 @@ export const applicableKind = (ref: LegislationVersionRef): SQL =>
 export const openedBy = (ref: LegislationVersionRef, asOf: SQLWrapper): SQL =>
   sql`(${ref.validFrom} IS NULL OR ${ref.validFrom} <= ${asOf})`;
 
+/** Whether a version has exactly the applied date supplied by a prior read. */
+export const opensOn = (ref: LegislationVersionRef, date: SQLWrapper): SQL =>
+  sql`(${eligibleExpression(ref)} AND ${ref.validFrom} = ${date})`;
+
 /**
  * Whether the version has a stated opening on or before `date`. Unlike
  * `openedBy`, a version with no opening never qualifies: counts of dated

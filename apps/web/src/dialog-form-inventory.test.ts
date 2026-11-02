@@ -349,6 +349,29 @@ const NON_DRAFT_OWNERS = new Map<
     },
   ],
   [
+    "components/workspaces/properties/inline-option-editor.tsx#InlineOptionEditor",
+    {
+      type: "parent-owned",
+      reason:
+        "Added, renamed and removed options go to the enclosing property draft; the add field holds only the next option's text.",
+    },
+  ],
+  [
+    "components/workspaces/properties/inline-option-editor.tsx#OptionRow",
+    {
+      type: "parent-owned",
+      reason: "A renamed option goes to the enclosing property draft on blur.",
+    },
+  ],
+  [
+    "components/workspaces/editable-field.tsx#InlineTextEditor",
+    {
+      type: "autosaved",
+      reason:
+        "The cell saves its text on blur or Enter; Escape leaves it unchanged.",
+    },
+  ],
+  [
     "components/workspaces/properties/property-conditions.tsx#DependencyConditionEditor",
     {
       type: "autosaved",

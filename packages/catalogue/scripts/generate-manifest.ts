@@ -36,6 +36,8 @@ export type GeneratedEntry = {
   manifestPath: string;
   /** JSON-encoded string literal — already wrapped in quotes — or "null". */
   iconLiteral: string;
+  /** JSON-encoded slug of a native tool; null for every other kind. */
+  nativeToolSlugLiteral: string | null;
   skillPayload: GeneratedSkillPayload | null;
 };
 
@@ -103,6 +105,8 @@ export const collectEntries = (entriesRoot: string): GeneratedEntry[] => {
           importName,
           manifestPath: toImportPath(manifest),
           iconLiteral: iconLiteralFor(filesystem, folder),
+          nativeToolSlugLiteral:
+            kind === "native-tool" ? JSON.stringify(slug) : null,
           skillPayload,
         };
       })
@@ -135,6 +139,12 @@ const renderOutputs = (entries: readonly GeneratedEntry[]): RenderedOutputs => {
       `  { manifest: ${entry.importName}, icon: ${entry.iconLiteral} }`,
   );
 
+  const nativeToolSlugRows = entries.flatMap((entry) =>
+    entry.nativeToolSlugLiteral === null
+      ? []
+      : [`  ${entry.nativeToolSlugLiteral}`],
+  );
+
   const skillPayloadRows = entries
     .map((entry) => entry.skillPayload)
     .filter((payload): payload is GeneratedSkillPayload => payload !== null)
@@ -155,6 +165,10 @@ type GeneratedCatalogueInput = {
 export const GENERATED_ENTRIES: readonly GeneratedCatalogueInput[] = [
 ${formatRows(entryRows)}
 ];
+
+export const GENERATED_NATIVE_TOOL_SLUGS = [
+${formatRows(nativeToolSlugRows)}
+] as const;
 
 export const GENERATED_RECOMMENDED = recommended;
 `;

@@ -13,6 +13,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const personalDataExportStatus = createSafeSessionHandler(
   {
+    accountScope: "stella:account_export_read",
     accountAccess: ACCOUNT_ACCESS.accountControl,
     contract: "patch",
     access: "read",

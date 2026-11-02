@@ -21,6 +21,11 @@ import {
 } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
 import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ArrowUpIcon,
@@ -361,132 +366,145 @@ export const ChatThreadMessages = ({
   // Rendered per message in both the flat and sticky layouts, so the message
   // body markup stays identical across surfaces; only the surrounding turn
   // grouping differs when `stickyUserMessages` is on.
-  const renderMessageNode = (message: ChatUIMessage, index: number) => (
-    <ChatRenderErrorBoundary
-      fallback={<MessageRenderFallback message={message} />}
-      key={message.id}
-      resetOn={message.parts}
-      surface="chat-message"
-    >
-      <Message
-        className={cn(
-          "transition-opacity duration-200",
-          approvalPendingMessageId &&
-            approvalPendingMessageId !== message.id &&
-            "opacity-40",
-        )}
-        from={message.role}
-        data-chat-message-id={message.id}
+  const renderMessageNode = (message: ChatUIMessage, index: number) =>
+    // A turn can persist an assistant message that shows nothing (only
+    // hidden reasoning, for example) ahead of the one holding its tool card
+    // and answer. Rendered, it is an empty block whose spacing opens a gap
+    // under the question. The last message always renders: its footer
+    // carries retry and stop.
+    message.role === "assistant" &&
+    index !== messages.length - 1 &&
+    message.metadata?.contextNotice === undefined &&
+    !hasVisibleAssistantParts(message.parts) ? null : (
+      <ChatRenderErrorBoundary
+        fallback={<MessageRenderFallback message={message} />}
+        key={message.id}
+        resetOn={message.parts}
+        surface="chat-message"
       >
-        <MessageContent
+        <Message
           className={cn(
-            message.parts.some(
-              (part) =>
-                part.type === "ui-resource" &&
-                uiResourceRenderer(part.resource.mimeType) ===
-                  "generated-visual",
-            ) && "w-full",
+            "transition-opacity duration-200",
+            approvalPendingMessageId &&
+              approvalPendingMessageId !== message.id &&
+              "opacity-40",
           )}
+          from={message.role}
+          data-chat-message-id={message.id}
         >
-          <MessageBodyRender
-            render={() => {
-              const policy = CHAT_MESSAGE_RENDER_POLICY[message.role];
-              switch (policy) {
-                case "activity":
-                  return renderActivityMessage(message.parts);
-                case "assistant":
-                  return (
-                    <ChatAnswerDecisionProvider
-                      message={message}
-                      isAwaitingUser={awaitedAssistantMessageId === message.id}
-                    >
-                      <AssistantMessageParts
-                        activeFileName={activeFileName}
-                        activeOrganizationId={activeOrganizationId}
-                        assistantTextDensity={assistantTextDensity}
+          <MessageContent
+            className={cn(
+              message.parts.some(
+                (part) =>
+                  part.type === "ui-resource" &&
+                  uiResourceRenderer(part.resource.mimeType) ===
+                    "generated-visual",
+              ) && "w-full",
+            )}
+          >
+            <MessageBodyRender
+              render={() => {
+                const policy = CHAT_MESSAGE_RENDER_POLICY[message.role];
+                switch (policy) {
+                  case "activity":
+                    return renderActivityMessage(message.parts);
+                  case "assistant":
+                    return (
+                      <ChatAnswerDecisionProvider
+                        message={message}
                         isAwaitingUser={
                           awaitedAssistantMessageId === message.id
                         }
-                        isGenerating={generationActive}
-                        isLatestAssistantMessage={
-                          message.id === retryableAssistantMessageId
-                        }
-                        message={message}
-                        onAskUserEditAndRerun={onAskUserEditAndRerun}
-                        onAskUserEditingChange={onAskUserEditingChange}
-                        onAskUserSubmit={onAskUserSubmit}
-                        onCreateDocumentResolve={onCreateDocumentResolve}
-                        onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
-                        onOpenCreatedDocument={onOpenCreatedDocument}
-                        onOpenPlaybook={onOpenPlaybook}
-                        shouldShowToolCalls={shouldShowToolCalls}
-                        streamdownComponents={streamdownComponents}
-                        workspaceId={workspaceId}
-                        threadRef={threadRef}
-                      />
-                      <ChatTurnDuration timing={message.metadata?.turnTiming} />
-                      <div
-                        className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
-                        data-chat-answer-footer
-                        data-chat-copy-exclude
                       >
-                        <AssistantMessageActions
-                          exportArtifact={findCreateDocumentArtifactForMessage(
-                            messages,
-                            index,
-                          )}
-                          canFork={canForkAssistantMessage({
-                            isGenerating: generationActive,
-                            messageId: message.id,
-                            messages,
-                          })}
-                          canRetry={canRetryAssistantMessage({
-                            error,
-                            isGenerating: generationActive,
-                            messageId: message.id,
-                            messages,
-                          })}
-                          contextMatterIds={branchSource?.contextMatterIds}
+                        <AssistantMessageParts
+                          activeFileName={activeFileName}
+                          activeOrganizationId={activeOrganizationId}
+                          assistantTextDensity={assistantTextDensity}
+                          isAwaitingUser={
+                            awaitedAssistantMessageId === message.id
+                          }
+                          isGenerating={generationActive}
+                          isLatestAssistantMessage={
+                            message.id === retryableAssistantMessageId
+                          }
                           message={message}
-                          onResend={onResend}
+                          onAskUserEditAndRerun={onAskUserEditAndRerun}
+                          onAskUserEditingChange={onAskUserEditingChange}
+                          onAskUserSubmit={onAskUserSubmit}
+                          onCreateDocumentResolve={onCreateDocumentResolve}
+                          onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
+                          onOpenCreatedDocument={onOpenCreatedDocument}
+                          onOpenPlaybook={onOpenPlaybook}
+                          shouldShowToolCalls={shouldShowToolCalls}
+                          streamdownComponents={streamdownComponents}
+                          workspaceId={workspaceId}
                           threadRef={threadRef}
                         />
-                        <AssistantAnswerMetadata
-                          message={message}
-                          workspaceId={workspaceId}
-                          threadId={threadRef?.threadId}
-                          disabled={
-                            generationActive || !!awaitedAssistantMessageId
-                          }
-                          onAnswerEdited={onAnswerEdited}
+                        <ChatTurnDuration
+                          timing={message.metadata?.turnTiming}
                         />
-                      </div>
-                    </ChatAnswerDecisionProvider>
-                  );
-                case "text":
-                  return (
-                    <EditableUserMessage
-                      actions={userMessageEdit}
-                      isGenerating={generationActive}
-                      message={message}
-                    >
-                      <TextMessageParts
+                        <div
+                          className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+                          data-chat-answer-footer
+                          data-chat-copy-exclude
+                        >
+                          <AssistantMessageActions
+                            exportArtifact={findCreateDocumentArtifactForMessage(
+                              messages,
+                              index,
+                            )}
+                            canFork={canForkAssistantMessage({
+                              isGenerating: generationActive,
+                              messageId: message.id,
+                              messages,
+                            })}
+                            canRetry={canRetryAssistantMessage({
+                              error,
+                              isGenerating: generationActive,
+                              messageId: message.id,
+                              messages,
+                            })}
+                            contextMatterIds={branchSource?.contextMatterIds}
+                            message={message}
+                            onResend={onResend}
+                            threadRef={threadRef}
+                          />
+                          <AssistantAnswerMetadata
+                            message={message}
+                            workspaceId={workspaceId}
+                            threadId={threadRef?.threadId}
+                            disabled={
+                              generationActive || !!awaitedAssistantMessageId
+                            }
+                            onAnswerEdited={onAnswerEdited}
+                          />
+                        </div>
+                      </ChatAnswerDecisionProvider>
+                    );
+                  case "text":
+                    return (
+                      <EditableUserMessage
+                        actions={userMessageEdit}
+                        isGenerating={generationActive}
                         message={message}
-                        messages={messages}
-                        index={index}
-                      />
-                    </EditableUserMessage>
-                  );
-                default:
-                  policy satisfies never;
-                  return panic("Unhandled chat message render policy");
-              }
-            }}
-          />
-        </MessageContent>
-      </Message>
-    </ChatRenderErrorBoundary>
-  );
+                      >
+                        <TextMessageParts
+                          message={message}
+                          messages={messages}
+                          index={index}
+                        />
+                      </EditableUserMessage>
+                    );
+                  default:
+                    policy satisfies never;
+                    return panic("Unhandled chat message render policy");
+                }
+              }}
+            />
+          </MessageContent>
+        </Message>
+      </ChatRenderErrorBoundary>
+    );
 
   return (
     // Sent messages persist a same-matter mention without its matter; the
@@ -746,11 +764,13 @@ const StickyUserTurn = ({
               pointer-events-none so plain text falls through to this jump
               target, and only its interactive children re-enable clicks. */}
           {isStuck && (
-            <button
+            // An invisible hit area: a plain button paints nothing, so no
+            // fill shows over the pinned header.
+            <Button
               aria-label={t("chat.jumpToMessage")}
-              className="absolute inset-0 z-0 cursor-pointer"
+              className="absolute inset-0 z-0"
               onClick={handleScrollBack}
-              type="button"
+              variant="plain"
             />
           )}
           <Message
@@ -778,6 +798,9 @@ const StickyUserTurn = ({
               )}
               <div
                 className={cn(
+                  // Anchors the idle edit action, which sits in this text box
+                  // as it does in the flat layout's `EditableUserMessage`.
+                  "relative",
                   "group-data-[stuck=true]/sticky:max-h-11 group-data-[stuck=true]/sticky:overflow-hidden",
                   // Fade the clipped overflow so a long pinned message dissolves
                   // instead of ending in a hard mid-glyph cut. The absolute-length
@@ -797,9 +820,10 @@ const StickyUserTurn = ({
                     />
                   ) : null,
                 )}
+                {!messageEdit.editing && messageEdit.editor}
               </div>
             </MessageContent>
-            {messageEdit.editor}
+            {messageEdit.editing && messageEdit.editor}
           </Message>
         </div>
       </div>
@@ -1779,6 +1803,29 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
 
 // Share visibility with the renderer so hidden skill misses and searches
 // folded into the sources row cannot produce an empty process disclosure.
+/**
+ * Whether any part of an assistant message draws something: a step, card or
+ * answer text, or a finished web search or fetch, which shows in the sources
+ * tray instead of as a step.
+ */
+const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
+  toAssistantPartRenderEntries(parts).some((entry) => {
+    if (entry.type !== "standard") {
+      return true;
+    }
+    const { part } = entry;
+    if (part.type === "text") {
+      return part.content.trim().length > 0;
+    }
+    if (
+      part.type === "tool-call" &&
+      (part.name === "web_search" || part.name === "fetch_url")
+    ) {
+      return true;
+    }
+    return isVisibleProcessEntry(entry);
+  });
+
 const isVisibleProcessEntry = (entry: AssistantPartRenderEntry): boolean => {
   if (entry.type !== "standard") {
     return true;
@@ -2223,57 +2270,61 @@ const AssistantProcessGroup = ({
           unitDisplay: "narrow",
         });
   return (
-    <details
+    <div
       data-slot="chat-step-list"
       className={cn(
         "max-w-[min(44rem,100%)] rounded-md",
         isOpen && "border-border/70 bg-muted/20 border",
         appearedLive && "motion-safe:animate-text-fade",
       )}
-      onToggle={(event) => {
-        setIsOpen(event.currentTarget.open);
-      }}
-      open={isOpen}
     >
-      <summary
-        className={cn(
-          "inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5",
-          "rounded-md px-2.5 py-1.5 text-xs",
-          !isOpen &&
-            "border-border/70 bg-background/70 hover:bg-muted/40 border shadow-sm",
-          "text-muted-foreground",
-          "[&::-webkit-details-marker]:hidden",
-        )}
-      >
-        <DirectionalIcon
-          className={cn(
-            "size-3.5 shrink-0 transition-transform",
-            isOpen && "rotate-90",
-          )}
-          flip={!isOpen}
-          icon={ChevronRightIcon}
-        />
-        <span className="text-xs font-medium">
-          <SwapText
-            className={cn(shownStepKey !== null && CHAT_PENDING_TEXT_CLASS)}
-            text={label}
-          />
-        </span>
-        {elapsed !== null && (
-          <>
-            <span aria-hidden="true" className="text-foreground-placeholder">
-              ·
+      <Collapsible onOpenChange={setIsOpen} open={isOpen}>
+        <CollapsibleTrigger render={<Button variant="plain" />}>
+          <span
+            className={cn(
+              "inline-flex min-h-8 items-center gap-1.5",
+              "rounded-md px-2.5 py-1.5 text-xs",
+              !isOpen &&
+                "border-border/70 bg-background/70 hover:bg-muted/40 border shadow-sm",
+              "text-muted-foreground",
+            )}
+          >
+            <DirectionalIcon
+              className={cn(
+                "size-3.5 shrink-0 transition-transform",
+                isOpen && "rotate-90",
+              )}
+              flip={!isOpen}
+              icon={ChevronRightIcon}
+            />
+            <span className="text-xs font-medium">
+              <SwapText
+                className={cn(shownStepKey !== null && CHAT_PENDING_TEXT_CLASS)}
+                text={label}
+              />
             </span>
-            {/* The timer ticks plainly: a fade every second is motion for
+            {elapsed !== null && (
+              <>
+                <span
+                  aria-hidden="true"
+                  className="text-foreground-placeholder"
+                >
+                  ·
+                </span>
+                {/* The timer ticks plainly: a fade every second is motion for
                 its own sake. */}
-            <span className="text-foreground-ghost tabular-nums">
-              {elapsed}
-            </span>
-          </>
-        )}
-      </summary>
-      <div className="flex flex-col gap-1 px-2.5 pb-2.5">{children}</div>
-    </details>
+                <span className="text-foreground-ghost tabular-nums">
+                  {elapsed}
+                </span>
+              </>
+            )}
+          </span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel>
+          <div className="flex flex-col gap-1 px-2.5 pb-2.5">{children}</div>
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
   );
 };
 
@@ -2342,33 +2393,29 @@ const AssistantThinkingPart = ({
   // time, and a trailing chevron that shows on hover, so every step in a
   // run lines up and reads at one size.
   return (
-    <details
-      className="group/reasoning my-0.5 max-w-xl text-sm"
-      onToggle={(event) => {
-        setIsOpen(event.currentTarget.open);
-      }}
-      open={isOpen}
-    >
-      <summary
-        className={cn(
-          "flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg ps-2",
-          "text-muted-foreground hover:bg-muted/35 hover:text-foreground-muted",
-          "[&::-webkit-details-marker]:hidden",
-        )}
-      >
-        <AssistantThinkingHeader
-          isExpanded={isOpen}
-          isStreaming={isStreaming}
-          reasoningTokenCount={reasoningTokenCount}
-        />
-      </summary>
-      <AssistantThinkingBody
-        components={components}
-        isStreaming={isStreaming}
-        restorationPairs={restorationPairs}
-        text={text}
-      />
-    </details>
+    <div className="group/reasoning my-0.5 max-w-xl text-sm">
+      <Collapsible onOpenChange={setIsOpen} open={isOpen}>
+        <CollapsibleTrigger
+          render={<Button className="flex w-full" variant="plain" />}
+        >
+          <span className="text-muted-foreground hover:bg-muted/35 hover:text-foreground-muted flex min-h-11 w-full items-center gap-2 rounded-lg ps-2">
+            <AssistantThinkingHeader
+              isExpanded={isOpen}
+              isStreaming={isStreaming}
+              reasoningTokenCount={reasoningTokenCount}
+            />
+          </span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel>
+          <AssistantThinkingBody
+            components={components}
+            isStreaming={isStreaming}
+            restorationPairs={restorationPairs}
+            text={text}
+          />
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
   );
 };
 

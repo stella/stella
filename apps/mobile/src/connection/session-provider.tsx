@@ -6,14 +6,20 @@ import { apiOAuthResourceUrl } from "@stll/api-contract/api-oauth-resource";
 import { mobileRedirectUri } from "@stll/api-contract/mobile-client";
 
 import { epochMilliseconds } from "@/connection/clock";
-import { TokenError } from "@/connection/errors";
+import type { TokenError } from "@/connection/errors";
 import {
   deviceCrypto,
   deviceSessionStore,
   openDeviceAuthSession,
 } from "@/connection/platform";
 import { restoredSource, sourceFor } from "@/connection/restored-session";
-import type { AccessTokenSource } from "@/connection/session";
+import { isCurrentSessionSource } from "@/connection/session";
+import type {
+  AccessTokenSource,
+  SessionGeneration,
+  StoredSession,
+} from "@/connection/session";
+import { keepSignIn, signOutSession } from "@/connection/session-actions";
 import {
   type BeforeSessionEnd,
   createSessionEndBoundary,
@@ -22,8 +28,10 @@ import { signIn as signInToServer } from "@/connection/sign-in";
 import type { SignInError } from "@/connection/sign-in";
 import { revokeRefreshToken } from "@/connection/tokens";
 import { APP_VARIANT, PUSH_NOTIFICATIONS } from "@/env";
+import { deviceAccountStore } from "@/native/account-store";
 import { currentPushDevice } from "@/native/push-device";
 import { unregisterPushDevice } from "@/state/push-devices";
+import { forgetRecentSearches } from "@/state/recent-searches";
 
 export type SessionState =
   | {
@@ -38,7 +46,7 @@ type SessionContextValue = {
   readonly signIn: (
     serverUrlInput: string,
   ) => Promise<Result<void, SignInError>>;
-  readonly signOut: () => Promise<void>;
+  readonly signOut: () => Promise<Result<void, TokenError>>;
   /**
    * The server refused `source`'s session; the person has to sign in again.
    * A source left over from an earlier sign-in ends nothing.
@@ -72,21 +80,52 @@ const stopPushNotifications = async (source: AccessTokenSource) => {
   }
 };
 
+/** Gives a grant back to the server. Best effort: an unrevoked grant expires unused. */
+const revokeSession = async (session: StoredSession) => {
+  (
+    await revokeRefreshToken({
+      clientId: session.clientId,
+      fetch,
+      refreshToken: session.refreshToken,
+      revocationEndpoint: session.revocationEndpoint,
+    })
+  ).unwrapOr(undefined);
+};
+
 export const SessionProvider = ({ children }: React.PropsWithChildren) => {
   const restored = use(restoredSource);
   const [state, setState] = useState<SessionState>(() =>
-    restored === undefined
+    restored?.session() === undefined
       ? { status: "signed-out", ended: false }
       : { status: "signed-in", source: restored },
   );
-  const [boundary] = useState(createSessionEndBoundary);
+  const [boundary] = useState(() => {
+    const created = createSessionEndBoundary();
+    // What the app keeps on the device for the account goes with its session.
+    created.register(forgetRecentSearches(deviceAccountStore));
+    return created;
+  });
   // Several requests can find the same session refused at once; its
   // handlers run for the first only.
   const [ending] = useState(() => new WeakSet<AccessTokenSource>());
+  const [endFailure, setEndFailure] = useState<{
+    generation: SessionGeneration;
+    error: unknown;
+  }>();
+  if (
+    endFailure !== undefined &&
+    deviceSessionStore.isCurrent(endFailure.generation)
+  ) {
+    panic(
+      "Session cleanup rejected outside its handled outcomes",
+      endFailure.error,
+    );
+  }
 
   const value: SessionContextValue = {
     state,
     signIn: async (serverUrlInput) => {
+      const transition = deviceSessionStore.begin();
       const signedIn = await signInToServer({
         crypto: deviceCrypto,
         fetch,
@@ -101,80 +140,84 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
       if (Result.isError(signedIn)) {
         return Result.err(signedIn.error);
       }
-      const { session } = signedIn.value;
-      const stored = await Result.tryPromise({
-        try: async () => {
-          await deviceSessionStore.write(session);
+      const { session, access } = signedIn.value;
+      return await keepSignIn({
+        store: deviceSessionStore,
+        transition,
+        session,
+        revoke: revokeSession,
+        publish: (generation) => {
+          const next = {
+            status: "signed-in",
+            source: sourceFor({ session, initialAccess: access, generation }),
+          } as const satisfies SessionState;
+          setState(
+            (current) =>
+              deviceSessionStore.commit(generation, () => next) ?? current,
+          );
         },
-        catch: (cause) =>
-          new TokenError({
-            message: "The keychain refused the session",
-            cause,
-          }),
       });
-      if (Result.isError(stored)) {
-        // A grant the phone cannot keep is one nobody can use; give it back.
-        // Sign-in fails either way, and an unrevoked grant expires unused.
-        (
-          await revokeRefreshToken({
-            clientId: session.clientId,
-            fetch,
-            refreshToken: session.refreshToken,
-            revocationEndpoint: session.revocationEndpoint,
-          })
-        ).unwrapOr(undefined);
-        return Result.err(stored.error);
-      }
-      setState({
-        status: "signed-in",
-        source: sourceFor(signedIn.value.session, signedIn.value.access),
-      });
-      return Result.ok(undefined);
     },
-    signOut: async () => {
-      if (state.status === "signed-in") {
-        ending.add(state.source);
-        await boundary.run("signed-out", state.source.session());
-        // Stop the notifications first, while the token still opens the API.
-        await stopPushNotifications(state.source);
-        const session = state.source.session();
-        // Best effort: an unreachable server cannot keep the phone signed in.
-        (
-          await revokeRefreshToken({
-            clientId: session.clientId,
-            fetch,
-            refreshToken: session.refreshToken,
-            revocationEndpoint: session.revocationEndpoint,
-          })
-        ).unwrapOr(undefined);
-      }
-      // The refresh token is revoked already, so a session the keychain
-      // keeps fails its first refresh and ends; signing out still happens.
-      (
-        await Result.tryPromise(async () => {
-          await deviceSessionStore.clear();
-        })
-      ).unwrapOr(undefined);
-      setState({ status: "signed-out", ended: false });
-    },
+    signOut: async () =>
+      await signOutSession({
+        store: deviceSessionStore,
+        session:
+          state.status === "signed-in" ? state.source.session() : undefined,
+        beforeEnd: async (session) => {
+          if (state.status === "signed-in") {
+            ending.add(state.source);
+            await boundary.run("signed-out", session);
+            await stopPushNotifications(state.source);
+          }
+        },
+        revoke: revokeSession,
+        publish: (generation) =>
+          setState(
+            (current) =>
+              deviceSessionStore.commit(
+                generation,
+                () => ({ status: "signed-out", ended: false }) as const,
+              ) ?? current,
+          ),
+        // The session outlived the sign-out, so a server refusal ends it.
+        kept: () => {
+          if (state.status === "signed-in") {
+            ending.delete(state.source);
+          }
+        },
+      }),
     end: (source) => {
       if (
         state.status !== "signed-in" ||
-        state.source !== source ||
+        !isCurrentSessionSource(state.source, source) ||
         ending.has(source)
       ) {
         return;
       }
+      const session = source.session();
+      if (session === undefined) {
+        return;
+      }
+      const generation = deviceSessionStore.generation();
       ending.add(source);
       const signOutAfterHandlers = async () => {
-        await boundary.run("ended", source.session());
-        setState((current) =>
-          current.status === "signed-in" && current.source === source
-            ? { status: "signed-out", ended: true }
-            : current,
+        await boundary.run("ended", session);
+        await stopPushNotifications(source);
+        setState(
+          (current) =>
+            deviceSessionStore.commit(generation, () =>
+              current.status === "signed-in" &&
+              isCurrentSessionSource(current.source, source)
+                ? ({ status: "signed-out", ended: true } as const)
+                : current,
+            ) ?? current,
         );
       };
-      void signOutAfterHandlers();
+      signOutAfterHandlers().catch((error: unknown) => {
+        deviceSessionStore.commit(generation, () =>
+          setEndFailure({ generation, error }),
+        );
+      });
     },
     registerBeforeSessionEnd: boundary.register,
   };

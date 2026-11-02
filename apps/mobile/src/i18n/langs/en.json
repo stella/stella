@@ -74,7 +74,8 @@
       "none": "No date",
       "today": "Today",
       "tomorrow": "Tomorrow",
-      "nextWeek": "In a week"
+      "nextWeek": "In a week",
+      "pick": "Pick a date"
     },
     "due": {
       "overdue": "Overdue",
@@ -164,7 +165,16 @@
     "preview": "Open preview",
     "previewDescription": "This file opens in the system preview.",
     "unrendered": "This document cannot be shown here, but the system preview may open it.",
-    "details": "Details"
+    "details": "Details",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "zoomFit": "Fit to width",
+    "fit": "Fit",
+    "appearance": {
+      "system": "Appearance: automatic",
+      "light": "Appearance: light",
+      "dark": "Appearance: dark"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -192,7 +202,8 @@
     "server": "Server",
     "signOut": "Sign out",
     "deleteAccount": "Delete account",
-    "deleteAccountHint": "Opens your account on the web, where you can delete it and everything in it that is yours."
+    "deleteAccountHint": "Opens your account on the web, where you can delete it and everything in it that is yours.",
+    "signOutFailed": "Sign-out could not be completed. Try again."
   },
   "header": {
     "search": "Search"
@@ -292,6 +303,29 @@
   "palette": {
     "placeholder": "Search matters and chats, or run a command",
     "noResults": "Nothing matches “{query}”"
+  },
+  "search": {
+    "placeholder": "Search stella",
+    "clear": "Clear search",
+    "cancel": "Cancel",
+    "recent": "Recent searches",
+    "clearRecent": "Clear",
+    "hint": "Search your matters, documents, tasks, chats and case law.",
+    "filters": "Filters",
+    "noResultsTitle": "No results",
+    "noResults": "Nothing matches “{query}”. Try other words, or remove a filter.",
+    "loadFailed": "The search could not be run.",
+    "retry": "Try again",
+    "type": {
+      "document": "Documents",
+      "matter": "Matters",
+      "task": "Tasks",
+      "caseLaw": "Case law",
+      "chat": "Chats",
+      "folder": "Folders",
+      "message": "Emails",
+      "link": "Links"
+    }
   },
   "pane": {
     "showList": "Show the list",

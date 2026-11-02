@@ -4,231 +4,233 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## contacts · `contacts` · contacts.ts:54 · rls
+## contacts · `contacts` · contacts.ts:57 · rls
 
 ```text
-contacts.id                              pUuid               pk,not null             contacts.ts:57
-contacts.organization_id                 safeOrganizationId  fk,not null             contacts.ts:58
-contacts.type                            text                not null                contacts.ts:61
-contacts.prefix                          varchar             null                    contacts.ts:64   Person fields (null for organizations)
-contacts.first_name                      varchar             null                    contacts.ts:65
-contacts.middle_name                     varchar             null                    contacts.ts:66
-contacts.last_name                       varchar             null                    contacts.ts:67
-contacts.suffix                          varchar             null                    contacts.ts:68
-contacts.date_of_birth_year              integer             null                    contacts.ts:69
-contacts.date_of_birth_month             integer             null                    contacts.ts:70
-contacts.date_of_birth_day               integer             null                    contacts.ts:71
-contacts.nationality_codes               text                array,default,not null  contacts.ts:72
-contacts.organization_name               varchar             null                    contacts.ts:75   Organization fields (null for persons)
-contacts.sanctions_monitoring_mode       text                default,not null        contacts.ts:79
-contacts.display_name                    varchar             not null                contacts.ts:85   Shared fields
-contacts.notes                           text                null                    contacts.ts:86
-contacts.emails                          jsonb               null                    contacts.ts:87
-contacts.phones                          jsonb               null                    contacts.ts:88
-contacts.addresses                       jsonb               null                    contacts.ts:89
-contacts.tags                            text                array,null              contacts.ts:90
-contacts.metadata                        jsonb               null                    contacts.ts:91
-contacts.color                           varchar             null                    contacts.ts:92
-contacts.registration_number             varchar             null                    contacts.ts:95   Billing fields
-contacts.tax_id                          varchar             null                    contacts.ts:98
-contacts.vat_id                          varchar             null                    contacts.ts:99
-contacts.vat_payer                       boolean             null                    contacts.ts:101  Null means the payer status has not been established.
-contacts.bank_accounts                   jsonb               null                    contacts.ts:102
-contacts.billing_address                 jsonb               null                    contacts.ts:103
-contacts.default_hourly_rate             centsColumn         null                    contacts.ts:104
-contacts.currency                        varchar             null                    contacts.ts:105
-contacts.payment_term_days               integer             null                    contacts.ts:106
-contacts.invoice_language                text                null                    contacts.ts:108  Language preferred for invoices sent to this contact; null uses the issuer default.
-contacts.originating_attorney_id         text                fk,null                 contacts.ts:111  Attorney responsibility
-contacts.responsible_attorney_id         text                fk,null                 contacts.ts:114
-contacts.{...importProvenanceColumns()}  spread                                      contacts.ts:119  Import provenance: external_source, external_id, external_change_key, imported_at.
-contacts.created_by                      text                fk,null                 contacts.ts:121
-contacts.created_at                      timestamptz         default,not null        contacts.ts:124
-contacts.updated_at                      timestamptz         default,not null        contacts.ts:125
+contacts.id                              pUuid               pk,not null             contacts.ts:60
+contacts.organization_id                 safeOrganizationId  fk,not null             contacts.ts:61
+contacts.type                            text                not null                contacts.ts:64
+contacts.prefix                          varchar             null                    contacts.ts:67   Person fields (null for organizations)
+contacts.first_name                      varchar             null                    contacts.ts:68
+contacts.middle_name                     varchar             null                    contacts.ts:69
+contacts.last_name                       varchar             null                    contacts.ts:70
+contacts.suffix                          varchar             null                    contacts.ts:71
+contacts.date_of_birth_year              integer             null                    contacts.ts:72
+contacts.date_of_birth_month             integer             null                    contacts.ts:73
+contacts.date_of_birth_day               integer             null                    contacts.ts:74
+contacts.nationality_codes               text                array,default,not null  contacts.ts:75
+contacts.organization_name               varchar             null                    contacts.ts:78   Organization fields (null for persons)
+contacts.sanctions_monitoring_mode       text                default,not null        contacts.ts:82
+contacts.display_name                    varchar             not null                contacts.ts:88   Shared fields
+contacts.notes                           text                null                    contacts.ts:89
+contacts.emails                          jsonb               null                    contacts.ts:90
+contacts.phones                          jsonb               null                    contacts.ts:91
+contacts.addresses                       jsonb               null                    contacts.ts:92
+contacts.tags                            text                array,null              contacts.ts:93
+contacts.metadata                        jsonb               null                    contacts.ts:94
+contacts.color                           varchar             null                    contacts.ts:95
+contacts.time_billing_format             text                default,not null        contacts.ts:97
+contacts.registration_number             varchar             null                    contacts.ts:102  Billing fields
+contacts.tax_id                          varchar             null                    contacts.ts:105
+contacts.vat_id                          varchar             null                    contacts.ts:106
+contacts.vat_payer                       boolean             null                    contacts.ts:108  Null means the payer status has not been established.
+contacts.bank_accounts                   jsonb               null                    contacts.ts:109
+contacts.billing_address                 jsonb               null                    contacts.ts:110
+contacts.default_hourly_rate             centsColumn         null                    contacts.ts:111
+contacts.currency                        varchar             null                    contacts.ts:112
+contacts.payment_term_days               integer             null                    contacts.ts:113
+contacts.invoice_language                text                null                    contacts.ts:115  Language preferred for invoices sent to this contact; null uses the issuer default.
+contacts.originating_attorney_id         text                fk,null                 contacts.ts:118  Attorney responsibility
+contacts.responsible_attorney_id         text                fk,null                 contacts.ts:121
+contacts.{...importProvenanceColumns()}  spread                                      contacts.ts:126  Import provenance: external_source, external_id, external_change_key, imported_at.
+contacts.created_by                      text                fk,null                 contacts.ts:128
+contacts.created_at                      timestamptz         default,not null        contacts.ts:131
+contacts.updated_at                      timestamptz         default,not null        contacts.ts:132
 ```
 
-## contact_import_requests · `contactImportRequests` · contacts.ts:218 · rls
+## contact_import_requests · `contactImportRequests` · contacts.ts:232 · rls
 
 ```text
-contact_import_requests.id                   pUuid               pk,not null       contacts.ts:221
-contact_import_requests.organization_id      safeOrganizationId  fk,not null       contacts.ts:222
-contact_import_requests.user_id              text                fk,not null       contacts.ts:225
-contact_import_requests.idempotency_key      varchar             not null          contacts.ts:229
-contact_import_requests.request_fingerprint  varchar             not null          contacts.ts:230
-contact_import_requests.result               jsonb               not null          contacts.ts:233
-contact_import_requests.created_at           timestamptz         default,not null  contacts.ts:234
+contact_import_requests.id                   pUuid               pk,not null       contacts.ts:235
+contact_import_requests.organization_id      safeOrganizationId  fk,not null       contacts.ts:236
+contact_import_requests.user_id              text                fk,not null       contacts.ts:239
+contact_import_requests.idempotency_key      varchar             not null          contacts.ts:243
+contact_import_requests.request_fingerprint  varchar             not null          contacts.ts:244
+contact_import_requests.result               jsonb               not null          contacts.ts:247
+contact_import_requests.created_at           timestamptz         default,not null  contacts.ts:248
 ```
 
-## contact_extraction_uploads · `contactExtractionUploads` · contacts.ts:252 · rls
+## contact_extraction_uploads · `contactExtractionUploads` · contacts.ts:266 · rls
 
 ```text
-contact_extraction_uploads.id                     pUuid               pk,not null       contacts.ts:255
-contact_extraction_uploads.organization_id        safeOrganizationId  fk,not null       contacts.ts:256
-contact_extraction_uploads.user_id                text                fk,not null       contacts.ts:259
-contact_extraction_uploads.declared_name          varchar             not null          contacts.ts:263
-contact_extraction_uploads.declared_mime          varchar             not null          contacts.ts:264
-contact_extraction_uploads.declared_size          bigint              not null          contacts.ts:265
-contact_extraction_uploads.declared_sha256        varchar             not null          contacts.ts:266
-contact_extraction_uploads.status                 text                default,not null  contacts.ts:267
-contact_extraction_uploads.claim_token            uuid                null              contacts.ts:271
-contact_extraction_uploads.processing_started_at  timestamptz         null              contacts.ts:272
-contact_extraction_uploads.expires_at             timestamptz         not null          contacts.ts:273
-contact_extraction_uploads.created_at             timestamptz         default,not null  contacts.ts:274
-contact_extraction_uploads.used_at                timestamptz         null              contacts.ts:275
+contact_extraction_uploads.id                     pUuid               pk,not null       contacts.ts:269
+contact_extraction_uploads.organization_id        safeOrganizationId  fk,not null       contacts.ts:270
+contact_extraction_uploads.user_id                text                fk,not null       contacts.ts:273
+contact_extraction_uploads.declared_name          varchar             not null          contacts.ts:277
+contact_extraction_uploads.declared_mime          varchar             not null          contacts.ts:278
+contact_extraction_uploads.declared_size          bigint              not null          contacts.ts:279
+contact_extraction_uploads.declared_sha256        varchar             not null          contacts.ts:280
+contact_extraction_uploads.status                 text                default,not null  contacts.ts:281
+contact_extraction_uploads.claim_token            uuid                null              contacts.ts:285
+contact_extraction_uploads.processing_started_at  timestamptz         null              contacts.ts:286
+contact_extraction_uploads.expires_at             timestamptz         not null          contacts.ts:287
+contact_extraction_uploads.created_at             timestamptz         default,not null  contacts.ts:288
+contact_extraction_uploads.used_at                timestamptz         null              contacts.ts:289
 ```
 
-## contact_relationships · `contactRelationships` · contacts.ts:297 · rls
+## contact_relationships · `contactRelationships` · contacts.ts:311 · rls
 
 ```text
-contact_relationships.id                  pUuid               pk,not null       contacts.ts:300
-contact_relationships.organization_id     safeOrganizationId  fk,not null       contacts.ts:301
-contact_relationships.person_id           safeUuid            fk,not null       contacts.ts:304
-contact_relationships.related_contact_id  safeUuid            fk,not null       contacts.ts:307
-contact_relationships.relationship_type   text                not null          contacts.ts:310
-contact_relationships.title               varchar             null              contacts.ts:315
-contact_relationships.is_primary          boolean             default,not null  contacts.ts:316
-contact_relationships.start_date          date                null              contacts.ts:317
-contact_relationships.end_date            date                null              contacts.ts:318
-contact_relationships.created_at          timestamptz         default,not null  contacts.ts:319
+contact_relationships.id                  pUuid               pk,not null       contacts.ts:314
+contact_relationships.organization_id     safeOrganizationId  fk,not null       contacts.ts:315
+contact_relationships.person_id           safeUuid            fk,not null       contacts.ts:318
+contact_relationships.related_contact_id  safeUuid            fk,not null       contacts.ts:321
+contact_relationships.relationship_type   text                not null          contacts.ts:324
+contact_relationships.title               varchar             null              contacts.ts:329
+contact_relationships.is_primary          boolean             default,not null  contacts.ts:330
+contact_relationships.start_date          date                null              contacts.ts:331
+contact_relationships.end_date            date                null              contacts.ts:332
+contact_relationships.created_at          timestamptz         default,not null  contacts.ts:333
 ```
 
-## workspaces · `workspaces` · contacts.ts:337 · rls
+## workspaces · `workspaces` · contacts.ts:351 · rls
 
 -- Workspaces --
 
 ```text
-workspaces.id                              pUuid               pk,not null       contacts.ts:340
-workspaces.organization_id                 safeOrganizationId  fk,not null       contacts.ts:341
-workspaces.{...importProvenanceColumns()}  spread                                contacts.ts:345  Import provenance: external_source, external_id, external_change_key, imported_at.
-workspaces.name                            varchar             not null          contacts.ts:346
-workspaces.reference                       varchar             not null          contacts.ts:347
-workspaces.client_id                       safeUuid            fk,null           contacts.ts:352  Nullable: a null client_id encodes a personal matter (visible only to the creator via workspace_members).
-workspaces.lead_user_id                    text                fk,null           contacts.ts:359  Optional per-matter lead.
-workspaces.billing_reference               varchar             null              contacts.ts:362
-workspaces.color                           varchar             null              contacts.ts:365
-workspaces.status                          text                default,not null  contacts.ts:366
-workspaces.last_activity_at                timestamptz         default,not null  contacts.ts:370
-workspaces.created_at                      timestamptz         default,not null  contacts.ts:371
+workspaces.id                              pUuid               pk,not null       contacts.ts:354
+workspaces.organization_id                 safeOrganizationId  fk,not null       contacts.ts:355
+workspaces.{...importProvenanceColumns()}  spread                                contacts.ts:359  Import provenance: external_source, external_id, external_change_key, imported_at.
+workspaces.name                            varchar             not null          contacts.ts:360
+workspaces.reference                       varchar             not null          contacts.ts:361
+workspaces.client_id                       safeUuid            fk,null           contacts.ts:366  Nullable: a null client_id encodes a personal matter (visible only to the creator via workspace_members).
+workspaces.lead_user_id                    text                fk,null           contacts.ts:373  Optional per-matter lead.
+workspaces.billing_narrative_language      varchar             null              contacts.ts:376
+workspaces.billing_reference               varchar             null              contacts.ts:379
+workspaces.color                           varchar             null              contacts.ts:382
+workspaces.status                          text                default,not null  contacts.ts:383
+workspaces.last_activity_at                timestamptz         default,not null  contacts.ts:387
+workspaces.created_at                      timestamptz         default,not null  contacts.ts:388
 ```
 
-## workspace_members · `workspaceMembers` · contacts.ts:414
+## workspace_members · `workspaceMembers` · contacts.ts:431
 
 ```text
-workspace_members.id            pUuid            pk,not null       contacts.ts:417
-workspace_members.workspace_id  safeWorkspaceId  fk,not null       contacts.ts:418
-workspace_members.user_id       varchar          fk,not null       contacts.ts:421
-workspace_members.created_at    timestamptz      default,not null  contacts.ts:425
+workspace_members.id            pUuid            pk,not null       contacts.ts:434
+workspace_members.workspace_id  safeWorkspaceId  fk,not null       contacts.ts:435
+workspace_members.user_id       varchar          fk,not null       contacts.ts:438
+workspace_members.created_at    timestamptz      default,not null  contacts.ts:442
 ```
 
-## workspace_contacts · `workspaceContacts` · contacts.ts:436
+## workspace_contacts · `workspaceContacts` · contacts.ts:453
 
 ```text
-workspace_contacts.id               pUuid               pk,not null       contacts.ts:439
-workspace_contacts.organization_id  safeOrganizationId  fk,not null       contacts.ts:440
-workspace_contacts.workspace_id     safeWorkspaceId     fk,not null       contacts.ts:443
-workspace_contacts.contact_id       safeUuid            fk,not null       contacts.ts:446
-workspace_contacts.role             text                not null          contacts.ts:449
-workspace_contacts.is_primary       boolean             default,not null  contacts.ts:454
-workspace_contacts.notes            text                null              contacts.ts:455
-workspace_contacts.created_at       timestamptz         default,not null  contacts.ts:456
+workspace_contacts.id               pUuid               pk,not null       contacts.ts:456
+workspace_contacts.organization_id  safeOrganizationId  fk,not null       contacts.ts:457
+workspace_contacts.workspace_id     safeWorkspaceId     fk,not null       contacts.ts:460
+workspace_contacts.contact_id       safeUuid            fk,not null       contacts.ts:463
+workspace_contacts.role             text                not null          contacts.ts:466
+workspace_contacts.is_primary       boolean             default,not null  contacts.ts:471
+workspace_contacts.notes            text                null              contacts.ts:472
+workspace_contacts.created_at       timestamptz         default,not null  contacts.ts:473
 ```
 
-## audit_logs · `auditLogs` · contacts.ts:574 · rls
+## audit_logs · `auditLogs` · contacts.ts:591 · rls
 
 ```text
-audit_logs.id                   pUuid               pk,not null       contacts.ts:577
-audit_logs.organization_id      safeOrganizationId  fk,not null       contacts.ts:578
-audit_logs.workspace_id         safeWorkspaceId     null              contacts.ts:581
-audit_logs.user_id              text                not null          contacts.ts:582
-audit_logs.action               text                not null          contacts.ts:583
-audit_logs.resource_type        text                not null          contacts.ts:584
-audit_logs.resource_id          text                not null          contacts.ts:585
-audit_logs.metadata             jsonb               null              contacts.ts:586
-audit_logs.changes              jsonb               null              contacts.ts:587
-audit_logs.performer_type       text                default,not null  contacts.ts:588
-audit_logs.performer_id         text                null              contacts.ts:592
-audit_logs.performer_name       text                null              contacts.ts:593
-audit_logs.trigger_type         text                default,not null  contacts.ts:594
-audit_logs.trigger_user_id      text                null              contacts.ts:598
-audit_logs.trigger_source       text                null              contacts.ts:599
-audit_logs.trigger_source_id    text                null              contacts.ts:600
-audit_logs.run_id               text                null              contacts.ts:601
-audit_logs.group_id             uuid                null              contacts.ts:602
-audit_logs.approval_status      text                default,not null  contacts.ts:603
-audit_logs.approved_by_user_id  text                null              contacts.ts:607
-audit_logs.activity_category    text                null              contacts.ts:608
-audit_logs.created_at           timestamptz         default,not null  contacts.ts:611
+audit_logs.id                   pUuid               pk,not null       contacts.ts:594
+audit_logs.organization_id      safeOrganizationId  fk,not null       contacts.ts:595
+audit_logs.workspace_id         safeWorkspaceId     null              contacts.ts:598
+audit_logs.user_id              text                not null          contacts.ts:599
+audit_logs.action               text                not null          contacts.ts:600
+audit_logs.resource_type        text                not null          contacts.ts:601
+audit_logs.resource_id          text                not null          contacts.ts:602
+audit_logs.metadata             jsonb               null              contacts.ts:603
+audit_logs.changes              jsonb               null              contacts.ts:604
+audit_logs.performer_type       text                default,not null  contacts.ts:605
+audit_logs.performer_id         text                null              contacts.ts:609
+audit_logs.performer_name       text                null              contacts.ts:610
+audit_logs.trigger_type         text                default,not null  contacts.ts:611
+audit_logs.trigger_user_id      text                null              contacts.ts:615
+audit_logs.trigger_source       text                null              contacts.ts:616
+audit_logs.trigger_source_id    text                null              contacts.ts:617
+audit_logs.run_id               text                null              contacts.ts:618
+audit_logs.group_id             uuid                null              contacts.ts:619
+audit_logs.approval_status      text                default,not null  contacts.ts:620
+audit_logs.approved_by_user_id  text                null              contacts.ts:624
+audit_logs.activity_category    text                null              contacts.ts:625
+audit_logs.created_at           timestamptz         default,not null  contacts.ts:628
 ```
 
-## account_audit_logs · `accountAuditLogs` · contacts.ts:719 · rls
+## account_audit_logs · `accountAuditLogs` · contacts.ts:736 · rls
 
 Account audit history belongs to its user, independently of organization membership.
 
 ```text
-account_audit_logs.id                uuid         pk,not null       contacts.ts:722
-account_audit_logs.user_id           text         fk,not null       contacts.ts:723
-account_audit_logs.event_type        text         not null          contacts.ts:728
-account_audit_logs.resource_id       text         not null          contacts.ts:731
-account_audit_logs.request_metadata  jsonb        null              contacts.ts:732
-account_audit_logs.group_id          uuid         not null          contacts.ts:737
-account_audit_logs.created_at        timestamptz  default,not null  contacts.ts:738
+account_audit_logs.id                uuid         pk,not null       contacts.ts:739
+account_audit_logs.user_id           text         fk,not null       contacts.ts:740
+account_audit_logs.event_type        text         not null          contacts.ts:745
+account_audit_logs.resource_id       text         not null          contacts.ts:748
+account_audit_logs.request_metadata  jsonb        null              contacts.ts:749
+account_audit_logs.group_id          uuid         not null          contacts.ts:754
+account_audit_logs.created_at        timestamptz  default,not null  contacts.ts:755
 ```
 
-## scheduler_jobs · `schedulerJobs` · contacts.ts:784 · rls
+## scheduler_jobs · `schedulerJobs` · contacts.ts:804 · rls
 
 -- Scheduler --
 
 ```text
-scheduler_jobs.id               varchar      pk,not null       contacts.ts:787
-scheduler_jobs.task             varchar      not null          contacts.ts:788
-scheduler_jobs.description      text         null              contacts.ts:789
-scheduler_jobs.schedule         jsonb        not null          contacts.ts:790
-scheduler_jobs.payload          jsonb        null              contacts.ts:791
-scheduler_jobs.enabled          boolean      default,not null  contacts.ts:792
-scheduler_jobs.paused_by        text         null              contacts.ts:793
-scheduler_jobs.paused_since     timestamptz  null              contacts.ts:794
-scheduler_jobs.paused_until     timestamptz  null              contacts.ts:795
-scheduler_jobs.pause_reason     text         null              contacts.ts:796
-scheduler_jobs.next_run_at      timestamptz  not null          contacts.ts:797
-scheduler_jobs.last_run_at      timestamptz  null              contacts.ts:798
-scheduler_jobs.last_success_at  timestamptz  null              contacts.ts:799
-scheduler_jobs.last_failure_at  timestamptz  null              contacts.ts:800
-scheduler_jobs.last_error       text         null              contacts.ts:801
-scheduler_jobs.locked_at        timestamptz  null              contacts.ts:802
-scheduler_jobs.locked_until     timestamptz  null              contacts.ts:803
-scheduler_jobs.locked_by        varchar      null              contacts.ts:804
-scheduler_jobs.created_at       timestamptz  default,not null  contacts.ts:805
-scheduler_jobs.updated_at       timestamptz  default,not null  contacts.ts:806
+scheduler_jobs.id               varchar      pk,not null       contacts.ts:807
+scheduler_jobs.task             varchar      not null          contacts.ts:808
+scheduler_jobs.description      text         null              contacts.ts:809
+scheduler_jobs.schedule         jsonb        not null          contacts.ts:810
+scheduler_jobs.payload          jsonb        null              contacts.ts:811
+scheduler_jobs.enabled          boolean      default,not null  contacts.ts:812
+scheduler_jobs.paused_by        text         null              contacts.ts:813
+scheduler_jobs.paused_since     timestamptz  null              contacts.ts:814
+scheduler_jobs.paused_until     timestamptz  null              contacts.ts:815
+scheduler_jobs.pause_reason     text         null              contacts.ts:816
+scheduler_jobs.next_run_at      timestamptz  not null          contacts.ts:817
+scheduler_jobs.last_run_at      timestamptz  null              contacts.ts:818
+scheduler_jobs.last_success_at  timestamptz  null              contacts.ts:819
+scheduler_jobs.last_failure_at  timestamptz  null              contacts.ts:820
+scheduler_jobs.last_error       text         null              contacts.ts:821
+scheduler_jobs.locked_at        timestamptz  null              contacts.ts:822
+scheduler_jobs.locked_until     timestamptz  null              contacts.ts:823
+scheduler_jobs.locked_by        varchar      null              contacts.ts:824
+scheduler_jobs.created_at       timestamptz  default,not null  contacts.ts:825
+scheduler_jobs.updated_at       timestamptz  default,not null  contacts.ts:826
 ```
 
-## scheduler_job_runs · `schedulerJobRuns` · contacts.ts:843 · rls
+## scheduler_job_runs · `schedulerJobRuns` · contacts.ts:863 · rls
 
 ```text
-scheduler_job_runs.id           pUuid        pk,not null       contacts.ts:846
-scheduler_job_runs.job_id       varchar      fk,not null       contacts.ts:847
-scheduler_job_runs.task         varchar      not null          contacts.ts:851
-scheduler_job_runs.runner_id    varchar      not null          contacts.ts:852
-scheduler_job_runs.status       text         default,not null  contacts.ts:853
-scheduler_job_runs.started_at   timestamptz  default,not null  contacts.ts:857
-scheduler_job_runs.finished_at  timestamptz  null              contacts.ts:858
-scheduler_job_runs.duration_ms  integer      null              contacts.ts:859
-scheduler_job_runs.error        text         null              contacts.ts:860
+scheduler_job_runs.id           pUuid        pk,not null       contacts.ts:866
+scheduler_job_runs.job_id       varchar      fk,not null       contacts.ts:867
+scheduler_job_runs.task         varchar      not null          contacts.ts:871
+scheduler_job_runs.runner_id    varchar      not null          contacts.ts:872
+scheduler_job_runs.status       text         default,not null  contacts.ts:873
+scheduler_job_runs.started_at   timestamptz  default,not null  contacts.ts:877
+scheduler_job_runs.finished_at  timestamptz  null              contacts.ts:878
+scheduler_job_runs.duration_ms  integer      null              contacts.ts:879
+scheduler_job_runs.error        text         null              contacts.ts:880
 ```
 
-## infosoud_tracked_cases · `infoSoudTrackedCases` · contacts.ts:880
+## infosoud_tracked_cases · `infoSoudTrackedCases` · contacts.ts:900
 
 -- InfoSoud Tracking --
 
 ```text
-infosoud_tracked_cases.id                    pUuid            pk,not null       contacts.ts:883
-infosoud_tracked_cases.workspace_id          safeWorkspaceId  fk,not null       contacts.ts:884
-infosoud_tracked_cases.court_code            varchar          not null          contacts.ts:887
-infosoud_tracked_cases.spis_zn               varchar          not null          contacts.ts:888
-infosoud_tracked_cases.enabled               boolean          default,not null  contacts.ts:889
-infosoud_tracked_cases.created_by            text             fk,null           contacts.ts:890
-infosoud_tracked_cases.last_sync_attempt_at  timestamptz      null              contacts.ts:893
-infosoud_tracked_cases.last_synced_at        timestamptz      null              contacts.ts:894
-infosoud_tracked_cases.last_sync_error       text             null              contacts.ts:895
-infosoud_tracked_cases.created_at            timestamptz      default,not null  contacts.ts:896
-infosoud_tracked_cases.updated_at            timestamptz      default,not null  contacts.ts:897
+infosoud_tracked_cases.id                    pUuid            pk,not null       contacts.ts:903
+infosoud_tracked_cases.workspace_id          safeWorkspaceId  fk,not null       contacts.ts:904
+infosoud_tracked_cases.court_code            varchar          not null          contacts.ts:907
+infosoud_tracked_cases.spis_zn               varchar          not null          contacts.ts:908
+infosoud_tracked_cases.enabled               boolean          default,not null  contacts.ts:909
+infosoud_tracked_cases.created_by            text             fk,null           contacts.ts:910
+infosoud_tracked_cases.last_sync_attempt_at  timestamptz      null              contacts.ts:913
+infosoud_tracked_cases.last_synced_at        timestamptz      null              contacts.ts:914
+infosoud_tracked_cases.last_sync_error       text             null              contacts.ts:915
+infosoud_tracked_cases.created_at            timestamptz      default,not null  contacts.ts:916
+infosoud_tracked_cases.updated_at            timestamptz      default,not null  contacts.ts:917
 ```

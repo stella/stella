@@ -44,6 +44,8 @@ export const REPLAY_USAGE = `Usage: bun run src/scripts/replay-case-law-source.t
   --court <name>    Replay only decisions from this exact court.
   --celex <value>   Replay only the decision stored under this publisher id
                     (metadata.celex).
+  --parser-version <n>
+                    Replay only the decisions this parser version wrote.
   --after <id>      Resume strictly after this decision id.
   --page-size <n>   Rows read per query (default ${DEFAULT_PAGE_SIZE}).
   --lease-wait <minutes>
@@ -105,9 +107,19 @@ const readValue = (
 const INTEGER_BOUND = {
   POSITIVE: { minimum: 1, wording: "a positive integer" },
   NON_NEGATIVE: { minimum: 0, wording: "a non-negative integer" },
+  /** `case_law_decisions.parser_version` is a smallint. */
+  PARSER_VERSION: {
+    minimum: 1,
+    maximum: 32_767,
+    wording: "an integer from 1 to 32767",
+  },
 } as const;
 
-type IntegerBound = (typeof INTEGER_BOUND)[keyof typeof INTEGER_BOUND];
+type IntegerBound = {
+  readonly minimum: number;
+  readonly maximum?: number;
+  readonly wording: string;
+};
 
 // The whole value has to be digits. `Number.parseInt` reads a prefix and
 // stops, so "20rows" would pass as 20, "0.5" as 0 and "1e3" as 1: every one
@@ -123,7 +135,8 @@ const boundedInteger = (
   if (
     !DECIMAL_DIGITS.test(raw) ||
     !Number.isSafeInteger(parsed) ||
-    parsed < bound.minimum
+    parsed < bound.minimum ||
+    parsed > (bound.maximum ?? Number.MAX_SAFE_INTEGER)
   ) {
     return invalid(`--${name} must be ${bound.wording}, got: ${raw}`);
   }
@@ -198,8 +211,31 @@ const readScope = (
   if (court.value?.length === 0) {
     return invalid("--court requires a non-empty value");
   }
-  if (celex.value !== undefined && court.value !== undefined) {
-    return invalid("--celex and --court are mutually exclusive replay scopes");
+  const parserVersion = readValue(argv, "parser-version");
+  if (Result.isError(parserVersion)) {
+    return parserVersion;
+  }
+  const named = [celex.value, court.value, parserVersion.value].filter(
+    (value) => value !== undefined,
+  );
+  if (named.length > 1) {
+    return invalid(
+      "--celex, --court and --parser-version are mutually exclusive replay scopes",
+    );
+  }
+  if (parserVersion.value !== undefined) {
+    const version = boundedInteger(
+      parserVersion.value,
+      "parser-version",
+      INTEGER_BOUND.PARSER_VERSION,
+    );
+    if (Result.isError(version)) {
+      return version;
+    }
+    return Result.ok({
+      type: "parser-version",
+      parserVersion: version.value,
+    } as const satisfies CaseLawReplayScope);
   }
   if (court.value !== undefined) {
     return Result.ok({

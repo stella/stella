@@ -722,7 +722,11 @@ describe("CLI legal citation projection", () => {
 
 describe("audit detail status output", () => {
   for (const format of ["json", "jsonl", "table"] as const) {
-    for (const changesStatus of ["visible", "feature_unavailable"] as const) {
+    for (const changesStatus of [
+      "visible",
+      "feature_unavailable",
+      "unrecognized_resource",
+    ] as const) {
       test(`${format} preserves ${changesStatus} beside audit changes`, () => {
         const item = {
           id: "entry",

@@ -287,6 +287,7 @@ export const VersionsFacet = ({
         loadOlderError={loadOlderError}
         versions={accumulated}
         workspaceId={workspaceId}
+        compareNeedsDocx={!canCompare && accumulated.length >= 2}
         onCompareVersions={canCompare ? () => setView("compare") : undefined}
         onLoadOlder={loadOlder}
         onSwitchVersion={handleSwitchVersion}

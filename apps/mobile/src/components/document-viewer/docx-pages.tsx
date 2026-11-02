@@ -1,9 +1,10 @@
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { IntlProvider } from "use-intl";
 import type { AbstractIntlMessages } from "use-intl";
 
 import { DocxEditor } from "@stll/folio-react";
+import type { DocxEditorRef } from "@stll/folio-react";
 import ar from "@stll/folio-react/messages/ar";
 import cs from "@stll/folio-react/messages/cs";
 import de from "@stll/folio-react/messages/de";
@@ -25,6 +26,7 @@ import "@stll/folio-react/editor.css";
 import { bundledFontUrl } from "@/components/dom-theme";
 
 import { FOLIO_FONT_FACES } from "./folio-fonts.gen";
+import { docxZoomTarget } from "./zoom";
 
 /** folio's own words in every language the app ships. */
 const FOLIO_CATALOGS = {
@@ -68,15 +70,21 @@ const declareFolioFonts = () => {
   document.head.append(style);
 };
 
-/** A Word document laid out in pages by folio, read-only, as the web shows it. */
+/**
+ * A Word document laid out in pages by folio, read-only, as the web shows it,
+ * `zoom` times the width folio fits the page to.
+ */
 export const DocxPages = ({
   bytes,
   locale,
+  zoom,
   onReady,
   onFailed,
 }: {
   bytes: Uint8Array;
   locale: string;
+  /** The page's width as a factor of folio's fit (see ./zoom.ts). */
+  zoom: number;
   onReady: () => void;
   onFailed: (message: string) => void;
 }) => {
@@ -84,9 +92,59 @@ export const DocxPages = ({
   // folio's own catalogue, not the app's: this provider serves folio alone.
   const messages: AbstractIntlMessages = FOLIO_CATALOGS[uiLocale];
 
+  const editor = useRef<DocxEditorRef>(null);
+  // folio's fit over the width it fitted, read once, while folio still
+  // fits the page itself: at the first paint, or else at the first zoom.
+  const fitPerPixel = useRef<number | null>(null);
+  const [width, setWidth] = useState(
+    () => document.documentElement.clientWidth,
+  );
+  const zoomed = useRef(false);
+
+  const readFit = () => {
+    const fitted = editor.current?.getZoom();
+    if (
+      fitPerPixel.current === null &&
+      !zoomed.current &&
+      fitted !== undefined
+    ) {
+      fitPerPixel.current = fitted / document.documentElement.clientWidth;
+    }
+  };
+
   const painted = useEffectEvent(() => {
+    readFit();
     onReady();
   });
+
+  useEffect(() => {
+    const resized = () => {
+      setWidth(document.documentElement.clientWidth);
+    };
+    window.addEventListener("resize", resized);
+    return () => {
+      window.removeEventListener("resize", resized);
+    };
+  }, []);
+
+  const applyZoom = useEffectEvent((atWidth: number, atZoom: number) => {
+    readFit();
+    const target = docxZoomTarget({
+      fitPerPixel: fitPerPixel.current,
+      width: atWidth,
+      zoom: atZoom,
+      zoomed: zoomed.current,
+    });
+    if (target === null) {
+      return;
+    }
+    zoomed.current = true;
+    editor.current?.setZoom(target);
+  });
+
+  useEffect(() => {
+    applyZoom(width, zoom);
+  }, [width, zoom]);
 
   useEffect(() => {
     declareFolioFonts();
@@ -118,6 +176,7 @@ export const DocxPages = ({
           onFailed(error.message);
         }}
         readOnly
+        ref={editor}
         showHeaderFooterEditing={false}
         showPrintButton={false}
         showReviewControls={false}

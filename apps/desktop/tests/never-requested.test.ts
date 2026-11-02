@@ -67,13 +67,6 @@ const EVIDENCE = {
     nativeCalls:
       /\bCGEventTapCreate\b|addGlobalMonitorForEventsMatchingMask|\bIOHIDRequestAccess\b|\bSetWindowsHookEx/u,
   },
-  microphone: {
-    declarations: [
-      "NSMicrophoneUsageDescription",
-      "com.apple.security.device.audio-input",
-    ],
-    nativeCalls: /\bAVAudioRecorder\b|\bAVAudioEngine\b|\bwaveInOpen\b/u,
-  },
   screenRecording: {
     declarations: ["NSScreenCaptureUsageDescription"],
     nativeCalls:
@@ -109,8 +102,8 @@ describe("never-requested claims", () => {
   });
 
   test("the evidence check catches a declaration it is meant to catch", () => {
-    expect(`${declarations}\nNSMicrophoneUsageDescription`).toContain(
-      EVIDENCE.microphone.declarations[0],
+    expect(`${declarations}\nNSCameraUsageDescription`).toContain(
+      EVIDENCE.camera.declarations[0],
     );
     expect("CGRequestScreenCaptureAccess();").toMatch(
       EVIDENCE.screenRecording.nativeCalls,

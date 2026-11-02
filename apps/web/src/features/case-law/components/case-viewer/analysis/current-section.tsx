@@ -3,6 +3,10 @@ import type { RefObject } from "react";
 
 import { useTranslations } from "use-intl";
 
+import {
+  READER_BREADCRUMB_CLEARANCE,
+  scrollReaderToBlock,
+} from "@stll/decision-reader/reader-landing";
 import { ChevronUpIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -11,7 +15,7 @@ import { getCategoryVar } from "@/features/case-law/components/case-viewer/analy
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { forceReflow } from "@/lib/utils";
 
-/** How far a heading may sit below the top edge and still be "current". */
+/** How far a heading may sit below the bar's line and still be "current". */
 const TOP_TOLERANCE_PX = 12;
 
 type CurrentSectionProps = {
@@ -44,7 +48,12 @@ export const CurrentSection = ({
     let frame = 0;
     const measure = () => {
       frame = 0;
-      const top = container.getBoundingClientRect().top + TOP_TOLERANCE_PX;
+      // The line a jump lands a block on, so a heading the reader jumped to
+      // is the one they are on.
+      const top =
+        container.getBoundingClientRect().top +
+        READER_BREADCRUMB_CLEARANCE +
+        TOP_TOLERANCE_PX;
       let current: string | null = null;
       for (const heading of headings) {
         const anchorId = anchorById.get(heading.id);
@@ -98,13 +107,7 @@ export const CurrentSection = ({
     if (!element) {
       return;
     }
-    container.scrollTo({
-      top:
-        element.getBoundingClientRect().top -
-        container.getBoundingClientRect().top +
-        container.scrollTop,
-      behavior: "instant",
-    });
+    scrollReaderToBlock(element, container);
     delete element.dataset["highlight"];
     forceReflow(element);
     element.dataset["highlight"] = "";
