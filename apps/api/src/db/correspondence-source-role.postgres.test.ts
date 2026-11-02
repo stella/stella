@@ -213,7 +213,11 @@ describe.skipIf(!runPostgresTests)(
         const memberships = await admin.unsafe<
           { isMigratingUser: boolean; inherits: boolean; canSet: boolean }[]
         >(
-          `SELECT membership.member = current_user::regrole AS "isMigratingUser",
+          // A role created by a non-superuser also records the creator's own
+          // administrative membership, granted by the bootstrap superuser,
+          // beside the migration's grant: each grantor is a row, the posture
+          // is what every row allows.
+          `SELECT DISTINCT membership.member = current_user::regrole AS "isMigratingUser",
           membership.inherit_option AS inherits,
           membership.set_option AS "canSet"
         FROM pg_catalog.pg_auth_members membership
@@ -221,8 +225,7 @@ describe.skipIf(!runPostgresTests)(
           ON granted.oid = membership.roleid
         JOIN pg_catalog.pg_roles member
           ON member.oid = membership.member
-        WHERE granted.rolname = $1
-        ORDER BY member.rolname`,
+        WHERE granted.rolname = $1`,
           [role],
         );
         expect([...memberships]).toEqual([

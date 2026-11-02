@@ -2966,6 +2966,7 @@
       "clauseDirectivesInvalid": "Uma cláusula vinculada contém diretivas inválidas. Corrija a cláusula antes de preencher o modelo.",
       "clauseDirectivesInvalidDetails": "A cláusula {clauseName} no campo {slotName} contém diretivas inválidas. Abra o editor de cláusulas, corrija os parágrafos indicados e preencha o modelo novamente.",
       "clauseDirectivesOverrideInvalidDetails": "O texto substituto da cláusula {clauseName} no campo {slotName} contém diretivas inválidas. Corrija o texto substituto deste preenchimento antes de tentar novamente.",
+      "correspondenceSourceChanged": "Esta correspondência mudou nesse meio-tempo. Recarregue a página e tente novamente.",
       "deeplKeyRejected": "A chave do DeepL salva foi rejeitada. Substitua-a nas configurações da organização.",
       "deeplQuotaExceeded": "A cota de caracteres do DeepL desta organização foi esgotada.",
       "disposableEmailNotAllowed": "Endereços de e-mail temporários não são permitidos. Use um endereço de e-mail permanente.",

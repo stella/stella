@@ -21,6 +21,7 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { CORRESPONDENCE_SOURCE_CHANGED_CODE } from "@stll/api-contract/correspondence";
 import { ORGANIZATION_DATA_BOX_REFUSAL_CODE } from "@stll/api-contract/data-box";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
@@ -247,6 +248,8 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.matterContactCapacityReached",
   [MATTER_CONTACT_CAPACITY_CODE.exceeded]:
     "errors.apiCodes.matterContactCapacityExceeded",
+  [CORRESPONDENCE_SOURCE_CHANGED_CODE]:
+    "errors.apiCodes.correspondenceSourceChanged",
   [ORGANIZATION_DATA_BOX_REFUSAL_CODE.limitReached]:
     "errors.apiCodes.organizationDataBoxLimitReached",
   [ORGANIZATION_DATA_BOX_REFUSAL_CODE.changedConcurrently]:

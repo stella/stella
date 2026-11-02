@@ -3,6 +3,13 @@ import type { SafeId } from "./safe-id";
 
 export const CORRESPONDENCE_MAX_BODY_CHARACTERS = 2_000_000;
 
+/**
+ * Another request filed or changed the same correspondence record at the same
+ * moment; reloading shows the current state.
+ */
+export const CORRESPONDENCE_SOURCE_CHANGED_CODE =
+  "correspondence_source_changed";
+
 export const CORRESPONDENCE_CHANNELS = ["email", "data_box"] as const;
 export type CorrespondenceChannel = (typeof CORRESPONDENCE_CHANNELS)[number];
 

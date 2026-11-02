@@ -191,9 +191,12 @@ type CallerPrivilege = {
   admitted: boolean;
 };
 
-const readCallerPrivileges = async (database: SQL) =>
+const readCallerPrivileges = async (
+  database: SQL,
+  restricted: readonly string[] = restrictedFunctions,
+) =>
   await database.unsafe<CallerPrivilege[]>(callerPrivilegesQuery, [
-    JSON.stringify(restrictedFunctions),
+    JSON.stringify(restricted),
     JSON.stringify(await readBodyCalls(database)),
   ]);
 
@@ -261,25 +264,26 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 [],
               );
 
+              // The query is proven on a restricted boolean routine of its own,
+              // whatever the migrations restrict.
+              await database.unsafe(`
+              CREATE FUNCTION public.routine_caller_restricted_fixture() RETURNS boolean
+                LANGUAGE sql AS 'SELECT true';
+              REVOKE EXECUTE ON FUNCTION public.routine_caller_restricted_fixture() FROM PUBLIC;
+            `);
               const [target] = await database.unsafe<
                 { call: string; signature: string }[]
               >(
-                `
-              SELECT format('%I.%I(%s)', n.nspname, p.proname,
-                (SELECT string_agg('NULL::' || format_type(argument, NULL), ', ' ORDER BY ordinal)
-                 FROM unnest(p.proargtypes::oid[]) WITH ORDINALITY args(argument, ordinal))) AS call,
-                p.oid::regprocedure::text AS signature
-              FROM pg_catalog.pg_proc p
-              JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
-              WHERE p.oid IN (SELECT value::regprocedure::oid FROM jsonb_array_elements_text($1::text::jsonb))
-                AND p.prorettype = 'boolean'::regtype
-              ORDER BY p.oid LIMIT 1
-            `,
-                [JSON.stringify(restrictedFunctions)],
+                `SELECT 'public.routine_caller_restricted_fixture()' AS call,
+                'public.routine_caller_restricted_fixture()'::regprocedure::text AS signature`,
               );
               if (!target) {
                 panic("Restricted policy function fixture is missing");
               }
+              const fixtureRestricted = [
+                ...restrictedFunctions,
+                "public.routine_caller_restricted_fixture()",
+              ];
               await database.unsafe(`
               CREATE ROLE routine_caller_fixture NOLOGIN;
               CREATE ROLE routine_caller_view_fixture NOLOGIN;
@@ -303,7 +307,10 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               CREATE VIEW public.routine_caller_fixture_trigger_view AS SELECT * FROM public.routine_caller_fixture_trigger_only;
               GRANT SELECT ON public.routine_caller_fixture_trigger_view TO routine_caller_view_fixture;
             `);
-              const fixturePrivileges = await readCallerPrivileges(database);
+              const fixturePrivileges = await readCallerPrivileges(
+                database,
+                fixtureRestricted,
+              );
               expect(
                 fixturePrivileges.filter(
                   ({ role, relation }) =>
@@ -343,9 +350,9 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 `GRANT EXECUTE ON FUNCTION ${target.signature} TO routine_caller_fixture, routine_caller_view_fixture`,
               );
               expect(
-                (await readCallerPrivileges(database)).filter(
-                  ({ admitted }) => !admitted,
-                ),
+                (
+                  await readCallerPrivileges(database, fixtureRestricted)
+                ).filter(({ admitted }) => !admitted),
               ).toEqual([]);
             },
           );

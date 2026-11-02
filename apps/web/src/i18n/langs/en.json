@@ -2966,6 +2966,7 @@
       "clauseDirectivesInvalid": "A linked clause has invalid directives. Correct the clause before filling the template.",
       "clauseDirectivesInvalidDetails": "Clause {clauseName} in slot {slotName} has invalid directives. Open the clause editor, correct the named paragraphs, and fill the template again.",
       "clauseDirectivesOverrideInvalidDetails": "The override for clause {clauseName} in slot {slotName} has invalid directives. Correct this fill’s override before filling again.",
+      "correspondenceSourceChanged": "This correspondence changed in the meantime. Reload the page and try again.",
       "deeplKeyRejected": "The stored DeepL key was rejected. Replace it in organization settings.",
       "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.",
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.",

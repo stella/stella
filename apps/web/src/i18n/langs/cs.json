@@ -2966,6 +2966,7 @@
       "clauseDirectivesInvalid": "Propojené ustanovení obsahuje neplatné direktivy. Před vyplněním vzoru ustanovení opravte.",
       "clauseDirectivesInvalidDetails": "Ustanovení {clauseName} na pozici {slotName} obsahuje neplatné direktivy. Otevřete editor ustanovení, opravte uvedené odstavce a znovu vyplňte vzor.",
       "clauseDirectivesOverrideInvalidDetails": "Přepsané ustanovení {clauseName} na pozici {slotName} obsahuje neplatné direktivy. Před dalším vyplněním opravte přepsané znění v tomto vyplnění.",
+      "correspondenceSourceChanged": "Tato korespondence se mezitím změnila. Načtěte stránku znovu a akci zopakujte.",
       "deeplKeyRejected": "Uložený klíč DeepL byl odmítnut. Nahraďte ho v nastavení organizace.",
       "deeplQuotaExceeded": "Limit znaků DeepL pro tuto organizaci byl vyčerpán.",
       "disposableEmailNotAllowed": "Dočasné e-mailové adresy nejsou povoleny. Použijte trvalou e-mailovou adresu.",

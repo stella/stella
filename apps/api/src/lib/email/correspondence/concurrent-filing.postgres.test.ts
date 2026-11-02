@@ -35,7 +35,7 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("concurrent correspondence filing (postgres)", () => {
-    test("two filings of one message that both planned no record converge on one", async () => {
+    test("two concurrent filings of one message converge on one record", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db: adminDb } = openClient({ max: 1 });
         const writers = [openClient({ max: 1 }), openClient({ max: 1 })];
@@ -76,6 +76,8 @@ if (!databaseUrl || !runPostgresTests) {
           bodyText: "Fixture message",
           bodyHtml: null,
         } satisfies ParsedCorrespondence;
+        // Settled before cleanup, so removing the fixture never races a filing.
+        let filings: Promise<unknown>[] = [];
         try {
           await adminDb.insert(organization).values({
             id: organizationId,
@@ -111,8 +113,9 @@ if (!databaseUrl || !runPostgresTests) {
               userId,
             });
           }
-          // Both writers plan before either inserts: the gate holds every
-          // insert of this test's filings until both are waiting at it.
+          // The gate holds every insert of this test's filings. Filing locks
+          // the matter first, so one filing waits at the gate while the other
+          // waits behind it for the matter.
           await adminDb.execute(sql`
             CREATE FUNCTION ${sql.identifier(functionName)}() RETURNS trigger
             LANGUAGE plpgsql AS $gate$
@@ -133,7 +136,7 @@ if (!databaseUrl || !runPostgresTests) {
           const [adminPid] = await adminDb.execute<{ pid: number }>(
             sql`SELECT pg_backend_pid() AS pid`,
           );
-          const filings = writers.map(async ({ db: writerDb }, index) => {
+          const filed = writers.map(async ({ db: writerDb }, index) => {
             const userId = userIds[index];
             if (userId === undefined) {
               throw new Error("Missing filer");
@@ -173,18 +176,29 @@ if (!databaseUrl || !runPostgresTests) {
               }),
             });
           });
+          filings = filed;
           await waitForExternalState({
-            description: "both filings wait at the insert gate",
+            description:
+              "one filing waits at the insert gate and the other behind it",
             read: async () =>
               (
-                await adminDb.execute<{ waiting: number }>(sql`
-                  SELECT count(*)::int AS waiting FROM pg_catalog.pg_stat_activity
-                  WHERE ${adminPid?.pid ?? 0} = ANY(pg_catalog.pg_blocking_pids(pid))
+                await adminDb.execute<{ gated: number; queued: number }>(sql`
+                  WITH gated AS (
+                    SELECT pid FROM pg_catalog.pg_stat_activity
+                    WHERE ${adminPid?.pid ?? 0} = ANY(pg_catalog.pg_blocking_pids(pid))
+                  )
+                  SELECT
+                    (SELECT count(*)::int FROM gated) AS gated,
+                    (SELECT count(*)::int FROM pg_catalog.pg_stat_activity activity
+                      WHERE EXISTS (
+                        SELECT 1 FROM gated
+                        WHERE gated.pid = ANY(pg_catalog.pg_blocking_pids(activity.pid))
+                      )) AS queued
                 `)
-              ).at(0)?.waiting === 2,
+              ).some(({ gated, queued }) => gated === 1 && queued === 1),
           });
           await adminDb.execute(sql`SELECT pg_advisory_unlock(${gateKey})`);
-          const outcomes = await Promise.all(filings);
+          const outcomes = await Promise.all(filed);
 
           const ids = outcomes.map((outcome) =>
             outcome.type === "ok" ? outcome.id : outcome.type,
@@ -216,6 +230,7 @@ if (!databaseUrl || !runPostgresTests) {
           );
         } finally {
           await adminDb.execute(sql`SELECT pg_advisory_unlock_all()`);
+          await Promise.allSettled(filings);
           await adminDb.execute(
             sql`DROP TRIGGER IF EXISTS ${sql.identifier(functionName)} ON correspondence`,
           );

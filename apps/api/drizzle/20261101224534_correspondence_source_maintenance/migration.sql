@@ -259,9 +259,10 @@ REVOKE ALL ON FUNCTION public.remove_entity_correspondence_sources() FROM PUBLIC
 GRANT EXECUTE ON FUNCTION public.correspondence_has_other_sources(uuid, uuid) TO stella;--> statement-breakpoint
 -- The source trigger routine runs for every correspondence writer as its
 -- owner; it stays executable for the roles that write correspondence, not
--- through PUBLIC. Its owner grants this before giving up the role.
+-- through PUBLIC: the application, the entity gate and the migrating owner
+-- of the table. Its owner grants this before giving up the role.
 REVOKE EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() TO stella, stella_entity_gate;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() TO stella, stella_entity_gate, SESSION_USER;--> statement-breakpoint
 RESET ROLE;--> statement-breakpoint
 REVOKE CREATE ON SCHEMA public FROM stella_correspondence_source;--> statement-breakpoint
 -- stella-migration-safety: reviewed grant-privileges - Disable runtime switching to the private lifecycle role after installing its trigger-only entry point.

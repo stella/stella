@@ -2966,6 +2966,7 @@
       "clauseDirectivesInvalid": "Susietoje sąlygoje yra netinkamų direktyvų. Prieš pildydami šabloną, pataisykite sąlygą.",
       "clauseDirectivesInvalidDetails": "Sąlygoje {clauseName}, esančioje lauke {slotName}, yra netinkamų direktyvų. Atidarykite sąlygų redaktorių, pataisykite nurodytas pastraipas ir dar kartą užpildykite šabloną.",
       "clauseDirectivesOverrideInvalidDetails": "Sąlygos {clauseName} pakeistas tekstas lauke {slotName} turi netinkamų direktyvų. Pataisykite šio pildymo pakeistą tekstą ir bandykite dar kartą.",
+      "correspondenceSourceChanged": "Ši korespondencija per tą laiką pasikeitė. Įkelkite puslapį iš naujo ir bandykite dar kartą.",
       "deeplKeyRejected": "Išsaugotas „DeepL“ raktas buvo atmestas. Pakeiskite jį organizacijos nustatymuose.",
       "deeplQuotaExceeded": "Šios organizacijos „DeepL“ simbolių kvota išnaudota.",
       "disposableEmailNotAllowed": "Laikini el. pašto adresai neleidžiami. Naudokite nuolatinį el. pašto adresą.",

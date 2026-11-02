@@ -2,7 +2,10 @@ import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { ParsedCorrespondence } from "@stll/api-contract/correspondence";
+import {
+  CORRESPONDENCE_SOURCE_CHANGED_CODE,
+  type ParsedCorrespondence,
+} from "@stll/api-contract/correspondence";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
@@ -219,6 +222,7 @@ type LockSourceContentOptions = FindSourceContentOptions & {
 const sourceConflict = () =>
   new HandlerError({
     status: 409,
+    code: CORRESPONDENCE_SOURCE_CHANGED_CODE,
     message: "The source update conflicts with another correspondence record",
   });
 
@@ -500,6 +504,7 @@ export const persistCorrespondenceContent = async ({
     return Result.err(
       new HandlerError({
         status: 409,
+        code: CORRESPONDENCE_SOURCE_CHANGED_CODE,
         message: "The filing conflicts with another correspondence record",
       }),
     );

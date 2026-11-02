@@ -2966,6 +2966,7 @@
       "clauseDirectivesInvalid": "يحتوي بند مرتبط على توجيهات غير صالحة. صحّح البند قبل تعبئة القالب.",
       "clauseDirectivesInvalidDetails": "يحتوي البند {clauseName} في الحقل {slotName} على توجيهات غير صالحة. افتح محرر البنود، وصحح الفقرات المحددة، ثم املأ القالب مرة أخرى.",
       "clauseDirectivesOverrideInvalidDetails": "يحتوي النص البديل للبند {clauseName} في الحقل {slotName} على توجيهات غير صالحة. صحّح النص البديل لهذا التعبئة قبل المحاولة مرة أخرى.",
+      "correspondenceSourceChanged": "تغيّرت هذه المراسلات في الأثناء. أعد تحميل الصفحة وحاول مرة أخرى.",
       "deeplKeyRejected": "تم رفض مفتاح DeepL المحفوظ. استبدله في إعدادات المؤسسة.",
       "deeplQuotaExceeded": "تم استنفاد حصة أحرف DeepL لهذه المؤسسة.",
       "disposableEmailNotAllowed": "عناوين البريد الإلكتروني المؤقتة غير مسموح بها. استخدم عنوان بريد إلكتروني دائم.",

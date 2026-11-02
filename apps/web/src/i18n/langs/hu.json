@@ -2966,6 +2966,7 @@
       "clauseDirectivesInvalid": "Egy kapcsolt záradék érvénytelen direktívákat tartalmaz. Javítsa a záradékot a sablon kitöltése előtt.",
       "clauseDirectivesInvalidDetails": "A(z) {slotName} mezőben lévő {clauseName} záradék érvénytelen direktívákat tartalmaz. Nyissa meg a záradékszerkesztőt, javítsa ki a megadott bekezdéseket, és töltse ki újra a sablont.",
       "clauseDirectivesOverrideInvalidDetails": "A(z) {clauseName} záradék felülírt szövege a(z) {slotName} mezőben érvénytelen direktívákat tartalmaz. Javítsa ki a szöveget ehhez a kitöltéshez, majd próbálja újra.",
+      "correspondenceSourceChanged": "Ez a levelezés időközben megváltozott. Töltse be újra az oldalt, és próbálja újra.",
       "deeplKeyRejected": "A mentett DeepL-kulcsot a szolgáltató elutasította. Cserélje le a szervezet beállításaiban.",
       "deeplQuotaExceeded": "A szervezet DeepL-karakterkerete elfogyott.",
       "disposableEmailNotAllowed": "Az ideiglenes e-mail-címek nem engedélyezettek. Használjon állandó e-mail-címet.",

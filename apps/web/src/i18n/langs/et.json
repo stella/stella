@@ -2966,6 +2966,7 @@
       "clauseDirectivesInvalid": "Seotud klausel sisaldab vigaseid direktiive. Enne malli täitmist parandage klausel.",
       "clauseDirectivesInvalidDetails": "Klausel {clauseName} väljas {slotName} sisaldab vigaseid direktiive. Avage klausliredaktor, parandage nimetatud lõigud ja täitke mall uuesti.",
       "clauseDirectivesOverrideInvalidDetails": "Klausli {clauseName} asendustekst väljas {slotName} sisaldab vigaseid direktiive. Parandage selle täitmise asendustekst ja proovige uuesti.",
+      "correspondenceSourceChanged": "See kirjavahetus on vahepeal muutunud. Laadige leht uuesti ja proovige uuesti.",
       "deeplKeyRejected": "Salvestatud DeepL-i võti lükati tagasi. Asendage see organisatsiooni seadetes.",
       "deeplQuotaExceeded": "Selle organisatsiooni DeepL-i tähemärgikvoot on ammendatud.",
       "disposableEmailNotAllowed": "Ajutised e-posti aadressid ei ole lubatud. Kasutage püsivat e-posti aadressi.",

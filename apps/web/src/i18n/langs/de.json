@@ -2966,6 +2966,7 @@
       "clauseDirectivesInvalid": "Eine verknüpfte Klausel enthält ungültige Anweisungen. Korrigieren Sie die Klausel, bevor Sie die Vorlage ausfüllen.",
       "clauseDirectivesInvalidDetails": "Die Klausel {clauseName} im Platzhalter {slotName} enthält ungültige Direktiven. Öffnen Sie den Klauseleditor, korrigieren Sie die angegebenen Absätze und füllen Sie die Vorlage erneut aus.",
       "clauseDirectivesOverrideInvalidDetails": "Die Überschreibung für Klausel {clauseName} im Platzhalter {slotName} enthält ungültige Anweisungen. Korrigieren Sie die Überschreibung für diesen Ausfüllvorgang und versuchen Sie es erneut.",
+      "correspondenceSourceChanged": "Diese Korrespondenz hat sich inzwischen geändert. Laden Sie die Seite neu und versuchen Sie es erneut.",
       "deeplKeyRejected": "Der gespeicherte DeepL-Schlüssel wurde abgelehnt. Ersetzen Sie ihn in den Organisationseinstellungen.",
       "deeplQuotaExceeded": "Das DeepL-Zeichenkontingent dieser Organisation ist aufgebraucht.",
       "disposableEmailNotAllowed": "Temporäre E-Mail-Adressen sind nicht zulässig. Verwenden Sie eine dauerhafte E-Mail-Adresse.",

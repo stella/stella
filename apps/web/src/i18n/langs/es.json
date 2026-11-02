@@ -2966,6 +2966,7 @@
       "clauseDirectivesInvalid": "Una cláusula vinculada contiene directivas no válidas. Corrija la cláusula antes de rellenar la plantilla.",
       "clauseDirectivesInvalidDetails": "La cláusula {clauseName} en el campo {slotName} contiene directivas no válidas. Abra el editor de cláusulas, corrija los párrafos indicados y vuelva a rellenar la plantilla.",
       "clauseDirectivesOverrideInvalidDetails": "La sustitución de la cláusula {clauseName} en el campo {slotName} contiene directivas no válidas. Corrija la sustitución de este formulario antes de volver a rellenarlo.",
+      "correspondenceSourceChanged": "Esta correspondencia cambió mientras tanto. Vuelva a cargar la página e inténtelo de nuevo.",
       "deeplKeyRejected": "La clave de DeepL guardada fue rechazada. Sustitúyela en la configuración de la organización.",
       "deeplQuotaExceeded": "Se ha agotado la cuota de caracteres de DeepL de esta organización.",
       "disposableEmailNotAllowed": "No se permiten direcciones de correo temporales. Usa una dirección de correo permanente.",
