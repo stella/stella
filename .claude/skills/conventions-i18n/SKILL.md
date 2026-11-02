@@ -39,11 +39,12 @@ longer matches it, and `i18n:sync` never updates an existing entry.
    lists every message `i18n:check` fails on for that locale with the English
    it was written for, the current translation, placeholders, plural forms the
    locale needs, glossary terms and the source lines that use the key.
-2. Rework each translation to say what the English now says.
-3. Once every locale is updated, record it with
-   `bun --filter @stll/web i18n:accept <key> ...`. Accept a key without
-   retranslating only when the English change leaves every translation correct
-   (casing, punctuation).
+   [check: i18n:check]
+2. Rework each translation to say what the English now says, then record it
+   with `bun --filter @stll/web i18n:accept <key> ...` once every locale is
+   updated. Accepting without retranslating is right only when the English
+   change leaves every translation correct (casing, punctuation).
+   [check: i18n:check]
 
 The product name is lowercase `stella` in every locale and grammatical form,
 sentence starts included (`stellu`, `stelle`).
