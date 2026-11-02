@@ -2,18 +2,10 @@
 
 import type * as React from "react";
 
+import { stripDirectionalControls } from "../lib/directional-controls";
 import { cn } from "../lib/utils";
 
-/** Explicit embeddings, overrides and isolates; implicit marks stay. */
-const DIRECTIONAL_CONTROLS = /[\u202A-\u202E\u2066-\u2069]/gu;
-
-/**
- * Isolation shields the text around a value, not the value itself: a
- * directional control inside it still reorders its letters, so stored text
- * loses those controls before it renders.
- */
-export const stripDirectionalControls = (text: string): string =>
-  text.replaceAll(DIRECTIONAL_CONTROLS, "");
+export { stripDirectionalControls };
 
 export const withoutDirectionalControls = (
   children: React.ReactNode,

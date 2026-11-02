@@ -75,6 +75,7 @@
     "./destructive-action-confirmation": "./src/components/destructive-action-confirmation.tsx",
     "./destructive-confirm-dialog": "./src/components/destructive-confirm-dialog.tsx",
     "./dialog": "./src/components/dialog.tsx",
+    "./directional-controls": "./src/lib/directional-controls.ts",
     "./directional-icon": "./src/components/directional-icon.tsx",
     "./field": "./src/components/field.tsx",
     "./form": "./src/components/form.tsx",

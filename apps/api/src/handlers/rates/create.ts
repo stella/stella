@@ -12,12 +12,12 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { defaultVarcharSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const createRateTableBodySchema = v.object({
-  name: defaultVarcharSchema,
+  name: displayNameSchema(),
   currency: currencyCodeSchema,
   isDefault: v.optional(v.boolean()),
 });

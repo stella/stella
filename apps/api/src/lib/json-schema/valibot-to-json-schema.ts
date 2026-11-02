@@ -7,6 +7,7 @@ import { type GenericSchema, safeParse } from "valibot";
 
 import { API_DATE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/api-date";
 import { DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/decision-paragraph-range";
+import { DISPLAY_NAME_RUNTIME_ONLY_ACTIONS } from "@stll/api-contract/display-name";
 import { wireValueOf } from "@stll/api-contract/http-input";
 import { keepUnicodePatternSource } from "@stll/api-contract/json-schema-regex";
 import { UUID_RUNTIME_ONLY_ACTIONS } from "@stll/api-contract/uuid";
@@ -74,6 +75,7 @@ const RUNTIME_ONLY_ACTIONS: ReadonlySet<unknown> = new Set([
   ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
   ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
   ...DOCUMENT_AST_RUNTIME_ONLY_ACTIONS,
+  ...DISPLAY_NAME_RUNTIME_ONLY_ACTIONS,
 ]);
 
 const RUNTIME_ONLY_CHECK_REQUIREMENTS: ReadonlySet<unknown> = new Set(

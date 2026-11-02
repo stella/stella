@@ -68,6 +68,9 @@ export const fileSchema = ({ maxBytes }: { maxBytes: number }) =>
 
 export { userIdSchema } from "@stll/api-contract/safe-id";
 
+/** Every name a person gives something; see `display-name.ts` in api-contract. */
+export { displayNameSchema } from "@stll/api-contract/display-name";
+
 export const defaultVarcharSchema = v.pipe(
   v.string(),
   v.minLength(1),
