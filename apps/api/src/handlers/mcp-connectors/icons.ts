@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
+import { decodeHTMLAttribute } from "entities";
 
 import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -58,17 +58,34 @@ const ICON_REL_PRIORITY = [
   "shortcut icon",
 ] as const;
 
-const findIconInHtml = ({
+export const findIconInHtml = ({
   html,
   rootUrl,
 }: {
   html: string;
   rootUrl: URL;
 }): string | null => {
-  const $ = cheerio.load(html);
+  const hrefs = new Map<string, string | null>();
+  new HTMLRewriter()
+    .on("link", {
+      element(el) {
+        const rawRel = el.getAttribute("rel");
+        if (rawRel === null) {
+          return;
+        }
+        const decodedRel = decodeHTMLAttribute(rawRel).toLowerCase();
+        const rel = ICON_REL_PRIORITY.find((value) => value === decodedRel);
+        if (rel === undefined || hrefs.has(rel)) {
+          return;
+        }
+        const rawHref = el.getAttribute("href");
+        hrefs.set(rel, rawHref === null ? null : decodeHTMLAttribute(rawHref));
+      },
+    })
+    .transform(html);
 
   for (const rel of ICON_REL_PRIORITY) {
-    const href = $(`link[rel="${rel}"]`).attr("href");
+    const href = hrefs.get(rel);
     if (!href) {
       continue;
     }

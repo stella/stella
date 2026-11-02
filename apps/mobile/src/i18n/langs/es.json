@@ -182,6 +182,17 @@
       "system": "Apariencia: automática",
       "light": "Apariencia: clara",
       "dark": "Apariencia: oscura"
+    },
+    "edit": {
+      "saved": "Guardado",
+      "saving": "Guardando…",
+      "notSaved": "Aún sin guardar",
+      "done": "Listo",
+      "openFailed": "Ahora no se puede editar este documento",
+      "takenOver": "Otra persona está editando ahora este documento. Sus cambios desde el último guardado no se conservaron.",
+      "finishFailed": "Sus cambios están guardados, pero aún no se han convertido en una nueva versión. Vuelva a tocar Listo o salga: la próxima edición continuará desde ellos.",
+      "stay": "Quedarse",
+      "leave": "Salir"
     }
   },
   "signIn": {

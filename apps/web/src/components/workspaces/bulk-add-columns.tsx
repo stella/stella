@@ -479,9 +479,7 @@ const useColumnsSubmit = (onClose: () => void) => {
       title:
         count === 1
           ? t("workspaces.properties.bulk.createdOne")
-          : t("workspaces.properties.bulk.createdMany", {
-              count: String(count),
-            }),
+          : t("workspaces.properties.bulk.createdMany", { count }),
       type: "success",
     });
     onClose();
