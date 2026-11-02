@@ -103,6 +103,12 @@ type DraftingFixture = {
   generation: "write" | "fail";
   /** Drafting requests wait until the test calls `releaseDraft`. */
   held?: boolean;
+  /** The remembered drafting instruction the server starts with. */
+  preference?: string;
+  /** What a guided draft proposes beyond its text, as the contract spells
+   * it, and whether its guideline note is fixed by a split. */
+  operations?: unknown[];
+  flagFix?: "split";
 };
 
 const RELEASE_DRAFT = "__STELLA_TEST_RELEASE_DRAFT__";
@@ -137,6 +143,8 @@ const DRAFTING: DraftingFixture = {
 
 /** What the mocked stella AI writes for a drafted suggestion. */
 const GENERATED_NARRATIVE = "Reviewed the lease draft and its annexes.";
+/** What it writes when asked to adjust a draft. */
+const REFINED_NARRATIVE = "Reviewed the lease draft.";
 
 /** The user's earlier entry the mocked draft follows. */
 const EARLIER_ENTRY = {
@@ -174,6 +182,7 @@ const installNativeBoundary = async ({
       historyDeletion,
       drafting,
       generatedNarrative: GENERATED_NARRATIVE,
+      refinedNarrative: REFINED_NARRATIVE,
       earlierEntry: EARLIER_ENTRY,
       releaseDraftKey: RELEASE_DRAFT,
       settingsWindow: {
@@ -195,6 +204,7 @@ const installNativeBoundary = async ({
         historyDeletion: historyState,
         drafting: draftingFixture,
         generatedNarrative,
+        refinedNarrative,
         earlierEntry,
         releaseDraftKey,
         settingsWindow,
@@ -204,6 +214,7 @@ const installNativeBoundary = async ({
       let batchAttempts = 0;
       let activitySnapshot = initialSnapshot;
       let draftConsent = draftingFixture.consent;
+      let draftPreference = draftingFixture.preference ?? null;
       let draftRevision = 1;
       const scopedDraftSettings = () => ({
         scopeKey: '["org_fixture","user_fixture"]',
@@ -211,7 +222,7 @@ const installNativeBoundary = async ({
           revision: `revision-${String(draftRevision)}`,
           effectiveMode: draftingFixture.mode,
           consent: draftConsent,
-          preference: null,
+          preference: draftPreference,
         },
       });
       const emitActivityChanged = () => emit(changedEvent, null);
@@ -405,6 +416,15 @@ const installNativeBoundary = async ({
           draftRevision += 1;
           return scopedDraftSettings();
         },
+        billing_draft_set_preference: (args) => {
+          if (args["revision"] !== `revision-${String(draftRevision)}`) {
+            throw new Error("billing draft request failed");
+          }
+          const preference = args["preference"];
+          draftPreference = typeof preference === "string" ? preference : null;
+          draftRevision += 1;
+          return scopedDraftSettings();
+        },
         billing_draft_withdraw_consent: () => {
           draftConsent = "revoked";
           draftRevision += 1;
@@ -448,7 +468,8 @@ const installNativeBoundary = async ({
                 mode: "guided",
                 drafts: request.entries.map((entry: { entryId: string }) => ({
                   entryId: entry.entryId,
-                  narrative: generatedNarrative,
+                  narrative:
+                    "steer" in request ? refinedNarrative : generatedNarrative,
                   classification: {
                     type: "ledes",
                     taskCode: "L120",
@@ -462,10 +483,13 @@ const installNativeBoundary = async ({
                         fileName: "Outside counsel guidelines.pdf",
                         section: "4.2",
                       },
+                      ...(draftingFixture.flagFix === undefined
+                        ? {}
+                        : { fix: draftingFixture.flagFix }),
                     },
                   ],
                   matchedEarlierEntryIds: [earlierEntry.id],
-                  operations: [],
+                  operations: draftingFixture.operations ?? [],
                 })),
                 checkedGuidelines: [
                   {
@@ -482,7 +506,8 @@ const installNativeBoundary = async ({
               mode: "plain",
               drafts: request.entries.map((entry: { entryId: string }) => ({
                 entryId: entry.entryId,
-                narrative: generatedNarrative,
+                narrative:
+                  "steer" in request ? refinedNarrative : generatedNarrative,
                 matchedEarlierEntryIds: [earlierEntry.id],
               })),
             },
@@ -2710,6 +2735,190 @@ test("a guided draft shows its codes and guideline notes, and the accepted entry
   ]);
 });
 
+test("a guided split creates its parts as entries, each over its own share of the time", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: {
+      ...DRAFTING,
+      mode: "guided",
+      consent: "granted",
+      flagFix: "split",
+      operations: [
+        {
+          type: "split",
+          parts: [10, 20].map((durationMinutes, index) => ({
+            durationMinutes,
+            narrative: `Part ${String(index + 1)}`,
+            classification: {
+              type: "ledes",
+              taskCode: "L120",
+              activityCode: "A104",
+            },
+            billable: true,
+          })),
+        },
+      ],
+    },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const proposal = card.getByRole("region", {
+    name: "stella AI suggests splitting this into 2 entries",
+  });
+  await expect(proposal).toContainText("Part 1");
+  await expect(proposal).toContainText("Part 2");
+  // Nothing is created until the split is accepted.
+  expect(batchRequests(await tauriInvocations(page))).toEqual([]);
+  await card
+    .getByRole("region", { name: enMessages.activity.aiDraftFlags })
+    .getByRole("button", { name: enMessages.activity.aiFlagSplit })
+    .click();
+  await expect(suggestionCard(page, "Second matter")).toBeFocused();
+  const [batch] = batchRequests(await tauriInvocations(page));
+  expect(batch).toEqual(
+    expect.objectContaining({
+      items: [
+        {
+          entry: expect.objectContaining({
+            matterId: "matter-1",
+            durationMinutes: 10,
+            narrative: "Part 1",
+          }),
+          ranges: [
+            { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:10:00Z" },
+          ],
+        },
+        {
+          entry: expect.objectContaining({
+            matterId: "matter-1",
+            durationMinutes: 20,
+            narrative: "Part 2",
+          }),
+          ranges: [
+            { start: "2026-10-07T09:10:00Z", end: "2026-10-07T09:30:00Z" },
+          ],
+        },
+      ],
+    }),
+  );
+});
+
+/** A matter the server named from the firm's records, outside the card's
+ * candidates. */
+const OTHER_CLIENT_MATTER_ID = "00000000-0000-4000-8000-0000000000b2";
+
+test("a guided move of part of the time keeps the rest on the card's matter", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: {
+      ...DRAFTING,
+      mode: "guided",
+      consent: "granted",
+      operations: [
+        {
+          type: "move",
+          targetMatterId: OTHER_CLIENT_MATTER_ID,
+          targetMatterName: "Other client matter",
+          durationMinutes: 10,
+          narrative: "Called about the service agreement.",
+          classification: { type: "activity_group", activityGroup: "client" },
+          billable: false,
+        },
+      ],
+    },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const proposal = card.getByRole("region", {
+    name: /Other client matter/u,
+  });
+  await expect(proposal).toContainText("Called about the service agreement.");
+  await proposal
+    .getByRole("button", { name: enMessages.activity.aiStructureMoveAccept })
+    .click();
+  await expect(suggestionCard(page, "Second matter")).toBeFocused();
+  const [batch] = batchRequests(await tauriInvocations(page));
+  expect(batch).toEqual(
+    expect.objectContaining({
+      items: [
+        {
+          entry: expect.objectContaining({
+            matterId: "matter-1",
+            durationMinutes: 20,
+            narrative: GENERATED_NARRATIVE,
+            billable: true,
+          }),
+          ranges: [
+            { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:20:00Z" },
+          ],
+        },
+        {
+          entry: expect.objectContaining({
+            matterId: OTHER_CLIENT_MATTER_ID,
+            durationMinutes: 10,
+            narrative: "Called about the service agreement.",
+            billable: false,
+            classification: {
+              type: "activity_group",
+              activityGroup: "client",
+            },
+          }),
+          ranges: [
+            { start: "2026-10-07T09:20:00Z", end: "2026-10-07T09:30:00Z" },
+          ],
+        },
+      ],
+    }),
+  );
+});
+
+test("a split proposed for one matter is not offered once the card's matter changes", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: {
+      ...DRAFTING,
+      mode: "guided",
+      consent: "granted",
+      operations: [
+        {
+          type: "split",
+          parts: [15, 15].map((durationMinutes) => ({
+            durationMinutes,
+            narrative: "Half",
+            classification: {
+              type: "ledes",
+              taskCode: "L120",
+              activityCode: "A104",
+            },
+            billable: true,
+          })),
+        },
+      ],
+    },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const proposal = card.getByRole("region", {
+    name: "stella AI suggests splitting this into 2 entries",
+  });
+  await expect(proposal).toBeVisible();
+  await card.getByRole("button", { name: "Example matter" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /Second matter/u })
+    .click();
+  await expect(proposal).toHaveCount(0);
+});
+
 test("choosing another matter drops a guided draft's codes", async ({
   page,
 }) => {
@@ -2727,6 +2936,166 @@ test("choosing another matter drops a guided draft's codes", async ({
     .getByRole("button", { name: /Second matter/u })
     .click();
   await expect(page.getByText("Task L120 · Activity A104")).toHaveCount(0);
+});
+
+test("refining a draft proposes the change, accepting applies it and Undo restores the draft", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const narrative = card.getByRole("textbox", {
+    name: enMessages.activity.entryNarrative,
+  });
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+  await card
+    .getByRole("button", { name: enMessages.activity.aiSteerShorter })
+    .click();
+  await card
+    .getByRole("button", { name: enMessages.activity.aiRefine, exact: true })
+    .click();
+  const proposal = card.getByRole("region", {
+    name: enMessages.activity.aiProposal,
+  });
+  await expect(proposal).toBeVisible();
+  // The proposal reads as a change to the draft until it is accepted.
+  expect(
+    (await proposal.getByRole("deletion").allTextContents()).join(""),
+  ).toBe("draft and its annexes.");
+  expect(
+    (await proposal.getByRole("insertion").allTextContents()).join(""),
+  ).toBe("draft.");
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+  const [, refined] = await draftInvocations(page);
+  // The instruction goes with the entry and the server's first result, sent
+  // back as it came.
+  expect(refined?.args).toEqual({
+    request: {
+      entries: [expect.objectContaining({ entryId: "entry_1" })],
+      steer: enMessages.activity.aiSteerShorter,
+      previousResult: {
+        mode: "plain",
+        drafts: [
+          {
+            entryId: "entry_1",
+            narrative: GENERATED_NARRATIVE,
+            matchedEarlierEntryIds: [EARLIER_ENTRY.id],
+          },
+        ],
+      },
+    },
+  });
+  await proposal
+    .getByRole("button", { name: enMessages.activity.aiAccept })
+    .click();
+  await expect(narrative).toHaveValue(REFINED_NARRATIVE);
+  await card.getByRole("button", { name: enMessages.activity.aiUndo }).click();
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+});
+
+test("dismissing a proposal keeps the draft, and Use original brings back the template", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const narrative = card.getByRole("textbox", {
+    name: enMessages.activity.entryNarrative,
+  });
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+  await card
+    .getByRole("textbox", { name: enMessages.activity.aiRefinePlaceholder })
+    .fill("Mention the annex numbers");
+  await card
+    .getByRole("button", { name: enMessages.activity.aiRefine, exact: true })
+    .click();
+  await card
+    .getByRole("region", { name: enMessages.activity.aiProposal })
+    .getByRole("button", { name: enMessages.activity.aiDismiss })
+    .click();
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+  await card
+    .getByRole("button", { name: enMessages.activity.aiUseOriginal })
+    .click();
+  await expect(narrative).toHaveValue("Work on Lease draft.docx");
+});
+
+test("an instruction remembered while refining becomes the drafting preference", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(
+    card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
+  ).toHaveValue(GENERATED_NARRATIVE);
+  await card
+    .getByRole("button", { name: enMessages.activity.aiSteerShorter })
+    .click();
+  await card
+    .getByRole("checkbox", { name: enMessages.activity.aiSteerRemember })
+    .click();
+  await card
+    .getByRole("button", { name: enMessages.activity.aiRefine, exact: true })
+    .click();
+  await expect
+    .poll(async () =>
+      (await tauriInvocations(page)).filter(
+        ({ command }) => command === "billing_draft_set_preference",
+      ),
+    )
+    .toEqual([
+      {
+        command: "billing_draft_set_preference",
+        args: {
+          scopeKey: '["org_fixture","user_fixture"]',
+          revision: "revision-1",
+          preference: enMessages.activity.aiSteerShorter,
+        },
+      },
+    ]);
+});
+
+test("Settings shows the remembered drafting preference and forgets it", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    view: "settings",
+    drafting: { ...DRAFTING, consent: "granted", preference: "Shorter" },
+  });
+  await expect(
+    page.getByText(enMessages.activity.billingDraftsPreference),
+  ).toBeVisible();
+  await expect(page.getByText("Shorter", { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.billingDraftsForgetPreference,
+    })
+    .click();
+  await expect(
+    page.getByText(enMessages.activity.billingDraftsPreference),
+  ).toHaveCount(0);
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "billing_draft_set_preference",
+    args: {
+      scopeKey: '["org_fixture","user_fixture"]',
+      revision: "revision-1",
+      preference: null,
+    },
+  });
 });
 
 test("a failed draft keeps the template and offers to try again", async ({
