@@ -524,7 +524,12 @@
     "aiSteerWriteIn": "Írás ezen a nyelven: {language}",
     "aiSteerRemember": "Megjegyzés legközelebbre",
     "billingDraftsPreference": "Az Ön javaslati preferenciája",
-    "billingDraftsForgetPreference": "Preferencia törlése"
+    "billingDraftsForgetPreference": "Preferencia törlése",
+    "aiStructureSplit": "{count, plural, one {A stella AI # bejegyzésre bontaná ezt} other {A stella AI # bejegyzésre bontaná ezt}}",
+    "aiStructureMove": "A stella AI {duration} áthelyezését javasolja ide: {matter}",
+    "aiStructureCreate": "{count, plural, one {# bejegyzés létrehozása} other {# bejegyzés létrehozása}}",
+    "aiStructureMoveAccept": "Áthelyezés",
+    "aiFlagSplit": "Bejegyzés felosztása"
   },
   "dictation": {
     "title": "Diktálás",

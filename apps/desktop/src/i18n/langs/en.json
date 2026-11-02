@@ -524,7 +524,12 @@
     "aiSteerWriteIn": "Write in {language}",
     "aiSteerRemember": "Remember for next time",
     "billingDraftsPreference": "Your drafting preference",
-    "billingDraftsForgetPreference": "Forget preference"
+    "billingDraftsForgetPreference": "Forget preference",
+    "aiStructureSplit": "{count, plural, one {stella AI suggests splitting this into # entry} other {stella AI suggests splitting this into # entries}}",
+    "aiStructureMove": "stella AI suggests moving {duration} to {matter}",
+    "aiStructureCreate": "{count, plural, one {Create # entry} other {Create # entries}}",
+    "aiStructureMoveAccept": "Move",
+    "aiFlagSplit": "Split entry"
   },
   "dictation": {
     "title": "Dictation",

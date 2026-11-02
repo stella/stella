@@ -146,9 +146,9 @@
       "default": {"title": 10, "description": 379, "inputSchema": 1424, "outputSchema": 1293, "annotations": 88, "payloadUtf8Bytes": 3334}
     },
     "list_templates": {
-      "advanced": {"title": 14, "description": 688, "inputSchema": 354, "outputSchema": 2576, "annotations": 92, "payloadUtf8Bytes": 3868},
-      "anonymized": {"title": 14, "description": 529, "inputSchema": 354, "outputSchema": 2576, "annotations": 92, "payloadUtf8Bytes": 3709},
-      "default": {"title": 14, "description": 688, "inputSchema": 354, "outputSchema": 2576, "annotations": 92, "payloadUtf8Bytes": 3868}
+      "advanced": {"title": 14, "description": 572, "inputSchema": 505, "outputSchema": 2576, "annotations": 92, "payloadUtf8Bytes": 3903},
+      "anonymized": {"title": 14, "description": 413, "inputSchema": 505, "outputSchema": 2576, "annotations": 92, "payloadUtf8Bytes": 3744},
+      "default": {"title": 14, "description": 572, "inputSchema": 505, "outputSchema": 2576, "annotations": 92, "payloadUtf8Bytes": 3903}
     },
     "list_time_entries": {
       "advanced": {"title": 17, "description": 587, "inputSchema": 1522, "outputSchema": 2168, "annotations": 95, "payloadUtf8Bytes": 4536},

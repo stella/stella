@@ -33,6 +33,12 @@ with `--scopes` must all be available. `--scopes` selects `stella:` resource
 scopes only: the identity scopes (`openid profile email offline_access`, which
 is what gets a refresh token issued) are always requested.
 
+Set `STELLA_TIMING=1` to print phase durations to stderr: startup, token
+lookup or refresh, registry lookup or refresh, the API call, and output. These
+traces contain durations only. Registry projections are reused for up to 30
+seconds within the same server, organization, CLI version, and credential;
+access tokens are reused until they approach expiry.
+
 ## Passing input
 
 Every generated command takes its tool's fields as flags, or the whole
