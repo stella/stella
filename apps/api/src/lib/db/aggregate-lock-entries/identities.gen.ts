@@ -3,6 +3,7 @@ import type { Identity as AccountDeletionRequestIdentity } from "./accountDeleti
 import type { Identity as AccountExportIdentity } from "./accountExport";
 import type { Identity as AutomatedFlowRunCapIdentity } from "./automatedFlowRunCap";
 import type { Identity as BillingCodeCapacityIdentity } from "./billingCodeCapacity";
+import type { Identity as BillingDraftSettingsIdentity } from "./billingDraftSettings";
 import type { Identity as CaseLawRepublicationIdentity } from "./caseLawRepublication";
 import type { Identity as CaseLawSitemapMonthIdentity } from "./caseLawSitemapMonth";
 import type { Identity as ChatMessageIdentity } from "./chatMessage";
@@ -59,6 +60,7 @@ export type AggregateIdentities = {
   "accountExport": AccountExportIdentity;
   "automatedFlowRunCap": AutomatedFlowRunCapIdentity;
   "billingCodeCapacity": BillingCodeCapacityIdentity;
+  "billingDraftSettings": BillingDraftSettingsIdentity;
   "caseLawRepublication": CaseLawRepublicationIdentity;
   "caseLawSitemapMonth": CaseLawSitemapMonthIdentity;
   "chatMessage": ChatMessageIdentity;

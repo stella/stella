@@ -4,7 +4,7 @@
     "function": "module/httpsOnlyFetch",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/bilingual-translations/read-run.ts",
@@ -39,14 +39,14 @@
     "function": "module/reparseNss",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/decisions/dev-reparse.ts",
     "function": "module/reparseNss",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/decisions/get.ts",
@@ -102,315 +102,315 @@
     "function": "module/createNalusFetch/request",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us-throttle.ts",
     "function": "module/createNalusFetch/request",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
     "function": "module/fetchFormex",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
     "function": "module/fetchFormex",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
     "function": "module/fetchNotice",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
     "function": "module/fetchNotice",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
     "function": "module/getTotalCount",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
     "function": "module/getTotalCount",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
     "function": "module/queryDecisions",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
     "function": "module/queryDecisions",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
     "function": "module/readDocumentResponse",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
     "function": "module/readDocumentResponse",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts",
     "function": "module/fetchDocument",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts",
     "function": "module/fetchDocument",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts",
     "function": "module/search",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts",
     "function": "module/search",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts",
     "function": "module/createPagePaginatedFetch/readPage",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts",
     "function": "module/createPagePaginatedFetch",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
     "function": "module/fetchDetail",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
     "function": "module/fetchDetail",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
     "function": "module/getTotalCount",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
     "function": "module/getTotalCount",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
     "function": "module/listPlCourtsDayPage",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts",
     "function": "module/listPlCourtsDayPage",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts",
     "function": "module/receive",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts",
     "function": "module/receive",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kis.ts",
     "function": "module/fetchEureka",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kis.ts",
     "function": "module/fetchEureka",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-ncourt.ts",
     "function": "module/request",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-ncourt.ts",
     "function": "module/request",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa-dataset.ts",
     "function": "module/locateShard",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa-dataset.ts",
     "function": "module/locateShard",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa-dataset.ts",
     "function": "module/readRepositoryRange",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa-dataset.ts",
     "function": "module/readRepositoryRange",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-sn.ts",
     "function": "module/requestProxy",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-sn.ts",
     "function": "module/requestProxy",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-tk.ts",
     "function": "module/requestTk",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-tk.ts",
     "function": "module/requestTk",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo.ts",
     "function": "module/fetchBody",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo.ts",
     "function": "module/fetchBody",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo.ts",
     "function": "module/search",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo.ts",
     "function": "module/search",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik.ts",
     "function": "module/request",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik.ts",
     "function": "module/request",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/sk-collections.ts",
     "function": "module/requestIssue",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts",
@@ -459,7 +459,7 @@
     "function": "module/courtSiteFetch",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/case-law/matter-links/list.ts",
@@ -592,14 +592,14 @@
     "function": "module/downloadZipHandler/fetchFile",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/entities/zip/download.ts",
     "function": "module/downloadZipHandler/fetchFile",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/entity-views/create.ts",
@@ -627,35 +627,35 @@
     "function": "module/fetchPreviewUrl",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/external-preview/preview.ts",
     "function": "module/validatePreviewUrl",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/files/get.ts",
     "function": "module/fetchStoredFileResponse",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Move the stored-PDF fetch to the @stll/fetch idle policy so forwarded document bodies can outlive the header wait."
+    "reason": "Move the stored-PDF fetch to the @stll/fetch headers policy and an explicit idle-bounded reader so forwarded document bodies can outlive the header wait."
   },
   {
     "file": "apps/api/src/handlers/files/get.ts",
     "function": "module/stampedDownloadHandler",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Move the stamped-download source fetch to the @stll/fetch idle policy before reading the full PDF for stamping."
+    "reason": "Move the stamped-download source fetch to the @stll/fetch headers policy and an explicit idle-bounded reader before reading the full PDF for stamping."
   },
   {
     "file": "apps/api/src/handlers/files/get.ts",
     "function": "module/stampedDownloadHandler",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Move the stamped-download source fetch to the @stll/fetch idle policy before reading the full PDF for stamping."
+    "reason": "Move the stamped-download source fetch to the @stll/fetch headers policy and an explicit idle-bounded reader before reading the full PDF for stamping."
   },
   {
     "file": "apps/api/src/handlers/flows/run-read.ts",
@@ -711,14 +711,14 @@
     "function": "module/discoverMcpIconUrl",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/mcp-connectors/icons.ts",
     "function": "module/discoverMcpIconUrl",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/mcp-connectors/list-connections.ts",
@@ -739,7 +739,7 @@
     "function": "module/probeMcpServer",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/organization-settings/correspondence/allowed-senders/list.ts",
@@ -760,42 +760,42 @@
     "function": "module/fetchAccountLabel",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/sharepoint/graph-client.ts",
     "function": "module/fetchAccountLabel",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/sharepoint/graph-client.ts",
     "function": "module/listDriveRootChildren",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/sharepoint/graph-client.ts",
     "function": "module/listDriveRootChildren",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/sharepoint/graph-oauth.ts",
     "function": "module/requestToken",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/sharepoint/graph-oauth.ts",
     "function": "module/requestToken",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/handlers/skills/commands/list.ts",
@@ -970,21 +970,21 @@
     "function": "module/probeAzureFoundry",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/ai-provider-probe.ts",
     "function": "module/probeHuggingFace",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/ai-provider-probe.ts",
     "function": "module/probeProvider",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/bilingual/run-queue.ts",
@@ -1019,35 +1019,35 @@
     "function": "module/startManagedProviderChecks",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/chat/openrouter-credential.ts",
     "function": "module/callback",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/chat/openrouter-credential.ts",
     "function": "module/callback",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/chat/provider-data-policy.ts",
     "function": "module/fetchManagedOpenRouterCompletion",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/chat/provider-data-policy.ts",
     "function": "module/fetchManagedOpenRouterCompletion",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/chat/run-log.ts",
@@ -1166,14 +1166,14 @@
     "function": "module/convertToPdf",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/files/gotenberg.ts",
     "function": "module/convertToPdf",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/files/office-evidence.ts",
@@ -1187,14 +1187,14 @@
     "function": "module/safePkiFetch",
     "kind": "numeric-timeout",
     "count": 2,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/files/pdf-signing/pki-fetch.ts",
     "function": "module/safePkiFetch",
     "kind": "total-timeout-body",
     "count": 2,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/flows/flow-executor.ts",
@@ -1222,14 +1222,14 @@
     "function": "module/probeDocumentConverter",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/hosted-usage-provider/client.ts",
     "function": "module/postProviderJson",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
@@ -1306,28 +1306,28 @@
     "function": "module/fetchBytes",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/lists/sanctions/source-fetch.ts",
     "function": "module/fetchBytes",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/lists/sanctions/source-fetch.ts",
     "function": "module/fetchStream",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/lists/sanctions/source-fetch.ts",
     "function": "module/fetchStream",
     "kind": "total-timeout-body",
     "count": 2,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/lists/verification/evidence.ts",
@@ -1355,14 +1355,14 @@
     "function": "module/createSafeMcpFetch",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/mcp-upstream/connections.ts",
     "function": "module/createSafeMcpFetch",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/mcp-upstream/connections.ts",
@@ -1376,14 +1376,14 @@
     "function": "module/fetchJson",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/mcp-upstream/oauth.ts",
     "function": "module/fetchJson",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/member-assignment-offboarding.ts",
@@ -1474,21 +1474,21 @@
     "function": "module/putPresignedUpload",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/s3.ts",
     "function": "module/fetchObject",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/s3.ts",
     "function": "module/readCorpusS3Range",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts",
@@ -1558,14 +1558,14 @@
     "function": "module/spawnBinaryWorker",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/subprocess.ts",
     "function": "module/spawnWorker",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/usage/assignment-capacity.ts",
@@ -1586,42 +1586,42 @@
     "function": "module/createJinaFetcher",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/web-search/jina.ts",
     "function": "module/createJinaFetcher",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/web-search/jina.ts",
     "function": "module/validateJinaKey",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/web-search/tavily.ts",
     "function": "module/createTavilyProvider",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/web-search/tavily.ts",
     "function": "module/createTavilyProvider",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/web-search/tavily.ts",
     "function": "module/validateTavilyKey",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/work-obligations/legacy-work-obligation.ts",
@@ -1642,7 +1642,7 @@
     "function": "module/createSystemOneClient/send",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/lib/workflow/route-playbooks.ts",
@@ -1656,573 +1656,573 @@
     "function": "module/microsoftJwksFetch",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/scripts/better-auth-microsoft-identity-map.ts",
     "function": "module/microsoftJwksFetch",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/scripts/citation-probe.ts",
     "function": "module/readObject",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/scripts/citation-probe.ts",
     "function": "module/resolveCredentials",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/scripts/citation-probe.ts",
     "function": "module/resolveCredentials",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/scripts/eu-ecj-formex-refresh.ts",
     "function": "module/runEcjFormexRefresh",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/scripts/fetch-ocr-models.ts",
     "function": "module/download",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/scripts/fetch-ocr-models.ts",
     "function": "module/download",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/scripts/post-deploy-response-policy.ts",
     "function": "module/deploymentFetch",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/scripts/subset-stamp-fonts.ts",
     "function": "module/download",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/api/src/scripts/subset-stamp-fonts.ts",
     "function": "module/download",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/collab/src/server.ts",
     "function": "module/postJson",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/landing/src/components/react/DocxEditorTool.tsx",
     "function": "module/DocxEditorTool/load",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/landing/src/components/react/EditorLiveDemo.tsx",
     "function": "module/EditorLiveDemo/load",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/landing/src/lib/animated-gradient.ts",
     "function": "module/initializeGradient",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/ai-suggestions/document-review-proposal-stream.ts",
     "function": "module/streamReviewProposal",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/ai-suggestions/document-review-proposal-stream.ts",
     "function": "module/streamReviewProposal",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/api-version-mismatch-refresh.tsx",
     "function": "module/useAvailableServerVersion",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/api-version-mismatch-refresh.tsx",
     "function": "module/useAvailableServerVersion",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/auth/sign-in-panel.tsx",
     "function": "module/signUpWithSelfhostBootstrap",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/auth/sign-in-panel.tsx",
     "function": "module/signUpWithSelfhostBootstrap",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts",
     "function": "module/useAutocompleteStream/fireRequest",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/chat/message-export-menu.tsx",
     "function": "module/MessageExportMenu/handleExport",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/chat/message-export-menu.tsx",
     "function": "module/MessageExportMenu/handleExport",
     "kind": "total-timeout-body",
     "count": 2,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/docx/use-edit-session.ts",
     "function": "module/useEditSession/open",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/docx/use-edit-session.ts",
     "function": "module/useEditSession/open",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/docx/use-folio-collaboration-room.ts",
     "function": "module/fetchSeedDocumentBuffer",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/docx/use-folio-collaboration-room.ts",
     "function": "module/fetchSeedDocumentBuffer",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/inspector/external-reference-panel.tsx",
     "function": "module/useExternalPdfBuffer",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/inspector/external-reference-panel.tsx",
     "function": "module/useExternalPdfBuffer",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/inspector/file-download-service.ts",
     "function": "module/downloadTabFile",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/inspector/file-download-service.ts",
     "function": "module/downloadTabFile",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/inspector/file-download-service.ts",
     "function": "module/fetchBuiltFile",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/inspector/file-download-service.ts",
     "function": "module/fetchBuiltFile",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/inspector/review-export-menu.tsx",
     "function": "module/ReviewExportMenu/handleInternalExport",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/inspector/review-export-menu.tsx",
     "function": "module/ReviewExportMenu/handleInternalExport",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/pdf/peek/peek-pdf-print.ts",
     "function": "module/fetchPrintPdf",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/pdf/peek/peek-pdf-print.ts",
     "function": "module/fetchPrintPdf",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/selfhost-update-banner.tsx",
     "function": "module/SelfhostUpdateBanner",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/selfhost-update-banner.tsx",
     "function": "module/SelfhostUpdateBanner",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/workspaces/row-actions.tsx",
     "function": "module/downloadEntityAsZip",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/workspaces/row-actions.tsx",
     "function": "module/downloadEntityAsZip",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/workspaces/row-actions.tsx",
     "function": "module/downloadOcrExport",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/components/workspaces/row-actions.tsx",
     "function": "module/downloadOcrExport",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/features/case-law/queries/decision-analysis.ts",
     "function": "module/decisionAnalysisOptions",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/features/case-law/queries/decision-analysis.ts",
     "function": "module/decisionAnalysisOptions",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/features/chat/chat-fetch.ts",
     "function": "module/chatFetchClient/assign[0]",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/features/knowledge/public/tools/tool-contribute-page.tsx",
     "function": "module/AddSkillForm/resolveLatestCommit",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/features/knowledge/public/tools/tool-contribute-page.tsx",
     "function": "module/AddSkillForm/resolveLatestCommit",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/lib/auth-client.ts",
     "function": "module/customFetchImpl",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/lib/dev-otp.ts",
     "function": "module/fetchDevOtp",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/lib/dev-otp.ts",
     "function": "module/fetchDevOtp",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/lib/files/queries.ts",
     "function": "module/emailAttachmentPreviewOptions",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/lib/files/queries.ts",
     "function": "module/emailAttachmentPreviewOptions",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/lib/files/storage-fetch.ts",
     "function": "module/fetchStorageArrayBuffer",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/lib/files/storage-fetch.ts",
     "function": "module/fetchStorageArrayBuffer",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/lib/files/upload-entity-version.ts",
     "function": "module/uploadEntityVersion",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/lib/knowledge/queries.ts",
     "function": "module/templateDocxBufferOptions",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/lib/knowledge/queries.ts",
     "function": "module/templateDocxBufferOptions",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/lib/public-law-sitemap.ts",
     "function": "module/fetchPublicSitemapDecisions",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/lib/public-law-sitemap.ts",
     "function": "module/fetchPublicSitemapShards",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/lib/public-tools-github-content.ts",
     "function": "module/loadRawSkill",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/lib/public-tools-github-content.ts",
     "function": "module/loadRawSkill",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/lib/workspace-sse.ts",
     "function": "module/probeWorkspaceStreamAccess",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx",
     "function": "module/useProcuracaoExtraction/extractFile",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx",
     "function": "module/useProcuracaoExtraction/extractFile",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx",
     "function": "module/ActivityExportMenu/exportActivity",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx",
     "function": "module/TableExportMenu/handleExport",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx",
     "function": "module/TableExportMenu/handleExport",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "apps/web/src/routes/agent-claim.tsx",
     "function": "module/confirmAgentClaim",
     "kind": "numeric-timeout",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "packages/agent-engine/src/bun-docker/api.ts",
     "function": "module/send",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "packages/agent-engine/src/bun-docker/api.ts",
     "function": "module/startExecStream",
     "kind": "total-timeout-body",
     "count": 2,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "packages/boe/src/client.ts",
     "function": "module/boeFetch",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "packages/cli/src/auth/oauth-metadata.ts",
     "function": "module/fetchCandidate",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "packages/cli/src/auth/token-exchange.ts",
     "function": "module/redeemAuthorizationCode",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "packages/cli/src/auth/token-exchange.ts",
     "function": "module/refreshAccessToken",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "packages/cli/src/cli-release-channel.ts",
     "function": "module/fetchLatestCliVersion",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "packages/cli/src/compatibility.ts",
     "function": "module/checkServerCompatibility",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "packages/scripts/src/auth-md-spec-drift.ts",
     "function": "module/fetchText",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "packages/scripts/src/dev-runner.ts",
     "function": "module/isHealthyApiPort",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "packages/scripts/src/dev-runner.ts",
     "function": "module/waitForHttpReadiness/pollUntilReady",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
     "file": "packages/scripts/src/model-catalog-upstream.ts",
     "function": "module/fetchJson",
     "kind": "total-timeout-body",
     "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
+    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   }
 ]

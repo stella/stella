@@ -3,14 +3,14 @@ import entry1 from "./accountExport";
 import entry2 from "./automated";
 import entry3 from "./automatedFlowRunCap";
 import entry4 from "./billingCodeCapacity";
-import entry5 from "./caseLawRepublication";
-import entry6 from "./caseLawSitemapMonth";
-import entry7 from "./chatRevision";
-import entry8 from "./chatSecret";
-import entry9 from "./chatStoredContent";
-import entry10 from "./chatToolGrants";
-import entry11 from "./contactCapacity";
-import entry12 from "./correspondenceSource";
+import entry5 from "./billingDraftSettings";
+import entry6 from "./caseLawRepublication";
+import entry7 from "./caseLawSitemapMonth";
+import entry8 from "./chatRevision";
+import entry9 from "./chatSecret";
+import entry10 from "./chatStoredContent";
+import entry11 from "./chatToolGrants";
+import entry12 from "./contactCapacity";
 import entry13 from "./deadlineAcceptance";
 import entry14 from "./deadlineClaim";
 import entry15 from "./deadlineEmission";
@@ -26,21 +26,20 @@ import entry24 from "./legislationAmendments";
 import entry25 from "./mcpOAuthState";
 import entry26 from "./memberPrefix";
 import entry27 from "./memory";
-import entry28 from "./organizationDataBoxes";
-import entry29 from "./organizationObjectIntentLifecycle";
-import entry30 from "./organizationObjectIntentWriter";
-import entry31 from "./personalCatalog";
-import entry32 from "./professionalUseAcceptance";
-import entry33 from "./rateTableWorkspace";
-import entry34 from "./readerAnnotation";
-import entry35 from "./readerAnswer";
-import entry36 from "./requestReceipt";
-import entry37 from "./sampleCase";
-import entry38 from "./scoutRun";
-import entry39 from "./searchHistory";
-import entry40 from "./searchProjectionRepair";
-import entry41 from "./signal";
-import entry42 from "./signingSession";
+import entry28 from "./organizationObjectIntentLifecycle";
+import entry29 from "./organizationObjectIntentWriter";
+import entry30 from "./personalCatalog";
+import entry31 from "./professionalUseAcceptance";
+import entry32 from "./rateTableWorkspace";
+import entry33 from "./readerAnnotation";
+import entry34 from "./readerAnswer";
+import entry35 from "./requestReceipt";
+import entry36 from "./sampleCase";
+import entry37 from "./scoutRun";
+import entry38 from "./searchHistory";
+import entry39 from "./searchProjectionRepair";
+import entry40 from "./signal";
+import entry41 from "./signingSession";
 
 export default {
   "accountDeletionRequest": entry0,
@@ -48,14 +47,14 @@ export default {
   "automated": entry2,
   "automatedFlowRunCap": entry3,
   "billingCodeCapacity": entry4,
-  "caseLawRepublication": entry5,
-  "caseLawSitemapMonth": entry6,
-  "chatRevision": entry7,
-  "chatSecret": entry8,
-  "chatStoredContent": entry9,
-  "chatToolGrants": entry10,
-  "contactCapacity": entry11,
-  "correspondenceSource": entry12,
+  "billingDraftSettings": entry5,
+  "caseLawRepublication": entry6,
+  "caseLawSitemapMonth": entry7,
+  "chatRevision": entry8,
+  "chatSecret": entry9,
+  "chatStoredContent": entry10,
+  "chatToolGrants": entry11,
+  "contactCapacity": entry12,
   "deadlineAcceptance": entry13,
   "deadlineClaim": entry14,
   "deadlineEmission": entry15,
@@ -71,19 +70,18 @@ export default {
   "mcpOAuthState": entry25,
   "memberPrefix": entry26,
   "memory": entry27,
-  "organizationDataBoxes": entry28,
-  "organizationObjectIntentLifecycle": entry29,
-  "organizationObjectIntentWriter": entry30,
-  "personalCatalog": entry31,
-  "professionalUseAcceptance": entry32,
-  "rateTableWorkspace": entry33,
-  "readerAnnotation": entry34,
-  "readerAnswer": entry35,
-  "requestReceipt": entry36,
-  "sampleCase": entry37,
-  "scoutRun": entry38,
-  "searchHistory": entry39,
-  "searchProjectionRepair": entry40,
-  "signal": entry41,
-  "signingSession": entry42,
+  "organizationObjectIntentLifecycle": entry28,
+  "organizationObjectIntentWriter": entry29,
+  "personalCatalog": entry30,
+  "professionalUseAcceptance": entry31,
+  "rateTableWorkspace": entry32,
+  "readerAnnotation": entry33,
+  "readerAnswer": entry34,
+  "requestReceipt": entry35,
+  "sampleCase": entry36,
+  "scoutRun": entry37,
+  "searchHistory": entry38,
+  "searchProjectionRepair": entry39,
+  "signal": entry40,
+  "signingSession": entry41,
 } as const;
