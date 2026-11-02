@@ -3059,7 +3059,7 @@ export const caseLawSourceArrivals = p.pgTable(
   ],
 );
 
-/** The complete coverage answer, replaced atomically by the governed refresh. */
+/** The stored coverage answer, naming any parts its refresh could not read. */
 export const caseLawCoverageSummaries = p.pgTable(
   "case_law_coverage_summaries",
   {

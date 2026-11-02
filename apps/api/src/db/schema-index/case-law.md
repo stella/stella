@@ -713,7 +713,7 @@ case_law_source_arrivals.counted_at       timestamptz  not null        case-law.
 
 ## case_law_coverage_summaries · `caseLawCoverageSummaries` · case-law.ts:3063 · rls
 
-The complete coverage answer, replaced atomically by the governed refresh.
+The stored coverage answer, naming any parts its refresh could not read.
 
 ```text
 case_law_coverage_summaries.key            text         pk,not null  case-law.ts:3066
