@@ -162,9 +162,10 @@ const SHAPE_EXCLUSIONS: readonly ShapeExclusion[] = [
     reason: "Matter leads are managed with membership.",
   },
   {
-    capability: "contacts.create",
-    field: "id",
-    reason: "Allocated by the tool.",
+    capability: "matters.update",
+    field: "billingNarrativeLanguage",
+    reason:
+      "The narrative language only steers activity billing drafts and is set through the matter capability.",
   },
   {
     capability: "tasks.create",
@@ -175,11 +176,6 @@ const SHAPE_EXCLUSIONS: readonly ShapeExclusion[] = [
     capability: "tasks.create",
     field: "agendaKind",
     reason: "Agenda events use the calendar capability.",
-  },
-  {
-    capability: "tasks.create",
-    field: "listPosition",
-    reason: "List ordering is managed by list operations.",
   },
   {
     capability: "tasks.create",
@@ -301,4 +297,15 @@ test("every curated write exposes every field of each backing capability", () =>
       expect(missing, `${id} fields missing from ${toolName}`).toEqual([]);
     }
   }
+});
+
+test("every shape exclusion names a field its capability still accepts", () => {
+  const catalog = readCapabilityCatalog();
+  const stale = SHAPE_EXCLUSIONS.filter(
+    ({ capability, field }) =>
+      !bodyProperties(
+        catalog.find((entry) => capabilityId(entry) === capability),
+      ).includes(field),
+  ).map(({ capability, field }) => `${capability}.${field}`);
+  expect(stale).toEqual([]);
 });

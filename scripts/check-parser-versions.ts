@@ -1084,7 +1084,8 @@ export const comparisonBase = ({
         detail: "merge_group requires its exact base SHA",
       };
     }
-    // No merge-base here: the exact queue base includes every earlier bump.
+    // No merge-base here: the base is the previous queue entry's commit, so
+    // this entry must advance every version it affects past the earlier ones.
     return runGit(["rev-parse", "--verify", `${base}^{commit}`]);
   }
   if (event !== "pull_request" && event !== "workflow_dispatch") {

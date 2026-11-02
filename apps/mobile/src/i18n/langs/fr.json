@@ -304,6 +304,29 @@
     "placeholder": "Rechercher des dossiers et des conversations, ou lancer une commande",
     "noResults": "Aucun résultat pour « {query} »"
   },
+  "search": {
+    "placeholder": "Rechercher dans stella",
+    "clear": "Effacer la recherche",
+    "cancel": "Annuler",
+    "recent": "Recherches récentes",
+    "clearRecent": "Effacer",
+    "hint": "Recherchez dans vos dossiers, documents, tâches, conversations et la jurisprudence.",
+    "filters": "Filtres",
+    "noResultsTitle": "Aucun résultat",
+    "noResults": "Aucun résultat pour « {query} ». Essayez d’autres mots ou retirez un filtre.",
+    "loadFailed": "La recherche n’a pas pu être effectuée.",
+    "retry": "Réessayer",
+    "type": {
+      "document": "Documents",
+      "matter": "Dossiers",
+      "task": "Tâches",
+      "caseLaw": "Jurisprudence",
+      "chat": "Conversations",
+      "folder": "Classeurs",
+      "message": "E-mails",
+      "link": "Liens"
+    }
+  },
   "pane": {
     "showList": "Afficher la liste",
     "hideList": "Masquer la liste"
