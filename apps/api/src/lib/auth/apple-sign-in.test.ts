@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { panic } from "better-result";
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 import { decodeJwt, decodeProtectedHeader, jwtVerify } from "jose";
 import { generateKeyPairSync } from "node:crypto";
 import * as v from "valibot";
@@ -23,6 +23,9 @@ import {
   createSocialIdentityValidation,
   SOCIAL_ACCOUNT_LINKING_OPTIONS,
 } from "@/api/lib/auth/social-identity-policy";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 // A throwaway key per run: no real Apple key is ever read.
 const { privateKey, publicKey } = generateKeyPairSync("ec", {
@@ -192,34 +195,40 @@ const createAppleFixture = async () => {
   const clientSecrets: string[] = [];
   const settings = enabledSettings();
   // Apple's token endpoint: the code exchange is the only outbound call.
-  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-    Object.assign(
-      async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-        const url = input instanceof Request ? input.url : String(input);
-        expect(url).toBe("https://appleid.apple.com/auth/token");
-        const body = new URLSearchParams(await new Response(init?.body).text());
-        clientSecrets.push(body.get("client_secret") ?? "");
-        return Response.json({
-          access_token: "apple-access-token",
-          token_type: "Bearer",
-          expires_in: 3600,
-          id_token: [
-            base64UrlJson({ alg: "RS256", kid: "apple" }),
-            base64UrlJson({
-              iss: "https://appleid.apple.com",
-              aud: settings.clientId,
-              sub: "001234.apple-subject.0001",
-              email: identity.email,
-              email_verified: identity.emailVerified,
-              is_private_email: "true",
-            }),
-            "signature",
-          ].join("."),
-        });
-      },
-      { preconnect: fetch.preconnect },
+  const fetchSpy = Object.assign(
+    mock(
+      Object.assign(
+        async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+          const url = input instanceof Request ? input.url : String(input);
+          expect(url).toBe("https://appleid.apple.com/auth/token");
+          const body = new URLSearchParams(
+            await new Response(init?.body).text(),
+          );
+          clientSecrets.push(body.get("client_secret") ?? "");
+          return Response.json({
+            access_token: "apple-access-token",
+            token_type: "Bearer",
+            expires_in: 3600,
+            id_token: [
+              base64UrlJson({ alg: "RS256", kid: "apple" }),
+              base64UrlJson({
+                iss: "https://appleid.apple.com",
+                aud: settings.clientId,
+                sub: "001234.apple-subject.0001",
+                email: identity.email,
+                email_verified: identity.emailVerified,
+                is_private_email: "true",
+              }),
+              "signature",
+            ].join("."),
+          });
+        },
+        { preconnect: fetch.preconnect },
+      ),
     ),
+    { preconnect: globalThis.fetch.preconnect },
   );
+  testFetchState.set(fetchSpy);
   const auth = betterAuth({
     baseURL,
     secret: "test-secret-that-is-long-enough-for-better-auth",
@@ -346,7 +355,7 @@ afterEach(() => {
 
 const fixture = async () => {
   const created = await createAppleFixture();
-  restoreFetch = () => created.fetchSpy.mockRestore();
+  restoreFetch = () => testFetchState.restore();
   return created;
 };
 

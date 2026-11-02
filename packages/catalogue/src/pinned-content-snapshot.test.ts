@@ -119,6 +119,11 @@ process.on("exit", () => console.log("PINNED_FETCH_ATTEMPTS=" + calls));
           process.execPath,
           "--preload",
           monitor,
+          "--preload",
+          path.resolve(
+            import.meta.dir,
+            "../../../scripts/offline-network-preload.ts",
+          ),
           path.resolve(import.meta.dir, "../scripts/check-pinned-content.ts"),
           "--check",
         ],
