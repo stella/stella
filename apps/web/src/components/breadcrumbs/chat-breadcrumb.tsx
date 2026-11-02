@@ -114,7 +114,9 @@ export const ChatBreadcrumb = ({
       <BreadcrumbQueryContent view={groupedView} />
       {groupedThread === null && <BreadcrumbQueryContent view={threadView} />}
       {titleEnabled && <BreadcrumbQueryContent view={titleView} />}
-      <BreadcrumbItem className="min-w-0 flex-1">
+      {/* The rename button's hover chrome reaches past its text; the end
+          margin keeps it inside the trail, which clips its overflow. */}
+      <BreadcrumbItem className="me-1 min-w-0 flex-1">
         <ChatTitleRename
           hasMessages={hasMessages}
           editClassName="w-full"

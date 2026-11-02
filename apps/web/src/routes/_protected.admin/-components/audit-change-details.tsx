@@ -61,7 +61,9 @@ export const AuditChangeDetails = ({
               </DetailsGrid>
               <Accordion>
                 <AccordionItem value="raw-changes">
-                  <AccordionTrigger size="compact">
+                  {/* Sized to its label, so the trigger fits a phone's
+                      scrolled table instead of the whole cell's width. */}
+                  <AccordionTrigger className="flex-none" size="compact">
                     {t("common.details")}
                   </AccordionTrigger>
                   <AccordionPanel keepMounted size="compact">

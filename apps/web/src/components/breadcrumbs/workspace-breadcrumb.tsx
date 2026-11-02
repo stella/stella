@@ -265,7 +265,7 @@ export const WorkspaceBreadcrumb = ({
     if (showMatterNumber && workspace.reference) {
       return (
         <Button
-          className="cursor-text py-0.5"
+          className="cursor-text"
           onClick={() => refRename.startEditing(workspace.reference)}
           variant="plain"
         >

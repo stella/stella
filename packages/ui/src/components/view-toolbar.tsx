@@ -4,14 +4,18 @@ import { FilterIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
 
-/** Shared view controls stay compact and scroll horizontally on small screens. */
+/**
+ * Shared view controls stay compact and scroll horizontally on small screens:
+ * the row never grows past its container, so a control past the edge is
+ * scrolled to rather than clipped.
+ */
 export const ViewToolbarChrome = ({
   className,
   ...props
 }: ComponentProps<"div">) => (
   <div
     className={cn(
-      "flex min-w-0 shrink-0 [scrollbar-width:none] flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1 [-ms-overflow-style:none] md:flex-wrap md:overflow-visible [&::-webkit-scrollbar]:hidden",
+      "flex max-w-full min-w-0 shrink-0 [scrollbar-width:none] flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1 [-ms-overflow-style:none] md:flex-wrap md:overflow-visible [&::-webkit-scrollbar]:hidden",
       className,
     )}
     {...props}
