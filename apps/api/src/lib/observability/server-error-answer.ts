@@ -26,7 +26,7 @@ export type AnswerCause = {
   readonly ctx?: FailureContext | undefined;
 };
 
-export const isServerErrorStatus = (code: number): boolean =>
+const isServerErrorStatus = (code: number): boolean =>
   code >= 500 && code <= 599;
 
 /**
