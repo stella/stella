@@ -7,7 +7,7 @@ import {
 } from "@stll/api-contract/desktop-time-entries";
 import { classifyFailure } from "@stll/errors";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import {
   type CachingDecision,
   type OrgAIConfig,
@@ -31,8 +31,13 @@ import {
   modelActionRefusal,
 } from "@/api/lib/rate-limit/model-action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
+
+import {
+  type DraftingAdmission,
+  generateAdmittedText,
+  type TextGeneration,
+} from "./drafting-model";
 
 const NARRATIVE_ACTION_KIND = "desktop-time-entries.narrative";
 const NARRATIVE_TASK = "short-text";
@@ -93,6 +98,9 @@ const narrativeFailure = (kind: AIErrorKind) =>
 
 type GenerateNarrativeOptions = {
   request: DesktopTimeEntryNarrativeRequest;
+  /** The organization's switch and the member's consent, read again before
+   * every provider request. */
+  drafting: DraftingAdmission;
   admission: ModelDispatchAdmission;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -112,6 +120,7 @@ type GenerateNarrativeOptions = {
 export const generateDesktopTimeEntryNarrative = async (
   {
     request,
+    drafting,
     admission,
     organizationId,
     userId,
@@ -121,35 +130,43 @@ export const generateDesktopTimeEntryNarrative = async (
     analytics,
     abortSignal,
   }: GenerateNarrativeOptions,
-  generate = generateTanStackTextForTask,
-): Promise<Result<string, HandlerError<502>>> => {
-  const generated = await Result.tryPromise({
-    try: async () =>
-      await generate({
-        admission,
-        organizationId,
-        userId,
-        dataClass: "customer",
-        managedAIResidency,
-        orgAIConfig,
-        task: NARRATIVE_TASK,
-        serviceTier: "standard",
-        caching,
-        analytics,
-        abortSignal,
-        deadlineMs: NARRATIVE_TIMEOUT_MS,
-        maxOutputTokens: NARRATIVE_MAX_OUTPUT_TOKENS,
-        finishPolicy: NARRATIVE_FINISH_POLICY,
-        system: NARRATIVE_SYSTEM_PROMPT,
-        systemPromptOrigin: "server-built",
-        messages: [{ role: "user", content: buildNarrativeMessage(request) }],
-        tenantWorkspaceIds: [],
-      }),
-    catch: (cause) => narrativeFailure(classifyAIBoundaryFailure(cause)),
+  generate?: TextGeneration,
+): Promise<Result<string, HandlerError | SafeDbError>> => {
+  const generated = await generateAdmittedText({
+    admission: drafting,
+    generate,
+    request: {
+      admission,
+      organizationId,
+      userId,
+      dataClass: "customer",
+      managedAIResidency,
+      orgAIConfig,
+      task: NARRATIVE_TASK,
+      serviceTier: "standard",
+      caching,
+      analytics,
+      abortSignal,
+      deadlineMs: NARRATIVE_TIMEOUT_MS,
+      maxOutputTokens: NARRATIVE_MAX_OUTPUT_TOKENS,
+      finishPolicy: NARRATIVE_FINISH_POLICY,
+      system: NARRATIVE_SYSTEM_PROMPT,
+      systemPromptOrigin: "server-built",
+      messages: [{ role: "user", content: buildNarrativeMessage(request) }],
+      tenantWorkspaceIds: [],
+    },
   });
   if (Result.isError(generated)) {
-    analytics.captureError(generated.error);
-    return generated;
+    // A refusal read right before a request sent nothing; it answers as the
+    // gate does. Any other failure is the model's.
+    if (generated.error.type === "refused") {
+      return Result.err(generated.error.error);
+    }
+    const failure = narrativeFailure(
+      classifyAIBoundaryFailure(generated.error.cause),
+    );
+    analytics.captureError(failure);
+    return Result.err(failure);
   }
   const narrative = generated.value.trim();
   if (narrative.length === 0) {
@@ -167,13 +184,14 @@ type RunNarrativeOptions = {
     scopedDb: ScopedDb;
     safeDb: SafeDb;
   };
+  drafting: DraftingAdmission;
   request: DesktopTimeEntryNarrativeRequest;
   signal: AbortSignal;
 };
 
 export type DesktopTimeEntryNarrativeRun = (
   options: RunNarrativeOptions,
-) => Promise<Result<string, HandlerError>>;
+) => Promise<Result<string, HandlerError | SafeDbError>>;
 
 /**
  * Resolves the organization's model settings (its own key when configured),
@@ -182,6 +200,7 @@ export type DesktopTimeEntryNarrativeRun = (
 export const runDesktopTimeEntryNarrative: DesktopTimeEntryNarrativeRun =
   async ({
     account: { organizationId, userId, scopedDb, safeDb },
+    drafting,
     request,
     signal,
   }) =>
@@ -208,6 +227,7 @@ export const runDesktopTimeEntryNarrative: DesktopTimeEntryNarrativeRun =
         async ({ admission }) =>
           await generateDesktopTimeEntryNarrative({
             request,
+            drafting,
             admission,
             organizationId,
             userId,

@@ -894,7 +894,6 @@
     "apps/web/src/features/case-law/components/case-viewer/reader-answer-card.tsx": 1,
     "apps/web/src/features/case-law/components/citation-timeline-panel.tsx": 1,
     "apps/web/src/features/case-law/components/decision-cells.tsx": 1,
-    "apps/web/src/features/case-law/components/decision-filter-popover.tsx": 1,
     "apps/web/src/features/case-law/components/top-bar-citations.tsx": 1,
     "apps/web/src/features/case-law/research/add-question-column.tsx": 1,
     "apps/web/src/features/chat/components/chat-title-rename.tsx": 1,

@@ -9,9 +9,11 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
+import { desktopBillingDraftSettingsResponseSchema } from "@stll/api-contract/desktop-billing-drafts";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import {
   SIGNAL_KIND,
@@ -126,7 +128,10 @@ import {
   createDesktopBillingDraftSettingsReadEndpoint,
   createDesktopBillingDraftSettingsUpdateEndpoint,
 } from "@/api/handlers/desktop-time-entries/billing-draft-settings";
-import { createDesktopBillingDraftEndpoint } from "@/api/handlers/desktop-time-entries/billing-drafts";
+import {
+  type BillingDraftPrompt,
+  createDesktopBillingDraftEndpoint,
+} from "@/api/handlers/desktop-time-entries/billing-drafts";
 import { createDesktopMatterCandidatesEndpoint } from "@/api/handlers/desktop-time-entries/candidates";
 import { createDesktopTimeEntryEndpoint } from "@/api/handlers/desktop-time-entries/create";
 import { createDesktopMattersEndpoint } from "@/api/handlers/desktop-time-entries/matters";
@@ -205,8 +210,12 @@ import { cents } from "@/api/lib/money";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
-import type { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+import type {
+  generateTanStackObjectForTask,
+  generateTanStackTextForTask,
+} from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { createDesktopBillingDraftRequest } from "@/api/tests/helpers/desktop-billing-draft";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -776,23 +785,36 @@ const expectDesktopEntryOwnedByB = async (entryId: string) => {
 
 const DESKTOP_DRAFT_PREFERENCE_B = "Organization B drafting preference";
 
+// Grants and preference changes apply to the revision the caller last read.
 const putDraftSettings = async (
   caller: (request: Request) => Promise<Response>,
-  body: { consent: "granted" } | { preference: string },
+  change:
+    { type: "grant_consent" } | { type: "set_preference"; preference: string },
 ) => {
-  const response = await caller(desktopRequest("/draft-settings", body));
+  const current = await caller(desktopRequest("/draft-settings"));
+  expect(current.status).toBe(200);
+  const { revision } = v.parse(
+    desktopBillingDraftSettingsResponseSchema,
+    await current.json(),
+  );
+  const response = await caller(
+    desktopRequest("/draft-settings", { ...change, revision }),
+  );
   expect(response.status).toBe(200);
 };
 
 const grantDraftConsent = async (
   caller: (request: Request) => Promise<Response>,
-) => await putDraftSettings(caller, { consent: "granted" });
+) => await putDraftSettings(caller, { type: "grant_consent" });
 
 const saveOrganizationBDraftSettings = async (
   desktopB: (request: Request) => Promise<Response>,
 ) => {
   await grantDraftConsent(desktopB);
-  await putDraftSettings(desktopB, { preference: DESKTOP_DRAFT_PREFERENCE_B });
+  await putDraftSettings(desktopB, {
+    type: "set_preference",
+    preference: DESKTOP_DRAFT_PREFERENCE_B,
+  });
 };
 
 const desktopCredentialIsolationCases = (): IsolationCase[] => [
@@ -947,21 +969,23 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
     },
     expectDenied: (result) =>
       expect(result).toEqual({
-        organizationMode: "enabled",
+        revision: null,
+        effectiveMode: "plain",
         consent: "revoked",
         preference: null,
       }),
     expectPositive: (result) =>
       expect(result).toEqual({
-        organizationMode: "enabled",
+        revision: expect.any(String),
+        effectiveMode: "plain",
         consent: "granted",
         preference: DESKTOP_DRAFT_PREFERENCE_B,
       }),
   },
   {
     // Drafting reads the selected matter before guidelines or the model, so
-    // B's matter is refused to A while B's own request passes that check and
-    // stops at the missing firm guideline file.
+    // B's matter is refused to A, while B, with consent and no firm
+    // guideline file bound, gets a plain description.
     name: "desktop billing drafts",
     runAAgainstB: async ({ desktopA, ids: testIds }) => {
       await grantDraftConsent(desktopA);
@@ -981,12 +1005,23 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
         "Selected matter is unavailable",
       );
     },
-    expectPositive: (result) => {
-      expect(result).toMatchObject({ status: 409 });
-      expect(JSON.stringify(result)).toContain(
-        "A firm billing guideline file is required",
-      );
-    },
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        status: 200,
+        body: {
+          result: {
+            mode: "plain",
+            drafts: [
+              {
+                entryId: "entry_1",
+                narrative: "Reviewed the agreement",
+                matchedEarlierEntryIds: [],
+              },
+            ],
+          },
+          earlierEntries: [],
+        },
+      }),
   },
   {
     name: "desktop single create",
@@ -3953,6 +3988,27 @@ const desktopServer = (): TestServer => {
     createDesktopBillingDraftSettingsUpdateEndpoint(authorize);
   const drafts = createDesktopBillingDraftEndpoint({
     authorizeAccount: authorize,
+    // The model is the one external boundary: it describes each selected
+    // entry under the reference the prompt gave it.
+    generateObjectForTask: asTestRaw<typeof generateTanStackObjectForTask>(
+      async ({ prompt }: { prompt?: string }) => ({
+        drafts: asTestRaw<BillingDraftPrompt>(
+          JSON.parse(prompt ?? "{}"),
+        ).entries.map(({ entryId }) => ({
+          entryId,
+          narrative: "Reviewed the agreement",
+          matchedEarlierEntryIds: [],
+        })),
+      }),
+    ),
+    admit: asTestRaw<typeof withActionAdmission>(
+      async ({ run }: Parameters<typeof withActionAdmission>[0]) =>
+        Result.ok(
+          await run(new AbortController().signal, {
+            reservePeriod: async () => Result.ok(undefined),
+          }),
+        ),
+    ),
   });
   // The real routes on the real HTTP core: each definition decodes its own
   // input and answers through its own response schemas.
