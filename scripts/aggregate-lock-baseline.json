@@ -1609,12 +1609,6 @@
   },
   {
     "file": "apps/api/src/handlers/rates/create.ts",
-    "fingerprint": "417504192e24109eab7c3ed529a2ccf11edb14f06da52ce9965b479f4e974cda",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/handlers/rates/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/rates/create.ts",
     "fingerprint": "c985c28ae08afb0f8e529cd72a630506bcc0d18352d7134cb21b994737db2771",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/rates/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -1630,12 +1624,6 @@
     "fingerprint": "bd22e7f053951a26804ba846859e82407821f7ae010b7c17a2a06938eb0c887f",
     "count": 1,
     "reason": "pg_advisory_xact_lock( in apps/api/src/handlers/rates/entries/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/rates/update.ts",
-    "fingerprint": "417504192e24109eab7c3ed529a2ccf11edb14f06da52ce9965b479f4e974cda",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/handlers/rates/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/handlers/rates/update.ts",

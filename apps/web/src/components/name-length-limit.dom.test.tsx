@@ -120,6 +120,7 @@ test("creating a rate table shows the server's length verdict under the name", a
   render(
     withIntl(
       <CreateRateTableForm
+        hasDefaultTable
         onCancel={() => undefined}
         onSubmit={async (values) => {
           submitted.push(values.name);
@@ -139,3 +140,44 @@ test("creating a rate table shows the server's length verdict under the name", a
   await screen.findByText(TOO_LONG_MESSAGE);
   expect(submitted).toEqual(["Standard"]);
 });
+
+test.each([
+  {
+    hasDefaultTable: false,
+    isDefault: true,
+    hint: messages.billing.rates.firstTableIsDefault,
+  },
+  {
+    hasDefaultTable: true,
+    isDefault: false,
+    hint: messages.billing.rates.onlyDefaultApplies,
+  },
+])(
+  "a rate table form with hasDefaultTable=$hasDefaultTable submits isDefault=$isDefault",
+  async ({ hasDefaultTable, isDefault, hint }) => {
+    const submitted: { isDefault?: boolean | undefined }[] = [];
+    render(
+      withIntl(
+        <CreateRateTableForm
+          hasDefaultTable={hasDefaultTable}
+          onCancel={() => undefined}
+          onSubmit={async (values) => {
+            submitted.push({ isDefault: values.isDefault });
+            return undefined;
+          }}
+        />,
+      ),
+    );
+
+    screen.getByText(hint);
+    const checkbox = screen.getByRole("checkbox");
+    expect(checkbox.getAttribute("aria-checked")).toBe(String(isDefault));
+    const input = screen.getByPlaceholderText(
+      messages.billing.rates.tableNamePlaceholder,
+    );
+    fireEvent.change(input, { target: { value: "Standard" } });
+    fireEvent.submit(input.closest("form") ?? input);
+
+    await waitFor(() => expect(submitted).toEqual([{ isDefault }]));
+  },
+);

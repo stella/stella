@@ -261,6 +261,7 @@ const RateTablesView = ({
 
       {showForm && (
         <CreateRateTableForm
+          hasDefaultTable={tables.some((table) => table.isDefault)}
           onCancel={() => setShowForm(false)}
           onSubmit={submitRateTable}
         />
@@ -337,9 +338,15 @@ const RateTablesView = ({
 // --- Create Rate Table Form ---
 
 export const CreateRateTableForm = ({
+  hasDefaultTable,
   onSubmit,
   onCancel,
 }: {
+  /**
+   * Whether the matter already has a default table. Without one, the server
+   * makes the new table the default, so the form shows it checked and fixed.
+   */
+  hasDefaultTable: boolean;
   /** Resolves with the server's message for the name when it rejected it. */
   onSubmit: (values: {
     name: string;
@@ -369,7 +376,7 @@ export const CreateRateTableForm = ({
       defaultValues: {
         name: "",
         currency: "USD",
-        isDefault: false,
+        isDefault: !hasDefaultTable,
       },
       onSubmit: async ({ value, formApi }) => {
         const nameIssue = await onSubmit(value);
@@ -437,12 +444,23 @@ export const CreateRateTableForm = ({
 
       <form.Field name="isDefault">
         {(field) => (
-          <div className="flex items-center gap-2">
-            <Checkbox
-              checked={field.state.value}
-              onCheckedChange={(checked) => field.handleChange(checked)}
-            />
-            <Label>{t("billing.rates.setAsDefault")}</Label>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={!hasDefaultTable || field.state.value}
+                disabled={!hasDefaultTable}
+                id={`${field.name}-checkbox`}
+                onCheckedChange={(checked) => field.handleChange(checked)}
+              />
+              <Label htmlFor={`${field.name}-checkbox`}>
+                {t("billing.rates.setAsDefault")}
+              </Label>
+            </div>
+            <p className="text-muted-foreground text-xs">
+              {hasDefaultTable
+                ? t("billing.rates.onlyDefaultApplies")
+                : t("billing.rates.firstTableIsDefault")}
+            </p>
           </div>
         )}
       </form.Field>
