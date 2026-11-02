@@ -4,6 +4,8 @@ import { expect, test } from "bun:test";
 import { APP_SEARCH_FIXTURE } from "@stll/api-contract/mcp-app.fixtures";
 import { DECISION_SEARCH_MATCHES } from "@stll/api-contract/search";
 
+import { appFailure, formatAppFailure } from "../shared/app-error";
+import { appLocale } from "../shared/locale";
 import { searchView } from "./model";
 import { CaseLawApp } from "./view";
 import type { CaseLawBridge } from "./view";
@@ -18,7 +20,7 @@ const fakeBridge = (snapshot: Snapshot) => {
     supportsTools: () => false,
     connect: async () => {},
     call: async () => {},
-    requestTool: async () => undefined,
+    requestTool: async () => ({ content: [] }),
     requestFullscreen: async () => {},
     requestInline: async () => {},
     retry: async () => {
@@ -41,15 +43,20 @@ const baseSnapshot = {
 } as const;
 
 test("Czech host locale renders headings and retry action with the recoverable failure", () => {
+  const failure = appFailure("unavailable", "app-request", true);
+  const message = formatAppFailure(failure, appLocale("cs-CZ").t);
   const host = fakeBridge({
     ...baseSnapshot,
-    result: { status: "error", message: null },
+    result: {
+      status: "error",
+      message,
+      failure,
+      previous: { status: "empty" },
+    },
   });
   const ui = render(<CaseLawApp bridge={host.bridge} />);
   expect(ui.getByRole("heading", { name: "Judikatura" })).toBeDefined();
-  expect(ui.getByRole("alert").textContent).toContain(
-    "Něco se pokazilo. Zkuste to znovu.",
-  );
+  expect(ui.getByRole("alert").textContent).toContain(message);
   fireEvent.click(ui.getByRole("button", { name: "Spustit znovu" }));
   expect(host.retries()).toBe(1);
 });
@@ -212,6 +219,38 @@ for (const { locale, label, direction } of [
   );
 }
 
+test.each([
+  { court: "Nejvyšší soud; Ústavní soud; Nejvyšší soud" },
+  { courts: ["Nejvyšší soud", "Ústavní soud", "Nejvyšší soud"] },
+  {
+    court: "Krajský soud v Brně",
+    courts: ["Nejvyšší soud", "Ústavní soud", "Nejvyšší soud"],
+  },
+])(
+  "court filters initialize unique selections from declared input: %j",
+  (input) => {
+    const host = fakeBridge({
+      ...baseSnapshot,
+      context: { locale: "en" },
+      input: { country: "CZE", ...input },
+      result: {
+        status: "ready",
+        view: {
+          type: "search",
+          results: [],
+          facets: null,
+          nextCursor: null,
+          searches: [],
+        },
+      },
+    });
+    const ui = render(<CaseLawApp bridge={host.bridge} />);
+    const court = ui.getByRole("button", { name: /^Court/u });
+    expect(
+      [...court.querySelectorAll("bdi")].map((label) => label.textContent),
+    ).toEqual(["Nejvyšší soud", "Ústavní soud"]);
+  },
+);
 test("metadata-only search hits visibly distinguish summaries from decision text", () => {
   const host = fakeBridge({
     ...baseSnapshot,

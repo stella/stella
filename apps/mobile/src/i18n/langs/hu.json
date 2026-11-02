@@ -304,6 +304,29 @@
     "placeholder": "Ügyek és beszélgetések keresése, vagy parancs futtatása",
     "noResults": "Semmi sem felel meg ennek: „{query}”"
   },
+  "search": {
+    "placeholder": "Keresés a stellában",
+    "clear": "Keresés törlése",
+    "cancel": "Mégse",
+    "recent": "Legutóbbi keresések",
+    "clearRecent": "Törlés",
+    "hint": "Keressen az ügyekben, dokumentumokban, feladatokban, beszélgetésekben és az ítélkezési gyakorlatban.",
+    "filters": "Szűrők",
+    "noResultsTitle": "Nincs találat",
+    "noResults": "Semmi sem felel meg ennek: „{query}”. Próbáljon más szavakat, vagy távolítson el egy szűrőt.",
+    "loadFailed": "A keresést nem sikerült elvégezni.",
+    "retry": "Újra",
+    "type": {
+      "document": "Dokumentumok",
+      "matter": "Ügyek",
+      "task": "Feladatok",
+      "caseLaw": "Ítélkezési gyakorlat",
+      "chat": "Beszélgetések",
+      "folder": "Mappák",
+      "message": "E-mailek",
+      "link": "Hivatkozások"
+    }
+  },
   "pane": {
     "showList": "Lista megjelenítése",
     "hideList": "Lista elrejtése"

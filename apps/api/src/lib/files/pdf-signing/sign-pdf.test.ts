@@ -19,6 +19,7 @@ import {
 import { createSelfSignedCertificate } from "@/api/tests/helpers/self-signed-certificate";
 import { settled } from "@/api/tests/helpers/settled";
 import { createSignedPdf } from "@/api/tests/helpers/signed-pdf";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import {
   createTestCertificate,
   createTestCrl,
@@ -29,6 +30,8 @@ import {
   createTestTimestampAuthority,
   createTestTimestampCertificate,
 } from "@/api/tests/helpers/timestamp-token";
+
+const testFetchState = createTestFetch();
 
 const keyPool = createTestRsaKeyPool();
 const permit = grantThirdPartyOutboundPermit();
@@ -347,14 +350,16 @@ describe("two-phase PDF signing", () => {
       // reach it, whatever the certificate's URLs name.
       const globalFetch = globalThis.fetch;
       const globalFetches: string[] = [];
-      globalThis.fetch = Object.assign(
-        async (input: Parameters<typeof fetch>[0]) => {
-          globalFetches.push(
-            input instanceof Request ? input.url : input.toString(),
-          );
-          throw new Error("unexpected global fetch");
-        },
-        { preconnect: globalFetch.preconnect },
+      testFetchState.set(
+        Object.assign(
+          async (input: Parameters<typeof fetch>[0]) => {
+            globalFetches.push(
+              input instanceof Request ? input.url : input.toString(),
+            );
+            throw new Error("unexpected global fetch");
+          },
+          { preconnect: globalFetch.preconnect },
+        ),
       );
       try {
         const applied = await settled(
@@ -381,7 +386,7 @@ describe("two-phase PDF signing", () => {
           globalFetches,
         };
       } finally {
-        globalThis.fetch = globalFetch;
+        testFetchState.restore();
       }
     };
 

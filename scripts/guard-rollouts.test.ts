@@ -145,10 +145,9 @@ const fullRollout = (id: string): GuardRollout => ({
   check: ["bun", `scripts/check-${id}.ts`],
 });
 
-test("discovery loads every rollout in file name order", () => {
+test("discovery loads every entry of the rollout directory in file name order", () => {
   expect(GUARD_ROLLOUTS.map(({ id }) => guardRolloutSource(id))).toEqual(
     readdirSync(path.join(ROOT, GUARD_ROLLOUT_DIRECTORY))
-      .filter((file) => file.endsWith(".json"))
       .toSorted()
       .map((file) => `${GUARD_ROLLOUT_DIRECTORY}/${file}`),
   );
@@ -189,12 +188,12 @@ test("parallel rollout branches merge cleanly and both load without an install",
     git("init", "-b", "base");
     git("config", "user.name", "Rollout fixture");
     git("config", "user.email", "rollout@example.test");
-    writeFileSync(path.join(root, GUARD_ROLLOUT_DIRECTORY, ".gitkeep"), "");
     git("add", ".");
     git("commit", "-m", "fixture base");
     // Add in reverse lexical order so discovery must establish its own order.
     for (const id of ["z-guard", "a-guard"]) {
       git("switch", "-c", id, "base");
+      mkdirSync(path.join(root, GUARD_ROLLOUT_DIRECTORY), { recursive: true });
       writeFileSync(
         path.join(root, guardRolloutSource(id)),
         JSON.stringify(fullRollout(id)),
@@ -276,6 +275,51 @@ test.each(["Guard.json", "a-1.json", "a--b.json", "1a.json"])(
     });
   },
 );
+
+test("a rollout written as a .ts module panics with its path instead of being skipped", () => {
+  withRolloutRepo((root) => {
+    writeFileSync(
+      path.join(root, guardRolloutSource("a-guard")),
+      JSON.stringify(fullRollout("a-guard")),
+    );
+    const source = `${GUARD_ROLLOUT_DIRECTORY}/b-guard.ts`;
+    writeFileSync(
+      path.join(root, source),
+      `export default ${JSON.stringify(fullRollout("b-guard"))};`,
+    );
+    const loaded = loadRollouts(root);
+    expect(loaded.status).not.toBe(0);
+    expect(loaded.stdout).toBe("");
+    expect(loaded.stderr).toContain(
+      `${GUARD_ROLLOUT_DIRECTORY} holds only <kebab-case-id>.json rollouts; rename or remove ${source}`,
+    );
+  });
+});
+
+test.each([".gitkeep", "README.md", "a-guard.json.ts", "schema.d.ts"])(
+  "a non-rollout entry in the rollout directory panics with its path: %s",
+  (file) => {
+    withRolloutRepo((root) => {
+      const source = `${GUARD_ROLLOUT_DIRECTORY}/${file}`;
+      writeFileSync(path.join(root, source), "");
+      const loaded = loadRollouts(root);
+      expect(loaded.status).not.toBe(0);
+      expect(loaded.stderr).toContain(source);
+      expect(loaded.stderr).toContain("AssertionError");
+    });
+  },
+);
+
+test("a nested directory in the rollout directory panics with its path", () => {
+  withRolloutRepo((root) => {
+    const source = `${GUARD_ROLLOUT_DIRECTORY}/nested`;
+    mkdirSync(path.join(root, source));
+    const loaded = loadRollouts(root);
+    expect(loaded.status).not.toBe(0);
+    expect(loaded.stderr).toContain(source);
+    expect(loaded.stderr).toContain("AssertionError");
+  });
+});
 
 test("rollouts from separate files preserve registry order", () => {
   expect(

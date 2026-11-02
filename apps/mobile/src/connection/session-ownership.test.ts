@@ -6,6 +6,12 @@ import {
   walk,
 } from "@stll/scripts/src/syntax-tree";
 
+const KEYCHAIN_CALLS: ReadonlySet<string> = new Set([
+  "getItemAsync",
+  "setItemAsync",
+  "deleteItemAsync",
+]);
+
 const violations = (filename: string, source: string) => {
   const parsed = parseSource(filename, source);
   const found: string[] = [];
@@ -13,9 +19,27 @@ const violations = (filename: string, source: string) => {
     if (
       node.type === "ImportDeclaration" &&
       node.source.value === "expo-secure-store" &&
-      filename !== "connection/platform.ts"
+      filename !== "connection/platform.ts" &&
+      filename !== "native/account-store.ts"
     ) {
       found.push("keychain adapter owner");
+    }
+    // The per-account store shares the keychain but never the session's
+    // item: every key it passes is put under its own prefix first.
+    if (
+      filename === "native/account-store.ts" &&
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      KEYCHAIN_CALLS.has(node.callee.name)
+    ) {
+      const key = node.arguments.at(0);
+      if (
+        key?.type !== "CallExpression" ||
+        key.callee.type !== "Identifier" ||
+        key.callee.name !== "accountKey"
+      ) {
+        found.push("account keychain namespace");
+      }
     }
     if (
       filename === "connection/platform.ts" &&
@@ -122,6 +146,24 @@ test("the ownership guard rejects mutations outside their owners", () => {
       "createSessionStore({ read: async () => { await deleteItemAsync(key); } });",
     ),
   ).toEqual(["keychain mutation adapter"]);
+  expect(
+    violations(
+      "native/account-store.ts",
+      'const read = async () => await getItemAsync("stella.session");',
+    ),
+  ).toEqual(["account keychain namespace"]);
+  expect(
+    violations(
+      "native/account-store.ts",
+      "const remove = async (key) => { await deleteItemAsync(key); };",
+    ),
+  ).toEqual(["account keychain namespace"]);
+  expect(
+    violations(
+      "native/account-store.ts",
+      "const write = async (key, value) => { await setItemAsync(accountKey(key), value); };",
+    ),
+  ).toEqual([]);
   expect(
     violations(
       "connection/session.ts",
