@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * The publisher's text of an Austrian RIS decision, read from its stored raw.
  *
@@ -9,8 +10,8 @@
  * the page number, the court and date repeated on every page), which are not
  * part of the decision.
  */
-import * as cheerio from "cheerio";
-import { type AnyNode, isTag, isText } from "domhandler";
+import { load } from "@stll/html";
+import { type AnyNode, isTag, isText } from "@stll/html/nodes";
 
 // Type-only: the part name stays the adapter's, without running its code.
 import type { AT_RIS_PART } from "@/api/handlers/case-law/ingestion/adapters/at-ris-fields";
@@ -158,7 +159,7 @@ const projectRisDecision = (sourceRaw: string): RetentionProjection => {
     // document the crawl could fetch.
     return { type: "no-text", reason: RETENTION_TEXT_ABSENCE.NOT_PUBLISHED };
   }
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const content = $("nutzdaten").first().get(0);
   if (content === undefined) {
     return {

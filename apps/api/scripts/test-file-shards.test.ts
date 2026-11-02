@@ -1,11 +1,9 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { encodePlanFileList } from "../../../scripts/plan-output-codec";
 import {
   parseApiTestShard,
   partitionTestFiles,
@@ -126,7 +124,7 @@ test("an API sub-shard must select files before the runner can start", () => {
   ).toEqual({ testPaths: [], shard: null });
 });
 
-test("explicit test selection validates inline lists and files before duration sharding", () => {
+test("explicit encoded test selection validates paths before duration sharding", () => {
   const files: [string, string, string] = [
     "src/a.test.ts",
     "src/b.test.ts",
@@ -135,39 +133,41 @@ test("explicit test selection validates inline lists and files before duration s
   expect(restrictApiTestFiles(files, undefined)).toEqual(files);
   expect(restrictApiTestFiles(files, "")).toEqual(files);
   expect(
-    restrictApiTestFiles(files, "src/c.test.ts\r\nsrc/a.test.ts\r\n"),
+    restrictApiTestFiles(
+      files,
+      encodePlanFileList(["src/c.test.ts", "src/a.test.ts"]),
+    ),
   ).toEqual([files[0], files[2]]);
-  expect(restrictApiTestFiles(files, "src/b.test.ts")).toEqual([files[1]]);
-  expect(() => restrictApiTestFiles(files, "src/unknown.test.ts")).toThrow(
-    "Unknown API_TEST_FILES path",
-  );
+  expect(
+    restrictApiTestFiles(files, encodePlanFileList(["src/b.test.ts"])),
+  ).toEqual([files[1]]);
   expect(() =>
-    restrictApiTestFiles(files, "src/a.test.ts\nsrc/a.test.ts"),
+    restrictApiTestFiles(files, encodePlanFileList(["src/unknown.test.ts"])),
+  ).toThrow("Unknown API_TEST_FILES_ENCODED path");
+  expect(() =>
+    restrictApiTestFiles(
+      files,
+      encodePlanFileList(["src/a.test.ts", "src/a.test.ts"]),
+    ),
   ).toThrow("paths must be unique");
-  const directory = mkdtempSync(path.join(tmpdir(), "api-test-selection-"));
-  try {
-    const filename = path.join(directory, "files.txt");
-    writeFileSync(filename, "src/a.test.ts\nsrc/c.test.ts\n");
-    const selected = restrictApiTestFiles(files, filename);
-    expect(selected).toEqual([files[0], files[2]]);
-    const bins = [1, 2].map(
-      (index) =>
-        selectApiTestFiles({
-          files: selected,
-          durations: {
-            "src/a.test.ts": 1,
-            "src/b.test.ts": 1000,
-            "src/c.test.ts": 2,
-          },
-          shardValue: `${index}/2`,
-        }).testPaths,
-    );
-    expect(bins.flat().toSorted()).toEqual([...selected]);
-    writeFileSync(filename, "");
-    expect(() => restrictApiTestFiles(files, filename)).toThrow(
-      "selected zero test files",
-    );
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
+  const selected = restrictApiTestFiles(
+    files,
+    encodePlanFileList(["src/a.test.ts", "src/c.test.ts"]),
+  );
+  const bins = [1, 2].map(
+    (index) =>
+      selectApiTestFiles({
+        files: selected,
+        durations: {
+          "src/a.test.ts": 1,
+          "src/b.test.ts": 1000,
+          "src/c.test.ts": 2,
+        },
+        shardValue: `${index}/2`,
+      }).testPaths,
+  );
+  expect(bins.flat().toSorted()).toEqual([...selected]);
+  expect(() => restrictApiTestFiles(files, encodePlanFileList([]))).toThrow(
+    "selected zero test files",
+  );
 });

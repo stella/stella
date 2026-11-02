@@ -7,6 +7,7 @@ import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
+import type { FormFile } from "@/state/form-file";
 
 /** The longest recording one transcription takes; recording stops there. */
 export const DICTATION_MAX_SECONDS = MAX_TRANSCRIPTION_AUDIO_SECONDS;
@@ -18,25 +19,6 @@ export const DICTATION_MAX_SECONDS = MAX_TRANSCRIPTION_AUDIO_SECONDS;
 const TRANSCRIBE_TIMEOUT_MS = 75_000;
 
 const transcriptionSchema = v.object({ text: v.string() });
-
-/** A recorded file on the phone, as React Native's multipart upload names one. */
-type RecordedFile = {
-  readonly uri: string;
-  readonly name: string;
-  readonly type: string;
-};
-
-declare global {
-  // oxlint-disable-next-line typescript/consistent-type-definitions -- only an interface merges into the global FormData
-  interface FormData {
-    /**
-     * React Native's `FormData` also takes a file by its location and
-     * streams it from disk; the DOM typings know only `Blob`s.
-     */
-    // oxlint-disable-next-line typescript/method-signature-style -- a method adds an overload; a property would replace the DOM's
-    append(name: string, value: RecordedFile): void;
-  }
-}
 
 /**
  * Turns one recording into text through the server's transcription, which
@@ -54,7 +36,7 @@ export const transcribeRecording = async ({
   readonly uri: string;
 }): Promise<Result<string, ApiError>> => {
   const form = new FormData();
-  const file: RecordedFile = {
+  const file: FormFile = {
     uri,
     name: "dictation.m4a",
     type: "audio/mp4",
