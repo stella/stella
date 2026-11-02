@@ -94,6 +94,7 @@
     "selectedRun": "Spustit AI sloupce pro {count, plural, one {# řádek} few {# řádky} many {# řádku} other {# řádků}}"
   },
   "aiDisclosure": {
+    "billingDrafts": "Návrhy AI jsou doporučení, která stella vytváří z kontrolovaného záznamu, vašich dřívějších záznamů k věci a fakturačních pravidel kanceláře, pokud je přidala. Každý záznam před vytvořením zkontrolujte.",
     "caseLaw": "AI shrnutí, poznámky a analýzy soudních rozhodnutí vytváří stella. Soudy je neschvalují a nejde o vlastní úvahy soudů; slouží jako pomůcka pro právníky a rozhodujícím zdrojem zůstává text rozhodnutí."
   },
   "appearance": {

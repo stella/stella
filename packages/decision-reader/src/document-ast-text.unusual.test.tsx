@@ -29,6 +29,7 @@ const messages = {
   "statutes.provisionTextUnavailable": "Text not available",
   "statutes.showCitedPartOnly": "Show cited part only",
   "statutes.showFullProvision": "Show full provision",
+  "aiDisclosure.billingDrafts": "Drafted disclosure",
   "aiDisclosure.caseLaw": "Generated disclosure",
   sourceAttribution: (
     source: string,
