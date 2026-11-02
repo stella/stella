@@ -71,60 +71,81 @@ fn absolute_directory(path: &Path) -> io::Result<File> {
   Ok(directory)
 }
 
-fn roots() -> Vec<(PathBuf, bool)> {
-  let mut roots = Vec::new();
-  for base in [
-    dirs::data_dir(),
-    dirs::data_local_dir(),
-    dirs::cache_dir(),
-    dirs::state_dir(),
-  ]
-  .into_iter()
-  .flatten()
-  {
-    roots.push((base.join(crate::config::APP_DATA_DIR_NAME), true));
-  }
-  #[cfg(target_os = "macos")]
-  if let Some(home) = dirs::home_dir() {
-    roots.push((
-      home
-        .join("Library/Logs")
-        .join(crate::config::APP_DATA_DIR_NAME),
-      true,
-    ));
-    roots.push((home.join("Library/LaunchAgents"), false));
-  }
-  // Test builds, the allocation harness included, keep their fixtures under
-  // the temporary directory.
-  #[cfg(any(test, feature = "allocation-tests"))]
-  roots.push((std::env::temp_dir(), false));
-  roots
+/// A base directory local files may be created under.
+struct Root {
+  path: PathBuf,
+  /// Whether the base is the application's own, restricted to the owner.
+  restrict: bool,
+  /// The platform temporary directory test builds anchor fixtures in.
+  temporary: bool,
+}
+
+/// The platform bases, resolved once: they do not change while the app runs,
+/// and every local file operation looks one up.
+fn roots() -> &'static [Root] {
+  static ROOTS: OnceLock<Vec<Root>> = OnceLock::new();
+  ROOTS.get_or_init(|| {
+    let owned = |path: PathBuf, restrict: bool| Root {
+      path,
+      restrict,
+      temporary: false,
+    };
+    let mut roots = Vec::new();
+    for base in [
+      dirs::data_dir(),
+      dirs::data_local_dir(),
+      dirs::cache_dir(),
+      dirs::state_dir(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+      roots.push(owned(base.join(crate::config::APP_DATA_DIR_NAME), true));
+    }
+    #[cfg(target_os = "macos")]
+    if let Some(home) = dirs::home_dir() {
+      roots.push(owned(
+        home
+          .join("Library/Logs")
+          .join(crate::config::APP_DATA_DIR_NAME),
+        true,
+      ));
+      roots.push(owned(home.join("Library/LaunchAgents"), false));
+    }
+    // Test builds, the allocation harness included, keep their fixtures under
+    // the temporary directory.
+    #[cfg(any(test, feature = "allocation-tests"))]
+    roots.push(Root {
+      path: std::env::temp_dir(),
+      restrict: false,
+      temporary: true,
+    });
+    roots
+  })
 }
 
 fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
-  let (root_path, restrict) = roots()
-    .into_iter()
-    .filter(|(root, _)| path.starts_with(root))
-    .max_by_key(|(root, _)| root.components().count())
+  let root = roots()
+    .iter()
+    .filter(|root| path.starts_with(&root.path))
+    .max_by_key(|root| root.path.components().count())
     .ok_or_else(invalid_path)?;
-  #[cfg(any(test, feature = "allocation-tests"))]
-  let temporary_anchor = root_path == std::env::temp_dir();
-  #[cfg(not(any(test, feature = "allocation-tests")))]
-  let temporary_anchor = false;
+  let (root_path, restrict, temporary_anchor) =
+    (&root.path, root.restrict, root.temporary);
   let relative = path
-    .strip_prefix(&root_path)
+    .strip_prefix(root_path)
     .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?
     .to_path_buf();
-  static ROOTS: OnceLock<Mutex<HashMap<PathBuf, Arc<File>>>> = OnceLock::new();
-  let mut opened = ROOTS
+  static OPENED: OnceLock<Mutex<HashMap<PathBuf, Arc<File>>>> = OnceLock::new();
+  let mut opened = OPENED
     .get_or_init(Mutex::default)
     .lock()
     .map_err(|error| io::Error::other(error.to_string()))?;
   // A root moved or deleted while the app runs leaves the cached handle on an
   // unlinked directory; reuse it only while the path still names that inode.
-  let cached = opened.get(&root_path).filter(|directory| {
+  let cached = opened.get(root_path).filter(|directory| {
     use std::os::unix::fs::MetadataExt;
-    match (directory.metadata(), std::fs::symlink_metadata(&root_path)) {
+    match (directory.metadata(), std::fs::symlink_metadata(root_path)) {
       (Ok(held), Ok(current)) => {
         held.dev() == current.dev() && held.ino() == current.ino()
       }
@@ -142,11 +163,11 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
     drop(opened);
     return Ok((directory, relative));
   }
-  opened.remove(&root_path);
+  opened.remove(root_path);
   // Only the platform-supplied temporary anchor may contain a system alias.
   // All descendants, including test fixtures, still use no-follow traversal.
   #[cfg(any(test, feature = "allocation-tests"))]
-  let physical_root = if root_path == std::env::temp_dir() {
+  let physical_root = if temporary_anchor {
     root_path.canonicalize()?
   } else {
     root_path.clone()
@@ -171,7 +192,7 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
     fs::fchmod(&directory, DIRECTORY_MODE)?;
   }
   let directory = Arc::new(directory);
-  opened.insert(root_path, Arc::clone(&directory));
+  opened.insert(root_path.clone(), Arc::clone(&directory));
   drop(opened);
   Ok((directory, relative))
 }
