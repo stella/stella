@@ -116,6 +116,45 @@ for (const rtl of [false, true]) {
   });
 }
 
+/**
+ * How far the tail's trailing end (the extension) sits inside the root's
+ * clip; negative when the root cuts it off.
+ */
+const measureTailEnd = async (page: Page) =>
+  await page.locator("[data-slot=middle-truncate]").evaluate((root) => {
+    const tail = root.children[1];
+    if (!(tail instanceof HTMLElement)) {
+      return null;
+    }
+    const rtl = getComputedStyle(root).direction === "rtl";
+    const rootBox = root.getBoundingClientRect();
+    const tailBox = tail.getBoundingClientRect();
+    return {
+      inside: rtl ? tailBox.left - rootBox.left : rootBox.right - tailBox.right,
+      tailWider: tailBox.width > rootBox.width,
+    };
+  });
+
+for (const rtl of [false, true]) {
+  const query = rtl ? "?rtl=true" : "";
+  const label = rtl ? "right to left" : "left to right";
+
+  test(`keeps the extension visible when the tail is wider than the row (${label})`, async ({
+    page,
+  }) => {
+    await openFixture(page, query);
+    await setFrameWidth(page, 40);
+    await expect(page.locator("[data-overflow]")).toHaveCount(1);
+    await expect
+      .poll(async () => await measureTailEnd(page))
+      .toMatchObject({ tailWider: true });
+    await expect
+      .poll(async () => Math.abs((await measureTailEnd(page))?.inside ?? 99))
+      .toBeLessThan(1);
+    await expect(page.locator("html")).not.toHaveAttribute("data-test-error");
+  });
+}
+
 test("keeps the full value as the text and accessible name", async ({
   page,
 }) => {

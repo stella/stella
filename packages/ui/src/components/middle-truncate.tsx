@@ -116,6 +116,19 @@ function fitHead(head: HTMLElement) {
   head.dataset["overflow"] = "";
 
   const rtl = getComputedStyle(head).direction === "rtl";
+  // A tail wider than the whole name (a narrow column, a deeply nested row)
+  // leaves the head no room and would lose its own end to the root's clip:
+  // the extension or suffix that tells names apart. Slide it so its end
+  // stays in view; its start, the part names share, is what gets cut.
+  const root = head.parentElement;
+  const tailOverflow =
+    root === null
+      ? 0
+      : tail.getBoundingClientRect().width - root.getBoundingClientRect().width;
+  if (tailOverflow > 0) {
+    tail.style.translate = `${String(rtl ? tailOverflow : -tailOverflow)}px 0`;
+    return;
+  }
   const box = head.getBoundingClientRect();
   const availableWidth = box.width;
   const range = document.createRange();
