@@ -20,15 +20,15 @@ type MoreRow = {
   readonly glyph: Glyph;
   /** The tile's colour, one of the web's option colour pairs. */
   readonly tile: "Amber" | "Blue" | "Gray" | "Purple" | "Teal";
-  /** Where the row goes, or what it does; none while it is still to come. */
-  readonly href: Href | (() => void) | null;
+  /** Where the row goes, or what it does. */
+  readonly href: Href | (() => void);
 };
 
 /**
  * Everything beyond the three tabs, as GitHub's app lists its sections: a
  * coloured tile, the name and a chevron, in grouped cards. Case law, your
  * timers and the settings open from here, and a device with the document
- * camera scans paper into a matter; voice input is on its way.
+ * camera scans paper into a matter.
  */
 const MoreScreen = () => {
   const t = useTranslations();
@@ -59,12 +59,6 @@ const MoreScreen = () => {
             } as const,
           ]
         : []),
-      {
-        glyph: "mic",
-        href: null,
-        label: t("more.voiceInput"),
-        tile: "Purple",
-      },
     ],
     [
       {
@@ -110,7 +104,6 @@ const MoreScreen = () => {
 export default MoreScreen;
 
 const MoreRowView = ({ last, row }: { last: boolean; row: MoreRow }) => {
-  const t = useTranslations("more");
   const router = useRouter();
   const colors = useAppColors();
   const ui = useUiColors();
@@ -119,13 +112,11 @@ const MoreRowView = ({ last, row }: { last: boolean; row: MoreRow }) => {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: href === null }}
       className="flex-row items-center gap-3 pl-4 active:opacity-60"
-      disabled={href === null}
       onPress={() => {
         if (typeof href === "function") {
           href();
-        } else if (href !== null) {
+        } else {
           router.push(href);
         }
       }}
@@ -146,11 +137,7 @@ const MoreRowView = ({ last, row }: { last: boolean; row: MoreRow }) => {
         <Text className="flex-1" variant="rowTitle">
           {row.label}
         </Text>
-        {href === null ? (
-          <Text variant="caption">{t("soon")}</Text>
-        ) : (
-          <ChevronRightIcon color={colors.muted} size={18} />
-        )}
+        <ChevronRightIcon color={colors.muted} size={18} />
       </View>
     </Pressable>
   );
