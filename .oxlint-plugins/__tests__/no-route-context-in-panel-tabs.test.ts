@@ -51,11 +51,28 @@ test("panel tabs accept provider hooks and route-neutral navigation", async () =
         "useAuthenticatedUser();",
         "useMaybeAuthenticatedUser();",
         "useNavigate();",
-        'useMatch({ from: "/_protected", shouldThrow: false });',
+        'useMatch({ from: "/_protected", strict: false, shouldThrow: false });',
         "Route.useNavigate();",
         'import { useRouteContext } from "other-library";',
         "useRouteContext();",
       ].join("\n"),
     ),
   ).toEqual([]);
+});
+
+test("panel tabs reject route-specific params, loader data, and strict matches", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        'import { useLoaderData, useParams, useMatch } from "@tanstack/react-router";',
+        'useParams({ from: "/knowledge" });',
+        'useMatch({ from: "/knowledge" });',
+        "Route.useParams();",
+        "Route.useLoaderData();",
+        'useLoaderData({ from: "/knowledge" });',
+        "useMatch({ strict: false, ...options });",
+      ].join("\n"),
+    ),
+  ).toEqual([2, 3, 4, 5, 6, 7]);
 });

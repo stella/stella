@@ -12,6 +12,7 @@ import {
   nativeEntries,
   nativeRuleId,
 } from "./.oxlint-plugins/no-native-ui-registry.ts";
+import { GLOBALLY_MOUNTED_UI } from "./.oxlint-plugins/no-route-context-in-panel-tabs.ts";
 import { PUBLIC_LAW_MIXED_MODULES } from "./.oxlint-plugins/public-law-decision-surface-modules.ts";
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
@@ -63,6 +64,11 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
   files: [`.oxlint-plugins/__fixtures__/${file}`],
   rules: Object.fromEntries(rules.map((rule) => [rule, "error"] as const)),
 });
+
+export const NO_RENDER_PHASE_UPDATE_GOVERNED_PATHS = [
+  "apps",
+  "packages",
+] as const;
 
 // Only the rows that declare an enforcement kind reach the lint rule; the rest
 // document an owner that no rule can yet prove.
@@ -1947,6 +1953,7 @@ const config = defineConfig({
     "./.oxlint-plugins/query-data-requires-state.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
     "./.oxlint-plugins/no-route-context-in-panel-tabs.ts",
+    "./.oxlint-plugins/no-render-phase-update.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
@@ -2163,6 +2170,17 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-render-phase-update.fixture.tsx",
+        ...NO_RENDER_PHASE_UPDATE_GOVERNED_PATHS.map(
+          (directory) => `${directory}/**/*.{ts,tsx}`,
+        ),
+      ],
+      rules: {
+        "no-render-phase-update/no-render-phase-update": "error",
+      },
+    },
     {
       // Page-level narrative copy owns a readable measure. Reusable component
       // internals and task-shaped surfaces are outside this narrow enrolment.
@@ -5231,15 +5249,7 @@ const config = defineConfig({
       // belongs to shared providers, including for tabs owned outside inspector.
       files: [
         ".oxlint-plugins/__fixtures__/no-route-context-in-panel-tabs.fixture.tsx",
-        "apps/web/src/**/*inspector*.tsx",
-        "apps/web/src/components/inspector/**/*.tsx",
-        "apps/web/src/components/inspector/**/*.ts",
-        "apps/web/src/features/knowledge/playbook-editor/playbook-draft-view.tsx",
-        "apps/web/src/features/knowledge/views/tools/tool-detail-panel-view.tsx",
-        "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx",
-        "apps/web/src/components/workspaces/matter-metadata-sheet.tsx",
-        "apps/web/src/components/workspaces/hooks/use-start-workflow.ts",
-        "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts",
+        ...GLOBALLY_MOUNTED_UI,
       ],
       rules: {
         "no-route-context-in-panel-tabs/no-route-context-in-panel-tabs":
