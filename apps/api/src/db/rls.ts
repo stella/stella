@@ -57,6 +57,13 @@ export const SETTING_USER_ID = "app.user_id";
 export const SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID =
   "app.account_export_organization_id";
 export const SETTING_ACCOUNT_EXPORT_USER_ID = "app.account_export_user_id";
+/**
+ * Organization ids, comma-separated, whose row this transaction may delete.
+ * The organization delete guard trigger refuses every other row; only the
+ * deletion owner (completeOrganizationDeletion) sets it in production.
+ */
+export const SETTING_ORGANIZATION_DELETION_IDS =
+  "app.organization_deletion_ids";
 
 export const WORKSPACE_ACCESS_MODE = {
   explicit: "explicit",

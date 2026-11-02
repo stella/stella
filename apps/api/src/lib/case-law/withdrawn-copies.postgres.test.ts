@@ -20,6 +20,7 @@ import type {
 import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -70,7 +71,7 @@ describe.skipIf(!enabled)("withdrawn copies (postgres)", () => {
       .where(inArray(caseLawIndexJobs.decisionId, ids));
     await db.delete(caseLawDecisions).where(inArray(caseLawDecisions.id, ids));
     await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
-    await db.delete(organization).where(eq(organization.id, orgId));
+    await deleteOrganizationsForTest(db, [orgId]);
     await db.delete(user).where(eq(user.id, userId));
   });
 

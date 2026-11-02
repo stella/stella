@@ -43,6 +43,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { LEGAL_LIST_SOURCE_DECISION_BACKFILL } from "../../../../../db/legal-list-source-decision-backfill";
 
@@ -407,9 +408,7 @@ if (!databaseUrl || !runPostgres) {
           });
         }
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         await db.delete(user).where(eq(user.id, userId));
       }
     });

@@ -26,3 +26,10 @@ export const ACCOUNT_EXPORT_IDLE_STATUSES = [
   "failed",
   "expired",
 ] as const satisfies readonly (typeof ACCOUNT_EXPORT_STATUSES)[number][];
+
+/**
+ * What one export covers: the account's own data, or the whole audit trail of
+ * one organization, requested by an owner ahead of deleting that organization.
+ */
+export const ACCOUNT_EXPORT_KINDS = ["account", "organization_audit"] as const;
+export type AccountExportKind = (typeof ACCOUNT_EXPORT_KINDS)[number];

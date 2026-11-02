@@ -21,6 +21,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { readWorkspaceContactsHandler } from "../workspace-contacts-read";
 import { createWorkspaceContactHandler } from "./create";
@@ -88,9 +89,7 @@ if (!databaseUrl || !runPostgresTests) {
             ),
           ).toBe(0);
         } finally {
-          await setup.db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(setup.db, [organizationId]);
         }
       });
     });
@@ -374,9 +373,7 @@ if (!databaseUrl || !runPostgresTests) {
           } finally {
             releaseFirst.resolve(undefined);
             await Promise.all([firstAddition, secondAddition]);
-            await setup.db
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(setup.db, [organizationId]);
             await setup.db.delete(user).where(eq(user.id, userId));
           }
         });

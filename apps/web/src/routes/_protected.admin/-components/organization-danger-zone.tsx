@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -8,10 +8,19 @@ import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import type { DestructiveConfirmOutcome } from "@stll/ui/destructive-confirm-dialog";
 import { Frame, FramePanel } from "@stll/ui/frame";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { organizationAuditExportLatestOptions } from "@/lib/organization/audit-export-queries";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
+
+import { OrganizationAuditArchive } from "./organization-audit-archive";
 
 type OrganizationDangerZoneProps = {
   organizationId: string;
@@ -23,6 +32,15 @@ type OrganizationDangerZoneProps = {
 const SUBSCRIPTION_RENEWS_CODE = "organization_subscription_renews";
 const ONLY_OWNER_LEAVE_CODE =
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER";
+const AUDIT_EXPORT_REQUIRED_CODE = "organization_audit_export_required";
+const AUDIT_EXPORT_STALE_CODE = "organization_audit_export_stale";
+const AUDIT_EXPORT_NOT_DOWNLOADED_CODE =
+  "organization_audit_export_not_downloaded";
+const AUDIT_EXPORT_REFUSAL_CODES: readonly (string | undefined)[] = [
+  AUDIT_EXPORT_REQUIRED_CODE,
+  AUDIT_EXPORT_STALE_CODE,
+  AUDIT_EXPORT_NOT_DOWNLOADED_CODE,
+];
 
 export const OrganizationDangerZone = ({
   organizationId,
@@ -32,6 +50,50 @@ export const OrganizationDangerZone = ({
 }: OrganizationDangerZoneProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+  const { id: userId } = useAuthenticatedUser();
+  const auditExportOptions = organizationAuditExportLatestOptions(
+    organizationId,
+    userId,
+  );
+  // Deleting the organization deletes its audit log, so only an owner holding
+  // a current archive of it can delete.
+  const auditExportView = queryView(
+    useQuery({ ...auditExportOptions, enabled: isOwner }),
+    { isEmpty: (data) => data === null },
+  );
+  useQueryViewError(auditExportView, "OrganizationDangerZone:auditArchive");
+  const auditArchive =
+    auditExportView.type === "items" ? auditExportView.items : null;
+  const auditArchiveCurrent =
+    auditArchive?.status === "ready" &&
+    auditArchive.coversCurrentTrail &&
+    auditArchive.downloaded;
+  const requestAuditArchive = useMutation({
+    onMutate: async () => {
+      await queryClient.cancelQueries({
+        queryKey: auditExportOptions.queryKey,
+      });
+    },
+    mutationFn: async () =>
+      unwrapApiResponse(await api.organizations["audit-export"].post()),
+    onSuccess: async (status) => {
+      queryClient.setQueryData(auditExportOptions.queryKey, status);
+      await queryClient.invalidateQueries({
+        queryKey: auditExportOptions.queryKey,
+      });
+    },
+    onError: (error) => {
+      analytics.captureError(error, {
+        fingerprintKey: "OrganizationDangerZone.auditArchive:failure",
+        scope: {
+          type: "handler",
+          handlerId: "OrganizationDangerZone.auditArchive:failure",
+        },
+      });
+      notifyUserError(error, t("errors.actionFailed"));
+    },
+  });
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [outcome, setOutcome] = useState<
     | { status: "active" }
@@ -55,6 +117,11 @@ export const OrganizationDangerZone = ({
           },
         });
         setOutcome({ status: "refused", code: result.error.code });
+        if (AUDIT_EXPORT_REFUSAL_CODES.includes(result.error.code)) {
+          await queryClient.invalidateQueries({
+            queryKey: auditExportOptions.queryKey,
+          });
+        }
         return "refused" as const;
       }
       setOutcome({ status: "completed", action });
@@ -90,6 +157,12 @@ export const OrganizationDangerZone = ({
         return t("admin.deleteRefusedSubscription");
       case ONLY_OWNER_LEAVE_CODE:
         return t("admin.leaveRefusedOnlyOwner");
+      case AUDIT_EXPORT_REQUIRED_CODE:
+        return t("admin.deleteRefusedAuditArchive");
+      case AUDIT_EXPORT_STALE_CODE:
+        return t("admin.auditArchiveOutdated");
+      case AUDIT_EXPORT_NOT_DOWNLOADED_CODE:
+        return t("admin.auditArchiveDownloadFirst");
       default:
         return t("errors.actionFailed");
     }
@@ -119,6 +192,20 @@ export const OrganizationDangerZone = ({
                   {t("admin.leaveOrganization")}
                 </Button>
               </div>
+              {isOwner &&
+                (auditExportView.type === "pending" ||
+                  auditExportView.type === "error") && (
+                  <QueryViewFeedback view={auditExportView} />
+                )}
+              {isOwner &&
+                (auditExportView.type === "empty" ||
+                  auditExportView.type === "items") && (
+                  <OrganizationAuditArchive
+                    status={auditArchive}
+                    requestPending={requestAuditArchive.isPending}
+                    onRequest={() => requestAuditArchive.mutate()}
+                  />
+                )}
               {isOwner && (
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-muted-foreground text-sm">
@@ -126,7 +213,9 @@ export const OrganizationDangerZone = ({
                   </p>
                   <Button
                     disabled={
-                      mutation.isPending || outcome.status === "completed"
+                      mutation.isPending ||
+                      outcome.status === "completed" ||
+                      !auditArchiveCurrent
                     }
                     onClick={() => setDeleteOpen(true)}
                     variant="destructive"

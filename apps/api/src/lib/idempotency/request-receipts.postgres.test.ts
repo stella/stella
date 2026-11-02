@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -27,6 +27,7 @@ import {
   createTestHandlerContext,
   NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { authorizeOrganizationReplay } from "./organization-replay-authorization";
 
@@ -68,9 +69,10 @@ const withFixture = async (
     try {
       await run(fixture);
     } finally {
-      await db
-        .delete(organization)
-        .where(inArray(organization.id, [organizationId, otherOrganizationId]));
+      await deleteOrganizationsForTest(db, [
+        organizationId,
+        otherOrganizationId,
+      ]);
       await db.delete(user).where(eq(user.id, userId));
     }
   });

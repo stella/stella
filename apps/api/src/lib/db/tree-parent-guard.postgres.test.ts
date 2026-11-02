@@ -26,6 +26,7 @@ import { getPgErrorCode } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -176,9 +177,7 @@ const createScope = async (db: GatedTestDb): Promise<Scope> => {
 };
 
 const dropScope = async (db: GatedTestDb, scope: Scope) =>
-  await db
-    .delete(organization)
-    .where(eq(organization.id, scope.organizationId));
+  await deleteOrganizationsForTest(db, [scope.organizationId]);
 
 /** Every chain ends at a root; a stored loop fails here. */
 const expectAcyclic = (parents: ReadonlyMap<string, string | null>) => {

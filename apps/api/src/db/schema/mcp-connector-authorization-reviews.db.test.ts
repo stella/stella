@@ -30,6 +30,7 @@ import {
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { TABLE_POLICY_SETTINGS_BASELINE } from "@/api/tests/security/table-policy-settings-baseline";
 import {
@@ -142,10 +143,8 @@ afterAll(async () => {
   await testDb
     .delete(mcpConnectors)
     .where(eq(mcpConnectors.id, catalogueConnectorId));
-  await testDb
-    .delete(organization)
-    .where(eq(organization.id, otherOrganizationId));
-  await testDb.delete(organization).where(eq(organization.id, organizationId));
+  await deleteOrganizationsForTest(testDb, [otherOrganizationId]);
+  await deleteOrganizationsForTest(testDb, [organizationId]);
   await testDb.delete(user).where(eq(user.id, ownerId));
   await testDb.delete(user).where(eq(user.id, memberId));
   await releaseTestDb();

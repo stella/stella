@@ -4,6 +4,7 @@ import { accountExportParams } from "@/api/handlers/account-exports/params";
 import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { status } from "@/api/http/status";
 import { recordAccountExportDownload } from "@/api/lib/account-export/store";
+import type { AccountExportReader } from "@/api/lib/account-export/store";
 import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
@@ -35,6 +36,16 @@ const resolveOAuthUser = async (
   return email === undefined ? null : { id: userId, email };
 };
 
+/**
+ * A bearer credential is an OAuth client acting under account-export consent;
+ * without one the caller is the account holder's browser session. The same
+ * reading picks the authentication below and the exports the caller may take.
+ */
+const accountExportReaderOf = (request: Request): AccountExportReader =>
+  request.headers.get("authorization") === null
+    ? "browser_session"
+    : "delegated";
+
 const authenticateAccountExportDownload = async (
   ctx: Parameters<typeof authenticateSession>[0],
   access: Parameters<typeof authenticateSession>[1],
@@ -45,7 +56,10 @@ const authenticateAccountExportDownload = async (
   }: DownloadAuthenticationDependencies = {},
 ): Promise<CallerOutcome<SessionCaller>> => {
   const authorization = ctx.request.headers.get("authorization");
-  if (authorization === null) {
+  if (
+    authorization === null ||
+    accountExportReaderOf(ctx.request) === "browser_session"
+  ) {
     return await authenticateBrowserSession(ctx, access);
   }
   if (!authorization.startsWith("Bearer ")) {
@@ -110,7 +124,12 @@ export const createDownloadPersonalDataExport = ({
     async function* ({ user, params: { exportId }, request }) {
       const row = yield* Result.await(
         Result.tryPromise(
-          async () => await recordDownload({ id: exportId, userId: user.id }),
+          async () =>
+            await recordDownload({
+              id: exportId,
+              userId: user.id,
+              reader: accountExportReaderOf(request),
+            }),
         ),
       );
       const objectKey = row?.objectKey ?? null;
@@ -132,7 +151,11 @@ export const createDownloadPersonalDataExport = ({
           body: source.body,
           contentType: "application/zip",
           disposition: "attachment",
-          fileName: sanitizeFilename(`personal-data-${row.id}.zip`),
+          fileName: sanitizeFilename(
+            row.kind === "organization_audit"
+              ? `organization-audit-log-${row.id}.zip`
+              : `personal-data-${row.id}.zip`,
+          ),
           ...(source.contentLength === undefined
             ? {}
             : { contentLength: source.contentLength }),

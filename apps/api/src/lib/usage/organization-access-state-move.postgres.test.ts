@@ -26,6 +26,7 @@ import {
 } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
@@ -151,9 +152,7 @@ if (!databaseUrl || !runPostgres) {
             );
           expect(creationAudits).toHaveLength(1);
         } finally {
-          await firstDb
-            .delete(organization)
-            .where(inArray(organization.id, [organizationId]));
+          await deleteOrganizationsForTest(firstDb, [organizationId]);
         }
       });
     });
@@ -231,9 +230,7 @@ if (!databaseUrl || !runPostgres) {
               [keyless]: ORGANIZATION_ACCESS_STATE.evaluationEnded,
             });
           } finally {
-            await writerDb
-              .delete(organization)
-              .where(inArray(organization.id, ids));
+            await deleteOrganizationsForTest(writerDb, ids);
           }
         });
       },

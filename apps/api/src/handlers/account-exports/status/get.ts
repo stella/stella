@@ -30,7 +30,13 @@ const personalDataExportStatus = createSafeSessionHandler(
   async function* ({ user, params: { exportId } }) {
     const row = yield* Result.await(
       Result.tryPromise(
-        async () => await readAccountExport({ id: exportId, userId: user.id }),
+        async () =>
+          await readAccountExport({
+            id: exportId,
+            userId: user.id,
+            // Agents reach this capability under account-export consent.
+            reader: "delegated",
+          }),
       ),
     );
     if (row === null) {

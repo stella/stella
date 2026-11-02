@@ -47,6 +47,7 @@ import {
   type RouteNetworkMetrics,
   summarizeCapture,
 } from "../helpers/network";
+import { deleteTestOrganization } from "../helpers/organization";
 import { declarePublicKnowledgeSmoke } from "../helpers/public-knowledge-smoke";
 import { signInWithEmailOtp } from "../helpers/sign-in";
 import {
@@ -436,11 +437,10 @@ const declareRouteSmokeGroup = ({
           } finally {
             try {
               if (negativeOrganizationId !== null) {
-                const deleted = await negativeRequest.post(
-                  `${E2E_API_ORIGIN}/api/auth/organization/delete`,
-                  { data: { organizationId: negativeOrganizationId } },
+                await deleteTestOrganization(
+                  negativeRequest,
+                  negativeOrganizationId,
                 );
-                expect(deleted.ok(), await deleted.text()).toBe(true);
               }
             } finally {
               await negativeRequest.dispose();

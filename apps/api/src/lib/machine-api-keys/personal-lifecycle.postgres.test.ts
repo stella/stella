@@ -33,6 +33,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const liveSessionRow = (userId: string) => ({
@@ -187,9 +188,7 @@ if (!databaseUrl || !runPostgres) {
           ).toHaveLength(5);
         } finally {
           await firstDb.delete(apikey).where(eq(apikey.referenceId, userId));
-          await firstDb
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(firstDb, [organizationId]);
           await firstDb.delete(user).where(eq(user.id, userId));
         }
       });
@@ -335,9 +334,7 @@ if (!databaseUrl || !runPostgres) {
             ).toEqual([]);
           } finally {
             await mintDb.delete(apikey).where(eq(apikey.referenceId, userId));
-            await mintDb
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(mintDb, [organizationId]);
             await mintDb.delete(user).where(eq(user.id, userId));
           }
         });
@@ -394,9 +391,7 @@ if (!databaseUrl || !runPostgres) {
           ).toEqual([]);
         } finally {
           await db.delete(apikey).where(eq(apikey.referenceId, userId));
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, userId));
         }
       });

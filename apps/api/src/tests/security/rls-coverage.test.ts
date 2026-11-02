@@ -548,6 +548,11 @@ describe("policy coverage", () => {
     // one owner-only policy and every privilege is revoked from stella; the
     // dedicated assertion below covers that instead of tenant CRUD.
     "chat_content_v3_backfill_receipts",
+    // Account exports belong to the requesting account: RLS admits a row by
+    // user_id alone. An organization audit export names the organization its
+    // archive covers, but that organization_id is never a tenant scope, and
+    // the row outlives the organization so its owner can still download it.
+    "account_exports",
     // Professional-use acceptances are written once at organization creation
     // on the owner connection and deny the request role entirely
     // (asserted in rls-table-grants.test.ts).

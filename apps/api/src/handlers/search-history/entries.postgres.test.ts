@@ -41,6 +41,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import clear from "./clear";
 import deleteEntry from "./delete";
@@ -144,9 +145,7 @@ const withHistory = async (
         memberId,
       });
     } finally {
-      await db
-        .delete(organization)
-        .where(inArray(organization.id, organizationIds));
+      await deleteOrganizationsForTest(db, organizationIds);
       await db.delete(user).where(inArray(user.id, userIds));
     }
   });

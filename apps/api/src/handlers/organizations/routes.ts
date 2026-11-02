@@ -1,3 +1,5 @@
+import requestOrganizationAuditArchive from "@/api/handlers/organizations/audit-export/create";
+import latestOrganizationAuditExport from "@/api/handlers/organizations/audit-export/get";
 import createOrganization from "@/api/handlers/organizations/create";
 import { organizationCreateBudget } from "@/api/handlers/organizations/rate-limit";
 import updateSlug from "@/api/handlers/organizations/slug/update";
@@ -14,6 +16,12 @@ export const organizationsRoute = mount(
       { "/slug": { POST: updateSlug } },
       { middleware: [organizationSlugBudget] },
     ),
+    routes({
+      "/audit-export": {
+        GET: latestOrganizationAuditExport,
+        POST: requestOrganizationAuditArchive,
+      },
+    }),
   ],
   { prefix: "/organizations" },
 );

@@ -68,6 +68,7 @@ import { appendSetCookieHeaders } from "@/api/http/context";
 import type { RequestContext, ResponseHeaders } from "@/api/http/context";
 import { status } from "@/api/http/status";
 import type { HttpStatusResponse } from "@/api/http/status";
+import { ORGANIZATION_AUDIT_EXPORT_REFUSAL_MESSAGE } from "@/api/lib/account-export/organization-audit-gate";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError, detached } from "@/api/lib/analytics/capture";
@@ -1821,7 +1822,7 @@ export const createAuth = (
         );
         await Promise.resolve();
       },
-      async beforeDeleteOrganization({ organization: org }) {
+      async beforeDeleteOrganization({ organization: org, user: deletedBy }) {
         // Complete the deletion here, before the plugin's adapter runs.
         // Everything that names the organization cascades away with it, and
         // those rows are the only description of the objects it owns:
@@ -1839,6 +1840,10 @@ export const createAuth = (
         // is the point: instructions committed ahead of a cascade that then
         // failed would name a live organization's documents.
         //
+        // The audit trail cascades with the organization, so the teardown
+        // owner first requires the deleting owner's complete archive of it
+        // and refuses, before writing anything, without one.
+        //
         // `org.id` is read off the row the plugin already loaded, so this is
         // where it becomes the ownership id. `rootDb` bypasses row-level
         // security exactly as the plugin's own adapter does.
@@ -1852,13 +1857,11 @@ export const createAuth = (
               if (await hasRenewingHostedSubscription(tx, organizationId)) {
                 return { type: "subscription_renews" } as const;
               }
-              return {
-                type: "deleted",
-                teardown: await completeOrganizationDeletion({
-                  organizationId,
-                  tx,
-                }),
-              } as const;
+              return await completeOrganizationDeletion({
+                deletedBy: brandPersistedUserId(deletedBy.id),
+                organizationId,
+                tx,
+              });
             }),
           catch: (cause) => cause,
         });
@@ -1886,6 +1889,15 @@ export const createAuth = (
               "Cancel the organization's subscription before deleting the organization.",
           });
         }
+        if (teardown.value.type === "refused") {
+          // `code` is what the web client reads off an auth error.
+          throw new APIError("CONFLICT", {
+            code: teardown.value.code,
+            error: teardown.value.code,
+            message:
+              ORGANIZATION_AUDIT_EXPORT_REFUSAL_MESSAGE[teardown.value.code],
+          });
+        }
 
         // Redis is not part of the durability contract: the request rows
         // are committed and the cleanup reconciler claims every pending one
@@ -1895,7 +1907,7 @@ export const createAuth = (
         await handoffCommittedEntityDeletionCleanupBatch({
           captureDeliveryError: captureError,
           enqueueCleanup: enqueueEntityDeletionCleanup,
-          requestIds: teardown.value.teardown.requestIds,
+          requestIds: teardown.value.requestIds,
         });
       },
       // A readable refusal before the plugin writes anything; the
