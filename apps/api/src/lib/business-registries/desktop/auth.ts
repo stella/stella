@@ -13,6 +13,13 @@ import {
   getAuth,
   resolveCredentialMemberAuthorization,
 } from "@/api/lib/auth";
+import type { VerifyApiKey } from "@/api/lib/auth/api-key-endpoints";
+import {
+  API_KEY_REFUSAL_REASON,
+  type ApiKeyRefusalReason,
+  apiKeyVerificationRefusalReason,
+  logApiKeyRefusal,
+} from "@/api/lib/auth/api-key-refusal-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   DESKTOP_ACCOUNT_PERMISSION,
@@ -96,7 +103,7 @@ type DesktopCredentialInfrastructure = {
   membershipDb: typeof rlsDb;
   // A getter, so authentication starts only for a request that carries a
   // desktop credential, inside the step that maps its failure to 503.
-  verifyApiKey: () => ReturnType<typeof getAuth>["api"]["verifyApiKey"];
+  verifyApiKey: () => VerifyApiKey;
   resolveMember: typeof resolveCredentialMemberAuthorization;
 };
 
@@ -149,12 +156,31 @@ export const createDesktopCredentialAuthorizers = ({
       return Result.err(verified.error);
     }
     const { key, valid } = verified.value;
-    if (!valid || !key?.enabled || key.expiresAt !== null) {
-      return Result.err(rejected());
+    const rejectKey = (
+      reason: ApiKeyRefusalReason,
+      error: HandlerError<401 | 403> = rejected(),
+    ) => {
+      logApiKeyRefusal({
+        reason,
+        mode: "desktop",
+        ...(key ? { key: { start: key.start } } : {}),
+      });
+      return error;
+    };
+    if (!valid || !key) {
+      return Result.err(
+        rejectKey(apiKeyVerificationRefusalReason(verified.value.error?.code)),
+      );
+    }
+    if (!key.enabled) {
+      return Result.err(rejectKey(API_KEY_REFUSAL_REASON.disabled));
+    }
+    if (key.expiresAt !== null) {
+      return Result.err(rejectKey(API_KEY_REFUSAL_REASON.invalidMetadata));
     }
     const metadata = parseDesktopRegistryMetadata(key.metadata);
     if (!metadata.success) {
-      return Result.err(rejected());
+      return Result.err(rejectKey(API_KEY_REFUSAL_REASON.invalidMetadata));
     }
     const proof = await VerifiedDesktopDeviceProof.verify({
       request,
@@ -218,7 +244,7 @@ export const createDesktopCredentialAuthorizers = ({
       if (revoked.isErr()) {
         return Result.err(revoked.error);
       }
-      return Result.err(rejected());
+      return Result.err(rejectKey(API_KEY_REFUSAL_REASON.expired));
     }
     const member = await Result.tryPromise({
       try: async () => await resolveMember(identity),
@@ -233,11 +259,18 @@ export const createDesktopCredentialAuthorizers = ({
       return Result.err(member.error);
     }
     if (member.value === null) {
-      return Result.err(rejected());
+      return Result.err(rejectKey(API_KEY_REFUSAL_REASON.inactiveMember));
     }
     const memberRole = authorizeDesktopMember(member.value, permission);
     if (memberRole.isErr()) {
-      return Result.err(memberRole.error);
+      return Result.err(
+        rejectKey(
+          memberRole.error.status === 401
+            ? API_KEY_REFUSAL_REASON.inactiveMember
+            : API_KEY_REFUSAL_REASON.rolePermissions,
+          memberRole.error,
+        ),
+      );
     }
     return Result.ok({
       ...identity,
