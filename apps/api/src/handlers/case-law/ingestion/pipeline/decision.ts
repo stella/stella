@@ -19,7 +19,6 @@ import {
   acquireSourceRawArtifact,
   archivePreservedObservationRaw,
   recordAbandonedRawWrite,
-  withSourceRawRetry,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-raw";
 import type { RawWriteState } from "@/api/handlers/case-law/ingestion/pipeline/decision-raw";
 import {
@@ -165,9 +164,13 @@ const runDecisionAttempt = async ({
   polarityRules,
   signal,
   s3Policy,
-}: ProcessDecisionAttemptOptions): Promise<AttemptStep> => {
+}: ProcessDecisionAttemptOptions): Promise<Result<AttemptStep, unknown>> => {
   signal?.throwIfAborted();
-  const observation = observeDecision({ input, sourceId, metadataUrlSchema });
+  const observed = observeDecision({ input, sourceId, metadataUrlSchema });
+  if (observed.isErr()) {
+    return observed;
+  }
+  const observation = observed.value;
   const proposedDecisionId = createSafeId<"caseLawDecision">();
 
   // Opened before the read below that proves the decision is not erased, so
@@ -190,11 +193,11 @@ const runDecisionAttempt = async ({
   const { existing, decisionId, composition } = identity;
 
   if (existing?.redactedAt) {
-    return {
+    return Result.ok({
       status: PROCESS_DECISION_STATUS.COMPLETE,
       inserted: false,
       searchVectorFailed: false,
-    };
+    });
   }
 
   const composedSupplements =
@@ -206,7 +209,7 @@ const runDecisionAttempt = async ({
   });
   const shape = classifyObservation({ result, existing });
   if (!storedInputMatchesDecision(inputProvenance, existing)) {
-    return RECONCILE_CONTENTION;
+    return Result.ok(RECONCILE_CONTENTION);
   }
 
   const rawOptions = {
@@ -224,7 +227,7 @@ const runDecisionAttempt = async ({
   const abandonRawWrite = async () => await recordAbandonedRawWrite(rawOptions);
   const archiveOutcome = await archivePreservedObservationRaw(rawOptions);
   if (archiveOutcome !== null) {
-    return archiveOutcome;
+    return Result.ok(archiveOutcome);
   }
 
   const existingPolicyOutcome = await resolveExistingDecisionPolicy({
@@ -239,22 +242,22 @@ const runDecisionAttempt = async ({
     sourceFingerprintFromStoredRaw,
   });
   if (existingPolicyOutcome !== null) {
-    return existingPolicyOutcome;
+    return Result.ok(existingPolicyOutcome);
   }
   signal?.throwIfAborted();
   const sourceRawArtifact = await acquireSourceRawArtifact(rawOptions);
   if (sourceRawArtifact.type === "retry") {
     await abandonRawWrite();
-    return sourceRawArtifact.outcome;
+    return Result.ok(sourceRawArtifact.outcome);
   }
   const rawArtifact = sourceRawArtifact.artifact;
   if (rawArtifact.s3UploadFailed) {
     // Do not pair newly derived output with a retained older raw object.
-    return {
+    return Result.ok({
       status: PROCESS_DECISION_STATUS.RETRYABLE,
       inserted: false,
       reason: PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE,
-    };
+    });
   }
 
   const attempted = await Result.tryPromise({
@@ -312,14 +315,14 @@ const runDecisionAttempt = async ({
   if (Result.isError(rowWrite)) {
     await abandonRawWrite();
     if (isConcurrentIdentityInsert(rowWrite.error)) {
-      return RECONCILE_CONTENTION;
+      return Result.ok(RECONCILE_CONTENTION);
     }
-    throw rowWrite.error;
+    return Result.err(rowWrite.error);
   }
 
   if ("status" in rowWrite.value) {
     await abandonRawWrite();
-    return RECONCILE_CONTENTION;
+    return Result.ok(RECONCILE_CONTENTION);
   }
   const { write, writeStatus } = rowWrite.value;
 
@@ -332,7 +335,7 @@ const runDecisionAttempt = async ({
     writeStatus,
   });
   if (settled !== null) {
-    return settled;
+    return Result.ok(settled);
   }
   // The row is committed. Its retention check starts now, off this write:
   // it reads the adapter's own observation, before any supplement joined it,
@@ -351,25 +354,11 @@ const runDecisionAttempt = async ({
   }
 
   signal?.throwIfAborted();
-  const flushed = await enqueueCorpusMirror({
+  return await enqueueCorpusMirror({
     scopedDb,
     write,
     corpus,
     corpusBatch,
-  });
-  if (flushed !== null) {
-    return flushed;
-  }
-
-  // Search indexing (tsvector) is handled by a background
-  // backfill loop so the slow to_tsvector + unaccent computation
-  // doesn't block cursor advancement. New decisions become
-  // searchable within ~30s of insertion.
-
-  return withSourceRawRetry(rawArtifact.s3UploadFailed, {
-    status: PROCESS_DECISION_STATUS.COMPLETE,
-    inserted: true,
-    searchVectorFailed: false,
   });
 };
 
@@ -382,17 +371,21 @@ const runDecisionAttempt = async ({
  */
 const processDecisionAttempt = async (
   options: ProcessDecisionAttemptOptions,
-): Promise<ProcessResult> => {
-  const step = await runDecisionAttempt(options);
+): Promise<Result<ProcessResult, unknown>> => {
+  const attempted = await runDecisionAttempt(options);
+  if (attempted.isErr()) {
+    return attempted;
+  }
+  const step = attempted.value;
   if (step.status !== RECONCILE_CONTENTION.status) {
-    return step;
+    return Result.ok(step);
   }
   if (options.contentionReconciliation === CONTENTION_RECONCILIATION.RETRY) {
-    return {
+    return Result.ok({
       status: PROCESS_DECISION_STATUS.RETRYABLE,
       inserted: false,
       reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
-    };
+    });
   }
   return await processDecisionAttempt({
     ...options,
@@ -414,7 +407,7 @@ const processDecisionFromInput = async (
   resolveSourceContract: SourceContractResolver = createSourceContractResolver(
     options.scopedDb,
   ),
-): Promise<ProcessResult> => {
+): Promise<Result<ProcessResult, unknown>> => {
   const {
     metadataUrlSchema,
     retention,
@@ -438,7 +431,7 @@ const processDecisionFromInput = async (
 export const processDecision = async (
   options: ProcessDecisionOptions,
   resolveSourceContract?: SourceContractResolver,
-): Promise<ProcessResult> =>
+): Promise<Result<ProcessResult, unknown>> =>
   await processDecisionFromInput(
     {
       ...options,
@@ -456,7 +449,7 @@ type ProcessStoredDecisionOptions = Omit<ProcessDecisionOptions, "refresh"> & {
 export const processStoredDecision = async (
   { sourceRawS3Key, decisionId, ...options }: ProcessStoredDecisionOptions,
   resolveSourceContract?: SourceContractResolver,
-): Promise<ProcessResult> =>
+): Promise<Result<ProcessResult, unknown>> =>
   await processDecisionFromInput(
     {
       ...options,

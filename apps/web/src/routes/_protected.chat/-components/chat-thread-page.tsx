@@ -41,11 +41,12 @@ import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
-import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
+import { getUserMessageHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
 import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
+import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { useAIKeyGate } from "@/components/require-ai-key";
@@ -279,6 +280,9 @@ export const ChatThreadPage = ({
     secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
+    startUserMessageEdit,
+    holdQueueForMessageEdit,
+    editUserMessage,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
@@ -302,8 +306,16 @@ export const ChatThreadPage = ({
     threadRef,
     workspaceId,
   });
+  const userMessageEdit = useUserMessageEditActions({
+    editUserMessage,
+    ensureAIAvailable,
+    holdQueueForMessageEdit,
+    messages,
+    startUserMessageEdit,
+    threadRef,
+  });
 
-  const sentMessageHistoryHtml = getUserMessageHtmlHistory(messages);
+  const sentMessageHistory = getUserMessageHistory(messages);
 
   // Suggested follow-up prompts for Tab-to-ask (editor) and chips display.
   const {
@@ -366,7 +378,7 @@ export const ChatThreadPage = ({
   };
   const controller = useChatEditor({
     followupAnalytics: { surface: "chat-thread" },
-    sentMessageHistoryHtml,
+    sentMessageHistory,
     suggestedFollowupPrompt,
     threadRef,
   });
@@ -726,6 +738,7 @@ export const ChatThreadPage = ({
                         stickyUserMessages
                         streamdownComponents={streamdownComponents}
                         threadRef={threadRef}
+                        userMessageEdit={userMessageEdit}
                         workspaceId={workspaceId}
                       />
                       <ChatThreadRecap

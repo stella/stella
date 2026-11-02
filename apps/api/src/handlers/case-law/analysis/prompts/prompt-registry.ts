@@ -7,20 +7,26 @@
 
 import { Result, TaggedError } from "better-result";
 
+import type { CaseLawAnalysisLanguage } from "@stll/api-contract";
+
 import { CS_SYSTEM_PROMPT } from "./cs";
 import { DE_SYSTEM_PROMPT } from "./de";
 import { EN_SYSTEM_PROMPT } from "./en";
 import { PL_SYSTEM_PROMPT } from "./pl";
 import { SK_SYSTEM_PROMPT } from "./sk";
 
-/** The source of truth for which languages have an analysis prompt. */
+/**
+ * One prompt for each language the contract names
+ * (`CASE_LAW_ANALYSIS_LANGUAGES`), and no other: the reader tells a reader
+ * which languages an analysis can be made in from that list.
+ */
 export const ANALYSIS_SYSTEM_PROMPTS = {
   cs: CS_SYSTEM_PROMPT,
   sk: SK_SYSTEM_PROMPT,
   de: DE_SYSTEM_PROMPT,
   en: EN_SYSTEM_PROMPT,
   pl: PL_SYSTEM_PROMPT,
-} as const satisfies Record<string, string>;
+} as const satisfies Record<CaseLawAnalysisLanguage, string>;
 
 type AnalysisPromptLanguage = keyof typeof ANALYSIS_SYSTEM_PROMPTS;
 

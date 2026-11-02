@@ -1,5 +1,60 @@
 # @stll/cli
 
+## 6.5.0
+
+### Minor Changes
+
+- [#7607](https://github.com/stella/stella/pull/7607) [`34a741f`](https://github.com/stella/stella/commit/34a741fa7878e68f1cf01093d1208719e783df75) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `stella organization create` and request organization creation consent during CLI login.
+
+- [#7641](https://github.com/stella/stella/pull/7641) [`4370f68`](https://github.com/stella/stella/commit/4370f6896e6db5adf073e9d773d795e2e722b002) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add statute provision links to matters for Czech and Slovak law through the API capabilities, MCP, and CLI.
+
+- [#7680](https://github.com/stella/stella/pull/7680) [`cfb3814`](https://github.com/stella/stella/commit/cfb381485ca6560ad4e510c2c15d347b03dc2914) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a team time report read capability with grouped recorded time and period summaries.
+
+### Patch Changes
+
+- Updated dependencies [[`34a741f`](https://github.com/stella/stella/commit/34a741fa7878e68f1cf01093d1208719e783df75)]:
+  - @stll/agent-input@0.3.0
+
+## 6.4.0
+
+### Minor Changes
+
+- [#7633](https://github.com/stella/stella/pull/7633) [`ea026da`](https://github.com/stella/stella/commit/ea026da403d121c9894049e1dd7f803120a73577) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow organization owners and admins to change an existing organization's slug through generated capabilities, with an opaque identifier option and shared slug validation.
+
+### Patch Changes
+
+- [#7241](https://github.com/stella/stella/pull/7241) [`921193e`](https://github.com/stella/stella/commit/921193ee4b5062a5c221e68d367ca0829be7dec2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Activity log entries for a resource type this version does not recognise report their recorded changes as withheld instead of empty.
+
+- [#7610](https://github.com/stella/stella/pull/7610) [`5065f5e`](https://github.com/stella/stella/commit/5065f5eeed5d4504675d06884436a677a2e25f78) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella auth login` signs in as the client the server publishes for the CLI and no longer registers a client of its own. A server whose authorization server cannot identify the CLI that way (no https issuer, or no client metadata document support) is refused; use an API key there.
+
+## 6.3.0
+
+### Minor Changes
+
+- [#7624](https://github.com/stella/stella/pull/7624) [`43ac3de`](https://github.com/stella/stella/commit/43ac3dec8b3fec9aff8843eecbd8ffe5e16e138a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Run JSONL operations with `stella batch`, bounded concurrency, ordered results, local validation, and resumable success receipts. Forward idempotency keys for replay-capable capabilities and preserve uncertain write outcomes for reconciliation. Bulk capability ID flags accept comma-separated values or `@file` and respect endpoint chunk limits.
+
+- [#7635](https://github.com/stella/stella/pull/7635) [`c442a44`](https://github.com/stella/stella/commit/c442a44c7142c39a92ec639dadb29fc43dd43342) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Rename the save task inputs to `assignee` and `description`.
+
+### Patch Changes
+
+- [#7350](https://github.com/stella/stella/pull/7350) [`27375ef`](https://github.com/stella/stella/commit/27375ef28c854e8341c537d18e910ca68b17e883) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add transcription model metadata and a file-input dictation capability description.
+
+- [#5807](https://github.com/stella/stella/pull/5807) [`35f52af`](https://github.com/stella/stella/commit/35f52afe993eb7c2e4f1f1079896ab6cae06a975) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose import provenance fields and the batch contact import capability.
+
+- [#7586](https://github.com/stella/stella/pull/7586) [`2e4e528`](https://github.com/stella/stella/commit/2e4e5285900659c6cfd6da7650a55cc67eb9485e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `matters.members.list` lists a matter's members, with each user's id, name, email and image, to an access token with `stella:read`. Tasks take assignees with `stella:matters_write`.
+
+## 6.2.2
+
+### Patch Changes
+
+- [#7604](https://github.com/stella/stella/pull/7604) [`71cfcf3`](https://github.com/stella/stella/commit/71cfcf376f59bdabb1358ebace6692c8db6fe3e3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Resolve Slovak statute citations and look up acts by number.
+
+## 6.2.1
+
+### Patch Changes
+
+- [#7351](https://github.com/stella/stella/pull/7351) [`ed2a1a6`](https://github.com/stella/stella/commit/ed2a1a6c7d277f9c87034b3dd35b67042da9df05) Thanks [@jan-kubica](https://github.com/jan-kubica)! - matters.update accepts expectedClientId and refuses a client change when the matter client no longer matches it.
+
 ## 6.2.0
 
 ### Minor Changes

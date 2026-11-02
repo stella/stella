@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 type InspectorTitleProps = {
@@ -27,18 +28,25 @@ export const InspectorTitle = ({
       </h2>
     );
   }
+  // The heading draws the editable box (hover fill, inset, ellipsis) and the
+  // button runs inline inside it, so the title keeps one typographic
+  // treatment and its colour, and the button's stretched hit area still
+  // covers the whole row. Spaces are kept as typed (`whitespace-pre`).
   return (
-    <h2 className="m-0" data-slot="inspector-title">
-      <button
-        className={cn(
-          className,
-          "hover:bg-accent -mx-1 w-full overflow-hidden rounded-sm px-1 text-start text-ellipsis whitespace-pre",
-        )}
+    <h2
+      className={cn(
+        className,
+        "hover:bg-accent relative -mx-1 my-0 overflow-hidden rounded-sm px-1 text-start text-ellipsis whitespace-pre",
+      )}
+      data-slot="inspector-title"
+    >
+      <Button
+        className="inline after:absolute after:inset-0"
         onClick={onEdit}
-        type="button"
+        variant="plain"
       >
         {children}
-      </button>
+      </Button>
     </h2>
   );
 };

@@ -180,7 +180,10 @@ const buildChatToolsForScenario = ({
     },
     // A live extension registers the client-executed browser tool, so its
     // schema also runs through the provider matrix.
-    browserClient: { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION },
+    browserExtension: {
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "connected",
+    },
     docxSuggestionSurface: surface,
     editApplyMode,
     hasActiveDocxEditClient: true,

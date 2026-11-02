@@ -216,7 +216,13 @@ export const adapterReparser: RawReparser = async (adapterKey, input) => {
   if (outcome.type === "supplement") {
     return { rejected: "the payload is a supplement" };
   }
-  const result = sanitizeResult(outcome.result);
+  const sanitized = sanitizeResult(outcome.result);
+  if (sanitized.isErr()) {
+    return {
+      rejected: `${sanitized.error.code}: ${sanitized.error.paths.join(", ")}`,
+    };
+  }
+  const result = sanitized.value;
   const sections = decisionSections(result);
   return {
     documentAst: result.documentAst,

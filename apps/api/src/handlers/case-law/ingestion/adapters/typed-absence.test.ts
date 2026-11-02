@@ -22,10 +22,12 @@ import {
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
+
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 test("every registered source has a publication fixture", () => {
@@ -72,7 +74,7 @@ for (const { key } of listSourceRegistrations()) {
     expect(splitStoredDecisionTextMetadata(stored).textFields).toEqual(
       decision.textFields,
     );
-    const normalized = sanitizeResult(decision);
+    const normalized = sanitizeResult(decision).unwrap();
     // Legacy rows stored only non-default reasons. Provenance changes must
     // neither alter the document payload nor require a source refresh.
     const legacyEntries = absence.entries.filter(
@@ -98,8 +100,8 @@ for (const { key } of listSourceRegistrations()) {
       caseLawCanonicalPayload({
         ...normalized,
         metadata: toPlainTextMetadataObject(legacyMetadata).unwrap(),
-      }),
-    ).toEqual(caseLawCanonicalPayload(normalized));
+      }).unwrap(),
+    ).toEqual(caseLawCanonicalPayload(normalized).unwrap());
     expect(
       shouldSkipRefresh({
         existingMetadata: legacyMetadata,

@@ -11,7 +11,6 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { runIngestionPipeline as runIngestionPipelineWithDependencies } from "@/api/handlers/case-law/ingestion/pipeline";
@@ -39,6 +38,8 @@ import {
   partialObservationFromMetadata,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   approveMetadataUrls,
   rehydrateMetadataUrls,
@@ -206,7 +207,7 @@ const decision: IngestionResult = plainTextIngestionResult({
  */
 const recordedCorpusWrite = (documentId: string) => {
   const contentHash = realCorpusStorage.corpusContentHash(
-    caseLawCanonicalPayload(sanitizeResult(decision)),
+    caseLawCanonicalPayload(sanitizeResult(decision).unwrap()).unwrap(),
   );
   return {
     ...realCorpusStorage.corpusKeys({
@@ -386,13 +387,15 @@ const scopedDb: ScopedDb = async (callback) => {
 
 describe("processDecision — canonical storage mode", () => {
   test("reserves before upload and publishes pointers only after it succeeds", async () => {
-    const outcome = await processDecision({
-      input: decision,
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: decision,
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(outcome).toEqual({
       status: "complete",
@@ -459,13 +462,15 @@ describe("processDecision — canonical storage mode", () => {
   test("keeps a readable pending row when the corpus write fails", async () => {
     failTheTransfer();
 
-    const outcome = await processDecision({
-      input: decision,
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: decision,
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(outcome).toEqual({
       status: "retryable",
@@ -513,21 +518,23 @@ describe("processDecision — canonical storage mode", () => {
         hasStoredDocument: true,
       };
 
-      const outcome = await processDecision({
-        input: plainTextIngestionResult({
-          ...decision,
-          fulltext: undefined,
-          isListingOnly: true,
-          metadata: { listedOnly: true },
-          rawHash: "listing-only-replay-hash",
-          sourceRaw: "<tr>listing only</tr>",
-          sourceRawContentType: "text/html",
-        }),
-        observationOrder: 2n,
-        sourceId: createSafeId<"caseLawSource">(),
-        scopedDb,
-        observedAt: new Date("2026-07-31T12:00:00.000Z"),
-      });
+      const outcome = (
+        await processDecision({
+          input: plainTextIngestionResult({
+            ...decision,
+            fulltext: undefined,
+            isListingOnly: true,
+            metadata: { listedOnly: true },
+            rawHash: "listing-only-replay-hash",
+            sourceRaw: "<tr>listing only</tr>",
+            sourceRawContentType: "text/html",
+          }),
+          observationOrder: 2n,
+          sourceId: createSafeId<"caseLawSource">(),
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        })
+      ).unwrap();
 
       expect(outcome).toEqual({
         status: "complete",
@@ -587,13 +594,15 @@ describe("processDecision — canonical storage mode", () => {
     };
     failTheTransfer();
 
-    const outcome = await processDecision({
-      input: decision,
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: decision,
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(outcome).toMatchObject({
       status: "retryable",
@@ -622,13 +631,15 @@ describe("processDecision — canonical storage mode", () => {
     };
     intentStatus = "cleanup";
 
-    const outcome = await processDecision({
-      input: decision,
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: decision,
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(outcome).toEqual({
       status: "retryable",
@@ -676,7 +687,7 @@ describe("processDecision — canonical storage mode", () => {
           },
           schema,
         );
-        const normalized = sanitizeResult(input, schema);
+        const normalized = sanitizeResult(input, schema).unwrap();
         expect(
           sanitizeResult(
             {
@@ -684,15 +695,17 @@ describe("processDecision — canonical storage mode", () => {
               ...splitStoredDecisionTextMetadata(normalized.metadata),
             },
             schema,
-          ).metadata,
+          ).unwrap().metadata,
         ).toEqual(normalized.metadata);
-        const outcome = await processDecision({
-          input,
-          observationOrder: 1n,
-          sourceId: createSafeId<"caseLawSource">(),
-          scopedDb,
-          observedAt: new Date("2026-07-31T12:00:00.000Z"),
-        });
+        const outcome = (
+          await processDecision({
+            input,
+            observationOrder: 1n,
+            sourceId: createSafeId<"caseLawSource">(),
+            scopedDb,
+            observedAt: new Date("2026-07-31T12:00:00.000Z"),
+          })
+        ).unwrap();
         expect(outcome.status).toBe("complete");
         const metadata = insertedRows.at(0)?.["metadata"];
         expect(metadata).toMatchObject({
@@ -721,7 +734,7 @@ describe("processDecision — canonical storage mode", () => {
               schema,
             ),
             schema,
-          ).metadata,
+          ).unwrap().metadata,
         }).toHaveProperty("value", normalized.metadata);
       } finally {
         fake.stop();
@@ -730,16 +743,18 @@ describe("processDecision — canonical storage mode", () => {
   );
 
   test("stores nothing and settles null pointers for a metadata-only decision", async () => {
-    const outcome = await processDecision({
-      // A metadata-first observation: identity fields only, the empty-AST
-      // placeholder, no fulltext — the shape a deferred-document adapter
-      // returns for every listing row.
-      input: plainTextIngestionResult({ ...decision, fulltext: undefined }),
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        // A metadata-first observation: identity fields only, the empty-AST
+        // placeholder, no fulltext — the shape a deferred-document adapter
+        // returns for every listing row.
+        input: plainTextIngestionResult({ ...decision, fulltext: undefined }),
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(outcome).toEqual({
       status: "complete",
@@ -795,13 +810,15 @@ describe("processDecision — canonical storage mode", () => {
       sourceRawContentType: null,
     };
 
-    const outcome = await processDecision({
-      input: decision,
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: decision,
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(outcome).toEqual({
       status: "complete",
@@ -862,17 +879,19 @@ describe("processDecision — canonical storage mode", () => {
     // Not vacuous: the payload is the one the row records.
     expect(
       realCorpusStorage.corpusContentHash(
-        caseLawCanonicalPayload(sanitizeResult(moved)),
+        caseLawCanonicalPayload(sanitizeResult(moved).unwrap()).unwrap(),
       ),
     ).toBe(recorded.contentHash);
 
-    await processDecision({
-      input: moved,
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    (
+      await processDecision({
+        input: moved,
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(transferredPacks).toHaveLength(1);
     expect(updatedDecisionRows.at(0)).toMatchObject({
@@ -904,13 +923,15 @@ describe("processDecision — canonical storage mode", () => {
       sourceRawContentType: null,
     };
 
-    const first = await processDecision({
-      input: decision,
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const first = (
+      await processDecision({
+        input: decision,
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(first).toEqual({
       status: "complete",
@@ -932,13 +953,15 @@ describe("processDecision — canonical storage mode", () => {
     events.length = 0;
     transferredPacks.length = 0;
 
-    const second = await processDecision({
-      input: decision,
-      observationOrder: 2n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T13:00:00.000Z"),
-    });
+    const second = (
+      await processDecision({
+        input: decision,
+        observationOrder: 2n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T13:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(second).toEqual({
       status: "complete",
@@ -960,7 +983,7 @@ describe("processDecision — canonical storage mode", () => {
       scopedDb,
       observedAt: new Date("2026-07-31T12:00:00.000Z"),
     }).then(
-      () => null,
+      (outcome) => (outcome.isErr() ? outcome.error : null),
       (error: unknown) => error,
     );
 
@@ -1021,16 +1044,18 @@ describe("processDecision — a refresh whose raw-source write failed", () => {
       sourceRawContentType: "text/html",
     };
 
-    const outcome = await processDecision({
-      input: plainTextIngestionResult({
-        ...decision,
-        sourceRaw: "<html></html>",
-      }),
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: plainTextIngestionResult({
+          ...decision,
+          sourceRaw: "<html></html>",
+        }),
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(outcome).toEqual({
       status: "retryable",
@@ -1052,7 +1077,11 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
 
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
-        Result.ok({ decisions: [decision], nextCursor: "cursor-2" }),
+        Result.ok({
+          decisions: [decision],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        }),
       );
 
     const result = await runIngestionPipeline({
@@ -1099,7 +1128,11 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
 
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
-        Result.ok({ decisions: [decision], nextCursor: "cursor-2" }),
+        Result.ok({
+          decisions: [decision],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        }),
       );
 
     const result = await runIngestionPipeline({
@@ -1129,7 +1162,7 @@ describe("sanitizeResult — decision-date floor", () => {
         country,
         decisionDate,
         sourceDocumentId: "document-1",
-      }).decisionDate;
+      }).unwrap().decisionDate;
     expect(dated("USA", "1791-08-03")).toBe("1791-08-03");
     expect(dated("USA", "1599-12-31")).toBeUndefined();
     expect(dated("SVK", "1791-08-03")).toBeUndefined();

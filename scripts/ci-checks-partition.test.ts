@@ -8,6 +8,7 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
@@ -25,7 +26,7 @@ import { CI_GATES, CONTINUE_ON_ERROR } from "./ci-gate-classes";
 import { rootCheckGate } from "./ci-root-check-gate";
 import { STATIC_RECEIPT_STEP_NAMES } from "./ci-static-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
-import { CI_GENERATED_OUTPUTS } from "./generated-files";
+import { CI_GENERATED_OUTPUTS, GENERATORS } from "./generated-files";
 import {
   DELEGATED_CHECKS_ENV,
   UNCHANGED_CHECKS_ENV,
@@ -359,7 +360,7 @@ const normalizeGuardPathLines = (run: string, tracked: ReadonlySet<string>) =>
 // CI_CHECKS_PARTITION_BASE=HEAD compares the head with itself.
 const mergeBase =
   process.env["CI_CHECKS_PARTITION_BASE"] ??
-  git(["merge-base", "origin/main", "HEAD"]);
+  treeBaseRevision({ repoRoot: repository });
 const baseCancellationSource = new Bun.Transpiler({
   loader: "ts",
 }).transformSync(
@@ -1173,6 +1174,56 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  if (step.name === "MCP app derived outputs guard") {
+    let run = v.parse(v.string(), fields.run);
+    if (run.includes("bun scripts/check-mcp-app-outputs.ts\n")) {
+      return step;
+    }
+    const declaredOutputs = GENERATORS.filter(
+      ({ id }) => id === "mcp-app-contracts" || id === "mcp-app-bundles",
+    ).flatMap(({ outputs }) => outputs);
+    const additions = declaredOutputs
+      .filter((output) => !run.includes(`  ${output}\n`))
+      .toSorted();
+    if (additions.length > 0) {
+      const anchor = "  packages/mcp-apps/src/*/generated/app.html.txt\n";
+      expect(run).toContain(anchor);
+      run = run.replace(
+        anchor,
+        () => `${anchor}${additions.map((output) => `  ${output}\n`).join("")}`,
+      );
+    }
+    const start = run.indexOf("outputs=(\n");
+    if (start === -1) {
+      return step;
+    }
+    const end = run.indexOf("done\n", start) + "done\n".length;
+    expect(end).toBeGreaterThan(start);
+    const legacy = run.slice(start, end);
+    const legacyParts = legacy.split(")\n");
+    const declarations =
+      legacyParts.at(0) ??
+      panic("the legacy MCP output CI step needs output declarations");
+    const loop =
+      legacyParts.at(1) ??
+      panic("the legacy MCP output CI step needs an output-checking loop");
+    expect(
+      declarations
+        .slice("outputs=(\n".length)
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .toSorted(),
+    ).toEqual(declaredOutputs.toSorted());
+    expect([
+      `for output in "\${outputs[@]}"; do\n  test -s "$output" || { echo "::error::$output was not generated"; exit 1; }\ndone\n`,
+      `for output in "\${outputs[@]}"; do\n  test -e "$output" || { echo "::error::$output was not generated"; exit 1; }\ndone\n`,
+      `for output in "\${outputs[@]}"; do\n  case "$output" in\n    packages/mcp-apps/src/*/generated/app.css.txt) test -f "$output" ;;\n    *) test -s "$output" ;;\n  esac || { echo "::error::$output was not generated"; exit 1; }\ndone\n`,
+    ]).toContain(loop);
+    // Only the declared output loop migrates; build, budgets and tracking remain.
+    run = `${run.slice(0, start)}bun scripts/check-mcp-app-outputs.ts\n${run.slice(end)}`;
+    return { ...step, run };
+  }
   if (step.name === "CLI sharded registry and derived runtime guard") {
     const run = v.parse(v.string(), fields.run);
     const continuation = " \\";

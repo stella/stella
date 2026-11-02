@@ -72,14 +72,16 @@ const documentId = (index: number): string =>
  */
 const seedDocumentRow = async (index: number) => {
   const id = documentId(index);
-  const written = await writeCorpusDocument({
-    documentId: id,
-    jurisdiction: "CZE",
-    text: `Zákon číslo ${index}. `.repeat(40),
-    sections: null,
-    ast: null,
-    stored: null,
-  });
+  const written = (
+    await writeCorpusDocument({
+      documentId: id,
+      jurisdiction: "CZE",
+      text: `Zákon číslo ${index}. `.repeat(40),
+      sections: null,
+      ast: null,
+      stored: null,
+    })
+  ).unwrap();
   if (written.type !== "written") {
     return panic("Seeded corpus payload was not written");
   }

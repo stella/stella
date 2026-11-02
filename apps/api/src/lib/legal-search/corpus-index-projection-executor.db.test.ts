@@ -189,7 +189,7 @@ const runLegislationCycle = async ({
     payloadReadConcurrency: 2,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
-    payloadReader: async () => ({ text, ast: null }),
+    payloadReader: async () => Result.ok({ text, ast: null }),
   });
 };
 

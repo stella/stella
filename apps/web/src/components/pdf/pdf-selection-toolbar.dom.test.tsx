@@ -246,11 +246,15 @@ test("Ask AI drafts the passage in the document's chat for the reader to finish"
   fireEvent.click(await view.findByRole("button", { name: "Ask AI" }));
 
   expect(useInspectorCommandStore.getState().pendingFileChatDraft).toEqual({
-    delivery: "draft",
     fileFieldId: FILE_FIELD_ID,
-    markdown: composerText(
-      "About this passage of Purchase agreement.pdf, 2026/014, p. 1:\n\n“The seller shall deliver the goods.”\n\n",
-    ),
+    handoff: {
+      type: "passage",
+      quote: {
+        label: "p. 1",
+        source: "paste",
+        text: "About this passage of Purchase agreement.pdf, 2026/014, p. 1:\n\n“The seller shall deliver the goods.”",
+      },
+    },
     sequence: 1,
   });
   expect(document.getSelection()?.isCollapsed ?? true).toBe(true);
@@ -263,11 +267,14 @@ test("Explain sends the passage to the document's chat at once", async () => {
   fireEvent.click(await view.findByRole("button", { name: "Explain" }));
 
   expect(useInspectorCommandStore.getState().pendingFileChatDraft).toEqual({
-    delivery: "send",
     fileFieldId: FILE_FIELD_ID,
-    markdown: composerText(
-      "Explain this passage of Purchase agreement.pdf, 2026/014, p. 1:\n\n“The seller shall deliver the goods.”",
-    ),
+    handoff: {
+      type: "prose",
+      delivery: "send",
+      markdown: composerText(
+        "Explain this passage of Purchase agreement.pdf, 2026/014, p. 1:\n\n“The seller shall deliver the goods.”",
+      ),
+    },
     sequence: 1,
   });
 });

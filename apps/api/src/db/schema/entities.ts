@@ -66,6 +66,7 @@ import type {
   DocumentSource,
   EntityDeletionCleanupStatus,
   FieldContent,
+  ImportDocumentSource,
   JustificationContent,
   LinkMetadata,
   SafeId,
@@ -436,11 +437,14 @@ export const entityVersions = p.pgTable(
       .$type<DocumentTranslationSourceLanguageCode>(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     /**
-     * Chain-of-custody tombstone. A non-null `deletedAt` hides the version
-     * from every read / list / restore / download path while its row and S3
-     * objects are retained under legal hold: version history must never be
-     * hard-deleted. `deletedBy` mirrors `createdBy` (plain user id, no FK) so
-     * the actor survives a user deletion.
+     * Version tombstone. Deleting a version sets `deletedAt` and keeps the
+     * row, its fields and their storage objects; a non-null `deletedAt` hides
+     * the version from every read / list / restore / download path. Moving
+     * the document to another matter carries its tombstones with it,
+     * `deletedAt`/`deletedBy` unchanged. Deleting the whole document removes
+     * all of its versions, tombstones included, with their objects.
+     * `deletedBy` mirrors `createdBy` (plain user id, no FK) so the actor
+     * survives a user deletion.
      */
     deletedAt: timestamptz("deleted_at"),
     deletedBy: p.text("deleted_by"),
@@ -1203,6 +1207,8 @@ export type PendingUploadPurposeData =
   | {
       type: "entity_create";
       propertyId: SafeId<"property">;
+      /** Set when the upload imports a file from another system. */
+      importSource?: ImportDocumentSource;
       /**
        * Final object id reserved by trusted server-side writers. Persisting it
        * before S3 publication lets the bounded reconciler derive and remove a

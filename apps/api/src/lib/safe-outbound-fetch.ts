@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import { lookup } from "node:dns/promises";
+import { lookup, Resolver } from "node:dns/promises";
 import { request as requestHttp } from "node:http";
 import type { ClientRequest, IncomingMessage } from "node:http";
 import { request as requestHttps } from "node:https";
@@ -28,6 +28,11 @@ export type SafeOutboundAddress = {
 };
 
 const MAX_OUTBOUND_URL_LENGTH = 2048;
+const DNS_RESOLVER_TIMEOUT_MS = 1000;
+
+/** Resolver acquisition stays at the outbound boundary; callers own total deadlines and cancellation. */
+export const createBoundedDnsResolver = () =>
+  new Resolver({ timeout: DNS_RESOLVER_TIMEOUT_MS, tries: 1 });
 
 export type SafeOutboundFetchBody =
   ArrayBuffer | string | Uint8Array | URLSearchParams;

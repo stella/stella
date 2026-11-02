@@ -3,7 +3,7 @@ import path from "node:path";
 
 import packageJson from "../package.json" with { type: "json" };
 import {
-  clusterExclusiveMigrationTests,
+  clusterExclusivePostgresTests,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
   findSharedTableDdlViolations,
   isolateSharedTableDdlTests,
@@ -24,7 +24,7 @@ describe("PostgreSQL cluster-wide migration isolation", () => {
   ])("isolates canonical migration runner access: %s", (source) => {
     const testPath = "src/db/replay.db.test.ts";
     expect(
-      clusterExclusiveMigrationTests(new Map([[testPath, source]])),
+      clusterExclusivePostgresTests(new Map([[testPath, source]])),
     ).toEqual(new Set([testPath]));
   });
 
@@ -37,7 +37,7 @@ describe("PostgreSQL cluster-wide migration isolation", () => {
     "const fixture = 'import { runMigrations } from \"./migration-runner\"';",
   ])("retains parallelism for non-owning source: %s", (source) => {
     expect(
-      clusterExclusiveMigrationTests(
+      clusterExclusivePostgresTests(
         new Map([["src/db/example.db.test.ts", source]]),
       ),
     ).toEqual(new Set());
@@ -52,7 +52,7 @@ describe("PostgreSQL cluster-wide migration isolation", () => {
       path.join(import.meta.dirname, "..", testPath),
     ).text();
     expect(
-      clusterExclusiveMigrationTests(new Map([[testPath, source]])),
+      clusterExclusivePostgresTests(new Map([[testPath, source]])),
     ).toEqual(new Set([testPath]));
   });
 });
@@ -186,3 +186,21 @@ describe("PostgreSQL shared batch", () => {
     ).toEqual([]);
   });
 });
+
+test.each([
+  "src/lib/case-law/sitemap-fairness-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
+  "src/lib/case-law/sitemap-shard-refresh.postgres.test.ts",
+  "src/db/case-law-sitemap-packing-enrollment.postgres.test.ts",
+  "src/lib/case-law/sitemap-backlog-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-visibility-drain.postgres.test.ts",
+])(
+  "snapshot visibility proof %s runs after all cluster workers finish",
+  (testPath) => {
+    expect(
+      clusterExclusivePostgresTests(
+        new Map([[testPath, "test('visibility', () => {})"]]),
+      ),
+    ).toEqual(new Set([testPath]));
+  },
+);

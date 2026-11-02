@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_COURTS",
   "key": "pl-courts",
-  "parserVersion": 19,
+  "parserVersion": 20,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."
+    "reason": "Re-read common-court opening recitals as whole sentences when the editor lays them out across adjacent lines."
   }
 }

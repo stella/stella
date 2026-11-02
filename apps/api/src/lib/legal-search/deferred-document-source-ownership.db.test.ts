@@ -430,12 +430,14 @@ if (!databaseUrl || !enabled) {
       for (const result of [
         await markDocumentUnavailable({ decision: claim.decision, scopedDb }),
         await parkDocumentFetch({ decision: claim.decision, scopedDb }),
-        await storeBackfilledDocument({
-          decision: claim.decision,
-          document,
-          scopedDb,
-          transfer: null,
-        }),
+        (
+          await storeBackfilledDocument({
+            decision: claim.decision,
+            document,
+            scopedDb,
+            transfer: null,
+          })
+        ).unwrap(),
       ]) {
         expect(result).toEqual({ status: "lost" });
       }
@@ -528,12 +530,14 @@ if (!databaseUrl || !enabled) {
           await claimDocumentFetch(decisionId, scopedDb),
           await markDocumentUnavailable({ decision: claim.decision, scopedDb }),
           await parkDocumentFetch({ decision: claim.decision, scopedDb }),
-          await storeBackfilledDocument({
-            decision: claim.decision,
-            document,
-            scopedDb,
-            transfer: null,
-          }),
+          (
+            await storeBackfilledDocument({
+              decision: claim.decision,
+              document,
+              scopedDb,
+              transfer: null,
+            })
+          ).unwrap(),
         ]) {
           expect(result).toEqual({ status: "busy" });
         }
@@ -649,12 +653,14 @@ if (!databaseUrl || !enabled) {
                 scopedDb: interruptedDb,
               });
             case "store":
-              return await storeBackfilledDocument({
-                decision: claim.decision,
-                document,
-                scopedDb: interruptedDb,
-                transfer: null,
-              });
+              return (
+                await storeBackfilledDocument({
+                  decision: claim.decision,
+                  document,
+                  scopedDb: interruptedDb,
+                  transfer: null,
+                })
+              ).unwrap();
           }
         };
         const outcome = await mutate();

@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.9.0
+
+### Minor Changes
+
+- [#7350](https://github.com/stella/stella/pull/7350) [`27375ef`](https://github.com/stella/stella/commit/27375ef28c854e8341c537d18e910ca68b17e883) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add transcription model metadata and a file-input dictation capability description.
+
 ## 0.8.2
 
 ### Patch Changes

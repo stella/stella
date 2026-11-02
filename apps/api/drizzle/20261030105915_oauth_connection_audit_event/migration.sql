@@ -5,4 +5,4 @@ SET statement_timeout = '10s';--> statement-breakpoint
 -- squawk-ignore ban-drop-constraint
 ALTER TABLE "account_audit_logs" DROP CONSTRAINT IF EXISTS "account_audit_logs_event_type_check";--> statement-breakpoint
 ALTER TABLE "account_audit_logs" ADD CONSTRAINT "account_audit_logs_event_type_check"
-  CHECK ("event_type" IN ('account.data_export.requested', 'account.data_export.ready', 'account.data_export.downloaded', 'account.data_export.expired', 'account.sign_in_method.disconnected', 'account.oauth_connection.disconnected')) NOT VALID;
+  CHECK ("event_type" IN ('account.data_export.requested', 'account.data_export.ready', 'account.data_export.downloaded', 'account.data_export.expired', 'account.sign_in_method.disconnected', 'account.oauth_connection.disconnected', 'organization.created', 'organization.evaluation.started')) NOT VALID;

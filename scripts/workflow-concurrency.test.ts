@@ -250,6 +250,7 @@ const concurrencyModes: Record<
   NonNullable<ConcurrencyProblemsOptions["mode"]>
 > = {
   "disarm-auto-merge.yml": "preserve-events",
+  "merge-group-hold.yml": "preserve-events",
 };
 
 describe("pull request workflow concurrency", () => {

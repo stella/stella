@@ -30,19 +30,7 @@ const validAst = {
   ],
 };
 
-const invalidAst = {
-  ...validAst,
-  blocks: [
-    ...validAst.blocks,
-    {
-      id: "b2",
-      anchorId: "h-title",
-      type: "paragraph",
-      inlines: [{ type: "text", text: "Body" }],
-      plainText: "Body",
-    },
-  ],
-};
+const invalidAst = [validAst];
 
 describe("stored reader-schema census", () => {
   test("counts schema failures separately from unreadable and absent payloads across cursor batches", async () => {

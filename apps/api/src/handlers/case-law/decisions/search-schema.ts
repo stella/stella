@@ -245,6 +245,10 @@ export const searchDecisionsSuccessResponseSchema = v.object({
         languageAlternates: languageAlternatesSchema,
         decisionDate: nullableStringSchema,
         decisionType: nullableBoundedString(bytes.decisionType),
+        decisionTypeKind: v.union([
+          v.picklist([...DECISION_TYPE_KINDS]),
+          v.null(),
+        ]),
         sourceUrl: nullableBoundedString(bytes.sourceUrl),
         headnote: decisionHeadnotePreviewSchema,
         keywords: v.union([decisionKeywordsPreviewSchema, v.null()]),

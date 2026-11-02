@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 
 import {
@@ -39,6 +41,22 @@ const Tooltip = TooltipPrimitive.Root;
 
 const TooltipTrigger = (props: TooltipPrimitive.Trigger.Props) => (
   <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+);
+
+/**
+ * A fact read inline with the facts beside it, whose dotted rule says there
+ * is more on hover or focus. The words keep the colour and weight of the
+ * text the caller wraps them in; the trigger owns the rule, the focus ring
+ * and the touch target.
+ */
+const TooltipFactTrigger = ({ children }: { children: ReactNode }) => (
+  <TooltipPrimitive.Trigger
+    className="decoration-foreground-placeholder hover:decoration-foreground-muted focus-visible:ring-ring relative cursor-default rounded-xs underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-3"
+    data-slot="tooltip-trigger"
+    type="button"
+  >
+    {children}
+  </TooltipPrimitive.Trigger>
 );
 
 const TooltipPopup = ({
@@ -92,6 +110,7 @@ export {
   TooltipProvider,
   Tooltip,
   TooltipTrigger,
+  TooltipFactTrigger,
   TooltipPopup,
   TooltipPopup as TooltipContent,
 };

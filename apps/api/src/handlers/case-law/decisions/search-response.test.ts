@@ -49,6 +49,7 @@ const responseWithText = (text: string): SearchResponse => {
     ),
     decisionDate: text,
     decisionType: text,
+    decisionTypeKind: "finding",
     sourceUrl: text,
     keywords: null,
     headnote: {

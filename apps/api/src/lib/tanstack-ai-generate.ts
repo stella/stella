@@ -16,7 +16,7 @@ import type {
   TokenUsage,
 } from "@tanstack/ai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -163,6 +163,17 @@ type SystemPromptOrigin = "server-built" | "embeds-untrusted";
 type GenerateTanStackBaseOptions = {
   abortSignal?: AbortSignal | undefined;
   analytics?: TanStackAIAnalyticsCallbacks | undefined;
+  /**
+   * Runs right before every provider request this layer dispatches: the
+   * first one, a retry after a provider's stated delay, a standard-tier
+   * retry, a repair turn and a fallback model. (A provider SDK's own retries
+   * of one dispatched request happen below this layer and do not run it.) A
+   * caller whose permission to send can lapse during the call checks it
+   * again here. An error stops the call before that request leaves, and the
+   * call fails with a `DispatchRefusedError` carrying it, never relabelled
+   * or recorded as a model failure.
+   */
+  beforeEachDispatch?: DispatchCheck | undefined;
   caching: CachingDecision;
   maxOutputTokens?: number | undefined;
   modelId?: string | undefined;
@@ -530,6 +541,7 @@ const generateTanStackTextWithin = async (
     for await (const delta of streamTanStackTextDeltas({
       abortController,
       analytics: options.analytics,
+      beforeEachDispatch: options.beforeEachDispatch,
       caching: options.caching,
       maxOutputTokens: options.maxOutputTokens,
       messages: requestMessages,
@@ -569,7 +581,7 @@ const generateTanStackTextWithin = async (
 };
 
 export const streamTanStackTextForTask = async function* (
-  options: TanStackTextForTaskOptions,
+  options: TanStackTextForTaskOptions & StreamingDispatchOptions,
 ): AsyncIterable<string> {
   // Checked before the model resolves: a dispatch on a settled proof panics.
   const abortSignal = admittedDispatchSignal(options);
@@ -737,9 +749,51 @@ export const collectTanStackTextRun = async (
   return result.value;
 };
 
+/** A caller's check before one provider request; an error refuses it. */
+export type DispatchCheck = () => Promise<Result<void, unknown>>;
+
+/** Streaming runs do not take a dispatch check: a caller that needs one
+ * uses the awaited generation, which runs it before every request. */
+type StreamingDispatchOptions = { beforeEachDispatch?: never };
+
+/**
+ * A caller's dispatch check refused a request, so nothing was sent. Not a
+ * model failure: every recovery step passes it through unchanged and no
+ * repair or fallback outcome records it.
+ */
+export class DispatchRefusedError extends TaggedError("DispatchRefusedError")<{
+  message: string;
+  /** What the caller's check answered. */
+  refusal: unknown;
+}> {}
+
+/** Runs the caller's check and stops the run when it refuses. */
+export const checkBeforeDispatch = async (check: DispatchCheck | undefined) => {
+  if (check === undefined) {
+    return;
+  }
+  const verdict = await check();
+  if (Result.isError(verdict)) {
+    throw new DispatchRefusedError({
+      message: "The caller refused a model request before it was sent",
+      refusal: verdict.error,
+    });
+  }
+};
+
+// A request stream that first runs the caller's per-request check.
+const afterDispatchCheck = async function* <TChunk>(
+  beforeEachDispatch: DispatchCheck | undefined,
+  stream: () => AsyncIterable<TChunk>,
+): AsyncIterable<TChunk> {
+  await checkBeforeDispatch(beforeEachDispatch);
+  yield* stream();
+};
+
 const streamTanStackTextDeltas = async function* ({
   abortController,
   analytics,
+  beforeEachDispatch,
   caching,
   maxOutputTokens,
   messages,
@@ -751,6 +805,7 @@ const streamTanStackTextDeltas = async function* ({
 }: {
   abortController: AbortController | undefined;
   analytics: TanStackAIAnalyticsCallbacks | undefined;
+  beforeEachDispatch?: DispatchCheck | undefined;
   caching: CachingDecision;
   maxOutputTokens: number | undefined;
   messages: GuardedModelMessages<ModelMessage[]>;
@@ -766,20 +821,24 @@ const streamTanStackTextDeltas = async function* ({
     model,
     serviceTier,
     stream: (requestedServiceTier) =>
-      streamChatChunks({
-        adapter: textAdapterWithNormalizedStops(model),
-        messages,
-        ...systemPromptsPatch({ caching, model, system }),
-        modelOptions: mergeGenerationOptions({
-          caching,
-          model,
-          maxOutputTokens,
-          serviceTier: requestedServiceTier,
-          temperature,
+      afterDispatchCheck(beforeEachDispatch, () =>
+        streamChatChunks({
+          adapter: textAdapterWithNormalizedStops(model),
+          messages,
+          ...systemPromptsPatch({ caching, model, system }),
+          modelOptions: mergeGenerationOptions({
+            caching,
+            model,
+            maxOutputTokens,
+            serviceTier: requestedServiceTier,
+            temperature,
+          }),
+          ...(modelAnalytics
+            ? { middleware: [modelAnalytics.middleware] }
+            : {}),
+          ...(abortController ? { abortController } : {}),
         }),
-        ...(modelAnalytics ? { middleware: [modelAnalytics.middleware] } : {}),
-        ...(abortController ? { abortController } : {}),
-      }),
+      ),
     onChunk: (chunk) => {
       if (chunk.type === EventType.RUN_FINISHED) {
         onFinish?.(finishedRunOf(chunk));
@@ -981,6 +1040,7 @@ export const withRecoveredProviderStatus = ({
 }: RecoveredProviderStatusOptions): unknown => {
   if (
     error instanceof ProviderCallError ||
+    error instanceof DispatchRefusedError ||
     isAbortRejection({ error, signal: abortSignal })
   ) {
     return error;
@@ -1432,6 +1492,13 @@ const settleStructuredOutput = async <TSchema extends v.GenericSchema>({
     try: async () => await repair({ invalidOutput: output, issues }),
     catch: (error: unknown) => error,
   });
+  // A repair the caller refused before it was sent was never tried.
+  if (
+    Result.isError(repaired) &&
+    repaired.error instanceof DispatchRefusedError
+  ) {
+    throw repaired.error;
+  }
   if (
     Result.isError(repaired) &&
     !(repaired.error instanceof ModelOutputInvalidError)
@@ -1461,6 +1528,12 @@ const settleStructuredOutput = async <TSchema extends v.GenericSchema>({
     try: candidate.run,
     catch: (error: unknown) => error,
   });
+  if (
+    Result.isError(attempted) &&
+    attempted.error instanceof DispatchRefusedError
+  ) {
+    throw attempted.error;
+  }
   if (Result.isError(attempted)) {
     report({
       type: "failed",
@@ -1566,8 +1639,9 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
               abortSignal: abortController?.signal,
               model: requestModel,
               serviceTier: options.serviceTier,
-              run: async (serviceTier) =>
-                await generateChatObject({
+              run: async (serviceTier) => {
+                await checkBeforeDispatch(options.beforeEachDispatch);
+                return await generateChatObject({
                   adapter: requestModel.adapter,
                   messages,
                   outputSchema: tanStackOutputSchema,
@@ -1587,7 +1661,8 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
                   }),
                   ...(analytics ? { middleware: [analytics.middleware] } : {}),
                   ...(abortController ? { abortController } : {}),
-                }),
+                });
+              },
             }),
           deadlineAt,
         ),
@@ -1667,7 +1742,8 @@ export const streamTanStackObjectForTask = async function* <
   outputMode: _outputMode,
   outputSchema,
   ...options
-}: GenerateTanStackObjectForTaskOptions<TSchema>): AsyncIterable<
+}: GenerateTanStackObjectForTaskOptions<TSchema> &
+  StreamingDispatchOptions): AsyncIterable<
   TanStackStructuredOutputEvent<v.InferOutput<TSchema>>
 > {
   // Checked before the model resolves: a dispatch on a settled proof panics.

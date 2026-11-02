@@ -46,6 +46,7 @@ export const APP_SEARCH_FIXTURE = {
       decisionId: "fixture-decision",
       resourceName: "case-law/fixture-decision",
       decisionType: "nález",
+      decisionTypeKind: "finding" as const,
       ecli: "ECLI:CZ:US:2024:1.US.123.24.1",
       language: "cs",
       matchedQueries: [0],
