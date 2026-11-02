@@ -39,9 +39,7 @@
     "scripts/autofix-select-paths.test.ts": ["**"],
     "scripts/baseline-paths.test.ts": ["**"],
     "scripts/baseline-shrink.test.ts": ["**"],
-    "scripts/bot-refresh-auto-merge.test.ts": [
-      ".github/workflows/bot-refresh-auto-merge.yml"
-    ],
+    "scripts/bot-refresh-auto-merge.test.ts": ["**"],
     "scripts/bundled-consumers.test.ts": ["**"],
     "scripts/capability-catalog-readers.test.ts": ["**"],
     "scripts/cargo-deny-fetch.test.ts": [
