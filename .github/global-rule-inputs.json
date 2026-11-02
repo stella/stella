@@ -160,6 +160,7 @@
     "scripts/crawl-posture.ts",
     "scripts/create-release-manifest.test.sh",
     "scripts/dated-waiver-base.ts",
+    "scripts/dated-waiver-changed-files.sh",
     "scripts/dated-waiver-core.ts",
     "scripts/dated-waiver-entry.ts",
     "scripts/dated-waiver-healing-workflow.test.ts",
