@@ -1455,10 +1455,12 @@
           "click": "Kattintás",
           "fill": "Szöveg beírása",
           "open": "Webhely megnyitása",
+          "openNewTab": "Webhely megnyitása új lapon",
           "pressKey": "Billentyű lenyomása",
           "select": "Lehetőség kiválasztása",
           "snapshot": "Oldal beolvasása",
-          "snapshotContinue": "Az oldal olvasásának folytatása"
+          "snapshotContinue": "Az oldal olvasásának folytatása",
+          "switchTab": "Váltás a lapra"
         },
         "askAgain": "Kérdezzen újra",
         "autoApproveReads": "Oldalolvasás automatikus jóváhagyása",
@@ -5450,6 +5452,12 @@
         "work_obligation": "munkakötelezettség",
         "workspace_contact": "ügy kapcsolattartója",
         "workspace_member": "ügy tagja"
+      },
+      "billingDrafts": {
+        "description": "Készítsen munkaleírásokat a kiválasztott tevékenységekből és az iroda vagy az ügyfél tudásfájljaiból. Minden felhasználó külön hozzájárulást ad. A vázlatok engedélyezése előtt csatolja az iroda irányelveit.",
+        "firm": "Irodai irányelvek",
+        "ledes": "Elektronikus számlázás (LEDES)",
+        "title": "AI számlázási vázlatok"
       },
       "documentProcessing": {
         "description": "Automatikusan felismeri a szkennelt PDF-ek szövegét, hogy a tartalmuk kereshető legyen.",

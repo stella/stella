@@ -3,9 +3,9 @@ import { is } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig } from "@stll/db-load-gate/health";
 
 import * as schema from "@/api/db/schema";
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { createBackfillRuntime } from "./backfill-runtime";
@@ -98,7 +98,7 @@ const backfillRelation = async (
     name: `${REPAIR_NAME}:${tableName}`,
     tableName,
     initialSize: BATCH_SIZE,
-    config: { ...defaultConfig, maxSize: MAX_BATCH_SIZE },
+    config: { ...loadGateHealthConfig(), maxSize: MAX_BATCH_SIZE },
     connection,
   });
   try {

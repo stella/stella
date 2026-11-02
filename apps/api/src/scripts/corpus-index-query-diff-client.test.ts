@@ -2,6 +2,9 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 
 import { envBase } from "@/api/env-base";
 import { corpusIndexQueryDiffClientForGeneration } from "@/api/scripts/corpus-index-query-diff-client";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 type RecordedRequest = { host: string };
 
@@ -32,9 +35,11 @@ beforeEach(() => {
       { status: 200 },
     );
   };
-  globalThis.fetch = Object.assign(stub, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
   Object.assign(envBase, {
     CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT: "http://localhost:7292",
@@ -42,7 +47,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   Object.assign(envBase, originalEndpoints);
 });
 

@@ -22,10 +22,11 @@ import { panic } from "better-result";
  * committed checkpoint admits a pending repair through deploy and startup.
  */
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+import type { Verdict } from "@stll/db-load-gate/health";
 
 import { isRecord } from "@/api/lib/type-guards";
 
+import { loadGateHealthConfig } from "../env-online-index";
 import { createBackfillRuntime } from "./backfill-runtime";
 import {
   EU_VAT_ID_SQL_COMPACT,
@@ -134,7 +135,7 @@ const moveUntilEmpty = async (
     name: CONTACT_VAT_ID_REPAIR_NAME,
     tableName: TABLE_NAME,
     initialSize: BATCH,
-    config: defaultConfig,
+    config: loadGateHealthConfig(),
     connection,
     readVerdict,
     clock,
