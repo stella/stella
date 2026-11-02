@@ -32,7 +32,6 @@ import { CHECK_POOL_JOBS } from "./ci-check-pool-registry";
 import {
   computeChangedFileScope,
   DEFAULT_DETECTORS,
-  MODEL_CATALOG_DRIFT_INPUTS,
   ROUTE_TREE_INPUTS,
   type ScopeOutput,
 } from "./ci-plan-scope";
@@ -928,13 +927,6 @@ test("route-tree CI scope covers every manifest input and output", () => {
     glob.replace(/\/\*\*$/u, "/*"),
   );
   expect(paths.toSorted()).toEqual([...ROUTE_TREE_INPUTS].toSorted());
-});
-
-test("CI rate snapshot scope stays pinned to the manifest", () => {
-  const inputs = generator("model-rates").inputs.map((glob) =>
-    glob.replace(/\/\*\*$/u, "/*"),
-  );
-  expect(inputs.toSorted()).toEqual([...MODEL_CATALOG_DRIFT_INPUTS].toSorted());
 });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

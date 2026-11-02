@@ -440,9 +440,6 @@ export const ChatThreadMessages = ({
                           workspaceId={workspaceId}
                           threadRef={threadRef}
                         />
-                        <ChatTurnDuration
-                          timing={message.metadata?.turnTiming}
-                        />
                         <div
                           className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
                           data-chat-answer-footer
@@ -468,6 +465,9 @@ export const ChatThreadMessages = ({
                             message={message}
                             onResend={onResend}
                             threadRef={threadRef}
+                          />
+                          <ChatTurnDuration
+                            timing={message.metadata?.turnTiming}
                           />
                           <AssistantAnswerMetadata
                             message={message}

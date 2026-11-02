@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   checkChangesetPackages,
@@ -242,7 +242,8 @@ describe("changeset gate decision", () => {
   });
 
   test("adding any changeset entry flips a failing verdict to a passing one", () => {
-    fc.assert(
+    assertProperty(
+      "adding any changeset entry flips a failing verdict to a passing one",
       fc.property(
         fc.uniqueArray(fc.constantFrom(...GATED_FILES), { minLength: 1 }),
         fc.array(fc.tuple(fc.constantFrom(...UNGATED_PREFIXES), SLUG)),
@@ -258,12 +259,13 @@ describe("changeset gate decision", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("never asks for a changeset when nothing gated changed", () => {
-    fc.assert(
+    assertProperty(
+      "never asks for a changeset when nothing gated changed",
       fc.property(
         fc.array(fc.tuple(fc.constantFrom(...UNGATED_PREFIXES), SLUG)),
         (ungated) => {
@@ -273,7 +275,7 @@ describe("changeset gate decision", () => {
           ).toBe("not-required");
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -285,7 +287,8 @@ describe("changeset package relevance", () => {
   });
 
   test("requires path evidence for every named package across the release policy", () => {
-    fc.assert(
+    assertProperty(
+      "requires path evidence for every named package across the release policy",
       fc.property(
         fc.constantFrom(...policy.packageFiles),
         fc.constantFrom(...policy.packageFiles),
@@ -307,7 +310,7 @@ describe("changeset package relevance", () => {
           checkChangesetPackages(options);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
