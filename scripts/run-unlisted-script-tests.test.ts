@@ -1129,6 +1129,26 @@ describe("directory scan coverage", () => {
     });
   });
 
+  test("ignores a call that never resumed because its thread exited", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const trace = [
+        '1 execve("/usr/bin/ls", ["ls", "data"], 0x0) = 0',
+        `1 openat(AT_FDCWD<${root}>, ".", O_RDONLY) = 3`,
+        "3 futex(0x1, FUTEX_WAIT_PRIVATE, 0, NULL <unfinished ...>",
+        "3 +++ exited with 0 +++",
+      ].join("\n");
+      expect(
+        uncoveredScans({
+          scanLog: "",
+          trace,
+          declared: ["data/**"],
+          tracked,
+          root,
+        }),
+      ).toEqual([]);
+    });
+  });
+
   test("fails closed when a traced process has no known working directory", () => {
     withTrackedFixture(({ root, tracked }) => {
       const trace = [

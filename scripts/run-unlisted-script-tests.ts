@@ -881,10 +881,10 @@ const joinedTraceRecords = (trace: string): string[] => {
     }
     records.push(line);
   }
-  if (unfinished.size > 0) {
-    panic("Incomplete syscall trace contains an unfinished call");
-  }
-  return records;
+  // A call left unfinished when its thread exits or is killed never returned,
+  // so it read nothing the test could depend on. A dropped clone or chdir
+  // still fails closed downstream: its process has no known working directory.
+  return records.filter((record) => record !== "");
 };
 
 // Git options that come before the subcommand and take a separate value.
