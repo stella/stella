@@ -26,6 +26,9 @@ import {
   SOURCE_FINGERPRINT_DRIVERS,
   sourceFingerprintCensus,
 } from "@/api/tests/helpers/source-fingerprint-census";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const BASELINE = new URL(
   "../../../../../../../scripts/source-fingerprint-baseline.json",
@@ -33,9 +36,8 @@ const BASELINE = new URL(
 );
 const CENSUS_OUT = process.env["SOURCE_FINGERPRINT_CENSUS_OUT"];
 
-const originalFetch = globalThis.fetch;
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const recordedDrivers = async (): Promise<string[]> => {
