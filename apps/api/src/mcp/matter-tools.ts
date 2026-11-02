@@ -16,6 +16,7 @@ import {
   MAX_CONTACT_NATIONALITY_CODES,
   updateContactBodySchema,
 } from "@stll/api-contract/contact-write";
+import { displayNameSchema } from "@stll/api-contract/display-name";
 import { DEFAULT_FILE_PROPERTY_NAME } from "@stll/api-contract/property-policy";
 import {
   organizationMemberSelectorSchema,
@@ -306,9 +307,7 @@ const saveMatterArgsSchema = nullAsAbsent(
       ),
       name: v.optional(
         v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(256),
+          displayNameSchema(),
           v.description("Matter name; required when creating"),
         ),
       ),
@@ -826,27 +825,25 @@ const saveContactArgsSchema = nullAsAbsent(
       ),
       display_name: v.optional(
         v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(512),
+          displayNameSchema({ maxLength: 512 }),
           v.description("Defaults to person or organization name"),
         ),
       ),
       first_name: v.optional(
         v.pipe(
-          v.nullable(v.pipe(v.string(), v.maxLength(256))),
+          v.nullable(displayNameSchema({ maxLength: 256, allowEmpty: true })),
           v.description("Given name"),
         ),
       ),
       last_name: v.optional(
         v.pipe(
-          v.nullable(v.pipe(v.string(), v.maxLength(256))),
+          v.nullable(displayNameSchema({ maxLength: 256, allowEmpty: true })),
           v.description("Family name"),
         ),
       ),
       organization_name: v.optional(
         v.pipe(
-          v.nullable(v.pipe(v.string(), v.maxLength(512))),
+          v.nullable(displayNameSchema({ maxLength: 512, allowEmpty: true })),
           v.description("Organization"),
         ),
       ),

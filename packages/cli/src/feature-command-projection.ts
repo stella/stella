@@ -6,6 +6,8 @@ import type { RouteNode } from "./route-types.js";
 export type CallerFeatureAccess = {
   capabilities: readonly string[];
   tools: readonly string[];
+  /** Explicit feature denials, separate from the scope-filtered visible identities. */
+  disabled?: { tools: readonly string[]; capabilities: readonly string[] };
 };
 
 export const hasFeatureCommands = (tree: RouteNode): boolean => {

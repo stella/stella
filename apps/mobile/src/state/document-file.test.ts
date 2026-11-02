@@ -168,6 +168,7 @@ describe("reading a document's file", () => {
     );
     const result = await read(fetch);
     expect(result.isOk() ? result.value : result.error).toEqual({
+      propertyId: "property-1",
       fileName: "Smlouva.docx",
       mimeType: "application/pdf",
       url: "https://storage.example.com/file-1?signature=abc",

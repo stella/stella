@@ -129,6 +129,20 @@ export const NUMBER_SERIES_DOCUMENT_TYPES = [
   "credit_note",
 ] as const;
 
+/**
+ * Why an invoice cannot be issued yet. Each is the `code` of the 409 that
+ * issuing answers with and an entry of the prefill's `issueBlockers`, so the
+ * composer withholds "Issue invoice" for exactly the reasons issuing refuses.
+ * Both are fixed in the organization's billing settings.
+ */
+export const INVOICE_ISSUE_BLOCKER = {
+  sellerProfileMissing: "invoice_seller_profile_missing",
+  numberSeriesMissing: "invoice_number_series_missing",
+} as const;
+
+export type InvoiceIssueBlocker =
+  (typeof INVOICE_ISSUE_BLOCKER)[keyof typeof INVOICE_ISSUE_BLOCKER];
+
 export const INVOICE_STATUSES = [
   "draft",
   "finalized",
