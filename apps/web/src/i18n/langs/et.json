@@ -5454,7 +5454,7 @@
         "workspace_member": "toimiku liige"
       },
       "billingDrafts": {
-        "description": "Koostage töö kirjeldused valitud tegevustest ning büroo või kliendi teadmiste failidest. Iga kasutaja annab ka oma nõusoleku. Enne mustandite lubamist lisage büroo juhised.",
+        "description": "Koostage töö kirjeldused valitud tegevustest ning büroo või kliendi teadmiste failidest. Iga kasutaja annab ka oma nõusoleku. Kui büroo juhised on lisatud, kontrollitakse mustandeid nende alusel.",
         "firm": "Büroo juhised",
         "ledes": "Elektrooniline arveldamine (LEDES)",
         "title": "Tehisintellekti arveldusmustandid"
