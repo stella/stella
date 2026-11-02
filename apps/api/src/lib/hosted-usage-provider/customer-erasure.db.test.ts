@@ -25,6 +25,7 @@ import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { runHostedCustomerErasures } from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { hasRenewingHostedSubscription } from "@/api/lib/usage/renewing-hosted-subscription";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -35,20 +36,17 @@ const credentials = {
   baseUrl: "https://provider.test",
 };
 let db: TestDatabase;
-let originalFetch: typeof fetch;
+const testFetch = createTestFetch();
 
 beforeAll(async () => {
   db = await getTestDb();
-  originalFetch = globalThis.fetch;
 });
 
 beforeEach(async () => {
   await db.delete(hostedCustomerErasures).where(sql`true`);
-  globalThis.fetch = originalFetch;
 });
 
 afterAll(async () => {
-  globalThis.fetch = originalFetch;
   await releaseTestDb();
 });
 
@@ -103,9 +101,11 @@ const installFetch = (
     init?: RequestInit,
   ) => Promise<Response>,
 ): void => {
-  globalThis.fetch = Object.assign(handler, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetch.set(
+    Object.assign(handler, {
+      preconnect: fetch.preconnect,
+    }),
+  );
 };
 
 const urlString = (url: string | URL | Request): string => {
