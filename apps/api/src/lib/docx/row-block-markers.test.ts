@@ -1,9 +1,8 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import fc from "fast-check";
-import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -30,9 +29,9 @@ const TR = (...cells: string[]) => `<w:tr>${cells.join("")}</w:tr>`;
 const TBL = (...rows: string[]) => `<w:tbl>${rows.join("")}</w:tbl>`;
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", documentXml);
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const parseBody = (xml: string): slimdom.Element => {

@@ -1,8 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -60,10 +59,9 @@ const WRAP = (body: string) =>
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", documentXml);
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  zip.set(
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -76,7 +74,7 @@ const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
       "</Types>",
     ].join(""),
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const organizationId = toSafeId<"organization">("org_1");

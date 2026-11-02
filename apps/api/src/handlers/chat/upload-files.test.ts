@@ -1,9 +1,8 @@
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import JSZip from "jszip";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
@@ -57,9 +56,8 @@ const requestKeys = (method: "DELETE" | "GET" | "PUT"): string[] =>
 
 /** Minimal DOCX with a heading and a body paragraph, for extraction tests. */
 const makeDocxBytes = async (): Promise<Uint8Array> => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -68,15 +66,14 @@ const makeDocxBytes = async (): Promise<Uint8Array> => {
   <w:p><w:r><w:t>Jan Novak signs here.</w:t></w:r></w:p>
 </w:body></w:document>`,
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="xml" ContentType="application/xml"/>
 </Types>`,
   );
-  return new Uint8Array(await zip.generateAsync({ type: "uint8array" }));
+  return new Uint8Array(await zip.generate({ compression: "store" }));
 };
 const organizationId = toSafeId<"organization">("organization_1");
 const workspaceId = toSafeId<"workspace">("workspace_1");

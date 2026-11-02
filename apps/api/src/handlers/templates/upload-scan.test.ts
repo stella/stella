@@ -1,9 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import createTemplate from "@/api/handlers/templates/create";
 import { discoverHandler } from "@/api/handlers/templates/discover";
@@ -26,16 +25,14 @@ import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
 const makeAttachedTemplateDocx = async (): Promise<File> => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<w:document xmlns:w="${W_NS}"><w:body>` +
       `<w:p><w:r><w:t>{{name}}</w:t></w:r></w:p></w:body></w:document>`,
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/_rels/document.xml.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
@@ -44,7 +41,7 @@ const makeAttachedTemplateDocx = async (): Promise<File> => {
       'Target="https://templates.example/remote.dotm" TargetMode="External"/>' +
       "</Relationships>",
   );
-  const bytes = await zip.generateAsync({ type: "uint8array" });
+  const bytes = await zip.generate({ compression: "store" });
   return new File([bytes], "linked.docx", { type: DOCX_MIME_TYPE });
 };
 

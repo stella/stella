@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import {
   propertyConfig,
   propertySeed,
@@ -65,10 +64,9 @@ const emptyTableCount = (body: slimdom.Element): number =>
 
 // A minimal DOCX ZIP for end-to-end fillTemplate coverage.
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", documentXml);
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -76,12 +74,12 @@ const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 </Types>`,
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const documentText = async (file: ScannedFile): Promise<string> => {
-  const zip = await JSZip.loadAsync(file.bytes);
-  const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  const zip = await ZipArchive.read(file.bytes);
+  const xml = (await zip.entry("word/document.xml")?.text()) ?? "";
   const texts: string[] = [];
   // Match the text element `<w:t>` / `<w:t ...>` only — not `<w:tr>`/`<w:tc>`.
   for (const match of xml.matchAll(/<w:t(?:\s[^>]*)?>(?<text>.*?)<\/w:t>/gu)) {
@@ -757,8 +755,8 @@ describe("fillTemplate — tables", () => {
     expect(text).toContain("CZ");
     expect(text).not.toContain("{{");
     // ZIP still opens as a valid package.
-    const reopened = await JSZip.loadAsync(file.bytes);
-    expect(reopened.file("word/document.xml")).not.toBeNull();
+    const reopened = await ZipArchive.read(file.bytes);
+    expect(reopened.entry("word/document.xml")).toBeDefined();
   });
 
   test("a bilingual scope table keeps only the rows whose condition holds", async () => {
@@ -795,9 +793,8 @@ describe("fillTemplate — tables", () => {
     expect(text).not.toContain("{{");
 
     // The filled package still parses, and no cell lost its paragraph.
-    const reopened = await JSZip.loadAsync(file.bytes);
-    const filledXml =
-      (await reopened.file("word/document.xml")?.async("string")) ?? "";
+    const reopened = await ZipArchive.read(file.bytes);
+    const filledXml = (await reopened.entry("word/document.xml")?.text()) ?? "";
     const filledBody = parseBody(filledXml);
     expect(rowCount(filledBody)).toBe(2);
     expect(emptyCellCount(filledBody)).toBe(0);

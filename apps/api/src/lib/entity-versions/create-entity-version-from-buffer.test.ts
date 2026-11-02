@@ -1,13 +1,12 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import JSZip from "jszip";
 
 import {
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
   REALTIME_EVENT_TYPE,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
@@ -84,9 +83,8 @@ const stampedDocxBytes = async (): Promise<Uint8Array> => {
   const wordNs = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
   const relNs =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8"?>',
@@ -96,8 +94,7 @@ const stampedDocxBytes = async (): Promise<Uint8Array> => {
       "</Types>",
     ].join("\n"),
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/document.xml",
     [
       '<?xml version="1.0" encoding="UTF-8"?>',
@@ -108,7 +105,7 @@ const stampedDocxBytes = async (): Promise<Uint8Array> => {
   );
 
   const stamped = await injectStamp(
-    await zip.generateAsync({ type: "arraybuffer" }),
+    (await zip.generate({ compression: "store" })).buffer,
     "2026/001/015.v3",
     "kx8mq2n4p3",
     "https://stella.legal",

@@ -93,12 +93,11 @@
 import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
 import { panic } from "better-result";
-import JSZip from "jszip";
 import { readFile, writeFile } from "node:fs/promises";
 import * as slimdom from "slimdom";
 import * as v from "valibot";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { filtersFromFieldConfig, formatDate } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -264,10 +263,9 @@ const blockXml = (block: AuthoredBlock): string =>
 // minimal OPC package discovery and the fill service need (document part,
 // content types, package relationship).
 const makeDocx = async (documentXml: string): Promise<Buffer> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", documentXml);
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  zip.set(
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -277,8 +275,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Types>",
     ].join(""),
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "_rels/.rels",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -287,7 +284,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Relationships>",
     ].join(""),
   );
-  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  return Buffer.from(Buffer.from(await zip.generate({ compression: "store" })));
 };
 
 const buildDocx = async (blocks: readonly AuthoredBlock[]): Promise<Buffer> =>
@@ -301,8 +298,8 @@ const buildDocx = async (blocks: readonly AuthoredBlock[]): Promise<Buffer> =>
 const readDocxBlocks = async (
   bytes: ArrayBuffer | Uint8Array,
 ): Promise<AuthoredBlock[]> => {
-  const zip = await JSZip.loadAsync(bytes);
-  const xml = await zip.file(MAIN_DOCUMENT_PART_PATH)?.async("string");
+  const zip = await ZipArchive.read(bytes);
+  const xml = await zip.entry(MAIN_DOCUMENT_PART_PATH)?.text();
   if (xml === undefined) {
     return panic("DOCX has no word/document.xml");
   }

@@ -1,7 +1,5 @@
 import { Result } from "better-result";
 
-import { writeZipEntry } from "@stll/docx-utils";
-
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import {
   firstXmlElement,
@@ -148,13 +146,11 @@ export const applyFitToPage = async (
   const { zip } = archive;
 
   // Guard: must be an OOXML spreadsheet
-  if (!zip.file("xl/workbook.xml")) {
+  if (!zip.entry("xl/workbook.xml")) {
     return buffer;
   }
 
-  const sheetPaths = Object.keys(zip.files).filter((p) =>
-    REGEX_SHEET_FILENAME.test(p),
-  );
+  const sheetPaths = zip.paths().filter((p) => REGEX_SHEET_FILENAME.test(p));
 
   const sheets = await Result.tryPromise(
     async () =>
@@ -177,8 +173,8 @@ export const applyFitToPage = async (
     if (patched.isErr()) {
       return buffer;
     }
-    writeZipEntry(zip, path, patched.value);
+    zip.set(path, patched.value);
   }
 
-  return await zip.generateAsync({ type: "arraybuffer" });
+  return (await zip.generate({ compression: "store" })).buffer;
 };

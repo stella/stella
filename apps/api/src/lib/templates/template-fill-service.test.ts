@@ -1,10 +1,9 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import JSZip from "jszip";
 
 import { compareCodeUnit } from "@stll/collation";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
@@ -95,10 +94,9 @@ const WRAP = (body: string) =>
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", documentXml);
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  zip.set(
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -111,15 +109,15 @@ const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
       "</Types>",
     ].join(""),
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const extractTexts = async (file: ScannedFile): Promise<string[]> => {
-  const zip = await JSZip.loadAsync(file.bytes);
+  const zip = await ZipArchive.read(file.bytes);
   const documentXmlFile =
-    zip.file("word/document.xml") ??
+    zip.entry("word/document.xml") ??
     panic("fixture DOCX is missing word/document.xml");
-  const xml = await documentXmlFile.async("string");
+  const xml = await documentXmlFile.text();
   return [...xml.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/gu)].map(
     (match) => match[1] ?? "",
   );
@@ -1340,9 +1338,9 @@ const filledTexts = async (
   if (!("file" in result)) {
     panic(`clause fill rejected: ${JSON.stringify(result)}`);
   }
-  const zip = await JSZip.loadAsync(result.file.bytes);
+  const zip = await ZipArchive.read(result.file.bytes);
   const xml =
-    (await zip.file("word/document.xml")?.async("string")) ??
+    (await zip.entry("word/document.xml")?.text()) ??
     panic("filled document has no body");
   return partParagraphTexts(xml);
 };
@@ -1456,8 +1454,8 @@ describe("clause and template directive parity", () => {
     if (!("file" in result)) {
       panic("expected filled clause");
     }
-    const zip = await JSZip.loadAsync(result.file.bytes);
-    const xml = await zip.file("word/document.xml")?.async("string");
+    const zip = await ZipArchive.read(result.file.bytes);
+    const xml = await zip.entry("word/document.xml")?.text();
     expect(xml).toContain("<w:b");
     expect(xml).toContain("<w:i");
     expect(xml).not.toContain("__each_");
@@ -1520,16 +1518,16 @@ describe("clause and template directive parity", () => {
     if (!("file" in result)) {
       panic("expected filled clause");
     }
-    const actualZip = await JSZip.loadAsync(result.file.bytes);
-    const expectedZip = await JSZip.loadAsync(direct.file.bytes);
-    expect(Object.keys(actualZip.files).toSorted()).toEqual(
-      Object.keys(expectedZip.files).toSorted(),
+    const actualZip = await ZipArchive.read(result.file.bytes);
+    const expectedZip = await ZipArchive.read(direct.file.bytes);
+    expect(actualZip.paths().toSorted()).toEqual(
+      expectedZip.paths().toSorted(),
     );
-    for (const path of Object.keys(expectedZip.files).filter((partName) =>
-      partName.endsWith(".xml"),
-    )) {
-      expect(await actualZip.file(path)?.async("string")).toBe(
-        await expectedZip.file(path)?.async("string"),
+    for (const path of expectedZip
+      .paths()
+      .filter((partName) => partName.endsWith(".xml"))) {
+      expect(await actualZip.entry(path)?.text()).toBe(
+        await expectedZip.entry(path)?.text(),
       );
     }
   });
@@ -1698,9 +1696,9 @@ test("filled clause directive trees match template body rendering", async () => 
         );
         const bodyResult = await fillTemplate(templateFile, values);
         expect(bodyResult.structureErrors).toEqual([]);
-        const bodyZip = await JSZip.loadAsync(bodyResult.file.bytes);
+        const bodyZip = await ZipArchive.read(bodyResult.file.bytes);
         const bodyXml =
-          (await bodyZip.file("word/document.xml")?.async("string")) ??
+          (await bodyZip.entry("word/document.xml")?.text()) ??
           panic("missing body XML");
         expect(texts).toEqual(partParagraphTexts(bodyXml));
         expect(texts.join("")).not.toContain("{%");
@@ -1976,8 +1974,8 @@ test("empty clause results remove only the numbered slot paragraph", async () =>
   if (!("file" in result)) {
     panic("expected a filled file");
   }
-  const zip = await JSZip.loadAsync(result.file.bytes);
-  const xml = await zip.file("word/document.xml")?.async("string");
+  const zip = await ZipArchive.read(result.file.bytes);
+  const xml = await zip.entry("word/document.xml")?.text();
   expect(xml?.match(/<w:numPr>/gu)).toHaveLength(2);
 });
 
@@ -2878,10 +2876,8 @@ describe("clause slot requiredness follows rendering", () => {
       if (!("file" in result)) {
         panic("expected filled document");
       }
-      const zip = await JSZip.loadAsync(result.file.bytes);
-      expect(await zip.file("word/document.xml")?.async("string")).toContain(
-        "<w:b",
-      );
+      const zip = await ZipArchive.read(result.file.bytes);
+      expect(await zip.entry("word/document.xml")?.text()).toContain("<w:b");
       expect(result.unmatchedPlaceholders).toEqual([]);
     },
   );
@@ -3275,9 +3271,8 @@ describe("template fields are required where they render", () => {
 
   test("header markers are required where the header renders them", async () => {
     const fillWithHeader = async (header: string, values: TemplateData) => {
-      const zip = await JSZip.loadAsync((await makeDocx(WRAP(branch))).bytes);
-      writeZipEntry(
-        zip,
+      const zip = await ZipArchive.read((await makeDocx(WRAP(branch))).bytes);
+      zip.set(
         "word/header1.xml",
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${header}</w:hdr>`,
       );
@@ -3285,7 +3280,7 @@ describe("template fields are required where they render", () => {
         source: {
           name: "Terms",
           fileName: "terms.docx",
-          file: testDocxFile(await zip.generateAsync({ type: "uint8array" })),
+          file: testDocxFile(await zip.generate({ compression: "store" })),
         },
         values,
         scopedDb: stubScopedDb(),

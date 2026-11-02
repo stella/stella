@@ -151,7 +151,6 @@
     "driver.js": "1.10.2",
     "immer": "^11.2.3",
     "isbot": "5.2.2",
-    "jszip": "catalog:",
     "katex": "^0.16.47",
     "lucide-react": "catalog:",
     "mdast-util-from-markdown": "2.1.0",

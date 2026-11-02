@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
-import JSZip from "jszip";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { createTestState } from "@stll/test-state";
 
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
@@ -359,10 +359,10 @@ describe.skipIf(!enabled)("user file key lifecycle census", () => {
     });
     expect(opened.toSorted()).toEqual(fixture.fileKeys.toSorted());
     const bytes = published.at(0) ?? panic("Archive publication required");
-    const archive = await JSZip.loadAsync(bytes);
-    const exportedFiles = Object.keys(archive.files).filter((name) =>
-      name.startsWith("files/"),
-    );
+    const archive = await ZipArchive.read(bytes);
+    const exportedFiles = archive
+      .paths()
+      .filter((name) => name.startsWith("files/"));
     expect(exportedFiles).toHaveLength(2);
   });
 

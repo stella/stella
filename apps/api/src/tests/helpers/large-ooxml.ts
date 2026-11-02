@@ -1,6 +1,4 @@
-import JSZip from "jszip";
-
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 const MIB = 1024 * 1024;
 // Past 32 MiB: more than an in-memory scan of the whole content would hold,
@@ -29,8 +27,8 @@ const CONTENT_TYPES =
   '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
   '<Default Extension="xml" ContentType="application/xml"/></Types>';
 
-const generate = async (zip: JSZip): Promise<Uint8Array> =>
-  await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+const generate = async (zip: ZipArchive): Promise<Uint8Array> =>
+  await zip.generate();
 
 /**
  * A DOCX whose body inflates to `bodyBytes` of prose-like text, with an
@@ -43,10 +41,9 @@ export const largeDocx = async ({
   bodyBytes?: number;
   trailer?: string;
 } = {}): Promise<Uint8Array> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "[Content_Types].xml", CONTENT_TYPES);
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set("[Content_Types].xml", CONTENT_TYPES);
+  zip.set(
     "word/document.xml",
     Buffer.concat([
       Buffer.from("<w:document><w:body><w:p><w:r><w:t>"),
@@ -59,11 +56,11 @@ export const largeDocx = async ({
 
 /** A DOCX carrying a large stored image, as scanned documents do. */
 export const mediaHeavyDocx = async (): Promise<Uint8Array> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "[Content_Types].xml", CONTENT_TYPES);
-  writeZipEntry(zip, "word/document.xml", "<w:document><w:body/></w:document>");
-  writeZipEntry(zip, "word/media/image1.jpeg", pseudoRandom(LARGE_BYTES), {
-    compression: "STORE",
+  const zip = new ZipArchive();
+  zip.set("[Content_Types].xml", CONTENT_TYPES);
+  zip.set("word/document.xml", "<w:document><w:body/></w:document>");
+  zip.set("word/media/image1.jpeg", pseudoRandom(LARGE_BYTES), {
+    compression: "store",
   });
   return await generate(zip);
 };
@@ -79,10 +76,9 @@ export const largeXlsx = async (): Promise<Uint8Array> => {
     rows.push(xml);
     bytes += xml.length;
   }
-  const zip = new JSZip();
-  writeZipEntry(zip, "[Content_Types].xml", CONTENT_TYPES);
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set("[Content_Types].xml", CONTENT_TYPES);
+  zip.set(
     "xl/worksheets/sheet1.xml",
     `<worksheet><sheetData>${rows.join("")}</sheetData></worksheet>`,
   );
@@ -91,11 +87,11 @@ export const largeXlsx = async (): Promise<Uint8Array> => {
 
 /** A PPTX carrying a large stored video. */
 export const mediaHeavyPptx = async (): Promise<Uint8Array> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "[Content_Types].xml", CONTENT_TYPES);
-  writeZipEntry(zip, "ppt/slides/slide1.xml", "<p:sld><p:cSld/></p:sld>");
-  writeZipEntry(zip, "ppt/media/media1.mp4", pseudoRandom(LARGE_BYTES), {
-    compression: "STORE",
+  const zip = new ZipArchive();
+  zip.set("[Content_Types].xml", CONTENT_TYPES);
+  zip.set("ppt/slides/slide1.xml", "<p:sld><p:cSld/></p:sld>");
+  zip.set("ppt/media/media1.mp4", pseudoRandom(LARGE_BYTES), {
+    compression: "store",
   });
   return await generate(zip);
 };

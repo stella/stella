@@ -1,8 +1,7 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -227,13 +226,12 @@ describe("runRegistryWriteTool (orchestration)", () => {
   });
 
   test("executes create_template through the chat projection", async () => {
-    const zip = new JSZip();
-    writeZipEntry(
-      zip,
+    const zip = new ZipArchive();
+    zip.set(
       "word/document.xml",
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>',
     );
-    const docxBase64 = await zip.generateAsync({ type: "base64" });
+    const docxBase64 = Buffer.from(await zip.generate()).toString("base64");
     const result = await runRegistryWriteTool({
       args: { docx_base64: docxBase64, name: "NDA" },
       context: {

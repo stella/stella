@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 1,
+  "reason": "A property entry read failed by rejecting its stream promise; read through the ZIP module it fails the same way with one throw, which the property readers' existing parse boundary catches."
+}

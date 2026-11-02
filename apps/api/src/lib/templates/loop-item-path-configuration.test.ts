@@ -13,9 +13,8 @@
  * agree; these fixtures pin that they do.
  */
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { W_NS } from "@/api/lib/docx/ooxml";
@@ -46,15 +45,13 @@ const blockXml = (block: Block): string =>
         .join("")}</w:tbl>`;
 
 const buildDocx = async (blocks: readonly Block[]): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       `<w:document xmlns:w="${W_NS}"><w:body>${blocks.map(blockXml).join("")}</w:body></w:document>`,
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
@@ -62,15 +59,14 @@ const buildDocx = async (blocks: readonly Block[]): Promise<ScannedFile> => {
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
       "</Types>",
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "_rels/.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
       "</Relationships>",
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 /** The bilingual power of attorney: one `{% for %}` per language section,

@@ -1,7 +1,6 @@
 import { TaggedError } from "better-result";
 import * as slimdom from "slimdom";
 
-import { writeZipEntry } from "@stll/docx-utils";
 import { declareFingerprintFields } from "@stll/errors";
 
 import type { StoredRow } from "@/api/lib/bilingual/operations";
@@ -357,10 +356,6 @@ export const applyFormattedBilingualTranslations = async (
       applyRow(doc, paragraphs, row, translation);
     }
   }
-  writeZipEntry(
-    archive.zip,
-    DOCUMENT_PART,
-    slimdom.serializeToWellFormedString(doc),
-  );
-  return await archive.zip.generateAsync({ type: "arraybuffer" });
+  archive.zip.set(DOCUMENT_PART, slimdom.serializeToWellFormedString(doc));
+  return (await archive.zip.generate({ compression: "store" })).buffer;
 };
