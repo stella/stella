@@ -4525,7 +4525,7 @@
       },
       "orphaned": {
         "description": "Le texte de ce document a été mis à jour depuis leur création et les passages marqués n'ont pas pu y être retrouvés. Ils ne sont pas affichés dans le texte.",
-        "summary": "{count, plural, one {# surlignage ou commentaire ne correspond plus au texte} other {# surlignages et commentaires ne correspondent plus au texte}}"
+        "summary": "{count, plural, one {# surlignage ou commentaire ne correspond plus au texte} other {# surlignages et commentaires ne correspondent plus au texte} many {# surlignages et commentaires ne correspondent plus au texte}}"
       },
       "removeHighlight": "Retirer le surlignage",
       "sharedBadge": "Partagé",
