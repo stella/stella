@@ -41,7 +41,11 @@ import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { useWorkspaceSSE } from "@/lib/workspace-sse";
 import { matterRouteView } from "@/lib/workspaces/archived-matters.logic";
 import { useUnarchiveWorkspace } from "@/lib/workspaces/mutations";
-import { overviewOptions, workspaceOptions } from "@/lib/workspaces/queries";
+import {
+  overviewOptions,
+  workspaceOptions,
+  workspacesRouteOptions,
+} from "@/lib/workspaces/queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
@@ -82,6 +86,11 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     const qc = context.queryClient;
 
     const onPrefetchError = (error: unknown) => {
+      // A matter opened cold that turns out archived or gone answers 404 to
+      // the active-only queries; the workspace load owns that outcome.
+      if (APIError.is(error) && error.status === 404) {
+        return;
+      }
       getAnalytics().captureError(error, {
         fingerprintKey:
           "workspaces.workspaceId.route.loader.onPrefetchError:failure",
@@ -95,11 +104,17 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
 
     // Only the workspace name blocks the breadcrumb. Start every independent
     // metadata request before awaiting it so they share the first network round.
+    const knownStatus = knownMatterStatus(
+      qc,
+      context.user.activeOrganizationId,
+      wsId,
+    );
     return await loadWorkspaceRouteQueries({
       loadWorkspace: async () =>
         await loadWorkspaceOrRedirect(qc, workspaceOptions(wsId)),
-      shouldStartPrefetches: (workspace) =>
-        matterRouteView(workspace.status) === "active",
+      isActive: (workspace) => matterRouteView(workspace.status) === "active",
+      knownInactive:
+        knownStatus !== undefined && matterRouteView(knownStatus) !== "active",
       startPrefetches: [
         () =>
           detached(
@@ -138,6 +153,27 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     ],
   }),
 });
+
+/**
+ * The matter's status as the client already holds it: the matter itself, or
+ * a matter list that contains it. `undefined` when nothing cached names it.
+ */
+const knownMatterStatus = (
+  queryClient: QueryClient,
+  organizationId: string,
+  workspaceId: string,
+) => {
+  const isThisMatter = ({ id }: { id: string }) => id === workspaceId;
+  return (
+    queryClient.getQueryData(workspaceOptions(workspaceId).queryKey)?.status ??
+    queryClient
+      .getQueryData(workspacesRouteOptions(organizationId, "archived").queryKey)
+      ?.workspaces.find(isThisMatter)?.status ??
+    queryClient
+      .getQueryData(workspacesRouteOptions(organizationId).queryKey)
+      ?.workspaces.find(isThisMatter)?.status
+  );
+};
 
 const loadWorkspaceOrRedirect = async (
   queryClient: QueryClient,

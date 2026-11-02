@@ -3,31 +3,28 @@ import { describe, expect, test } from "bun:test";
 import { matterRouteView } from "@/lib/workspaces/archived-matters.logic";
 import { loadWorkspaceRouteQueries } from "@/routes/_protected.workspaces/$workspaceId/-route-loader.logic";
 
+type Matter = { status: "active" | "archived" };
+
+const recordingPrefetches = (starts: string[]) =>
+  ["workflow", "views", "overview", "properties"].map((name) => () => {
+    starts.push(name);
+  });
+
+const isActive = ({ status }: Matter) => matterRouteView(status) === "active";
+
 describe("matter route query startup", () => {
-  test("starts every non-blocking query after an active workspace resolves", async () => {
+  test("starts every non-blocking query before the workspace query resolves", async () => {
+    const workspace = Promise.withResolvers<Matter>();
     const starts: string[] = [];
 
-    const result = await loadWorkspaceRouteQueries({
+    const result = loadWorkspaceRouteQueries({
       loadWorkspace: async () => {
         starts.push("workspace");
-        return { status: "active" as const };
+        return await workspace.promise;
       },
-      shouldStartPrefetches: ({ status }) =>
-        matterRouteView(status) === "active",
-      startPrefetches: [
-        () => {
-          starts.push("workflow");
-        },
-        () => {
-          starts.push("views");
-        },
-        () => {
-          starts.push("overview");
-        },
-        () => {
-          starts.push("properties");
-        },
-      ],
+      isActive,
+      knownInactive: false,
+      startPrefetches: recordingPrefetches(starts),
     });
 
     expect(starts).toEqual([
@@ -38,33 +35,38 @@ describe("matter route query startup", () => {
       "properties",
     ]);
 
-    expect(result).toEqual({ status: "active" });
+    workspace.resolve({ status: "active" });
+    expect(await result).toEqual({ status: "active" });
   });
 
-  test("does not start active-only prefetches for an archived workspace", async () => {
+  test("a matter known to be archived starts no active-only query", async () => {
     const starts: string[] = [];
     const result = await loadWorkspaceRouteQueries({
-      loadWorkspace: async () => ({ status: "archived" as const }),
-      shouldStartPrefetches: ({ status }) =>
-        matterRouteView(status) === "active",
-      startPrefetches: [
-        () => {
-          starts.push("workflow");
-        },
-        () => {
-          starts.push("views");
-        },
-        () => {
-          starts.push("overview");
-        },
-        () => {
-          starts.push("properties");
-        },
-      ],
+      loadWorkspace: async () =>
+        await Promise.resolve<Matter>({ status: "archived" }),
+      isActive,
+      knownInactive: true,
+      startPrefetches: recordingPrefetches(starts),
     });
 
     expect(result).toEqual({ status: "archived" });
     expect(starts).toEqual([]);
+  });
+
+  test("a matter known to be archived that loads active again starts them after it loads", async () => {
+    const workspace = Promise.withResolvers<Matter>();
+    const starts: string[] = [];
+    const result = loadWorkspaceRouteQueries({
+      loadWorkspace: async () => await workspace.promise,
+      isActive,
+      knownInactive: true,
+      startPrefetches: recordingPrefetches(starts),
+    });
+
+    expect(starts).toEqual([]);
+    workspace.resolve({ status: "active" });
+    expect(await result).toEqual({ status: "active" });
+    expect(starts).toEqual(["workflow", "views", "overview", "properties"]);
   });
 });
 
@@ -73,7 +75,8 @@ test("renders the matter while metadata warmups are still pending", async () => 
   let warmed = false;
   const result = loadWorkspaceRouteQueries({
     loadWorkspace: async () => "Matter B",
-    shouldStartPrefetches: () => true,
+    isActive: () => true,
+    knownInactive: false,
     startPrefetches: [
       () => {
         void metadata.promise.then(() => {
