@@ -324,6 +324,17 @@ export const correspondenceSources = p.pgTable.withRLS(
         recordId: table.correspondenceId,
       }),
     }),
+    // The registration trigger inserts exactly the uploaded record's own
+    // source, scoped from the inserted record.
+    p.pgPolicy("correspondence_source_registration", {
+      for: "insert",
+      to: correspondenceSourceMaintenance,
+      withCheck: sql`${sourceMaintenanceScope({
+        organizationId: table.organizationId,
+        workspaceId: table.workspaceId,
+        recordId: table.correspondenceId,
+      })} AND ${table.entityId} = nullif(current_setting('app.correspondence_source_entity_id', true), '')::uuid`,
+    }),
     ...entityFeatureGateChecks(table),
     p.primaryKey({
       name: "correspondence_sources_pkey",

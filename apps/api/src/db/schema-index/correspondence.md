@@ -55,81 +55,81 @@ correspondence_sources.correspondence_id                safeUuid            fk,n
 correspondence_sources.entity_id                        safeUuid            fk,not null  correspondence.ts:305
 ```
 
-## correspondence_filers · `correspondenceFilers` · correspondence.ts:369 · rls
+## correspondence_filers · `correspondenceFilers` · correspondence.ts:380 · rls
 
 ```text
-correspondence_filers.{...entityFeatureGateColumns()}  spread                                correspondence.ts:372
-correspondence_filers.id                               pUuid               pk,not null       correspondence.ts:373
-correspondence_filers.organization_id                  safeOrganizationId  fk,not null       correspondence.ts:374
-correspondence_filers.workspace_id                     safeWorkspaceId     fk,not null       correspondence.ts:375
-correspondence_filers.correspondence_id                safeUuid            fk,not null       correspondence.ts:376
-correspondence_filers.filed_by_user_id                 text                fk,null           correspondence.ts:377
-correspondence_filers.filed_by_allowed_sender_id       safeUuid            fk,null           correspondence.ts:380
-correspondence_filers.filed_by_display                 jsonb               null              correspondence.ts:383
-correspondence_filers.filed_at                         timestamptz         default,not null  correspondence.ts:385
+correspondence_filers.{...entityFeatureGateColumns()}  spread                                correspondence.ts:383
+correspondence_filers.id                               pUuid               pk,not null       correspondence.ts:384
+correspondence_filers.organization_id                  safeOrganizationId  fk,not null       correspondence.ts:385
+correspondence_filers.workspace_id                     safeWorkspaceId     fk,not null       correspondence.ts:386
+correspondence_filers.correspondence_id                safeUuid            fk,not null       correspondence.ts:387
+correspondence_filers.filed_by_user_id                 text                fk,null           correspondence.ts:388
+correspondence_filers.filed_by_allowed_sender_id       safeUuid            fk,null           correspondence.ts:391
+correspondence_filers.filed_by_display                 jsonb               null              correspondence.ts:394
+correspondence_filers.filed_at                         timestamptz         default,not null  correspondence.ts:396
 ```
 
-## correspondence_attachments · `correspondenceAttachments` · correspondence.ts:464 · rls
+## correspondence_attachments · `correspondenceAttachments` · correspondence.ts:475 · rls
 
 ```text
-correspondence_attachments.{...entityFeatureGateColumns()}  spread                                correspondence.ts:467
-correspondence_attachments.id                               pUuid               pk,not null       correspondence.ts:468
-correspondence_attachments.organization_id                  safeOrganizationId  fk,not null       correspondence.ts:469
-correspondence_attachments.workspace_id                     safeWorkspaceId     fk,not null       correspondence.ts:470
-correspondence_attachments.correspondence_id                safeUuid            fk,not null       correspondence.ts:471
-correspondence_attachments.entity_id                        safeUuid            fk,not null       correspondence.ts:472
-correspondence_attachments.ordinal                          integer             not null          correspondence.ts:473
-correspondence_attachments.filename                         text                not null          correspondence.ts:474
-correspondence_attachments.media_type                       text                not null          correspondence.ts:475
-correspondence_attachments.byte_size                        integer             not null          correspondence.ts:476
-correspondence_attachments.scan_verdict                     text                not null          correspondence.ts:477
-correspondence_attachments.created_at                       timestamptz         default,not null  correspondence.ts:480
+correspondence_attachments.{...entityFeatureGateColumns()}  spread                                correspondence.ts:478
+correspondence_attachments.id                               pUuid               pk,not null       correspondence.ts:479
+correspondence_attachments.organization_id                  safeOrganizationId  fk,not null       correspondence.ts:480
+correspondence_attachments.workspace_id                     safeWorkspaceId     fk,not null       correspondence.ts:481
+correspondence_attachments.correspondence_id                safeUuid            fk,not null       correspondence.ts:482
+correspondence_attachments.entity_id                        safeUuid            fk,not null       correspondence.ts:483
+correspondence_attachments.ordinal                          integer             not null          correspondence.ts:484
+correspondence_attachments.filename                         text                not null          correspondence.ts:485
+correspondence_attachments.media_type                       text                not null          correspondence.ts:486
+correspondence_attachments.byte_size                        integer             not null          correspondence.ts:487
+correspondence_attachments.scan_verdict                     text                not null          correspondence.ts:488
+correspondence_attachments.created_at                       timestamptz         default,not null  correspondence.ts:491
 ```
 
-## matter_inbound_addresses · `matterInboundAddresses` · correspondence.ts:536 · rls
+## matter_inbound_addresses · `matterInboundAddresses` · correspondence.ts:547 · rls
 
 ```text
-matter_inbound_addresses.id               pUuid               pk,not null       correspondence.ts:539
-matter_inbound_addresses.organization_id  safeOrganizationId  fk,not null       correspondence.ts:540
-matter_inbound_addresses.workspace_id     safeWorkspaceId     fk,not null       correspondence.ts:541
-matter_inbound_addresses.token            varchar             not null          correspondence.ts:542
-matter_inbound_addresses.created_by       text                fk,null           correspondence.ts:543
-matter_inbound_addresses.created_at       timestamptz         default,not null  correspondence.ts:546
-matter_inbound_addresses.revoked_at       timestamptz         null              correspondence.ts:547
-matter_inbound_addresses.revoked_by       text                fk,null           correspondence.ts:548
+matter_inbound_addresses.id               pUuid               pk,not null       correspondence.ts:550
+matter_inbound_addresses.organization_id  safeOrganizationId  fk,not null       correspondence.ts:551
+matter_inbound_addresses.workspace_id     safeWorkspaceId     fk,not null       correspondence.ts:552
+matter_inbound_addresses.token            varchar             not null          correspondence.ts:553
+matter_inbound_addresses.created_by       text                fk,null           correspondence.ts:554
+matter_inbound_addresses.created_at       timestamptz         default,not null  correspondence.ts:557
+matter_inbound_addresses.revoked_at       timestamptz         null              correspondence.ts:558
+matter_inbound_addresses.revoked_by       text                fk,null           correspondence.ts:559
 ```
 
-## correspondence_allowed_senders · `correspondenceAllowedSenders` · correspondence.ts:577 · rls
+## correspondence_allowed_senders · `correspondenceAllowedSenders` · correspondence.ts:588 · rls
 
 ```text
-correspondence_allowed_senders.id                   pUuid               pk,not null       correspondence.ts:580
-correspondence_allowed_senders.organization_id      safeOrganizationId  fk,not null       correspondence.ts:581
-correspondence_allowed_senders.address              text                not null          correspondence.ts:582
-correspondence_allowed_senders.kind                 text                not null          correspondence.ts:583
-correspondence_allowed_senders.scope                text                not null          correspondence.ts:584
-correspondence_allowed_senders.owner_user_id        text                fk,null           correspondence.ts:585
-correspondence_allowed_senders.approved_by          text                fk,null           correspondence.ts:588
-correspondence_allowed_senders.approved_by_display  jsonb               null              correspondence.ts:591
-correspondence_allowed_senders.approved_at          timestamptz         default,not null  correspondence.ts:594
-correspondence_allowed_senders.revoked_at           timestamptz         null              correspondence.ts:595
+correspondence_allowed_senders.id                   pUuid               pk,not null       correspondence.ts:591
+correspondence_allowed_senders.organization_id      safeOrganizationId  fk,not null       correspondence.ts:592
+correspondence_allowed_senders.address              text                not null          correspondence.ts:593
+correspondence_allowed_senders.kind                 text                not null          correspondence.ts:594
+correspondence_allowed_senders.scope                text                not null          correspondence.ts:595
+correspondence_allowed_senders.owner_user_id        text                fk,null           correspondence.ts:596
+correspondence_allowed_senders.approved_by          text                fk,null           correspondence.ts:599
+correspondence_allowed_senders.approved_by_display  jsonb               null              correspondence.ts:602
+correspondence_allowed_senders.approved_at          timestamptz         default,not null  correspondence.ts:605
+correspondence_allowed_senders.revoked_at           timestamptz         null              correspondence.ts:606
 ```
 
-## correspondence_allowed_sender_matters · `correspondenceAllowedSenderMatters` · correspondence.ts:665 · rls
+## correspondence_allowed_sender_matters · `correspondenceAllowedSenderMatters` · correspondence.ts:676 · rls
 
 ```text
-correspondence_allowed_sender_matters.id                 pUuid               pk,not null  correspondence.ts:668
-correspondence_allowed_sender_matters.organization_id    safeOrganizationId  fk,not null  correspondence.ts:669
-correspondence_allowed_sender_matters.workspace_id       safeWorkspaceId     fk,not null  correspondence.ts:670
-correspondence_allowed_sender_matters.allowed_sender_id  safeUuid            fk,not null  correspondence.ts:671
+correspondence_allowed_sender_matters.id                 pUuid               pk,not null  correspondence.ts:679
+correspondence_allowed_sender_matters.organization_id    safeOrganizationId  fk,not null  correspondence.ts:680
+correspondence_allowed_sender_matters.workspace_id       safeWorkspaceId     fk,not null  correspondence.ts:681
+correspondence_allowed_sender_matters.allowed_sender_id  safeUuid            fk,not null  correspondence.ts:682
 ```
 
-## correspondence_drop_logs · `correspondenceDropLogs` · correspondence.ts:705 · rls
+## correspondence_drop_logs · `correspondenceDropLogs` · correspondence.ts:716 · rls
 
 ```text
-correspondence_drop_logs.id               pUuid               pk,not null  correspondence.ts:708
-correspondence_drop_logs.organization_id  safeOrganizationId  fk,not null  correspondence.ts:709
-correspondence_drop_logs.workspace_id     safeWorkspaceId     fk,not null  correspondence.ts:710
-correspondence_drop_logs.sender_address   text                not null     correspondence.ts:711
-correspondence_drop_logs.reason           text                not null     correspondence.ts:712
-correspondence_drop_logs.received_at      timestamptz         not null     correspondence.ts:713
+correspondence_drop_logs.id               pUuid               pk,not null  correspondence.ts:719
+correspondence_drop_logs.organization_id  safeOrganizationId  fk,not null  correspondence.ts:720
+correspondence_drop_logs.workspace_id     safeWorkspaceId     fk,not null  correspondence.ts:721
+correspondence_drop_logs.sender_address   text                not null     correspondence.ts:722
+correspondence_drop_logs.reason           text                not null     correspondence.ts:723
+correspondence_drop_logs.received_at      timestamptz         not null     correspondence.ts:724
 ```
