@@ -168,6 +168,10 @@ const AUDIT_RESOURCE_RESOLVERS = {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },
+  [AUDIT_RESOURCE_TYPE.OUTBOUND_ACTION]: {
+    type: "unresolvable",
+    reason: "No canonical user-facing name source",
+  },
   [AUDIT_RESOURCE_TYPE.ANNOUNCEMENT]: {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
