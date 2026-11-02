@@ -1,7 +1,7 @@
 import { EventType } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result } from "better-result";
-import { afterAll, describe, expect, spyOn, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -27,6 +27,7 @@ import {
 } from "@/api/tests/helpers/provider-wire-contract";
 import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { installTestFetch } from "@/api/tests/helpers/test-fetch";
 
 // Model requests are retried by the generation layer alone
 // (`provider-retry-policy.ts`): every check it makes before a dispatch then
@@ -167,7 +168,7 @@ describe("the generation layer retries what the clients no longer do", () => {
 const failFirstRequests = (failures: number, error: () => Error) => {
   const answer = globalThis.fetch;
   let sent = 0;
-  const spy = spyOn(globalThis, "fetch").mockImplementation(
+  const replacement = installTestFetch(
     Object.assign(
       async (
         input: Parameters<typeof globalThis.fetch>[0],
@@ -182,7 +183,7 @@ const failFirstRequests = (failures: number, error: () => Error) => {
       { preconnect: answer.preconnect },
     ),
   );
-  return { restore: () => spy.mockRestore(), sent: () => sent };
+  return { restore: () => replacement.restore(), sent: () => sent };
 };
 
 const connectionReset = () =>

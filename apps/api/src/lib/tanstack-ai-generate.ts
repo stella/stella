@@ -532,7 +532,7 @@ export const withProviderRetryWait = async <T>(
   }
 };
 
-export type ProviderStreamRetryOptions<T> = ProviderRetryOptions & {
+type ProviderStreamRetryOptions<T> = ProviderRetryOptions & {
   abortSignal: AbortSignal | undefined;
   /** Opens the stream; called once per attempt. */
   open: () => AsyncIterable<T>;
