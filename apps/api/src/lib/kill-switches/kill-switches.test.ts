@@ -10,6 +10,7 @@ import {
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
 import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
@@ -43,7 +44,6 @@ import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admissio
 import { admitModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { testOrganizationStateDb } from "@/api/tests/helpers/model-dispatch-admission";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const testState = createTestState({ file: import.meta.path, config: env });

@@ -4,9 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
-import { createTestState } from "../apps/api/src/tests/helpers/test-state";
 import {
+  addQuarantineExclusion,
   type Advisory,
   AuditCommandError,
   type Baseline,
@@ -15,7 +16,9 @@ import {
   checkRelease,
   collectGatedAdvisories,
   pruneBaseline,
+  quarantinedRemediationBody,
   readBaseline,
+  remediationOutputs,
   runDependencyAuditCli,
   runReleaseCheck as executeReleaseAudit,
   writeBaseline,
@@ -25,6 +28,15 @@ import {
   lapsedAcceptances,
   patchedAcceptanceWindows,
 } from "./dependency-audit-acceptance";
+import {
+  type AdvisoryAssessment,
+  assessAdvisories,
+} from "./dependency-audit-assessment";
+import {
+  planDependencyAuditRemediation,
+  updatedResolutionEntries,
+  verifyDependencyAuditRemediation,
+} from "./dependency-audit-remediation";
 
 const testState = createTestState({ file: import.meta.path, config: {} });
 const advisory = { id: "GHSA-aaaa-bbbb-cccc", vulnerableVersions: "<=1.4.0" };
@@ -38,6 +50,730 @@ const currentAdvisory: Advisory = {
   package: "pkg",
   title: "test advisory",
 };
+
+test("remediation plans pins, quarantine exclusions, and dated blocker acceptances", () => {
+  const assessment = (
+    packageName: string,
+    disposition: AdvisoryAssessment["disposition"],
+  ): AdvisoryAssessment => ({
+    advisory: { ...currentAdvisory, package: packageName },
+    disposition,
+    acceptance: undefined,
+    affectedPaths: [packageName],
+    copies: [{ path: packageName, version: "1.4.0" }],
+    resolutionPaths: [],
+    action: "test action",
+  });
+  const plan = planDependencyAuditRemediation({
+    now: new Date("2026-10-31T12:00:00.000Z"),
+    assessments: [
+      assessment("available", {
+        status: "fix_available",
+        installableVersions: ["1.4.1"],
+        quarantinedVersions: [],
+      }),
+      assessment("quarantined", {
+        status: "fix_in_quarantine",
+        package: "quarantined",
+        installableVersions: [],
+        quarantinedVersions: [
+          {
+            version: "1.4.1",
+            installableSince: "2026-11-01T04:44:07.718Z",
+          },
+        ],
+      }),
+      assessment("blocked", {
+        status: "upstream_blocked",
+        blockers: ["no forward patched release"],
+        patchedVersions: [],
+      }),
+    ],
+  });
+  expect([...plan.pins]).toEqual([
+    ["available", "1.4.1"],
+    ["quarantined", "1.4.1"],
+  ]);
+  expect(plan.quarantineExclusions).toEqual([
+    {
+      package: "quarantined",
+      version: "1.4.1",
+      quarantineExpires: "2026-11-01T04:44:07.718Z",
+    },
+  ]);
+  expect(plan.acceptanceDrafts).toEqual([
+    expect.objectContaining({
+      package: "blocked",
+      owner: "supply-chain",
+      expiresOn: "2026-11-14",
+      affectedPaths: ["blocked"],
+    }),
+  ]);
+});
+
+test("quarantined remediation reports publisher provenance and maintainer continuity", async () => {
+  const plan = {
+    pins: new Map([["pkg", "2.0.0"]]),
+    quarantineExclusions: [
+      {
+        package: "pkg",
+        version: "2.0.0",
+        quarantineExpires: "2026-11-03T00:00:00.000Z",
+      },
+    ],
+    acceptanceDrafts: [],
+  };
+  // The shape `bun info <name>@<version> --json` returns: one version's
+  // manifest with the package-wide time map.
+  const time = {
+    created: "2026-08-01T00:00:00.000Z",
+    modified: "2026-10-30T00:00:00.000Z",
+    "1.0.0": "2026-09-01T00:00:00.000Z",
+    "2.0.0": "2026-10-30T00:00:00.000Z",
+  };
+  const manifests: Record<string, unknown> = {
+    "pkg@1.0.0": { version: "1.0.0", maintainers: [{ name: "alice" }], time },
+    "pkg@2.0.0": {
+      version: "2.0.0",
+      _npmUser: { name: "alice" },
+      versions: ["1.0.0", "2.0.0"],
+      time,
+    },
+  };
+  const readDocument = async (spec: string) => manifests[spec];
+  const body = await quarantinedRemediationBody(plan, readDocument);
+  expect(await remediationOutputs(plan, readDocument)).toEqual({
+    quarantined: "true",
+    prBody: body,
+  });
+  expect(body).toContain("| Package | Pinned version | npm publish time |");
+  expect(body).toContain(
+    "| pkg | 2.0.0 | 2026-10-30T00:00:00.000Z | alice | yes |",
+  );
+});
+
+test("non-quarantined remediation keeps the summary without registry reads", async () => {
+  let reads = 0;
+  const body = await quarantinedRemediationBody(
+    { pins: new Map(), quarantineExclusions: [], acceptanceDrafts: [] },
+    async () => {
+      reads += 1;
+      return {};
+    },
+  );
+  expect(reads).toBe(0);
+  expect(body).not.toContain("| Package |");
+  expect(
+    await remediationOutputs({
+      pins: new Map(),
+      quarantineExclusions: [],
+      acceptanceDrafts: [],
+    }),
+  ).toEqual({ quarantined: "false" });
+});
+
+describe("remediation selects one complete package fix", () => {
+  const assessment = ({
+    id,
+    vulnerableVersions,
+    disposition,
+  }: {
+    id: string;
+    vulnerableVersions: string;
+    disposition: AdvisoryAssessment["disposition"];
+  }): AdvisoryAssessment => ({
+    advisory: { ...currentAdvisory, id, vulnerableVersions },
+    disposition,
+    acceptance: undefined,
+    affectedPaths: ["pkg"],
+    copies: [{ path: "pkg", version: "1.4.0" }],
+    resolutionPaths: [],
+    action: "test action",
+  });
+  const available = (
+    id: string,
+    vulnerableVersions: string,
+    installableVersions: string[],
+    quarantinedVersions: {
+      version: string;
+      installableSince: string;
+    }[] = [],
+  ) =>
+    assessment({
+      id,
+      vulnerableVersions,
+      disposition: {
+        status: "fix_available",
+        installableVersions,
+        quarantinedVersions,
+      },
+    });
+  const accepted = (
+    id: string,
+    vulnerableVersions: string,
+  ): AdvisoryAssessment => {
+    const acceptance = {
+      id,
+      severity: currentAdvisory.severity,
+      package: currentAdvisory.package,
+      title: currentAdvisory.title,
+      owner: "supply-chain",
+      reason: "test acceptance",
+      expiresOn: "2026-11-14",
+      affectedPaths: ["pkg"],
+    };
+    return {
+      ...assessment({
+        id,
+        vulnerableVersions,
+        disposition: { status: "accepted", acceptance },
+      }),
+      acceptance,
+    };
+  };
+  const now = new Date("2026-10-31T12:00:00.000Z");
+
+  test("an accepted advisory does not block a release that fixes it and a new advisory", () => {
+    const plan = planDependencyAuditRemediation({
+      now,
+      assessments: [
+        accepted("GHSA-1111-1111-1111", "<1.5.1"),
+        available("GHSA-2222-2222-2222", "<1.5.0", ["1.5.0", "1.5.1"]),
+      ],
+    });
+
+    expect([...plan.pins]).toEqual([["pkg", "1.5.1"]]);
+    expect(plan.acceptanceDrafts).toEqual([]);
+  });
+
+  test("an accepted advisory may remain when the selected release fixes only the new advisory", () => {
+    const plan = planDependencyAuditRemediation({
+      now,
+      assessments: [
+        accepted("GHSA-1111-1111-1111", ">=1.5.0"),
+        available("GHSA-2222-2222-2222", "<1.5.0", ["1.5.0"]),
+      ],
+    });
+
+    expect([...plan.pins]).toEqual([["pkg", "1.5.0"]]);
+    expect(plan.acceptanceDrafts).toEqual([]);
+  });
+
+  test("two advisories select the lowest common fix in either input order", () => {
+    const assessments = [
+      available("GHSA-1111-1111-1111", "<1.5.1", ["1.5.1"]),
+      available("GHSA-2222-2222-2222", "<=1.4.0", ["1.4.1", "1.5.1"]),
+    ];
+    for (const input of [assessments, assessments.toReversed()]) {
+      const plan = planDependencyAuditRemediation({ assessments: input, now });
+      expect([...plan.pins]).toEqual([["pkg", "1.5.1"]]);
+      expect(plan.quarantineExclusions).toEqual([]);
+    }
+  });
+
+  test("an installable common fix wins over an earlier quarantined fix", () => {
+    const plan = planDependencyAuditRemediation({
+      now,
+      assessments: [
+        available(
+          "GHSA-1111-1111-1111",
+          "<=1.4.0",
+          ["1.4.2"],
+          [
+            {
+              version: "1.4.1",
+              installableSince: "2026-11-01T04:44:07.718Z",
+            },
+          ],
+        ),
+      ],
+    });
+    expect([...plan.pins]).toEqual([["pkg", "1.4.2"]]);
+    expect(plan.quarantineExclusions).toEqual([]);
+  });
+
+  test("a quarantined fix is pinned with its temporary exclusion", () => {
+    const plan = planDependencyAuditRemediation({
+      now,
+      assessments: [
+        assessment({
+          id: "GHSA-1111-1111-1111",
+          vulnerableVersions: "<=1.4.0",
+          disposition: {
+            status: "fix_in_quarantine",
+            package: "pkg",
+            installableVersions: [],
+            quarantinedVersions: [
+              {
+                version: "1.4.1",
+                installableSince: "2026-11-01T04:44:07.718Z",
+              },
+            ],
+          },
+        }),
+      ],
+    });
+    expect([...plan.pins]).toEqual([["pkg", "1.4.1"]]);
+    expect(plan.quarantineExclusions).toEqual([
+      {
+        package: "pkg",
+        version: "1.4.1",
+        quarantineExpires: "2026-11-01T04:44:07.718Z",
+      },
+    ]);
+  });
+
+  test("no common fix drafts every remaining advisory without a partial pin", () => {
+    const plan = planDependencyAuditRemediation({
+      now,
+      assessments: [
+        available("GHSA-1111-1111-1111", ">=1.5.0", ["1.4.1"]),
+        available("GHSA-2222-2222-2222", "<2.0.0", ["2.0.0"]),
+      ],
+    });
+    expect([...plan.pins]).toEqual([]);
+    expect(plan.quarantineExclusions).toEqual([]);
+    expect(plan.acceptanceDrafts.map(({ id }) => id)).toEqual([
+      "GHSA-1111-1111-1111",
+      "GHSA-2222-2222-2222",
+    ]);
+  });
+});
+
+describe("remediation verifies the resolver result", () => {
+  const now = new Date("2026-10-31T12:00:00.000Z");
+  const assessment: AdvisoryAssessment = {
+    advisory: currentAdvisory,
+    disposition: {
+      status: "fix_available",
+      installableVersions: ["1.4.1"],
+      quarantinedVersions: [],
+    },
+    acceptance: undefined,
+    affectedPaths: ["parent/example"],
+    copies: [
+      { path: "parent/example", version: "1.4.0" },
+      { path: "parent@2/example", version: "2.0.0" },
+    ],
+    resolutionPaths: [
+      {
+        copyPath: "parent/example",
+        resolution: "parent/example",
+        requirement: "^1.0.0",
+      },
+      {
+        copyPath: "parent@2/example",
+        resolution: "parent/example",
+        requirement: "^2.0.0",
+      },
+    ],
+    action: "test action",
+  };
+
+  test("a quarantined mailauth/joi resolution survives end-to-end verification", async () => {
+    const beforeLockfile = JSON.stringify({
+      packages: {
+        mailauth: ["mailauth@7.1.1", "", { dependencies: { joi: "18.2.9" } }],
+        "mailauth/joi": ["joi@18.2.9", "", {}],
+      },
+    });
+    const assessments = assessAdvisories({
+      advisories: [
+        {
+          id: "GHSA-4528-x5fx-h6hg",
+          severity: "high",
+          package: "joi",
+          title: "test advisory",
+          vulnerableVersions: "<18.3.1",
+        },
+      ],
+      accepted: [],
+      lockfile: beforeLockfile,
+      manifest: { resolutions: { "mailauth/joi": "18.2.9" } },
+      versions: new Map([["joi", ["18.2.9"]]]),
+      quarantinedReleases: new Map([
+        [
+          "joi",
+          [
+            {
+              version: "18.3.1",
+              installableSince: "2026-11-01T04:44:07.718Z",
+            },
+          ],
+        ],
+      ]),
+    });
+    let reverted = false;
+
+    const plan = await verifyDependencyAuditRemediation({
+      assessments,
+      now,
+      resolve: async () => ({
+        assessments: [],
+        beforeLockfile,
+        afterLockfile: beforeLockfile.replace("joi@18.2.9", "joi@18.3.1"),
+        revert: async () => {
+          reverted = true;
+        },
+      }),
+    });
+
+    expect(reverted).toBe(false);
+    expect([...plan.pins]).toEqual([["mailauth/joi", "18.3.1"]]);
+    expect(plan.quarantineExclusions).toEqual([
+      {
+        package: "joi",
+        version: "18.3.1",
+        quarantineExpires: "2026-11-01T04:44:07.718Z",
+      },
+    ]);
+    expect(plan.acceptanceDrafts).toEqual([]);
+  });
+
+  test("a copy without a repository resolution cannot leave its parent range", async () => {
+    const exactParentAssessment = {
+      ...assessment,
+      resolutionPaths: [
+        {
+          copyPath: "parent/example",
+          resolution: "parent/example",
+          requirement: "*",
+        },
+      ],
+    } satisfies AdvisoryAssessment;
+    const beforeLockfile = JSON.stringify({
+      packages: {
+        parent: ["parent@1.0.0", "", { dependencies: { example: "1.4.0" } }],
+        "parent/example": ["example@1.4.0", "", {}],
+      },
+    });
+    let reverted = false;
+
+    const plan = await verifyDependencyAuditRemediation({
+      assessments: [exactParentAssessment],
+      now,
+      resolve: async () => ({
+        assessments: [],
+        beforeLockfile,
+        afterLockfile: beforeLockfile.replace("example@1.4.0", "example@1.4.1"),
+        revert: async () => {
+          reverted = true;
+        },
+      }),
+    });
+
+    expect(reverted).toBe(true);
+    expect([...plan.pins]).toEqual([]);
+    expect(plan.acceptanceDrafts).toHaveLength(1);
+  });
+
+  test("two parent versions fall back to a draft when Bun keeps the vulnerable copy", async () => {
+    let reverted = false;
+    const plan = await verifyDependencyAuditRemediation({
+      assessments: [assessment],
+      now,
+      resolve: async () => ({
+        assessments: [assessment],
+        beforeLockfile: JSON.stringify({ packages: {} }),
+        afterLockfile: JSON.stringify({ packages: {} }),
+        revert: async () => {
+          reverted = true;
+        },
+      }),
+    });
+
+    expect(reverted).toBe(true);
+    expect([...plan.pins]).toEqual([]);
+    expect(plan.acceptanceDrafts.map(({ id }) => id)).toEqual([
+      currentAdvisory.id,
+    ]);
+  });
+
+  test("rejects a shared resolution key that also changes a safe copy", async () => {
+    let reverted = false;
+    const beforeLockfile = JSON.stringify({
+      packages: {
+        parent: ["parent@1.0.0", "", { dependencies: { example: "^1.0.0" } }],
+        "parent/example": ["example@1.4.0", "", {}],
+        "parent@2": [
+          "parent@2.0.0",
+          "",
+          { dependencies: { example: "^2.0.0" } },
+        ],
+        "parent@2/example": ["example@2.0.0", "", {}],
+      },
+    });
+    const afterLockfile = beforeLockfile
+      .replace("example@1.4.0", "example@1.4.1")
+      .replace("example@2.0.0", "example@1.4.1");
+    const plan = await verifyDependencyAuditRemediation({
+      assessments: [assessment],
+      now,
+      resolve: async () => ({
+        assessments: [],
+        beforeLockfile,
+        afterLockfile,
+        revert: async () => {
+          reverted = true;
+        },
+      }),
+    });
+
+    expect(reverted).toBe(true);
+    expect([...plan.pins]).toEqual([]);
+    expect(plan.acceptanceDrafts).toHaveLength(1);
+  });
+
+  test("rejects a changed safe copy even when it remains in its declared range", async () => {
+    let reverted = false;
+    const beforeLockfile = JSON.stringify({
+      packages: {
+        "parent/example": ["example@1.4.0", "", {}],
+        "parent@2/example": ["example@2.0.0", "", {}],
+      },
+    });
+    const plan = await verifyDependencyAuditRemediation({
+      assessments: [assessment],
+      now,
+      resolve: async () => ({
+        assessments: [],
+        beforeLockfile,
+        afterLockfile: beforeLockfile
+          .replace("example@1.4.0", "example@1.4.1")
+          .replace("example@2.0.0", "example@2.0.1"),
+        revert: async () => {
+          reverted = true;
+        },
+      }),
+    });
+
+    expect(reverted).toBe(true);
+    expect([...plan.pins]).toEqual([]);
+  });
+
+  test("a verified package-wide fix replaces a vulnerable scoped pin", async () => {
+    let resolutions: Record<string, unknown> = {
+      "parent/pkg": "1.4.0",
+      unrelated: "3.0.0",
+    };
+    const packageAssessment = {
+      ...assessment,
+      advisory: { ...currentAdvisory, package: "pkg" },
+      affectedPaths: ["pkg"],
+      copies: [{ path: "pkg", version: "1.4.0" }],
+      resolutionPaths: [],
+    } satisfies AdvisoryAssessment;
+    const plan = await verifyDependencyAuditRemediation({
+      assessments: [packageAssessment],
+      now,
+      resolve: async (proposal) => {
+        resolutions = updatedResolutionEntries(resolutions, proposal.pins);
+        const patchedVersionSelected =
+          resolutions["pkg"] === "1.4.1" &&
+          resolutions["parent/pkg"] === undefined;
+        return {
+          assessments: patchedVersionSelected ? [] : [packageAssessment],
+          beforeLockfile: JSON.stringify({
+            packages: { pkg: ["pkg@1.4.0", "", {}] },
+          }),
+          afterLockfile: JSON.stringify({
+            packages: { pkg: ["pkg@1.4.1", "", {}] },
+          }),
+          revert: async () => {},
+        };
+      },
+    });
+
+    expect([...plan.pins]).toEqual([["pkg", "1.4.1"]]);
+    expect(resolutions).toEqual({ pkg: "1.4.1", unrelated: "3.0.0" });
+  });
+
+  test("a resolver error is propagated instead of becoming a draft", async () => {
+    expect(
+      await rejectionOf(
+        verifyDependencyAuditRemediation({
+          assessments: [assessment],
+          now,
+          resolve: async () => {
+            throw new TypeError("registry unavailable");
+          },
+        }),
+      ),
+    ).toMatchObject({ message: "registry unavailable" });
+  });
+
+  test("a later resolver error reverts every previously applied package", async () => {
+    const first = {
+      ...assessment,
+      affectedPaths: ["pkg"],
+      copies: [{ path: "pkg", version: "1.4.0" }],
+      resolutionPaths: [],
+    } satisfies AdvisoryAssessment;
+    const second = {
+      ...first,
+      advisory: { ...first.advisory, package: "second" },
+      affectedPaths: ["second"],
+      copies: [{ path: "second", version: "1.4.0" }],
+      resolutionPaths: [],
+    } satisfies AdvisoryAssessment;
+    let firstReverted = false;
+    let calls = 0;
+
+    expect(
+      await rejectionOf(
+        verifyDependencyAuditRemediation({
+          assessments: [first, second],
+          now,
+          resolve: async () => {
+            calls += 1;
+            if (calls === 2) {
+              throw new TypeError("second resolver failed");
+            }
+            return {
+              assessments: [],
+              beforeLockfile: JSON.stringify({ packages: {} }),
+              afterLockfile: JSON.stringify({ packages: {} }),
+              revert: async () => {
+                firstReverted = true;
+              },
+            };
+          },
+        }),
+      ),
+    ).toMatchObject({ message: "second resolver failed" });
+    expect(firstReverted).toBe(true);
+  });
+
+  test("reverts run one at a time, newest first", async () => {
+    const packageAssessment = (name: string) =>
+      ({
+        ...assessment,
+        advisory: { ...assessment.advisory, package: name },
+        affectedPaths: [name],
+        copies: [{ path: name, version: "1.4.0" }],
+        resolutionPaths: [],
+      }) satisfies AdvisoryAssessment;
+    const events: string[] = [];
+    let calls = 0;
+
+    await rejectionOf(
+      verifyDependencyAuditRemediation({
+        assessments: ["first", "second", "third"].map(packageAssessment),
+        now,
+        resolve: async () => {
+          calls += 1;
+          if (calls === 3) {
+            throw new TypeError("third resolver failed");
+          }
+          const applied = calls;
+          return {
+            assessments: [],
+            beforeLockfile: JSON.stringify({ packages: {} }),
+            afterLockfile: JSON.stringify({ packages: {} }),
+            // Each revert restores a cumulative snapshot; overlapping reverts
+            // would interleave their start and end events.
+            revert: async () => {
+              events.push(`start ${String(applied)}`);
+              await Promise.resolve();
+              await Promise.resolve();
+              events.push(`end ${String(applied)}`);
+            },
+          };
+        },
+      }),
+    );
+    expect(events).toEqual(["start 2", "end 2", "start 1", "end 1"]);
+  });
+});
+
+test("a shared copy retains every parent-qualified resolution", () => {
+  const shared = {
+    advisory: currentAdvisory,
+    disposition: {
+      status: "fix_available",
+      installableVersions: ["1.4.1"],
+      quarantinedVersions: [],
+    },
+    acceptance: undefined,
+    affectedPaths: ["example"],
+    copies: [{ path: "example", version: "1.4.0" }],
+    resolutionPaths: [
+      {
+        copyPath: "example",
+        resolution: "one/example",
+        requirement: "^1.4.0",
+        repositoryResolution: true,
+      },
+      {
+        copyPath: "example",
+        resolution: "two/example",
+        requirement: "^1.4.0",
+        repositoryResolution: true,
+      },
+    ],
+    action: "test action",
+  } satisfies AdvisoryAssessment;
+
+  const plan = planDependencyAuditRemediation({
+    assessments: [shared],
+    now: new Date(),
+  });
+  expect([...plan.pins]).toEqual([
+    ["one/example", "1.4.1"],
+    ["two/example", "1.4.1"],
+  ]);
+});
+
+test("adding the first quarantine exclusion keeps the array end outside its comment", () => {
+  expect(
+    addQuarantineExclusion(
+      "minimumReleaseAgeExcludes = [] # temporary exceptions\n",
+      '  "example", # quarantine-expires: 2026-11-01T00:00:00.000Z',
+    ),
+  ).toBe(`minimumReleaseAgeExcludes = [
+  "example", # quarantine-expires: 2026-11-01T00:00:00.000Z
+] # temporary exceptions
+`);
+});
+
+test("a quarantine exclusion goes onto its own line of a multi-line array", () => {
+  expect(
+    addQuarantineExclusion(
+      'minimumReleaseAgeExcludes = [\n  "existing",\n]\n',
+      '  "example", # quarantine-expires: 2026-11-01T00:00:00.000Z',
+    ),
+  ).toBe(`minimumReleaseAgeExcludes = [
+  "example", # quarantine-expires: 2026-11-01T00:00:00.000Z
+  "existing",
+]
+`);
+});
+
+test("a non-empty inline exclusion array is refused instead of rewritten", () => {
+  expect(() =>
+    addQuarantineExclusion(
+      'minimumReleaseAgeExcludes = ["existing"]\n',
+      '  "example", # quarantine-expires: 2026-11-01T00:00:00.000Z',
+    ),
+  ).toThrow("must be an empty or multi-line array");
+});
+
+test("package-wide pins preserve differently named scoped packages", () => {
+  expect(
+    updatedResolutionEntries(
+      {
+        "@vendor/example": "2.0.0",
+        "parent/@vendor/example": "2.0.0",
+        "parent/example": "1.0.0",
+      },
+      new Map([["example", "1.4.1"]]),
+    ),
+  ).toEqual({
+    "@vendor/example": "2.0.0",
+    "parent/@vendor/example": "2.0.0",
+    example: "1.4.1",
+  });
+});
 
 test("newer patched releases preserve the first installable patch deadline", () => {
   const patchReleases = [

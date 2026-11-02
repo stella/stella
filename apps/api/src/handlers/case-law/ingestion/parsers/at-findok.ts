@@ -1,16 +1,24 @@
-// parser-output-unchanged: retention is checked by the pipeline against the stored raw; the parser no longer validates itself, and its blocks are unchanged.
 /** Parse Findok's decision XML envelope and embedded publisher XHTML. */
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
 // parser-output-unchanged: imports the document AST from its package owner
-import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 
-// parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
+// parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
+import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
-import { visibleHtmlText } from "./shared-inlines";
+import { type AtPrintedLine, readAtDecisionRoles } from "./at-decision-regions";
+import { compareTextFidelity, normalizeInlineLayout } from "./at-ris-markup";
+import {
+  inlinesToPlainText,
+  isExcludedHtmlTag,
+  visibleHtmlText,
+  walkInlines,
+} from "./shared-inlines";
 
 export type ParseFindokDecisionInput = {
   caseNumber: string;
@@ -33,6 +41,8 @@ export type ParseFindokDecisionOutput = {
   envelope: FindokEnvelopeFields;
   statutes: string[];
   subjectCodes: string[];
+  /** Set when the text read differs from what the publisher printed. */
+  textFidelity: DecisionTextFidelity | undefined;
 };
 
 /**
@@ -185,8 +195,18 @@ export const parseFindokDecisionXml = (
 
   const blocks: Block[] = [];
   let blockIndex = 0;
-  const appendParagraph = (text: string): void => {
-    if (text === "") {
+  let printed = "";
+  const inlinesOf = (document: cheerio.CheerioAPI, node: AnyNode): Inline[] => {
+    const inlines = normalizeInlineLayout(
+      walkInlines(document, document(node), {
+        sanitizeHref: sanitizeUrl,
+        superscripts: true,
+      }),
+    );
+    return inlines;
+  };
+  const appendParagraph = (inlines: Inline[]): void => {
+    if (inlines.length === 0) {
       return;
     }
     blockIndex += 1;
@@ -194,23 +214,29 @@ export const parseFindokDecisionXml = (
       id: `b${blockIndex}`,
       anchorId: `p-${blockIndex}`,
       type: "paragraph",
-      inlines: [{ type: "text", text }],
-      plainText: text,
+      inlines,
+      plainText: inlinesToPlainText(inlines),
     });
   };
 
   const appendNode = (node: AnyNode, document: cheerio.CheerioAPI): void => {
     if (!isTag(node)) {
       if (isText(node)) {
-        appendParagraph(normalizedText(node.data));
+        appendParagraph(
+          normalizeInlineLayout([{ type: "text", text: node.data }]),
+        );
       }
       return;
     }
-    const text = normalizedText(visibleHtmlText(document(node)));
-    if (text === "") {
+    // A script or style prints nothing; the inline walk only skips nested ones.
+    if (isExcludedHtmlTag(node.tagName.toLowerCase())) {
       return;
     }
     if (/^h[1-6]$/u.test(node.tagName)) {
+      const inlines = inlinesOf(document, node);
+      if (inlines.length === 0) {
+        return;
+      }
       blockIndex += 1;
       blocks.push({
         id: `b${blockIndex}`,
@@ -218,17 +244,17 @@ export const parseFindokDecisionXml = (
         type: "heading",
         level: headingLevel(node),
         role: blockIndex === 1 ? "decision-title" : "section-heading",
-        inlines: [{ type: "text", text }],
-        plainText: text,
+        inlines,
+        plainText: inlinesToPlainText(inlines),
       });
       return;
     }
-    if (node.tagName === "p" || node.tagName === "li") {
-      appendParagraph(text);
-      return;
-    }
-    if (document(node).find("h1, h2, h3, h4, h5, h6, p, li").length === 0) {
-      appendParagraph(text);
+    if (
+      node.tagName === "p" ||
+      node.tagName === "li" ||
+      document(node).find("h1, h2, h3, h4, h5, h6, p, li").length === 0
+    ) {
+      appendParagraph(inlinesOf(document, node));
       return;
     }
     document(node)
@@ -250,6 +276,7 @@ export const parseFindokDecisionXml = (
       );
     }
 
+    printed += visibleHtmlText(body);
     body.contents().each((_, node) => {
       appendNode(node, document);
     });
@@ -264,6 +291,41 @@ export const parseFindokDecisionXml = (
     );
   }
 
+  // Findok labels no part of the decision: its roles are what the court
+  // printed, read over the whole decision.
+  const roles = readAtDecisionRoles(
+    blocks.map((block): AtPrintedLine => {
+      switch (block.type) {
+        case "heading": {
+          return { type: "heading", text: block.plainText };
+        }
+        case "paragraph": {
+          return { type: "paragraph", text: block.plainText, section: "text" };
+        }
+        case "table":
+        case "image": {
+          // Findok's reader emits neither; a block with no text is no line.
+          return { type: "field" };
+        }
+        default: {
+          block satisfies never;
+          return panic("Unhandled Findok block type");
+        }
+      }
+    }),
+    [input.caseNumber],
+  );
+  for (const [index, block] of blocks.entries()) {
+    const role = roles[index];
+    if (block.type === "paragraph" && role !== undefined) {
+      blocks[index] = { ...block, role };
+    }
+  }
+
+  const textFidelity = compareTextFidelity(
+    printed,
+    blocks.map((block) => block.plainText).join(""),
+  );
   const ecli = optionalText(envelope, "Grundk > ecli");
   const keywords = distinctTexts(envelope, "Grundk matbez_erf");
   const statutes = distinctTexts(envelope, "Grundk ngesamt_erf");
@@ -296,5 +358,6 @@ export const parseFindokDecisionXml = (
     fulltext: blocks.map((block) => block.plainText).join("\n\n"),
     keywords,
     statutes,
+    textFidelity,
   });
 };

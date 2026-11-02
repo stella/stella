@@ -9,11 +9,19 @@ import {
   planModelCompaction,
 } from "@/api/handlers/chat/compaction";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import { admitDraftingWithGateReader } from "@/api/handlers/desktop-time-entries/drafting-model";
+import {
+  capNarrative,
+  generateDesktopTimeEntryNarrative,
+  NARRATIVE_FAILURE_MESSAGE,
+  NARRATIVE_FINISH_POLICY,
+} from "@/api/handlers/desktop-time-entries/narrative-model";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { toSafeId } from "@/api/lib/branded-types";
 import { compactionGenerationRequest } from "@/api/lib/chat/compaction-tokens";
 import { HISTORY_TRIMMED_NOTICE } from "@/api/lib/chat/context-notice";
 import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import type { TanStackTextFinishPolicy } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -333,6 +341,97 @@ const modelCompactionDriver = textCallSiteDriver({
     ),
 });
 
+// --- Desktop time-entry narrative -------------------------------------------
+
+/** What the desktop receives: a narrative, or the failure it answers by
+ *  keeping its template. */
+type NarrativeAnswer =
+  | { type: "narrative"; text?: string }
+  | { type: "keep-template"; status: number; message: string; cause: unknown };
+
+const KEEP_TEMPLATE = {
+  type: "keep-template",
+  status: 502,
+  message: NARRATIVE_FAILURE_MESSAGE,
+  cause: undefined,
+} as const satisfies NarrativeAnswer;
+
+const desktopNarrativeDriver = textCallSiteDriver({
+  name: "generateDesktopTimeEntryNarrative",
+  finishPolicy: NARRATIVE_FINISH_POLICY,
+  run: async (cassette): Promise<NarrativeAnswer> => {
+    const admission = testModelAdmission(
+      organizationId,
+      "desktop-time-entries.narrative",
+    );
+    // The organization allows drafting and the member consents throughout.
+    const drafting = (
+      await admitDraftingWithGateReader({
+        safeDb: async () =>
+          await Promise.resolve(panic("The replay reads no database")),
+        organizationId,
+        userId: toSafeId<"user">("user_ai_text_replay"),
+        loadGate: async () =>
+          await Promise.resolve(
+            Result.ok({
+              organizationMode: "enabled" as const,
+              consentAt: new Date("2026-10-01T12:00:00Z"),
+              preference: null,
+              draftingMode: "plain" as const,
+            }),
+          ),
+      })
+    ).unwrap();
+    const result = await generateDesktopTimeEntryNarrative({
+      request: {
+        titles: ["Smlouva o dílo – návrh.docx", "Katastr nemovitostí"],
+        locale: "cs-CZ",
+        matterName: null,
+      },
+      drafting,
+      admission,
+      organizationId,
+      userId: toSafeId<"user">("user_ai_text_replay"),
+      orgAIConfig: replayOrgAIConfig(cassette),
+      managedAIResidency: "eu",
+      caching: { enabled: false, reason: "org-disabled" },
+      analytics: createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
+        feature: "desktop_time_entries.narrative",
+        modelTier: admission.modelTier,
+        traceId: "ai-text-replay",
+      }),
+      abortSignal: new AbortController().signal,
+    });
+    if (Result.isError(result)) {
+      if (!HandlerError.is(result.error)) {
+        return panic("The replay's gate never fails", result.error);
+      }
+      const { status, message, cause } = result.error;
+      return { type: "keep-template", status, message, cause };
+    }
+    const expected = expectedTextOutcome(
+      cassette.expect,
+      NARRATIVE_FINISH_POLICY,
+    );
+    return expected.type === "success" && expected.text === undefined
+      ? { type: "narrative" }
+      : { type: "narrative", text: result.value };
+  },
+  answerFor: (expected): NarrativeAnswer => {
+    if (expected.type !== "success") {
+      return KEEP_TEMPLATE;
+    }
+    if (expected.text === undefined) {
+      return { type: "narrative" };
+    }
+    const text = expected.text.trim();
+    return text === ""
+      ? KEEP_TEMPLATE
+      : { type: "narrative", text: capNarrative(text) };
+  },
+});
+
 // --- The census -------------------------------------------------------------
 
 /**
@@ -344,6 +443,7 @@ export const TEXT_CALL_SITE_DRIVERS: Readonly<
   Record<string, readonly TextCallSiteDriver[]>
 > = {
   "handlers/chat/compaction.ts": [chatCompactionDriver, modelCompactionDriver],
+  "handlers/desktop-time-entries/drafting-model.ts": [desktopNarrativeDriver],
 };
 
 /**

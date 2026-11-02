@@ -121,6 +121,22 @@ const ROUTINE_SIGNATURE =
 const pattern = (source: string) => new RegExp(source, "iu");
 const group = (match: RegExpExecArray, index: number) => match[index] ?? "";
 
+type GatedFunctionStatementKind =
+  | { type: "alter-function-set-search-path"; effect: "metadata-only" }
+  | { type: "other" };
+
+const classifyGatedFunctionStatement = (
+  sql: string,
+): GatedFunctionStatementKind => {
+  const searchPathEntry = `(?:"(?:[^"]|"")*"|[a-z_][a-z0-9_$]*)`;
+  const setSearchPath = pattern(
+    `^ALTER\\s+FUNCTION\\s+${GATE_ROUTINE}\\s*\\([^)]*\\)\\s+SET\\s+search_path\\s*=\\s*${searchPathEntry}(?:\\s*,\\s*${searchPathEntry})*\\s*;?$`,
+  );
+  return setSearchPath.test(sql)
+    ? { type: "alter-function-set-search-path", effect: "metadata-only" }
+    : { type: "other" };
+};
+
 type MapField =
   | "functions"
   | "policies"
@@ -469,6 +485,7 @@ const NAMES_GATE_OBJECT =
 const GATE_CHECK_BLOCK =
   /^DO \$check\$ BEGIN IF NOT EXISTS \(SELECT 1 FROM pg_constraint WHERE conrelid = 'public\.[a-z0-9_]+'::regclass AND conname = 'entity_feature_gate_(?:states|ready)_check'\) THEN ALTER TABLE public\."[a-z0-9_]+" ADD CONSTRAINT entity_feature_gate_(?:states_check CHECK \(entity_feature_gate IN \('pending', 'open', 'legal-lists', 'missing'\)\)|ready_check CHECK \(entity_feature_gate <> 'pending'\)) NOT VALID; END IF; END \$check\$;?$/u;
 const REVIEWED_DO_BLOCK_DIGESTS: ReadonlySet<string> = new Set([
+  "9d05bf7d24a473037ce35ddf58a1464a4159ee1aba7fce8b04361f7bf4bc18d8",
   // 20261009112500_entity_feature_row_gates: the gate role ($role$) and the
   // gated tables' ownership check ($ownership$).
   "2cc1de9651dce4678295ae32a0be83b4e543aed1d09da1770e8bbea7f3310c8b",
@@ -494,8 +511,12 @@ const DO_BLOCK_PROTECTION_VERBS =
 const doBlockDigest = (sql: string): string =>
   sha256Hex(sql.replace(/\s+/gu, " ").trim());
 
+/** The gate check constraints the generator writes for a newly gated table. */
+export const isGeneratedGateCheckBlock = (sql: string): boolean =>
+  GATE_CHECK_BLOCK.test(clean(sql).trim());
+
 const isReviewedGateDoBlock = (sql: string) =>
-  GATE_CHECK_BLOCK.test(sql) ||
+  isGeneratedGateCheckBlock(sql) ||
   REVIEWED_DO_BLOCK_DIGESTS.has(doBlockDigest(sql));
 
 /** Inline the policy DDL the gate migration's finish routine runs when called. */
@@ -525,6 +546,13 @@ const foldedStatements = (migration: string): string[] =>
     );
 
 const foldStatement = (state: FoldState, sql: string, migration: number) => {
+  const functionStatement = classifyGatedFunctionStatement(sql);
+  switch (functionStatement.type) {
+    case "alter-function-set-search-path":
+      return;
+    case "other":
+      break;
+  }
   for (const handler of STATEMENT_HANDLERS) {
     const match = handler.pattern.exec(sql);
     if (match) {

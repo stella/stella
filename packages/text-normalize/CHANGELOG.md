@@ -1,5 +1,11 @@
 # @stll/text-normalize
 
+## 0.5.2
+
+### Patch Changes
+
+- [#7462](https://github.com/stella/stella/pull/7462) [`5a7bfa7`](https://github.com/stella/stella/commit/5a7bfa7e45b652a24792c542e43b96dbeb52145b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Preserve numeric superscript index boundaries before search query compatibility folding.
+
 ## 0.5.1
 
 ### Patch Changes

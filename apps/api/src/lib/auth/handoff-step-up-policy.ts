@@ -22,6 +22,7 @@ const normalizePath = (path: string) => {
 export const requiresHandoffStepUpForRequest = (request: Request): boolean => {
   const path = normalizePath(new URL(request.url).pathname);
   return (
+    path === "/organizations" ||
     /(?:^|[/-])exports?(?:[/-]|$)/u.test(path) ||
     /^\/style-sets\/[^/]+\/download$/u.test(path) ||
     /^\/entities\/zip(?:\/|$)/u.test(path) ||

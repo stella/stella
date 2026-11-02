@@ -2,6 +2,7 @@ import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
 import type { ModelTask } from "@stll/ai-catalog";
+import { classifyFailure, readFailureBrand } from "@stll/errors";
 
 import {
   getChatAttachmentFilename,
@@ -396,6 +397,21 @@ type CompactModelMessagesOptions = {
   summarizeTranscript: (transcript: string) => Promise<string>;
   triggerTokens?: number | undefined;
 };
+
+// A grader reads a brand only at the failure node, so the wrapper carries the
+// summarizer's own classification (a deadline, a cancellation) when it has one.
+const summaryFailure = ({
+  cause,
+  message,
+}: {
+  cause: unknown;
+  message: string;
+}): HandlerError<500> => {
+  const error = new HandlerError({ status: 500, message, cause });
+  const brand = readFailureBrand(cause);
+  return brand === undefined ? error : classifyFailure(error, brand.reason);
+};
+
 export const compactChatMessages = async ({
   messages,
   onSummaryError,
@@ -429,11 +445,7 @@ export const compactChatMessages = async ({
   const summaryResult = await Result.tryPromise({
     try: async () => await summarizeTranscript(preparedTranscript.value),
     catch: (cause) =>
-      new HandlerError({
-        status: 500,
-        message: "Failed to compact chat history",
-        cause,
-      }),
+      summaryFailure({ cause, message: "Failed to compact chat history" }),
   });
   if (Result.isError(summaryResult)) {
     onSummaryError?.(summaryResult.error);
@@ -526,10 +538,9 @@ export const compactModelMessages = async ({
   const summaryResult = await Result.tryPromise({
     try: async () => await summarizeTranscript(transcript),
     catch: (cause) =>
-      new HandlerError({
-        status: 500,
-        message: "Failed to compact model step history",
+      summaryFailure({
         cause,
+        message: "Failed to compact model step history",
       }),
   });
   if (Result.isError(summaryResult)) {

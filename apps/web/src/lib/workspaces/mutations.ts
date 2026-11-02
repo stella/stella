@@ -6,6 +6,8 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { DEFAULT_FILE_PROPERTY_NAME } from "@stll/api-contract/property-policy";
+
 import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -20,10 +22,6 @@ import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { useTableStore } from "@/lib/workspaces/table-store";
-
-// Hardcoded in English: these are persisted in the DB and shared
-// across all organization members regardless of their locale.
-const DEFAULT_FILE_PROPERTY_NAME = "Documents";
 
 type CreateWorkspaceVars = {
   // Omit `clientId` to create a personal matter (initially visible
@@ -75,7 +73,6 @@ export const useCreateWorkspace = () => {
 };
 
 type WorkspaceUpdateValueByType = {
-  clientId: string;
   color: string | null;
   leadUserId: string | null;
   name: string;
@@ -84,12 +81,14 @@ type WorkspaceUpdateValueByType = {
 
 type WorkspaceUpdateType = keyof WorkspaceUpdateValueByType;
 
-export type WorkspaceUpdate = {
-  [Type in WorkspaceUpdateType]: {
-    type: Type;
-    value: WorkspaceUpdateValueByType[Type];
-  };
-}[WorkspaceUpdateType];
+export type WorkspaceUpdate =
+  | { type: "clientId"; value: string; expectedClientId: string | null }
+  | {
+      [Type in WorkspaceUpdateType]: {
+        type: Type;
+        value: WorkspaceUpdateValueByType[Type];
+      };
+    }[WorkspaceUpdateType];
 
 type WorkspaceUpdateRefreshScope = "query-cache" | "route-metadata";
 
@@ -115,7 +114,13 @@ export const workspaceUpdateRefreshScope = (update: WorkspaceUpdate) =>
 export const workspaceUpdateBody = (update: WorkspaceUpdate) => {
   switch (update.type) {
     case "clientId":
-      return { clientId: toSafeId<"contact">(update.value) };
+      return {
+        clientId: toSafeId<"contact">(update.value),
+        expectedClientId:
+          update.expectedClientId === null
+            ? null
+            : toSafeId<"contact">(update.expectedClientId),
+      };
     case "color":
       return { color: update.value };
     case "leadUserId":

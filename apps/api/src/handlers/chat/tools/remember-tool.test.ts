@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { createRememberTool } from "@/api/handlers/chat/tools/remember-tool";
@@ -17,7 +18,6 @@ import type {
 } from "@/api/lib/memory/persist-explicit-memory";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 

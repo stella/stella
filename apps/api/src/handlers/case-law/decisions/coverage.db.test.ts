@@ -35,6 +35,7 @@ import {
   caseLawCourtStatusRows,
   readCaseLawCourtCountQuery,
 } from "@/api/handlers/case-law/decisions/status-courts";
+import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { readProvisionPendingCounts } from "@/api/lib/case-law/provision-pending";
@@ -356,7 +357,9 @@ const loadCoverage = async (
     onPartialFailure: () => undefined,
     now: NOW,
     readSources: async () =>
-      await readAsReader(readCaseLawCoverageSourcesQuery),
+      await readAsReader(
+        async (tx) => await readCaseLawCoverageSourcesQuery(tx, []),
+      ),
     readArrivals: async (sourceIds) =>
       await readAsReader(
         async (tx) =>
@@ -687,7 +690,7 @@ test(
         ),
       );
       const sources = await readAsReader(async (tx) =>
-        readCaseLawCoverageSourcesQuery(tx),
+        readCaseLawCoverageSourcesQuery(tx, []),
       );
       // Held, not searchable: the unindexed endpoints still bound the years,
       // while withdrawn and listing-only decisions never do.
@@ -771,7 +774,9 @@ test(
 test(
   "the reader role can run every statement the coverage page needs",
   async () => {
-    const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
+    const sources = await readAsReader(
+      async (tx) => await readCaseLawCoverageSourcesQuery(tx, []),
+    );
     // The withheld source is filtered in SQL, so it never reaches the loader.
     expect(sources.map(({ adapterKey }) => adapterKey).toSorted()).toEqual([
       ADAPTER_KEYS.AT_COURTS,
@@ -861,7 +866,9 @@ test(
   async () => {
     const coverage = await loadCoverage({
       readSources: async () => {
-        const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
+        const sources = await readAsReader(
+          async (tx) => await readCaseLawCoverageSourcesQuery(tx, []),
+        );
         // A retired adapter leaves its row behind; the column is a varchar
         // and the registry is deployment state, so the two legitimately
         // disagree. Without a manifest there is no country to file it under.
@@ -1135,7 +1142,9 @@ test(
   async () => {
     const coverage = await loadCoverage({
       readSources: async () => {
-        const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
+        const sources = await readAsReader(
+          async (tx) => await readCaseLawCoverageSourcesQuery(tx, []),
+        );
         // As a source looks before its first sync cycle stamps a count.
         for (const source of sources) {
           if (source.adapterKey === ADAPTER_KEYS.CZ_NS) {
@@ -1283,7 +1292,9 @@ test(
     const coverage = await loadCoverage({
       readSources: async () => {
         sourceReads += 1;
-        return await readAsReader(readCaseLawCoverageSourcesQuery);
+        return await readAsReader(
+          async (tx) => await readCaseLawCoverageSourcesQuery(tx, []),
+        );
       },
       readArrivals: async (sourceIds) => {
         arrivalsReads += 1;
@@ -1300,3 +1311,44 @@ test(
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test("a fixed-snapshot source reports its release date, not a recent run, as its currency", async () => {
+  const db = drizzle({ client });
+  const snapshotSourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values(
+    caseLawSourceRow({
+      id: snapshotSourceId,
+      adapterKey: ADAPTER_KEYS.PL_NSA,
+      name: "pl snapshot",
+      enabled: true,
+      // A run an hour ago would read as current for a live publisher.
+      lastSyncAt: new Date(NOW.getTime() - HOUR_IN_MS),
+    }),
+  );
+  try {
+    const coverage = await loadCoverage();
+    if (Result.isError(coverage)) {
+      throw coverage.error;
+    }
+    const poland = coverage.value.countries.find(
+      ({ country }) => country === "POL",
+    );
+    const source = poland?.sources.find(
+      ({ adapterKey }) => adapterKey === ADAPTER_KEYS.PL_NSA,
+    );
+    expect(source?.health).toBe(CASE_LAW_COVERAGE_HEALTH.SNAPSHOT);
+    expect(source?.edition).toEqual({
+      type: "snapshot",
+      snapshotDate: PL_NSA_SNAPSHOT.snapshotDate,
+    });
+    expect(poland?.health).toBe(CASE_LAW_COVERAGE_HEALTH.SNAPSHOT);
+    const czech = coverage.value.countries
+      .find(({ country }) => country === "CZE")
+      ?.sources.find(({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS);
+    expect(czech?.edition).toEqual({ type: "live" });
+  } finally {
+    await db
+      .delete(caseLawSources)
+      .where(eq(caseLawSources.id, snapshotSourceId));
+  }
+});

@@ -38,6 +38,14 @@
 //            `@stll/property-testing/rejection`) for a rejection. Another
 //            framework's `expect` (Playwright) is not considered.
 //
+// no-global-testing-library-screen
+//   Flagged: binding `screen` from a `@testing-library/*` package, by import or
+//            by destructuring `await import("@testing-library/...")`.
+//   `screen` is bound to the `document` that was global when Testing Library
+//   first loaded. DOM test files register their own happy-dom window, so in a
+//   process that runs several of them `screen` queries another file's
+//   document. Tests query through the object `render()` returns instead.
+//
 // no-unmanaged-database-client
 //   Flagged: constructing a database client, called or with `new`, through
 //            its import: `SQL` from `bun` (and `Bun.SQL`), `createSqlClient`
@@ -62,6 +70,22 @@
 //   nested suites, but not sibling suites. A spy must be created in a
 //   `beforeEach` (never at module scope) and an enclosing `afterEach` must call
 //   `mock.restore()`: restoring a spy detaches it for the rest of the file.
+//
+// require-fetch-after-all
+//   A globalThis.fetch assignment in beforeAll must have another assignment
+//   in afterAll at the same describe or file scope. Bun 1.4.4 exposes no
+//   describe-scope completion hook to a preload, so the static pairing keeps
+//   sibling describes from inheriting a replacement as their baseline. The
+//   rule checks direct assignments only; it does not prove which value is
+//   restored.
+//
+// no-wait-for-under-fake-timers
+//   Testing Library's retrying queries advance Jest's fake clock by their poll
+//   interval. A test whose assertion becomes true through asynchronous work can
+//   therefore race its own application timeout. Tests drive the fake clock in
+//   `act`, then use a synchronous query/assertion. The rule follows fake-timer
+//   installation in a test callback and in enclosing `beforeEach` callbacks;
+//   an earlier real-timer restoration in the test makes later waits valid.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import { panic } from "better-result";
@@ -83,7 +107,12 @@ import type { AstNode, FilenameContext, ScopeContext } from "./utils.ts";
 const BUN_TEST_MODULE = "bun:test";
 const EXPECT_EXPORT = "expect";
 const MODULE_MOCK_EXPORTS = new Set(["mock", "spyOn"]);
-const FILE_HOOK_EXPORTS = new Set(["beforeEach", "afterEach"]);
+const FILE_HOOK_EXPORTS = new Set([
+  "beforeAll",
+  "beforeEach",
+  "afterEach",
+  "afterAll",
+]);
 const MOCK_DEFAULT_METHODS = new Set([
   "mockImplementation",
   "mockReturnValue",
@@ -481,6 +510,9 @@ const enclosingBlock = (node: AstNode): EnclosingBlock => {
   }
   return { node: null, conditional: false };
 };
+
+const TESTING_LIBRARY_SCOPE = "@testing-library/";
+const SCREEN_EXPORT = "screen";
 
 const mentionsBunTest = (text: string): boolean =>
   text.includes(BUN_TEST_MODULE);
@@ -958,9 +990,345 @@ const closesSharedDatabaseClient = (
   );
 };
 
+const isGlobalFetchAssignment = (node: AstNode): boolean => {
+  const target = unwrapExpression(node.left);
+  if (
+    !isAstNode(target) ||
+    target.type !== "MemberExpression" ||
+    memberPropertyName(target) !== "fetch"
+  ) {
+    return false;
+  }
+  const object = unwrapExpression(target.object);
+  return isIdentifierReference(object) && object.name === "globalThis";
+};
+
+const callbackArgument = (node: AstNode) => {
+  const args = Array.isArray(node.arguments) ? node.arguments : [];
+  return args.find(
+    (argument): argument is AstNode =>
+      isAstNode(argument) &&
+      (argument.type === "ArrowFunctionExpression" ||
+        argument.type === "FunctionExpression"),
+  );
+};
+
+const nearestCallback = (node: AstNode, callbacks: readonly AstNode[]) => {
+  let current: unknown = node.parent;
+  while (isAstNode(current)) {
+    if (callbacks.includes(current)) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return null;
+};
+
+const callbackBodyStatement = (node: AstNode, callback: AstNode) => {
+  let current = node;
+  while (isAstNode(current.parent) && current.parent !== callback.body) {
+    current = current.parent;
+  }
+  return current;
+};
+
+const containingFunction = (node: AstNode) => {
+  let current: unknown = node.parent;
+  while (isAstNode(current)) {
+    if (
+      current.type === "ArrowFunctionExpression" ||
+      current.type === "FunctionDeclaration" ||
+      current.type === "FunctionExpression"
+    ) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return null;
+};
+
+const TEST_FRAMEWORK_MODULES = new Set(["bun:test", "vitest", "@jest/globals"]);
+
+const testFrameworkExport = (context: ScopeContext, expression: unknown) => {
+  const binding = resolveImportedExpressionForEnforcement(context, expression);
+  if (binding !== null) {
+    return TEST_FRAMEWORK_MODULES.has(binding.source) ? binding.imported : null;
+  }
+  const unwrapped = unwrapExpression(expression);
+  return isIdentifierReference(unwrapped) &&
+    resolveVariable(context, unwrapped) === null
+    ? unwrapped.name
+    : null;
+};
+
+const timerFrameworkExport = (context: ScopeContext, callee: unknown) => {
+  const expression = unwrapExpression(callee);
+  return isAstNode(expression) && expression.type === "MemberExpression"
+    ? testFrameworkExport(context, expression.object)
+    : null;
+};
+
 export default eslintCompatPlugin({
   meta: { name: "bun-test-hygiene" },
   rules: {
+    "require-fetch-after-all": {
+      meta: {
+        type: "problem",
+        messages: {
+          missingRestore:
+            "A beforeAll replacement of globalThis.fetch must be restored by an afterAll in the same describe block (or at file scope for a top-level hook).",
+        },
+      },
+      createOnce(context) {
+        const replacements: { node: AstNode; scope: unknown }[] = [];
+        const restoredScopes = new Set<unknown>();
+        return {
+          before() {
+            replacements.length = 0;
+            restoredScopes.clear();
+            // Both `globalThis.fetch` and `globalThis["fetch"]` reach the
+            // assignment check; the prefilter only skips files naming neither.
+            return (
+              mentionsBunTest(context.sourceCode.text) &&
+              context.sourceCode.text.includes("globalThis") &&
+              context.sourceCode.text.includes("fetch")
+            );
+          },
+          AssignmentExpression(node) {
+            if (!isAstNode(node) || !isGlobalFetchAssignment(node)) {
+              return;
+            }
+            const hook = enclosingHook(context, node);
+            if (hook?.exportName === "beforeAll") {
+              replacements.push({ node, scope: hook.scope });
+            } else if (hook?.exportName === "afterAll") {
+              restoredScopes.add(hook.scope);
+            }
+          },
+          "Program:exit"() {
+            for (const replacement of replacements) {
+              if (!restoredScopes.has(replacement.scope)) {
+                context.report({
+                  node: replacement.node,
+                  messageId: "missingRestore",
+                });
+              }
+            }
+          },
+        };
+      },
+    },
+    "no-wait-for-under-fake-timers": {
+      meta: {
+        type: "problem",
+        messages: {
+          fakeTimerWait:
+            "Testing Library retries advance fake timers and can fire application timeouts. Drive the clock explicitly inside `act`, then assert synchronously.",
+        },
+      },
+      createOnce(context) {
+        const fakeTimerCalls: AstNode[] = [];
+        const realTimerCalls: AstNode[] = [];
+        const waits: AstNode[] = [];
+        const hooks: { callback: AstNode; kind: "beforeAll" | "beforeEach" }[] =
+          [];
+        const suiteCallbacks: AstNode[] = [];
+        const ownerCallbacks: AstNode[] = [];
+
+        const startsBefore = (candidate: AstNode, node: AstNode) =>
+          candidate.range[0] < node.range[0];
+        const isInside = (node: AstNode, container: AstNode) =>
+          container.range[0] <= node.range[0] &&
+          node.range[1] <= container.range[1];
+        const isDirectStatement = (call: AstNode, callback: AstNode) => {
+          let current = call;
+          while (
+            isAstNode(current.parent) &&
+            (current.parent.type === "AwaitExpression" ||
+              current.parent.type === "ChainExpression")
+          ) {
+            current = current.parent;
+          }
+          if (callback.body === current) {
+            return true;
+          }
+          const statement = current.parent;
+          return (
+            isAstNode(statement) &&
+            statement.type === "ExpressionStatement" &&
+            isAstNode(statement.parent) &&
+            statement.parent === callback.body
+          );
+        };
+        const directRestorations = (callback: AstNode) =>
+          realTimerCalls.filter(
+            (call) =>
+              isInside(call, callback) && isDirectStatement(call, callback),
+          );
+        const startsAfter = (
+          left: AstNode | undefined,
+          right: AstNode | undefined,
+        ) =>
+          left !== undefined &&
+          (right === undefined || left.range[0] > right.range[0]);
+
+        return {
+          before() {
+            fakeTimerCalls.length = 0;
+            realTimerCalls.length = 0;
+            waits.length = 0;
+            hooks.length = 0;
+            suiteCallbacks.length = 0;
+            ownerCallbacks.length = 0;
+            return /(?:useFakeTimers|waitFor|findBy)/u.test(
+              context.sourceCode.text,
+            );
+          },
+          CallExpression(node) {
+            if (!isAstNode(node)) {
+              return;
+            }
+            const property = memberPropertyName(node.callee);
+            const calleeName = getPropertyName(node.callee) ?? property;
+            const owner = timerFrameworkExport(context, node.callee);
+            if (
+              property === "useFakeTimers" &&
+              (owner === "jest" || owner === "vi")
+            ) {
+              fakeTimerCalls.push(node);
+              return;
+            }
+            if (
+              (property === "useRealTimers" &&
+                (owner === "jest" || owner === "vi")) ||
+              calleeName === "restoreRealTimers"
+            ) {
+              realTimerCalls.push(node);
+              return;
+            }
+            const frameworkName = testFrameworkExport(context, node.callee);
+            if (
+              frameworkName === "beforeEach" ||
+              frameworkName === "beforeAll"
+            ) {
+              const callback = callbackArgument(node);
+              if (callback !== undefined) {
+                hooks.push({ callback, kind: frameworkName });
+                ownerCallbacks.push(callback);
+              }
+              return;
+            }
+            const registration = testRegistration(context, node);
+            const registrationName = registration?.exportName ?? frameworkName;
+            if (registrationName === "describe") {
+              const callback = callbackArgument(node);
+              if (callback !== undefined) {
+                suiteCallbacks.push(callback);
+              }
+              return;
+            }
+            if (
+              registration !== null ||
+              registrationName === "test" ||
+              registrationName === "it"
+            ) {
+              const callback = callbackArgument(node);
+              if (callback !== undefined) {
+                ownerCallbacks.push(callback);
+              }
+              return;
+            }
+            if (
+              calleeName === "waitFor" ||
+              calleeName === "waitForElementToBeRemoved" ||
+              (typeof calleeName === "string" &&
+                /^findBy[A-Z]/u.test(calleeName))
+            ) {
+              waits.push(node);
+            }
+          },
+          "Program:exit"() {
+            for (const wait of waits) {
+              const callback = nearestCallback(wait, ownerCallbacks);
+              if (callback === null) {
+                continue;
+              }
+              const enclosingSuites = suiteCallbacks
+                .filter((suite) => isInside(wait, suite))
+                .toSorted(
+                  (left, right) =>
+                    right.range[1] -
+                    right.range[0] -
+                    (left.range[1] - left.range[0]),
+                );
+              const applicableHooks = hooks
+                .filter(({ callback: hookCallback }) => {
+                  const suiteCallback = containingFunction(hookCallback);
+                  return (
+                    suiteCallback === null ||
+                    enclosingSuites.includes(suiteCallback)
+                  );
+                })
+                .toSorted((left, right) => {
+                  const leftSuite = containingFunction(left.callback);
+                  const rightSuite = containingFunction(right.callback);
+                  const leftDepth =
+                    leftSuite === null
+                      ? -1
+                      : enclosingSuites.indexOf(leftSuite);
+                  const rightDepth =
+                    rightSuite === null
+                      ? -1
+                      : enclosingSuites.indexOf(rightSuite);
+                  if (left.kind !== right.kind) {
+                    return left.kind === "beforeAll" ? -1 : 1;
+                  }
+                  if (leftDepth !== rightDepth) {
+                    return leftDepth - rightDepth;
+                  }
+                  return left.callback.range[0] - right.callback.range[0];
+                });
+              const topLevelFake = fakeTimerCalls.findLast(
+                (call) => containingFunction(call) === null,
+              );
+              let inheritedFakeTimers = topLevelFake !== undefined;
+              for (const { callback: hookCallback, kind } of applicableHooks) {
+                const fake = fakeTimerCalls.findLast((call) =>
+                  isInside(call, hookCallback),
+                );
+                const real =
+                  kind === "beforeEach"
+                    ? directRestorations(hookCallback).at(-1)
+                    : undefined;
+                if (fake !== undefined || real !== undefined) {
+                  inheritedFakeTimers = startsAfter(fake, real);
+                }
+              }
+              const testHasFakeTimers = fakeTimerCalls.some((call) =>
+                isInside(call, callback),
+              );
+              const waitStatement = callbackBodyStatement(wait, callback);
+              const lastRestoration = directRestorations(callback).findLast(
+                (call) => startsBefore(call, waitStatement),
+              );
+              const hasLaterInstallation = fakeTimerCalls.some(
+                (call) =>
+                  isInside(call, callback) &&
+                  startsAfter(call, lastRestoration),
+              );
+              const restoredBeforeWait =
+                lastRestoration !== undefined && !hasLaterInstallation;
+              const localTimerState =
+                (inheritedFakeTimers || testHasFakeTimers) &&
+                !restoredBeforeWait;
+              if (localTimerState) {
+                context.report({ node: wait, messageId: "fakeTimerWait" });
+              }
+            }
+          },
+        };
+      },
+    },
     "require-module-mock-reset": {
       meta: {
         type: "problem",
@@ -1291,6 +1659,75 @@ export default eslintCompatPlugin({
               messageId: "disabled",
               data: { call: describeRegistration(registration) },
             });
+          },
+        };
+      },
+    },
+    "no-global-testing-library-screen": {
+      meta: {
+        type: "problem",
+        messages: {
+          globalScreen:
+            "`screen` stays bound to the document of whichever test file " +
+            "loaded Testing Library first, so it reads the wrong DOM when " +
+            "several DOM test files share a process. Query through the " +
+            "object `render()` returns (`const view = render(...)`; " +
+            "`view.getByRole(...)`) or `within(view.container)`.",
+        },
+      },
+      createOnce(context) {
+        return {
+          before() {
+            return context.sourceCode.text.includes(TESTING_LIBRARY_SCOPE);
+          },
+          ImportSpecifier(node) {
+            const { parent } = node;
+            if (
+              !isAstNode(parent) ||
+              !isAstNode(parent.source) ||
+              !isStringLiteral(parent.source) ||
+              !parent.source.value.startsWith(TESTING_LIBRARY_SCOPE)
+            ) {
+              return;
+            }
+            if (
+              isAstNode(node.imported) &&
+              getPropertyName(node.imported) === SCREEN_EXPORT
+            ) {
+              context.report({ node, messageId: "globalScreen" });
+            }
+          },
+          Property(node) {
+            const { parent } = node;
+            if (
+              !isAstNode(parent) ||
+              parent.type !== "ObjectPattern" ||
+              !isAstNode(node.key) ||
+              getPropertyName(node.key) !== SCREEN_EXPORT
+            ) {
+              return;
+            }
+            const declarator = parent.parent;
+            if (
+              !isAstNode(declarator) ||
+              declarator.type !== "VariableDeclarator"
+            ) {
+              return;
+            }
+            const init = unwrapExpression(declarator.init);
+            const loaded =
+              isAstNode(init) && init.type === "AwaitExpression"
+                ? unwrapExpression(init.argument)
+                : init;
+            if (
+              isAstNode(loaded) &&
+              loaded.type === "ImportExpression" &&
+              isAstNode(loaded.source) &&
+              isStringLiteral(loaded.source) &&
+              loaded.source.value.startsWith(TESTING_LIBRARY_SCOPE)
+            ) {
+              context.report({ node, messageId: "globalScreen" });
+            }
           },
         };
       },

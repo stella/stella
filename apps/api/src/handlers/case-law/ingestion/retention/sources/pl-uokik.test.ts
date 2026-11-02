@@ -9,7 +9,6 @@ import { describe, expect, test } from "bun:test";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assemblePlUokikDecision,
   parsePlUokikDetail,
@@ -22,6 +21,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { plUokikRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-uokik";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 const FIXTURES = new URL("../../adapters/__fixtures__/", import.meta.url);

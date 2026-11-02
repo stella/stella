@@ -12,6 +12,7 @@ import {
   normalizePersistedChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
+import { clientVisibleChatPart } from "@/api/handlers/chat/client-visible-chat-part";
 import type {
   ChatMessageMetadata,
   ChatMessageRole,
@@ -319,7 +320,9 @@ export const clientMessageFromPageRow = (
     ...(metadata === undefined ? {} : { metadata }),
     role: message.role,
     revision: row.revision,
-    parts: attachPlaceholders(message.parts, placeholderById),
+    parts: attachPlaceholders(message.parts, placeholderById).map(
+      clientVisibleChatPart,
+    ),
   };
 };
 

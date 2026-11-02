@@ -6,7 +6,7 @@ type SingleFlight = {
    * the first await, so a second click or Enter in the same frame, before a
    * re-render disables the button, is ignored instead of creating twice.
    */
-  run: (submit: () => Promise<unknown>) => Promise<void>;
+  run: <T>(submit: () => Promise<T>) => Promise<T | undefined>;
   /**
    * The same guard for a callback-style `mutation.mutate`: `start` receives
    * `settled`, which it passes as the call's `onSettled` (and calls itself
@@ -22,14 +22,14 @@ export const useSingleFlight = (): SingleFlight => {
   const inFlight = useRef(false);
   const [pending, setPending] = useState(false);
 
-  const run = async (submit: () => Promise<unknown>) => {
+  const run = async <T>(submit: () => Promise<T>) => {
     if (inFlight.current) {
-      return;
+      return undefined;
     }
     inFlight.current = true;
     setPending(true);
     try {
-      await submit();
+      return await submit();
     } finally {
       inFlight.current = false;
       setPending(false);

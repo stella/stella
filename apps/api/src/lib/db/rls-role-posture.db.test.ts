@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { rootDb } from "@/api/db/root";
 import { envBase } from "@/api/env-base";
@@ -21,7 +22,6 @@ import {
   type GatedTestDb,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { withIsolatedPostgresCluster } from "@/api/tests/isolated-postgres-cluster";
 
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

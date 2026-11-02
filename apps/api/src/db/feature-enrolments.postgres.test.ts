@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { SETTING_ORGANIZATION_ID, SETTING_USER_ID } from "@/api/db/rls";
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -30,7 +31,6 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const testState = createTestState({ file: import.meta.path, config: env });

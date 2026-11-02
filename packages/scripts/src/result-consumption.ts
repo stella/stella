@@ -17,6 +17,7 @@ import {
   type CodeCheckLeg,
   ownsCodeCheckPath,
 } from "./code-quality-partition";
+import { importDependents } from "./import-dependents";
 import { createProgram } from "./typescript-program";
 
 const asyncSome = async <T>(
@@ -185,10 +186,15 @@ const isAssignmentExpression = (expression: ts.Expression): boolean =>
   expression.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
   expression.operatorToken.kind <= ts.SyntaxKind.LastAssignment;
 
-const isProductSourcePath = (file: string): boolean =>
+// Generated modules are not scanned but carry inferred types between product
+// modules, so the importer closure walks through them.
+export const isImportGraphPath = (file: string): boolean =>
   PRODUCT_SOURCE_PATTERN.test(file) &&
   !TEST_FILE_PATTERN.test(file) &&
-  !GENERATED_OR_EXTERNAL_PATTERN.test(file);
+  !file.includes("/node_modules/");
+
+export const isProductSourcePath = (file: string): boolean =>
+  isImportGraphPath(file) && !GENERATED_OR_EXTERNAL_PATTERN.test(file);
 
 const isProductSourceFile = (
   sourceFile: ts.SourceFile,
@@ -1021,11 +1027,25 @@ const changedSourceFiles = (repositoryRoot: string, base: string): string[] => {
     ...gitLines(repositoryRoot, ["ls-files", "--others", "--exclude-standard"]),
   ]);
 
+  // A path changed since the base can be deleted in the working tree; its
+  // importers then fail to resolve it and are checked as dependents.
   return [...files]
-    .filter(isProductSourcePath)
+    .filter(isImportGraphPath)
     .map((file) => path.join(repositoryRoot, file))
+    .filter((file) => existsSync(file))
     .toSorted();
 };
+
+const importGraphFiles = (repositoryRoot: string): string[] =>
+  execFileSync(
+    "git",
+    ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+    { maxBuffer: 2 ** 30, cwd: repositoryRoot, encoding: "utf-8" },
+  )
+    .split("\0")
+    .filter((file) => file.length > 0 && isImportGraphPath(file))
+    .map((file) => path.join(repositoryRoot, file))
+    .filter((file) => existsSync(file));
 
 const workspaceConfig = (
   repositoryRoot: string,
@@ -1168,16 +1188,38 @@ const run = async (): Promise<number> => {
       ? changedSourceFiles(repositoryRoot, cli.base)
       : undefined;
   if (changedFiles?.length === 0) {
-    console.log("result-consumption: no changed product TypeScript files");
+    console.log("result-consumption: no changed TypeScript source files");
     return 0;
+  }
+  // A change that makes a function return a Result breaks unchanged callers,
+  // so the changed files are checked together with every module importing
+  // them.
+  let checkedFiles: string[] | undefined;
+  if (changedFiles !== undefined) {
+    const importers = importDependents({
+      repositoryRoot,
+      candidates: importGraphFiles(repositoryRoot),
+      changed: changedFiles,
+    });
+    checkedFiles = [...changedFiles, ...importers]
+      .filter((file) =>
+        isProductSourcePath(repoRelativePath(repositoryRoot, file)),
+      )
+      .toSorted();
+    console.log(
+      `result-consumption: ${changedFiles.length} changed file(s) and ${importers.size} importer(s), ${checkedFiles.length} product file(s) checked`,
+    );
+    if (checkedFiles.length === 0) {
+      return 0;
+    }
   }
 
   const diagnosticsByLocation = new Map<string, ResultConsumptionDiagnostic>();
 
   const discoveredProjects =
-    changedFiles === undefined
+    checkedFiles === undefined
       ? findResultWorkspaceConfigs(repositoryRoot)
-      : groupChangedFilesByConfig(repositoryRoot, changedFiles);
+      : groupChangedFilesByConfig(repositoryRoot, checkedFiles);
   const projects =
     cli.leg === undefined
       ? discoveredProjects

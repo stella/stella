@@ -887,7 +887,7 @@ export const entityFeatureGatePropagationSql = (
   }
   return `CREATE OR REPLACE FUNCTION public.entity_feature_gate_propagate()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog SET row_security = on
+SET search_path = pg_catalog, pg_temp SET row_security = on
 SET plan_cache_mode = force_generic_plan SET jit = off AS $function$
 DECLARE
   changed_ids uuid[];

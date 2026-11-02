@@ -2,6 +2,11 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import { customType, timestamp } from "drizzle-orm/pg-core";
 
+import {
+  decodeStoredChatContent,
+  encodeStoredChatContent,
+} from "@/api/db/stored-chat-part-codec";
+
 /**
  * Safe replacement for `p.jsonb()`.
  *
@@ -39,6 +44,36 @@ export const jsonb = customType<{
     }
     return value;
   },
+});
+
+const parseJsonbFromDriver = (value: unknown): unknown => {
+  if (typeof value === "string" && /^[{[]/u.test(value.trimStart())) {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      return parsed;
+    } catch {
+      return value;
+    }
+  }
+  return value;
+};
+
+/**
+ * `jsonb` for stored chat message content. Every read and write of a message
+ * crosses `stored-chat-part-codec`, so a part this release cannot read is
+ * carried whole and written back unchanged, whichever path saves the message.
+ */
+export const chatContentJsonb = customType<{
+  data: unknown;
+  driverData: unknown;
+}>({
+  dataType: () => "jsonb",
+  toDriver: (value) =>
+    value === null || value === undefined
+      ? null
+      : sql`${JSON.stringify(encodeStoredChatContent(value))}::text::jsonb`,
+  fromDriver: (value): unknown =>
+    decodeStoredChatContent(parseJsonbFromDriver(value)),
 });
 
 /**

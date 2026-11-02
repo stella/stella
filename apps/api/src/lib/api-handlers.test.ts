@@ -7,6 +7,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { createTestState } from "@stll/test-state";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -61,7 +62,6 @@ import {
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const testState = createTestState({ file: import.meta.path, config: env });

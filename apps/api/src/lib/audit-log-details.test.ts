@@ -12,6 +12,7 @@ import {
   parseSource,
   walk,
 } from "@stll/scripts/src/syntax-tree";
+import { createTestState } from "@stll/test-state";
 
 import { auditLogs } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -33,7 +34,6 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 

@@ -10,7 +10,6 @@ const { act } = await import("react");
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { ToastProvider, stellaToast } = await import("@stll/ui/toast");
 const { toAPIError } = await import("@/lib/errors/api");
-const { readQueryResult } = await import("@/lib/errors/query-result");
 const { ACTION_ADMISSION_CODES, ACTION_ADMISSION_REFUSALS } =
   await import("@stll/api-contract/action-admission");
 const messages = (await import("@/i18n/langs/en.json")).default;
@@ -81,22 +80,13 @@ test("permanent rejections show each safe reason without a Retry action", async 
 
 test("a mixed upload batch explains an empty file without presigning or retrying it", async () => {
   const { UploadQueue } = await import("@/lib/upload-queue");
-  const { EmptyUploadFileError } =
+  const { UploadFileSizeError } =
     await import("@/lib/files/upload-file-validation");
-  const { buildEntityCreatePresignPayload } =
-    await import("./create-file-upload-payload.logic");
+  const { hashActiveUploadFile } = await import("@/lib/files/active-uploads");
   const presignedNames: string[] = [];
   const queue = new UploadQueue(async (file) => {
-    const payload = readQueryResult(
-      buildEntityCreatePresignPayload({
-        propertyId: "property_upload",
-        name: file.name,
-        mimeType: file.type,
-        size: file.size,
-        sha256Hex: "a".repeat(64),
-      }),
-    );
-    presignedNames.push(payload.name);
+    await hashActiveUploadFile(file);
+    presignedNames.push(file.name);
     if (file.name === "wrong.pdf") {
       throw toAPIError({
         status: 422,
@@ -121,7 +111,7 @@ test("a mixed upload batch explains an empty file without presigning or retrying
   expect(presignedNames).toEqual(["wrong.pdf", "accepted.pdf"]);
   expect(queue.getProgress()).toEqual({ completed: 1, failed: 2, total: 3 });
   expect(
-    queue.getFailedFiles().some(({ error }) => EmptyUploadFileError.is(error)),
+    queue.getFailedFiles().some(({ error }) => UploadFileSizeError.is(error)),
   ).toBe(true);
   expect(
     queue

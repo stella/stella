@@ -81,7 +81,7 @@ describe(RULE, () => {
   test("requires serial execution in files using a state fixture", async () => {
     expect(
       await lint(
-        'import { test as run } from "bun:test";\nimport { createTestState as fixture } from "@/api/tests/helpers/test-state";\nfixture({ file: import.meta.path, config: {} });\nrun.concurrent("shared state", () => {});',
+        'import { test as run } from "bun:test";\nimport { createTestState as fixture } from "@stll/test-state";\nfixture({ file: import.meta.path, config: {} });\nrun.concurrent("shared state", () => {});',
       ),
     ).toEqual([4]);
     expect(
@@ -91,15 +91,37 @@ describe(RULE, () => {
     ).toEqual([]);
   });
 
+  test("recognises the fixture by package name and by relative path inside its package", async () => {
+    const concurrentFixture = (specifier: string) =>
+      `import { test } from "bun:test";\nimport { createTestState } from "${specifier}";\ncreateTestState({ file: import.meta.path, config: {} });\ntest.concurrent("shared state", () => {});`;
+    const [byPackage, byRelativePath, outsidePackage] = await Promise.all([
+      lintSingleRule(RULE, concurrentFixture("@stll/test-state"), {
+        sourcePath: "packages/test-state/src/consumer.test.ts",
+        cwd: "scratch",
+      }),
+      lintSingleRule(RULE, concurrentFixture("./test-state"), {
+        sourcePath: "packages/test-state/src/consumer.test.ts",
+        cwd: "scratch",
+      }),
+      lintSingleRule(RULE, concurrentFixture("./test-state"), {
+        sourcePath: "packages/other/src/consumer.test.ts",
+        cwd: "scratch",
+      }),
+    ]);
+    expect(byPackage).toEqual([4]);
+    expect(byRelativePath).toEqual([4]);
+    expect(outsidePackage).toEqual([]);
+  });
+
   test("rejects setup registered before the fixture, including aliased hooks", async () => {
     expect(
       await lint(
-        'import { beforeEach as setup } from "bun:test";\nimport { createTestState } from "@/api/tests/helpers/test-state";\nsetup(() => state.setEnv("A", "setup"));\nconst state = createTestState({ file: import.meta.path, config: {} });',
+        'import { beforeEach as setup } from "bun:test";\nimport { createTestState } from "@stll/test-state";\nsetup(() => state.setEnv("A", "setup"));\nconst state = createTestState({ file: import.meta.path, config: {} });',
       ),
     ).toEqual([3]);
     expect(
       await lint(
-        'import { test } from "bun:test";\nimport { createTestState } from "@/api/tests/helpers/test-state";\ntest.each([1])("early", () => {});\nconst state = createTestState({ file: import.meta.path, config: {} });',
+        'import { test } from "bun:test";\nimport { createTestState } from "@stll/test-state";\ntest.each([1])("early", () => {});\nconst state = createTestState({ file: import.meta.path, config: {} });',
       ),
     ).toEqual([3]);
   });
@@ -107,17 +129,17 @@ describe(RULE, () => {
   test("requires file registration scope and fixture-owned beforeAll setup", async () => {
     expect(
       await lint(
-        'import { describe } from "bun:test";\nimport { createTestState } from "@/api/tests/helpers/test-state";\ndescribe("nested", () => {\n  createTestState({ file: import.meta.path, config: {} });\n});',
+        'import { describe } from "bun:test";\nimport { createTestState } from "@stll/test-state";\ndescribe("nested", () => {\n  createTestState({ file: import.meta.path, config: {} });\n});',
       ),
     ).toEqual([3, 4]);
     expect(
       await lint(
-        'import { beforeAll } from "bun:test";\nimport { createTestState } from "@/api/tests/helpers/test-state";\nconst state = createTestState({ file: import.meta.path, config: {} });\nbeforeAll(() => state.setEnv("A", "setup"));',
+        'import { beforeAll } from "bun:test";\nimport { createTestState } from "@stll/test-state";\nconst state = createTestState({ file: import.meta.path, config: {} });\nbeforeAll(() => state.setEnv("A", "setup"));',
       ),
     ).toEqual([4]);
     expect(
       await lint(
-        'import { beforeEach, afterEach, describe } from "bun:test";\nimport { createTestState } from "@/api/tests/helpers/test-state";\nconst state = createTestState({ file: import.meta.path, config: {} });\nbeforeEach(() => state.setEnv("A", "setup"));\nafterEach(() => state.setEnv("A", "teardown"));\ndescribe("nested", () => { state.beforeAll(() => state.setEnv("A", "file")); });',
+        'import { beforeEach, afterEach, describe } from "bun:test";\nimport { createTestState } from "@stll/test-state";\nconst state = createTestState({ file: import.meta.path, config: {} });\nbeforeEach(() => state.setEnv("A", "setup"));\nafterEach(() => state.setEnv("A", "teardown"));\ndescribe("nested", () => { state.beforeAll(() => state.setEnv("A", "file")); });',
       ),
     ).toEqual([]);
   });

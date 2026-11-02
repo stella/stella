@@ -98,8 +98,6 @@ export const DevSidebarGroup = () => {
       setTanstackDevtools: s.setTanstackDevtools,
       sourceInspector: s.sourceInspector,
       setSourceInspector: s.setSourceInspector,
-      publicLawPreview: s.publicLawPreview,
-      setPublicLawPreview: s.setPublicLawPreview,
       simulateSlowLoad: s.simulateSlowLoad,
       setSimulateSlowLoad: s.setSimulateSlowLoad,
     })),
@@ -248,13 +246,6 @@ export const DevSidebarGroup = () => {
           variant="switch"
         >
           Source Inspector
-        </MenuCheckboxItem>
-        <MenuCheckboxItem
-          checked={dev.publicLawPreview}
-          onClick={() => dev.setPublicLawPreview(!dev.publicLawPreview)}
-          variant="switch"
-        >
-          Public law preview
         </MenuCheckboxItem>
         <MenuCheckboxItem
           checked={dev.simulateSlowLoad}

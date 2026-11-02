@@ -63,6 +63,7 @@ export const FileViewerWithAI = ({
   docxEditorRef,
   docxComments,
   onDocxCommentsChange,
+  presets,
   requestDocxEditMode,
   children,
 }: FileViewerWithAIProps) => {
@@ -156,6 +157,7 @@ export const FileViewerWithAI = ({
               }}
               onActiveDraftChatBound={onActiveDraftChatBound}
               onDocxCommentsChange={onDocxCommentsChange}
+              presets={presets}
               requestDocxEditMode={requestDocxEditMode}
               workspaceId={workspaceId}
             />

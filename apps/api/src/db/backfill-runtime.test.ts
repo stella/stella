@@ -7,18 +7,107 @@ import {
   BackfillFailedError,
   BackfillHeldError,
 } from "@stll/db-load-gate/backfill-pass";
-import type { Verdict } from "@stll/db-load-gate/health";
+import type { Signal, Verdict } from "@stll/db-load-gate/health";
 import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
+import {
+  AUTOVACUUM_SQL,
+  LONG_TRANSACTION_SQL,
+} from "@stll/db-load-gate/indicators";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
+  BACKFILL_TABLE_CONTENTION,
+  type BackfillTableContention,
   createBackfillRuntime,
   createScriptBackfillRuntime,
   decodeCheckpoint,
 } from "./backfill-runtime";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import type { Transaction } from "./root";
+
+test.each([
+  BACKFILL_TABLE_CONTENTION.WRITE,
+  BACKFILL_TABLE_CONTENTION.SHARED_READ,
+])(
+  "population pressure gates %s work and releases after folding",
+  async (tableContention) => {
+    const config = {
+      ...defaultConfig,
+      minSize: 1,
+      maxSize: 1,
+      busyWindows: [],
+    };
+    let pending = 8193;
+    let checkpoint: {
+      cursor: string | null;
+      batch: ReturnType<typeof initialBatchState>;
+    } = {
+      cursor: null,
+      batch: initialBatchState(config),
+    };
+    let now = 0;
+    let workCalls = 0;
+    const runtime = createBackfillRuntime({
+      name: "decision-reparse",
+      tableName: "case_law_decisions",
+      tableContention,
+      initialSize: 1,
+      config,
+      clock: () => now,
+      readVerdict: async () => ({ kind: "normal", signals: [] }),
+      log: () => {},
+      connection: {
+        execute: async () => {},
+        query: async (statement, parameters = []) => {
+          if (statement.includes("transaction_isolation")) {
+            return [{ isolation: "read committed" }];
+          }
+          if (statement.includes("to_regclass")) {
+            return [{ installed: true }];
+          }
+          if (statement.includes("AS pending")) {
+            return [{ pending }];
+          }
+          if (statement.startsWith("SELECT cursor, batch")) {
+            return [checkpoint];
+          }
+          if (statement.startsWith("UPDATE database_backfill_states")) {
+            checkpoint = {
+              cursor: parameters.at(1)?.toString() ?? null,
+              batch: JSON.parse(String(parameters.at(2))),
+            };
+          }
+          return [{ acquired: true }];
+        },
+      },
+    });
+    const work = async () => {
+      workCalls += 1;
+      return { cursor: "next", done: false, value: 1 };
+    };
+    try {
+      if (tableContention === BACKFILL_TABLE_CONTENTION.WRITE) {
+        expect(await rejectionOf(runtime.step(work))).toBeInstanceOf(
+          BackfillHeldError,
+        );
+        expect(workCalls).toBe(0);
+      } else {
+        await runtime.step(work);
+        expect(workCalls).toBe(1);
+      }
+      pending = 0;
+      now = 60_000;
+      await runtime.step(work);
+      expect(workCalls).toBe(
+        tableContention === BACKFILL_TABLE_CONTENTION.WRITE ? 1 : 2,
+      );
+    } finally {
+      await runtime.close();
+    }
+  },
+);
 
 test.each([undefined, null, "unknown", {}, 4])(
   "an unrecognized checkpoint cause %p uses the legacy hold policy",
@@ -86,6 +175,9 @@ test.each([
       execute: async () => {},
       release: () => {},
       query: async (statement, parameters = []) => {
+        if (statement.includes("transaction_isolation")) {
+          return [{ isolation: "read committed" }];
+        }
         if (statement.startsWith("SELECT cursor, batch")) {
           return [checkpoint];
         }
@@ -167,6 +259,9 @@ test("observed completion clears a durable hold without reading load or running 
     connection: {
       execute: async () => {},
       query: async (statement, parameters = []) => {
+        if (statement.includes("transaction_isolation")) {
+          return [{ isolation: "read committed" }];
+        }
         if (statement.startsWith("SELECT cursor, batch")) {
           return [checkpoint];
         }
@@ -263,6 +358,9 @@ test.each(["default", "changes"] as const)(
       connection: {
         execute: async () => {},
         query: async (statement, parameters = []) => {
+          if (statement.includes("transaction_isolation")) {
+            return [{ isolation: "read committed" }];
+          }
           if (statement.startsWith("SELECT cursor, batch")) {
             return [checkpoint];
           }
@@ -368,6 +466,9 @@ test("a quiet multi-unit run retains its first resume transition in the final st
     connection: {
       execute: async () => {},
       query: async (statement, parameters = []) => {
+        if (statement.includes("transaction_isolation")) {
+          return [{ isolation: "read committed" }];
+        }
         if (statement.startsWith("SELECT cursor, batch")) {
           return [checkpoint];
         }
@@ -417,6 +518,9 @@ for (const mode of ["database", "script"] as const) {
         statement: string,
         parameters: readonly unknown[] = [],
       ) => {
+        if (statement.includes("transaction_isolation")) {
+          return [{ isolation: "read committed" }];
+        }
         if (
           statement.startsWith("INSERT INTO database_backfill_states") ||
           statement.startsWith("UPDATE database_backfill_states")
@@ -520,3 +624,112 @@ for (const mode of ["database", "script"] as const) {
     },
   );
 }
+
+const LOAD_OBSERVED_AT = 1_000_000;
+
+/** One script runtime over a fake connection whose table is busy in every lock-shaped way. */
+const runAgainstBusyTable = async ({
+  tableContention,
+  ioBalance,
+}: {
+  tableContention: BackfillTableContention | undefined;
+  ioBalance: Signal;
+}) => {
+  const observedAt = new Date(LOAD_OBSERVED_AT).toISOString();
+  const query = async (statement: string) => {
+    if (statement === LONG_TRANSACTION_SQL) {
+      // A writer on the table has held its lock for ten minutes.
+      return await Promise.resolve([{ ageMs: 10 * 60_000, observedAt }]);
+    }
+    if (statement === AUTOVACUUM_SQL) {
+      return await Promise.resolve([{ active: true, observedAt }]);
+    }
+    if (statement.startsWith("SELECT cursor, batch")) {
+      return await Promise.resolve([
+        { cursor: null, batch: initialBatchState(defaultConfig) },
+      ]);
+    }
+    return await Promise.resolve([{ acquired: true }]);
+  };
+  const dialect = new PgDialect();
+  const transaction = asTestRaw<Transaction>({
+    execute: async (statement: Parameters<typeof dialect.sqlToQuery>[0]) =>
+      await query(dialect.sqlToQuery(statement).sql),
+  });
+  const runtime = createScriptBackfillRuntime({
+    name: "table-contention",
+    tableName: "rows",
+    tableContention,
+    initialSize: 1,
+    config: { ...defaultConfig, minSize: 1, maxSize: 1, busyWindows: [] },
+    clock: () => LOAD_OBSERVED_AT,
+    readEbsSignal: async () => await Promise.resolve(ioBalance),
+    log: () => undefined,
+    db: {
+      transaction: async (work) => await work(transaction),
+      execute: transaction.execute,
+    },
+    slot: { tryAcquire: async () => true, release: () => undefined },
+  });
+  const state = { worked: false };
+  try {
+    const outcome = await Result.tryPromise({
+      try: async () =>
+        await runtime.step(async () => {
+          state.worked = true;
+          return await Promise.resolve({
+            cursor: null,
+            done: true,
+            value: "ran",
+          });
+        }),
+      catch: (error: unknown) => error,
+    });
+    return {
+      worked: state.worked,
+      held: outcome.isErr() && outcome.error instanceof BackfillHeldError,
+    };
+  } finally {
+    await runtime.close();
+  }
+};
+
+const ioBalanceSignal = (value: number): Signal => ({
+  indicator: "ebs_balance",
+  kind: value < defaultConfig.hardFloor ? "stop" : "normal",
+  value,
+  threshold: defaultConfig.hardFloor,
+  observedAt: new Date(LOAD_OBSERVED_AT).toISOString(),
+  reason: "Minimum byte and IO balance",
+});
+
+test.each([
+  { tableContention: undefined, held: true },
+  { tableContention: BACKFILL_TABLE_CONTENTION.WRITE, held: true },
+  { tableContention: BACKFILL_TABLE_CONTENTION.SHARED_READ, held: false },
+])(
+  "a long lock holder and autovacuum on the table hold $tableContention work only when it writes there",
+  async ({ tableContention, held }) => {
+    expect(
+      await runAgainstBusyTable({
+        tableContention,
+        ioBalance: ioBalanceSignal(100),
+      }),
+    ).toEqual({ worked: !held, held });
+  },
+);
+
+test.each([
+  BACKFILL_TABLE_CONTENTION.WRITE,
+  BACKFILL_TABLE_CONTENTION.SHARED_READ,
+])(
+  "a low IO and byte balance holds %s work, whatever its table contention",
+  async (tableContention) => {
+    expect(
+      await runAgainstBusyTable({
+        tableContention,
+        ioBalance: ioBalanceSignal(defaultConfig.hardFloor - 1),
+      }),
+    ).toEqual({ worked: false, held: true });
+  },
+);

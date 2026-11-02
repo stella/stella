@@ -345,3 +345,16 @@ describe("tool call ids through the engine", () => {
     ]);
   });
 });
+
+describe("chunk types the installed SDK does not name", () => {
+  test("an unknown or inherited event type passes through unchanged", async () => {
+    const chunks = [
+      ...Object.getOwnPropertyNames(Object.prototype),
+      "__proto__",
+      "FUTURE_EVENT",
+    ].map((type) => asTestRaw<StreamChunk>({ type, toolCallId: "call_0" }));
+    expect(await collect(chunks, [], new ToolCallIdLedger(["call_0"]))).toEqual(
+      chunks,
+    );
+  });
+});

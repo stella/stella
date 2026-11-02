@@ -68,6 +68,28 @@ test("function drop and rename are folded", () => {
   ).toBe(true);
 });
 
+test("function search_path metadata leaves every derived gate plan unchanged", () => {
+  const history = [
+    `${routine()} ${trigger()} ${policy()} ${index()} ${grant()}`,
+  ];
+  expect(
+    fold([
+      ...history,
+      "ALTER FUNCTION public.entity_feature_gate_graph() SET search_path = pg_catalog, public, pg_temp;",
+    ]),
+  ).toEqual(fold(history));
+});
+
+test("other ALTER FUNCTION forms still fail closed", () => {
+  expect(() =>
+    fold([
+      `${routine()} ALTER FUNCTION public.entity_feature_gate_graph() OWNER TO stella;`,
+    ]),
+  ).toThrow(
+    /Unsupported gated object statement in migration 1: ALTER FUNCTION[\s\S]+OWNER TO/u,
+  );
+});
+
 test("index drop and rename are folded", () => {
   expect(
     fold([`${index()} DROP INDEX CONCURRENTLY IF EXISTS items_ef_gate;`])

@@ -1,43 +1,9 @@
 {
-  "accessOff": {
-    "message": "Piekļuve vietnēm ir izslēgta. Piešķiriet to vienreiz, lai stella varētu izmantot vietnes, kurās esat pieteicies."
-  },
-  "accessReady": {
-    "message": "Gatavs. stella var izmantot atsevišķu cilni, kamēr jūsu pieteikšanās paliek aktīva."
-  },
   "accessUpdateFailed": {
     "message": "Chrome neizdevās mainīt piekļuvi vietnēm."
   },
-  "adoptTab": {
-    "message": "Izmantot šo cilni ar stella"
-  },
   "adoptUnsupported": {
     "message": "Ar stella var izmantot tikai publiskas HTTPS lapas."
-  },
-  "adoptedTab": {
-    "message": "stella tagad var lasīt $ORIGIN$ šajā cilnē. Jautājiet par to tērzēšanā.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "checkingAccess": {
-    "message": "Pārbauda piekļuvi vietnēm…"
-  },
-  "connectTab": {
-    "message": "Savienot pašreizējo stella cilni"
-  },
-  "controllerReady": {
-    "message": "Savienots ar $ORIGIN$. Katra darbība joprojām jāapstiprina stellā.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "disconnectTab": {
-    "message": "Atvienot cilni"
   },
   "downloadKept": {
     "message": "Lejupielādes, kas pabeidzās, kamēr stella vadīja cilni, un tika saglabātas: $COUNT$. Pirms atvēršanas pārbaudiet, no kurienes tās ir.",
@@ -72,13 +38,68 @@
   "extensionName": {
     "message": "stella"
   },
-  "grantAccess": {
-    "message": "Atļaut visas vietnes"
+  "unsupportedTab": {
+    "message": "Atveriet stella lietotnes cilni un mēģiniet vēlreiz."
+  },
+  "connectionPurpose": {
+    "message": "Kad lūgsiet tērzēšanā, stella varēs atsevišķā cilnē atvērt un lasīt vietnes, izmantojot jūsu pieteikšanās sesijas."
+  },
+  "statusConnected": {
+    "message": "Savienots ar $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "statusNotConnected": {
+    "message": "Nav savienots"
+  },
+  "statusWebsiteAccessNeeded": {
+    "message": "Nepieciešama piekļuve vietnēm"
+  },
+  "statusOpenStella": {
+    "message": "Lai savienotu, atveriet stella"
+  },
+  "statusTabHandedOver": {
+    "message": "Cilne nodota stella: $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "allowAndConnect": {
+    "message": "Atļaut piekļuvi un savienot"
+  },
+  "allowWebsiteAccess": {
+    "message": "Atļaut piekļuvi vietnēm"
+  },
+  "connectStella": {
+    "message": "Savienot stella"
+  },
+  "adoptTab": {
+    "message": "Izmantot šo cilni ar stella"
+  },
+  "disconnectTab": {
+    "message": "Atvienot"
+  },
+  "disconnectDescription": {
+    "message": "stella pārtrauks izmantot savienoto cilni."
   },
   "revokeAccess": {
     "message": "Noņemt piekļuvi vietnēm"
   },
-  "unsupportedTab": {
-    "message": "Atveriet stella lietotnes cilni un mēģiniet vēlreiz."
+  "revokeDescription": {
+    "message": "Noņem atļauju atvērt un lasīt vietnes."
+  },
+  "checkingAccess": {
+    "message": "Pārbauda savienojumu…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "stella ir savienota citā adresē"
+  },
+  "connectStellaInstead": {
+    "message": "Tā vietā savienot stella šeit"
   }
 }

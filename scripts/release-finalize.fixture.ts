@@ -20,6 +20,24 @@ const git = (cwd: string, ...args: string[]) => {
 
 type ProofFixture = {
   states?: Record<string, string>;
+  /** A failed main/heavy run: its conclusion and latest-attempt jobs. */
+  heavyRun?: {
+    conclusion: string;
+    jobs: readonly {
+      name: string;
+      status: string;
+      conclusion: string | null;
+      steps?: readonly { name: string; conclusion: string | null }[];
+    }[];
+    /** The heavy run's current attempt; defaults to 1. */
+    runAttempt?: number;
+    /** The jobs API's total_count; defaults to the number of jobs. */
+    total?: number;
+    /** The ci-required-summary record; no artifact when undefined. */
+    record?: (sha: string) => unknown;
+    /** The ci-required-violations record; no artifact when undefined. */
+    violations?: (sha: string) => unknown;
+  };
   runSha?: string;
   incidents?: boolean;
   noRc?: boolean;
@@ -59,6 +77,7 @@ export const finalize = (fixture: ProofFixture = {}) => {
       "finalize-release.sh",
       "check-release-main-health.sh",
       "check-release-open-incidents.sh",
+      "release-heavy-verdict.jq",
     ]) {
       cpSync(new URL(source, import.meta.url), path.join(root, source));
     }
@@ -95,9 +114,35 @@ export const finalize = (fixture: ProofFixture = {}) => {
           head_branch: "main",
           event: "workflow_dispatch",
           display_title: `${title}${fixture.runSha ?? sha}`,
+          run_attempt: fixture.heavyRun?.runAttempt ?? 1,
           status: "completed",
-          conclusion: "success",
+          conclusion:
+            title.startsWith("Main heavy") && fixture.heavyRun
+              ? fixture.heavyRun.conclusion
+              : "success",
         }),
+      );
+    }
+    writeFileSync(
+      path.join(root, "jobs.json"),
+      JSON.stringify([
+        {
+          total_count:
+            fixture.heavyRun?.total ?? fixture.heavyRun?.jobs.length ?? 0,
+          jobs: fixture.heavyRun?.jobs ?? [],
+        },
+      ]),
+    );
+    if (fixture.heavyRun?.violations !== undefined) {
+      writeFileSync(
+        path.join(root, "violations.json"),
+        JSON.stringify(fixture.heavyRun.violations(sha)),
+      );
+    }
+    if (fixture.heavyRun?.record !== undefined) {
+      writeFileSync(
+        path.join(root, "record.json"),
+        JSON.stringify(fixture.heavyRun.record(sha)),
       );
     }
     writeFileSync(
@@ -116,6 +161,16 @@ esac
 case "$*" in
   'release view '*) printf '%s\\n' '${fixture.rcPublication !== "published"}' ;;
   *statuses?*) cat "$TEST_ROOT/statuses.json" ;;
+  'run download '*)
+    dir="\u0024{!#}"
+    case "$*" in
+      *' -n ci-required-summary '*) name=ci-required-summary; file=record.json ;;
+      *' -n ci-required-violations '*) name=ci-required-violations; file=violations.json ;;
+      *) echo "unexpected artifact" >&2; exit 1 ;;
+    esac
+    [[ -f "$TEST_ROOT/$file" ]] || { echo "no artifact" >&2; exit 1; }
+    cp "$TEST_ROOT/$file" "\u0024{dir}/$name.json" ;;
+  *actions/runs/*/jobs?*) cat "$TEST_ROOT/jobs.json" ;;
   *actions/runs/*) run="\u0024{!#}"; cat "$TEST_ROOT/run-\u0024{run##*/}.json" ;;
   *issues?*) cat "$TEST_ROOT/incidents.json" ;;
   'release edit '*)

@@ -57,6 +57,7 @@ const decision = {
     name: "Synthetic fixture source",
   },
   sourceAttributionUrl: null,
+  sourceLanguages: null,
   sourceUrl: null,
   textFields: {
     abstract: absentText,

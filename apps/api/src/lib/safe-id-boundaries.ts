@@ -34,6 +34,12 @@ export const brandPersistedWorkspaceId = (
   workspaceId: string,
 ): SafeId<"workspace"> => toSafeId<"workspace">(workspaceId);
 
+/** Multi-matter desktop requests validate UUIDs before scoped authorization. */
+export const brandValidatedWorkspaceId = (
+  value: string,
+): SafeId<"workspace"> | null =>
+  isUuid(value) ? toSafeId<"workspace">(value) : null;
+
 // parser-output-unchanged: Agent-skill ID validation is unused by legal parsers and cannot alter their output.
 export const parsePersistedAgentSkillId = (
   id: string,

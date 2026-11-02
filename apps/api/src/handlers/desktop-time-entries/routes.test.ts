@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { timeEntries } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createHttpApp } from "@/api/http/app";
@@ -8,6 +10,7 @@ import { routes } from "@/api/http/route";
 import type { RouteEntry } from "@/api/http/route";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { toSafeId } from "@/api/lib/branded-types";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   authorizedMemberRole,
@@ -18,7 +21,6 @@ import {
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createDesktopMatterCandidatesEndpoint } from "./candidates";
@@ -49,9 +51,16 @@ test("desktop time entry endpoints require desktop account credentials", async (
     `time-entries/${WORKSPACE_ID}`,
     "time-entries/batch",
     "time-entries/batch/status",
+    "time-entries/narrative",
   ]) {
     let body = JSON.stringify(BODY);
-    if (path === "time-entries/batch/status") {
+    if (path === "time-entries/narrative") {
+      body = JSON.stringify({
+        titles: ["Katastr nemovitostí"],
+        locale: "cs-CZ",
+        matterName: null,
+      });
+    } else if (path === "time-entries/batch/status") {
       body = JSON.stringify({ idempotencyKey: "test" });
     } else if (path === "time-entries/batch") {
       body = JSON.stringify({
@@ -64,7 +73,7 @@ test("desktop time entry endpoints require desktop account credentials", async (
         `http://localhost/v1/desktop/${path}`,
         path.startsWith("time-entries/")
           ? {
-              method: "PUT",
+              method: path === "time-entries/narrative" ? "POST" : "PUT",
               headers: { "content-type": "application/json" },
               body,
             }
@@ -168,6 +177,21 @@ const exercise = async ({
   const device = await createDesktopDeviceSigner();
   const authorizeAccount = async (request: Request) =>
     Result.ok({
+      featureAccessSnapshot: buildFeatureAccessSnapshot({
+        organizationId: toSafeId<"organization">(ORGANIZATION_ID),
+        userId: USER_ID,
+        identity: { email: "desktop@example.test", emailVerified: true },
+        enrolments:
+          hidden === "time-billing"
+            ? []
+            : [
+                {
+                  featureId: "time-billing",
+                  organizationId: ORGANIZATION_ID,
+                  userId: USER_ID,
+                },
+              ],
+      }),
       consumedProof: await claimFixtureDeviceProof({
         request: await device.signRequest({
           request,

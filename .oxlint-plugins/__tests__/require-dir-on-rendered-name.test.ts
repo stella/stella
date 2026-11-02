@@ -18,7 +18,7 @@ const cases = [
   {
     title: "allows shared isolation and unrelated content",
     source:
-      "const view = <><BidiText>{user.displayName}</BidiText><UserText>{user.email}</UserText><span>{item.count}</span></>;",
+      "const view = <><BidiText>{user.displayName}</BidiText><UserText>{user.email}</UserText><IdentityText>{user.displayName}</IdentityText><span>{item.count}</span></>;",
     lines: [],
     sourcePath: "source.tsx",
   },

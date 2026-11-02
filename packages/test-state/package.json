@@ -1,0 +1,26 @@
+{
+  "name": "@stll/test-state",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Serial test fixtures that restore environment and validated configuration",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/test-state.ts"
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/test-state",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/test-state"
+  },
+  "dependencies": {
+    "better-result": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:"
+  }
+}

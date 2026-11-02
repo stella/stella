@@ -41,8 +41,12 @@ export default {
       "apps/api/src/lib/entities/create-from-buffer.ts",
       "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts",
       "apps/api/src/lib/flows/flow-executor.ts",
+      "apps/api/src/lib/review-organization/reset.ts",
+      "apps/api/src/lib/scheduler/tasks/review-organization-reset.ts",
       "apps/api/src/lib/tasks/create-task-entity.ts",
       "apps/api/src/lib/uploads/entity-create.ts",
+      "apps/api/src/lib/workspace-deletion.ts",
+      "apps/api/src/mcp/matter-tools.ts",
     ].map((importer) => ({
       path: importer,
       reason: FLUSHES_ITS_OWN_SEARCH_MARKS,

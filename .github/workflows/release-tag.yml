@@ -135,7 +135,7 @@ jobs:
 
       # A release whose npm publish failed or never ran leaves users on an
       # older CLI and libraries while everything else moves on. The previous
-      # stable tag's packages must be on npm before the next tag is cut; fix
+      # promoted stable release's packages must be on npm before the next tag is cut; fix
       # the publish (publish-npm.yml) first. Runs without an install.
       - name: Refuse a tag while the previous release is missing from npm
         continue-on-error: true

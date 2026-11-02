@@ -123,7 +123,8 @@ export const MODEL_VISIBLE_MCP_TOOL_DEFINITIONS =
   );
 
 const PURPOSE_BUILT_MCP_TOOL_DEFINITIONS = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
-  ({ name }) =>
+  ({ name, scope }) =>
+    MCP_DEFAULT_RESOURCE_SCOPES.some((candidate) => candidate === scope) &&
     name !== "list_capabilities" &&
     name !== "describe_capability" &&
     name !== MCP_CAPABILITY_EXECUTORS.read &&

@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Runs API code-quality checks required by the merge verdict.",
+  "reviewedDigest": "4876e07c78d917684586b31840680fc7d625dbc455d9daf10fbe4ff5e9db1452"
+}

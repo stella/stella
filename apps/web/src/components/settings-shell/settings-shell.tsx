@@ -20,7 +20,7 @@ import { cn } from "@stll/ui/utils";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { settingsNavSections } from "@/components/settings-shell/settings-nav";
 import { env } from "@/env";
-import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
+import { useTimeBillingChromeEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
@@ -46,7 +46,7 @@ type SettingsShellProps = {
 export const SettingsShell = ({ children }: SettingsShellProps) => {
   const t = useTranslations();
   const memoryEnabled = useCallerFeatureEnabled(CALLER_FEATURE.aiMemory);
-  const timeBilling = useTimeBillingPreviewEnabled();
+  const timeBilling = useTimeBillingChromeEnabled();
   const roleQuery = useQuery(roleOptions);
   const roleView = queryView(roleQuery);
   useQueryViewError(roleView, "SettingsShell.role:query");
@@ -154,14 +154,16 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
                   );
                 })}
                 {section.id === "account" && (
-                  <button
-                    className={NAV_ITEM_CLASS}
+                  <Button
+                    className="block w-full"
                     onClick={openShortcuts}
-                    type="button"
+                    variant="plain"
                   >
-                    <KeyboardIcon className="size-4" />
-                    <span>{t("navigation.shortcutsDialog.title")}</span>
-                  </button>
+                    <span className={NAV_ITEM_CLASS}>
+                      <KeyboardIcon className="size-4" />
+                      <span>{t("navigation.shortcutsDialog.title")}</span>
+                    </span>
+                  </Button>
                 )}
               </div>
             ))}
@@ -169,14 +171,14 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
         </ScrollArea>
       </div>
       <ScrollArea className="min-h-0 min-w-0 flex-1">
-        <main className="flex min-w-0 flex-col">
+        <section className="flex min-w-0 flex-col">
           {/* One width for every page: organization tables need it, and
               moving between sections never shifts the content. */}
           <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-6">
             <QueryViewFeedback view={roleView} />
             {children}
           </div>
-        </main>
+        </section>
       </ScrollArea>
     </div>
   );

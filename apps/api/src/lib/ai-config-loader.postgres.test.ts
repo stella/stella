@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, getTableName, sql, TransactionRollbackError } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   ORGANIZATION_ACCESS_STATE,
@@ -26,7 +28,6 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

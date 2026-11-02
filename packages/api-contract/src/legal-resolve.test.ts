@@ -81,6 +81,11 @@ describe("legal resolve response", () => {
     },
     { status: "not_found", reason: "unknown_document" },
     {
+      status: "not_found",
+      reason: "unknown_document",
+      hint: "Use collection Zb. for 513/1991.",
+    },
+    {
       status: "ambiguous",
       candidates: [
         {
@@ -95,6 +100,16 @@ describe("legal resolve response", () => {
     { status: "country_unavailable" },
   ])("accepts the $status envelope", (value) => {
     expect(v.safeParse(legalResolveResponseSchema, value).success).toBe(true);
+  });
+
+  test("rejects a non-text recovery hint", () => {
+    expect(
+      v.safeParse(legalResolveResponseSchema, {
+        status: "not_found",
+        reason: "unknown_document",
+        hint: { collection: "Zb." },
+      }).success,
+    ).toBe(false);
   });
 
   test("rejects the former free-form metadata envelope", () => {

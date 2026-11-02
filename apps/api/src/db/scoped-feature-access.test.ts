@@ -3,6 +3,7 @@ import type { SQLWrapper } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import {
   createMembershipSafeDb,
@@ -18,7 +19,6 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 

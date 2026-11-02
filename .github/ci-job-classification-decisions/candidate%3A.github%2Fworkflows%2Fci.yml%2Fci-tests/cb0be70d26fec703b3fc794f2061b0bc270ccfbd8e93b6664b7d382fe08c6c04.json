@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Runs scoped package tests and reports quarantined outcomes for the merge verdict.",
+  "reviewedDigest": "cb0be70d26fec703b3fc794f2061b0bc270ccfbd8e93b6664b7d382fe08c6c04"
+}

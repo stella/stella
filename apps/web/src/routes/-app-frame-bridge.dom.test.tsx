@@ -7,11 +7,19 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
+// The bridge reports a live extension only in a desktop Chromium browser, and
+// happy-dom presents none, so this file presents one explicitly: it tests the
+// bridge across navigation, not the test environment's browser.
+Object.defineProperty(navigator, "userAgentData", {
+  configurable: true,
+  value: { brands: [{ brand: "Chromium" }], mobile: false },
+});
+
 const testing = await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
-const { getBrowserClientCapability, isBrowserExtensionBridgeMounted } =
+const { getBrowserExtensionState, isBrowserExtensionBridgeMounted } =
   await import("@/features/chat/browser-control/browser-extension-bridge");
 const { APP_FRAME_SCOPE } = await import("@/routes/-app-frame-scope");
 const { AppFrameHost } = await import("@/routes/-app-frame-host");
@@ -19,6 +27,7 @@ const { BROWSER_CONTROL_PROTOCOL_VERSION, BROWSER_EXTENSION_MESSAGE_SOURCE } =
   await import("@stll/api-contract/browser-control");
 
 afterAll(async () => {
+  Reflect.deleteProperty(navigator, "userAgentData");
   testing.cleanup();
   await testing.act(async () => {
     await sleep(50);
@@ -79,8 +88,9 @@ test("a route with no app frame still has the extension bridge, across navigatio
         }),
       );
     });
-    expect(getBrowserClientCapability()).toEqual({
+    expect(getBrowserExtensionState()).toEqual({
       protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "connected",
     });
 
     testing.act(() => {
@@ -89,7 +99,7 @@ test("a route with no app frame still has the extension bridge, across navigatio
     });
     await testing.waitFor(() => view.getByTestId("other"));
     expect(isBrowserExtensionBridgeMounted()).toBe(true);
-    expect(getBrowserClientCapability()).toBeDefined();
+    expect(getBrowserExtensionState()).toBeDefined();
   } finally {
     view.unmount();
     queryClient.clear();

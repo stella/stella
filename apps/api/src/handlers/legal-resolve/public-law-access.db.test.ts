@@ -4,6 +4,7 @@ import { inArray } from "drizzle-orm";
 
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { organization } from "@/api/db/auth-schema";
 import {
@@ -18,7 +19,6 @@ import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import {
   getTestDb,
   releaseTestDb,

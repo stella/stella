@@ -18,6 +18,7 @@ import {
   expiredWaiverAnnotations,
   expiredWaiverFailures,
   expiryInstant,
+  isExpiryPolicySource,
   PENDING_CONTRACT_MIGRATIONS_SOURCE,
   readTestQuarantines,
   RECHECK_INSTRUCTIONS,
@@ -359,6 +360,26 @@ test("impossible dates, missing anchors and new expiry-bearing owners fail close
     ),
   ).toEqual(["apps/example/src/deadline.ts", "new.json"]);
 });
+test("expiry census skips tests and fixtures in every naming", () => {
+  for (const file of [
+    "packages/api-contract/src/desktop-runner.fixtures.json",
+    "packages/api-contract/src/desktop-presence-request.fixture.json",
+    "apps/desktop/fixtures/activity-contract.json",
+    "packages/mcp-kit/src/__fixtures__/registry.json",
+    "apps/api/src/lib/deadline.test.ts",
+    "apps/web/src/deadline.spec.tsx",
+  ]) {
+    expect(isExpiryPolicySource(file)).toBe(false);
+  }
+  for (const file of [
+    "packages/api-contract/src/desktop-runner.ts",
+    "apps/api/src/lib/fixture-loader.ts",
+    "scripts/suppression-waivers.json",
+    "bunfig.toml",
+  ]) {
+    expect(isExpiryPolicySource(file)).toBe(true);
+  }
+});
 test("documentation inventory derives from injected typed owners including none", () => {
   for (const docs of [
     [],
@@ -473,8 +494,8 @@ test("all waiver kinds retain their keys when unrelated lines shift their locato
     collectWaivers({
       read: (file) =>
         prefix +
-        (file === "scripts/guard-rollout-policy.ts"
-          ? 'const rollouts = [{id: "fixture-guard"}];'
+        (file === "scripts/guard-rollouts/fixture-guard.json"
+          ? '{"id":"fixture-guard"}'
           : read(file)),
       docs: [doc],
       audit: [{ id: "GHSA-test", package: "pkg", expiresOn: "2026-10-03" }],
@@ -580,7 +601,13 @@ test("check consumes validated tracked files without spawning under the offline 
 
 test("check requires an explicit tracked-files input", () => {
   const checked = Bun.spawnSync(
-    ["bun", "scripts/dated-waivers.ts", "--check"],
+    [
+      "bun",
+      "--preload",
+      "./scripts/offline-network-preload.ts",
+      "scripts/dated-waivers.ts",
+      "--check",
+    ],
     {
       cwd: path.resolve(import.meta.dir, ".."),
     },
@@ -600,6 +627,8 @@ test("tracked-files input rejects absolute and parent paths", () => {
       const checked = Bun.spawnSync(
         [
           "bun",
+          "--preload",
+          "./scripts/offline-network-preload.ts",
           "scripts/dated-waivers.ts",
           "--check",
           "--tracked-files",
@@ -620,8 +649,8 @@ test("tracked-files input rejects absolute and parent paths", () => {
 test("changed-lines guard rollouts enter the dated inventory with a full-scope probe", () => {
   const entries = collectWaivers({
     read: (file) =>
-      file === "scripts/guard-rollout-policy.ts"
-        ? 'export const GUARD_ROLLOUTS = [{ id: "fixture-guard" }];'
+      file === "scripts/guard-rollouts/fixture-guard.json"
+        ? '{"id":"fixture-guard"}'
         : read(file),
     docs: [],
     audit: [],
@@ -663,7 +692,7 @@ test("changed-lines guard rollouts enter the dated inventory with a full-scope p
   expect(
     expiredWaiverFailures(entries, new Date("2026-10-20T00:00:00.000Z")),
   ).toEqual([
-    "scripts/guard-rollout-policy.ts:1 dated waiver expired: fixture-guard",
+    "scripts/guard-rollouts/fixture-guard.json:1 dated waiver expired: fixture-guard",
   ]);
 });
 
