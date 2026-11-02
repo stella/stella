@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import { UPLOAD_FILE_MIN_BYTES } from "@stll/api-contract/limits";
 
+import { MAX_BYTES_ISSUE } from "@/api/http/input";
 import { defaultVarcharSchema } from "@/api/lib/custom-schema";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 
@@ -14,7 +15,7 @@ export const uploadFileSizeSchema = (maximum: number) =>
     // S3 enforces the maximum via the signed Content-Length; finalize
     // re-checks via S3.HEAD. Pinning it at the schema level lets the API
     // refuse oversized requests before even minting a URL.
-    v.maxValue(maximum),
+    v.maxValue(maximum, MAX_BYTES_ISSUE),
   );
 
 /**

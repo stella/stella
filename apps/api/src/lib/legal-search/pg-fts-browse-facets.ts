@@ -1,17 +1,12 @@
-import { Result } from "better-result";
-import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, lte, sql } from "drizzle-orm";
 
-import {
-  caseLawBrowseFacetCounts,
-  caseLawSources,
-  publishedCaseLawDecisions,
-} from "@/api/db/schema";
 import {
   caseLawPublicReadDb,
   type CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { populationCountsFreshness } from "@/api/lib/case-law/population-count-freshness";
+import { caseLawPopulationRows } from "@/api/lib/case-law/population-counts";
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import type {
   LegalBrowseFacets,
@@ -23,153 +18,60 @@ import {
 } from "@/api/lib/public-law-shared-query";
 import type { FacetBucket } from "@/api/lib/search/types";
 
-/** Refreshed hourly, so visible bucket counts can be up to one hour stale. */
-
-const toFacetBuckets = (
-  rows: readonly { count: number; value: string }[],
-): FacetBucket[] => rows.map((row) => ({ count: row.count, value: row.value }));
-
-/** Serve fresh installs before the first scheduled snapshot refresh. */
-const readLivePgFtsBrowseFacets = async (
-  tx: CaseLawPublicReadTransaction,
-  query: LegalBrowseFacetsQuery,
-): Promise<LegalBrowseFacets> => {
-  const scope: SQL[] = [redistributableCaseLawSource];
-  if (query.jurisdiction) {
-    scope.push(eq(publishedCaseLawDecisions.country, query.jurisdiction));
-  }
-
-  const countryRows = await tx
-    .select({
-      value: publishedCaseLawDecisions.country,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(publishedCaseLawDecisions)
-    .innerJoin(
-      caseLawSources,
-      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-    )
-    .where(and(...scope))
-    .groupBy(publishedCaseLawDecisions.country)
-    .orderBy(desc(sql`count(*)`), desc(publishedCaseLawDecisions.country))
-    .limit(query.limit);
-
-  const courtRows = await tx
-    .select({
-      value: publishedCaseLawDecisions.court,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(publishedCaseLawDecisions)
-    .innerJoin(
-      caseLawSources,
-      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-    )
-    .where(and(...scope))
-    .groupBy(publishedCaseLawDecisions.court)
-    .orderBy(desc(sql`count(*)`), desc(publishedCaseLawDecisions.court))
-    .limit(query.limit);
-
-  const decisionYear = sql<string>`to_char(${publishedCaseLawDecisions.decisionDate}, 'YYYY')`;
-  const yearRows = await tx
-    .select({
-      value: decisionYear,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(publishedCaseLawDecisions)
-    .innerJoin(
-      caseLawSources,
-      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-    )
-    .where(and(isNotNull(publishedCaseLawDecisions.decisionDate), ...scope))
-    .groupBy(decisionYear)
-    .orderBy(desc(decisionYear))
-    .limit(query.limit);
-
-  return {
-    country: toFacetBuckets(countryRows),
-    court: toFacetBuckets(courtRows),
-    year: toFacetBuckets(yearRows),
-  };
-};
-
 export const readPgFtsBrowseFacets = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawBrowseFacets,
   async (
     tx: CaseLawPublicReadTransaction,
     query: LegalBrowseFacetsQuery,
   ): Promise<LegalBrowseFacets> => {
-    const snapshotRows = await tx
-      .select({ kind: caseLawBrowseFacetCounts.kind })
-      .from(caseLawBrowseFacetCounts)
-      .orderBy(caseLawBrowseFacetCounts.kind)
-      .limit(1);
-    if (snapshotRows.length === 0) {
-      return await readLivePgFtsBrowseFacets(tx, query);
-    }
-
+    const population = caseLawPopulationRows(tx, query.excludedSourceIds);
     const scope = and(
-      redistributableCaseLawSource,
       query.jurisdiction
-        ? eq(caseLawBrowseFacetCounts.country, query.jurisdiction)
+        ? eq(population.country, query.jurisdiction)
         : undefined,
     );
 
-    const countryRows = await tx
+    const grouped = tx
       .select({
-        value: caseLawBrowseFacetCounts.value,
-        count: sql<number>`sum(${caseLawBrowseFacetCounts.total})::int`,
+        kind: population.kind,
+        value: population.value,
+        count: sql<number>`sum(${population.total})::integer`.as("count"),
       })
-      .from(caseLawBrowseFacetCounts)
-      .innerJoin(
-        caseLawSources,
-        eq(caseLawSources.id, caseLawBrowseFacetCounts.sourceId),
+      .from(population)
+      .where(
+        and(scope, sql`${population.kind} IN ('country', 'court', 'year')`),
       )
-      .where(and(scope, eq(caseLawBrowseFacetCounts.kind, "country")))
-      .groupBy(caseLawBrowseFacetCounts.value)
-      .orderBy(
-        desc(sql`sum(${caseLawBrowseFacetCounts.total})`),
-        desc(caseLawBrowseFacetCounts.value),
-      )
-      .limit(query.limit);
-
-    const courtRows = await tx
+      .groupBy(population.kind, population.value)
+      .as("grouped_population");
+    const ranked = tx
       .select({
-        value: caseLawBrowseFacetCounts.value,
-        count: sql<number>`sum(${caseLawBrowseFacetCounts.total})::int`,
+        kind: grouped.kind,
+        value: grouped.value,
+        count: grouped.count,
+        position: sql<number>`row_number() OVER (PARTITION BY ${grouped.kind}
+        ORDER BY CASE WHEN ${grouped.kind} = 'year' THEN NULL ELSE ${grouped.count} END DESC,
+        ${grouped.value} DESC)`.as("position"),
       })
-      .from(caseLawBrowseFacetCounts)
-      .innerJoin(
-        caseLawSources,
-        eq(caseLawSources.id, caseLawBrowseFacetCounts.sourceId),
-      )
-      .where(and(scope, eq(caseLawBrowseFacetCounts.kind, "court")))
-      .groupBy(caseLawBrowseFacetCounts.value)
-      .orderBy(
-        desc(sql`sum(${caseLawBrowseFacetCounts.total})`),
-        desc(caseLawBrowseFacetCounts.value),
-      )
-      .limit(query.limit);
-
-    const yearRows = await tx
+      .from(grouped)
+      .as("ranked_population");
+    const bucket = (kind: "country" | "court" | "year") => sql<
+      FacetBucket[]
+    >`coalesce(
+      jsonb_agg(jsonb_build_object('value', ${ranked.value}, 'count', ${ranked.count})
+        ORDER BY ${ranked.position}) FILTER (WHERE ${ranked.kind} = ${kind}), '[]'::jsonb)`;
+    const [row] = await tx
       .select({
-        value: caseLawBrowseFacetCounts.value,
-        count: sql<number>`sum(${caseLawBrowseFacetCounts.total})::int`,
+        country: bucket("country"),
+        court: bucket("court"),
+        year: bucket("year"),
+        countsFreshness: populationCountsFreshness,
       })
-      .from(caseLawBrowseFacetCounts)
-      .innerJoin(
-        caseLawSources,
-        eq(caseLawSources.id, caseLawBrowseFacetCounts.sourceId),
-      )
-      .where(and(scope, eq(caseLawBrowseFacetCounts.kind, "year")))
-      .groupBy(caseLawBrowseFacetCounts.value)
-      .orderBy(desc(caseLawBrowseFacetCounts.value))
-      .limit(query.limit);
-
-    return {
-      country: toFacetBuckets(countryRows),
-      court: toFacetBuckets(courtRows),
-      year: toFacetBuckets(yearRows),
-    };
+      .from(ranked)
+      .where(lte(ranked.position, query.limit));
+    if (!row) {
+      return panic("Maintained facet aggregate returned no row");
+    }
+    return row;
   },
 );
 

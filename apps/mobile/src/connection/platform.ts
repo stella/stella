@@ -12,8 +12,7 @@ import { openAuthSessionAsync } from "expo-web-browser";
 import * as v from "valibot";
 
 import type { AuthorizationCrypto } from "./pkce";
-import { storedSessionSchema } from "./session";
-import type { SessionStore } from "./session";
+import { createSessionStore, storedSessionSchema } from "./session";
 import type { OpenAuthSession } from "./sign-in";
 
 export const deviceCrypto: AuthorizationCrypto = {
@@ -23,6 +22,7 @@ export const deviceCrypto: AuthorizationCrypto = {
 };
 
 const SESSION_KEY = "stella.session";
+const PENDING_DELETION = JSON.stringify({ status: "pending-deletion" });
 
 /**
  * The Keychain on iOS, the Keystore-encrypted store on Android. Readable once
@@ -31,11 +31,14 @@ const SESSION_KEY = "stella.session";
  */
 const KEYCHAIN = { keychainAccessible: AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY };
 
-export const deviceSessionStore: SessionStore = {
+export const deviceSessionStore = createSessionStore({
   read: async () => {
     const stored = await getItemAsync(SESSION_KEY, KEYCHAIN);
     if (stored === null) {
       return undefined;
+    }
+    if (stored === PENDING_DELETION) {
+      return null;
     }
     const parsed = v.safeParse(
       v.pipe(v.string(), v.parseJson(), storedSessionSchema),
@@ -44,18 +47,20 @@ export const deviceSessionStore: SessionStore = {
     // A shape this build cannot read is a session it cannot use; dropping it
     // sends the person to sign in rather than failing every request.
     if (!parsed.success) {
-      await deleteItemAsync(SESSION_KEY, KEYCHAIN);
-      return undefined;
+      return null;
     }
     return parsed.output;
   },
   write: async (session) => {
     await setItemAsync(SESSION_KEY, JSON.stringify(session), KEYCHAIN);
   },
+  prepareClear: async () => {
+    await setItemAsync(SESSION_KEY, PENDING_DELETION, KEYCHAIN);
+  },
   clear: async () => {
     await deleteItemAsync(SESSION_KEY, KEYCHAIN);
   },
-};
+});
 
 /**
  * The system authentication session (ASWebAuthenticationSession, Custom Tabs).
