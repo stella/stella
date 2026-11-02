@@ -6,7 +6,7 @@ import { CONTACT_BULK_DELETE_LIMIT, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -146,10 +146,16 @@ const bulkDeleteContacts = createSafeRootHandler(
       }),
     );
 
-    flushWorkspaceSearchRepairs(txResult.affectedWorkspaceIds).catch(
-      createErrorCapture(
-        handlerErrorContext("bulkDeleteContacts.flushWorkspaceSearchRepairs"),
-      ),
+    detached(
+      async () =>
+        flushWorkspaceSearchRepairs(txResult.affectedWorkspaceIds).catch(
+          createErrorCapture(
+            handlerErrorContext(
+              "bulkDeleteContacts.flushWorkspaceSearchRepairs",
+            ),
+          ),
+        ),
+      "contacts-bulk-delete.flush-workspace-search-repairs",
     );
     return Result.ok({ outcomes: txResult.outcomes });
   },

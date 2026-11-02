@@ -18,6 +18,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 import bulkDeleteContacts from "./bulk/delete";
@@ -122,9 +123,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             ).at(0),
           ).toEqual({ clientId: blockedContactId });
         } finally {
-          await setup.db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(setup.db, [organizationId]);
           await setup.db.delete(user).where(eq(user.id, userId));
         }
       });
@@ -263,9 +262,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           });
           expect(auditedIds).toEqual([plainContactId]);
         } finally {
-          await setup.db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(setup.db, [organizationId]);
           await setup.db.delete(user).where(eq(user.id, userId));
         }
       });
