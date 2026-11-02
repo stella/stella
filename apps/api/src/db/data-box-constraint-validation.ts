@@ -11,27 +11,27 @@ export const DATA_BOX_CONSTRAINTS = [
   {
     tableName: "correspondence",
     constraintName: "correspondence_direction_check",
-    introducedBy: "20261031235000_data_box_correspondence",
+    introducedBy: "20261101221334_data_box_correspondence",
   },
   {
     tableName: "correspondence",
     constraintName: "correspondence_channel_check",
-    introducedBy: "20261031235000_data_box_correspondence",
+    introducedBy: "20261101221334_data_box_correspondence",
   },
   {
     tableName: "correspondence",
     constraintName: "correspondence_data_box_check",
-    introducedBy: "20261031235000_data_box_correspondence",
+    introducedBy: "20261101221334_data_box_correspondence",
   },
   {
     tableName: "organization_settings",
     constraintName: "organization_settings_data_box_ids_check",
-    introducedBy: "20261031235000_data_box_correspondence",
+    introducedBy: "20261101221334_data_box_correspondence",
   },
   {
     tableName: "correspondence",
     constraintName: "correspondence_source_entity_workspace_fk",
-    introducedBy: "20261031235500_correspondence_source_maintenance",
+    introducedBy: "20261101221734_correspondence_source_maintenance",
   },
 ] as const satisfies readonly (OnlineConstraintValidation & {
   introducedBy: string;

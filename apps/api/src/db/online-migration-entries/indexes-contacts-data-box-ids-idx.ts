@@ -9,7 +9,7 @@ export default {
       createSql: `CREATE INDEX CONCURRENTLY "contacts_data_box_ids_idx" ON public."contacts" USING gin (("metadata" -> 'dataBoxes') jsonb_path_ops)`,
       definitionBody:
         "ON public.contacts USING gin (((metadata -> 'dataBoxes'::text)) jsonb_path_ops)",
-      introducedBy: "20261031235000_data_box_correspondence",
+      introducedBy: "20261101221334_data_box_correspondence",
       isUnique: false,
       name: "contacts_data_box_ids_idx",
       tableName: "contacts",
