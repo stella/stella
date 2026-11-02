@@ -12,6 +12,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { drainSanctionsContactMarks } from "@/api/lib/lists/sanctions/monitoring-drain";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -181,9 +182,7 @@ if (!databaseUrl || !runPostgresTests) {
         observe.resolve(undefined);
         release.resolve(undefined);
         await Promise.allSettled(running);
-        await lockerDb
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(lockerDb, [organizationId]);
       }
     });
   }, 120_000);

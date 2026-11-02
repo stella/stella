@@ -1,17 +1,7 @@
 import { useState } from "react";
 
-import {
-  type QueryClient,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import {
-  createFileRoute,
-  Navigate,
-  Outlet,
-  redirect,
-  useMatch,
-} from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Outlet, useMatch } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 
@@ -25,11 +15,9 @@ import { WorkflowServiceTierPromptProvider } from "@/components/workspaces/workf
 import { WorkflowStartConfirmationPromptProvider } from "@/components/workspaces/workflow-start-confirmation-prompt";
 import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-workspace-chat-mention-registration";
 import { useMountEffect } from "@/hooks/use-effect";
-import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
@@ -58,18 +46,6 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     presentation: routePresentation({ type: "entity", entity: "matter" }),
   },
   component: RouteComponent,
-  notFoundComponent: () => {
-    // Handles unmatched child routes (e.g. doubled
-    // /workspaces/$id/workspaces/$id from stale router state).
-    if (import.meta.env.DEV) {
-      // oxlint-disable-next-line no-console -- dev-only stack trace to debug stale doubled URLs
-      console.trace(
-        "[stella] notFoundComponent triggered — redirecting to /workspaces. Current URL:",
-        globalThis.location.href,
-      );
-    }
-    return <Navigate replace to="/workspaces" />;
-  },
   loader: async ({ context, params }) => {
     const wsId = params.workspaceId;
     const qc = context.queryClient;
@@ -89,7 +65,14 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     // Only the workspace name blocks the breadcrumb. Start every independent
     // metadata request before awaiting it so they share the first network round.
     return await loadWorkspaceRouteQueries({
-      loadWorkspace: async () => await loadWorkspaceOrRedirect(qc, wsId),
+      loadWorkspace: async () => {
+        const workspace = await loadRouteResource({
+          ids: [wsId],
+          load: async () =>
+            await ensureRouteQueryData(qc, workspaceOptions(wsId)),
+        });
+        return workspace;
+      },
       startPrefetches: [
         () =>
           detached(
@@ -128,35 +111,6 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     ],
   }),
 });
-
-const loadWorkspaceOrRedirect = async (
-  queryClient: QueryClient,
-  workspaceId: string,
-) => {
-  try {
-    return await ensureRouteQueryData(
-      queryClient,
-      workspaceOptions(workspaceId),
-    );
-  } catch (error) {
-    if (APIError.is(error) && error.status === 404) {
-      // The redirect swallows this branch, so capture here; the rethrow
-      // below reaches the route error boundary, which captures already.
-      getAnalytics().captureError(error, {
-        fingerprintKey: "loadWorkspaceOrRedirect:failure",
-        scope: {
-          type: "handler",
-          handlerId: "loadWorkspaceOrRedirect:failure",
-        },
-      });
-      const t = getTranslator();
-      notifyUserError(error, t("errors.matterNotFound"));
-      throw redirect({ to: "/workspaces", replace: true });
-    }
-
-    throw error;
-  }
-};
 
 function RouteComponent() {
   const workspaceId = Route.useParams({

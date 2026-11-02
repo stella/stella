@@ -22,6 +22,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -119,9 +120,7 @@ const withFixture = async (
     try {
       await check(db, fixture);
     } finally {
-      await db
-        .delete(organization)
-        .where(eq(organization.id, fixture.organizationId));
+      await deleteOrganizationsForTest(db, [fixture.organizationId]);
       await db
         .delete(user)
         .where(inArray(user.id, [fixture.adminId, fixture.memberId]));

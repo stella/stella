@@ -42,6 +42,7 @@ import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -488,9 +489,7 @@ if (!databaseUrl || !runPostgresTests) {
         }
         await Promise.allSettled(running);
         await removeGate();
-        await controlDb
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(controlDb, [organizationId]);
         await controlDb
           .update(sanctionsSources)
           .set({
@@ -904,9 +903,7 @@ if (!databaseUrl || !runPostgresTests) {
         controllers.abort();
         await Promise.allSettled(running);
         await removeGate();
-        await controlDb
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(controlDb, [organizationId]);
       }
     });
   }, 120_000);
@@ -1177,9 +1174,7 @@ if (!databaseUrl || !runPostgresTests) {
           sql`DROP FUNCTION IF EXISTS ${sql.identifier(faultName)}()`,
         );
         await removeGate();
-        await settingsDb
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(settingsDb, [organizationId]);
         await restoreFanouts();
       }
     });

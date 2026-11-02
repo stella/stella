@@ -45,6 +45,7 @@ import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -508,9 +509,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
           expect.objectContaining({ id: membershipIds.at(1) }),
         );
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         await db.delete(user).where(inArray(user.id, users));
       }
     });
@@ -697,9 +696,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
           }
         }
       } finally {
-        await db
-          .delete(organization)
-          .where(inArray(organization.id, organizations));
+        await deleteOrganizationsForTest(db, organizations);
         await db.delete(user).where(inArray(user.id, users));
       }
     });

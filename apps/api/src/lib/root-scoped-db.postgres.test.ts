@@ -14,6 +14,7 @@ import { createRootOrganizationBackgroundDb } from "@/api/lib/root-scoped-db";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -78,11 +79,9 @@ const withFixture = async (
       );
       await run({ db, primary, other });
     } finally {
-      await db.delete(organization).where(
-        inArray(
-          organization.id,
-          rows.map(({ organizationId }) => organizationId),
-        ),
+      await deleteOrganizationsForTest(
+        db,
+        rows.map(({ organizationId }) => organizationId),
       );
     }
   });

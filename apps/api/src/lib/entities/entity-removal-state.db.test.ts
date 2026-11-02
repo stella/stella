@@ -20,6 +20,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS } from "@/api/lib/folio-collab-room-contract";
 import { cents } from "@/api/lib/money";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -268,7 +269,7 @@ test.each(Object.entries(cases))(
     await clearState();
     expect((await validate(f, "move")).isOk()).toBe(true);
     // Restrictions must be removed before the organization's cascading teardown.
-    await db.delete(organization).where(eq(organization.id, f.organizationId));
+    await deleteOrganizationsForTest(db, [f.organizationId]);
     await db.delete(user).where(eq(user.id, f.userId));
   },
 );
@@ -318,9 +319,7 @@ test.each(["desktop", "signing"] as const)(
       }
     } finally {
       await clear();
-      await db
-        .delete(organization)
-        .where(eq(organization.id, f.organizationId));
+      await deleteOrganizationsForTest(db, [f.organizationId]);
       await db.delete(user).where(eq(user.id, f.userId));
     }
   },
