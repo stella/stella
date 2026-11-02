@@ -345,7 +345,8 @@ test("the sweep removes expired and invalid unread redirect records", async () =
   const invalidKey = `${REDIRECT_PREFIX}invalid`;
   const malformedKey = `${REDIRECT_PREFIX}malformed`;
   const validKey = `${REDIRECT_PREFIX}valid`;
-  const unrelatedKey = "unrelated-key";
+  // Another registered session family the sweep must leave alone.
+  const unrelatedKey = "contact-import-request:v1:unrelated";
   storage.setItem(expiredKey, JSON.stringify({ expiresAt: Date.now() - 1 }));
   storage.setItem(invalidKey, "{}");
   storage.setItem(malformedKey, "{not json");
