@@ -164,11 +164,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   "mobile-ui-theme": ["packages/portable-path/src/index.ts"],
   "mobile-icons": ["packages/portable-path/src/index.ts"],
   "mobile-folio-fonts": ["packages/portable-path/src/index.ts"],
-  "capability-catalog": [
-    "apps/api/package.json",
-    "apps/api/scripts/*",
-    "apps/api/scripts/seed-content/*",
-  ],
+  "capability-catalog": ["apps/api/package.json", "apps/api/scripts/*"],
   "capability-runtime": [
     "packages/legal-ast/src/analysis.ts",
     "packages/legal-ast/src/decision-identifier.ts",

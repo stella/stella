@@ -4,7 +4,6 @@
 import type { ProductPreviewKey } from "../../components/react/previews/keys";
 import type Messages from "../../i18n/messages/messages.gen";
 import type { TranslationKey } from "../../i18n/utils";
-import type { ProductCaptureId } from "../product-captures";
 import type { ProductStorySceneId } from "../product-story";
 import type { ProductSlug } from "./pillars";
 
@@ -32,7 +31,8 @@ export type ProductMedia =
   | { type: "placeholder"; note: string; aspect?: string }
   | {
       type: "image";
-      captureId: ProductCaptureId;
+      src: string;
+      darkSrc: string;
       altKey: TranslationKey;
       aspect?: string;
     }

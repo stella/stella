@@ -9,8 +9,6 @@ import {
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { generatedVisualInputSchema } from "@stll/api-contract/generated-visual";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
-import { MARKETING_LOCALE_MARKERS } from "@stll/playwright-tools/marketing-locales";
-import type { MarketingLocale } from "@stll/playwright-tools/marketing-locales";
 
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
 import {
@@ -33,16 +31,14 @@ import {
   visualPreviewFailureModelContent,
 } from "@/api/lib/visual-preview";
 
-import { SEED_CONTENT_BY_LOCALE } from "./seed-content/locales";
 import {
   buildExportReviewCitationSeeds,
-  buildExportReviewDocNames,
   buildExportReviewMetadata,
+  EXPORT_REVIEW_DOC_NAMES,
+  EXPORT_REVIEW_RISK_LEVELS,
   exportReviewCitationBlockId,
-  type ExportReviewCopy,
   exportReviewDocumentIds,
   type ExportReviewMetadata,
-  isElevatedRisk,
 } from "./seed-export-review";
 import { at, seedFileIdentity, seedId } from "./seed-utils";
 
@@ -52,8 +48,9 @@ import { at, seedFileIdentity, seedId } from "./seed-utils";
 // frames it). Every claim in the answers is derived from the export-review
 // rows it cites, and every citation resolves to the exact review-extract line
 // that states it, so opening a chip lands on text that supports the sentence.
-// Each locale films its own data room; the prose around the derived facts is
-// written per locale in its content pack (MarketingAgentCopy).
+
+export const MARKETING_AGENT_THREAD_TITLE =
+  "Project Atlas · Change-of-control review";
 
 /** How a change of control affects a counterparty's agreements. */
 export const CHANGE_OF_CONTROL_POSITIONS = [
@@ -63,54 +60,6 @@ export const CHANGE_OF_CONTROL_POSITIONS = [
 ] as const;
 type ChangeOfControlPosition = (typeof CHANGE_OF_CONTROL_POSITIONS)[number];
 
-type ExposureViewLabels = (typeof exposureView)["data"]["labels"];
-
-/** The answers' prose around the facts the data room supplies. */
-export type MarketingAgentCopy = {
-  /** Locale of the numbers, currency and lists in the answers and the view. */
-  formattingLocale: string;
-  /** The generated view's labels (its fixture holds the English ones). */
-  viewLabels: ExposureViewLabels;
-  /** "Customer Contract 2019": an agreement's type and vintage. */
-  agreementLabel: (documentType: string, year: string) => string;
-  firstAnswerIntro: (facts: {
-    documentCount: number;
-    consentCount: number;
-  }) => string;
-  tableColumns: readonly [string, string, string, string];
-  firstAnswerOutro: (facts: { confirmNames: string }) => string;
-  secondAnswerLead: (facts: {
-    counterparty: string;
-    criticalCount: number;
-    riskFinding: string;
-    riskFindingCitation: string;
-    keyObligation: string;
-    keyObligationCitation: string;
-  }) => string;
-  citationLabels: {
-    riskFinding: string;
-    keyObligation: string;
-    governingLaw: string;
-    expiryDate: string;
-    contractValue: string;
-  };
-  factLabels: { governingLaw: string; expires: string; contractValue: string };
-  thirdAnswerLead: (facts: {
-    share: string;
-    consentValue: string;
-    totalValue: string;
-    consentCount: number;
-    criticalCount: number;
-    firstCriticalCitation: string;
-    secondCriticalCitation: string;
-  }) => string;
-  thirdAnswerFollowUp: (facts: {
-    confirmNames: string;
-    consentCount: number;
-  }) => string;
-  recap: (facts: { consentNames: string; confirmNames: string }) => string;
-};
-
 const exposureHtml = readFileSync(
   new URL(
     "../src/handlers/visual-sandbox/fixtures/showcase/change-of-control-exposure.html",
@@ -119,6 +68,11 @@ const exposureHtml = readFileSync(
   "utf-8",
 );
 
+const POSITION_LABELS = exposureView.data.labels.positions satisfies Record<
+  ChangeOfControlPosition,
+  string
+>;
+
 /**
  * The position a review extract supports. High and Critical extracts record
  * that consent, notice or termination rights need partner review; the others
@@ -126,13 +80,12 @@ const exposureHtml = readFileSync(
  * consent position confirmed. Every extract requires written notice.
  */
 const changeOfControlPosition = (
-  copy: ExportReviewCopy,
   metadata: ExportReviewMetadata,
 ): ChangeOfControlPosition => {
-  if (isElevatedRisk(copy, metadata.riskLevel)) {
+  if (metadata.riskLevel === "High" || metadata.riskLevel === "Critical") {
     return "consent";
   }
-  return metadata.tags.includes(copy.secondaryTags[0]) ? "confirm" : "notice";
+  return metadata.tags.includes("consent needed") ? "confirm" : "notice";
 };
 
 type CounterpartyExposure = {
@@ -140,7 +93,7 @@ type CounterpartyExposure = {
   agreement: string;
   documents: number;
   value: number;
-  risk: string;
+  risk: ExportReviewMetadata["riskLevel"];
   position: ChangeOfControlPosition;
 };
 
@@ -150,14 +103,11 @@ type CounterpartyExposure = {
  * or position, because the thread and the view describe each counterparty
  * with one position.
  */
-export const aggregateChangeOfControlExposure = (
-  copy: ExportReviewCopy,
-): CounterpartyExposure[] => {
+export const aggregateChangeOfControlExposure = (): CounterpartyExposure[] => {
   const byCounterparty = new Map<string, CounterpartyExposure>();
-  const docNames = buildExportReviewDocNames(copy);
-  for (let index = 0; index < docNames.length; index++) {
-    const metadata = buildExportReviewMetadata(copy, index);
-    const position = changeOfControlPosition(copy, metadata);
+  for (let index = 0; index < EXPORT_REVIEW_DOC_NAMES.length; index++) {
+    const metadata = buildExportReviewMetadata(index);
+    const position = changeOfControlPosition(metadata);
     const existing = byCounterparty.get(metadata.counterparty);
     if (existing === undefined) {
       byCounterparty.set(metadata.counterparty, {
@@ -186,8 +136,7 @@ export const aggregateChangeOfControlExposure = (
 };
 
 /** Risk levels, most severe first. */
-export const riskSeverity = (copy: ExportReviewCopy) =>
-  copy.riskLevels.toReversed();
+export const RISK_SEVERITY = EXPORT_REVIEW_RISK_LEVELS.toReversed();
 
 /**
  * The order the answer's table and the generated view list counterparties
@@ -195,18 +144,15 @@ export const riskSeverity = (copy: ExportReviewCopy) =>
  * largest contract value, so the Critical rows the prose cites lead.
  */
 export const rankChangeOfControlExposure = (
-  copy: ExportReviewCopy,
   rows: readonly CounterpartyExposure[],
-): CounterpartyExposure[] => {
-  const severity = riskSeverity(copy);
-  return rows.toSorted(
+): CounterpartyExposure[] =>
+  rows.toSorted(
     (a, b) =>
       CHANGE_OF_CONTROL_POSITIONS.indexOf(a.position) -
         CHANGE_OF_CONTROL_POSITIONS.indexOf(b.position) ||
-      severity.indexOf(a.risk) - severity.indexOf(b.risk) ||
+      RISK_SEVERITY.indexOf(a.risk) - RISK_SEVERITY.indexOf(b.risk) ||
       b.value - a.value,
   );
-};
 
 type CitedDocument = {
   fileName: string;
@@ -215,14 +161,10 @@ type CitedDocument = {
 };
 
 /** The counterparty's first DOCX row: DOCX citations highlight the passage. */
-const citedDocumentFor = (
-  copy: ExportReviewCopy,
-  counterparty: string,
-): CitedDocument => {
-  const docNames = buildExportReviewDocNames(copy);
-  for (let index = 0; index < docNames.length; index++) {
-    const fileName = at(docNames, index);
-    const metadata = buildExportReviewMetadata(copy, index);
+const citedDocumentFor = (counterparty: string): CitedDocument => {
+  for (let index = 0; index < EXPORT_REVIEW_DOC_NAMES.length; index++) {
+    const fileName = at(EXPORT_REVIEW_DOC_NAMES, index);
+    const metadata = buildExportReviewMetadata(index);
     if (fileName.endsWith(".docx") && metadata.counterparty === counterparty) {
       return {
         fileName,
@@ -243,13 +185,12 @@ type CitationField =
   | "tags";
 
 const citationTarget = (
-  copy: ExportReviewCopy,
   document: CitedDocument,
   field: CitationField,
   workspaceId: SafeId<"workspace">,
 ): ChatSourceCitationTarget => {
   const citationSeed =
-    buildExportReviewCitationSeeds(copy, document.metadata).find(
+    buildExportReviewCitationSeeds(document.metadata).find(
       ({ fieldSuffix }) => fieldSuffix === field,
     ) ?? panic(`Export review rows have no ${field} citation`);
   return {
@@ -263,19 +204,45 @@ const citationTarget = (
   };
 };
 
+const cite = (
+  label: string,
+  document: CitedDocument,
+  field: CitationField,
+  workspaceId: SafeId<"workspace">,
+) =>
+  `[${label}](${toChatSourceCitationHref(
+    citationTarget(document, field, workspaceId),
+  )})`;
+
 /** "Delta_Logistics_Customer_Contract_2019.docx" -> "Customer Contract 2019". */
-const agreementLabel = (copy: MarketingAgentCopy, document: CitedDocument) => {
+const agreementLabel = (document: CitedDocument) => {
   const year = /_(?<year>\d{4})\.docx$/u.exec(document.fileName)?.groups?.[
     "year"
   ];
   return year === undefined
     ? panic(`Export review file ${document.fileName} has no vintage year`)
-    : copy.agreementLabel(document.metadata.documentType, year);
+    : `${document.metadata.documentType} ${year}`;
 };
 
-/** "Delta Logistics Kft." -> "Delta Logistics"; "Delta Logistika, s.r.o." -> "Delta Logistika". */
+/** Small counts read as words in prose ("four counterparties"). */
+const countWord = (count: number) =>
+  [
+    "no",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+  ].at(count) ?? String(count);
+
+/** "Delta Logistics Kft." -> "Delta Logistics". */
 const shortName = (counterparty: string) =>
-  counterparty.split(" ").slice(0, 2).join(" ").replace(/,$/u, "");
+  counterparty.split(" ").slice(0, 2).join(" ");
 
 const sourceDocument = (
   document: CitedDocument,
@@ -289,38 +256,33 @@ const sourceDocument = (
   workspaceId,
 });
 
-const formatters = (formattingLocale: string) => {
-  const conjunction = new Intl.ListFormat(formattingLocale, {
-    type: "conjunction",
-  });
-  return {
-    money: new Intl.NumberFormat(formattingLocale, {
-      style: "currency",
-      currency: exposureView.data.currency,
-      notation: "compact",
-      maximumFractionDigits: 1,
-    }),
-    exactMoney: new Intl.NumberFormat(formattingLocale, {
-      style: "currency",
-      currency: exposureView.data.currency,
-      maximumFractionDigits: 0,
-    }),
-    /** "Delta Logistics, Granite Properties and Helios Energy". */
-    names: (rows: readonly { name: string }[]) =>
-      conjunction.format(rows.map(({ name }) => shortName(name))),
-    percent: new Intl.NumberFormat(formattingLocale, {
-      style: "percent",
-      maximumFractionDigits: 0,
-    }),
-  };
-};
+const money = new Intl.NumberFormat("en-GB", {
+  style: "currency",
+  currency: exposureView.data.currency,
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+const exactMoney = new Intl.NumberFormat("en-GB", {
+  style: "currency",
+  currency: exposureView.data.currency,
+  maximumFractionDigits: 0,
+});
+const conjunction = new Intl.ListFormat("en-GB", { type: "conjunction" });
+/** "Delta Logistics, Granite Properties and Helios Energy". */
+const names = (rows: readonly { name: string }[]) =>
+  conjunction.format(rows.map(({ name }) => shortName(name)));
+const percent = new Intl.NumberFormat("en-GB", {
+  style: "percent",
+  maximumFractionDigits: 0,
+});
 
 const MESSAGE_OFFSETS_MS = [0, 40_000, 180_000, 222_000, 360_000, 415_000];
 
-// The data room's two Critical agreements, which the answers name: a
-// customer contract and a loan agreement (ExportReviewCopy.counterparties).
-const FIRST_CRITICAL_COUNTERPARTY = 3;
-const SECOND_CRITICAL_COUNTERPARTY = 7;
+export const MARKETING_AGENT_QUESTIONS = [
+  "Which agreements in the Project Atlas data room carry change-of-control risk?",
+  "What does the Helios loan agreement say, and when does it expire?",
+  "Turn this into a view I can take to the partner meeting.",
+] as const;
 
 /**
  * The final turn's `show_visual` call as a real one leaves it: the model's
@@ -329,26 +291,19 @@ const SECOND_CRITICAL_COUNTERPARTY = 7;
  */
 const buildExposureVisual = ({
   fileId,
-  locale,
   toolCallId,
 }: {
   fileId: SafeId<"userFile">;
-  locale: MarketingLocale;
   toolCallId: string;
 }) => {
-  const { agent, exportReview } = SEED_CONTENT_BY_LOCALE[locale];
-  // The page is the fixture; its labels are the locale's and the data room
-  // is the seed's.
+  // The page and its labels are the fixture; the data room is the seed's.
   const visualInput = v.parse(generatedVisualInputSchema, {
     ...exposureView,
-    title: MARKETING_LOCALE_MARKERS[locale].agent.viewTitle,
     data: {
       ...exposureView.data,
-      formattingLocale: agent.formattingLocale,
-      labels: agent.viewLabels,
       positions: CHANGE_OF_CONTROL_POSITIONS,
-      risks: riskSeverity(exportReview),
-      counterparties: aggregateChangeOfControlExposure(exportReview),
+      risks: RISK_SEVERITY,
+      counterparties: aggregateChangeOfControlExposure(),
     },
     html: exposureHtml,
   });
@@ -381,36 +336,26 @@ const buildExposureVisual = ({
 
 type BuildMarketingAgentThreadInput = {
   createdAt: Date;
-  locale: MarketingLocale;
   organizationId: SafeId<"organization">;
   userId: string;
   workspaceId: SafeId<"workspace">;
 };
 
-type WriteAnswersInput = {
-  locale: MarketingLocale;
-  workspaceId: SafeId<"workspace">;
-};
-
-/**
- * The three answers' prose and their cited documents, in the locale's words
- * around the facts its data room supplies.
- */
-const writeAnswers = ({ locale, workspaceId }: WriteAnswersInput) => {
-  const { agent: copy, exportReview } = SEED_CONTENT_BY_LOCALE[locale];
-  const { exactMoney, money, names, percent } = formatters(
-    copy.formattingLocale,
-  );
-  const cite = (label: string, document: CitedDocument, field: CitationField) =>
-    `[${label}](${toChatSourceCitationHref(
-      citationTarget(exportReview, document, field, workspaceId),
-    )})`;
-  const exposure = aggregateChangeOfControlExposure(exportReview);
-  const ranked = rankChangeOfControlExposure(exportReview, exposure);
+export const buildMarketingAgentThread = ({
+  createdAt,
+  organizationId,
+  userId,
+  workspaceId,
+}: BuildMarketingAgentThreadInput) => {
+  const threadId = seedId<"chatThread">("marketing-agent-thread");
+  const visualFileId = seedId<"userFile">("marketing-agent-visual");
+  const visualToolCallId = "call-marketing-agent-visual";
+  const exposure = aggregateChangeOfControlExposure();
+  const ranked = rankChangeOfControlExposure(exposure);
   const rowFor = (position: ChangeOfControlPosition) =>
     ranked.filter((row) => row.position === position);
   const documentFor = new Map(
-    exposure.map((row) => [row.name, citedDocumentFor(exportReview, row.name)]),
+    exposure.map((row) => [row.name, citedDocumentFor(row.name)]),
   );
   const cited = (counterparty: string) =>
     documentFor.get(counterparty) ??
@@ -424,133 +369,47 @@ const writeAnswers = ({ locale, workspaceId }: WriteAnswersInput) => {
   const tableRows = CHANGE_OF_CONTROL_POSITIONS.flatMap((position) =>
     rowFor(position).map((row) => {
       const document = cited(row.name);
-      return `| ${row.name} | ${cite(agreementLabel(copy, document), document, positionField[position])} | ${row.risk} | ${copy.viewLabels.positions[position]} |`;
+      return `| ${row.name} | ${cite(agreementLabel(document), document, positionField[position], workspaceId)} | ${row.risk} | ${POSITION_LABELS[position]} |`;
     }),
   );
   const consentRows = rowFor("consent");
   const confirmRows = rowFor("confirm");
-  const [firstColumn, secondColumn, thirdColumn, fourthColumn] =
-    copy.tableColumns;
   const firstAnswer = [
-    copy.firstAnswerIntro({
-      documentCount: buildExportReviewDocNames(exportReview).length,
-      consentCount: consentRows.length,
-    }),
+    `I checked all ${String(EXPORT_REVIEW_DOC_NAMES.length)} documents in the data room. Every agreement requires written notice before an assignment, renewal or material service change, so a change of control triggers at least a notice everywhere. Only ${countWord(consentRows.length)} counterparties go further: their review extracts flag consent or termination rights that need partner review before signing.`,
     "",
-    `| ${firstColumn} | ${secondColumn} | ${thirdColumn} | ${fourthColumn} |`,
+    "| Counterparty | Agreement | Risk | Change-of-control position |",
     "| --- | --- | --- | --- |",
     ...tableRows,
     "",
-    copy.firstAnswerOutro({ confirmNames: names(confirmRows) }),
+    `The ${names(confirmRows)} agreements report no blocking issue, but each is tagged "consent needed", so confirm the consent position before signing.`,
   ].join("\n");
 
-  // The prose names the two Critical agreements; fail the seed rather than
-  // film a sentence the data contradicts.
-  const criticalRisk = exportReview.riskLevels[3];
-  const critical = consentRows.filter(({ risk }) => risk === criticalRisk);
-  const delta = cited(
-    at(exportReview.counterparties, FIRST_CRITICAL_COUNTERPARTY),
-  );
-  const helios = cited(
-    at(exportReview.counterparties, SECOND_CRITICAL_COUNTERPARTY),
-  );
+  // The prose names the two Critical agreements, Delta Logistics and Helios
+  // Energy; fail the seed rather than film a sentence the data contradicts.
+  const critical = consentRows.filter(({ risk }) => risk === "Critical");
+  const helios = cited("Helios Energy a.s.");
+  const delta = cited("Delta Logistics Kft.");
   if (
     critical.map(({ name }) => name).join(",") !==
     [delta, helios].map(({ metadata }) => metadata.counterparty).join(",")
   ) {
-    panic("The named Critical pair no longer matches the data room");
+    panic("Delta Logistics and Helios Energy are no longer the Critical pair");
   }
-  const { citationLabels, factLabels } = copy;
   const secondAnswer = [
-    copy.secondAnswerLead({
-      counterparty: shortName(helios.metadata.counterparty),
-      criticalCount: critical.length,
-      riskFinding: helios.metadata.riskFinding,
-      riskFindingCitation: cite(
-        citationLabels.riskFinding,
-        helios,
-        "risk-finding",
-      ),
-      keyObligation: helios.metadata.keyObligation,
-      keyObligationCitation: cite(
-        citationLabels.keyObligation,
-        helios,
-        "key-obligation",
-      ),
-    }),
+    `The ${shortName(helios.metadata.counterparty)} loan agreement is one of the ${countWord(critical.length)} Critical items. Its review extract records that "${helios.metadata.riskFinding}" ${cite("Risk finding", helios, "risk-finding", workspaceId)} That sits on top of the standard duty: "${helios.metadata.keyObligation}" ${cite("Key obligation", helios, "key-obligation", workspaceId)}`,
     "",
-    `- **${factLabels.governingLaw}:** ${helios.metadata.governingLaw} ${cite(citationLabels.governingLaw, helios, "governing-law")}`,
-    `- **${factLabels.expires}:** ${helios.metadata.expiryDate} ${cite(citationLabels.expiryDate, helios, "expiry-date")}`,
-    `- **${factLabels.contractValue}:** ${exactMoney.format(helios.metadata.contractValue)} ${cite(citationLabels.contractValue, helios, "contract-value")}`,
+    `- **Governing law:** ${helios.metadata.governingLaw} ${cite("Governing law", helios, "governing-law", workspaceId)}`,
+    `- **Expires:** ${helios.metadata.expiryDate} ${cite("Expiry date", helios, "expiry-date", workspaceId)}`,
+    `- **Contract value:** ${exactMoney.format(helios.metadata.contractValue)} ${cite("Contract value", helios, "contract-value", workspaceId)}`,
   ].join("\n");
 
   const totalValue = exposure.reduce((sum, row) => sum + row.value, 0);
   const consentValue = consentRows.reduce((sum, row) => sum + row.value, 0);
-  const thirdLead = copy.thirdAnswerLead({
-    share: percent.format(consentValue / totalValue),
-    consentValue: money.format(consentValue),
-    totalValue: money.format(totalValue),
-    consentCount: consentRows.length,
-    criticalCount: critical.length,
-    firstCriticalCitation: cite(
-      `${shortName(delta.metadata.counterparty)} · ${agreementLabel(copy, delta)}`,
-      delta,
-      "risk-finding",
-    ),
-    secondCriticalCitation: cite(
-      `${shortName(helios.metadata.counterparty)} · ${agreementLabel(copy, helios)}`,
-      helios,
-      "risk-finding",
-    ),
-  });
-  const thirdFollowUp = copy.thirdAnswerFollowUp({
-    confirmNames: names(confirmRows),
-    consentCount: consentRows.length,
-  });
-
-  return {
-    citedDocuments: exposure.map(({ name }) => cited(name)),
-    delta,
-    firstAnswer,
-    helios,
-    recapText: copy.recap({
-      consentNames: names(consentRows),
-      confirmNames: names(confirmRows),
-    }),
-    secondAnswer,
-    thirdFollowUp,
-    thirdLead,
-  };
-};
-
-export const buildMarketingAgentThread = ({
-  createdAt,
-  locale,
-  organizationId,
-  userId,
-  workspaceId,
-}: BuildMarketingAgentThreadInput) => {
-  const markers = MARKETING_LOCALE_MARKERS[locale].agent;
-  const threadId = seedId<"chatThread">("marketing-agent-thread");
-  const visualFileId = seedId<"userFile">("marketing-agent-visual");
-  const visualToolCallId = "call-marketing-agent-visual";
-  const {
-    citedDocuments,
-    delta,
-    firstAnswer,
-    helios,
-    recapText,
-    secondAnswer,
-    thirdFollowUp,
-    thirdLead,
-  } = writeAnswers({ locale, workspaceId });
+  const thirdLead = `Here is the exposure by counterparty. ${percent.format(consentValue / totalValue)} of the contract value in the data room (${money.format(consentValue)} of ${money.format(totalValue)}) sits with the ${countWord(consentRows.length)} counterparties that need consent or termination review, led by the ${countWord(critical.length)} Critical agreements: ${cite(`${shortName(delta.metadata.counterparty)} · ${agreementLabel(delta)}`, delta, "risk-finding", workspaceId)} and ${cite(`${shortName(helios.metadata.counterparty)} · ${agreementLabel(helios)}`, helios, "risk-finding", workspaceId)}.`;
+  const thirdFollowUp = `Next: confirm the consent position with ${names(confirmRows)}, then draft the consent requests for the ${countWord(consentRows.length)} counterparties under review.`;
 
   const { visualBytes, visualInput, visualOutput, visualPart } =
-    buildExposureVisual({
-      fileId: visualFileId,
-      locale,
-      toolCallId: visualToolCallId,
-    });
+    buildExposureVisual({ fileId: visualFileId, toolCallId: visualToolCallId });
 
   const completed = (
     documents: readonly CitedDocument[],
@@ -567,16 +426,16 @@ export const buildMarketingAgentThread = ({
   }[] = [
     {
       role: "user",
-      parts: [{ type: "text", content: markers.questions[0] }],
+      parts: [{ type: "text", content: MARKETING_AGENT_QUESTIONS[0] }],
     },
     {
       role: "assistant",
       parts: [{ type: "text", content: firstAnswer }],
-      metadata: completed(citedDocuments),
+      metadata: completed(exposure.map(({ name }) => cited(name))),
     },
     {
       role: "user",
-      parts: [{ type: "text", content: markers.questions[1] }],
+      parts: [{ type: "text", content: MARKETING_AGENT_QUESTIONS[1] }],
     },
     {
       role: "assistant",
@@ -585,7 +444,7 @@ export const buildMarketingAgentThread = ({
     },
     {
       role: "user",
-      parts: [{ type: "text", content: markers.questions[2] }],
+      parts: [{ type: "text", content: MARKETING_AGENT_QUESTIONS[2] }],
     },
     {
       role: "assistant",
@@ -646,13 +505,13 @@ export const buildMarketingAgentThread = ({
       organizationId,
       userId,
       workspaceId,
-      title: markers.threadTitle,
+      title: MARKETING_AGENT_THREAD_TITLE,
       createdAt,
       updatedAt: lastMessage.createdAt,
       // Pinned so reopening the thread shows this recap without a model call:
       // the API serves a cached recap while it names the last message and the
       // current prompt version.
-      recapText,
+      recapText: `You mapped change-of-control exposure across the Project Atlas data room: ${names(consentRows)} need consent or termination review, and an exposure view summarises it for the partner meeting. Still open: confirm the consent position for ${names(confirmRows)}.`,
       recapMessageId: lastMessage.id,
       recapPromptVersion: RECAP_PROMPT_VERSION,
       recapGeneratedAt: new Date(lastMessage.createdAt.getTime() + 86_400_000),

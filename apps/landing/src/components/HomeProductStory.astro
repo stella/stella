@@ -1,5 +1,4 @@
 ---
-import { productCaptures } from "../data/product-captures";
 import { productHref } from "../data/products/links";
 import type { ProductSlug } from "../data/products/pillars";
 import { resolveProductDiscoverLabels } from "../data/site-nav";
@@ -75,21 +74,21 @@ const chapters = [
 // apps/web/e2e/marketing/product-screenshots.spec.ts.
 const storyShots = [
   {
-    src: productCaptures["story-public-data-1"].src[locale],
-    darkSrc: productCaptures["story-public-data-1"].darkSrc[locale],
+    darkSrc: "/media/products/story-public-data-1-dark.png",
+    lightSrc: "/media/products/story-public-data-1.png",
     altKey: "story.dataMainAlt",
   },
   {
-    src: productCaptures["story-public-data-2"].src[locale],
-    darkSrc: productCaptures["story-public-data-2"].darkSrc[locale],
+    darkSrc: "/media/products/story-public-data-2-dark.png",
+    lightSrc: "/media/products/story-public-data-2.png",
     altKey: "story.dataConstitutionalAlt",
   },
   {
-    src: productCaptures["story-public-data-3"].src[locale],
-    darkSrc: productCaptures["story-public-data-3"].darkSrc[locale],
+    darkSrc: "/media/products/story-public-data-3-dark.png",
+    lightSrc: "/media/products/story-public-data-3.png",
     altKey: "story.dataSupremeAlt",
   },
-] as const satisfies readonly { darkSrc: string; src: string; altKey: TranslationKey }[];
+] as const satisfies readonly { darkSrc: string; lightSrc: string; altKey: TranslationKey }[];
 
 // Each shot holds at full opacity for ~3.6s and cross-fades over ~0.8s, for
 // a ~13.2s total loop. The keyframes (below, in .story-shot-layer) are
@@ -246,7 +245,7 @@ const proofItems = [
                               darkSrc={shot.darkSrc}
                               decoding="async"
                               defer="visible"
-                              lightSrc={shot.src}
+                              lightSrc={shot.lightSrc}
                               loading="lazy"
                             />
                           </div>

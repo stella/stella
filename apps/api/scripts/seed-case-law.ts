@@ -57,16 +57,15 @@ import {
 } from "./seed-case-law-provisions";
 import type { SeededDecision } from "./seed-case-law-provisions";
 import { syntheticCaseLawFixtures } from "./seed-case-law-synthetic";
-import { globalSeedId } from "./seed-utils";
+import { seedId } from "./seed-utils";
 
 const FIXTURES_DIR = path.join(import.meta.dir, "__fixtures__", "case-law");
 /** The scheduler's budgets for the provision state backfill's session. */
 const PROVISION_BACKFILL_STATEMENT_TIMEOUT_MS = 60_000;
 const PROVISION_BACKFILL_LOCK_TIMEOUT_MS = 30_000;
 
-// The corpus is global, so its ids are the same from every organization's run.
 export const sourceIdFor = (adapterKey: string) =>
-  globalSeedId(`case-law-source-${adapterKey}`);
+  seedId(`case-law-source-${adapterKey}`);
 
 type FixtureSource = {
   adapter_key: string;
@@ -238,7 +237,7 @@ export const fixtureDecisionRow = ({
   const fulltext =
     d.fulltext ?? d.sections?.map((s) => s.text).join("\n\n") ?? "";
   return {
-    id: globalSeedId(
+    id: seedId(
       JSON.stringify([
         "case-law-dec",
         adapterKey,

@@ -15,17 +15,14 @@ import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
-import {
-  MARKETING_LOCALE_ACCOUNTS,
-  MARKETING_LOCALE_MARKERS,
-} from "@stll/playwright-tools/marketing-locales";
 import { repoRelativePath } from "@stll/portable-path";
 
 import { seedSidebarState } from "../helpers/sidebar-state";
 import {
   anchorMarketingAgentFinalTurn,
   getMarketingAgentThreadId,
-  marketingAgentCitedSources,
+  MARKETING_AGENT_CITED_SOURCES,
+  MARKETING_AGENT_FIRST_QUESTION,
   settleMarketingAgentThread,
 } from "./agent-thread";
 import {
@@ -45,37 +42,21 @@ import type {
 import {
   assertNoActiveEditBadge,
   releaseSupplierAgreementEditLock,
-  supplierAgreementEditorPath,
+  SUPPLIER_AGREEMENT_EDITOR_PATH,
 } from "./edit-locks";
-import { marketingSeedIds } from "./seed-ids";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
 const MEDIA_DIR = path.join(REPO_ROOT, "apps/landing/public/media/products");
 const RAW_VIDEO_DIR = path.join(REPO_ROOT, ".playwright/marketing-video");
 const WEB_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
 const API_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
-// The recordings film the English firm.
-const MARKETING_LOCALE = "en";
-const SUPPLIER_AGREEMENT = marketingSeedIds(MARKETING_LOCALE).supplierAgreement;
-const SUPPLIER_AGREEMENT_EDITOR_PATH =
-  supplierAgreementEditorPath(SUPPLIER_AGREEMENT);
-const MARKETING_URLS = {
-  apiUrl: API_URL,
-  webUrl: WEB_URL,
-  supplierAgreement: SUPPLIER_AGREEMENT,
-};
-const MARKETING_AGENT_CITED_SOURCES =
-  marketingAgentCitedSources(MARKETING_LOCALE);
-const MARKETING_AGENT_FIRST_QUESTION =
-  MARKETING_LOCALE_MARKERS[MARKETING_LOCALE].agent.questions[0];
+const MARKETING_URLS = { apiUrl: API_URL, webUrl: WEB_URL };
 const CAPTURE_FILTER = process.env["MARKETING_CAPTURE"];
 const THEME_FILTER = process.env["MARKETING_THEME"];
-const { email: EMAIL, organizationName: MARKETING_ORGANIZATION_NAME } =
-  MARKETING_LOCALE_ACCOUNTS[MARKETING_LOCALE];
-const {
-  exportReviewWorkspaceId: EXPORT_REVIEW_WORKSPACE_ID,
-  meridianWorkspaceId: MERIDIAN_WORKSPACE_ID,
-} = marketingSeedIds(MARKETING_LOCALE);
+const EMAIL = "test@stella.dev";
+const MARKETING_ORGANIZATION_NAME = "Harbrook & Partners";
+const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
+const MERIDIAN_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
 // The editor scenes film the negotiated Supplier Agreement (edit-locks.ts):
 // the docx with the clause-12 liability-cap redline and playbook margin
 // comments, matching the landing DOM mock (storyEditorDocument in
@@ -601,7 +582,7 @@ const scenes = [
       // Every answer, citation, the generated view and the recap have
       // painted, and the final turn (question, cited lead-in, view) is
       // framed at the top of the transcript.
-      await settleMarketingAgentThread(page, { locale: MARKETING_LOCALE });
+      await settleMarketingAgentThread(page);
       // Pre-warm both cited documents the loop will click: open each in
       // the inspector, require its folio preview to really paint (this
       // fails the run early when a preview cannot render), then close the
@@ -621,7 +602,7 @@ const scenes = [
       // performs the open on camera. The pane reflowed the chat, so frame
       // the final turn again.
       await closeAllInspectorTabs(page);
-      await anchorMarketingAgentFinalTurn(page, MARKETING_LOCALE);
+      await anchorMarketingAgentFinalTurn(page);
       // Rest just below-right of the first cited source: neutral (nothing
       // hovered), and the loop's first eased move starts from a short,
       // natural approach onto that source.
@@ -1663,10 +1644,7 @@ const resolveMarketingViewRoutes = async (
       `Could not load marketing chat: ${await threadsResponse.text()}`,
     );
   }
-  const threadId = getMarketingAgentThreadId(
-    await threadsResponse.json(),
-    MARKETING_LOCALE,
-  );
+  const threadId = getMarketingAgentThreadId(await threadsResponse.json());
 
   // The template-fill scene's "Add" menu lives in the Meridian workspace's
   // own filesystem view, a separate seeded workspace from Export Review.

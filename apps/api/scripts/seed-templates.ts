@@ -46,15 +46,14 @@ import { writeScannedObject } from "@/api/lib/file-scan/stored-object";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
-import { EN_SEED_CONTENT } from "./seed-content/en";
-import type {
-  SeedLocaleContent,
-  TemplateCategoryLabel,
-  TemplateLabel,
-} from "./seed-content/types";
 import { seedTemplateChatThreads } from "./seed-template-chat-threads";
 import { ensureTestUsers } from "./seed-test-user";
-import { DEFAULT_ORG_ID, pickAuthor, seedId } from "./seed-utils";
+import {
+  ALL_TEST_USER_IDS,
+  DEFAULT_ORG_ID,
+  pickAuthor,
+  seedId,
+} from "./seed-utils";
 
 // ─── Clause body helpers ────────────────────────────────
 
@@ -1304,37 +1303,43 @@ const CLAUSES: ClauseSeed[] = [
 // TEMPLATE CATEGORIES (4)
 // ═══════════════════════════════════════════════════════════
 
-// Names and descriptions are the content pack's (SeedLocaleContent.templates).
 const TEMPLATE_CATS = [
   {
     label: "tmpl-cat-corporate",
+    name: "Corporate",
+    description: "Share purchase, shareholder, and board resolution templates.",
     sortOrder: 0,
   },
   {
     label: "tmpl-cat-employment",
+    name: "Employment",
+    description: "Employment contracts, NDAs, and HR-related templates.",
     sortOrder: 1,
   },
   {
     label: "tmpl-cat-commercial",
+    name: "Commercial",
+    description: "Master services, SLA, and commercial agreement templates.",
     sortOrder: 2,
   },
   {
     label: "tmpl-cat-real-estate",
+    name: "Real Estate",
+    description:
+      "Lease agreements, licences, and property transaction templates.",
     sortOrder: 3,
   },
-] as const satisfies readonly {
-  label: TemplateCategoryLabel;
-  sortOrder: number;
-}[];
+] as const;
 
 // ═══════════════════════════════════════════════════════════
 // TEMPLATES (9)
 // ═══════════════════════════════════════════════════════════
 
-/** A template's body; its name and file name are the content pack's. */
 type TemplateSeed = {
-  label: TemplateLabel;
+  label: string;
   catLabel: string;
+  name: string;
+  fileName: string;
   bodyXml: string;
   fields: FieldMeta[];
   conditions: NamedCondition[];
@@ -1345,6 +1350,8 @@ const TEMPLATES: TemplateSeed[] = [
   {
     label: "tmpl-spa",
     catLabel: "tmpl-cat-corporate",
+    name: "Share Purchase Agreement",
+    fileName: "Share_Purchase_Agreement.docx",
     bodyXml:
       xmlHeading("Share Purchase Agreement", 1) +
       xmlP("Date: {{date}}") +
@@ -1459,6 +1466,8 @@ const TEMPLATES: TemplateSeed[] = [
   {
     label: "tmpl-board-resolution",
     catLabel: "tmpl-cat-corporate",
+    name: "Board Resolution",
+    fileName: "Board_Resolution.docx",
     bodyXml:
       xmlHeading("Board Resolution", 1) +
       xmlP("Date: {{date}}") +
@@ -1523,6 +1532,8 @@ const TEMPLATES: TemplateSeed[] = [
   {
     label: "tmpl-shareholders",
     catLabel: "tmpl-cat-corporate",
+    name: "Shareholders' Agreement",
+    fileName: "Shareholders_Agreement.docx",
     bodyXml:
       xmlHeading("Shareholders' Agreement", 1) +
       xmlP("Date: {{date}}") +
@@ -1617,6 +1628,8 @@ const TEMPLATES: TemplateSeed[] = [
   {
     label: "tmpl-employment",
     catLabel: "tmpl-cat-employment",
+    name: "Employment Agreement",
+    fileName: "Employment_Agreement.docx",
     bodyXml:
       xmlHeading("Employment Agreement", 1) +
       xmlP("Date: {{date}}") +
@@ -1729,6 +1742,8 @@ const TEMPLATES: TemplateSeed[] = [
   {
     label: "tmpl-nda",
     catLabel: "tmpl-cat-employment",
+    name: "Non-Disclosure Agreement",
+    fileName: "Non_Disclosure_Agreement.docx",
     bodyXml:
       xmlHeading("Non-Disclosure Agreement", 1) +
       xmlP("Date: {{date}}") +
@@ -1807,6 +1822,8 @@ const TEMPLATES: TemplateSeed[] = [
   {
     label: "tmpl-msa",
     catLabel: "tmpl-cat-commercial",
+    name: "Master Services Agreement",
+    fileName: "Master_Services_Agreement.docx",
     bodyXml:
       xmlHeading("Master Services Agreement", 1) +
       xmlP("Date: {{date}}") +
@@ -1918,6 +1935,8 @@ const TEMPLATES: TemplateSeed[] = [
   {
     label: "tmpl-sla",
     catLabel: "tmpl-cat-commercial",
+    name: "Service Level Agreement",
+    fileName: "Service_Level_Agreement.docx",
     bodyXml:
       xmlHeading("Service Level Agreement", 1) +
       xmlP("Date: {{date}}") +
@@ -1984,6 +2003,8 @@ const TEMPLATES: TemplateSeed[] = [
   {
     label: "tmpl-lease",
     catLabel: "tmpl-cat-real-estate",
+    name: "Lease Agreement",
+    fileName: "Lease_Agreement.docx",
     bodyXml:
       xmlHeading("Lease Agreement", 1) +
       xmlP("Date: {{date}}") +
@@ -2088,6 +2109,8 @@ const TEMPLATES: TemplateSeed[] = [
   {
     label: "tmpl-supply",
     catLabel: "tmpl-cat-commercial",
+    name: "Supply Agreement",
+    fileName: "Supply_Agreement.docx",
     bodyXml:
       xmlHeading("Supply Agreement", 1) +
       xmlP("Date: {{date}}") +
@@ -2324,11 +2347,10 @@ const TEMPLATE_CLAUSE_LINKS: TemplateClauseLinkSeed[] = [
 // ═══════════════════════════════════════════════════════════
 
 export async function seedTemplates(
-  organizationId: SafeId<"organization">,
-  authorIds: readonly string[],
-  copy: SeedLocaleContent["templates"],
+  organizationId?: SafeId<"organization">,
+  authorIds: readonly string[] = ALL_TEST_USER_IDS,
 ): Promise<void> {
-  const ORG_ID = organizationId;
+  const ORG_ID = organizationId ?? DEFAULT_ORG_ID;
   if (authorIds.length === 0) {
     panic("Seed templates requires at least one author");
   }
@@ -2419,7 +2441,6 @@ export async function seedTemplates(
 
   // ── 4. Template categories ──────────────────────────
   for (const cat of TEMPLATE_CATS) {
-    const { name, description } = copy.categories[cat.label];
     await db.transaction(
       async (tx) =>
         await tx
@@ -2427,8 +2448,8 @@ export async function seedTemplates(
           .values({
             id: scopedSeedId(cat.label),
             organizationId: ORG_ID,
-            name,
-            description,
+            name: cat.name,
+            description: cat.description,
             sortOrder: cat.sortOrder,
           })
           .onConflictDoNothing(),
@@ -2438,7 +2459,6 @@ export async function seedTemplates(
 
   // ── 5. Templates → S3 → template versions (v1) ─────
   for (const [i, t] of TEMPLATES.entries()) {
-    const { name, fileName } = copy.templates[t.label];
     const templateId = scopedSeedId(t.label);
     const versionId = scopedSeedId(`${t.label}-v1`);
 
@@ -2466,12 +2486,12 @@ export async function seedTemplates(
     // into the marker that declares it: the document is the template.
     // Stored like any template: scanned before it is written.
     const bare = await scanUpload({
-      bytes: await createTemplateDocx(name, t.bodyXml),
+      bytes: await createTemplateDocx(t.name, t.bodyXml),
       declaredMimeType: DOCX_MIME_TYPE,
-      fileName,
+      fileName: t.fileName,
     });
     if (Result.isError(bare)) {
-      panic(`Seed template ${name} failed the upload scan`, bare.error);
+      panic(`Seed template ${t.name} failed the upload scan`, bare.error);
     }
     const { file } = await writeFieldFilters(
       bare.value,
@@ -2502,8 +2522,8 @@ export async function seedTemplates(
             id: templateId,
             organizationId: ORG_ID,
             categoryId: scopedSeedId(t.catLabel),
-            name,
-            fileName,
+            name: t.name,
+            fileName: t.fileName,
             s3Key: stored.key,
             scanState: stored.scanState,
             sizeBytes,
@@ -2556,7 +2576,7 @@ export async function seedTemplates(
         templates: TEMPLATES.map((template) => ({
           id: scopedSeedId(template.label),
           label: template.label,
-          name: copy.templates[template.label].name,
+          name: template.name,
         })),
         authorIds,
       }),
@@ -2609,11 +2629,7 @@ if (import.meta.main) {
     console.log("Seeding templates & clauses...\n");
     const { colleagueUserIds, testUserId } =
       await ensureTestUsers(DEFAULT_ORG_ID);
-    await seedTemplates(
-      DEFAULT_ORG_ID,
-      [testUserId, ...colleagueUserIds],
-      EN_SEED_CONTENT.templates,
-    );
+    await seedTemplates(DEFAULT_ORG_ID, [testUserId, ...colleagueUserIds]);
     console.log("\nDone.");
     process.exit(0);
   });

@@ -4,14 +4,12 @@ import {
   extractCaseLawDecisionIdFromIdRouteParam,
   parseCaseLawDecisionPath,
 } from "@stll/api-contract/case-law-decision-route";
-import { MARKETING_CASE_LAW } from "@stll/playwright-tools/marketing-case-law";
+import scenarios from "@stll/playwright-tools/marketing-case-law.json" with { type: "json" };
 
 import {
   getMarketingDecisionPaths,
   MarketingDecisionPathError,
 } from "../marketing/case-law-reader";
-
-const scenarios = MARKETING_CASE_LAW.en;
 
 const response = () => ({
   global: scenarios.map((scenario, index) => ({
@@ -42,7 +40,7 @@ const response = () => ({
 describe("marketing readers resolve from publicly available thread badges", () => {
   test("resolves every shared scenario with its stored slug and language alternates", () => {
     const payload = response();
-    const paths = getMarketingDecisionPaths(payload, scenarios);
+    const paths = getMarketingDecisionPaths(payload);
     expect(paths.size).toBe(scenarios.length);
     for (const {
       decision: { badge },
@@ -75,10 +73,9 @@ describe("marketing readers resolve from publicly available thread badges", () =
         badge: { ...thread.decision.badge, slug: null },
       },
     }));
-    const pathname = getMarketingDecisionPaths(
-      { ...payload, global },
-      scenarios,
-    ).get(first.decision.badge.caseNumber);
+    const pathname = getMarketingDecisionPaths({ ...payload, global }).get(
+      first.decision.badge.caseNumber,
+    );
     const route = parseCaseLawDecisionPath(pathname ?? "");
     expect(extractCaseLawDecisionIdFromIdRouteParam(route?.slug ?? "")).toBe(
       first.decision.badge.id,
@@ -87,83 +84,68 @@ describe("marketing readers resolve from publicly available thread badges", () =
 
   test("rejects an empty response instead of retaining old reader images", () => {
     expect(() =>
-      getMarketingDecisionPaths({ global: [], workspaces: [] }, scenarios),
+      getMarketingDecisionPaths({ global: [], workspaces: [] }),
     ).toThrow(MarketingDecisionPathError);
     expect(() =>
-      getMarketingDecisionPaths({ global: [], workspaces: [] }, scenarios),
+      getMarketingDecisionPaths({ global: [], workspaces: [] }),
     ).toThrow("received 0");
   });
 
   test("rejects a missing or wrong-language scenario", () => {
     const payload = response();
     expect(() =>
-      getMarketingDecisionPaths(
-        {
-          ...payload,
-          global: payload.global.slice(1),
-        },
-        scenarios,
-      ),
+      getMarketingDecisionPaths({
+        ...payload,
+        global: payload.global.slice(1),
+      }),
     ).toThrow("received 0");
     expect(() =>
-      getMarketingDecisionPaths(
-        {
-          ...payload,
-          global: payload.global.map((thread) => ({
-            ...thread,
-            decision: {
-              ...thread.decision,
-              badge: { ...thread.decision.badge, language: "en" },
-            },
-          })),
-        },
-        scenarios,
-      ),
+      getMarketingDecisionPaths({
+        ...payload,
+        global: payload.global.map((thread) => ({
+          ...thread,
+          decision: {
+            ...thread.decision,
+            badge: { ...thread.decision.badge, language: "en" },
+          },
+        })),
+      }),
     ).toThrow("received 0");
   });
 
   test("reports missing scenarios when every badge is unavailable", () => {
     expect(() =>
-      getMarketingDecisionPaths(
-        {
-          global: [{ decision: { type: "unavailable" } }],
-        },
-        scenarios,
-      ),
+      getMarketingDecisionPaths({
+        global: [{ decision: { type: "unavailable" } }],
+      }),
     ).toThrow("received 0");
   });
 
   test("ignores an unrelated unavailable badge", () => {
     const payload = response();
-    const paths = getMarketingDecisionPaths(
-      {
-        ...payload,
-        global: [
-          ...payload.global,
-          { id: "unrelated-thread", decision: { type: "unavailable" } },
-        ],
-      },
-      scenarios,
-    );
-    expect(paths).toEqual(getMarketingDecisionPaths(payload, scenarios));
+    const paths = getMarketingDecisionPaths({
+      ...payload,
+      global: [
+        ...payload.global,
+        { id: "unrelated-thread", decision: { type: "unavailable" } },
+      ],
+    });
+    expect(paths).toEqual(getMarketingDecisionPaths(payload));
   });
 
   test("resolves when several threads reference the same decision", () => {
     const payload = response();
-    const paths = getMarketingDecisionPaths(
-      {
-        ...payload,
-        global: [
-          ...payload.global,
-          ...payload.global.map((thread) => ({
-            ...thread,
-            id: `${thread.id}-2`,
-          })),
-        ],
-      },
-      scenarios,
-    );
-    expect(paths).toEqual(getMarketingDecisionPaths(payload, scenarios));
+    const paths = getMarketingDecisionPaths({
+      ...payload,
+      global: [
+        ...payload.global,
+        ...payload.global.map((thread) => ({
+          ...thread,
+          id: `${thread.id}-2`,
+        })),
+      ],
+    });
+    expect(paths).toEqual(getMarketingDecisionPaths(payload));
   });
 
   test("rejects different decisions matching one scenario", () => {
@@ -173,37 +155,31 @@ describe("marketing readers resolve from publicly available thread badges", () =
       throw new Error("missing fixture thread");
     }
     expect(() =>
-      getMarketingDecisionPaths(
-        {
-          ...payload,
-          global: [
-            ...payload.global,
-            {
-              ...first,
-              id: "other-thread",
-              decision: {
-                ...first.decision,
-                badge: {
-                  ...first.decision.badge,
-                  id: "12345678-1234-4234-8234-999999999999",
-                },
+      getMarketingDecisionPaths({
+        ...payload,
+        global: [
+          ...payload.global,
+          {
+            ...first,
+            id: "other-thread",
+            decision: {
+              ...first.decision,
+              badge: {
+                ...first.decision.badge,
+                id: "12345678-1234-4234-8234-999999999999",
               },
             },
-          ],
-        },
-        scenarios,
-      ),
+          },
+        ],
+      }),
     ).toThrow("received 2");
   });
 
   test("rejects malformed route metadata", () => {
     expect(() =>
-      getMarketingDecisionPaths(
-        {
-          global: [{ decision: { type: "present", badge: { id: "broken" } } }],
-        },
-        scenarios,
-      ),
+      getMarketingDecisionPaths({
+        global: [{ decision: { type: "present", badge: { id: "broken" } } }],
+      }),
     ).toThrow("response is malformed");
   });
 });
