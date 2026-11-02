@@ -38,7 +38,8 @@ const {
 const { IntlProvider, createTranslator } = await import("use-intl");
 const { Button } = await import("@stll/ui/button");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
-const { drainReactScheduler } = await import("@/lib/react-scheduler-drain");
+const { drainReactScheduler } =
+  await import("@stll/property-testing/dom-environment");
 const { supportedLanguages } = await import("@/i18n/i18n-store");
 const { CreateOrganizationDialog } =
   await import("./create-organization-dialog");
