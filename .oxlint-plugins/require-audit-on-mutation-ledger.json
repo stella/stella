@@ -1772,7 +1772,6 @@
     "id": "apps/api/src/lib/smoke-session/store.ts::ensureSmokePrincipal",
     "writes": {
       "insert:member": 1,
-      "insert:organization": 1,
       "insert:user": 1
     },
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."

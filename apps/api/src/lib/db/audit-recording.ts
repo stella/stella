@@ -1,10 +1,6 @@
 import { panic } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
-import { ORGANIZATION_EVALUATION_LIMIT } from "@stll/api-contract/organization-create";
-
-import { SETTING_USER_ID } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import type {
   AUDIT_ACTIVITY_CATEGORIES,
@@ -12,9 +8,7 @@ import type {
 } from "@/api/db/schema";
 import { accountAuditLogs, auditLogs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
-import { readBounded } from "@/api/lib/db/read-bounded";
 import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
 
 import {
@@ -26,11 +20,7 @@ import type {
   ChatAuditResourceType,
   NonChatAuditResourceType,
 } from "../audit-log-details";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  ORGANIZATION_EVALUATION_STARTED_EVENT_TYPE,
-} from "../audit-log.constants";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "../audit-log.constants";
 import type {
   AccountAuditEventType,
   AuditAction,
@@ -503,7 +493,7 @@ const createOrganizationBackgroundAuditRecorder =
     });
   };
 
-type AccountAuditEvent = {
+export type AccountAuditEvent = {
   type: AccountAuditEventType;
   resourceId: string;
 };
@@ -565,79 +555,3 @@ export function createBackgroundAuditRecorder(
   }
   return createOrganizationBackgroundAuditRecorder(bindings);
 }
-
-/** Holds the account lock until the owning creation records its grant and commits. */
-export const claimOrganizationEvaluation = async (
-  tx: Transaction,
-  userId: SafeId<"user">,
-): Promise<boolean> => {
-  await withAggregateLock({
-    tx,
-    aggregate: "account",
-    id: userId,
-    mode: "no key update",
-  });
-  // FORCE RLS also binds owner reads to the authenticated account.
-  await tx.execute(sql`SELECT set_config(${SETTING_USER_ID}, ${userId}, true)`);
-  const granted = await readBounded(
-    tx
-      .select({ id: accountAuditLogs.id })
-      .from(accountAuditLogs)
-      .where(
-        and(
-          eq(accountAuditLogs.userId, userId),
-          eq(
-            accountAuditLogs.eventType,
-            ORGANIZATION_EVALUATION_STARTED_EVENT_TYPE,
-          ),
-        ),
-      ),
-    ORGANIZATION_EVALUATION_LIMIT - 1,
-  );
-  switch (granted.type) {
-    case "complete":
-      return true;
-    case "overflow":
-      return false;
-    default:
-      granted satisfies never;
-      return panic("Unhandled organization evaluation audit count");
-  }
-};
-
-type RecordOrganizationCreationAuditOptions = {
-  userId: SafeId<"user">;
-  organizationId: SafeId<"organization">;
-  evaluation: "grant" | "none";
-};
-
-/** Evaluation grants stay in immutable account history when organizations are deleted. */
-export const recordOrganizationCreationAudit = async (
-  tx: AuditTransaction,
-  {
-    userId,
-    organizationId,
-    evaluation,
-  }: RecordOrganizationCreationAuditOptions,
-) => {
-  const events = [
-    { type: "organization.created", resourceId: organizationId },
-  ] satisfies AccountAuditEvent[];
-  switch (evaluation) {
-    case "grant":
-      await createAccountRecorder({ account: { userId } }, null)(tx, [
-        ...events,
-        {
-          type: ORGANIZATION_EVALUATION_STARTED_EVENT_TYPE,
-          resourceId: organizationId,
-        },
-      ]);
-      return;
-    case "none":
-      await createAccountRecorder({ account: { userId } }, null)(tx, events);
-      return;
-    default:
-      evaluation satisfies never;
-      panic("Unhandled organization evaluation grant");
-  }
-};
