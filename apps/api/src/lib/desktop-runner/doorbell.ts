@@ -94,16 +94,31 @@ type RedisDoorbellOptions = {
   createClient: (
     options: Parameters<typeof createRedisClient>[0],
   ) => RedisDoorbellClient;
+  /** Schedules a retry of a failed SUBSCRIBE; returns its cancel. */
+  scheduleRetry?: (run: () => void, ms: number) => () => void;
+};
+
+/** First wait before a failed SUBSCRIBE is retried; it doubles up to the cap. */
+const SUBSCRIBE_RETRY_MS = 1000;
+const SUBSCRIBE_RETRY_CAP_MS = 30_000;
+
+const scheduleOnClock = (run: () => void, ms: number) => {
+  const timer = setTimeout(run, ms);
+  return () => {
+    clearTimeout(timer);
+  };
 };
 
 /**
  * Rings across tasks over Redis pub/sub, one channel per task. A ring for a
  * task of this process skips Redis. Bun reconnects a subscriber without
- * re-issuing SUBSCRIBE, so the subscription is renewed on every reconnect; a
- * ring published while it is down is lost, which the sweep covers.
+ * re-issuing SUBSCRIBE, so the subscription is renewed on every reconnect, and
+ * a SUBSCRIBE that fails on a live connection is retried on a timer; a ring
+ * published while it is down is lost, which the sweep covers.
  */
 export const createRedisDoorbell = ({
   createClient,
+  scheduleRetry = scheduleOnClock,
 }: RedisDoorbellOptions): DesktopRunnerDoorbell => {
   const local = createLocalDoorbell();
   const localInstances = new Set<string>();
@@ -135,26 +150,59 @@ export const createRedisDoorbell = ({
       localInstances.add(instanceId);
       const subscriber = createClient({ storeClass: "cache" });
       const channel = channelOf(instanceId);
-      const subscribe = async () =>
-        await subscriber.subscribe(channel, (sessionId) => onRing(sessionId));
-      const resubscribe = () => {
-        bestEffort(async () => {
-          await subscriber.unsubscribe(channel);
-          await subscribe();
-        }, observeSubscribeFailure);
+      const subscription = {
+        stopped: false,
+        cancelRetry: (): void => undefined,
+        /** Renewals run one at a time, so a channel is never subscribed twice. */
+        queue: Promise.resolve(),
+      };
+      // SUBSCRIBE, after an UNSUBSCRIBE unless it is the first one. A failure
+      // is observed and retried on a timer, so a connection that stays up
+      // never stays unsubscribed; a reconnect renews at once instead.
+      const renew = (attempt: number, first: boolean) => {
+        subscription.cancelRetry();
+        const previous = subscription.queue;
+        subscription.queue = (async () => {
+          await previous;
+          if (subscription.stopped) {
+            return;
+          }
+          const renewed = await Result.tryPromise(async () => {
+            if (!first) {
+              await subscriber.unsubscribe(channel);
+            }
+            await subscriber.subscribe(channel, (sessionId) =>
+              onRing(sessionId),
+            );
+          });
+          if (renewed.isOk() || subscription.stopped) {
+            return;
+          }
+          observeSubscribeFailure(renewed.error);
+          subscription.cancelRetry = scheduleRetry(
+            () => {
+              detached(renew(attempt + 1, false), "desktop-runner.doorbell");
+            },
+            Math.min(SUBSCRIBE_RETRY_MS * 2 ** attempt, SUBSCRIBE_RETRY_CAP_MS),
+          );
+        })();
+        return subscription.queue;
       };
       const stopReconnects: { stop: () => void } = { stop: () => undefined };
       // Not awaited: a subscriber waits for Redis, and boot must not. Until it
       // is subscribed, rings for this task wait for the sweep. Reconnects are
-      // observed only after the first subscription, so it is not issued twice.
+      // observed only after the first attempt, so it is not issued twice.
       bestEffort(async () => {
-        try {
-          await subscribe();
-        } finally {
-          stopReconnects.stop = subscriber.onReconnect(resubscribe);
+        await renew(0, true);
+        if (!subscription.stopped) {
+          stopReconnects.stop = subscriber.onReconnect(() => {
+            detached(renew(0, false), "desktop-runner.doorbell");
+          });
         }
       }, observeSubscribeFailure);
       return async () => {
+        subscription.stopped = true;
+        subscription.cancelRetry();
         stopReconnects.stop();
         localInstances.delete(instanceId);
         await stopLocal();
