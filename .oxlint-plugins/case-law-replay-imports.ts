@@ -20,6 +20,13 @@ const REPLAY_ENTRYPOINTS = [
   "apps/api/src/scripts/replay-case-law-source.ts",
 ];
 
+/**
+ * The repository roots every closure file lives under. The rule skips files
+ * outside them without building the closure, so the closure refuses any file
+ * that would escape them.
+ */
+export const REPLAY_CLOSURE_ROOTS = ["apps/", "packages/", "node_modules/"];
+
 /** Follow value imports rather than assigning write ownership by directory. */
 export const replayImportClosure = (root: string) => {
   const found = new Set<string>();
@@ -28,6 +35,9 @@ export const replayImportClosure = (root: string) => {
     const relative = pending.pop();
     if (relative === undefined || found.has(relative)) {
       continue;
+    }
+    if (!REPLAY_CLOSURE_ROOTS.some((prefix) => relative.startsWith(prefix))) {
+      panic(`Replay import ${relative} is outside the replay closure roots`);
     }
     const absolute = path.join(root, relative);
     const source = readFileSync(absolute, "utf-8");

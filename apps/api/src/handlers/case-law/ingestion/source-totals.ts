@@ -497,11 +497,11 @@ export const sourceStoredTotalRefreshClaimStatement = ({
   sourceTotalsUpdate(tx, refreshClaimWrite(claim));
 
 /** Commit a full failure backoff first; only a fenced success restores the normal phase. */
-export const sourceStoredTotalRefreshClaim = ({
+export const sourceStoredTotalRefreshClaim = async ({
   tx,
   ...claim
 }: SourceStoredTotalRefreshClaimOptions) =>
-  writeSourceTotals({ tx, ...refreshClaimWrite(claim) });
+  await writeSourceTotals({ tx, ...refreshClaimWrite(claim) });
 
 const initialSourceRefreshSlot = (
   sourceId: SafeId<"caseLawSource">,

@@ -2,7 +2,10 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { Context } from "@oxlint/plugins";
 import path from "node:path";
 
-import { replayImportClosure } from "./case-law-replay-imports.ts";
+import {
+  REPLAY_CLOSURE_ROOTS,
+  replayImportClosure,
+} from "./case-law-replay-imports.ts";
 import { REPLAY_WRITER_REGISTRY } from "./case-law-replay-writer-registry.ts";
 import type { ReplayWriterOwner } from "./case-law-replay-writer-registry.ts";
 import type { AstNode, ScopeContext } from "./utils.ts";
@@ -28,6 +31,11 @@ type PlanBinding = ReturnType<typeof planBinding>;
 
 let closure: ReadonlySet<string> | undefined;
 const fileIsReplayWriter = (filename: string) => {
+  // Every closure file sits under one of its roots, so a file outside them is
+  // answered without parsing the closure.
+  if (!REPLAY_CLOSURE_ROOTS.some((root) => filename.includes(root))) {
+    return false;
+  }
   closure ??= replayImportClosure(path.resolve(import.meta.dirname, ".."));
   return [...closure].some((file) => filename.endsWith(file));
 };
