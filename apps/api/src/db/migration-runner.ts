@@ -49,6 +49,7 @@ import {
   ONLINE_MIGRATION_REPAIRS,
   runOnlineMigrations,
 } from "./online-migrations";
+import type { OnlineRepairOptions } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import { createDatabase } from "./sql-client";
 import { terminateReserved } from "./sql-close";
@@ -623,12 +624,15 @@ const prepareSchemaPhase = async ({
 }: PrepareSchemaPhaseOptions) => {
   await observeSchema(SCHEMA_LANE_STEP, async () => {
     await connection.unsafe(bootstrapRoleSql);
-    const [liftTimeout, takeLane, restoreTimeout] =
-      CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
-    await connection.unsafe(liftTimeout);
-    await connection.unsafe(takeLane);
+    const { lift, lock, restore } = CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
+    for (const statement of lift) {
+      await connection.unsafe(statement);
+    }
+    await connection.unsafe(lock);
     onLaneAcquired();
-    await connection.unsafe(restoreTimeout);
+    for (const statement of restore) {
+      await connection.unsafe(statement);
+    }
   });
 
   const bundle = readMigrationFiles({ migrationsFolder });
@@ -813,6 +817,7 @@ type RunMigrationsOptions = {
   migrationsSchema?: string;
   migrationsTable?: string;
   runOnline?: typeof runOnlineMigrations;
+  observeRepair?: OnlineRepairOptions["observeRepair"];
   onlineIndexHold?: OnlineIndexHoldRef;
   /** Test seam: lock retry configuration and runtime. */
   lockWaitRetry?: LockWaitRetry;
@@ -887,6 +892,7 @@ export const runMigrations = async ({
   migrationsSchema = "drizzle",
   migrationsTable = "__drizzle_migrations",
   runOnline = runOnlineMigrations,
+  observeRepair,
   onlineIndexHold = createOnlineIndexHold(),
   lockWaitRetry = DEFAULT_LOCK_WAIT_RETRY,
   timing = DEFAULT_MIGRATION_TIMING,
@@ -1028,6 +1034,7 @@ export const runMigrations = async ({
         indexGate: { ebs, hold: onlineIndexHold, lockTelemetry },
         reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
         timing: onlineTiming,
+        observeRepair,
         repairs: ONLINE_MIGRATION_REPAIRS,
       },
     );
