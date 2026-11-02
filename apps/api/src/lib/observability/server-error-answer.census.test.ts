@@ -59,9 +59,6 @@ const COMPUTED: Readonly<Record<string, Readonly<Record<string, string>>>> = {
     "upstream.status":
       "re-wraps the Better Auth answer, whose failures its own hooks observe",
   },
-  "src/handlers/case-law/ingestion/adapters/test-utils.ts": {
-    "match.status ?? 200": "a test double's upstream answer, never served",
-  },
   "src/handlers/case-law/ingestion/eu-completion-runner.ts": {
     "response.status":
       "re-wraps an upstream answer the runner reads, never served",
