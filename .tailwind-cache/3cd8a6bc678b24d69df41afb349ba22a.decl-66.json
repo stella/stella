@@ -1,1 +1,1 @@
-{"in-data-[slot=frame]:*:[tr]:data-[state=selected]:*:[td]:flex":{"valid":true,"declarations":[[">","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}}}
+{"@md/app-crumbs:[&>[data-crumb-fold]]:flex":{"valid":true,"declarations":[["@>","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}},"in-data-[slot=frame]:*:[tr]:data-[state=selected]:*:[td]:flex":{"valid":true,"declarations":[[">","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}}}
