@@ -4,6 +4,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  defaultTranscriptionModelId,
   getTranscriptionModel,
   isTranscriptionModelId,
   TRANSCRIPTION_MODELS,
@@ -54,6 +55,38 @@ test("transcription lookup preserves the evidence for every catalog model", () =
       );
       expect(availability.price.usdNumerator).toBeGreaterThan(0);
       expect(availability.price.secondsDenominator).toBeGreaterThan(0);
+    }
+  }
+});
+
+test("the default transcription model is offered in its region and no offered model is cheaper there", () => {
+  for (const residency of ["eu", "us"] as const) {
+    const offered = Object.keys(TRANSCRIPTION_MODELS)
+      .filter(isTranscriptionModelId)
+      .flatMap((modelId) => {
+        const regional = TRANSCRIPTION_MODELS[modelId].residency[residency];
+        return regional.status === "available"
+          ? [
+              {
+                modelId,
+                usdPerSecond:
+                  regional.price.usdNumerator /
+                  regional.price.secondsDenominator,
+              },
+            ]
+          : [];
+      });
+    const chosen = defaultTranscriptionModelId(residency);
+    if (offered.length === 0) {
+      expect(chosen).toBeUndefined();
+      continue;
+    }
+    const chosenPrice = offered.find(
+      ({ modelId }) => modelId === chosen,
+    )?.usdPerSecond;
+    expect(chosenPrice).toBeDefined();
+    for (const { usdPerSecond } of offered) {
+      expect(chosenPrice).toBeLessThanOrEqual(usdPerSecond);
     }
   }
 });

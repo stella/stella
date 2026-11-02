@@ -233,7 +233,10 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
     required: "false",
     selection_required: "false",
     specs: "[]",
+    suite_specs: "[]",
   },
+  "browser-suite-plan": { legs: "[]" },
+  "browser-suite-fallback": { legs: "[]" },
   generate: { input_hash: "" },
   "heavy-plan": {
     heavy_jobs: "[]",
@@ -255,6 +258,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   outcome: { required_summary: "", required_violations: "" },
   "patch-id": {
     patch_id: "",
+    entry_base_sha: "",
     workflow_version: "",
     tested_tree: "",
     workflow_tree: "",

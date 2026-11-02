@@ -1,8 +1,9 @@
 // parser-output-unchanged: replay enrolment chooses which stored rows are re-parsed, never how a row is parsed.
 import { panic } from "better-result";
 
-import { defaultConfig, type HealthConfig } from "@stll/db-load-gate/health";
+import type { HealthConfig } from "@stll/db-load-gate/health";
 
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import { readReplayTickEnvironment } from "@/api/env-replay";
 import {
   ADAPTER_KEYS,
@@ -12,10 +13,13 @@ import {
 import { MAX_REPLAY_ROW_READMISSIONS } from "./replay-failure";
 
 // A load hold resumes only once the ordinary admission floor is recovered.
-export const REPLAY_HEALTH_CONFIG = {
-  ...defaultConfig,
-  resumeFloor: defaultConfig.startFloor,
-} satisfies HealthConfig;
+export const replayHealthConfig = (
+  health: HealthConfig = loadGateHealthConfig(),
+) =>
+  ({
+    ...health,
+    resumeFloor: health.startFloor,
+  }) satisfies HealthConfig;
 
 export type ReplayEnrolment =
   | { mode: "off" }

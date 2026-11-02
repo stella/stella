@@ -1,6 +1,7 @@
-import { decideStart, defaultConfig } from "@stll/db-load-gate/health";
+import { decideStart } from "@stll/db-load-gate/health";
 import type { HealthConfig, Verdict } from "@stll/db-load-gate/health";
 
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import {
   canStartCyclePage,
   reserveCycleBudget,
@@ -22,7 +23,7 @@ type SourceStoredTotalAdmissionRequest = {
 /** Recheck load and commit the operation's full budget before the exact count. */
 export const createSourceStoredTotalAdmission = ({
   readVerdict,
-  config = defaultConfig,
+  config = loadGateHealthConfig(),
 }: SourceStoredTotalAdmissionOptions) => {
   const admittedCycles = new WeakSet<CycleDeadline>();
   return async ({
