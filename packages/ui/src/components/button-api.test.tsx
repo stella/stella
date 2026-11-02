@@ -287,3 +287,52 @@ describe("Button plain positioning", () => {
     expect(classes).toContain("relative");
   });
 });
+
+describe("Button loading keeps its width", () => {
+  test("without an icon the label stays, transparent, under a centred loader", () => {
+    const markup = renderToStaticMarkup(<Button loading>Save draft</Button>);
+
+    expect(markup).toContain('data-slot="button-loading-label"');
+    expect(markup).toMatch(/data-slot="button-label"[^>]*>Save draft</u);
+    // The label itself is transparent; the loader's `starting:opacity-0`
+    // must not stand in for it.
+    const label = /<span[^>]*data-slot="button-loading-label"[^>]*>/u.exec(
+      markup,
+    )?.[0];
+    expect(label).toMatch(/class="(?:[^"]* )?opacity-0(?: [^"]*)?"/u);
+    expect(markup).toContain("absolute inset-0 m-auto");
+    expect(markup).toContain('aria-busy="true"');
+  });
+
+  test("with an icon the loader takes the icon's place", () => {
+    const markup = renderToStaticMarkup(
+      <Button icon={<svg data-testid="icon" />} loading>
+        Retry
+      </Button>,
+    );
+
+    expect(markup).not.toContain("button-loading-label");
+    expect(markup).not.toContain('data-testid="icon"');
+    expect(markup).not.toContain("absolute inset-0 m-auto");
+  });
+
+  test("an icon that draws nothing is no icon: the label keeps its place", () => {
+    for (const icon of ["", true, []]) {
+      const markup = renderToStaticMarkup(
+        <Button icon={icon} loading>
+          Save draft
+        </Button>,
+      );
+
+      expect(markup).toMatch(/data-slot="button-label"[^>]*>Save draft</u);
+      expect(markup).toContain("absolute inset-0 m-auto");
+    }
+  });
+
+  test("an idle button renders its content directly", () => {
+    const markup = renderToStaticMarkup(<Button>Save draft</Button>);
+
+    expect(markup).not.toContain("button-loading-label");
+    expect(markup).not.toContain("button-loader");
+  });
+});

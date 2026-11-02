@@ -91,6 +91,7 @@
     "./initials": "./src/lib/initials.ts",
     "./input-otp": "./src/components/input-otp.tsx",
     "./list": "./src/components/list.tsx",
+    "./kbd": "./src/components/kbd.tsx",
     "./label": "./src/components/label.tsx",
     "./landing": "./src/components/landing.tsx",
     "./matter-icon": {
@@ -277,7 +278,7 @@
     "build": "tsdown",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun run test:unit",
-    "test:unit": "bun test --path-ignore-patterns '**/*.playwright.spec.ts'",
+    "test:unit": "bun test --isolate --path-ignore-patterns '**/*.playwright.spec.ts'",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "test:browser": "playwright test --config playwright.config.ts",
     "pack:check": "cd ../.. && bun scripts/check-published-exports.ts packages/ui",
