@@ -102,6 +102,7 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
 import { skillsOptions } from "@/lib/knowledge/queries";
 import type { fetchWorkspaceNavigationPage } from "@/lib/memory-api";
@@ -490,7 +491,7 @@ function ChatIndex() {
         getContextMatterIds,
         getSendMode,
       };
-      await startNewThreadCommandHandoff({
+      const handoff = await startNewThreadCommandHandoff({
         activeOrganizationId,
         context: chatThreadContext,
         files: draft.files,
@@ -498,6 +499,10 @@ function ChatIndex() {
         queryClient,
         threadRef,
       });
+      if (handoff.isErr()) {
+        notifyUserError(handoff.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
       await navigate({
         to: "/chat/$threadId",
         params: { threadId: threadRef.threadId },
@@ -557,6 +562,10 @@ function ChatIndex() {
         staleTime: "static",
       }),
     ]);
+    if (message.isErr()) {
+      notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+      return CHAT_SEND_KEPT;
+    }
     const chat = acquireChatRuntime({
       activeOrganizationId,
       context: chatThreadContext,
@@ -570,7 +579,7 @@ function ChatIndex() {
     // TanStack boundary fails before appending, this
     // throws here so the composer restores the draft
     // instead of navigating to an empty thread.
-    await chat.startRouteHandoffMessage(message, {
+    await chat.startRouteHandoffMessage(message.value, {
       timingSurface: "chat-thread",
     });
 
