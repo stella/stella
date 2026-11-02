@@ -37,8 +37,11 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
 import createHostedSetup from "./create-hosted-setup";
+
+const testFetchState = createTestFetch();
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -122,21 +125,23 @@ const installFakeProvider = (
 ): FakeProvider => {
   const originalFetch = globalThis.fetch;
   let calls = 0;
-  globalThis.fetch = Object.assign(
-    async (input: Parameters<typeof globalThis.fetch>[0]) => {
-      const url = requestUrl(input);
-      if (new URL(url).origin !== new URL(PROVIDER_BASE_URL).origin) {
-        return panic(`Unexpected outbound request to ${url}`);
-      }
-      calls += 1;
-      return respond(calls);
-    },
-    { preconnect: originalFetch.preconnect },
+  testFetchState.set(
+    Object.assign(
+      async (input: Parameters<typeof globalThis.fetch>[0]) => {
+        const url = requestUrl(input);
+        if (new URL(url).origin !== new URL(PROVIDER_BASE_URL).origin) {
+          return panic(`Unexpected outbound request to ${url}`);
+        }
+        calls += 1;
+        return respond(calls);
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
   );
   return {
     calls: () => calls,
     restore: () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     },
   };
 };

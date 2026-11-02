@@ -142,6 +142,13 @@ describe("browser approval card", () => {
           elements: [],
           revision: "revision-1",
           tabId: 7,
+          tabs: [
+            {
+              active: true,
+              tabId: 7,
+              url: "https://example.com/",
+            },
+          ],
           text: "Ready",
           textOffset: 0,
           textTotalChars: 5,
@@ -154,6 +161,32 @@ describe("browser approval card", () => {
 
     expect(markup).toContain(messages.chat.approval.browser.actions.snapshot);
     expect(markup).not.toContain(browserQuestion);
+  });
+
+  test("names a new tab and a tab switch with the website they lead to", () => {
+    const { actions } = messages.chat.approval.browser;
+    const newTab = renderCard(
+      browserPart(
+        { action: "open", newTab: true, url: "https://example.com/news" },
+        "approval-requested",
+      ),
+    );
+    expect(newTab).toContain(actions.openNewTab);
+    expect(newTab).toContain("https://example.com/news");
+
+    const switchTab = renderCard(
+      browserPart(
+        {
+          action: "switch-tab",
+          tabId: 9,
+          url: "https://example.com/results",
+        },
+        "approval-requested",
+      ),
+    );
+    expect(switchTab).toContain(actions.switchTab);
+    expect(switchTab).toContain("https://example.com/results");
+    expect(switchTab).toContain(browserQuestion);
   });
 
   test("a malformed browser command still shows what the model sent", () => {

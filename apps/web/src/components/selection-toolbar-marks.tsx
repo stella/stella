@@ -93,13 +93,18 @@ export const MarkColorSwatches = ({
       content={t(markColorLabelKey(color))}
       key={color}
       render={
-        <button
+        <Button
           aria-label={t(markColorLabelKey(color))}
-          className="focus-visible:ring-ring size-4 rounded-full ring-offset-1 transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:outline-none"
+          className="group/act flex"
           onClick={() => onPick(color)}
-          style={{ backgroundColor: `var(--option-${color})` }}
-          type="button"
-        />
+          shape="round"
+          variant="plain"
+        >
+          <span
+            className="block size-4 rounded-full transition-transform group-hover/act:scale-110"
+            style={{ backgroundColor: `var(--option-${color})` }}
+          />
+        </Button>
       }
     />
   ));

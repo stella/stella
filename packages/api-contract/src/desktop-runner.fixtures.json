@@ -1,0 +1,1013 @@
+{
+  "vocabulary": {
+    "protocol": {
+      "current": 1,
+      "minimum": 1
+    },
+    "maxFrameBytes": 4194304,
+    "harnesses": ["codex", "claude-code", "opencode"],
+    "harnessStates": [
+      "ready",
+      "needs_login",
+      "limit_until",
+      "not_installed",
+      "unsupported"
+    ],
+    "harnessCapabilities": ["approvals", "interrupt", "resume", "image_input"],
+    "runRejectReasons": [
+      "harness_not_installed",
+      "harness_needs_login",
+      "harness_limited",
+      "harness_unsupported",
+      "harness_version_unavailable",
+      "model_unavailable",
+      "policy_unsupported",
+      "at_capacity",
+      "unknown_run"
+    ],
+    "approvalKinds": ["command", "file_change", "mcp_tool", "tool"],
+    "approvalDecisions": ["approve", "approve_for_session", "deny"],
+    "runOutcomes": [
+      "completed",
+      "interrupted",
+      "cancelled",
+      "failed",
+      "limit_reached",
+      "needs_login"
+    ],
+    "networkPolicies": ["open"],
+    "fsPolicies": ["workspace"],
+    "desktopMessageTypes": [
+      "hello",
+      "harness.status",
+      "run.accepted",
+      "run.rejected",
+      "run.event",
+      "run.approval_request",
+      "run.finished"
+    ],
+    "serverMessageTypes": [
+      "welcome",
+      "upgrade_required",
+      "reconnect",
+      "run.start",
+      "run.input",
+      "run.approval",
+      "run.interrupt",
+      "run.cancel",
+      "run.token",
+      "ack"
+    ]
+  },
+  "valid": {
+    "desktop": [
+      {
+        "type": "hello",
+        "protocol": 1,
+        "appVersion": "0.9.60",
+        "sidecarVersion": "0.9.60",
+        "harnesses": [
+          {
+            "id": "codex",
+            "state": "ready",
+            "version": "0.48.0",
+            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "models": [
+              {
+                "id": "model-large",
+                "label": "Large model"
+              },
+              {
+                "id": "model-small",
+                "label": "Small model"
+              }
+            ]
+          },
+          {
+            "id": "claude-code",
+            "state": "limit_until",
+            "version": "2.0.30",
+            "resetsAt": "2026-10-28T14:00:00.000Z"
+          },
+          {
+            "id": "opencode",
+            "state": "unsupported",
+            "version": null
+          }
+        ],
+        "activeRuns": [
+          {
+            "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+            "lastSeq": 12
+          },
+          {
+            "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+            "lastSeq": 0
+          }
+        ]
+      },
+      {
+        "type": "hello",
+        "protocol": 1,
+        "appVersion": "0.9.60",
+        "sidecarVersion": "0.9.61-beta.1",
+        "harnesses": [
+          {
+            "id": "codex",
+            "state": "needs_login",
+            "version": "0.48.0"
+          },
+          {
+            "id": "claude-code",
+            "state": "not_installed"
+          },
+          {
+            "id": "opencode",
+            "state": "unsupported",
+            "version": "1.2.3"
+          }
+        ],
+        "activeRuns": []
+      },
+      {
+        "type": "hello",
+        "protocol": 1,
+        "appVersion": "0.9.60",
+        "sidecarVersion": "0.9.60",
+        "harnesses": [],
+        "activeRuns": []
+      },
+      {
+        "type": "harness.status",
+        "harness": {
+          "id": "claude-code",
+          "state": "ready",
+          "version": "2.0.30",
+          "capabilities": ["approvals"],
+          "models": [
+            {
+              "id": "model-large",
+              "label": "Large model"
+            }
+          ]
+        }
+      },
+      {
+        "type": "run.accepted",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "reason": "harness_not_installed"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "reason": "harness_needs_login"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "reason": "harness_limited"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "reason": "harness_unsupported"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "reason": "harness_version_unavailable"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "reason": "model_unavailable"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "reason": "policy_unsupported"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "reason": "at_capacity"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "reason": "unknown_run"
+      },
+      {
+        "type": "run.event",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 1,
+        "chunk": {
+          "type": "RUN_STARTED",
+          "threadId": "thread-1",
+          "runId": "harness-run-1",
+          "timestamp": 1793196000000
+        }
+      },
+      {
+        "type": "run.event",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 2,
+        "chunk": {
+          "type": "TEXT_MESSAGE_CONTENT",
+          "messageId": "message-1",
+          "delta": "Reading the matter."
+        }
+      },
+      {
+        "type": "run.event",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 3,
+        "chunk": {
+          "type": "TOOL_CALL_START",
+          "toolCallId": "call-1",
+          "toolCallName": "mcp__stella__read_document",
+          "toolName": "mcp__stella__read_document",
+          "metadata": {
+            "source": "harness"
+          }
+        }
+      },
+      {
+        "type": "run.approval_request",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 4,
+        "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
+        "kind": "command",
+        "summary": "Allow command"
+      },
+      {
+        "type": "run.approval_request",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 5,
+        "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
+        "kind": "file_change",
+        "summary": "Allow file_change"
+      },
+      {
+        "type": "run.approval_request",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 6,
+        "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
+        "kind": "mcp_tool",
+        "summary": "Allow mcp_tool"
+      },
+      {
+        "type": "run.approval_request",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 7,
+        "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
+        "kind": "tool",
+        "summary": "Allow tool"
+      },
+      {
+        "type": "run.finished",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 20,
+        "outcome": "completed",
+        "harnessSessionId": "session-1"
+      },
+      {
+        "type": "run.finished",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 21,
+        "outcome": "interrupted",
+        "harnessSessionId": null
+      },
+      {
+        "type": "run.finished",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 22,
+        "outcome": "cancelled",
+        "harnessSessionId": "session-1"
+      },
+      {
+        "type": "run.finished",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 23,
+        "outcome": "failed",
+        "harnessSessionId": null
+      },
+      {
+        "type": "run.finished",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 24,
+        "outcome": "limit_reached",
+        "harnessSessionId": "session-1"
+      },
+      {
+        "type": "run.finished",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 25,
+        "outcome": "needs_login",
+        "harnessSessionId": null
+      }
+    ],
+    "server": [
+      {
+        "type": "welcome",
+        "protocol": 1,
+        "resume": [
+          {
+            "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+            "ackSeq": 10
+          },
+          {
+            "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+            "ackSeq": 0
+          }
+        ]
+      },
+      {
+        "type": "welcome",
+        "protocol": 1,
+        "resume": []
+      },
+      {
+        "type": "upgrade_required",
+        "minimumProtocol": 1,
+        "currentProtocol": 1
+      },
+      {
+        "type": "reconnect",
+        "afterMs": 1500
+      },
+      {
+        "type": "run.start",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "harness": "codex",
+        "harnessVersion": "0.48.0",
+        "model": "model-large",
+        "harnessSessionId": null,
+        "instructions": "Use the stella MCP server for workspace actions.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Summarise the lease."
+          },
+          {
+            "role": "assistant",
+            "content": null,
+            "toolCalls": [
+              {
+                "id": "call-1",
+                "type": "function",
+                "function": {
+                  "name": "read_document",
+                  "arguments": "{}"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "content": "Lease text",
+            "toolCallId": "call-1"
+          }
+        ],
+        "policy": {
+          "network": "open",
+          "fs": "workspace"
+        },
+        "mcp": {
+          "serverName": "stella",
+          "url": "https://api.example.test/mcp",
+          "token": "run-token-1",
+          "expiresAt": "2026-10-28T09:15:00.000Z"
+        }
+      },
+      {
+        "type": "run.start",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "harness": "claude-code",
+        "harnessVersion": "2.0.30",
+        "model": "model-large",
+        "harnessSessionId": "session-1",
+        "instructions": "Use the stella MCP server for workspace actions.",
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "content": "Continue."
+              }
+            ]
+          }
+        ],
+        "policy": {
+          "network": "open",
+          "fs": "workspace"
+        },
+        "mcp": {
+          "serverName": "stella",
+          "url": "https://api.example.test/mcp",
+          "token": "run-token-1",
+          "expiresAt": "2026-10-28T09:15:00.000Z"
+        }
+      },
+      {
+        "type": "run.input",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "inputId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+        "message": {
+          "role": "user",
+          "content": "Also check the annex."
+        }
+      },
+      {
+        "type": "run.approval",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
+        "decision": "approve"
+      },
+      {
+        "type": "run.approval",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
+        "decision": "approve_for_session"
+      },
+      {
+        "type": "run.approval",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
+        "decision": "deny"
+      },
+      {
+        "type": "run.interrupt",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
+      },
+      {
+        "type": "run.cancel",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002"
+      },
+      {
+        "type": "run.token",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "token": "run-token-2",
+        "expiresAt": "2026-10-28T09:30:00.000Z"
+      },
+      {
+        "type": "ack",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 12
+      }
+    ]
+  },
+  "unknownFields": [
+    {
+      "name": "hello ignores unknown top-level and report fields",
+      "direction": "desktop",
+      "input": {
+        "type": "hello",
+        "protocol": 1,
+        "appVersion": "0.9.60",
+        "sidecarVersion": "0.9.60",
+        "harnesses": [
+          {
+            "id": "codex",
+            "state": "ready",
+            "version": "0.48.0",
+            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "models": [
+              {
+                "id": "model-large",
+                "label": "Large model"
+              },
+              {
+                "id": "model-small",
+                "label": "Small model"
+              }
+            ],
+            "binaryPath": "/opt/codex"
+          }
+        ],
+        "activeRuns": [
+          {
+            "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+            "lastSeq": 12
+          },
+          {
+            "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+            "lastSeq": 0
+          }
+        ],
+        "deviceName": "Workstation"
+      },
+      "parsed": {
+        "type": "hello",
+        "protocol": 1,
+        "appVersion": "0.9.60",
+        "sidecarVersion": "0.9.60",
+        "harnesses": [
+          {
+            "id": "codex",
+            "state": "ready",
+            "version": "0.48.0",
+            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "models": [
+              {
+                "id": "model-large",
+                "label": "Large model"
+              },
+              {
+                "id": "model-small",
+                "label": "Small model"
+              }
+            ]
+          }
+        ],
+        "activeRuns": [
+          {
+            "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+            "lastSeq": 12
+          },
+          {
+            "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+            "lastSeq": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "a chunk keeps every field it carries",
+      "direction": "desktop",
+      "input": {
+        "type": "run.event",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 3,
+        "chunk": {
+          "type": "TOOL_CALL_START",
+          "toolCallId": "call-1",
+          "toolCallName": "mcp__stella__read_document",
+          "toolName": "mcp__stella__read_document",
+          "metadata": {
+            "source": "harness"
+          },
+          "providerExtra": {
+            "cached": true
+          }
+        },
+        "traceId": "trace-1"
+      },
+      "parsed": {
+        "type": "run.event",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "seq": 3,
+        "chunk": {
+          "type": "TOOL_CALL_START",
+          "toolCallId": "call-1",
+          "toolCallName": "mcp__stella__read_document",
+          "toolName": "mcp__stella__read_document",
+          "metadata": {
+            "source": "harness"
+          },
+          "providerExtra": {
+            "cached": true
+          }
+        }
+      }
+    },
+    {
+      "name": "run.start ignores unknown fields beside the policy",
+      "direction": "server",
+      "input": {
+        "type": "run.start",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "harness": "codex",
+        "harnessVersion": "0.48.0",
+        "model": "model-large",
+        "harnessSessionId": null,
+        "instructions": "Use the stella MCP server for workspace actions.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Summarise the lease."
+          },
+          {
+            "role": "assistant",
+            "content": null,
+            "toolCalls": [
+              {
+                "id": "call-1",
+                "type": "function",
+                "function": {
+                  "name": "read_document",
+                  "arguments": "{}"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "content": "Lease text",
+            "toolCallId": "call-1"
+          }
+        ],
+        "policy": {
+          "network": "open",
+          "fs": "workspace",
+          "clipboard": "blocked"
+        },
+        "mcp": {
+          "serverName": "stella",
+          "url": "https://api.example.test/mcp",
+          "token": "run-token-1",
+          "expiresAt": "2026-10-28T09:15:00.000Z"
+        },
+        "priority": "high"
+      },
+      "parsed": {
+        "type": "run.start",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "harness": "codex",
+        "harnessVersion": "0.48.0",
+        "model": "model-large",
+        "harnessSessionId": null,
+        "instructions": "Use the stella MCP server for workspace actions.",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Summarise the lease."
+          },
+          {
+            "role": "assistant",
+            "content": null,
+            "toolCalls": [
+              {
+                "id": "call-1",
+                "type": "function",
+                "function": {
+                  "name": "read_document",
+                  "arguments": "{}"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "content": "Lease text",
+            "toolCallId": "call-1"
+          }
+        ],
+        "policy": {
+          "network": "open",
+          "fs": "workspace"
+        },
+        "mcp": {
+          "serverName": "stella",
+          "url": "https://api.example.test/mcp",
+          "token": "run-token-1",
+          "expiresAt": "2026-10-28T09:15:00.000Z"
+        }
+      }
+    }
+  ],
+  "rejected": {
+    "desktop": [
+      {
+        "name": "unknown message type",
+        "reason": "unknown_type",
+        "message": {
+          "type": "run.progress",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
+        }
+      },
+      {
+        "name": "event position zero",
+        "reason": "invalid",
+        "message": {
+          "type": "run.event",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "seq": 0,
+          "chunk": {
+            "type": "TEXT_MESSAGE_CONTENT",
+            "messageId": "message-1",
+            "delta": "Reading the matter."
+          }
+        }
+      },
+      {
+        "name": "unknown chunk type",
+        "reason": "invalid",
+        "message": {
+          "type": "run.event",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "seq": 2,
+          "chunk": {
+            "type": "NOT_A_CHUNK"
+          }
+        }
+      },
+      {
+        "name": "limited harness without a reset time",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "limit_until",
+            "version": "0.48.0"
+          }
+        }
+      },
+      {
+        "name": "unknown harness",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "cursor",
+            "state": "not_installed"
+          }
+        }
+      },
+      {
+        "name": "unknown reject reason",
+        "reason": "invalid",
+        "message": {
+          "type": "run.rejected",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "reason": "busy"
+        }
+      },
+      {
+        "name": "unknown outcome",
+        "reason": "invalid",
+        "message": {
+          "type": "run.finished",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "seq": 3,
+          "outcome": "timeout",
+          "harnessSessionId": null
+        }
+      },
+      {
+        "name": "unknown approval kind",
+        "reason": "invalid",
+        "message": {
+          "type": "run.approval_request",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "seq": 3,
+          "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
+          "kind": "network",
+          "summary": "Allow"
+        }
+      },
+      {
+        "name": "duplicate harness report",
+        "reason": "invalid",
+        "message": {
+          "type": "hello",
+          "protocol": 1,
+          "appVersion": "0.9.60",
+          "sidecarVersion": "0.9.61-beta.1",
+          "harnesses": [
+            {
+              "id": "codex",
+              "state": "needs_login",
+              "version": "0.48.0"
+            },
+            {
+              "id": "codex",
+              "state": "needs_login",
+              "version": "0.48.0"
+            }
+          ],
+          "activeRuns": []
+        }
+      }
+    ],
+    "server": [
+      {
+        "name": "unknown message type",
+        "message": {
+          "type": "run.pause",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
+        }
+      },
+      {
+        "name": "unknown approval decision",
+        "message": {
+          "type": "run.approval",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
+          "decision": "maybe"
+        }
+      },
+      {
+        "name": "restricted network policy",
+        "message": {
+          "type": "run.start",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "harness": "codex",
+          "harnessVersion": "0.48.0",
+          "model": "model-large",
+          "harnessSessionId": null,
+          "instructions": "Use the stella MCP server for workspace actions.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Summarise the lease."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "toolCalls": [
+                {
+                  "id": "call-1",
+                  "type": "function",
+                  "function": {
+                    "name": "read_document",
+                    "arguments": "{}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Lease text",
+              "toolCallId": "call-1"
+            }
+          ],
+          "policy": {
+            "network": "restricted",
+            "fs": "workspace"
+          },
+          "mcp": {
+            "serverName": "stella",
+            "url": "https://api.example.test/mcp",
+            "token": "run-token-1",
+            "expiresAt": "2026-10-28T09:15:00.000Z"
+          }
+        }
+      },
+      {
+        "name": "home filesystem policy",
+        "message": {
+          "type": "run.start",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "harness": "codex",
+          "harnessVersion": "0.48.0",
+          "model": "model-large",
+          "harnessSessionId": null,
+          "instructions": "Use the stella MCP server for workspace actions.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Summarise the lease."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "toolCalls": [
+                {
+                  "id": "call-1",
+                  "type": "function",
+                  "function": {
+                    "name": "read_document",
+                    "arguments": "{}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Lease text",
+              "toolCallId": "call-1"
+            }
+          ],
+          "policy": {
+            "network": "open",
+            "fs": "home"
+          },
+          "mcp": {
+            "serverName": "stella",
+            "url": "https://api.example.test/mcp",
+            "token": "run-token-1",
+            "expiresAt": "2026-10-28T09:15:00.000Z"
+          }
+        }
+      },
+      {
+        "name": "unknown harness",
+        "message": {
+          "type": "run.start",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "harness": "cursor",
+          "harnessVersion": "0.48.0",
+          "model": "model-large",
+          "harnessSessionId": null,
+          "instructions": "Use the stella MCP server for workspace actions.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Summarise the lease."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "toolCalls": [
+                {
+                  "id": "call-1",
+                  "type": "function",
+                  "function": {
+                    "name": "read_document",
+                    "arguments": "{}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Lease text",
+              "toolCallId": "call-1"
+            }
+          ],
+          "policy": {
+            "network": "open",
+            "fs": "workspace"
+          },
+          "mcp": {
+            "serverName": "stella",
+            "url": "https://api.example.test/mcp",
+            "token": "run-token-1",
+            "expiresAt": "2026-10-28T09:15:00.000Z"
+          }
+        }
+      },
+      {
+        "name": "run.start without an MCP binding",
+        "message": {
+          "type": "run.start",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "harness": "codex",
+          "harnessVersion": "0.48.0",
+          "model": "model-large",
+          "harnessSessionId": null,
+          "instructions": "Use the stella MCP server for workspace actions.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Summarise the lease."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "toolCalls": [
+                {
+                  "id": "call-1",
+                  "type": "function",
+                  "function": {
+                    "name": "read_document",
+                    "arguments": "{}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Lease text",
+              "toolCallId": "call-1"
+            }
+          ],
+          "policy": {
+            "network": "open",
+            "fs": "workspace"
+          }
+        }
+      },
+      {
+        "name": "welcome without resume positions",
+        "message": {
+          "type": "welcome",
+          "protocol": 1
+        }
+      },
+      {
+        "name": "ack position zero",
+        "message": {
+          "type": "ack",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "seq": 0
+        }
+      },
+      {
+        "name": "ack position as text",
+        "message": {
+          "type": "ack",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "seq": "12"
+        }
+      }
+    ]
+  }
+}

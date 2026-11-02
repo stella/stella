@@ -2102,6 +2102,8 @@ test("the patch-id step lists every queue entry's own patch down to the group ba
       { pr: 12, patch_id: patchOf(first, second) },
       { pr: 11, patch_id: patchOf(base, first) },
     ]);
+    // Per-entry checks compare against the entry ahead, not the target.
+    expect(batched["entry_base_sha"]).toBe(first);
     expect(batched["tested_tree"]).toBe(git("rev-parse", "HEAD^{tree}"));
     expect(batched["workflow_tree"]).toBe(git("rev-parse", `${second}^{tree}`));
     const retryFailure = nodePath.join(repository, ".git", "retry-failure.sh");
@@ -2119,10 +2121,10 @@ test("the patch-id step lists every queue entry's own patch down to the group ba
     // An entry whose queue ref is gone breaks the chain: nothing is proven.
     git("update-ref", "-d", firstRef);
     expect(chain(second, secondRef)).toBe("null");
-    // A pull request run has no chain.
-    expect(
-      runPatchIdStep({ repository, base, head: second })["entry_chain"],
-    ).toBe("null");
+    // A pull request run has no chain and no entry base.
+    const pullRequest = runPatchIdStep({ repository, base, head: second });
+    expect(pullRequest["entry_chain"]).toBe("null");
+    expect(pullRequest["entry_base_sha"]).toBe("");
   } finally {
     rmSync(repository, { recursive: true, force: true });
   }

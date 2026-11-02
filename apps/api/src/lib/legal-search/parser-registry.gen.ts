@@ -94,7 +94,7 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.CZ_NS]: 23,
 
-  [ADAPTER_KEYS.CZ_NSS]: 28,
+  [ADAPTER_KEYS.CZ_NSS]: 29,
 
   [ADAPTER_KEYS.CZ_REGIONAL]: 18,
 
@@ -118,7 +118,7 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.PL_SN]: 12,
 
-  [ADAPTER_KEYS.PL_TK]: 11,
+  [ADAPTER_KEYS.PL_TK]: 12,
 
   [ADAPTER_KEYS.PL_UODO]: 16,
 
@@ -222,7 +222,7 @@ export const PARSER_VERSION_SCOPES = {
 
   [ADAPTER_KEYS.CZ_NS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. running headers, page numbers, soft hyphens, captions, the formula lines, section headings, letter-spaced words, the signing judge's name and paragraph numbers are recomputed from the stored print page, and none of them has feature storage of its own Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own."} },
 
-  [ADAPTER_KEYS.CZ_NSS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Section headings, the formula lines, the takto lead-in and letter-spaced words are recomputed with them. Rebuild inline emphasis from retained PDF originals with the shared style mapper. Discovering an uncaptured original requires a normal re-crawl. Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own."} },
+  [ADAPTER_KEYS.CZ_NSS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. Read inline style declarations with CSS cascade semantics. Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Section headings, the formula lines, the takto lead-in and letter-spaced words are recomputed with them. Rebuild inline emphasis from retained PDF originals with the shared style mapper. Discovering an uncaptured original requires a normal re-crawl. Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own."} },
 
   [ADAPTER_KEYS.CZ_REGIONAL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. running headers, soft hyphens, misplaced opening quotes, letter-spaced words, title and formula lines, the takto lead-in, the court's own Poučení label and paragraph numbers are recomputed from the stored decision, and none of them has feature storage of its own Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own."} },
 
@@ -246,7 +246,7 @@ export const PARSER_VERSION_SCOPES = {
 
   [ADAPTER_KEYS.PL_SN]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_SN], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
 
-  [ADAPTER_KEYS.PL_TK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_TK], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
+  [ADAPTER_KEYS.PL_TK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_TK], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Read inline style declarations with CSS cascade semantics."} },
 
   [ADAPTER_KEYS.PL_UODO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UODO], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
 

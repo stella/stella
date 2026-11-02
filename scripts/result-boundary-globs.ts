@@ -27,6 +27,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "apps/api/src/db/online-migration-entries/**/*.ts",
   "packages/playwright-tools/src/**/*.ts",
   "packages/render-probe/src/**/*.{ts,tsx}",
   "apps/web/src/features/law-search-history/**/*.ts",
@@ -371,6 +372,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   // a checkout without installed packages gets one actionable line; it cannot
   // import the Result library, which is one of the packages that may be missing.
   "packages/cli/src/cli.ts",
+  // Protected CLI startup must reject before check work when its network-denying preload is absent.
+  "packages/scripts/src/offline-check-startup.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",

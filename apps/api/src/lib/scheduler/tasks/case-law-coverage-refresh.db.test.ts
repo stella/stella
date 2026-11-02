@@ -3,11 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import {
-  defaultConfig,
-  initialBatchState,
-  nextBatch,
-} from "@stll/db-load-gate/health";
+import { initialBatchState, nextBatch } from "@stll/db-load-gate/health";
 
 import {
   BACKFILL_TABLE_CONTENTION,
@@ -18,6 +14,7 @@ import {
   databaseBackfillStates,
   schedulerJobs,
 } from "@/api/db/schema";
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import { createSafeId } from "@/api/lib/branded-types";
 import { CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/coverage-refresh-interval";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
@@ -26,7 +23,7 @@ import { logger } from "@/api/lib/observability/logger";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import {
-  CASE_LAW_COVERAGE_REFRESH_CONFIG,
+  caseLawCoverageRefreshConfig,
   createCaseLawCoverageRefreshTask,
   REFRESH_CASE_LAW_COVERAGE_TASK,
 } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
@@ -202,7 +199,7 @@ test("coverage refresh publishes complete answers atomically and retains them on
 
 // The refresh reads the corpus under shared locks and writes only its own
 // summary row; it is governed as that, not as a corpus writer.
-test("coverage refresh is governed as a shared reader at default floors, held at most one interval, and still needs the backfill slot", async () => {
+test("coverage refresh is governed as a shared reader at the configured floors, held at most one interval, and still needs the backfill slot", async () => {
   const job =
     (await db.select().from(schedulerJobs)).find(({ id }) => id === JOB_ID) ??
     panic("Coverage scheduler fixture is missing");
@@ -237,7 +234,7 @@ test("coverage refresh is governed as a shared reader at default floors, held at
   };
 
   // Long lock holders and autovacuum on the corpus do not describe a shared
-  // reader; the IO balance and busy windows still hold it, at default floors.
+  // reader; the IO balance and busy windows still hold it, at the configured floors.
   const declared: Parameters<typeof createScriptBackfillRuntime>[0][] = [];
   await resetCheckpoint();
   expect(
@@ -257,17 +254,19 @@ test("coverage refresh is governed as a shared reader at default floors, held at
   expect(declared.at(0)?.tableContention).toBe(
     BACKFILL_TABLE_CONTENTION.SHARED_READ,
   );
-  expect(declared.at(0)?.config).toBe(CASE_LAW_COVERAGE_REFRESH_CONFIG);
+  const coverageConfig = caseLawCoverageRefreshConfig();
+  expect(declared.at(0)?.config).toEqual(coverageConfig);
+  const environment = loadGateHealthConfig();
   expect({
-    hardFloor: CASE_LAW_COVERAGE_REFRESH_CONFIG.hardFloor,
-    startFloor: CASE_LAW_COVERAGE_REFRESH_CONFIG.startFloor,
-    resumeFloor: "resumeFloor" in CASE_LAW_COVERAGE_REFRESH_CONFIG,
-    busyWindows: CASE_LAW_COVERAGE_REFRESH_CONFIG.busyWindows,
+    hardFloor: coverageConfig.hardFloor,
+    startFloor: coverageConfig.startFloor,
+    resumeFloor: "resumeFloor" in coverageConfig,
+    busyWindows: coverageConfig.busyWindows,
   }).toEqual({
-    hardFloor: defaultConfig.hardFloor,
-    startFloor: defaultConfig.startFloor,
+    hardFloor: environment.hardFloor,
+    startFloor: environment.startFloor,
     resumeFloor: false,
-    busyWindows: defaultConfig.busyWindows,
+    busyWindows: environment.busyWindows,
   });
   // The script runtime's own advisory slot is the one every backfill shares.
   expect(declared.at(0)).not.toHaveProperty("slot");
@@ -276,12 +275,12 @@ test("coverage refresh is governed as a shared reader at default floors, held at
   for (let holdCount = 0; holdCount <= 60; holdCount += 1) {
     const decision = nextBatch({
       state: {
-        ...initialBatchState(CASE_LAW_COVERAGE_REFRESH_CONFIG),
+        ...initialBatchState(caseLawCoverageRefreshConfig()),
         holdCount,
       },
       verdict: { kind: "stop", signals: [] },
       lastDurationMs: null,
-      config: CASE_LAW_COVERAGE_REFRESH_CONFIG,
+      config: caseLawCoverageRefreshConfig(),
       clock: () => 0,
     });
     expect(decision.action).toBe("hold");
