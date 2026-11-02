@@ -144,6 +144,7 @@ type RunOptions = {
   failUnquarantined?: boolean;
   reportDir?: "set" | "unset";
   source?: string;
+  registryLocation?: "workspace" | "tooling";
 };
 
 const run = ({
@@ -151,22 +152,30 @@ const run = ({
   failUnquarantined = false,
   reportDir = "set",
   source = SOURCE,
+  registryLocation = "workspace",
 }: RunOptions) => {
   const root = mkdtempSync(path.join(tmpdir(), "flaky-quarantine-"));
   roots.push(root);
-  mkdirSync(path.join(root, "scripts"));
-  mkdirSync(path.join(root, "pkg"));
-  writeFileSync(
-    path.join(root, "scripts/flaky-test-quarantine.json"),
-    serializeRegistry({ entries: names.map(entry) }),
+  const registryPath = path.join(
+    root,
+    registryLocation === "tooling" ? "tooling/scripts" : "scripts",
+    "flaky-test-quarantine.json",
   );
+  mkdirSync(path.dirname(registryPath), { recursive: true });
+  mkdirSync(path.join(root, "pkg"));
+  writeFileSync(registryPath, serializeRegistry({ entries: names.map(entry) }));
   writeFileSync(path.join(root, FIXTURE), source);
   writeFileSync(path.join(root, "runner.ts"), RUNNER);
   if (failUnquarantined) {
     writeFileSync(path.join(root, "fail-unquarantined"), "");
   }
   const reports = path.join(root, "reports");
-  const { BUN_OPTIONS: _options, ...inherited } = process.env;
+  const {
+    BUN_OPTIONS: _options,
+    FLAKY_TEST_QUARANTINE_REPORT_DIR: _reportDirectory,
+    FLAKY_TEST_QUARANTINE_REGISTRY: _registry,
+    ...inherited
+  } = process.env;
   const result = Bun.spawnSync({
     // CI loads the preload into a package runner through BUN_OPTIONS; that
     // runner then spawns the actual Bun test process.
@@ -175,10 +184,8 @@ const run = ({
     env: {
       ...inherited,
       BUN_OPTIONS: `--preload=${PRELOAD}`,
-      [QUARANTINE_REGISTRY_ENV]: path.join(
-        root,
-        "scripts/flaky-test-quarantine.json",
-      ),
+      [QUARANTINE_REGISTRY_ENV]: registryPath,
+      GITHUB_WORKSPACE: root,
       ...(reportDir === "set" ? { [QUARANTINE_REPORT_DIR_ENV]: reports } : {}),
     },
     stdout: "pipe",
@@ -230,12 +237,18 @@ const runReceiverFixture = ({
     }),
   );
   const reports = path.join(root, "reports");
-  const { BUN_OPTIONS: _options, ...inherited } = process.env;
+  const {
+    BUN_OPTIONS: _options,
+    FLAKY_TEST_QUARANTINE_REPORT_DIR: _reportDirectory,
+    FLAKY_TEST_QUARANTINE_REGISTRY: _registry,
+    ...inherited
+  } = process.env;
   const result = Bun.spawnSync({
     cmd: [process.execPath, "test", `./${RECEIVER_FIXTURE}`],
     cwd: root,
     env: {
       ...inherited,
+      GITHUB_WORKSPACE: root,
       ...(preload
         ? {
             BUN_OPTIONS: `--preload=${PRELOAD}`,
@@ -283,6 +296,25 @@ const FAILING = [
 ];
 
 describe("flaky-test quarantine preload", () => {
+  test("matches tests inside an enabled Postgres-gated suite", () => {
+    const name = "Postgres gate > quarantined case";
+    const result = run({
+      names: [name],
+      source: `import { describe, test } from "bun:test";
+const runPostgresTests = true;
+describe.skipIf(!runPostgresTests)("Postgres gate", () => {
+  test("quarantined case", () => {
+    throw new TypeError("fixture failure");
+  });
+});`,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.records).toContainEqual(
+      expect.objectContaining({ id: `${FIXTURE}::${name}`, type: "failed" }),
+    );
+  });
+
   test("reused describe.each registrars restart row IDs for each suite", () => {
     const names = [
       "outer > first 0 alpha > case",
@@ -557,4 +589,18 @@ describe("outer", () => {
     expect(exitCode).not.toBe(0);
     expect(records).toEqual([]);
   });
+});
+
+test("a preserved registry applies to tests in the deployed workspace", () => {
+  const { exitCode, records } = run({
+    names: FAILING,
+    registryLocation: "tooling",
+  });
+  expect(exitCode).toBe(0);
+  expect(records).toContainEqual(
+    expect.objectContaining({
+      type: "failed",
+      id: `${FIXTURE}::${FAILING.at(0)}`,
+    }),
+  );
 });

@@ -134,6 +134,9 @@ jobs:
         if: always()
         run: docker logout ghcr.io
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Record network baseline
         timeout-minutes: 6
         env:
