@@ -135,7 +135,7 @@
           "path": "scripts/check-migration-schema.ts",
           "contains": [
             "Database schema changed without a migration file",
-            "linkBaseDependencies(root, baseRoot)",
+            "prepareBaseDependencies(root, baseRoot)",
             "migration\\.sql$"
           ]
         }
