@@ -22,8 +22,8 @@ import type {
 import {
   BACKGROUND_REPLAY_LIMITS,
   REPLAY_ENROLMENT,
-  REPLAY_HEALTH_CONFIG,
   type ReplayEnrolment,
+  replayHealthConfig,
   replayKillRequested,
 } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import {
@@ -240,9 +240,11 @@ export const createReplayPreflightGate = ({
   saveState,
   clock,
 }: ReplayPreflightGateOptions) => {
+  const config = replayHealthConfig();
   let state: BatchState | undefined;
   return {
-    heldTooLong: () => state !== undefined && isHeldTooLong(state, clock()),
+    heldTooLong: () =>
+      state !== undefined && isHeldTooLong(state, clock(), config),
     readVerdict: async (): Promise<Verdict> => {
       state ??= await loadState();
       if (state.holdUntil !== null && clock() < state.holdUntil) {
@@ -254,7 +256,7 @@ export const createReplayPreflightGate = ({
         state,
         verdict,
         lastDurationMs: null,
-        config: REPLAY_HEALTH_CONFIG,
+        config,
         clock,
       });
       state = plan.state;
@@ -400,11 +402,12 @@ const runReplayOnSlotSession = async ({
       },
     },
   });
+  const healthConfig = { ...replayHealthConfig(), ...fixture.healthConfig };
   const health = runtime.createScriptBackfillHealthReader({
     db: rootDb,
     tableName: "case_law_decisions",
     clock: now,
-    config: { ...REPLAY_HEALTH_CONFIG, ...fixture.healthConfig },
+    config: healthConfig,
   });
   let lastVerdict: Verdict = { kind: "unknown", signals: [] };
   const leaseOwner = createReplayLeaseOwner({
@@ -427,7 +430,7 @@ const runReplayOnSlotSession = async ({
       metric(source, "case_law.replay.tick", {
         "case_law.replay.tick.held": 1,
         "case_law.replay.tick.hold_too_long": Number(
-          isHeldTooLong(state, now()),
+          isHeldTooLong(state, now(), healthConfig),
         ),
       }),
   });

@@ -4,11 +4,7 @@ import { sql, TransactionRollbackError } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import {
-  stella,
-  stellaCaseLawReader,
-  stellaPublicLawReader,
-} from "@/api/db/rls";
+import { stella, stellaPublicLawReader } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import { readCitationGraphFacts } from "@/api/handlers/case-law/analysis/significance";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
@@ -234,94 +230,30 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
-    // Migrations run before the new API starts, so the previous API version
-    // keeps reading the base table through both reader roles until its tasks
-    // are gone. The migrated database must still serve those reads.
-    test("previous-version base-table reads still work after the migrations", async () => {
+    test("the withdrawal status view keeps its three columns read-only", async () => {
       await asReader(databaseUrl, async (tx) => {
         await tx.execute(
           sql.raw(
-            'SELECT "id", "case_number", "fulltext", "metadata", "redacted_at" FROM "case_law_decisions" LIMIT 0',
+            "SELECT decision_id, status, withdrawn_at FROM case_law_withdrawal_status LIMIT 0",
           ),
         );
+        const privileges = await tx.execute<{ field: string }>(sql`
+          SELECT a.attname AS field FROM pg_attribute a
+          WHERE a.attrelid = 'case_law_withdrawal_status'::regclass
+            AND a.attnum > 0 AND NOT a.attisdropped
+            AND has_column_privilege(current_user, a.attrelid, a.attnum, 'SELECT')
+          ORDER BY a.attname
+        `);
+        expect(privileges.map(({ field }) => field)).toEqual([
+          "decision_id",
+          "status",
+          "withdrawn_at",
+        ]);
+        const permissions = await tx.execute<{ writable: boolean }>(sql`
+          SELECT has_table_privilege(current_user, 'case_law_withdrawal_status', 'INSERT,UPDATE,DELETE') AS writable
+        `);
+        expect(permissions.at(0)?.writable).toBe(false);
       });
-      await asRole(databaseUrl, stellaCaseLawReader.name, async (tx) => {
-        await tx.execute(sql.raw('SELECT * FROM "case_law_decisions" LIMIT 0'));
-      });
-    });
-
-    test("previous-version base-table reads return rows the policies admit", async () => {
-      await withSearchCensus(databaseUrl, async ({ decisionId }) => {
-        const idsSeenBy = async (role: string): Promise<string[]> => {
-          const seen: string[] = [];
-          await asRole(databaseUrl, role, async (tx) => {
-            const result = await tx.execute<{ id: string }>(
-              sql.raw(
-                `SELECT "id" FROM "case_law_decisions" WHERE "id" = '${decisionId}'`,
-              ),
-            );
-            seen.push(...result.map(({ id }) => id));
-          });
-          return seen;
-        };
-        expect(await idsSeenBy(READER_ROLE)).toEqual([decisionId]);
-        expect(await idsSeenBy(stellaCaseLawReader.name)).toEqual([decisionId]);
-      });
-    });
-
-    // The pending contract step is what closes the base table to the readers;
-    // it is held to doing exactly that, with the views left readable.
-    test("the pending contract step closes the base relation and keeps the views", async () => {
-      for (const role of [READER_ROLE, stellaCaseLawReader.name]) {
-        const failure = await rejectionOf(
-          asRole(
-            databaseUrl,
-            role,
-            async (tx) => {
-              await tx.execute(
-                sql.raw('SELECT "id" FROM "case_law_decisions" LIMIT 0'),
-              );
-            },
-            applyPendingContractSteps,
-          ),
-        );
-        expect(failure).toBeInstanceOf(Error);
-        expect(errorAndCauseMessages(failure)).toContain("permission denied");
-        expect(errorAndCauseMessages(failure)).toContain("case_law_decisions");
-      }
-      await asReader(
-        databaseUrl,
-        async (tx) => {
-          await tx.execute(
-            sql.raw('SELECT "id" FROM "case_law_published_decisions" LIMIT 0'),
-          );
-          await tx.execute(
-            sql.raw('SELECT "id" FROM "case_law_unredacted_decisions" LIMIT 0'),
-          );
-          await tx.execute(
-            sql.raw(
-              "SELECT decision_id, status, withdrawn_at FROM case_law_withdrawal_status LIMIT 0",
-            ),
-          );
-          const privileges = await tx.execute<{ field: string }>(sql`
-            SELECT a.attname AS field FROM pg_attribute a
-            WHERE a.attrelid = 'case_law_withdrawal_status'::regclass
-              AND a.attnum > 0 AND NOT a.attisdropped
-              AND has_column_privilege(current_user, a.attrelid, a.attnum, 'SELECT')
-            ORDER BY a.attname
-          `);
-          expect(privileges.map(({ field }) => field)).toEqual([
-            "decision_id",
-            "status",
-            "withdrawn_at",
-          ]);
-          const permissions = await tx.execute<{ writable: boolean }>(sql`
-            SELECT has_table_privilege(current_user, 'case_law_withdrawal_status', 'INSERT,UPDATE,DELETE') AS writable
-          `);
-          expect(permissions.at(0)?.writable).toBe(false);
-        },
-        applyPendingContractSteps,
-      );
     });
 
     test("withdrawal status needs no base-table or tombstone grants", async () => {

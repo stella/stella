@@ -24,7 +24,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import {
-  defaultVarcharSchema,
+  displayNameSchema,
   resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
@@ -216,7 +216,7 @@ const hasCircularDependency = ({
 };
 
 const updatePropertyBodySchema = v.object({
-  name: defaultVarcharSchema,
+  name: displayNameSchema(),
   content: propertyContentSchema,
   tool: v.union([
     v.intersect([
