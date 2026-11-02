@@ -649,6 +649,8 @@
       "noExpenses": "Selles toimikus pole kinnitatud ja arveldamata kulusid.",
       "noTime": "Selles toimikus pole kinnitatud ja arveldamata aega.",
       "noVat": "Käibemaksuta",
+      "notReadyDescription": "Saate mustandi kohe salvestada ja selle väljastada, kui see on seadistatud.",
+      "notReadyTitle": "Pole veel väljastamiseks valmis",
       "nothingToBill": "Veel pole midagi arveldada. Kinnitage selle toimiku ajakanded või kulud, et neid arveldada.",
       "openInvoice": "Ava arve",
       "otherCurrency": "{count, plural, one {# rida on} other {# rida on}} kirjendatud muus valuutas kui {currency} ja jääb eraldi arve jaoks.",
@@ -1455,10 +1457,12 @@
           "click": "Klõpsa",
           "fill": "Sisesta tekst",
           "open": "Ava veebisait",
+          "openNewTab": "Ava veebisait uuel vahekaardil",
           "pressKey": "Vajuta klahvi",
           "select": "Vali suvand",
           "snapshot": "Loe lehte",
-          "snapshotContinue": "Jätka lehe lugemist"
+          "snapshotContinue": "Jätka lehe lugemist",
+          "switchTab": "Lülitu vahekaardile"
         },
         "askAgain": "Küsi uuesti",
         "autoApproveReads": "Kinnita lehtede lugemine automaatselt",
@@ -2955,6 +2959,8 @@
       "invitationLimitReached": "See organisatsioon on jõudnud kutsete piirangu täitumiseni. Tühistage esmalt mõni ootel kutse.",
       "invitationOtherRecipient": "See kutse saadeti teisele e-posti aadressile.",
       "invitationRoleNotAllowed": "Selle rolliga ei saa kedagi kutsuda. Valige muu roll.",
+      "invoiceNumberSeriesMissing": "Seadistage organisatsiooni seadete jaotises Numbriseeriad arvete vaikimisi numbriseeria ja väljastage seejärel arve.",
+      "invoiceSellerProfileMissing": "Lisage müüja profiil organisatsiooni seadete jaotises Arveldusprofiilid ja väljastage seejärel arve.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",
       "legalSourceFilePropertyMissing": "Sellel toimikul puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
       "matterContactCapacityExceeded": "Selles toimikus on rohkem kontakte, kui saab kuvada. Ülejäänud kontaktide kuvamiseks eemaldage nähtavaid kontaktiseoseid.",
@@ -5451,6 +5457,12 @@
         "workspace_contact": "toimiku kontakt",
         "workspace_member": "toimiku liige"
       },
+      "billingDrafts": {
+        "description": "Koostage töö kirjeldused valitud tegevustest ning büroo või kliendi teadmiste failidest. Iga kasutaja annab ka oma nõusoleku. Kui büroo juhised on lisatud, kontrollitakse mustandeid nende alusel.",
+        "firm": "Büroo juhised",
+        "ledes": "Elektrooniline arveldamine (LEDES)",
+        "title": "Tehisintellekti arveldusmustandid"
+      },
       "documentProcessing": {
         "description": "Tuvastage skannitud PDF-ides tekst automaatselt, et nende sisu oleks otsitav.",
         "title": "Dokumenditeksti tuvastamine",
@@ -6390,6 +6402,10 @@
     "deleteWorkspaceConfirmDescription": "Kas olete kindel, et soovite selle toimiku kustutada? Seda toimingut ei saa tagasi võtta.",
     "deletedItem": "Kustutatud: {name}",
     "deletingWorkspace": "Toimiku kustutamine",
+    "documentSwitcher": {
+      "searchPlaceholder": "Otsi dokumenti…",
+      "trigger": "Vaheta dokumenti"
+    },
     "documentsCount": "{count, plural, one {# dokument} other {# dokumenti}}",
     "dropToUploadFiles": "Lohistage failid üleslaadimiseks siia",
     "duplicateMatter": "Dubleeri toimik",
@@ -7030,7 +7046,7 @@
         "addAnother": "Lisa veel veerg",
         "createFailed": "Veergude loomine ebaõnnestus",
         "createMany": "Loo {count} veergu",
-        "createdMany": "Loodi {count} veergu",
+        "createdMany": "{count, plural, one {Loodi # veerg} other {Loodi # veergu}}",
         "createdOne": "Veerg loodud",
         "promptPlaceholder": "Mida see veerg peaks välja võtma? / ja @ kasutamiseks täpsusta seda veeru dialoogis.",
         "title": "Lisa veerud"

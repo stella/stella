@@ -9,16 +9,13 @@ import { rateEntries, rateTables } from "@/api/db/schema";
 import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import {
-  defaultVarcharSchema,
-  resourceIdSchema,
-} from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateRateTableBodySchema = v.object({
   id: resourceIdSchema("rateTable"),
-  name: v.optional(defaultVarcharSchema),
+  name: v.optional(displayNameSchema()),
   currency: v.optional(currencyCodeSchema),
   isDefault: v.optional(v.boolean()),
 });
