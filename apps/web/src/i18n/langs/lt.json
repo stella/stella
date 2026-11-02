@@ -1455,10 +1455,12 @@
           "click": "Spustelėti",
           "fill": "Įvesti tekstą",
           "open": "Atverti svetainę",
+          "openNewTab": "Atverti svetainę naujame skirtuke",
           "pressKey": "Paspausti klavišą",
           "select": "Pasirinkti parinktį",
           "snapshot": "Perskaityti puslapį",
-          "snapshotContinue": "Tęsti puslapio skaitymą"
+          "snapshotContinue": "Tęsti puslapio skaitymą",
+          "switchTab": "Pereiti į skirtuką"
         },
         "askAgain": "Klausti dar kartą",
         "autoApproveReads": "Automatiškai patvirtinti puslapių skaitymą",
@@ -5450,6 +5452,12 @@
         "work_obligation": "darbo prievolė",
         "workspace_contact": "bylos kontaktas",
         "workspace_member": "bylos narys"
+      },
+      "billingDrafts": {
+        "description": "Kurkite darbo aprašymus iš pasirinktų veiklų ir kontoros arba kliento žinių failų. Kiekvienas naudotojas taip pat duoda savo sutikimą. Prieš įjungdami juodraščius pridėkite kontoros gaires.",
+        "firm": "Kontoros gairės",
+        "ledes": "Elektroninis sąskaitų išrašymas (LEDES)",
+        "title": "DI atsiskaitymo juodraščiai"
       },
       "documentProcessing": {
         "description": "Automatiškai atpažinkite tekstą nuskenuotuose PDF, kad jų turinį būtų galima ieškoti.",

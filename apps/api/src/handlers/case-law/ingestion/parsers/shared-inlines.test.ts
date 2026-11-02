@@ -85,6 +85,44 @@ describe("walkInlines", () => {
     expect(walk("<img alt='Header'>")).toEqual([]);
   });
 
+  test("span declarations cascade before emphasis and spacer classification", () => {
+    for (const style of [
+      "FONT-WEIGHT : 650 ; FONT-STYLE : OBLIQUE",
+      "font-weight:normal; font-weight:bold; font-style:normal; font-style:italic",
+      "font-weight:bold ! IMPORTANT; font-weight:normal; font-style:italic!important; font-style:normal",
+    ]) {
+      expect(
+        walk(`<span style="${style}">x</span>`, { parseSpanStyle: true }),
+      ).toEqual([
+        {
+          type: "bold",
+          children: [
+            { type: "italic", children: [{ type: "text", text: "x" }] },
+          ],
+        },
+      ]);
+    }
+    expect(
+      walk(
+        '<span style="font-weight:bold; font-weight:normal; font-style:italic; font-style:normal">x</span>',
+        { parseSpanStyle: true },
+      ),
+    ).toEqual([{ type: "text", text: "x" }]);
+    for (const style of [
+      "-AW-IMPORT : SPACES",
+      "DISPLAY : INLINE-BLOCK !important; display:block",
+    ]) {
+      expect(
+        walk(`<span style="${style}"> </span>`, { parseSpanStyle: true }),
+      ).toEqual([{ type: "text", text: ASPOSE_SPACER_GAP }]);
+    }
+    expect(
+      walk('<span style="display:inline-block; display:block"> </span>', {
+        parseSpanStyle: true,
+      }),
+    ).toEqual([{ type: "text", text: " " }]);
+  });
+
   test("parseSpanStyle reads emphasis and turns spacer spans into a gap", () => {
     expect(
       walk("<span style='font-weight:bold'>x</span>", { parseSpanStyle: true }),
@@ -98,6 +136,21 @@ describe("walkInlines", () => {
         { type: "text", text: ASPOSE_SPACER_GAP },
       ]);
     }
+  });
+
+  test("a spacer-styled span holding an image keeps the image's alt text", () => {
+    const span =
+      '<span style="display:inline flow-root"><img alt="Figure"></span>';
+    expect(walk(span, { parseSpanStyle: true, parseImgAlt: true })).toEqual([
+      { type: "text", text: "Figure" },
+    ]);
+    // Without alt text to read, the span is still the gap it lays out.
+    expect(
+      walk('<span style="display:inline-block"><img alt=" "></span>', {
+        parseSpanStyle: true,
+        parseImgAlt: true,
+      }),
+    ).toEqual([{ type: "text", text: ASPOSE_SPACER_GAP }]);
   });
 
   test("anonymization spans mark text and coalesce", () => {

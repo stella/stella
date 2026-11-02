@@ -80,6 +80,7 @@ const MODEL_CATALOG_INPUTS = [
   "packages/scripts/src/model-catalog-capabilities.ts",
   "packages/scripts/src/model-catalog-rates-gen.ts",
   "packages/scripts/src/model-catalog-snapshot.ts",
+  "packages/scripts/src/offline-check-startup.ts",
 ] as const;
 
 const TRANSITIVE_GENERATOR_INPUTS = {
@@ -95,6 +96,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/*",
     "apps/api/src/lib/account-export/constants.ts",
     "apps/api/src/lib/bilingual/contract.ts",
+    "apps/api/src/lib/billing/narrative-language.ts",
     "apps/api/src/lib/case-law/*",
     "apps/api/src/lib/chat/ai-data-policy.ts",
     "apps/api/src/lib/chat/thread-name-kinds.ts",
@@ -619,6 +621,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/collation/src/index.ts",
     "packages/portable-path/src/index.ts",
     "packages/scripts/src/generated-artifact-format.ts",
+    "packages/scripts/src/syntax-tree.ts",
     "scripts/generated-artifacts.ts",
   ],
   selfhost: [
@@ -683,6 +686,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/*",
     "apps/api/src/lib/account-export/constants.ts",
     "apps/api/src/lib/bilingual/contract.ts",
+    "apps/api/src/lib/billing/narrative-language.ts",
     "apps/api/src/lib/case-law/*",
     "apps/api/src/lib/chat/ai-data-policy.ts",
     "apps/api/src/lib/chat/thread-name-kinds.ts",
@@ -790,6 +794,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/*",
     "apps/api/src/lib/account-export/constants.ts",
     "apps/api/src/lib/bilingual/contract.ts",
+    "apps/api/src/lib/billing/narrative-language.ts",
     "apps/api/src/lib/case-law/*",
     "apps/api/src/lib/chat/ai-data-policy.ts",
     "apps/api/src/lib/chat/thread-name-kinds.ts",
@@ -1275,6 +1280,19 @@ const GENERATOR_DECLARATIONS = [
       "--check",
     ],
     autofix: false,
+    after: [],
+  },
+  {
+    id: "online-migration-entries",
+    outputKind: "committed",
+    outputs: ["apps/api/src/db/online-migration-entries.gen.ts"],
+    inputs: [
+      "scripts/generate-online-migration-entries.ts",
+      "apps/api/src/db/online-migration-entries/*.ts",
+    ],
+    write: ["bun", "scripts/generate-online-migration-entries.ts"],
+    check: ["bun", "scripts/generate-online-migration-entries.ts", "--check"],
+    autofix: true,
     after: [],
   },
   {
@@ -1954,6 +1972,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/fetch/src/index.ts",
       "packages/fetch/src/race-abort.ts",
       "packages/scripts/src/model-catalog-snapshot.ts",
+      "packages/scripts/src/offline-check-startup.ts",
       "packages/skills/src/streaming.ts",
     ],
     inputs: [
@@ -2208,6 +2227,8 @@ const GENERATOR_DECLARATIONS = [
       "packages/stable-stringify/src/index.ts",
       "packages/stable-stringify/src/stable-stringify.ts",
       "scripts/offline-network-preload.ts",
+      "scripts/offline-check-startup.ts",
+      "packages/scripts/src/offline-check-startup.ts",
     ],
     inputs: [
       "packages/catalogue/entries/**",

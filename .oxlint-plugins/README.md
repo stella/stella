@@ -113,6 +113,8 @@ runtime validation, or integration tests.
 
 ### Database, ingestion, pagination, and data shape
 
+- [`no-style-substring-match`](./no-style-substring-match.ts) (`no-style-substring-match`): rejects string-literal substring tests (`includes`, `startsWith`, `indexOf`) on style identifiers or `.attr("style")` results, and style attribute selector literals, in case-law ingestion and legal-search parsers; reads belong to the inline-style owner, and test files are exempt.
+
 - [`no-domain-enum`](./no-domain-enum.ts) (`no-domain-enum`): rejects TypeScript enum declarations and actual Drizzle `pgEnum` imports or namespace reads, including stable aliases and static computed keys; ordinary namespace column APIs remain valid. Domain values use string-literal unions or `as const` tables, and database columns use named value lists with text columns.
 - [`no-bare-jsonb-cast`](./no-bare-jsonb-cast.ts) (`no-bare-jsonb-cast`): rejects bare PostgreSQL JSONB casts that bypass the typed JSONB expression helper.
 - [`no-hand-rolled-execute-rows`](./no-hand-rolled-execute-rows.ts) (`no-hand-rolled-execute-rows`): rejects testing an `execute(query)` result's shape by hand (`Array.isArray`, a `rows` read, `"rows" in`, `{ rows }` destructuring) and any binding tested both as an array and for `rows`; rows are read through `executedRows` (`apps/api/src/lib/db/executed-rows.ts`), which handles the server driver's rows and PGlite's `{ rows }` and panics on a third shape. Provenance follows `await`, assertions, stable bindings, and the `.value` of a `Result.tryPromise` around the call.
@@ -294,6 +296,7 @@ runtime validation, or integration tests.
 - [`require-detached-label-shape`](./require-detached-label-shape.ts) (`require-detached-label-shape`): requires monitored detached work to use stable `feature.action` labels.
 - [`require-api-error-check`](./require-api-error-check.ts) (`require-api-error-check`): requires API responses to inspect or unwrap the error channel before data is consumed or escapes.
 - [`require-fetch-timeout`](./require-fetch-timeout.ts) (`require-fetch-timeout`): requires network requests to carry a bounded timeout or an owned timeout wrapper.
+- [`no-global-fetch-replacement`](./no-global-fetch-replacement.ts) (`no-global-fetch-replacement`): confines API test `globalThis.fetch` assignment and spies to test-local `try/finally` restoration; shared setup uses the test-fetch owner.
 - [`no-fetch-response-body-replacement`](./no-fetch-response-body-replacement.ts) (`no-fetch-response-body-replacement`): prevents the fetch transport from constructing replacement `Response` or `ReadableStream` bodies; test fixtures are exempt.
 - [`require-toast-error-capture`](./require-toast-error-capture.ts) (`require-toast-error-capture`): requires failures shown in a toast to also reach structured error capture.
 - [`tagged-error-requires-message`](./tagged-error-requires-message.ts) (`tagged-error-requires-message`): requires every `TaggedError` payload to include a user- or operator-readable message.
