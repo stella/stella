@@ -509,7 +509,22 @@
     "billingDraftsUnavailable": "Impossible de charger les réglages des propositions de stella AI pour le moment.",
     "aiDraftCodes": "Tâche {task} · Activité {activity}",
     "aiDraftFlags": "Remarques sur les règles de facturation",
-    "aiDraftFlagSource": "{file}, {section}"
+    "aiDraftFlagSource": "{file}, {section}",
+    "aiRefine": "Ajuster",
+    "aiRefinePlaceholder": "Dites à stella comment ajuster cette proposition…",
+    "aiRefining": "stella AI ajuste la description…",
+    "aiProposal": "stella AI propose",
+    "aiAccept": "Accepter",
+    "aiDismiss": "Ignorer",
+    "aiUndo": "Annuler",
+    "aiUseOriginal": "Utiliser l’original",
+    "aiSteerShorter": "Plus court",
+    "aiSteerMoreDetail": "Plus détaillé",
+    "aiSteerClientFriendly": "Formulation claire pour le client",
+    "aiSteerWriteIn": "Écrire en {language}",
+    "aiSteerRemember": "Mémoriser pour la prochaine fois",
+    "billingDraftsPreference": "Votre préférence de rédaction",
+    "billingDraftsForgetPreference": "Oublier la préférence"
   },
   "dictation": {
     "title": "Dictée",

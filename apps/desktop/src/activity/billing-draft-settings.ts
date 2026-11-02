@@ -19,10 +19,11 @@ import {
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import { scopedDraftSettingsFrom } from "./billing-draft-logic";
+import type { ScopedDraftSettings } from "./billing-draft-logic";
 import { BillingDraftConsent } from "./billing-draft-transport";
 import type { DraftConsentStatus } from "./billing-draft-transport";
 
-type BillingDraftSettings =
+export type BillingDraftSettings =
   | { type: "loading" }
   | { type: "unavailable" }
   | { type: "failed" }
@@ -40,6 +41,8 @@ export type BillingDraftSettingsControl = {
   consent: BillingDraftConsent;
   reload: () => void;
   setConsent: (consent: "granted" | "revoked") => Promise<boolean>;
+  /** Remembers the instruction future drafts follow, or forgets it. */
+  setPreference: (preference: string | null) => Promise<boolean>;
 };
 
 // Fixed codes only: nothing about the drafts leaves the window.
@@ -54,6 +57,36 @@ const reportFailure = (
     operation,
     window: DESKTOP_TELEMETRY_WINDOWS.activity,
   });
+};
+
+/** A settings answer, only while it belongs to `scopeKey` and the save that
+ * asked for it is still current. */
+const ownAnswer = (
+  answer: unknown,
+  scopeKey: string,
+  stillCurrent: () => boolean,
+): ScopedDraftSettings | null => {
+  const next = scopedDraftSettingsFrom(answer);
+  return next === null || next.scopeKey !== scopeKey || !stillCurrent()
+    ? null
+    : next;
+};
+
+/** A compare-and-set write on the server: reads the current revision first,
+ * even after a lost answer, and writes only for the same account. */
+const writeAtCurrentRevision = async (
+  scopeKey: string,
+  stillCurrent: () => boolean,
+  write: (revision: string | null) => Promise<unknown>,
+): Promise<ScopedDraftSettings | null> => {
+  const current = ownAnswer(
+    await invoke<unknown>("billing_draft_get_settings"),
+    scopeKey,
+    stillCurrent,
+  );
+  return current === null
+    ? null
+    : ownAnswer(await write(current.settings.revision), scopeKey, stillCurrent);
 };
 
 type Loaded =
@@ -116,40 +149,29 @@ export const useBillingDraftSettings = (
         return false;
       }
       const generation = intent.value;
+      const stillCurrent = () =>
+        consent.ownsScope(scopeKey) && consent.isCurrent(generation);
       const save = async () => {
         const result = await Result.tryPromise(async () => {
-          let answer: unknown;
-          if (value === "granted") {
-            // The grant is compare-and-set: read the current revision first,
-            // even after a lost answer.
-            const current = scopedDraftSettingsFrom(
-              await invoke<unknown>("billing_draft_get_settings"),
-            );
-            if (
-              current === null ||
-              current.scopeKey !== scopeKey ||
-              !consent.ownsScope(scopeKey) ||
-              !consent.isCurrent(generation)
-            ) {
-              return false;
-            }
-            answer = await invoke<unknown>("billing_draft_grant_consent", {
-              scopeKey,
-              revision: current.settings.revision,
-            });
-          } else {
-            answer = await invoke<unknown>("billing_draft_withdraw_consent", {
-              scopeKey,
-            });
-          }
-          const next = scopedDraftSettingsFrom(answer);
-          if (
-            next === null ||
-            next.scopeKey !== scopeKey ||
-            !consent.ownsScope(scopeKey) ||
-            next.settings.consent !== value ||
-            !consent.isCurrent(generation)
-          ) {
+          const next =
+            value === "granted"
+              ? await writeAtCurrentRevision(
+                  scopeKey,
+                  stillCurrent,
+                  async (revision) =>
+                    invoke<unknown>("billing_draft_grant_consent", {
+                      scopeKey,
+                      revision,
+                    }),
+                )
+              : ownAnswer(
+                  await invoke<unknown>("billing_draft_withdraw_consent", {
+                    scopeKey,
+                  }),
+                  scopeKey,
+                  stillCurrent,
+                );
+          if (next === null || next.settings.consent !== value) {
             return false;
           }
           if (!consent.confirm(next.settings.consent, generation)) {
@@ -231,5 +253,50 @@ export const useBillingDraftSettings = (
     };
   }, [reload, consent]);
 
-  return { settings, consent, reload, setConsent };
+  const setPreference = useCallback(
+    async (preference: string | null) => {
+      const scopeKey = consent.captureScope();
+      if (scopeKey === null) {
+        return false;
+      }
+      const startedAt = request.current;
+      const stillCurrent = () =>
+        consent.ownsScope(scopeKey) && startedAt === request.current;
+      const save = async () => {
+        const result = await Result.tryPromise(async () => {
+          const next = await writeAtCurrentRevision(
+            scopeKey,
+            stillCurrent,
+            async (revision) =>
+              invoke<unknown>("billing_draft_set_preference", {
+                scopeKey,
+                revision,
+                preference,
+              }),
+          );
+          if (next === null) {
+            return false;
+          }
+          setLoaded({
+            type: "ready",
+            mode: next.settings.effectiveMode,
+            preference: next.settings.preference,
+          });
+          return true;
+        });
+        if (result.isErr() || !result.value) {
+          reportFailure(
+            DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
+            DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          );
+          return false;
+        }
+        return true;
+      };
+      return await consent.enqueue(scopeKey, save);
+    },
+    [consent],
+  );
+
+  return { settings, consent, reload, setConsent, setPreference };
 };

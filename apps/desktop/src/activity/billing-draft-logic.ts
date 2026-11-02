@@ -7,6 +7,7 @@ import {
 } from "@stll/api-contract/desktop-billing-drafts";
 import type {
   DesktopBillingDraftRequest,
+  DesktopBillingDraftResponse,
   DesktopBillingDraftReview,
   DesktopBillingDraftSettingsResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
@@ -135,6 +136,9 @@ export type CardDraft = {
   earlierEntries: DesktopBillingDraftReview["earlierEntries"];
   classification: DesktopTimeEntryClassification | null;
   flags: GuidelineFlag[];
+  /** The server's result as it came, which a refining request sends back
+   * unchanged. */
+  result: DesktopBillingDraftResponse;
 };
 
 /** The card's draft from a server review, or `null` when the answer does not
@@ -160,6 +164,7 @@ export const cardDraftFrom = (value: unknown): CardDraft | null => {
           earlierEntries: followed(draft.matchedEarlierEntryIds),
           classification: null,
           flags: [],
+          result,
         };
   }
   const draft = result.drafts.find(
@@ -177,6 +182,7 @@ export const cardDraftFrom = (value: unknown): CardDraft | null => {
       fileName: ruleRef.fileName,
       section: ruleRef.section,
     })),
+    result,
   };
 };
 

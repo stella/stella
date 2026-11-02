@@ -175,6 +175,7 @@ describe("a card's draft", () => {
       earlierEntries: [earlier("00000000-0000-4000-8000-0000000000a1")],
       classification: null,
       flags: [],
+      result: expect.objectContaining({ mode: "plain" }),
     });
   });
 
@@ -226,6 +227,7 @@ describe("a card's draft", () => {
           section: "4.2",
         },
       ],
+      result: expect.objectContaining({ mode: "guided" }),
     });
   });
 

@@ -509,7 +509,22 @@
     "billingDraftsUnavailable": "stella AI draft settings cannot be loaded right now.",
     "aiDraftCodes": "Task {task} · Activity {activity}",
     "aiDraftFlags": "Billing guideline notes",
-    "aiDraftFlagSource": "{file}, {section}"
+    "aiDraftFlagSource": "{file}, {section}",
+    "aiRefine": "Refine",
+    "aiRefinePlaceholder": "Tell stella how to adjust this draft…",
+    "aiRefining": "stella AI is adjusting the description…",
+    "aiProposal": "stella AI suggests",
+    "aiAccept": "Accept",
+    "aiDismiss": "Dismiss",
+    "aiUndo": "Undo",
+    "aiUseOriginal": "Use original",
+    "aiSteerShorter": "Shorter",
+    "aiSteerMoreDetail": "More detail",
+    "aiSteerClientFriendly": "Client-friendly wording",
+    "aiSteerWriteIn": "Write in {language}",
+    "aiSteerRemember": "Remember for next time",
+    "billingDraftsPreference": "Your drafting preference",
+    "billingDraftsForgetPreference": "Forget preference"
   },
   "dictation": {
     "title": "Dictation",

@@ -509,7 +509,22 @@
     "billingDraftsUnavailable": "Nastavení návrhů stella AI se teď nepodařilo načíst.",
     "aiDraftCodes": "Úkon {task} · Činnost {activity}",
     "aiDraftFlags": "Poznámky k fakturačním pravidlům",
-    "aiDraftFlagSource": "{file}, {section}"
+    "aiDraftFlagSource": "{file}, {section}",
+    "aiRefine": "Upravit",
+    "aiRefinePlaceholder": "Napište stelle, jak návrh upravit…",
+    "aiRefining": "stella AI upravuje popis…",
+    "aiProposal": "stella AI navrhuje",
+    "aiAccept": "Přijmout",
+    "aiDismiss": "Zahodit",
+    "aiUndo": "Vrátit zpět",
+    "aiUseOriginal": "Použít původní",
+    "aiSteerShorter": "Kratší",
+    "aiSteerMoreDetail": "Podrobněji",
+    "aiSteerClientFriendly": "Srozumitelně pro klienta",
+    "aiSteerWriteIn": "Psát v jazyce {language}",
+    "aiSteerRemember": "Zapamatovat pro příště",
+    "billingDraftsPreference": "Vaše preference pro návrhy",
+    "billingDraftsForgetPreference": "Zapomenout preferenci"
   },
   "dictation": {
     "title": "Diktování",
