@@ -1338,6 +1338,43 @@ describe("runs the API ends", () => {
     ).toEqual([]);
     await desktop.close();
   });
+
+  test("a heartbeat between a run's start and its acceptance keeps its token refreshed", async () => {
+    const { timers: system } = recordingTimers();
+    const beats: (() => void)[] = [];
+    const instance = await startInstance("api-token-accept", sharedDoorbell, {
+      timers: {
+        ...system,
+        // Heartbeats run only when the test fires them.
+        setInterval: (run, ms) => {
+          beats.push(run);
+          return system.setInterval(() => undefined, ms);
+        },
+      },
+    });
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(instance, desktopId);
+    await desktop.hello();
+    const beat = beats.at(-1) ?? panic("the socket scheduled no heartbeat");
+    const runId = await assignRun(desktopId);
+    await desktop.receive("run.start", ofRun(runId));
+    // Renewed while the run is started but not accepted yet.
+    beat();
+    desktop.send({ type: "run.accepted", runId });
+    // Frames are handled after that renewal, in order.
+    desktop.send(textEvent(runId, 1, "Working"));
+    await desktop.receive("ack", ofRun(runId));
+    clock.now += 15 * 60_000;
+    beat();
+    desktop.send(textEvent(runId, 2, "Still working"));
+    await desktop.receive("ack", ofRun(runId));
+    expect(
+      desktop.received.filter(
+        (message) => message.type === "run.token" && message.runId === runId,
+      ),
+    ).toHaveLength(1);
+    await desktop.close();
+  });
 });
 
 describe("what one run may store", () => {

@@ -449,8 +449,16 @@ type RenewOptions = SessionOptions & { now: Date; leaseMs: number };
 type RenewResult =
   /** Another socket of the same installation and key is current. */
   | { type: "superseded" }
-  /** The runs this socket holds that are still running, read with the renewal. */
-  | { type: "current"; running: ReadonlySet<string> };
+  /**
+   * The runs this socket holds that are still open, and those of them that are
+   * running, read with the renewal. A run started but not yet accepted is open
+   * and not running.
+   */
+  | {
+      type: "current";
+      open: ReadonlySet<string>;
+      running: ReadonlySet<string>;
+    };
 
 /**
  * A heartbeat of the current socket: the runner is seen, and every open run it
@@ -506,13 +514,23 @@ export const renewRunnerSession = async (
           inArray(runs.state, DESKTOP_RUNNER_LEASED_RUN_STATES),
         ),
       );
-    const running = await tx
-      .select({ runId: runs.runId })
+    const open = await tx
+      .select({ runId: runs.runId, state: runs.state })
       .from(runs)
-      .where(and(boundTo(binding), eq(runs.state, "running")));
+      .where(
+        and(
+          boundTo(binding),
+          inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+        ),
+      );
     return {
       type: "current",
-      running: new Set(running.map(({ runId }) => runId)),
+      open: new Set(open.map(({ runId }) => runId)),
+      running: new Set(
+        open
+          .filter(({ state }) => state === "running")
+          .map(({ runId }) => runId),
+      ),
     };
   });
 

@@ -466,13 +466,16 @@ const renew = async (state: SessionState) => {
   }
   for (const [runId, tracked] of state.tokens) {
     // A run the API ended gets no new token, whatever this socket last sent.
-    if (!renewed.running.has(runId)) {
+    if (!renewed.open.has(runId)) {
       state.tokens.delete(runId);
       continue;
     }
+    // A run started but not accepted yet keeps its token tracked, so a
+    // heartbeat after its acceptance still refreshes it.
     if (
+      renewed.running.has(runId) &&
       tracked.expiresAt - now.getTime() <
-      state.context.timing.tokenRefreshMarginMs
+        state.context.timing.tokenRefreshMarginMs
     ) {
       await sendToken(state, runId, tracked.workspaceIds);
     }
