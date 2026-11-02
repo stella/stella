@@ -1,17 +1,20 @@
 import { expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import { load } from "@stll/html";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseNsDecisionHtml } from "./cz-ns";
+import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "./cz-ns";
 import {
   expectMarkerRetention,
   injectMarkupMarkers,
   markerPlan,
 } from "./marker-injection.test-helper";
+
+const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);
 
 const shapes = fc.array(
   fc.constantFrom(
@@ -46,7 +49,7 @@ test(
           for (const tag of ancestors) {
             body = `<${tag}>${body}</${tag}>`;
           }
-          const fixture = cheerio.load(
+          const fixture = load(
             `<html><body><table id="box-table-a"><tr><td>Soud:</td><td>metadataqzexcluded</td></tr></table><p class="fixture-title" align="center">ROZSUDEK</p>${body}<script>scriptqzexcluded</script><style>styleqzexcluded</style></body></html>`,
           );
           const injected = injectMarkupMarkers({

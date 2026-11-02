@@ -16,6 +16,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -116,7 +117,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   for (const { organizationId, userId } of tenants) {
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     await db.delete(user).where(eq(user.id, userId));
   }
   await releaseTestDb();

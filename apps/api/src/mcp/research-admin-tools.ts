@@ -174,7 +174,7 @@ const listAuditLogArgsSchema = nullAsAbsent(
           v.number(),
           v.integer(),
           v.minValue(1),
-          v.maxValue(LIMITS.auditLogPageSizeMax),
+          v.maxValue(LIMITS.mcpListPageSizeMax),
           v.description("Max entries to return"),
         ),
       ),

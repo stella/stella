@@ -16,9 +16,18 @@
   },
   "admin": {
     "ai": "AI",
+    "auditArchiveDescription": "Usunięcie organizacji usuwa również jej rejestr aktywności. Najpierw wyeksportuj rejestr aktywności i pobierz archiwum; będzie dostępne przez godzinę.",
+    "auditArchiveDownloadFirst": "Przed usunięciem organizacji pobierz archiwum rejestru aktywności.",
+    "auditArchiveFailed": "Nie udało się przygotować archiwum rejestru aktywności.",
+    "auditArchiveOutdated": "Od utworzenia tego archiwum w rejestrze aktywności pojawiły się nowe wpisy. Wyeksportuj go ponownie przed usunięciem organizacji.",
+    "auditArchiveReady": "Archiwum rejestru aktywności jest gotowe. Możesz teraz usunąć organizację.",
+    "auditArchiveRequest": "Eksportuj rejestr aktywności",
+    "auditArchiveRequestNew": "Ponownie wyeksportuj rejestr aktywności",
+    "auditArchiveWorking": "Przygotowywanie archiwum rejestru aktywności…",
     "billingProfiles": "Profile rozliczeniowe",
     "deleteDescription": "Trwale usuniesz tę organizację i jej dane. Tej operacji nie można cofnąć.",
     "deleteOrganization": "Usuń organizację",
+    "deleteRefusedAuditArchive": "Przed usunięciem organizacji wyeksportuj jej rejestr aktywności.",
     "deleteRefusedSubscription": "Ta organizacja ma subskrypcję, która się odnawia. Najpierw anuluj ją w sekcji Plan i wykorzystanie, a następnie usuń organizację.",
     "deleteTypeToConfirm": "Wpisz {name}, aby potwierdzić.",
     "firmSetup": "Ustawienia kancelarii",
@@ -649,6 +658,8 @@
       "noExpenses": "W tej sprawie nie ma zatwierdzonych, niezafakturowanych wydatków.",
       "noTime": "W tej sprawie nie ma zatwierdzonego, niezafakturowanego czasu.",
       "noVat": "Bez VAT",
+      "notReadyDescription": "Możesz teraz zapisać szkic i wystawić go po skonfigurowaniu.",
+      "notReadyTitle": "Jeszcze nie można wystawić",
       "nothingToBill": "Na razie nie ma czego fakturować. Zatwierdź wpisy czasu lub wydatki w tej sprawie, aby je rozliczyć.",
       "openInvoice": "Otwórz fakturę",
       "otherCurrency": "{count, plural, one {# pozycja jest zapisana} few {# pozycje są zapisane} many {# pozycji jest zapisanych} other {# pozycji jest zapisanych}} w innej walucie niż {currency} i czekają na osobną fakturę.",
@@ -818,12 +829,14 @@
       "effectiveFrom": "Obowiązuje od",
       "effectiveRateRequired": "Nie ustawiono obowiązującej stawki dla tej sprawy, osoby i daty. Dodaj stawkę lub zapisz czas jako niepodlegający rozliczeniu.",
       "effectiveTo": "Obowiązuje do",
+      "firstTableIsDefault": "Pierwsza tabela stawek w sprawie jest domyślna.",
       "hourlyRate": "Stawka godzinowa",
       "logNonBillable": "Zapisz jako niepodlegający rozliczeniu",
       "noRateEntries": "Brak wpisów stawek",
       "noRateFound": "Brak skonfigurowanej stawki",
       "noRateTables": "Brak tabel stawek",
       "ongoing": "Bezterminowo",
+      "onlyDefaultApplies": "Stawki są stosowane tylko z domyślnej tabeli sprawy.",
       "override": "Nadpisz",
       "perHour": "/godz.",
       "rateCount": "{count, plural, one {# stawka} few {# stawki} many {# stawek} other {# stawki}}",
@@ -1318,7 +1331,7 @@
   },
   "catalogue": {
     "addCustom": "Dodaj własne",
-    "addCustomMcp": "Dodaj serwer MCP",
+    "addCustomMcp": "Dodaj integrację",
     "addCustomSkill": "Dodaj umiejętność",
     "by": "Autor: {author}",
     "configuration": "Konfiguracja",
@@ -1329,7 +1342,7 @@
     "detailAuthMethod": "Uwierzytelnianie",
     "empty": "Żadne wpisy nie odpowiadają bieżącemu filtrowi.",
     "filter": {
-      "mcps": "Serwery MCP",
+      "mcps": "Integracje",
       "nativeTools": "Wbudowane narzędzia",
       "skills": "Umiejętności"
     },
@@ -1817,8 +1830,8 @@
     "signInToChatAbout": "Zaloguj się, aby czatować o",
     "skills": {
       "scope": {
-        "private": "Twoje umiejętności AI",
-        "team": "Umiejętności AI zespołu"
+        "private": "Twoje umiejętności",
+        "team": "Umiejętności zespołu"
       }
     },
     "sourceChips": {
@@ -2482,7 +2495,7 @@
     "scopeChat": "Odczyt i zarządzanie Twoimi czatami i wiadomościami",
     "scopeContactsWrite": "Tworzenie, edytowanie i usuwanie kontaktów w całej organizacji",
     "scopeDocumentsWrite": "Tworzenie, edytowanie i usuwanie Twoich dokumentów",
-    "scopeExternalMcps": "Korzystanie z połączonych narzędzi zewnętrznych",
+    "scopeExternalMcps": "Korzystanie z połączonych integracji",
     "scopeFeedback": "Wysyłanie opinii o produkcie do opiekunów stelli",
     "scopeKnowledgeWrite": "Tworzenie, edytowanie i usuwanie Twoich klauzul oraz uruchamianie playbooków",
     "scopeLawRead": "Czytać publiczne przepisy prawa i orzecznictwo",
@@ -2508,7 +2521,7 @@
     "summaryChat": "czaty",
     "summaryContactsWrite": "kontakty",
     "summaryDocumentsWrite": "dokumenty",
-    "summaryExternalMcps": "połączone narzędzia zewnętrzne",
+    "summaryExternalMcps": "połączone integracje",
     "summaryKnowledgeWrite": "klauzule i playbooki",
     "summaryLawRead": "publiczne przepisy prawa i orzecznictwo",
     "summaryLineChange": "<group>Tworzenie i edycja:</group> {items}",
@@ -2537,8 +2550,8 @@
     "attorneys": {
       "none": "Nieprzypisany",
       "originating": "Główny kontakt",
-      "responsible": "Prawnik prowadzący",
-      "title": "Prawnicy klienta"
+      "responsible": "Osoba odpowiedzialna",
+      "title": "Opiekunowie klienta"
     },
     "billing": {
       "addBankAccount": "Dodaj konto bankowe",
@@ -2957,6 +2970,8 @@
       "invitationLimitReached": "Ta organizacja osiągnęła limit zaproszeń. Najpierw anuluj oczekujące zaproszenie.",
       "invitationOtherRecipient": "To zaproszenie wysłano na inny adres e-mail.",
       "invitationRoleNotAllowed": "Nie możesz zaprosić nikogo z tą rolą. Wybierz inną rolę.",
+      "invoiceNumberSeriesMissing": "Skonfiguruj domyślną serię numeracji faktur w ustawieniach organizacji w sekcji Serie numeracji, a następnie wystaw fakturę.",
+      "invoiceSellerProfileMissing": "Dodaj profil sprzedawcy w ustawieniach organizacji w sekcji Profile rozliczeniowe, a następnie wystaw fakturę.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
       "matterContactCapacityExceeded": "Ta sprawa zawiera więcej kontaktów, niż można wyświetlić. Usuń widoczne powiązania z kontaktami, aby wyświetlić pozostałe kontakty.",
@@ -3378,7 +3393,7 @@
     "doubleClickFooter": "Kliknij dwukrotnie, aby dodać stopkę",
     "doubleClickHeader": "Kliknij dwukrotnie, aby dodać nagłówek",
     "downloadCheckpoint": "Pobierz punkt kontrolny",
-    "editAuthRequired": "Odśwież Stellę i zaloguj się ponownie przed edycją tego dokumentu.",
+    "editAuthRequired": "Odśwież stellę i zaloguj się ponownie przed edycją tego dokumentu.",
     "editDownloadFailed": "Nie udało się pobrać dokumentu do edycji.",
     "editLink": "Edytuj link",
     "editOpenFailed": "Nie udało się otworzyć dokumentu do edycji.",
@@ -3451,7 +3466,7 @@
     "redoShortcut": "Ponów (Ctrl+Y)",
     "rejectChange": "Odrzuć zmianę",
     "removeLink": "Usuń link",
-    "renderErrorDescription": "Wystąpił błąd podczas renderowania tego komponentu. Spróbuj ponownie albo skontaktuj się z pomocą techniczną, jeśli problem będzie się powtarzał.",
+    "renderErrorDescription": "Nie udało się wyświetlić tej części dokumentu. Odśwież stronę, a jeśli problem będzie się powtarzał, daj nam znać.",
     "saveCheckpointFailedDescription": "Plik DOCX został utworzony lokalnie, ale stella nie mogła przesłać punktu kontrolnego. Pozostaw edytor otwarty i spróbuj zapisać ponownie.",
     "saveCheckpointFailedTitle": "Nie udało się przesłać zapisu",
     "saveEditorUnavailableDescription": "Edytor nie jest jeszcze gotowy. Poczekaj, aż dokument zakończy ładowanie, a następnie spróbuj zapisać ponownie.",
@@ -4152,7 +4167,7 @@
     "mcp": {
       "addAndConnect": "Dodaj i połącz",
       "addServer": "Dodaj serwer",
-      "addServerCardTitle": "Dodaj nowy serwer MCP",
+      "addServerCardTitle": "Dodaj nową integrację",
       "auth": {
         "bearer": "Token Bearer",
         "none": "Bez uwierzytelniania",
@@ -4415,7 +4430,7 @@
         "title": "Szablony"
       },
       "tools": {
-        "description": "Połącz stella z rejestrami publicznymi i innymi źródłami",
+        "description": "Umiejętności, integracje i zawsze dostępne narzędzia, z których AI może korzystać na czacie",
         "title": "Narzędzia"
       },
       "workflows": {
@@ -4449,7 +4464,7 @@
       },
       "commandConflict": "Umiejętność z tym poleceniem / już istnieje",
       "commandHelp": "Wpisz to na czacie, aby uruchomić tę umiejętność.",
-      "commandLabel": "Polecenie ukośnikowe (opcjonalne)",
+      "commandLabel": "Polecenie czatu (opcjonalne)",
       "commandPlaceholder": "np. podsumuj",
       "errors": {
         "commandInvalid": "Używaj tylko małych liter, cyfr, łączników i podkreśleń"
@@ -4596,7 +4611,7 @@
     "chat": "Czat",
     "contacts": "Kontakty",
     "inbox": "Skrzynka",
-    "knowledge": "Wiedza",
+    "knowledge": "Analityka",
     "myTodos": "Moje zadania",
     "pinned": "Przypięte",
     "recentMatters": "Ostatnie sprawy",
@@ -6434,7 +6449,8 @@
       "errored": "Błąd",
       "formatNotSupported": "Format nie jest obsługiwany",
       "selectAValue": "Wybierz wartość",
-      "selectValues": "Wybierz wartości"
+      "selectValues": "Wybierz wartości",
+      "wholeNumberOnly": "Wpisz liczbę całkowitą"
     },
     "files": {
       "addFilePropertyToUpload": "Dodaj właściwość typu plik, aby przesyłać pliki",
@@ -6728,7 +6744,7 @@
     "matterInfo": "Informacje o sprawie",
     "mattersCount": "{count, plural, one {# sprawa} few {# sprawy} many {# spraw} other {# sprawy}}",
     "members": {
-      "addMember": "Dodaj członka",
+      "addMember": "Dodaj do sprawy",
       "addMemberDescription": "Dodaj członka zespołu do tej sprawy",
       "alreadyMember": "Użytkownik jest już członkiem",
       "alreadyOnMatter": "Już należy do tej sprawy",
@@ -7052,7 +7068,7 @@
         "addAnother": "Dodaj kolejną kolumnę",
         "createFailed": "Nie udało się utworzyć kolumn",
         "createMany": "Utwórz {count} kolumn",
-        "createdMany": "Utworzono {count} kolumn",
+        "createdMany": "{count, plural, one {Utworzono # kolumnę} few {Utworzono # kolumny} many {Utworzono # kolumn} other {Utworzono # kolumny}}",
         "createdOne": "Utworzono kolumnę",
         "promptPlaceholder": "Co ta kolumna ma wyodrębnić? Aby użyć / i @, doprecyzuj ją w oknie dialogowym kolumny.",
         "title": "Dodaj kolumny"

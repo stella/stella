@@ -15,7 +15,7 @@ const project = async (sourceRaw: string) => {
   if (ukFclRetention.type !== "checked") {
     return panic("LegalDocML must have a retention projection");
   }
-  return await ukFclRetention.project(sourceRaw);
+  return await ukFclRetention.project(sourceRaw, { sourceRawObjects: {} });
 };
 
 test("stored LegalDocML is measured independently, and missing judgment text fails", async () => {

@@ -13,12 +13,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { waiverKey } from "./dated-waiver-core";
 import {
   createPrivateTaskSink,
   type FixEvidence,
   probeSourceFingerprint,
   type RemovalAssessment,
-  waiverKey,
 } from "./dated-waiver-fix-task";
 import {
   createProbeBudget,

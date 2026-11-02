@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import { readdir } from "node:fs/promises";
 import * as v from "valibot";
 
+import { load } from "@stll/html";
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { LINE_WRAP_TYPE, planBlockLineWrap } from "@stll/legal-ast/line-wrap";
 
@@ -12,8 +12,14 @@ import {
   buildValidationHtml,
   validateAst,
 } from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseUsDecisionHtml, usDocumentLinesOf } from "./cz-us";
+import {
+  parseUsDecisionHtml as uncheckedParseUsDecisionHtml,
+  usDocumentLinesOf,
+} from "./cz-us";
+
+const parseUsDecisionHtml = guardParser(uncheckedParseUsDecisionHtml);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 const SNAPSHOT = new URL(
@@ -285,7 +291,7 @@ describe("committed CZ ÚS fixtures", () => {
   test("produce identical diagnostics from paragraphs and validation HTML", async () => {
     for (const name of await fixtureNames()) {
       const html = await gunzipText(new URL(name, FIXTURES));
-      const $ = cheerio.load(html);
+      const $ = load(html);
       const rtf = $("input#docContentHidden").attr("value") ?? "";
       expect(rtf.trim()).not.toBe("");
 

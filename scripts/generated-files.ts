@@ -3,6 +3,7 @@ import {
   CI_GENERATED_OUTPUTS,
   MCP_APP_DIRECTORY_OUTPUTS,
   MCP_APP_GENERATED_OUTPUTS,
+  MODEL_CATALOG_INPUTS,
 } from "../packages/scripts/src/generated-files";
 
 export {
@@ -59,29 +60,6 @@ export const effectiveGeneratorInputs = (generator: Generator) => [
   ...SHARED_GENERATOR_INPUTS,
   ...generator.inputs,
 ];
-
-const MODEL_CATALOG_INPUTS = [
-  ".github/workflows/ci.yml",
-  "packages/ai-catalog/package.json",
-  "packages/ai-catalog/src/capabilities-overrides.ts",
-  "packages/ai-catalog/src/capabilities.gen.ts",
-  "packages/ai-catalog/src/document-input-overrides.ts",
-  "packages/ai-catalog/src/index.ts",
-  "packages/ai-catalog/src/model-defaults-ledger.ts",
-  "packages/ai-catalog/src/model-rate-policy.ts",
-  "packages/ai-catalog/src/model-rate.ts",
-  "packages/ai-catalog/src/model-rates.gen.ts",
-  "packages/ai-catalog/src/reasoning-capabilities.ts",
-  "packages/fetch/src/body-reader.ts",
-  "packages/fetch/src/connection-failure.ts",
-  "packages/fetch/src/index.ts",
-  "packages/fetch/src/race-abort.ts",
-  "packages/scripts/src/model-catalog-capabilities-gen.ts",
-  "packages/scripts/src/model-catalog-capabilities.ts",
-  "packages/scripts/src/model-catalog-rates-gen.ts",
-  "packages/scripts/src/model-catalog-snapshot.ts",
-  "packages/scripts/src/offline-check-startup.ts",
-] as const;
 
 const TRANSITIVE_GENERATOR_INPUTS = {
   "account-export-tables": [
@@ -186,7 +164,11 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   "mobile-ui-theme": ["packages/portable-path/src/index.ts"],
   "mobile-icons": ["packages/portable-path/src/index.ts"],
   "mobile-folio-fonts": ["packages/portable-path/src/index.ts"],
-  "capability-catalog": ["apps/api/package.json", "apps/api/scripts/*"],
+  "capability-catalog": [
+    "apps/api/package.json",
+    "apps/api/scripts/*",
+    "apps/api/scripts/seed-content/*",
+  ],
   "capability-runtime": [
     "packages/legal-ast/src/analysis.ts",
     "packages/legal-ast/src/decision-identifier.ts",
@@ -197,6 +179,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "chat-transcripts": ["packages/scripts/src/child-exit-status.ts"],
   "cli-registry": [
+    "packages/html/src/*",
     "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/lib/imports/external-ref.ts",
     "apps/api/src/lib/imports/upsert-by-external-id.ts",
@@ -220,6 +203,9 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/email/correspondence/create.ts",
     "apps/api/src/lib/email/correspondence/provenance.ts",
     "apps/api/src/lib/email/inbound/*",
+    "apps/api/src/lib/hosted-usage-provider/client.ts",
+    "apps/api/src/lib/hosted-usage-provider/config.ts",
+    "apps/api/src/lib/hosted-usage-provider/external-account-ref.ts",
     "apps/api/src/lib/hosted-usage-provider/webhook-retention.ts",
     "apps/api/src/lib/infosoud/agenda-import.ts",
     "apps/api/src/lib/infosoud/client.ts",
@@ -279,6 +265,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/*",
     "apps/api/src/lib/account-export/constants.ts",
     "apps/api/src/lib/account-export/enqueue.ts",
+    "apps/api/src/lib/account-export/organization-audit-gate.ts",
     "apps/api/src/lib/account-export/store.ts",
     "apps/api/src/lib/agent-skills/*",
     "apps/api/src/lib/analytics/*",
@@ -547,6 +534,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "failure-tags": ["scripts/generated-artifacts.ts"],
   "mcp-app-bundles": [
+    "packages/html/src/*",
     "packages/portable-path/src/index.ts",
     "packages/scripts/src/*",
     "packages/text-normalize/src/*",

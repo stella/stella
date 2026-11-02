@@ -34,6 +34,14 @@
     "composerPlaceholder": "Demander à stella",
     "send": "Envoyer",
     "stop": "Arrêter",
+    "dictate": "Dicter",
+    "dictationCancel": "Annuler la dictée",
+    "dictationFinish": "Terminer la dictée",
+    "dictationListening": "Écoute… {elapsed} sur {limit}",
+    "dictationTranscribing": "Transcription…",
+    "dictationDenied": "La dictée a besoin du micro. Autorisez-le pour stella dans Réglages.",
+    "dictationFailed": "L’enregistrement n’a pas pu être transcrit. Réessayez.",
+    "dictationSilent": "Aucune parole n’a été entendue.",
     "sendFailed": "Votre message n’a pas pu être envoyé. Réessayez.",
     "answerWorking": "En cours…",
     "answerStopped": "Arrêté.",
@@ -174,6 +182,17 @@
       "system": "Apparence : automatique",
       "light": "Apparence : claire",
       "dark": "Apparence : sombre"
+    },
+    "edit": {
+      "saved": "Enregistré",
+      "saving": "Enregistrement…",
+      "notSaved": "Pas encore enregistré",
+      "done": "Terminé",
+      "openFailed": "Ce document ne peut pas être modifié pour le moment",
+      "takenOver": "Quelqu’un d’autre modifie maintenant ce document. Vos modifications depuis le dernier enregistrement n’ont pas été conservées.",
+      "finishFailed": "Vos modifications sont enregistrées, mais elles ne sont pas encore devenues une nouvelle version. Touchez à nouveau Terminé, ou quittez le document. La prochaine modification reprendra à partir de là.",
+      "stay": "Rester",
+      "leave": "Quitter"
     }
   },
   "signIn": {
@@ -222,9 +241,7 @@
     "share": "Partager"
   },
   "more": {
-    "soon": "Bientôt disponible",
-    "timers": "Chronomètres",
-    "voiceInput": "Saisie vocale"
+    "timers": "Chronomètres"
   },
   "writes": {
     "consentNeeded": "Pour modifier depuis l’app, stella a besoin de votre autorisation. Reconnectez-vous pour la donner.",

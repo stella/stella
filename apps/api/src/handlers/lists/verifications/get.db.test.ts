@@ -34,7 +34,9 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
+import { resolveEffectiveGrants } from "../../../../../../packages/cli/src/auth/command-scopes";
 import { loadBakedCapabilityCatalog } from "../../../../../../packages/cli/src/capability-catalog-load";
 import { deriveCapabilityLeaf } from "../../../../../../packages/cli/src/generate-capability-tree";
 import { runCapabilityCommand } from "../../../../../../packages/cli/src/run-capability-command";
@@ -379,6 +381,7 @@ const seed = async (db: GatedTestDb) => {
           configDir: "",
           serverUrl: server.url.origin,
           token,
+          effectiveGrants: resolveEffectiveGrants({ token }),
         },
         flags: {
           matterId: workspaceId,
@@ -445,9 +448,7 @@ const withFixture = async (
       await exercise(fixture);
     } finally {
       env.API_FEATURE_ACCESS_GRANTS = previous;
-      await db
-        .delete(organization)
-        .where(eq(organization.id, fixture.organizationId));
+      await deleteOrganizationsForTest(db, [fixture.organizationId]);
       await db.delete(user).where(eq(user.id, fixture.actor));
       await db.delete(user).where(eq(user.id, fixture.otherActor));
     }

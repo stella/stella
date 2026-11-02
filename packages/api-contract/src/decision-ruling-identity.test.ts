@@ -5,7 +5,7 @@ import {
   DECISION_IDENTIFIER_TYPES,
   normalizeStructuredDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -263,7 +263,8 @@ describe("language-independent comparison", () => {
   });
 
   test("is a fixed point and produces keys on arbitrary Unicode and lone surrogates", () => {
-    fc.assert(
+    assertProperty(
+      "is a fixed point and produces keys on arbitrary Unicode and lone surrogates",
       fc.property(unicodeString, (input) => {
         const folded = foldRulingIdentity(input);
         expect(foldRulingIdentity(folded)).toBe(folded);
@@ -281,7 +282,7 @@ describe("language-independent comparison", () => {
           keys.dockets.length,
         );
       }),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
     expect(
       rulingGroupKeys(rulingKeysOf({ ...decision, court: "\ud800" })),
@@ -289,7 +290,8 @@ describe("language-independent comparison", () => {
   });
 
   test("canonical and compatibility input forms agree", () => {
-    fc.assert(
+    assertProperty(
+      "canonical and compatibility input forms agree",
       fc.property(unicodeString, (input) => {
         for (const normalization of ["NFC", "NFD", "NFKC"] as const) {
           expect(
@@ -300,23 +302,25 @@ describe("language-independent comparison", () => {
           );
         }
       }),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 
   test("invisible characters and whitespace do not change court or kind folds", () => {
-    fc.assert(
+    assertProperty(
+      "invisible characters and whitespace do not change court or kind folds",
       fc.property(unicodeString, gaps, (input, separator) => {
         expect(foldRulingIdentity(Array.from(input).join(separator))).toBe(
           foldRulingIdentity(input),
         );
       }),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 
   test("inserting gaps except between digits preserves docket identity", () => {
-    fc.assert(
+    assertProperty(
+      "inserting gaps except between digits preserves docket identity",
       fc.property(unicodeString, gaps, (input, separator) => {
         // Test after compatibility normalization: otherwise insertion can break
         // a ligature into a different sequence of alphanumeric boundaries.
@@ -334,12 +338,13 @@ describe("language-independent comparison", () => {
         }
         expect(docketOf(spaced)).toBe(docketOf(input));
       }),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 
   test("invisible gaps between digits behave like a slash", () => {
-    fc.assert(
+    assertProperty(
+      "invisible gaps between digits behave like a slash",
       fc.property(
         fc.integer({ min: 0, max: 999_999 }),
         fc.integer({ min: 0, max: 999_999 }),
@@ -350,12 +355,13 @@ describe("language-independent comparison", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 
   test("decimal runs remain ordered without losing digits", () => {
-    fc.assert(
+    assertProperty(
+      "decimal runs remain ordered without losing digits",
       fc.property(
         fc.array(fc.integer({ min: 0, max: 999_999 }), {
           minLength: 1,
@@ -367,7 +373,7 @@ describe("language-independent comparison", () => {
           expect(docketOf(docket)?.split("/")).toEqual(numbers.map(String));
         },
       ),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 });

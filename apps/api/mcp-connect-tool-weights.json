@@ -256,10 +256,10 @@
     {
       "name": "list_templates",
       "nameChars": 14,
-      "descriptionChars": 688,
-      "inputSchemaChars": 354,
-      "totalChars": 1056,
-      "estimatedTokens": 382
+      "descriptionChars": 572,
+      "inputSchemaChars": 505,
+      "totalChars": 1091,
+      "estimatedTokens": 406
     },
     {
       "name": "list_time_entries",
@@ -577,9 +577,9 @@
       "name": "set_field_value",
       "nameChars": 15,
       "descriptionChars": 297,
-      "inputSchemaChars": 2771,
-      "totalChars": 3083,
-      "estimatedTokens": 1259
+      "inputSchemaChars": 2759,
+      "totalChars": 3071,
+      "estimatedTokens": 1254
     },
     {
       "name": "set_practice_jurisdictions",
@@ -631,7 +631,7 @@
     }
   ],
   "totals": {
-    "characters": 133002,
-    "estimatedTokens": 52859
+    "characters": 133025,
+    "estimatedTokens": 52878
   }
 }

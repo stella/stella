@@ -1,8 +1,7 @@
-import * as cheerio from "cheerio";
-
 import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
 import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
 import type { ConditionNode } from "@stll/conditions";
+import { load } from "@stll/html";
 
 import { createHtmlSanitizer } from "@/api/lib/markdown/sanitize-html";
 
@@ -116,7 +115,7 @@ export const deserializeAITool = (data: AITool): AITool => {
   );
 
   const html = Bun.markdown.html(data.prompt);
-  const $ = cheerio.load(html, undefined, false);
+  const $ = load(html, undefined, false);
 
   $("a").each((_, el) => {
     const href = $(el).attr("href") ?? "";
