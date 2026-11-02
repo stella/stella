@@ -146,11 +146,14 @@ checkout_image="stella-api-migration-rehearsal:${run_id}"
 repair_report="$runtime_dir/repairs.jsonl"
 contender_log="$runtime_dir/contender.log"
 tooling="${REHEARSAL_CI_TOOLING:-$repo_root}"
-compose_files=(-f "$repo_root/docker-compose.yml" -f "$runtime_dir/compose.json")
+compose_files=(-f "$repo_root/docker-compose.yml" -f "$runtime_dir/compose.json" -f "$runtime_dir/credentials.json")
 
 prepare_dependencies() {
   set -euo pipefail
   bun "$tooling/scripts/ci-service-images.ts" --compose "$repo_root/docker-compose.yml" > "$runtime_dir/compose.json"
+  # Releases refuse the development example credentials in strict runtime
+  # mode, so this run's object store gets its own.
+  bun -e 'const [access, secret] = [crypto.randomUUID(), crypto.randomUUID()].map((id) => id.replaceAll("-", "")); console.log(JSON.stringify({ services: { rustfs: { environment: { RUSTFS_ACCESS_KEY: access, RUSTFS_SECRET_KEY: secret } }, "rustfs-setup": { environment: { AWS_ACCESS_KEY_ID: access, AWS_SECRET_ACCESS_KEY: secret } } } }))' > "$runtime_dir/credentials.json"
   bash "$tooling/scripts/retry.sh" docker compose "${compose_files[@]}" -p "$compose_project" --profile dev pull rustfs gotenberg rustfs-setup
   docker compose "${compose_files[@]}" -p "$compose_project" --profile dev up -d --wait --wait-timeout 60 rustfs gotenberg
   docker compose "${compose_files[@]}" -p "$compose_project" --profile dev run --rm --no-deps rustfs-setup
