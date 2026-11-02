@@ -21,11 +21,6 @@ import * as cheerio from "cheerio";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import {
   assemblePlTkDecision,
   buildPlTkDecision,
   createPlTkPageCache,
@@ -51,6 +46,11 @@ import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/ad
 import { parsePlTkPage } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -514,6 +514,17 @@ describe("the print view's listing", () => {
       decisionDate: "2026-08-12",
       subject: "Tryb uchwalenia ustawy",
     });
+  });
+
+  test("a span nested in the italic subject inherits it without repeating it", async () => {
+    const page = parsePlTkListingPage(
+      (await listingFixture("pl-tk-listing-merits-page-0.html.gz")).replace(
+        'font-style: italic;">Tryb uchwalenia ustawy.</span>',
+        'font-style: italic;">Tryb <span style="font-style:inherit">uchwalenia</span> ustawy.</span>',
+      ),
+      "merits",
+    );
+    expect(page?.rows[1]?.subject).toBe("Tryb uchwalenia ustawy");
   });
 
   test("every row of the oldest page dates, including a padded day", async () => {

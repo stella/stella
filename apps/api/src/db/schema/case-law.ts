@@ -70,6 +70,7 @@ import {
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
+import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import {
   publishedCaseLawDecisionFor,
   unredactedCaseLawDecisionFor,
@@ -555,6 +556,21 @@ const publishedCourtDateIndex = (t: PublishedCourtDateColumns) =>
     )
     .where(publishedCaseLawDecisionFor(t));
 
+type ProvisionSearchIndexColumns = Parameters<
+  typeof publishedCaseLawDecisionFor
+>[0] & {
+  country: PgColumn;
+  citationAuthority: PgColumn;
+  id: PgColumn;
+};
+
+// The id tiebreaker lets a provision page stop within an equal-authority band.
+const provisionSearchIndex = (t: ProvisionSearchIndexColumns) =>
+  p
+    .index(CASE_LAW_PROVISION_SEARCH_INDEX.name)
+    .on(t.country, sql`${t.citationAuthority} DESC`, sql`${t.id} DESC`)
+    .where(publishedCaseLawDecisionFor(t));
+
 const publishedCoverageIndexes = (
   t: PublishedCourtDateColumns & { sourceId: PgColumn; caseNumber: PgColumn },
 ) => [
@@ -1025,6 +1041,7 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_citation_authority_idx")
       .on(t.citationAuthority),
+    provisionSearchIndex(t),
     // The previous authority sweep's order, kept for the length of one
     // rollout: a task still on the previous revision sorts by it. Removal
     // condition: that release fully rolled out; drop this declaration and the
@@ -2389,6 +2406,18 @@ export const caseLawProvisionCitations = p.pgTable(
         t.decisionId,
         t.spanStart,
       ),
+    // Candidate membership starts with a decision and then seeks only the
+    // requested work's anchor subtree. Unrelated links from the same decision
+    // never enter the range.
+    p
+      .index("case_law_provision_citations_decision_work_subtree_idx")
+      .on(
+        t.decisionId,
+        t.jurisdiction,
+        t.workIdentifier,
+        sql`${t.anchor} COLLATE "C"`,
+        t.spanStart,
+      ),
     p
       .index("case_law_provision_citations_eli_citing_idx")
       .on(
@@ -2708,9 +2737,9 @@ export const caseLawSitemapShards = p.pgTable(
  * `20261029140900_case_law_sitemap_changes`): the month a decision left and
  * the month it entered. A month of `*` asks for a whole country, and a
  * country of `*` for every country (a source's redistribution changed). The
- * refresh recounts each logged month and deletes exactly the rows its count's
- * own snapshot saw, so a row is consumed only by a count that includes its
- * change. One row per month per transaction, so a bulk write logs each month
+ * refresh persists a recount's snapshot xmin and retires older transactions
+ * in bounded batches, so a row is consumed only by a count that includes it.
+ * One row per month per transaction, so a bulk write logs each month
  * once. A queue, not a watermark: ids order nothing.
  */
 export const caseLawSitemapChanges = p.pgTable(
@@ -2763,6 +2792,175 @@ export const caseLawSitemapShardCounts = p.pgTable(
       to: "public",
       using: sql`true`,
       withCheck: sql`true`,
+    }),
+  ],
+);
+
+/** Provider-independent decision populations, maintained in the decision transaction. */
+export const CASE_LAW_POPULATION_KINDS = [
+  "country",
+  "court",
+  "year",
+  "coverage-year",
+  "pending-text",
+] as const;
+
+const caseLawPopulationCountColumns = () => ({
+  kind: p.text({ enum: CASE_LAW_POPULATION_KINDS }).notNull(),
+  country: p.varchar({ length: 3 }).notNull(),
+  sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+  value: p.varchar({ length: 512 }).notNull(),
+  total: p.integer().notNull(),
+});
+
+export const caseLawPopulationCounts = p.pgTable(
+  "case_law_population_counts",
+  caseLawPopulationCountColumns(),
+  (t) => [
+    p.primaryKey({
+      name: "case_law_population_counts_pkey",
+      columns: [t.kind, t.country, t.sourceId, t.value],
+    }),
+    p.check("case_law_population_counts_total_positive", sql`${t.total} > 0`),
+    p.check(
+      "case_law_population_counts_kind_valid",
+      sql`${t.kind} IN (${sql.join(
+        CASE_LAW_POPULATION_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("case_law_population_counts_source_kind_idx")
+      .on(t.sourceId, t.kind, t.value, t.total),
+    p.pgPolicy("case_law_population_count_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_counts'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_counts'::regclass)`,
+    }),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (SELECT 1 FROM ${caseLawSources} AS population_source WHERE population_source.id = ${t.sourceId} AND ${redistributableCaseLawSourceFor(sql`population_source.descriptor`)})`,
+    }),
+  ],
+);
+
+/** Append-only signed bucket changes; ingestion never locks the shared counters. */
+export const caseLawPopulationDeltas = p.pgTable(
+  "case_law_population_deltas",
+  {
+    id: p.bigint({ mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    kind: p.text({ enum: CASE_LAW_POPULATION_KINDS }).notNull(),
+    country: p.varchar({ length: 3 }).notNull(),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    value: p.varchar({ length: 512 }).notNull(),
+    delta: p.integer().notNull(),
+  },
+  (t) => [
+    p.check("case_law_population_deltas_nonzero", sql`${t.delta} <> 0`),
+    p.check(
+      "case_law_population_deltas_kind_valid",
+      sql`${t.kind} IN (${sql.join(
+        CASE_LAW_POPULATION_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("case_law_population_deltas_source_kind_idx")
+      .on(t.sourceId, t.kind, t.value),
+    p.pgPolicy("case_law_population_delta_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_deltas'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_deltas'::regclass)`,
+    }),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (SELECT 1 FROM ${caseLawSources} AS population_source WHERE population_source.id = ${t.sourceId} AND ${redistributableCaseLawSourceFor(sql`population_source.descriptor`)})`,
+    }),
+  ],
+);
+
+/** Migration-owned invoker view: bounded pending deltas plus folded counts. */
+export const caseLawPopulationCountsLive = p
+  .pgView("case_law_population_counts_live", caseLawPopulationCountColumns())
+  .existing();
+
+const CASE_LAW_POPULATION_PUBLICATIONS = ["published", "unpublished"] as const;
+
+/** Row-local replay checkpoint; a seed and a concurrent write cannot count a decision twice. */
+export const caseLawPopulationProjections = p.pgTable(
+  "case_law_population_projections",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id").primaryKey(),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    country: p.varchar({ length: 3 }).notNull(),
+    buckets: p.jsonb().notNull(),
+    court: p.varchar({ length: 512 }).notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+    publication: p.text({ enum: CASE_LAW_POPULATION_PUBLICATIONS }).notNull(),
+  },
+  (t) => [
+    p.check(
+      "case_law_population_projection_publication_valid",
+      sql`${t.publication} IN (${sql.join(
+        CASE_LAW_POPULATION_PUBLICATIONS.map(
+          (publication) => sql`${publication}`,
+        ),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("case_law_population_projection_activity_idx")
+      .on(t.country, t.court, t.updatedAt.desc(), t.sourceId, t.createdAt)
+      .where(sql`${t.publication} = 'published'`),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`${t.publication} = 'published' AND EXISTS (SELECT 1 FROM ${caseLawSources} AS population_source WHERE population_source.id = ${t.sourceId} AND ${redistributableCaseLawSourceFor(sql`population_source.descriptor`)})`,
+    }),
+    p.pgPolicy("case_law_population_projection_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_projections'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_projections'::regclass)`,
+    }),
+  ],
+);
+
+const CASE_LAW_POPULATION_SEED_PHASES = ["scan", "fold", "complete"] as const;
+
+/** Durable strict-lower seed cursor, completed only after the bounded traversal ends. */
+export const caseLawPopulationSeedState = p.pgTable(
+  "case_law_population_seed_state",
+  {
+    slot: p.integer().primaryKey(),
+    cursor: safeUuid<"caseLawDecision">("cursor"),
+    sourceId: safeUuid<"caseLawSource">("source_id"),
+    foldGeneration: p.integer("fold_generation").notNull().default(0),
+    foldedAt: timestamptz("folded_at"),
+    phase: p
+      .text({ enum: CASE_LAW_POPULATION_SEED_PHASES })
+      .notNull()
+      .default("scan"),
+  },
+  (t) => [
+    p.check("case_law_population_seed_singleton", sql`${t.slot} = 0`),
+    p.check(
+      "case_law_population_seed_phase_valid",
+      sql`${t.phase} IN (${sql.join(
+        CASE_LAW_POPULATION_SEED_PHASES.map((phase) => sql`${phase}`),
+        sql`, `,
+      )})`,
+    ),
+    p.pgPolicy("case_law_population_seed_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_seed_state'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_population_seed_state'::regclass)`,
     }),
   ],
 );
@@ -3913,6 +4111,60 @@ export const caseLawDecisionCitationStatsState = p.pgTable(
       for: "select",
       to: stellaPublicLawReader,
       using: sql`true`,
+    }),
+  ],
+);
+
+const SITEMAP_DRAIN_PHASES = ["draining", "awaiting_visibility"] as const;
+
+/** A published recount's safe transaction boundary, retained while its log rows drain. */
+export const caseLawSitemapDrainProgress = p.pgTable(
+  "case_law_sitemap_drain_progress",
+  {
+    country: p.text().notNull(),
+    year: p.text().notNull(),
+    month: p.text().notNull(),
+    coveredBefore: xid8("covered_before").notNull(),
+    phase: p.text({ enum: SITEMAP_DRAIN_PHASES }).notNull().default("draining"),
+    retiredThrough: xid8("retired_through")
+      .notNull()
+      .default(sql`'0'::xid8`),
+  },
+  (t) => [
+    p.primaryKey({ columns: [t.country, t.year, t.month] }),
+    p.check(
+      "case_law_sitemap_drain_phase_check",
+      sql`${t.phase} IN (${sql.join(
+        SITEMAP_DRAIN_PHASES.map((phase) => sql`${phase}`),
+        sql`, `,
+      )})`,
+    ),
+    p.pgPolicy("case_law_sitemap_drain_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+  ],
+);
+
+/** Singleton strict-lower cursor for bounded sitemap refresh discovery. */
+export const caseLawSitemapRefreshCursor = p.pgTable(
+  "case_law_sitemap_refresh_cursor",
+  {
+    slot: p.integer().notNull().default(0),
+    lastCountry: p.text("last_country").notNull().default(""),
+    lastYear: p.text("last_year").notNull().default(""),
+    lastMonth: p.text("last_month").notNull().default(""),
+  },
+  (t) => [
+    p.primaryKey({ columns: [t.slot] }),
+    p.check("case_law_sitemap_refresh_cursor_singleton", sql`${t.slot} = 0`),
+    p.pgPolicy("case_law_sitemap_refresh_cursor_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
     }),
   ],
 );

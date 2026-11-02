@@ -59,6 +59,7 @@ export type SafeIdType =
   | "caseLawIngestionFailure"
   | "caseLawJudge"
   | "caseLawMatterLink"
+  | "legislationMatterLink"
   | "caseLawPolarityRule"
   | "caseLawProvisionCitation"
   | "caseLawReconciliationItem"
@@ -168,6 +169,7 @@ export type SafeIdType =
   | "legalListItemComment"
   | "legalListItemReview"
   | "legalListItemSource"
+  | "legalListItemSourceDecision"
   | "legalListSection"
   | "legalReaderAnnotation"
   | "legalReaderAnswer"
@@ -225,7 +227,7 @@ export type SafeIdType =
   | "entityLink";
 
 export const isSafeIdValue = (value: string): boolean =>
-  value.length > 0 && value.isWellFormed();
+  value.length > 0 && !/[\uD800-\uDFFF]/u.test(value);
 
 /**
  * The one validator behind every brander: a consumer that narrows the id set

@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "SK_US",
   "key": "sk-us",
-  "parserVersion": 19,
+  "parserVersion": 22,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Recompute paragraph text and line breaks from stored markup: retain a line break when its newline survives whitespace trimming and drop it when the newline is removed; paragraph AST has no separate feature storage."
+    "reason": "Recompute paragraph text and line breaks from stored markup: retain a line break when its newline survives whitespace trimming and drop it when the newline is removed; paragraph AST has no separate feature storage. Normalize repeated block identities and publisher head-matter order before reading stored decisions; AST identities and roles have no independent feature storage. Recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes; AST roles and labels have no separate feature storage. Read files that set word gaps as no-break spaces at their text-layer seams: a plain space inside a word joins it, and one after a finished sentence before a numbered point restores the lost line break; paragraph AST has no separate feature storage."
   }
 }

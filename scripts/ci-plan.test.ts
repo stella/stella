@@ -50,6 +50,7 @@ import {
 } from "./ci-plan-scope";
 import { prHeavyJobs } from "./ci-pr-jobs";
 import { pilotFastJobs } from "./ci-pr-pilot-plan";
+import { REQUIRED_RECORD_KEYS } from "./ci-required-record";
 import {
   embedsExpression,
   GITHUB_EXPRESSION_LIMIT,
@@ -1797,6 +1798,13 @@ const requiredRecordSchema = v.strictObject({
   not_required: v.array(v.string()),
   verdict: v.picklist(["success", "failure"]),
 });
+
+test("the required-jobs record parser reads exactly the record's key set", () => {
+  // A key added to the record, or to this parser alone, fails here.
+  expect(Object.keys(requiredRecordSchema.entries)).toEqual([
+    ...REQUIRED_RECORD_KEYS,
+  ]);
+});
 type RequiredRecordCase = {
   label: string;
   options: EvaluateResultOptions;
@@ -2476,7 +2484,7 @@ test("desktop Rust tests select classified merge-group changes at every queue de
           expect(selected).toEqual(lintPlatforms);
           expect(selected.at(0)).toEqual({
             os: "macos",
-            runner: "macos-14",
+            runner: "macos-15",
             target: "aarch64-apple-darwin",
           });
           expect(selected.at(1)).toEqual({
@@ -8917,7 +8925,8 @@ test("only the resolver chooses a run's comparison base", () => {
           continue;
         }
         // The patch id names an entry's own change, so it alone diffs
-        // against the previous queue entry.
+        // against the previous queue entry; per-entry checks read that base
+        // from its entry_base_sha output.
         if (
           file === ".github/workflows/ci.yml" &&
           line.trim().startsWith("GROUP_BASE_SHA:")

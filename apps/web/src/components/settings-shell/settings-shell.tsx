@@ -154,14 +154,16 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
                   );
                 })}
                 {section.id === "account" && (
-                  <button
-                    className={NAV_ITEM_CLASS}
+                  <Button
+                    className="block w-full"
                     onClick={openShortcuts}
-                    type="button"
+                    variant="plain"
                   >
-                    <KeyboardIcon className="size-4" />
-                    <span>{t("navigation.shortcutsDialog.title")}</span>
-                  </button>
+                    <span className={NAV_ITEM_CLASS}>
+                      <KeyboardIcon className="size-4" />
+                      <span>{t("navigation.shortcutsDialog.title")}</span>
+                    </span>
+                  </Button>
                 )}
               </div>
             ))}
@@ -169,14 +171,14 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
         </ScrollArea>
       </div>
       <ScrollArea className="min-h-0 min-w-0 flex-1">
-        <main className="flex min-w-0 flex-col">
+        <section className="flex min-w-0 flex-col">
           {/* One width for every page: organization tables need it, and
               moving between sections never shifts the content. */}
           <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-6">
             <QueryViewFeedback view={roleView} />
             {children}
           </div>
-        </main>
+        </section>
       </ScrollArea>
     </div>
   );

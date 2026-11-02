@@ -13,6 +13,7 @@ export const API_VALIDATION_CONSTRAINTS = [
   "required",
   "maxLength",
   "minLength",
+  "maxBytes",
   "invalid",
 ] as const;
 
@@ -23,7 +24,7 @@ export type ApiValidationIssue = {
   /** Dotted path inside the request part, e.g. `name` or `items.0.title`. */
   field: string;
   constraint: ApiValidationConstraint;
-  /** The bound a length constraint was checked against. */
+  /** The bound a length or byte-size constraint was checked against. */
   limit?: number | undefined;
 };
 
@@ -75,11 +76,41 @@ export const CHAT_CONTINUATION_REJECTED_ERROR_CODE =
 export const CHAT_TURN_NOT_OWNED_ERROR_CODE = "chat_turn_not_owned" as const;
 
 /**
+ * Why the server refused to edit a user message and drop the turns after it.
+ * After any of them the page reloads the thread as stored. Only `turnRunning`
+ * and `historyChanged` pass: the same message can be edited again once
+ * nothing runs. `targetMissing` and `targetNotUserMessage` do not change by
+ * waiting.
+ * - `targetMissing`: no such message of the requester in this thread and
+ *   organization (another user's, another thread's, or one already dropped).
+ * - `targetNotUserMessage`: the message is not a user message.
+ * - `turnRunning`: a turn of the thread still runs.
+ * - `historyChanged`: another turn changed the thread while the edit was
+ *   being saved.
+ */
+export const CHAT_MESSAGE_EDIT_ERROR_CODE = {
+  historyChanged: "chat_edit_history_changed",
+  targetMissing: "chat_edit_target_missing",
+  targetNotUserMessage: "chat_edit_target_not_user_message",
+  turnRunning: "chat_edit_turn_running",
+} as const;
+
+export type ChatMessageEditErrorCode =
+  (typeof CHAT_MESSAGE_EDIT_ERROR_CODE)[keyof typeof CHAT_MESSAGE_EDIT_ERROR_CODE];
+
+/**
  * A request needed an encrypted (password-protected) file's content: an
  * encrypted PDF or Office document cannot be read, extracted or sent to a
  * model. Shared so every client can explain it instead of a generic failure.
  */
 export const ENCRYPTED_CONTENT_ERROR_CODE = "encrypted_content" as const;
+
+/**
+ * A stored file has nothing to show: no viewer renders its type and no PDF
+ * rendition exists. The file itself is fine and still downloads, so a client
+ * offers the download instead of a retry.
+ */
+export const PREVIEW_UNAVAILABLE_ERROR_CODE = "preview_unavailable" as const;
 
 export const API_FILE_SECURITY_REJECTED_ERROR_CODE =
   "file_security_rejected" as const;

@@ -50,8 +50,9 @@ export const ProtectedScreens = () => {
  * action is the tab's "+": a new conversation over the chats, a new task over
  * the tasks and a new matter over the matters, which also offer how to group
  * them. Search is the system's field, which the list under it filters by;
- * More has nothing to search. Every button draws a lucide glyph from the
- * asset catalog (`barGlyph`), which the bar has as it is built.
+ * More, which has no list to filter, searches all of stella instead, on its
+ * own screen. Every button draws a lucide glyph from the asset catalog
+ * (`barGlyph`), which the bar has as it is built.
  */
 const Screens = () => {
   const { state } = useSession();
@@ -59,6 +60,7 @@ const Screens = () => {
   const navigationTheme = useNavigationTheme();
   const tabs = useTranslations("tabs");
   const header = useTranslations("header");
+  const search = useTranslations("search");
   const matters = useTranslations("matters");
   const signedIn = state.status === "signed-in";
   const router = useRouter();
@@ -78,7 +80,7 @@ const Screens = () => {
     headerTitleStyle: { color: colors.text },
   } as const;
 
-  const shortcuts = useShortcuts(tabAction);
+  const shortcuts = useShortcuts(tab, tabAction);
 
   return (
     <ThemeProvider value={navigationTheme}>
@@ -129,6 +131,18 @@ const Screens = () => {
                 </Stack.Toolbar.Button>
               </Stack.Toolbar>
               <Stack.Toolbar placement="right">
+                {tab === "more" ? (
+                  <Stack.Toolbar.Button
+                    onPress={() => {
+                      router.push("/search");
+                    }}
+                  >
+                    {barGlyph("search")}
+                    <Stack.Toolbar.Label>
+                      {search("placeholder")}
+                    </Stack.Toolbar.Label>
+                  </Stack.Toolbar.Button>
+                ) : null}
                 {tabAction === undefined ? null : (
                   <Stack.Toolbar.Button onPress={tabAction.onPress}>
                     {barGlyph("plus")}
@@ -179,6 +193,13 @@ const Screens = () => {
             </Stack.Screen>
             <Stack.Screen name="thread/[threadId]" />
             <Stack.Screen
+              name="search"
+              options={{
+                animation: "fade",
+                contentStyle: { backgroundColor: colors.background },
+              }}
+            />
+            <Stack.Screen
               name="palette"
               options={{
                 contentStyle: { backgroundColor: colors.background },
@@ -197,7 +218,15 @@ const Screens = () => {
               }}
             />
             <Stack.Screen
-              name="scan"
+              name="scan/index"
+              options={{
+                ...pushedScreen,
+                // Full screen, so a stray swipe cannot drop pages not yet saved.
+                presentation: "fullScreenModal",
+              }}
+            />
+            <Stack.Screen
+              name="scan/save"
               options={{
                 ...pushedScreen,
                 presentation: "formSheet",
@@ -269,11 +298,15 @@ const TAB_ROUTES: ReadonlyMap<string, Href> = new Map([
 
 /**
  * A hardware keyboard's shortcuts, as t3code gives an iPad: ⌘N for the
- * open tab's "+", ⌘F to search it, ⌘K for the command palette, ⌘\ to put
- * the list beside a selection away, ⌘1 to ⌘4 for the tabs, ⌘, for the
- * settings and Escape to close what is open over them.
+ * open tab's "+", ⌘F to search it (all of stella from More), ⌘K for the
+ * command palette, ⌘\ to put the list beside a selection away, ⌘1 to ⌘4
+ * for the tabs, ⌘, for the settings and Escape to close what is open over
+ * them.
  */
-function useShortcuts(primary: TabAction | undefined): {
+function useShortcuts(
+  tab: string,
+  primary: TabAction | undefined,
+): {
   commands: readonly KeyCommand[];
   run: (id: string) => void;
 } {
@@ -324,7 +357,11 @@ function useShortcuts(primary: TabAction | undefined): {
     if (id === "new") {
       primary?.onPress();
     } else if (id === "search") {
-      searchBar.current?.focus();
+      if (tab === "more") {
+        router.push("/search");
+      } else {
+        searchBar.current?.focus();
+      }
     } else if (id === "list") {
       selection.toggleList();
     } else if (id === "palette") {

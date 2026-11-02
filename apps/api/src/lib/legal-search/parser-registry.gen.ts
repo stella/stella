@@ -3,139 +3,260 @@ import type { ParserVersionScopes } from "./parser-reparse-scopes";
 
 export const ADAPTER_KEYS = {
   AT_ASYLGH: "at-asylgh",
+
   AT_BKS: "at-bks",
+
   AT_BVWG: "at-bvwg",
+
   AT_COURTS: "at-courts",
+
   AT_FINDOK: "at-findok",
+
   AT_LVWG: "at-lvwg",
+
   AT_UBAS: "at-ubas",
+
   AT_UMSE: "at-umse",
+
   AT_UVS: "at-uvs",
+
   AT_VERG: "at-verg",
+
   AT_VFGH: "at-vfgh",
+
   AT_VWGH: "at-vwgh",
+
   CZ_NS: "cz-ns",
+
   CZ_NSS: "cz-nss",
+
   CZ_REGIONAL: "cz-regional",
+
   CZ_UOHS: "cz-uohs",
+
   CZ_US: "cz-us",
+
   EU_ECJ: "eu-ecj",
+
   HU_BHGY: "hu-bhgy",
+
   PL_COURTS: "pl-courts",
+
   PL_KIO: "pl-kio",
+
   PL_KIS: "pl-kis",
+
   PL_NCOURT: "pl-ncourt",
+
   PL_NSA: "pl-nsa",
+
   PL_SN: "pl-sn",
+
   PL_TK: "pl-tk",
+
   PL_UODO: "pl-uodo",
+
   PL_UOKIK: "pl-uokik",
+
   SK_COURTS: "sk-courts",
+
   SK_US: "sk-us",
+
   UK_FCL: "uk-fcl",
 } as const;
 export const IMPORT_SOURCE_KEYS = {
   COURTLISTENER: "us-courtlistener",
 } as const;
 export const PARSER_VERSIONS = {
-  [ADAPTER_KEYS.AT_ASYLGH]: 9,
-  [ADAPTER_KEYS.AT_BKS]: 9,
-  [ADAPTER_KEYS.AT_BVWG]: 9,
-  [ADAPTER_KEYS.AT_COURTS]: 9,
-  [ADAPTER_KEYS.AT_FINDOK]: 11,
-  [ADAPTER_KEYS.AT_LVWG]: 9,
-  [ADAPTER_KEYS.AT_UBAS]: 9,
-  [ADAPTER_KEYS.AT_UMSE]: 9,
-  [ADAPTER_KEYS.AT_UVS]: 9,
-  [ADAPTER_KEYS.AT_VERG]: 9,
-  [ADAPTER_KEYS.AT_VFGH]: 9,
-  [ADAPTER_KEYS.AT_VWGH]: 9,
-  [ADAPTER_KEYS.CZ_NS]: 21,
-  [ADAPTER_KEYS.CZ_NSS]: 25,
-  [ADAPTER_KEYS.CZ_REGIONAL]: 16,
-  [ADAPTER_KEYS.CZ_UOHS]: 7,
-  [ADAPTER_KEYS.CZ_US]: 32,
-  [ADAPTER_KEYS.EU_ECJ]: 19,
-  [ADAPTER_KEYS.HU_BHGY]: 22,
-  [ADAPTER_KEYS.PL_COURTS]: 19,
+  [ADAPTER_KEYS.AT_ASYLGH]: 11,
+
+  [ADAPTER_KEYS.AT_BKS]: 11,
+
+  [ADAPTER_KEYS.AT_BVWG]: 11,
+
+  [ADAPTER_KEYS.AT_COURTS]: 11,
+
+  [ADAPTER_KEYS.AT_FINDOK]: 13,
+
+  [ADAPTER_KEYS.AT_LVWG]: 11,
+
+  [ADAPTER_KEYS.AT_UBAS]: 11,
+
+  [ADAPTER_KEYS.AT_UMSE]: 11,
+
+  [ADAPTER_KEYS.AT_UVS]: 11,
+
+  [ADAPTER_KEYS.AT_VERG]: 11,
+
+  [ADAPTER_KEYS.AT_VFGH]: 11,
+
+  [ADAPTER_KEYS.AT_VWGH]: 11,
+
+  [ADAPTER_KEYS.CZ_NS]: 23,
+
+  [ADAPTER_KEYS.CZ_NSS]: 29,
+
+  [ADAPTER_KEYS.CZ_REGIONAL]: 18,
+
+  [ADAPTER_KEYS.CZ_UOHS]: 8,
+
+  [ADAPTER_KEYS.CZ_US]: 34,
+
+  [ADAPTER_KEYS.EU_ECJ]: 21,
+
+  [ADAPTER_KEYS.HU_BHGY]: 25,
+
+  [ADAPTER_KEYS.PL_COURTS]: 20,
+
   [ADAPTER_KEYS.PL_KIO]: 13,
-  [ADAPTER_KEYS.PL_KIS]: 13,
+
+  [ADAPTER_KEYS.PL_KIS]: 14,
+
   [ADAPTER_KEYS.PL_NCOURT]: 20,
+
   [ADAPTER_KEYS.PL_NSA]: 10,
+
   [ADAPTER_KEYS.PL_SN]: 12,
-  [ADAPTER_KEYS.PL_TK]: 11,
+
+  [ADAPTER_KEYS.PL_TK]: 12,
+
   [ADAPTER_KEYS.PL_UODO]: 16,
+
   [ADAPTER_KEYS.PL_UOKIK]: 14,
-  [ADAPTER_KEYS.SK_COURTS]: 21,
-  [ADAPTER_KEYS.SK_US]: 19,
-  [ADAPTER_KEYS.UK_FCL]: 4,
+
+  [ADAPTER_KEYS.SK_COURTS]: 25,
+
+  [ADAPTER_KEYS.SK_US]: 22,
+
+  [ADAPTER_KEYS.UK_FCL]: 5,
 } as const satisfies Record<AdapterKey, number>;
 export const SOURCE_FINGERPRINT_VERSIONS = {
   [ADAPTER_KEYS.AT_ASYLGH]: 0,
+
   [ADAPTER_KEYS.AT_BKS]: 0,
+
   [ADAPTER_KEYS.AT_BVWG]: 0,
+
   [ADAPTER_KEYS.AT_COURTS]: 0,
+
   [ADAPTER_KEYS.AT_FINDOK]: 0,
+
   [ADAPTER_KEYS.AT_LVWG]: 0,
+
   [ADAPTER_KEYS.AT_UBAS]: 0,
+
   [ADAPTER_KEYS.AT_UMSE]: 0,
+
   [ADAPTER_KEYS.AT_UVS]: 0,
+
   [ADAPTER_KEYS.AT_VERG]: 0,
+
   [ADAPTER_KEYS.AT_VFGH]: 0,
+
   [ADAPTER_KEYS.AT_VWGH]: 0,
+
   [ADAPTER_KEYS.CZ_NS]: 0,
+
   [ADAPTER_KEYS.CZ_NSS]: 0,
+
   [ADAPTER_KEYS.CZ_REGIONAL]: 0,
+
   [ADAPTER_KEYS.CZ_UOHS]: 0,
+
   [ADAPTER_KEYS.CZ_US]: 0,
+
   [ADAPTER_KEYS.EU_ECJ]: 0,
+
   [ADAPTER_KEYS.HU_BHGY]: 0,
+
   [ADAPTER_KEYS.PL_COURTS]: 0,
+
   [ADAPTER_KEYS.PL_KIO]: 0,
+
   [ADAPTER_KEYS.PL_KIS]: 0,
+
   [ADAPTER_KEYS.PL_NCOURT]: 0,
+
   [ADAPTER_KEYS.PL_NSA]: 0,
+
   [ADAPTER_KEYS.PL_SN]: 0,
+
   [ADAPTER_KEYS.PL_TK]: 0,
+
   [ADAPTER_KEYS.PL_UODO]: 0,
+
   [ADAPTER_KEYS.PL_UOKIK]: 0,
+
   [ADAPTER_KEYS.SK_COURTS]: 0,
+
   [ADAPTER_KEYS.SK_US]: 0,
+
   [ADAPTER_KEYS.UK_FCL]: 0,
+
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: 0,
 } as const satisfies Record<AdapterKey | ImportSourceKey, number>;
 export const PARSER_VERSION_SCOPES = {
-  [ADAPTER_KEYS.AT_ASYLGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_ASYLGH], scope: {"type":"all","reason":"Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage."} },
-  [ADAPTER_KEYS.AT_BKS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_BKS], scope: {"type":"all","reason":"Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage."} },
-  [ADAPTER_KEYS.AT_BVWG]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_BVWG], scope: {"type":"all","reason":"Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage."} },
-  [ADAPTER_KEYS.AT_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_COURTS], scope: {"type":"all","reason":"Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage."} },
-  [ADAPTER_KEYS.AT_FINDOK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_FINDOK], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage."} },
-  [ADAPTER_KEYS.AT_LVWG]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_LVWG], scope: {"type":"all","reason":"Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage."} },
-  [ADAPTER_KEYS.AT_UBAS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_UBAS], scope: {"type":"all","reason":"Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage."} },
-  [ADAPTER_KEYS.AT_UMSE]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_UMSE], scope: {"type":"all","reason":"Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage."} },
-  [ADAPTER_KEYS.AT_UVS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_UVS], scope: {"type":"all","reason":"Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage."} },
-  [ADAPTER_KEYS.AT_VERG]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VERG], scope: {"type":"all","reason":"Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage."} },
-  [ADAPTER_KEYS.AT_VFGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VFGH], scope: {"type":"all","reason":"Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage."} },
-  [ADAPTER_KEYS.AT_VWGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VWGH], scope: {"type":"all","reason":"Reclassify publisher headings and trailing publisher metadata from stored RIS XML; AST roles have no separate feature storage."} },
-  [ADAPTER_KEYS.CZ_NS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage."} },
-  [ADAPTER_KEYS.CZ_NSS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS], scope: {"type":"all","reason":"Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Rebuild inline emphasis from retained PDF originals with the shared style mapper. Discovering an uncaptured original requires a normal re-crawl."} },
-  [ADAPTER_KEYS.CZ_REGIONAL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage."} },
-  [ADAPTER_KEYS.CZ_UOHS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_UOHS], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own."} },
-  [ADAPTER_KEYS.CZ_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_US], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage."} },
-  [ADAPTER_KEYS.EU_ECJ]: { version: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
-  [ADAPTER_KEYS.HU_BHGY]: { version: PARSER_VERSIONS[ADAPTER_KEYS.HU_BHGY], scope: {"type":"all","reason":"Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage."} },
-  [ADAPTER_KEYS.PL_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
+  [ADAPTER_KEYS.AT_ASYLGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_ASYLGH], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles."} },
+
+  [ADAPTER_KEYS.AT_BKS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_BKS], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles."} },
+
+  [ADAPTER_KEYS.AT_BVWG]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_BVWG], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles."} },
+
+  [ADAPTER_KEYS.AT_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_COURTS], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles."} },
+
+  [ADAPTER_KEYS.AT_FINDOK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_FINDOK], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles."} },
+
+  [ADAPTER_KEYS.AT_LVWG]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_LVWG], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles."} },
+
+  [ADAPTER_KEYS.AT_UBAS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_UBAS], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles."} },
+
+  [ADAPTER_KEYS.AT_UMSE]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_UMSE], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles."} },
+
+  [ADAPTER_KEYS.AT_UVS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_UVS], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles."} },
+
+  [ADAPTER_KEYS.AT_VERG]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VERG], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles."} },
+
+  [ADAPTER_KEYS.AT_VFGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VFGH], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles."} },
+
+  [ADAPTER_KEYS.AT_VWGH]: { version: PARSER_VERSIONS[ADAPTER_KEYS.AT_VWGH], scope: {"type":"all","reason":"Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles."} },
+
+  [ADAPTER_KEYS.CZ_NS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. running headers, page numbers, soft hyphens, captions, the formula lines, section headings, letter-spaced words, the signing judge's name and paragraph numbers are recomputed from the stored print page, and none of them has feature storage of its own Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.CZ_NSS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. Read inline style declarations with CSS cascade semantics. Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Section headings, the formula lines, the takto lead-in and letter-spaced words are recomputed with them. Rebuild inline emphasis from retained PDF originals with the shared style mapper. Discovering an uncaptured original requires a normal re-crawl. Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.CZ_REGIONAL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. running headers, soft hyphens, misplaced opening quotes, letter-spaced words, title and formula lines, the takto lead-in, the court's own Poučení label and paragraph numbers are recomputed from the stored decision, and none of them has feature storage of its own Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.CZ_UOHS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_UOHS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage."} },
+
+  [ADAPTER_KEYS.CZ_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_US], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. the plenary ruling roles, the formula lines, the takto lead-in and the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card; paragraph text, ruling roles, separate-opinion headings, letter-spaced words and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own. Ruling roles also open after an SbNU nález caption and end at the signatures, the closing line and the instruction; they have no feature storage of their own."} },
+
+  [ADAPTER_KEYS.EU_ECJ]: { version: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ], scope: {"type":"all","reason":"The sentence introducing the ruling (On those grounds, THE COURT hereby rules:) loses the holding role where the Court sets it on several lines: the General Court's unmarked opening row and the oldest layout's bare paragraphs."} },
+
+  [ADAPTER_KEYS.HU_BHGY]: { version: PARSER_VERSIONS[ADAPTER_KEYS.HU_BHGY], scope: {"type":"all","reason":"Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage. Read a partial or interim judgment's operative introduction and the kind printed below a header table as opening the operative part; a header label needs its colon; paragraph roles and the decision type have no separate feature storage. Type the reasons printed after the ruling as argumentation, not as the document's tail, in the sections derived from the AST."} },
+
+  [ADAPTER_KEYS.PL_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS], scope: {"type":"all","reason":"Re-read common-court opening recitals as whole sentences when the editor lays them out across adjacent lines."} },
+
   [ADAPTER_KEYS.PL_KIO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIO], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
-  [ADAPTER_KEYS.PL_KIS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own."} },
+
+  [ADAPTER_KEYS.PL_KIS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS], scope: {"type":"all","reason":"Re-read word-processor HTML so single printed line breaks stay inside their sentence and blank lines alone end paragraphs."} },
+
   [ADAPTER_KEYS.PL_NCOURT]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NCOURT], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Re-read portal statute links against their anchor text: links whose provisions the anchor does not print lose them, links naming another act or a bare paragraph become plain text, and the metadata lists what was dropped. Also revalidates publisher head-matter ordering across the complete document AST."} },
+
   [ADAPTER_KEYS.PL_NSA]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NSA], scope: {"type":"all","reason":"Classify the thesis heading as publisher head matter when rebuilding the stored dataset sections; AST roles have no separate feature storage."} },
+
   [ADAPTER_KEYS.PL_SN]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_SN], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
-  [ADAPTER_KEYS.PL_TK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_TK], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
+
+  [ADAPTER_KEYS.PL_TK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_TK], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Read inline style declarations with CSS cascade semantics."} },
+
   [ADAPTER_KEYS.PL_UODO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UODO], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
+
   [ADAPTER_KEYS.PL_UOKIK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own."} },
-  [ADAPTER_KEYS.SK_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own."} },
-  [ADAPTER_KEYS.SK_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_US], scope: {"type":"all","reason":"Recompute paragraph text and line breaks from stored markup: retain a line break when its newline survives whitespace trimming and drop it when the newline is removed; paragraph AST has no separate feature storage."} },
-  [ADAPTER_KEYS.UK_FCL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.UK_FCL], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage."} },
+
+  [ADAPTER_KEYS.SK_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own. Revalidate deferred stored PDF payloads through the shared typed corpus-validation result; invalid textless structure is a classified no-document outcome, while readable source text and AST retain the same parser. Preserve PDF paragraph gaps, lettered items and the bounded first-page metadata table when rebuilding document text and block boundaries from captured PDF bytes. Rows without captured PDF bytes yield a metadata-only replay outcome and retain their applied parser version; populated historical rows require an explicit PDF capture refresh. Metadata-derived titles require extracted document blocks. Paragraph-gap thresholds derive from font metrics rather than the frequency of observed gaps. Recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes; AST roles and labels have no separate feature storage. Read words the court sets letter-spaced as words, keeping the wider gap between two of them as the word boundary; paragraph text has no separate feature storage."} },
+
+  [ADAPTER_KEYS.SK_US]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_US], scope: {"type":"all","reason":"Recompute paragraph text and line breaks from stored markup: retain a line break when its newline survives whitespace trimming and drop it when the newline is removed; paragraph AST has no separate feature storage. Normalize repeated block identities and publisher head-matter order before reading stored decisions; AST identities and roles have no independent feature storage. Recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes; AST roles and labels have no separate feature storage. Read files that set word gaps as no-break spaces at their text-layer seams: a plain space inside a word joins it, and one after a finished sentence before a numbered point restores the lost line break; paragraph AST has no separate feature storage."} },
+
+  [ADAPTER_KEYS.UK_FCL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.UK_FCL], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Date a tribunal decision by its decision date, so a document named a decision is read rather than refused."} },
 } as const satisfies ParserVersionScopes<typeof PARSER_VERSIONS>;
 export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
 export type ImportSourceKey = (typeof IMPORT_SOURCE_KEYS)[keyof typeof IMPORT_SOURCE_KEYS];

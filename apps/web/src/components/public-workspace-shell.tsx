@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { CircleUserRoundIcon, PanelLeftIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { matterChromeStyle } from "@stll/ui/matter-colors";
+import { SidebarIdentityButton } from "@stll/ui/sidebar";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceShell } from "@stll/ui/workspace-shell";
 
@@ -31,7 +32,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarHeader,
-  sidebarIdentityTriggerClassName,
   SidebarMenu,
   SidebarMenuBadge,
   SidebarMenuButton,
@@ -52,7 +52,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { formatHotkeyForPlatform, HOTKEYS } from "@/lib/hotkeys";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
-import { isPublicLawSsrRouteEnabled } from "@/lib/public-law-launch";
+import { isPublicLawEnabled } from "@/lib/public-law-launch";
 import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 
@@ -113,8 +113,8 @@ export const PublicWorkspaceShell = ({
   topBar,
 }: PublicWorkspaceShellProps) => {
   const authStatus = useClientAuthStatus();
-  const createMatterDialogOpen = useCreateMatterStore(
-    (state) => state.dialog.status === "open",
+  const createMatterDialogMounted = useCreateMatterStore(
+    (state) => state.dialog.status !== "closed",
   );
   const [authRedirectTo, setAuthRedirectTo] = useState<string | null>(null);
   const requestAuth = (redirectTo: string) => {
@@ -184,7 +184,7 @@ export const PublicWorkspaceShell = ({
               />
             </Suspense>
           )}
-          {authStatus.isAuthenticated && createMatterDialogOpen && (
+          {authStatus.isAuthenticated && createMatterDialogMounted && (
             <Suspense fallback={null}>
               <CreateMatterDialog />
             </Suspense>
@@ -237,7 +237,7 @@ const PublicSidebar = ({
   // gate is isomorphic, and anyone rendering this shell passed it.
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includeInbox: inboxEntryEnabled,
-    includePublicLaw: isPublicLawSsrRouteEnabled(),
+    includePublicLaw: isPublicLawEnabled(),
     includePublicTools: isPublicToolsRouteEnabled(),
     includeTimesheets: false,
     publicKnowledge: isPublicKnowledgeEnabled(),
@@ -385,13 +385,9 @@ const PublicSidebar = ({
               <Tooltip
                 content={isCollapsed ? t("auth.signIn") : null}
                 render={
-                  <button
+                  <SidebarIdentityButton
                     aria-label={t("auth.signIn")}
-                    className={cn(
-                      sidebarIdentityTriggerClassName(sidebarLayout),
-                    )}
                     onClick={() => requestAuth(currentHref)}
-                    type="button"
                   />
                 }
                 side="right"
