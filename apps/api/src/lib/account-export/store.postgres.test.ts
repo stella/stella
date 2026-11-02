@@ -57,7 +57,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         for (const migration of [
           "20261010005100_account_audit_scope",
           "20261016100500_account_exports",
-          "20261101090000_organization_audit_exports",
+          "20261101221334_organization_audit_exports",
         ]) {
           const source = await Bun.file(
             new URL(

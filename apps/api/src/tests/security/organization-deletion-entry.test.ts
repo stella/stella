@@ -61,7 +61,7 @@ describe("organization deletion entry points", () => {
   test("only the deletion owner grants the organization delete guard", async () => {
     // The database refuses every organization row delete that its
     // transaction did not name in this setting (migration
-    // 20261101090100_organization_delete_owner_guard); this census keeps the
+    // 20261101221434_organization_delete_owner_guard); this census keeps the
     // setting in the owner's hands.
     const granters: string[] = [];
     for await (const { relativePath, source } of productionSources()) {
