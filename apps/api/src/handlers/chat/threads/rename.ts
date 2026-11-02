@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -127,10 +127,14 @@ const renameThread = createSafeRootHandler(
     // Re-index so global search finds the thread by its new title. Fire-and-
     // forget after the rename commits: indexing must never block or fail the
     // rename. Mirrors generate-thread-title.ts and send-message.ts.
-    upsertChatThreadSearchDocument(params.threadId).catch(
-      createErrorCapture(
-        handlerErrorContext("renameThread.upsertChatThreadSearchDocument"),
-      ),
+    detached(
+      () =>
+        upsertChatThreadSearchDocument(params.threadId).catch(
+          createErrorCapture(
+            handlerErrorContext("renameThread.upsertChatThreadSearchDocument"),
+          ),
+        ),
+      "thread-rename.index-thread",
     );
 
     return Result.ok({ title });

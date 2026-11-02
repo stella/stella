@@ -50,7 +50,11 @@ import type {
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -352,13 +356,17 @@ export const persistMessage = async (props: PersistMessageProps) => {
   // actually changed. Fire-and-forget: indexing must never block or
   // fail a chat turn.
   if (Result.isOk(result) && props.persistencePlan.type !== "none") {
-    props
-      .indexThread(props.threadId)
-      .catch(
-        createErrorCapture(
-          handlerErrorContext("persistMessage.props_indexThread"),
-        ),
-      );
+    detached(
+      () =>
+        props
+          .indexThread(props.threadId)
+          .catch(
+            createErrorCapture(
+              handlerErrorContext("persistMessage.props_indexThread"),
+            ),
+          ),
+      "chat-message-persistence.index-thread",
+    );
   }
   return result;
 };
@@ -1242,15 +1250,19 @@ export const persistAcceptedMessageWithClaim = async ({
   if (Result.isError(result.value)) {
     return Result.err(result.value.error);
   }
-  persistenceProps
-    .indexThread(persistenceProps.threadId)
-    .catch(
-      createErrorCapture(
-        handlerErrorContext(
-          "persistAcceptedMessageWithClaim.persistenceProps_indexThread",
+  detached(
+    () =>
+      persistenceProps
+        .indexThread(persistenceProps.threadId)
+        .catch(
+          createErrorCapture(
+            handlerErrorContext(
+              "persistAcceptedMessageWithClaim.persistenceProps_indexThread",
+            ),
+          ),
         ),
-      ),
-    );
+    "chat-message-persistence.index-thread",
+  );
   return Result.ok(result.value.value);
 };
 
@@ -1285,14 +1297,18 @@ export const persistClaimedReplayMessage = async ({
   if (result.value === null) {
     return Result.ok(null);
   }
-  persistenceProps
-    .indexThread(persistenceProps.threadId)
-    .catch(
-      createErrorCapture(
-        handlerErrorContext(
-          "persistClaimedReplayMessage.persistenceProps_indexThread",
+  detached(
+    () =>
+      persistenceProps
+        .indexThread(persistenceProps.threadId)
+        .catch(
+          createErrorCapture(
+            handlerErrorContext(
+              "persistClaimedReplayMessage.persistenceProps_indexThread",
+            ),
+          ),
         ),
-      ),
-    );
+    "chat-message-persistence.index-thread",
+  );
   return Result.ok(result.value.execution);
 };

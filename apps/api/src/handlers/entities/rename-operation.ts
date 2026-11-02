@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -146,10 +146,14 @@ export const createRenameEntityHandler = ({
       );
     }
 
-    flushRepairs([body.entityId]).catch(
-      createErrorCapture(
-        handlerErrorContext("createRenameEntityHandler.flushRepairs"),
-      ),
+    detached(
+      () =>
+        flushRepairs([body.entityId]).catch(
+          createErrorCapture(
+            handlerErrorContext("createRenameEntityHandler.flushRepairs"),
+          ),
+        ),
+      "rename-operation.flush-repairs",
     );
 
     return Result.ok({

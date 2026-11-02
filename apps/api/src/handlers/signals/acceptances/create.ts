@@ -20,7 +20,7 @@ import {
   SIGNAL_EVENT_TYPE,
   transitionSignal,
 } from "@/api/handlers/signals/transition";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -243,13 +243,17 @@ export const createAcceptSignal = (
               return outcome.value;
             }),
           );
-          dependencies
-            .flushEntitySearchRepairs([created.entityId])
-            .catch(
-              createErrorCapture(
-                handlerErrorContext("createAcceptSignal.rejection"),
-              ),
-            );
+          detached(
+            () =>
+              dependencies
+                .flushEntitySearchRepairs([created.entityId])
+                .catch(
+                  createErrorCapture(
+                    handlerErrorContext("createAcceptSignal.rejection"),
+                  ),
+                ),
+            "acceptances-create.flush-entity-search-repairs",
+          );
 
           const row = yield* yield* loadVisibleSignal({
             safeDb,

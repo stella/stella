@@ -9,7 +9,11 @@ import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields, pendingUploads, workspaces } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -615,52 +619,72 @@ export const createEntityFromBuffer = async ({
   // must NOT invoke `maybeStartUploadTriggeredFlows` — only genuine USER uploads
   // fire the file-upload trigger, so a flow-created document can never spawn
   // another flow run. Keep the upload trigger out of this call site.
-  dependencies
-    .processExtraction(entityId)
-    .catch(
-      createErrorCapture(
-        handlerErrorContext(
-          "createEntityFromBuffer.dependencies_processExtraction",
+  detached(
+    () =>
+      dependencies
+        .processExtraction(entityId)
+        .catch(
+          createErrorCapture(
+            handlerErrorContext(
+              "createEntityFromBuffer.dependencies_processExtraction",
+            ),
+          ),
         ),
-      ),
-    );
-  dependencies
-    .flushEntitySearchRepairs([entityId])
-    .catch(
-      createErrorCapture(
-        handlerErrorContext("createEntityFromBuffer.flushEntitySearchRepairs"),
-      ),
-    );
+    "create-from-buffer.process-extraction",
+  );
+  detached(
+    () =>
+      dependencies
+        .flushEntitySearchRepairs([entityId])
+        .catch(
+          createErrorCapture(
+            handlerErrorContext(
+              "createEntityFromBuffer.flushEntitySearchRepairs",
+            ),
+          ),
+        ),
+    "create-from-buffer.flush-entity-search-repairs",
+  );
 
-  dependencies
-    .enqueuePdfDerivativeOrMarkFailed({
-      encrypted: encryption.encrypted,
-      entityId,
-      fieldId,
-      mimeType,
-      organizationId,
-      userId,
-      workspaceId,
-    })
-    .catch(
-      createErrorCapture(
-        handlerErrorContext("entityBuffer.enqueuePdfDerivative"),
-      ),
-    );
+  detached(
+    () =>
+      dependencies
+        .enqueuePdfDerivativeOrMarkFailed({
+          encrypted: encryption.encrypted,
+          entityId,
+          fieldId,
+          mimeType,
+          organizationId,
+          userId,
+          workspaceId,
+        })
+        .catch(
+          createErrorCapture(
+            handlerErrorContext("entityBuffer.enqueuePdfDerivative"),
+          ),
+        ),
+    "create-from-buffer.enqueue-pdf-derivative-or-mark-failed",
+  );
 
-  dependencies
-    .enqueueImageThumbnailOrMarkFailed({
-      encrypted: encryption.encrypted,
-      entityId,
-      fieldId,
-      mimeType,
-      organizationId,
-      userId,
-      workspaceId,
-    })
-    .catch(
-      createErrorCapture(handlerErrorContext("entityBuffer.enqueueThumbnail")),
-    );
+  detached(
+    () =>
+      dependencies
+        .enqueueImageThumbnailOrMarkFailed({
+          encrypted: encryption.encrypted,
+          entityId,
+          fieldId,
+          mimeType,
+          organizationId,
+          userId,
+          workspaceId,
+        })
+        .catch(
+          createErrorCapture(
+            handlerErrorContext("entityBuffer.enqueueThumbnail"),
+          ),
+        ),
+    "create-from-buffer.enqueue-image-thumbnail-or-mark-failed",
+  );
 
   dependencies.broadcastWorkspaceResourceUpdated(
     workspaceId,

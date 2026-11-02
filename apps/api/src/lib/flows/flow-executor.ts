@@ -28,7 +28,7 @@ import {
   loadManagedAIResidency,
   loadOrgAIConfig,
 } from "@/api/lib/ai-config-loader";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   AUDIT_ACTION,
@@ -1207,10 +1207,14 @@ const pauseAtReviewGate = async ({
   const { payload, pings, taskEntityId } = paused;
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
-  flushSearchRepairs([taskEntityId]).catch(
-    createErrorCapture(
-      handlerErrorContext("pauseAtReviewGate.flushSearchRepairs"),
-    ),
+  detached(
+    () =>
+      flushSearchRepairs([taskEntityId]).catch(
+        createErrorCapture(
+          handlerErrorContext("pauseAtReviewGate.flushSearchRepairs"),
+        ),
+      ),
+    "flow-executor.flush-search-repairs",
   );
 };
 

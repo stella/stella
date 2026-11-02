@@ -21,7 +21,7 @@ import {
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
@@ -1137,11 +1137,15 @@ export const createWorkflowReconcileRunner = (
       return;
     }
     running = true;
-    reconcile({})
-      .catch(handleWorkflowReconcileFailure)
-      .finally(() => {
-        running = false;
-      });
+    detached(
+      () =>
+        reconcile({})
+          .catch(handleWorkflowReconcileFailure)
+          .finally(() => {
+            running = false;
+          }),
+      "workflow-queue.reconcile",
+    );
   };
 };
 
@@ -2314,15 +2318,19 @@ const finishWorkflow = async (
   // failure must never fail (or block) the classification workflow. The
   // recursion guard inside — a playbook run's materialized columns are never the
   // classifier, so they cannot re-trigger routing — keeps this from looping.
-  maybeRouteClassifiedDocuments({
-    actor,
-    planPropertyIds,
-    startSuccessorWorkflow,
-  }).catch((error: unknown) =>
-    captureError(
-      error,
-      handlerErrorContext("workflowFinish.routeDocuments", { workspaceId }),
-    ),
+  detached(
+    () =>
+      maybeRouteClassifiedDocuments({
+        actor,
+        planPropertyIds,
+        startSuccessorWorkflow,
+      }).catch((error: unknown) =>
+        captureError(
+          error,
+          handlerErrorContext("workflowFinish.routeDocuments", { workspaceId }),
+        ),
+      ),
+    "workflow-queue.maybe-route-classified-documents",
   );
 
   // Grade whatever the workspace still owes: columns created mid-run, and the

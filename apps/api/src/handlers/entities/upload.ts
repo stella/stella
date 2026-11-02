@@ -25,7 +25,7 @@ import {
   uploadTriggeredFlowPolicy,
 } from "@/api/handlers/entities/upload-origin";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -1250,59 +1250,71 @@ export const uploadEntityHandler = async function* ({
     );
 
     if (uploadTriggeredFlowPolicy(origin) === "start") {
-      maybeStartUploadTriggeredFlows({
-        entityId,
-        workspaceId,
-        organizationId,
-        fileName: fileName.value,
-      }).catch((error: unknown) => {
-        captureError(
-          error,
-          handlerErrorContext("entityUpload.startFlows", {
+      detached(
+        () =>
+          maybeStartUploadTriggeredFlows({
             entityId,
             workspaceId,
+            organizationId,
+            fileName: fileName.value,
+          }).catch((error: unknown) => {
+            captureError(
+              error,
+              handlerErrorContext("entityUpload.startFlows", {
+                entityId,
+                workspaceId,
+              }),
+            );
           }),
-        );
-      });
+        "entities-upload.maybe-start-upload-triggered-flows",
+      );
     }
 
-    enqueuePdfDerivativeOrMarkFailed({
-      encrypted,
-      entityId,
-      fieldId,
-      mimeType: file.type,
-      organizationId,
-      userId,
-      workspaceId,
-    }).catch((error: unknown) => {
-      captureError(
-        error,
-        handlerErrorContext("entityUpload.enqueuePdfDerivative", {
+    detached(
+      () =>
+        enqueuePdfDerivativeOrMarkFailed({
+          encrypted,
           entityId,
           fieldId,
           mimeType: file.type,
+          organizationId,
+          userId,
+          workspaceId,
+        }).catch((error: unknown) => {
+          captureError(
+            error,
+            handlerErrorContext("entityUpload.enqueuePdfDerivative", {
+              entityId,
+              fieldId,
+              mimeType: file.type,
+            }),
+          );
         }),
-      );
-    });
+      "entities-upload.enqueue-pdf-derivative-or-mark-failed",
+    );
 
-    enqueueImageThumbnailOrMarkFailed({
-      encrypted,
-      entityId,
-      fieldId,
-      mimeType: file.type,
-      organizationId,
-      userId,
-      workspaceId,
-    }).catch((error: unknown) => {
-      captureError(
-        error,
-        handlerErrorContext("entityUpload.enqueueThumbnail", {
+    detached(
+      () =>
+        enqueueImageThumbnailOrMarkFailed({
+          encrypted,
           entityId,
           fieldId,
           mimeType: file.type,
+          organizationId,
+          userId,
+          workspaceId,
+        }).catch((error: unknown) => {
+          captureError(
+            error,
+            handlerErrorContext("entityUpload.enqueueThumbnail", {
+              entityId,
+              fieldId,
+              mimeType: file.type,
+            }),
+          );
         }),
-      );
-    });
+      "entities-upload.enqueue-image-thumbnail-or-mark-failed",
+    );
 
     return Result.ok({
       entityId,

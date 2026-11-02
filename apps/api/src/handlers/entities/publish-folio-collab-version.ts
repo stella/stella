@@ -5,7 +5,7 @@ import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -351,42 +351,50 @@ const startPublicationFollowUps = async ({
       }),
     );
   });
-  enqueuePdfDerivativeOrMarkFailed({
-    encrypted: PUBLISHED_FILE_ENCRYPTION.encrypted,
-    entityId: publication.entityId,
-    fieldId: publication.fieldId,
-    mimeType: DOCX_MIME_TYPE,
-    organizationId,
-    userId: brandPersistedUserId(userId),
-    workspaceId,
-  }).catch((error: unknown) => {
-    captureError(
-      error,
-      handlerErrorContext("publication.enqueuePdfDerivative", {
+  detached(
+    () =>
+      enqueuePdfDerivativeOrMarkFailed({
+        encrypted: PUBLISHED_FILE_ENCRYPTION.encrypted,
         entityId: publication.entityId,
         fieldId: publication.fieldId,
+        mimeType: DOCX_MIME_TYPE,
+        organizationId,
+        userId: brandPersistedUserId(userId),
+        workspaceId,
+      }).catch((error: unknown) => {
+        captureError(
+          error,
+          handlerErrorContext("publication.enqueuePdfDerivative", {
+            entityId: publication.entityId,
+            fieldId: publication.fieldId,
+          }),
+        );
       }),
-    );
-  });
-  computeVersionDiffStats({
-    entityId: publication.entityId,
-    organizationId,
-    scopedDb: async (callback) => {
-      const result = await safeDb(callback);
-      return result.unwrap(
-        "Collaboration version diff reads stay inside the authorized workspace scope.",
-      );
-    },
-    versionId: publication.versionId,
-    workspaceId,
-  }).catch((error: unknown) => {
-    captureError(
-      error,
-      handlerErrorContext("publication.computeVersionDiff", {
+    "publish-folio-collab-version.enqueue-pdf-derivative-or-mark-failed",
+  );
+  detached(
+    () =>
+      computeVersionDiffStats({
+        entityId: publication.entityId,
+        organizationId,
+        scopedDb: async (callback) => {
+          const result = await safeDb(callback);
+          return result.unwrap(
+            "Collaboration version diff reads stay inside the authorized workspace scope.",
+          );
+        },
         versionId: publication.versionId,
+        workspaceId,
+      }).catch((error: unknown) => {
+        captureError(
+          error,
+          handlerErrorContext("publication.computeVersionDiff", {
+            versionId: publication.versionId,
+          }),
+        );
       }),
-    );
-  });
+    "publish-folio-collab-version.compute-version-diff-stats",
+  );
 };
 
 const publicationRejection = (

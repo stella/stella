@@ -25,7 +25,11 @@ import {
   validateMoveSourceReadLimits,
 } from "@/api/handlers/entities/copy-utils";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -653,71 +657,105 @@ const copyToWorkspaceHandler = async function* ({
 
   // Acceleration only: the marks are already committed, and the standing
   // drain repairs whatever a lost flush leaves behind.
-  dependencies
-    .flushEntitySearchRepairs([
-      ...txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
-      ...txResult.entityIdsBySearchIndexOwner[
-        SEARCH_INDEX_OWNER.durableExtraction
-      ],
-    ])
-    .catch(createErrorCapture(handlerErrorContext("entityCopy.flushSearch")));
+  detached(
+    () =>
+      dependencies
+        .flushEntitySearchRepairs([
+          ...txResult.entityIdsBySearchIndexOwner[
+            SEARCH_INDEX_OWNER.searchMark
+          ],
+          ...txResult.entityIdsBySearchIndexOwner[
+            SEARCH_INDEX_OWNER.durableExtraction
+          ],
+        ])
+        .catch(
+          createErrorCapture(handlerErrorContext("entityCopy.flushSearch")),
+        ),
+    "entities-copy.flush-entity-search-repairs",
+  );
 
   // Acceleration only: each run already committed with its copied source.
-  handoffCommittedDocumentProcessingRuns({
-    enqueue: dependencies.enqueueDocumentProcessingRun,
-    runIds: txResult.nativeExtractionRunIds,
-  }).catch(
-    createErrorCapture(
-      handlerErrorContext(
-        "copyToWorkspaceHandler.handoffCommittedDocumentProcessingRuns",
+  detached(
+    () =>
+      handoffCommittedDocumentProcessingRuns({
+        enqueue: dependencies.enqueueDocumentProcessingRun,
+        runIds: txResult.nativeExtractionRunIds,
+      }).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "copyToWorkspaceHandler.handoffCommittedDocumentProcessingRuns",
+          ),
+        ),
       ),
-    ),
+    "entities-copy.handoff-committed-document-processing-runs",
   );
 
   // Enqueue PDF derivative generation for copied file fields
   for (const fileField of txResult.fileFields) {
-    dependencies
-      .enqueuePdfDerivativeOrMarkFailed({
-        entityId: fileField.entityId,
-        fieldId: fileField.fieldId,
-        mimeType: fileField.mimeType,
-        encrypted: fileField.encrypted,
-        organizationId,
-        userId,
-        workspaceId: targetWorkspaceId,
-      })
-      .catch(
-        createErrorCapture(
-          handlerErrorContext("entityCopy.enqueuePdfDerivative"),
-        ),
-      );
-    dependencies
-      .enqueueImageThumbnailOrMarkFailed({
-        entityId: fileField.entityId,
-        fieldId: fileField.fieldId,
-        mimeType: fileField.mimeType,
-        encrypted: fileField.encrypted,
-        organizationId,
-        userId,
-        workspaceId: targetWorkspaceId,
-      })
-      .catch(
-        createErrorCapture(handlerErrorContext("entityCopy.enqueueThumbnail")),
-      );
+    detached(
+      () =>
+        dependencies
+          .enqueuePdfDerivativeOrMarkFailed({
+            entityId: fileField.entityId,
+            fieldId: fileField.fieldId,
+            mimeType: fileField.mimeType,
+            encrypted: fileField.encrypted,
+            organizationId,
+            userId,
+            workspaceId: targetWorkspaceId,
+          })
+          .catch(
+            createErrorCapture(
+              handlerErrorContext("entityCopy.enqueuePdfDerivative"),
+            ),
+          ),
+      "entities-copy.enqueue-pdf-derivative-or-mark-failed",
+    );
+    detached(
+      () =>
+        dependencies
+          .enqueueImageThumbnailOrMarkFailed({
+            entityId: fileField.entityId,
+            fieldId: fileField.fieldId,
+            mimeType: fileField.mimeType,
+            encrypted: fileField.encrypted,
+            organizationId,
+            userId,
+            workspaceId: targetWorkspaceId,
+          })
+          .catch(
+            createErrorCapture(
+              handlerErrorContext("entityCopy.enqueueThumbnail"),
+            ),
+          ),
+      "entities-copy.enqueue-image-thumbnail-or-mark-failed",
+    );
   }
 
   // Sync search indexes
-  dependencies
-    .syncWorkspaceSearchActivity(targetWorkspaceId)
-    .catch(
-      createErrorCapture(handlerErrorContext("entityCopy.syncTargetSearch")),
-    );
+  detached(
+    () =>
+      dependencies
+        .syncWorkspaceSearchActivity(targetWorkspaceId)
+        .catch(
+          createErrorCapture(
+            handlerErrorContext("entityCopy.syncTargetSearch"),
+          ),
+        ),
+    "entities-copy.sync-workspace-search-activity",
+  );
   if (deleteSource) {
-    dependencies
-      .syncWorkspaceSearchActivity(sourceWorkspaceId)
-      .catch(
-        createErrorCapture(handlerErrorContext("entityCopy.syncSourceSearch")),
-      );
+    detached(
+      () =>
+        dependencies
+          .syncWorkspaceSearchActivity(sourceWorkspaceId)
+          .catch(
+            createErrorCapture(
+              handlerErrorContext("entityCopy.syncSourceSearch"),
+            ),
+          ),
+      "entities-copy.sync-workspace-search-activity",
+    );
   }
 
   // The source workspace event comes from the `realtime` config. This explicit

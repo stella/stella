@@ -143,7 +143,7 @@ export const createDetachedModelActionStarter = (
           panic("Unhandled detached model action phase");
       }
     };
-    detached(run(), "model-action.background");
+    detached(() => run(), "model-action.background");
     return await answered.promise;
   };
 };

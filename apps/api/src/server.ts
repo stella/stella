@@ -156,17 +156,25 @@ const startS3RefreshLoop = () => {
     // `refreshStale*` own both the staleness test and the deduplication, so a
     // resolution still in flight when the next tick arrives is joined rather
     // than started again.
-    refreshStaleS3().catch((error: unknown) => {
-      logger.error("s3.refresh_failed", {
-        "error.type": errorTag(error),
-      });
-    });
+    detached(
+      () =>
+        refreshStaleS3().catch((error: unknown) => {
+          logger.error("s3.refresh_failed", {
+            "error.type": errorTag(error),
+          });
+        }),
+      "server.refresh-stale-s3",
+    );
 
-    refreshStaleCorpusS3().catch((error: unknown) => {
-      logger.error("s3.corpus_refresh_failed", {
-        "error.type": errorTag(error),
-      });
-    });
+    detached(
+      () =>
+        refreshStaleCorpusS3().catch((error: unknown) => {
+          logger.error("s3.corpus_refresh_failed", {
+            "error.type": errorTag(error),
+          });
+        }),
+      "server.refresh-stale-corpus-s3",
+    );
   }, S3_REFRESH_CHECK_INTERVAL_MS);
 
   timer.unref();
@@ -196,10 +204,10 @@ const startServer = async (): Promise<void> => {
     }).unwrap("Redis connection configuration must be valid.");
     logger.info("redis.connection.mode", { mode });
     if (isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-      detached(startActionAdmissionRedis(), "admission-store.start");
+      detached(() => startActionAdmissionRedis(), "admission-store.start");
     }
     if (isDeploymentFeatureEnabled("FEATURE_MCP_READ_FENCE")) {
-      detached(startMcpReadFenceRedis(), "read-fence-store.start");
+      detached(() => startMcpReadFenceRedis(), "read-fence-store.start");
     }
   }
 
@@ -345,10 +353,10 @@ const startServer = async (): Promise<void> => {
     }
   };
   process.once("SIGTERM", () => {
-    detached(shutdownWorkers("SIGTERM"), "server.shutdown");
+    detached(() => shutdownWorkers("SIGTERM"), "server.shutdown");
   });
   process.once("SIGINT", () => {
-    detached(shutdownWorkers("SIGINT"), "server.shutdown");
+    detached(() => shutdownWorkers("SIGINT"), "server.shutdown");
   });
 
   // Scheduled jobs run here rather than in a process of their own. A separate

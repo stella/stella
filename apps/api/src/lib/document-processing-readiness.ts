@@ -254,21 +254,22 @@ export const startDocumentOcrWorkerReadiness = (
     // the 90s live lease outlives one missed 30s beat, and the next beat writes
     // on a reconnected socket. Anything else is a defect and is captured.
     detached(
-      started.catch((error: unknown) => {
-        if (isTransientRedisConnectionError(error)) {
-          logger.warn("document_processing.readiness_heartbeat_disrupted", {
+      () =>
+        started.catch((error: unknown) => {
+          if (isTransientRedisConnectionError(error)) {
+            logger.warn("document_processing.readiness_heartbeat_disrupted", {
+              "error.type": errorTag(error),
+            });
+            return;
+          }
+          captureError(
+            error,
+            handlerErrorContext("documentProcessing.heartbeat"),
+          );
+          logger.error("document_processing.readiness_heartbeat_failed", {
             "error.type": errorTag(error),
           });
-          return;
-        }
-        captureError(
-          error,
-          handlerErrorContext("documentProcessing.heartbeat"),
-        );
-        logger.error("document_processing.readiness_heartbeat_failed", {
-          "error.type": errorTag(error),
-        });
-      }),
+        }),
       "document-processing.readiness-heartbeat",
     );
   };

@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -180,26 +180,30 @@ export const fillHandler = async ({
   // Best-effort analytics; don't block the download. The template came with
   // the request and is not stored, so the row has no template and no audit
   // event (there is no resource to audit against).
-  scopedDb(
-    async (tx) =>
-      await recordTemplateFill({
-        tx,
-        templateId: null,
-        organizationId,
-        userId,
-        format,
-        diagnostics,
+  detached(
+    () =>
+      scopedDb(
+        async (tx) =>
+          await recordTemplateFill({
+            tx,
+            templateId: null,
+            organizationId,
+            userId,
+            format,
+            diagnostics,
+          }),
+      ).catch((error: unknown) => {
+        captureError(
+          error,
+          handlerErrorContext("templates.fillHandler", {
+            operation: "template_fill_analytics",
+            organizationId,
+            userId,
+          }),
+        );
       }),
-  ).catch((error: unknown) => {
-    captureError(
-      error,
-      handlerErrorContext("templates.fillHandler", {
-        operation: "template_fill_analytics",
-        organizationId,
-        userId,
-      }),
-    );
-  });
+    "template-fill.record-analytics",
+  );
 
   const additionalHeaders = fillDiagnosticHeaders({ diagnostics, format });
 

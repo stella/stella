@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 
-import { createDetached } from "@stll/errors";
 import { DEFAULT_CUTOFF } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
 
+import { detached } from "@/api/lib/analytics/capture";
 import { logger } from "@/api/lib/observability/logger";
 
 import {
@@ -203,9 +203,6 @@ const createEditionWarmer = ({
   const targets = new Map<SanctionsSource, WarmTarget>();
   const durations = new Map<SanctionsSource, number>();
   const state = initialEditionWarmerState();
-  const detached = createDetached((error) => {
-    reportFailure({ stage: "public-warmup", reason: "operation", error });
-  });
   const readEdition = createEditionReads({ loadEntries, clock });
   // Database reads run outside matcher leases so loaded lists keep screening.
   const warm = async (
@@ -321,15 +318,23 @@ const createEditionWarmer = ({
 
   const start = () => {
     state.active = true;
-    const running = pass().finally(() => {
-      // A newer pass may already run; only this pass's own state is cleared.
-      if (state.running === running) {
-        state.active = false;
-        state.running = null;
-      }
-    });
-    state.running = running;
-    detached(running, "sanctions.public-warmup");
+    detached(
+      () => {
+        const running = pass().finally(() => {
+          // A newer pass may already run; only this pass's own state is cleared.
+          if (state.running === running) {
+            state.active = false;
+            state.running = null;
+          }
+        });
+        state.running = running;
+        return running;
+      },
+      "sanctions.public-warmup",
+      (error) => {
+        reportFailure({ stage: "public-warmup", reason: "operation", error });
+      },
+    );
   };
 
   return {

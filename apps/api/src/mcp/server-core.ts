@@ -948,22 +948,19 @@ const monitorLegacyStream = ({
     await teardown();
   };
   const abortExchange = () => {
-    detached(
-      (async () => {
-        try {
-          await reader.cancel(request.signal.reason);
-        } catch (error) {
-          reportLegacyTransportError(error, {
-            captureError,
-            mode,
-            operation: "cancel_stream",
-          });
-        } finally {
-          await completeExchange();
-        }
-      })(),
-      "mcp.legacy-stream-teardown",
-    );
+    detached(async () => {
+      try {
+        await reader.cancel(request.signal.reason);
+      } catch (error) {
+        reportLegacyTransportError(error, {
+          captureError,
+          mode,
+          operation: "cancel_stream",
+        });
+      } finally {
+        await completeExchange();
+      }
+    }, "mcp.legacy-stream-teardown");
   };
   request.signal.addEventListener("abort", abortExchange, {
     once: true,

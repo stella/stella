@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { entities, workspaces } from "@/api/db/schema";
 import type { LinkMetadata } from "@/api/db/schema";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -173,8 +173,14 @@ export default createSafeHandler(
       );
     }
 
-    flushEntitySearchRepairs([entityId]).catch(
-      createErrorCapture(handlerErrorContext("clip.flushEntitySearchRepairs")),
+    detached(
+      () =>
+        flushEntitySearchRepairs([entityId]).catch(
+          createErrorCapture(
+            handlerErrorContext("clip.flushEntitySearchRepairs"),
+          ),
+        ),
+      "entities-clip.flush-entity-search-repairs",
     );
 
     return Result.ok({ entityId });

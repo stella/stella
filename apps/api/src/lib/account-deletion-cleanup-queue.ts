@@ -195,27 +195,24 @@ export const initAccountDeletionCleanupWorker = ({
   );
 
   const reconcile = () => {
-    detached(
-      (async () => {
-        try {
-          const count = await enqueuePendingAccountDeletionCleanupRequests(db);
-          if (count === 0) {
-            return;
-          }
-
-          logger.info("account_deletion_cleanup.reconciled", {
-            count: String(count),
-          });
-        } catch (error) {
-          captureError(error, handlerErrorContext("accountDeletion.reconcile"));
-          logger.error(
-            "account_deletion_cleanup.reconcile_failed",
-            errorSystemFields(error),
-          );
+    detached(async () => {
+      try {
+        const count = await enqueuePendingAccountDeletionCleanupRequests(db);
+        if (count === 0) {
+          return;
         }
-      })(),
-      "account-deletion-cleanup.reconcile",
-    );
+
+        logger.info("account_deletion_cleanup.reconciled", {
+          count: String(count),
+        });
+      } catch (error) {
+        captureError(error, handlerErrorContext("accountDeletion.reconcile"));
+        logger.error(
+          "account_deletion_cleanup.reconcile_failed",
+          errorSystemFields(error),
+        );
+      }
+    }, "account-deletion-cleanup.reconcile");
   };
   reconcile();
   const reconcileInterval = setInterval(reconcile, RECONCILE_INTERVAL_MS);

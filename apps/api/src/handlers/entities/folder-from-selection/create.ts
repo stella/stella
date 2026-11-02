@@ -167,11 +167,11 @@ export const createFolderFromSelectionHandler = async function* ({
   const entityId = yield* attempt;
 
   detached(
-    flushSearchRepairs([entityId]),
+    () => flushSearchRepairs([entityId]),
     "folder-from-selection.flush-search-repairs",
   );
   detached(
-    syncSearchActivity(workspaceId),
+    () => syncSearchActivity(workspaceId),
     "folder-from-selection.sync-search-activity",
   );
 

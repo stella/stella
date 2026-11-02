@@ -18,7 +18,11 @@ import {
   snapshotOfCurrentVersion,
 } from "@/api/handlers/entities/copy-utils";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -102,6 +106,26 @@ const DUPLICATE_CAPTURE_CONTEXT = {
     "duplicateEntityHandler.enqueueImageThumbnailOrMarkFailed",
   ),
 } as const;
+
+/** PDF and thumbnail derivatives for one copied file, after commit. */
+const startCopyDerivatives = (
+  file: Parameters<typeof enqueuePdfDerivativeOrMarkFailed>[0],
+) => {
+  detached(
+    () =>
+      enqueuePdfDerivativeOrMarkFailed(file).catch(
+        createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.pdfDerivative),
+      ),
+    "entities-duplicate.enqueue-pdf-derivative-or-mark-failed",
+  );
+  detached(
+    () =>
+      enqueueImageThumbnailOrMarkFailed(file).catch(
+        createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.imageThumbnail),
+      ),
+    "entities-duplicate.enqueue-image-thumbnail-or-mark-failed",
+  );
+};
 
 const duplicateEntityHandler = async function* ({
   safeDb,
@@ -261,41 +285,36 @@ const duplicateEntityHandler = async function* ({
 
   // Acceleration only: the marks are already committed, and the standing
   // drain repairs whatever a lost flush leaves behind.
-  dependencies
-    .flushEntitySearchRepairs([
-      ...txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
-      ...txResult.entityIdsBySearchIndexOwner[
-        SEARCH_INDEX_OWNER.durableExtraction
-      ],
-    ])
-    .catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.searchRepair));
+  detached(
+    () =>
+      dependencies
+        .flushEntitySearchRepairs([
+          ...txResult.entityIdsBySearchIndexOwner[
+            SEARCH_INDEX_OWNER.searchMark
+          ],
+          ...txResult.entityIdsBySearchIndexOwner[
+            SEARCH_INDEX_OWNER.durableExtraction
+          ],
+        ])
+        .catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.searchRepair)),
+    "entities-duplicate.flush-entity-search-repairs",
+  );
 
-  handoffCommittedDocumentProcessingRuns({
-    enqueue: dependencies.enqueueDocumentProcessingRun,
-    runIds: txResult.nativeExtractionRunIds,
-  }).catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.documentProcessing));
+  detached(
+    () =>
+      handoffCommittedDocumentProcessingRuns({
+        enqueue: dependencies.enqueueDocumentProcessingRun,
+        runIds: txResult.nativeExtractionRunIds,
+      }).catch(
+        createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.documentProcessing),
+      ),
+    "entities-duplicate.handoff-committed-document-processing-runs",
+  );
 
   // The copies reference fresh file IDs, so each needs its own
   // PDF/thumbnail derivatives.
   for (const fileField of txResult.fileFields) {
-    enqueuePdfDerivativeOrMarkFailed({
-      entityId: fileField.entityId,
-      fieldId: fileField.fieldId,
-      mimeType: fileField.mimeType,
-      encrypted: fileField.encrypted,
-      organizationId,
-      userId,
-      workspaceId,
-    }).catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.pdfDerivative));
-    enqueueImageThumbnailOrMarkFailed({
-      entityId: fileField.entityId,
-      fieldId: fileField.fieldId,
-      mimeType: fileField.mimeType,
-      encrypted: fileField.encrypted,
-      organizationId,
-      userId,
-      workspaceId,
-    }).catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.imageThumbnail));
+    startCopyDerivatives({ ...fileField, organizationId, userId, workspaceId });
   }
 
   return Result.ok({

@@ -3167,16 +3167,17 @@ const readSourceUntilCut = async function* ({
         // cleanup, but let settlement finish while an uncooperative next is
         // still blocked; the race already observes that next's rejection.
         detached(
-          Result.tryPromise(async () => await iterator.return?.()).then(
-            (result) => {
-              if (Result.isError(result)) {
-                observeFailure(result.error, {
-                  sink: SOURCE_CLEANUP_AFTER_CUT_FAILURE,
-                });
-              }
-              return undefined;
-            },
-          ),
+          () =>
+            Result.tryPromise(async () => await iterator.return?.()).then(
+              (result) => {
+                if (Result.isError(result)) {
+                  observeFailure(result.error, {
+                    sink: SOURCE_CLEANUP_AFTER_CUT_FAILURE,
+                  });
+                }
+                return undefined;
+              },
+            ),
           "chat.source-cleanup-after-cut",
         );
       } else {

@@ -16,7 +16,7 @@ import {
   type WorkObligationSource,
   workspaces,
 } from "@/api/db/schema";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -513,10 +513,16 @@ export const createTaskEntityHandler = async function* ({
   // pass a transaction today assign only their own actor, so they owe none.
   if (props.tx === undefined) {
     fileNotifications(txResult.notifications);
-    flushEntitySearchRepairs([txResult.entityId]).catch(
-      createErrorCapture(
-        handlerErrorContext("createTaskEntityHandler.flushEntitySearchRepairs"),
-      ),
+    detached(
+      () =>
+        flushEntitySearchRepairs([txResult.entityId]).catch(
+          createErrorCapture(
+            handlerErrorContext(
+              "createTaskEntityHandler.flushEntitySearchRepairs",
+            ),
+          ),
+        ),
+      "create-task-entity.flush-entity-search-repairs",
     );
   }
 

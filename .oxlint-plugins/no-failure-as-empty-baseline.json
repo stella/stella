@@ -57,7 +57,6 @@
     "apps/api/src/lib/report-export-enqueue.ts::handle::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/s3.ts::fetchEcsCredentials::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/s3.ts::readS3ResponseErrorCode::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/lib/scheduler/runner.ts::timer::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/scheduler/tasks/case-law-provision-state-backfill.ts::createCaseLawProvisionStateBackfillTask::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/search/extraction-worker.ts::extractAttachmentPlaintext::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/search/extraction-worker.ts::extractPdfMarkdown::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",

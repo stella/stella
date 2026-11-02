@@ -16,7 +16,7 @@ import type {
   FieldContent,
 } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   BUFFER_INTENT_DELETE_TIMEOUT_MS,
@@ -452,20 +452,28 @@ export const initFileDerivativeWorker = () => {
     // Local pause without waiting: it is called from inside the processor,
     // which must still finish the job in hand.
     pause: () => {
-      worker.pause(true).catch((error: unknown) => {
-        observeFailure(error, {
-          sink: CONSUMPTION_TOGGLE_FAILED_SINK,
-          ctx: { queue: QUEUE_NAME },
-        });
-      });
+      detached(
+        () =>
+          worker.pause(true).catch((error: unknown) => {
+            observeFailure(error, {
+              sink: CONSUMPTION_TOGGLE_FAILED_SINK,
+              ctx: { queue: QUEUE_NAME },
+            });
+          }),
+        "file-derivative-queue.pause",
+      );
     },
     resume: () => {
-      worker.resume().catch((error: unknown) => {
-        observeFailure(error, {
-          sink: CONSUMPTION_TOGGLE_FAILED_SINK,
-          ctx: { queue: QUEUE_NAME },
-        });
-      });
+      detached(
+        () =>
+          worker.resume().catch((error: unknown) => {
+            observeFailure(error, {
+              sink: CONSUMPTION_TOGGLE_FAILED_SINK,
+              ctx: { queue: QUEUE_NAME },
+            });
+          }),
+        "file-derivative-queue.resume",
+      );
     },
   };
 
@@ -473,33 +481,41 @@ export const initFileDerivativeWorker = () => {
     const exhausted =
       job && job.attemptsMade >= (job.opts.attempts ?? DEFAULT_JOB_ATTEMPTS);
     if (exhausted && job.name === GENERATE_THUMBNAIL_JOB_NAME) {
-      markImageThumbnailFailed(
-        job.data,
-        DERIVATIVE_FAILURE_REASON.PROCESSING,
-      ).catch((markError: unknown) => {
-        captureError(
-          markError,
-          handlerErrorContext("fileDerivative.markThumbnailFailed", {
-            entityId: job.data.entityId,
-            fieldId: job.data.fieldId,
-            workspaceId: job.data.workspaceId,
+      detached(
+        () =>
+          markImageThumbnailFailed(
+            job.data,
+            DERIVATIVE_FAILURE_REASON.PROCESSING,
+          ).catch((markError: unknown) => {
+            captureError(
+              markError,
+              handlerErrorContext("fileDerivative.markThumbnailFailed", {
+                entityId: job.data.entityId,
+                fieldId: job.data.fieldId,
+                workspaceId: job.data.workspaceId,
+              }),
+            );
           }),
-        );
-      });
+        "file-derivative-queue.mark-image-thumbnail-failed",
+      );
     } else if (exhausted) {
-      markPdfDerivativeFailed(
-        job.data,
-        DERIVATIVE_FAILURE_REASON.PROCESSING,
-      ).catch((markError: unknown) => {
-        captureError(
-          markError,
-          handlerErrorContext("fileDerivative.markPdfFailed", {
-            entityId: job.data.entityId,
-            fieldId: job.data.fieldId,
-            workspaceId: job.data.workspaceId,
+      detached(
+        () =>
+          markPdfDerivativeFailed(
+            job.data,
+            DERIVATIVE_FAILURE_REASON.PROCESSING,
+          ).catch((markError: unknown) => {
+            captureError(
+              markError,
+              handlerErrorContext("fileDerivative.markPdfFailed", {
+                entityId: job.data.entityId,
+                fieldId: job.data.fieldId,
+                workspaceId: job.data.workspaceId,
+              }),
+            );
           }),
-        );
-      });
+        "file-derivative-queue.mark-pdf-derivative-failed",
+      );
     }
 
     captureError(

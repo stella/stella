@@ -10,7 +10,11 @@ import type {
   PendingUploadPurposeData,
 } from "@/api/db/schema";
 import { pendingUploads } from "@/api/db/schema";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -142,6 +146,60 @@ const EXTRACTION_KEY = "entityVersion.processExtraction";
 const THUMBNAIL_KEY = "entityVersion.enqueueThumbnail";
 const PDF_KEY = "entityVersion.enqueuePdfDerivative";
 const DIFF_KEY = "entityVersion.computeVersionDiff";
+
+type VersionFollowUpWork = Parameters<
+  typeof enqueuePdfDerivativeOrMarkFailed
+>[0] & { versionId: SafeId<"entityVersion"> };
+
+/** Work a promoted version starts after commit; none of it blocks the upload. */
+const startVersionFollowUpWork = ({
+  versionId,
+  ...file
+}: VersionFollowUpWork) => {
+  const { entityId, fieldId, mimeType, organizationId, userId, workspaceId } =
+    file;
+  detached(
+    () =>
+      processExtraction(entityId).catch((error: unknown) => {
+        captureError(error, handlerErrorContext(EXTRACTION_KEY, { entityId }));
+      }),
+    "entity-version.process-extraction",
+  );
+  detached(
+    () =>
+      enqueuePdfDerivativeOrMarkFailed(file).catch((error: unknown) => {
+        const context = { entityId, fieldId, mimeType };
+        captureError(error, handlerErrorContext(PDF_KEY, context));
+      }),
+    "entity-version.enqueue-pdf-derivative-or-mark-failed",
+  );
+  detached(
+    () =>
+      enqueueImageThumbnailOrMarkFailed(file).catch((error: unknown) => {
+        const context = { entityId, fieldId, mimeType };
+        captureError(error, handlerErrorContext(THUMBNAIL_KEY, context));
+      }),
+    "entity-version.enqueue-image-thumbnail-or-mark-failed",
+  );
+  detached(
+    () =>
+      computeVersionDiffStats({
+        versionId,
+        entityId,
+        scopedDb: createRootScopedDb({
+          organizationId,
+          userId,
+          workspaceIds: [workspaceId],
+        }),
+        workspaceId,
+        organizationId,
+      }).catch((error: unknown) => {
+        const context = { versionId };
+        captureError(error, handlerErrorContext(DIFF_KEY, context));
+      }),
+    "entity-version.compute-version-diff-stats",
+  );
+};
 
 type DetectVersionEncryptionOptions = Pick<
   FinalizeEntityVersionProps,
@@ -325,15 +383,15 @@ export const finalizeEntityVersion = async function* ({
     const finalizedResult =
       finalized ??
       panic("Entity version write completed without finalize result");
-    flushEntitySearchRepairs([entityId]).catch(
-      createErrorCapture(handlerErrorContext("entityVersion.flushSearch")),
+    detached(
+      () =>
+        flushEntitySearchRepairs([entityId]).catch(
+          createErrorCapture(handlerErrorContext("entityVersion.flushSearch")),
+        ),
+      "entity-version.flush-entity-search-repairs",
     );
     const afterPromote = () => {
-      processExtraction(entityId).catch((error: unknown) => {
-        const context = { entityId };
-        captureError(error, handlerErrorContext(EXTRACTION_KEY, context));
-      });
-      enqueuePdfDerivativeOrMarkFailed({
+      startVersionFollowUpWork({
         encrypted: encryption.encrypted,
         entityId,
         fieldId,
@@ -341,35 +399,7 @@ export const finalizeEntityVersion = async function* ({
         organizationId,
         userId,
         workspaceId,
-      }).catch((error: unknown) => {
-        const context = { entityId, fieldId, mimeType: declaredMime };
-        captureError(error, handlerErrorContext(PDF_KEY, context));
-      });
-      enqueueImageThumbnailOrMarkFailed({
-        encrypted: encryption.encrypted,
-        entityId,
-        fieldId,
-        mimeType: declaredMime,
-        organizationId,
-        userId,
-        workspaceId,
-      }).catch((error: unknown) => {
-        const context = { entityId, fieldId, mimeType: declaredMime };
-        captureError(error, handlerErrorContext(THUMBNAIL_KEY, context));
-      });
-      computeVersionDiffStats({
         versionId: entityVersionId,
-        entityId,
-        scopedDb: createRootScopedDb({
-          organizationId,
-          userId,
-          workspaceIds: [workspaceId],
-        }),
-        workspaceId,
-        organizationId,
-      }).catch((error: unknown) => {
-        const context = { versionId: entityVersionId };
-        captureError(error, handlerErrorContext(DIFF_KEY, context));
       });
       broadcastWorkspaceResourceUpdated(
         workspaceId,

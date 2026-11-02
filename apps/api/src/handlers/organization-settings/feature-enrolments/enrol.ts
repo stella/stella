@@ -74,7 +74,8 @@ export const enrolFeatureHandler = async function* ({
     }),
   );
   detached(
-    publishMcpToolProjectionChange({ organizationId, userId }),
+    async () =>
+      await publishMcpToolProjectionChange({ organizationId, userId }),
     "mcp.feature-enrolment-tool-projection",
   );
   return Result.ok({ featureId, enrolled: true });

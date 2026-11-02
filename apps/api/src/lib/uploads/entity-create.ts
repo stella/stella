@@ -34,7 +34,11 @@ import {
   properties,
   workspaces,
 } from "@/api/db/schema";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -724,75 +728,95 @@ export const finalizeEntityCreate = async function* ({
     }
     const { finalized } = writeResult;
 
-    flushEntitySearchRepairs([entityId]).catch(
-      createErrorCapture(handlerErrorContext("entityCreate.flushSearch")),
+    detached(
+      () =>
+        flushEntitySearchRepairs([entityId]).catch(
+          createErrorCapture(handlerErrorContext("entityCreate.flushSearch")),
+        ),
+      "entity-create.flush-entity-search-repairs",
     );
 
     const afterPromote = () => {
       // Async kickoffs mirror the legacy handler. They run only after
       // both promotion and the DB transaction have succeeded, so
       // consumers never read a final key before it exists.
-      processExtraction(entityId).catch((error: unknown) => {
-        captureError(
-          error,
-          handlerErrorContext("entityCreate.processExtraction", {
-            entityId,
-            mimeType: declaredMime,
+      detached(
+        () =>
+          processExtraction(entityId).catch((error: unknown) => {
+            captureError(
+              error,
+              handlerErrorContext("entityCreate.processExtraction", {
+                entityId,
+                mimeType: declaredMime,
+              }),
+            );
           }),
-        );
-      });
+        "entity-create.process-extraction",
+      );
       // File-upload flow trigger. Fire-and-forget on the USER upload path only;
       // flow-created documents (create-document step) never reach this call site.
-      maybeStartUploadTriggeredFlows({
-        entityId,
-        workspaceId,
-        organizationId,
-        fileName: finalized.fileName,
-      }).catch((error: unknown) => {
-        captureError(
-          error,
-          handlerErrorContext("entityCreate.startFlows", {
+      detached(
+        () =>
+          maybeStartUploadTriggeredFlows({
             entityId,
             workspaceId,
+            organizationId,
+            fileName: finalized.fileName,
+          }).catch((error: unknown) => {
+            captureError(
+              error,
+              handlerErrorContext("entityCreate.startFlows", {
+                entityId,
+                workspaceId,
+              }),
+            );
           }),
-        );
-      });
-      enqueuePdfDerivativeOrMarkFailed({
-        encrypted,
-        entityId,
-        fieldId,
-        mimeType: declaredMime,
-        organizationId,
-        userId,
-        workspaceId,
-      }).catch((error: unknown) => {
-        captureError(
-          error,
-          handlerErrorContext("entityCreate.enqueuePdfDerivative", {
+        "entity-create.maybe-start-upload-triggered-flows",
+      );
+      detached(
+        () =>
+          enqueuePdfDerivativeOrMarkFailed({
+            encrypted,
             entityId,
             fieldId,
             mimeType: declaredMime,
+            organizationId,
+            userId,
+            workspaceId,
+          }).catch((error: unknown) => {
+            captureError(
+              error,
+              handlerErrorContext("entityCreate.enqueuePdfDerivative", {
+                entityId,
+                fieldId,
+                mimeType: declaredMime,
+              }),
+            );
           }),
-        );
-      });
-      enqueueImageThumbnailOrMarkFailed({
-        encrypted,
-        entityId,
-        fieldId,
-        mimeType: declaredMime,
-        organizationId,
-        userId,
-        workspaceId,
-      }).catch((error: unknown) => {
-        captureError(
-          error,
-          handlerErrorContext("entityCreate.enqueueThumbnail", {
+        "entity-create.enqueue-pdf-derivative-or-mark-failed",
+      );
+      detached(
+        () =>
+          enqueueImageThumbnailOrMarkFailed({
+            encrypted,
             entityId,
             fieldId,
             mimeType: declaredMime,
+            organizationId,
+            userId,
+            workspaceId,
+          }).catch((error: unknown) => {
+            captureError(
+              error,
+              handlerErrorContext("entityCreate.enqueueThumbnail", {
+                entityId,
+                fieldId,
+                mimeType: declaredMime,
+              }),
+            );
           }),
-        );
-      });
+        "entity-create.enqueue-image-thumbnail-or-mark-failed",
+      );
     };
 
     return finalizeOk({ finalizedResult: finalized, finalKey, afterPromote });

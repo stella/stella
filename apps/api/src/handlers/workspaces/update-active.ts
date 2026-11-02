@@ -28,10 +28,11 @@ const updateActiveWorkspace = createSafeHandler(
     // trip, which otherwise lands on the first document open as a >1s
     // GET /files/:id/url tail.
     detached(
-      prewarmScopedDownloadSigning({
-        organizationId: session.activeOrganizationId,
-        workspaceId,
-      }),
+      () =>
+        prewarmScopedDownloadSigning({
+          organizationId: session.activeOrganizationId,
+          workspaceId,
+        }),
       "workspaces.prewarm-scoped-signing",
     );
 

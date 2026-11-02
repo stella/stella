@@ -258,7 +258,7 @@ export const startSchedulerLoop = ({
         return;
       }
 
-      detached(runTick(), "scheduler-runner.run-tick");
+      detached(() => runTick(), "scheduler-runner.run-tick");
     }, pollIntervalMs);
   };
 
@@ -294,7 +294,7 @@ export const startSchedulerLoop = ({
       return;
     }
 
-    detached(runTick(), "scheduler-runner.run-tick");
+    detached(() => runTick(), "scheduler-runner.run-tick");
   }, 0);
 
   return {
@@ -524,16 +524,17 @@ export const startLeaseHeartbeat = ({
 
   const timer = setInterval(() => {
     detached(
-      renew().catch((error: unknown) => {
-        logger.warn("scheduler.lease_heartbeat_failed", {
-          "scheduler.job_id": jobId,
-          "scheduler.runner_id": runnerId,
-          "error.type": errorTag(error),
-        });
-        if (performance.now() - lastRenewedAt >= leaseMs) {
-          markLost();
-        }
-      }),
+      () =>
+        renew().catch((error: unknown) => {
+          logger.warn("scheduler.lease_heartbeat_failed", {
+            "scheduler.job_id": jobId,
+            "scheduler.runner_id": runnerId,
+            "error.type": errorTag(error),
+          });
+          if (performance.now() - lastRenewedAt >= leaseMs) {
+            markLost();
+          }
+        }),
       "scheduler-runner.renew",
     );
   }, intervalMs);

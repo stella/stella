@@ -28,8 +28,8 @@ const shutdown = async (signal: string): Promise<void> => {
 };
 
 process.once("SIGTERM", () => {
-  detached(shutdown("SIGTERM"), "file-derivative.shutdown-sigterm");
+  detached(() => shutdown("SIGTERM"), "file-derivative.shutdown-sigterm");
 });
 process.once("SIGINT", () => {
-  detached(shutdown("SIGINT"), "file-derivative.shutdown-sigint");
+  detached(() => shutdown("SIGINT"), "file-derivative.shutdown-sigint");
 });

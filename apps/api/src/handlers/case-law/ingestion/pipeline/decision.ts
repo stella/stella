@@ -345,10 +345,11 @@ const runDecisionAttempt = async ({
   // check failures and this write's abort never reject the write.
   if (shape.incomingCarriesDocument) {
     detached(
-      startDecisionRetentionCheck({
-        ...retention,
-        result: observation.observed,
-      }),
+      () =>
+        startDecisionRetentionCheck({
+          ...retention,
+          result: observation.observed,
+        }),
       "case-law.retention-check",
     );
   }

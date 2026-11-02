@@ -4,7 +4,7 @@ import {
   importContactRows,
   importContactsBodySchema,
 } from "@/api/handlers/contacts/import-contacts";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -63,10 +63,14 @@ const importContacts = createSafeRootHandler(
         : [],
     );
     if (writtenContactIds.length > 0) {
-      flushContactSearchRepairs(writtenContactIds).catch(
-        createErrorCapture(
-          handlerErrorContext("importContacts.flushContactSearchRepairs"),
-        ),
+      detached(
+        () =>
+          flushContactSearchRepairs(writtenContactIds).catch(
+            createErrorCapture(
+              handlerErrorContext("importContacts.flushContactSearchRepairs"),
+            ),
+          ),
+        "contacts-import.flush-contact-search-repairs",
       );
     }
 

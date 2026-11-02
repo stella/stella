@@ -9,7 +9,7 @@ import {
   revisionResult,
 } from "@/api/handlers/chat/messages/revisions/accept";
 import { writeChatMessageRevisionOnTx } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -67,12 +67,16 @@ const revertMessageRevision = createSafeRootHandler(
       ),
     );
     if (result.type === "ok") {
-      upsertChatThreadSearchDocument(threadId).catch(
-        createErrorCapture(
-          handlerErrorContext(
-            "revertMessageRevision.upsertChatThreadSearchDocument",
+      detached(
+        () =>
+          upsertChatThreadSearchDocument(threadId).catch(
+            createErrorCapture(
+              handlerErrorContext(
+                "revertMessageRevision.upsertChatThreadSearchDocument",
+              ),
+            ),
           ),
-        ),
+        "message-revision-revert.index-thread",
       );
     }
     return revisionResult(result);

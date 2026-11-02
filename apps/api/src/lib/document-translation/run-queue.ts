@@ -10,7 +10,7 @@ import {
   documentTranslationUnits,
 } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import {
   decideDispositions,
@@ -1472,15 +1472,19 @@ export const initDocumentTranslationRunWorker = ({
   );
   worker.on("failed", (job, error) => {
     if (job) {
-      setRunFailed(brandActor(job.data), "internal").catch(
-        (markError: unknown) =>
-          captureError(
-            markError,
-            handlerErrorContext(
-              "documenttranslation.initDocumentTranslationRunWorker.markError",
-              { runId: job.data.runId },
-            ),
+      detached(
+        () =>
+          setRunFailed(brandActor(job.data), "internal").catch(
+            (markError: unknown) =>
+              captureError(
+                markError,
+                handlerErrorContext(
+                  "documenttranslation.initDocumentTranslationRunWorker.markError",
+                  { runId: job.data.runId },
+                ),
+              ),
           ),
+        "document-translation.set-run-failed",
       );
     }
     captureError(

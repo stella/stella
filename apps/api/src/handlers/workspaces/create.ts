@@ -11,7 +11,7 @@ import {
   workspaceViews,
 } from "@/api/db/schema";
 import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -89,6 +89,23 @@ export type CreateWorkspaceHandlerProps = {
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: v.InferOutput<typeof createWorkspaceBodySchema>;
+};
+
+/** Index the committed matter without holding the response for it. */
+const flushCreatedWorkspaceSearch = (
+  workspaceId: Parameters<typeof flushWorkspaceSearchRepairs>[0][number],
+) => {
+  detached(
+    () =>
+      flushWorkspaceSearchRepairs([workspaceId]).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "createWorkspaceHandler.flushWorkspaceSearchRepairs",
+          ),
+        ),
+      ),
+    "workspaces-create.flush-workspace-search-repairs",
+  );
 };
 
 // Shared matter-creation logic reused by the HTTP handler and the
@@ -324,11 +341,7 @@ export const createWorkspaceHandler = async function* ({
     }),
   );
 
-  flushWorkspaceSearchRepairs([txResult.id]).catch(
-    createErrorCapture(
-      handlerErrorContext("createWorkspaceHandler.flushWorkspaceSearchRepairs"),
-    ),
-  );
+  flushCreatedWorkspaceSearch(txResult.id);
 
   return Result.ok({ id: txResult.id });
 };

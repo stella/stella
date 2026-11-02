@@ -522,7 +522,7 @@ type EmailOtpResponseScheduleOptions = {
 };
 
 export const runEmailOtpRequestOnResponseSchedule = async ({
-  detach = (operation) => detached(operation, "auth.email-otp-delivery"),
+  detach = (operation) => detached(() => operation, "auth.email-otp-delivery"),
   responseDelayMs,
   runRequest,
   wait = Bun.sleep,

@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceContacts } from "@/api/db/schema";
 import { workspaceContactRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -96,12 +96,16 @@ export const deleteWorkspaceContactHandler = async function* ({
     );
   }
 
-  flushWorkspaceSearchRepairs([workspaceId]).catch(
-    createErrorCapture(
-      handlerErrorContext(
-        "deleteWorkspaceContactHandler.flushWorkspaceSearchRepairs",
+  detached(
+    () =>
+      flushWorkspaceSearchRepairs([workspaceId]).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "deleteWorkspaceContactHandler.flushWorkspaceSearchRepairs",
+          ),
+        ),
       ),
-    ),
+    "contacts-delete.flush-workspace-search-repairs",
   );
 
   return Result.ok({ id: deleted.id });

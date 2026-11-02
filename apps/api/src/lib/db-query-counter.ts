@@ -21,6 +21,7 @@ import { getCallSites } from "node:util";
 import {
   currentRequestWork,
   emptyReadWork,
+  withoutRequestWork,
   withRequestWork,
 } from "@/api/lib/observability/request-work";
 import type { QueryCounter } from "@/api/lib/observability/request-work";
@@ -75,6 +76,18 @@ export const runWithQueryCounter = <TResult>(
 };
 
 export const currentQueryCounter = () => queryCounterStore.getStore();
+
+/**
+ * Start `fn` outside every active counter store. Work a caller starts but does
+ * not await (post-commit search flushes, notifications, cleanup) finishes at a
+ * time the caller does not control, so charging its statements to the
+ * caller's request, task or job would make that measurement depend on timing.
+ * Every continuation `fn` schedules inherits the detachment; other async
+ * context (request identity, logging) is untouched. The sanctioned entry
+ * point is `detached(() => work, "feature.action")`.
+ */
+export const runOutsideQueryCounter = <TResult>(fn: () => TResult): TResult =>
+  queryCounterStore.exit(() => withoutRequestWork(fn));
 
 export class RepeatedQueryFingerprintError extends TaggedError(
   "RepeatedQueryFingerprintError",

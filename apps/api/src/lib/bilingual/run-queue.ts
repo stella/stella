@@ -22,7 +22,7 @@ import {
   bilingualTranslationRuns,
 } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { translateBatch } from "@/api/lib/bilingual/ai";
 import type {
@@ -266,16 +266,23 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
 
   worker.on("failed", (job, error) => {
     if (job) {
-      setRunFailed(brandActor(job.data), "internal").catch(
-        (markError: unknown) => {
-          captureError(
-            markError,
-            handlerErrorContext("bilingual.initBilingualRunWorker.markError", {
-              runId: job.data.runId,
-              workspaceId: job.data.workspaceId,
-            }),
-          );
-        },
+      detached(
+        () =>
+          setRunFailed(brandActor(job.data), "internal").catch(
+            (markError: unknown) => {
+              captureError(
+                markError,
+                handlerErrorContext(
+                  "bilingual.initBilingualRunWorker.markError",
+                  {
+                    runId: job.data.runId,
+                    workspaceId: job.data.workspaceId,
+                  },
+                ),
+              );
+            },
+          ),
+        "bilingual-run.set-run-failed",
       );
     }
     const runId = job ? job.data.runId : "";

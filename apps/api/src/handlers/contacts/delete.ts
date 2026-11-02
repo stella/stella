@@ -5,7 +5,7 @@ import * as v from "valibot";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -147,10 +147,17 @@ export const deleteContactHandler = async function* ({
     );
   }
 
-  flushRepairs(txResult.value.affectedWorkspaceIds).catch(
-    createErrorCapture(
-      handlerErrorContext("deleteContactHandler.flushWorkspaceSearchRepairs"),
-    ),
+  const flushedWorkspaceIds = txResult.value.affectedWorkspaceIds;
+  detached(
+    () =>
+      flushRepairs(flushedWorkspaceIds).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "deleteContactHandler.flushWorkspaceSearchRepairs",
+          ),
+        ),
+      ),
+    "contacts-delete.flush-workspace-search-repairs",
   );
 
   return Result.ok({});

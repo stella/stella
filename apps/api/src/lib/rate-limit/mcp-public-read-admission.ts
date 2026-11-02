@@ -200,7 +200,7 @@ export const withMcpPublicReadAdmission = async <T>({
     degraded(event);
     // The store may complete an uncertain acquire; cleanup must not delay the read.
     detached(
-      releaseDegradedAcquire({ keys, leaseId, redis, redisReady }),
+      () => releaseDegradedAcquire({ keys, leaseId, redis, redisReady }),
       "mcp-public-read.acquire-cleanup",
     );
     const outcome = await Result.tryPromise({

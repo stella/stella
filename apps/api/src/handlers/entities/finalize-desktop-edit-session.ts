@@ -13,7 +13,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { status } from "@/api/http/status";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -763,42 +763,50 @@ export const finalizeDesktopEditSessionHandler = async ({
         );
       });
 
-      enqueuePdfDerivativeOrMarkFailed({
-        encrypted: officeFileEncryption(
-          desktopEditMimeTypeForFileType(result.fileType),
-        ).encrypted,
-        entityId: result.entityId,
-        fieldId: result.fieldId,
-        mimeType: desktopEditMimeTypeForFileType(result.fileType),
-        organizationId: authorizedSession.value.organizationId,
-        userId: brandPersistedUserId(authorizedSession.value.userId),
-        workspaceId: authorizedSession.value.workspaceId,
-      }).catch((error: unknown) => {
-        captureError(
-          error,
-          handlerErrorContext("desktopEdit.enqueuePdfDerivative", {
+      detached(
+        () =>
+          enqueuePdfDerivativeOrMarkFailed({
+            encrypted: officeFileEncryption(
+              desktopEditMimeTypeForFileType(result.fileType),
+            ).encrypted,
             entityId: result.entityId,
             fieldId: result.fieldId,
             mimeType: desktopEditMimeTypeForFileType(result.fileType),
+            organizationId: authorizedSession.value.organizationId,
+            userId: brandPersistedUserId(authorizedSession.value.userId),
+            workspaceId: authorizedSession.value.workspaceId,
+          }).catch((error: unknown) => {
+            captureError(
+              error,
+              handlerErrorContext("desktopEdit.enqueuePdfDerivative", {
+                entityId: result.entityId,
+                fieldId: result.fieldId,
+                mimeType: desktopEditMimeTypeForFileType(result.fileType),
+              }),
+            );
           }),
-        );
-      });
+        "finalize-desktop-edit-session.enqueue-pdf-derivative-or-mark-failed",
+      );
 
       if (result.fileType === "docx") {
-        computeVersionDiffStats({
-          versionId: result.versionId,
-          entityId: result.entityId,
-          scopedDb: authorizedSession.value.scopedDb,
-          workspaceId: authorizedSession.value.workspaceId,
-          organizationId: authorizedSession.value.organizationId,
-        }).catch((error: unknown) => {
-          captureError(
-            error,
-            handlerErrorContext("desktopEdit.computeVersionDiff", {
+        detached(
+          () =>
+            computeVersionDiffStats({
               versionId: result.versionId,
+              entityId: result.entityId,
+              scopedDb: authorizedSession.value.scopedDb,
+              workspaceId: authorizedSession.value.workspaceId,
+              organizationId: authorizedSession.value.organizationId,
+            }).catch((error: unknown) => {
+              captureError(
+                error,
+                handlerErrorContext("desktopEdit.computeVersionDiff", {
+                  versionId: result.versionId,
+                }),
+              );
             }),
-          );
-        });
+          "finalize-desktop-edit-session.compute-version-diff-stats",
+        );
       }
     }
 

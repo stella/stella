@@ -33,7 +33,7 @@ import {
   revokeOAuthTokensAndGrants,
   selectActiveTaskAssignments,
 } from "@/api/lib/account-deletion-steps";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { runConfirmedTransaction } from "@/api/lib/confirmation-otp";
 import {
@@ -401,20 +401,24 @@ const enqueueStorageCleanupOrLog = async (
       deletionRequestId,
     });
 
-    processAccountDeletionCleanupRequest(
-      deletionRequestId,
-      createAccountDeletionCleanupRequestDeps(rootDb),
-    ).catch((cleanupError: unknown) => {
-      captureError(
-        cleanupError,
-        handlerErrorContext("lib.enqueueStorageCleanupOrLog.cleanupError", {
+    detached(
+      () =>
+        processAccountDeletionCleanupRequest(
           deletionRequestId,
+          createAccountDeletionCleanupRequestDeps(rootDb),
+        ).catch((cleanupError: unknown) => {
+          captureError(
+            cleanupError,
+            handlerErrorContext("lib.enqueueStorageCleanupOrLog.cleanupError", {
+              deletionRequestId,
+            }),
+          );
+          logger.error("account_deletion_cleanup.inline_failed", {
+            "error.type": errorTag(cleanupError),
+            deletionRequestId,
+          });
         }),
-      );
-      logger.error("account_deletion_cleanup.inline_failed", {
-        "error.type": errorTag(cleanupError),
-        deletionRequestId,
-      });
-    });
+      "delete-account.process-account-deletion-cleanup-request",
+    );
   }
 };
