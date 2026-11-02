@@ -738,7 +738,7 @@ const ToolCallHeaderLabel = ({
   hasError: boolean;
   isLoading: boolean;
   label: ReactNode;
-  status: StatusMarkStatus;
+  status: Exclude<StatusMarkStatus, "running">;
   statusLabel: string | undefined;
   subtitle: ReturnType<typeof getToolSubtitle>;
 }) => (
