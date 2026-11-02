@@ -442,7 +442,7 @@ async fn align_managed_copy_file_name(
     );
   }
 
-  tokio::fs::rename(path, &aligned_path).await.map_err(|e| {
+  crate::local_store::rename_private(path, &aligned_path).map_err(|e| {
     format!("stella desktop could not rename the managed Office file: {e}")
   })?;
 
@@ -538,12 +538,11 @@ async fn has_temporary_lock_file(dir: &Path, file_name: &str) -> bool {
 }
 
 #[cfg(target_os = "windows")]
-async fn append_probe_reports_locked(file_path: &Path) -> bool {
-  match tokio::fs::OpenOptions::new()
-    .append(true)
-    .open(file_path)
-    .await
-  {
+fn append_probe_reports_locked(file_path: &Path) -> bool {
+  match crate::local_store::open_private(
+    crate::local_store::OpenMode::AppendExisting,
+    file_path,
+  ) {
     Ok(_) => false,
     Err(e) => matches!(
       e.kind(),
@@ -569,7 +568,7 @@ async fn local_file_appears_open(file_path: &Path, file_name: &str) -> bool {
   }
 
   #[cfg(target_os = "windows")]
-  if append_probe_reports_locked(file_path).await {
+  if append_probe_reports_locked(file_path) {
     return true;
   }
 
@@ -1391,7 +1390,16 @@ impl SessionManager {
   }
 
   pub async fn open_edit_root(&self) -> bool {
-    let _ = tokio::fs::create_dir_all(&self.edit_root).await;
+    let root = self.edit_root.clone();
+    if !matches!(
+      tokio::task::spawn_blocking(move || crate::local_store::create_private_dir(
+        &root
+      ))
+      .await,
+      Ok(Ok(()))
+    ) {
+      return false;
+    }
     open_path_native(self.edit_root.to_string_lossy().as_ref()).is_ok()
   }
 
@@ -2170,18 +2178,20 @@ impl SessionManager {
     file_name: &str,
     buffer: &[u8],
   ) -> Result<String, String> {
-    let safe_folder = sanitize_path_segment(folder_name);
-    let session_folder = self.edit_root.join(&safe_folder);
-    tokio::fs::create_dir_all(&session_folder)
-      .await
-      .map_err(|e| format!("Failed to create editing folder: {e}"))?;
-
+    let edit_root = self.edit_root.clone();
+    let session_folder = edit_root.join(sanitize_path_segment(folder_name));
     let file_path = session_folder.join(file_name);
-    tokio::fs::write(&file_path, buffer)
-      .await
-      .map_err(|e| format!("Failed to write Office file: {e}"))?;
-
-    Ok(file_path.to_string_lossy().to_string())
+    let buffer = buffer.to_vec();
+    tokio::task::spawn_blocking(move || {
+      crate::local_store::create_private_dir(&edit_root)
+        .and_then(|()| crate::local_store::create_private_dir(&session_folder))
+        .map_err(|error| format!("Failed to create editing folder: {error}"))?;
+      crate::local_store::write_private_atomic(&file_path, &buffer)
+        .map_err(|error| format!("Failed to write Office file: {error}"))?;
+      Ok(file_path.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|error| format!("Office file task failed: {error}"))?
   }
 
   async fn persist_sessions_result(&self) -> Result<(), String> {
@@ -2837,10 +2847,46 @@ fn chrono_now() -> String {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
   use std::io::{Cursor, Write};
   use zip::write::SimpleFileOptions;
+
+  #[cfg(unix)]
+  #[tokio::test]
+  async fn local_file_creation_keeps_edit_copies() {
+    use std::os::unix::fs::PermissionsExt;
+    if crate::local_store::local_file_creation_child(
+      "session_manager::tests::local_file_creation_keeps_edit_copies",
+    ) {
+      return;
+    }
+    let mut manager = SessionManager::new();
+    manager.edit_root =
+      std::env::temp_dir().join(format!("stella-edit-{}", uuid::Uuid::new_v4()));
+    let path = PathBuf::from(
+      manager
+        .write_managed_copy("session", "document.docx", b"document")
+        .await
+        .unwrap(),
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), b"document");
+    assert_eq!(
+      std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+      0o600
+    );
+    for directory in [manager.edit_root.as_path(), path.parent().unwrap()] {
+      assert_eq!(
+        std::fs::metadata(directory).unwrap().permissions().mode() & 0o777,
+        0o700
+      );
+    }
+    std::fs::remove_dir_all(manager.edit_root).unwrap();
+  }
 
   fn persisted_session_for_test(id: &str) -> PersistedDesktopSession {
     PersistedDesktopSession {
@@ -3721,10 +3767,12 @@ mod tests {
 
   #[tokio::test]
   async fn persist_sessions_keeps_unconfirmed_sessions() {
-    let path = std::env::temp_dir().join(format!(
-      "stella-desktop-sessions-{}.json",
-      uuid::Uuid::new_v4()
-    ));
+    let path = std::env::temp_dir()
+      .join(format!(
+        "stella-desktop-sessions-{}.json",
+        uuid::Uuid::new_v4()
+      ))
+      .join("sessions.json");
     let mut manager = SessionManager::new();
     manager.store_path = path.clone();
     manager.unconfirmed_sessions.insert(
@@ -3747,10 +3795,12 @@ mod tests {
 
   #[tokio::test]
   async fn document_account_identity_and_origin_persist() {
-    let path = std::env::temp_dir().join(format!(
-      "stella-desktop-sessions-{}.json",
-      uuid::Uuid::new_v4()
-    ));
+    let path = std::env::temp_dir()
+      .join(format!(
+        "stella-desktop-sessions-{}.json",
+        uuid::Uuid::new_v4()
+      ))
+      .join("sessions.json");
     let mut manager = SessionManager::new();
     manager.store_path = path.clone();
     let account = LinkedAccountSnapshot {
@@ -3797,10 +3847,12 @@ mod tests {
 
   #[tokio::test]
   async fn the_selected_self_host_keeps_its_api_and_origin_together() {
-    let path = std::env::temp_dir().join(format!(
-      "stella-selected-selfhost-{}.json",
-      uuid::Uuid::new_v4()
-    ));
+    let path = std::env::temp_dir()
+      .join(format!(
+        "stella-selected-selfhost-{}.json",
+        uuid::Uuid::new_v4()
+      ))
+      .join("sessions.json");
     let mut manager = SessionManager::new();
     manager.store_path = path.clone();
     manager.trust_self_host_connection_for_test(
@@ -3826,10 +3878,12 @@ mod tests {
 
   #[tokio::test]
   async fn document_relink_preserves_the_account_origin() {
-    let path = std::env::temp_dir().join(format!(
-      "stella-desktop-account-origin-{}.json",
-      uuid::Uuid::new_v4()
-    ));
+    let path = std::env::temp_dir()
+      .join(format!(
+        "stella-desktop-account-origin-{}.json",
+        uuid::Uuid::new_v4()
+      ))
+      .join("sessions.json");
     let mut manager = SessionManager::new();
     manager.store_path = path.clone();
     manager.trust_self_host_connection_for_test(
@@ -3862,10 +3916,12 @@ mod tests {
 
   #[tokio::test]
   async fn active_session_supersedes_unconfirmed_copy_on_persist() {
-    let path = std::env::temp_dir().join(format!(
-      "stella-desktop-sessions-{}.json",
-      uuid::Uuid::new_v4()
-    ));
+    let path = std::env::temp_dir()
+      .join(format!(
+        "stella-desktop-sessions-{}.json",
+        uuid::Uuid::new_v4()
+      ))
+      .join("sessions.json");
     let mut manager = SessionManager::new();
     manager.store_path = path.clone();
     let persisted = persisted_session_for_test("session-restored");

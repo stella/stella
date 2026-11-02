@@ -783,9 +783,14 @@ fn document_app() -> Option<DocumentApp> {
   use objc2_app_kit::NSWorkspace;
   use objc2_foundation::{NSString, NSURL};
 
-  let probe = std::env::temp_dir()
-    .join(format!("stella-document-app-{}.docx", uuid::Uuid::new_v4()));
-  std::fs::write(&probe, []).ok()?;
+  let directory = dirs::cache_dir()?.join(crate::config::APP_DATA_DIR_NAME);
+  crate::local_store::create_private_dir(&directory).ok()?;
+  let probe =
+    directory.join(format!("stella-document-app-{}.docx", uuid::Uuid::new_v4()));
+  drop(
+    crate::local_store::open_private(crate::local_store::OpenMode::CreateNew, &probe)
+      .ok()?,
+  );
   let url = NSURL::fileURLWithPath(&NSString::from_str(probe.to_str()?));
   let app_path = NSWorkspace::sharedWorkspace()
     .URLForApplicationToOpenURL(&url)
