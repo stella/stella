@@ -33,6 +33,7 @@ import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-i
 import { createRootOrganizationBackgroundDb } from "@/api/lib/root-scoped-db";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const SEED_BATCH_SIZE = 100;
 const BENCHMARK_PROFILES = [
@@ -297,9 +298,7 @@ if (!runPostgresTests) {
               await tx
                 .delete(contacts)
                 .where(eq(contacts.organizationId, organizationId));
-              await tx
-                .delete(organization)
-                .where(eq(organization.id, organizationId));
+              await deleteOrganizationsForTest(tx, [organizationId]);
               await tx.execute(sql`
             CREATE TEMP TABLE monitoring_benchmark_payloads ON COMMIT DROP AS
             SELECT content_hash

@@ -870,7 +870,6 @@
   },
   "no-native-ui/no-native-accordion": {
     "apps/desktop/src/activity/ActivityApp.tsx": 2,
-    "apps/web/src/features/chat/source-chips.tsx": 2,
     "packages/decision-reader/src/decision-text.tsx": 2,
     "packages/decision-reader/src/headnote-block.tsx": 2
   },
@@ -1223,7 +1222,6 @@
     "apps/api/src/handlers/case-law/ingestion/parsers/cz-us.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/parsers/hu-bhgy.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 1,
-    "apps/api/src/handlers/case-law/ingestion/supplement-fold.ts": 1,
     "apps/api/src/handlers/catalogue/list.ts": 1,
     "apps/api/src/handlers/chat/chat-message-persistence.ts": 1,
     "apps/api/src/handlers/chat/fork/create.ts": 2,

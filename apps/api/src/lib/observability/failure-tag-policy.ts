@@ -173,6 +173,7 @@ export const TAGGED_FAILURE_REASON = {
   DesktopRunnerCommandInvalid: "tagged_failure",
   DevContentEncryptionKeyError: "tagged_failure",
   DevHostProbeError: "tagged_failure",
+  DetachedFunctionOperandError: "tagged_failure",
   DevProcessInspectionError: "tagged_failure",
   DevProcessOwnershipError: "tagged_failure",
   DevProcessRegistrationError: "tagged_failure",
