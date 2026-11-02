@@ -87,7 +87,7 @@ describe("SidebarEntityRow right-click", () => {
     await waitFor(() => {
       expect(menuLabels()).toEqual([
         messages.common.rename,
-        messages.common.delete,
+        messages.workspaces.deleteFromMatter,
       ]);
     });
   });
