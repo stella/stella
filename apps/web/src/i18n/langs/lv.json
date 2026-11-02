@@ -5453,6 +5453,12 @@
         "workspace_contact": "lietas kontaktpersona",
         "workspace_member": "lietas dalībnieks"
       },
+      "billingDrafts": {
+        "description": "Veidojiet darba aprakstus no atlasītajām darbībām un biroja vai klienta zināšanu failiem. Katrs lietotājs arī dod savu piekrišanu. Pirms melnrakstu ieslēgšanas pievienojiet biroja vadlīnijas.",
+        "firm": "Biroja vadlīnijas",
+        "ledes": "Elektroniskie norēķini (LEDES)",
+        "title": "AI norēķinu melnraksti"
+      },
       "documentProcessing": {
         "description": "Automātiski atpazīstiet tekstu skenētos PDF, lai to saturs būtu meklējams.",
         "title": "Dokumentu teksta atpazīšana",

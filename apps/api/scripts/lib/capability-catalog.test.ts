@@ -7,6 +7,7 @@ import type {
   RouteEntry,
 } from "../../src/http/route";
 import { fileSchema } from "../../src/lib/custom-schema";
+import { FEATURE_REGISTRY } from "../../src/lib/feature-access/registry";
 import { toRouteJsonSchema } from "../../src/lib/json-schema/valibot-to-json-schema";
 import type { RouteGate } from "../../src/lib/route-gates";
 import {
@@ -28,7 +29,9 @@ import {
   isWellFormedCapabilityId,
   MAX_CAPABILITY_SCHEMA_BYTES,
   parseCapabilityTransport,
+  requiredDeploymentFeature,
   resolveAccess,
+  resolveCapabilityDeploymentFeature,
   resolveHandlerKind,
   resolveScope,
   returnsInlineFileResponse,
@@ -1472,6 +1475,73 @@ describe("scanFileResponseReturns", () => {
       flaggedIds: new Set(["gone.export"]),
     });
     expect(scan.staleFlags).toEqual(["gone.export"]);
+  });
+});
+
+describe("required handler deployment features", () => {
+  test("mixed-domain requirements fill missing metadata while existing tool and domain gates retain precedence", () => {
+    const options = {
+      registry: FEATURE_REGISTRY,
+      requirement: { featureId: "time-billing", type: "required" },
+      inheritedFeature: undefined,
+      domainFeature: undefined,
+    } as const;
+    expect(resolveCapabilityDeploymentFeature(options)).toBe(
+      "FEATURE_TIME_BILLING",
+    );
+    expect(
+      resolveCapabilityDeploymentFeature({
+        ...options,
+        domainFeature: "FEATURE_PUBLIC_LAW",
+      }),
+    ).toBe("FEATURE_PUBLIC_LAW");
+    expect(
+      resolveCapabilityDeploymentFeature({
+        ...options,
+        domainFeature: "FEATURE_PUBLIC_LAW",
+        inheritedFeature: "FEATURE_LEGAL_LISTS",
+      }),
+    ).toBe("FEATURE_LEGAL_LISTS");
+  });
+  test("an unregistered required feature fails instead of silently removing its gate", () => {
+    expect(() =>
+      requiredDeploymentFeature(FEATURE_REGISTRY, {
+        featureId: "unknown-feature",
+        type: "required",
+      }),
+    ).toThrow("Required capability feature must be registered");
+  });
+  test("required billing access derives its deployment tag inside a mixed capability domain", () => {
+    for (const featureId of ["time-billing", "legal-lists"]) {
+      expect(
+        requiredDeploymentFeature(FEATURE_REGISTRY, {
+          featureId,
+          type: "required",
+        }),
+      ).toBe(
+        featureId === "time-billing"
+          ? "FEATURE_TIME_BILLING"
+          : "FEATURE_LEGAL_LISTS",
+      );
+    }
+  });
+
+  test("conditional and absent requirements leave unrelated capability operations available", () => {
+    expect(
+      requiredDeploymentFeature(FEATURE_REGISTRY, {
+        featureId: "time-billing",
+        type: "conditional",
+      }),
+    ).toBeUndefined();
+    expect(
+      requiredDeploymentFeature(FEATURE_REGISTRY, undefined),
+    ).toBeUndefined();
+    expect(
+      requiredDeploymentFeature(FEATURE_REGISTRY, {
+        featureId: "activity-timeline",
+        type: "required",
+      }),
+    ).toBeUndefined();
   });
 });
 

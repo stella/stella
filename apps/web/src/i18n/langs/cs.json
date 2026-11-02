@@ -5453,6 +5453,12 @@
         "workspace_contact": "kontakt spisu",
         "workspace_member": "člen spisu"
       },
+      "billingDrafts": {
+        "description": "Navrhujte popisy práce z vybrané aktivity a znalostních souborů kanceláře nebo klienta. Každý uživatel také uděluje souhlas. Před zapnutím návrhů připojte pravidla kanceláře.",
+        "firm": "Pravidla kanceláře",
+        "ledes": "Elektronická fakturace (LEDES)",
+        "title": "AI návrhy výkazů práce"
+      },
       "documentProcessing": {
         "description": "Automaticky rozpoznávejte text v naskenovaných PDF, aby v nich šlo vyhledávat.",
         "title": "Rozpoznávání textu v dokumentech",

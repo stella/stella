@@ -2078,6 +2078,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-dropped-fake-timers.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
+    "./.oxlint-plugins/no-global-fetch-replacement.ts",
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/inspector-header-title.ts",
@@ -2955,14 +2956,6 @@ const config = defineConfig({
       // code. It uses standard Node-style `throw new Error(...)` because
       // it doesn't depend on better-result.
       files: [".claude/mcp/**/*.ts"],
-      rules: { "no-bare-error/no-bare-error": "off" },
-    },
-    {
-      // Test-only adapter helper consumed exclusively from
-      // `**/*.test.ts`. Not part of any production code path.
-      files: [
-        "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
-      ],
       rules: { "no-bare-error/no-bare-error": "off" },
     },
     {
@@ -6450,6 +6443,23 @@ const config = defineConfig({
       rules: {
         "no-direct-test-state/no-direct-test-state": "error",
         "no-shared-checkout-mutation/no-shared-checkout-mutation": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/**/*.{test,spec}.{ts,tsx,js,jsx}",
+        "apps/api/**/__tests__/**/*.{ts,tsx,js,jsx}",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/src/mcp/__fixtures__/external-source/replay.ts",
+        ".oxlint-plugins/__fixtures__/no-global-fetch-replacement.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/tests/helpers/test-fetch.ts",
+        // The process-wide guard that restores fetch after every test.
+        "apps/api/src/tests/fetch-global-guard.ts",
+      ],
+      rules: {
+        "no-global-fetch-replacement/no-global-fetch-replacement": "error",
       },
     },
     {
