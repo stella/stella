@@ -172,6 +172,7 @@ import { publicRowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { readOnlineIndexesReady } from "@/api/lib/db/online-index-readiness";
 import type { OnlineIndexName } from "@/api/lib/db/online-index-readiness";
 import { POSTGRES_INTEGER_MAX } from "@/api/lib/db/postgres-integer";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
@@ -277,6 +278,10 @@ import {
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import { readPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
 import {
+  publicReadTimeoutError,
+  publicReadTimeoutResponse,
+} from "@/api/lib/legal-search/public-read-timeout";
+import {
   blendStableCitationAuthority,
   courtTierSignal,
   DEFAULT_AUTHORITY_WEIGHT,
@@ -287,7 +292,10 @@ import type {
   RankedHit,
   ScoredCandidate,
 } from "@/api/lib/legal-search/rerank";
-import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
+import {
+  isSearchIndexUnavailable,
+  searchIndexUnavailableResponse,
+} from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -2766,6 +2774,25 @@ const TERM_COVERAGE_FAILURE_SINK = failureSink({
   expected: [],
 });
 
+/**
+ * The answer to a failed term coverage read. A refusal the corpus index read
+ * answered with (an expired request budget, an unavailable index) is returned
+ * as its own envelope, which every route and tool reads with its own code;
+ * any other failure is the coverage read's.
+ */
+const termCoverageFailure = (error: HandlerError<502 | 503>) => {
+  // An expired budget is read first: it is never the index being down.
+  const timedOut = publicReadTimeoutError(error) !== null;
+  if (!timedOut && isSearchIndexUnavailable(error)) {
+    // The index refusal observes its own cause.
+    return searchIndexUnavailableResponse(error);
+  }
+  observeFailure(error, { sink: TERM_COVERAGE_FAILURE_SINK });
+  return timedOut
+    ? publicReadTimeoutResponse()
+    : status(error.status, { message: error.message });
+};
+
 export const searchCorpusIndexDecisions = async ({
   signal,
   body,
@@ -3357,8 +3384,7 @@ export const searchCorpusIndexDecisions = async ({
     ? await readRelaxedHits()
     : Result.ok({ hits: [], scan: emptyCorpusIndexScan() });
   if (Result.isError(relaxed)) {
-    observeFailure(relaxed.error, { sink: TERM_COVERAGE_FAILURE_SINK });
-    return status(relaxed.error.status, { message: relaxed.error.message });
+    return termCoverageFailure(relaxed.error);
   }
   const relaxedHits = relaxed.value.hits;
   const servedIds = new Set(page.hits.map((hit) => String(hit.decisionId)));
