@@ -7,8 +7,11 @@ import {
   truncateEntityName,
 } from "@stll/api-contract";
 
+import { normalizeEntityName } from "@/api/lib/entities/entity-name";
+
 const resolvedSiblingNameSchema = v.pipe(
   v.string(),
+  v.brand("EntityName"),
   v.brand("ResolvedSiblingName"),
 );
 
@@ -23,10 +26,11 @@ type ResolveSiblingNameOptions = {
 };
 
 export const resolveSiblingName = ({
-  name,
+  name: requestedName,
   kind,
   siblingNames,
 }: ResolveSiblingNameOptions): ResolvedSiblingName => {
+  const name = normalizeEntityName(requestedName);
   if (!siblingNames.has(name)) {
     return v.parse(resolvedSiblingNameSchema, name);
   }

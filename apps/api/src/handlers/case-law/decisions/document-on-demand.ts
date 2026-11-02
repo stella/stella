@@ -55,6 +55,7 @@ import type {
   DecisionDocumentOutcome,
   PendingDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
+import { requestBoundedTimeoutMs } from "@/api/lib/load/request-latency-budget";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -351,7 +352,7 @@ export const readThroughDeferredDocument = async ({
           await withPublicReadIo("hydration", async () => await attempt()),
         {
           label: READ_BUDGET_LABEL,
-          timeoutMs: READ_BUDGET_MS,
+          timeoutMs: requestBoundedTimeoutMs(READ_BUDGET_MS),
         },
       ),
   );

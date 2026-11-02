@@ -198,7 +198,7 @@ const defaultPlan = () => ({
 const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   "api-test-durations": { hash: "", key: "" },
   "api-tests": {
-    api_test_files: "[]",
+    api_test_files_encoded: "[]",
     api_test_shards: "4",
     ci_tests_matrix: "[]",
     ci_tests_required: "true",
@@ -233,7 +233,10 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
     required: "false",
     selection_required: "false",
     specs: "[]",
+    suite_specs: "[]",
   },
+  "browser-suite-plan": { legs: "[]" },
+  "browser-suite-fallback": { legs: "[]" },
   generate: { input_hash: "" },
   "heavy-plan": {
     heavy_jobs: "[]",
@@ -251,9 +254,11 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   },
   "legal-atlas-scope": { api_source_required: "false" },
   "marketing-release": { required: "false" },
+  "migration-scope": { database_migrations_required: "false" },
   outcome: { required_summary: "", required_violations: "" },
   "patch-id": {
     patch_id: "",
+    entry_base_sha: "",
     workflow_version: "",
     tested_tree: "",
     workflow_tree: "",
@@ -268,11 +273,13 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   "postgres-test-durations": { hash: "" },
   "postgres-test-plan": {
     postgres_selection_reason: "",
-    postgres_test_selection: "[]",
+    postgres_test_selection_encoded: "[]",
   },
   "pr-jobs-plan": { pr_depth_jobs: "[]", pr_heavy_jobs: "[]" },
   "query-perf-scope": { query_perf_required: "false" },
   "root-checks": { root_checks: "[]" },
+  "schema-imports": { changed: "false" },
+  "schema-imports-fallback": { changed: "false" },
   suites: { armed_delta: "false", run_required: "true", heavy_proof: "true" },
   "target-base": { base_sha: "" },
   "ui-playground-plan": { matrix: "[]", specs: "[]" },

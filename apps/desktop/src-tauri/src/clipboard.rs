@@ -2176,12 +2176,15 @@ impl ClipboardManager {
 
     self.remember_source_app_visual(source_app_visual);
 
-    let preserved_metadata = self
+    // Copying a clip's content again moves that clip to the front under its
+    // own id: an open editor, a selection or a pending command still names it.
+    let preserved = self
       .items
       .iter()
       .find(|item| item.same_text_content(&plain_text, html.as_deref()))
       .map(|item| {
         (
+          item.id().to_string(),
           item.group_id().map(str::to_string),
           item.grouped_at(),
           item.name().map(str::to_string),
@@ -2191,13 +2194,16 @@ impl ClipboardManager {
     self
       .items
       .retain(|item| !item.same_text_content(&plain_text, html.as_deref()));
-    let id = uuid::Uuid::new_v4().to_string();
-    let (group_id, grouped_at, name, retention_class) = preserved_metadata.unwrap_or((
-      None,
-      None,
-      None,
-      ClipboardItemRetentionClass::History,
-    ));
+    let (id, group_id, grouped_at, name, retention_class) =
+      preserved.unwrap_or_else(|| {
+        (
+          uuid::Uuid::new_v4().to_string(),
+          None,
+          None,
+          None,
+          ClipboardItemRetentionClass::History,
+        )
+      });
     let item = match html {
       Some(html) => ClipboardItem::FormattedText {
         copied_at,
@@ -2265,10 +2271,12 @@ impl ClipboardManager {
           byte_size,
           group_id,
           grouped_at,
+          id,
           name,
           retention_class,
           ..
         } => (
+          id.clone(),
           blob_id.clone(),
           *byte_size,
           group_id.clone(),
@@ -2283,11 +2291,12 @@ impl ClipboardManager {
     self
       .items
       .retain(|item| item.image_checksum() != Some(checksum.as_str()));
-    let id = uuid::Uuid::new_v4().to_string();
-    let (blob_id, byte_size, group_id, grouped_at, name, retention_class) =
+    // As with text, the same image keeps its clip's id when it returns.
+    let (id, blob_id, byte_size, group_id, grouped_at, name, retention_class) =
       match existing {
         Some(existing) => existing,
         None => (
+          uuid::Uuid::new_v4().to_string(),
           uuid::Uuid::new_v4().to_string(),
           image.len(),
           None,
@@ -5792,11 +5801,19 @@ mod tests {
     manager.persistence = ClipboardPersistence::MemoryOnly;
 
     assert!(capture(&mut manager, "first", None, now));
+    let first_id = manager.items[0].id().to_string();
     assert!(capture(&mut manager, "second", None, now));
     assert!(capture(&mut manager, "first", None, now));
 
     assert_eq!(manager.items.len(), 2);
     assert_eq!(manager.items[0].plain_text(), Some("first"));
+    // The clip keeps its id, so an editor opened on it can still read it.
+    assert_eq!(manager.items[0].id(), first_id);
+    assert!(
+      manager
+        .item_for_webview(&first_id, &ClipboardCaller::for_test())
+        .is_some()
+    );
   }
 
   #[test]
@@ -6577,7 +6594,7 @@ mod tests {
       ClipboardCaptureOutcome::Captured
     );
     assert_eq!(manager.items.len(), 1);
-    assert_ne!(manager.items[0].id(), original_id);
+    assert_eq!(manager.items[0].id(), original_id);
     assert_eq!(
       manager.items[0].image_blob_id(),
       Some(original_blob_id.as_str())

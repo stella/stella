@@ -198,8 +198,8 @@ describe.skipIf(!runPostgresTests)(
             CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
           );
           // Both bodies qualify their relations, so the answers above hold
-          // either way; the configuration is what keeps a later unqualified
-          // reference from reading the caller's temporary schema.
+          // under the pinned path; the role privilege census rejects any
+          // definer body that names a public relation without its schema.
           for (const reader of [
             "public.stella_case_law_coverage_summary()",
             "public.stella_case_law_coverage_summary_v2()",
@@ -208,7 +208,7 @@ describe.skipIf(!runPostgresTests)(
               sql`SELECT proconfig AS config FROM pg_proc WHERE oid = ${reader}::regprocedure`,
             );
             expect(rows.at(0)?.["config"]).toEqual([
-              "search_path=pg_catalog, public, pg_temp",
+              "search_path=pg_catalog, pg_temp",
             ]);
           }
         },

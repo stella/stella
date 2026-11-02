@@ -3,11 +3,13 @@ import fc from "fast-check";
 
 import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import type { Block } from "@stll/legal-ast/document-ast";
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import {
   actCompareSide,
   compareStatuteBlocks,
+  comparisonAfterPick,
   groupCompareRows,
   locateCompareRows,
   pairCompareSides,
@@ -344,9 +346,13 @@ describe("a consolidation without a usable AST", () => {
     expect(actCompareSide({ blocks: [], statuteTitle: "Act" })).toEqual(
       unstructured,
     );
-    expect(provisionCompareSide({ blocks: null, provision: "par_1" })).toEqual(
-      unstructured,
-    );
+    expect(
+      provisionCompareSide({
+        blocks: null,
+        provision: "par_1",
+        scheme: E_SBIRKA_ANCHORS,
+      }),
+    ).toEqual(unstructured);
   });
 
   test("settles the comparison whatever the other side answers", () => {
@@ -411,7 +417,11 @@ describe("one provision compared", () => {
   // side built from the blocks alone misses an amended caption.
   test("an amendment to the caption alone is a change", () => {
     const rows = rowsBetween(
-      provisionCompareSide({ blocks: onScreen, provision: "par_5" }),
+      provisionCompareSide({
+        blocks: onScreen,
+        provision: "par_5",
+        scheme: E_SBIRKA_ANCHORS,
+      }),
       readSide("Delivery and acceptance"),
     );
 
@@ -424,7 +434,11 @@ describe("one provision compared", () => {
   test("the side on screen reads as the provision read does", () => {
     expect(
       rowsBetween(
-        provisionCompareSide({ blocks: onScreen, provision: "par_5" }),
+        provisionCompareSide({
+          blocks: onScreen,
+          provision: "par_5",
+          scheme: E_SBIRKA_ANCHORS,
+        }),
         readSide("Delivery"),
       ).every((row) => row.status === "unchanged"),
     ).toBe(true);
@@ -457,6 +471,58 @@ describe("resolveCompareVersions", () => {
         expect(resolved.newer.id).toBe("c");
       }
     }
+  });
+
+  test("a column takes another version and the other column stays, on screen or not", () => {
+    const [c, b, a] = versions;
+    if (a === undefined || b === undefined || c === undefined) {
+      throw new Error("The fixture lists three versions");
+    }
+    const unknown = { id: "x", versionValidFrom: null };
+    // On screen: c (newer); compared: a (older).
+    const pair = { older: a, newer: c, onScreenId: "c" };
+    // The compared column takes b: only `compare` moves.
+    expect(comparisonAfterPick({ ...pair, replaced: a, picked: b })).toEqual({
+      type: "compare",
+      compare: "2025-01-01",
+    });
+    // The on-screen column takes b: b goes on screen, a stays compared.
+    expect(comparisonAfterPick({ ...pair, replaced: c, picked: b })).toEqual({
+      type: "open",
+      versionId: "b",
+      compare: "2024-01-01",
+    });
+    // Every pick resolves back to the pair the reader asked for.
+    for (const [replaced, picked, kept] of [
+      [a, b, c],
+      [c, b, a],
+    ] as const) {
+      const next = comparisonAfterPick({ ...pair, replaced, picked });
+      if (next.type === "none") {
+        throw new Error("A pick of a third version moves the comparison");
+      }
+      const resolved = resolveCompareVersions({
+        compare: next.compare,
+        onScreenId: next.type === "open" ? next.versionId : "c",
+        versions,
+      });
+      expect(
+        resolved.type === "ready"
+          ? [resolved.older.id, resolved.newer.id].toSorted()
+          : null,
+      ).toEqual([picked.id, kept.id].toSorted());
+    }
+    // Nothing to name the comparison by, or nothing that changes.
+    expect(
+      comparisonAfterPick<{ id: string; versionValidFrom: string | null }>({
+        ...pair,
+        replaced: a,
+        picked: unknown,
+      }),
+    ).toEqual({ type: "none" });
+    expect(comparisonAfterPick({ ...pair, replaced: a, picked: c })).toEqual({
+      type: "none",
+    });
   });
 
   test("names the consolidation the URL asked for as the other one", () => {
@@ -626,7 +692,8 @@ const numberedWithDrops = fc
 
 describe("aligning a renumbered or extended subdivision", () => {
   test("new letters anywhere in a list read as inserted, the rest as the same wording relabelled", () => {
-    fc.assert(
+    assertProperty(
+      "new letters anywhere in a list read as inserted, the rest as the same wording relabelled",
       fc.property(listInsertion, (edit) => {
         const { inserted, newer, older } = insertItems(edit);
         const rows = rowsOf(older, newer);
@@ -649,12 +716,13 @@ describe("aligning a renumbered or extended subdivision", () => {
           );
         }
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 200 }),
+      { seed: propertySeed(), numRuns: 200 },
     );
   });
 
   test("a sentence added to or dropped from a paragraph marks exactly that sentence", () => {
-    fc.assert(
+    assertProperty(
+      "a sentence added to or dropped from a paragraph marks exactly that sentence",
       fc.property(sentences, fc.nat(), (wording, pick) => {
         const at = pick % wording.length;
         const shorter = wording.filter((_, index) => index !== at);
@@ -681,7 +749,7 @@ describe("aligning a renumbered or extended subdivision", () => {
           );
         }
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 200 }),
+      { seed: propertySeed(), numRuns: 200 },
     );
   });
 
@@ -796,7 +864,8 @@ describe("aligning a renumbered or extended subdivision", () => {
         ...bodies.map((body, item) => text(`${letter(item)}) ${body}`)),
       ]);
 
-    fc.assert(
+    assertProperty(
+      "unchanged neighbouring provisions, even ones sharing its wording, never change how an amended provision pairs",
       fc.property(
         amendment,
         neighbours,
@@ -815,12 +884,13 @@ describe("aligning a renumbered or extended subdivision", () => {
           ).toEqual(alone);
         },
       ),
-      propertyConfig({ seed: propertySeed(), numRuns: 200 }),
+      { seed: propertySeed(), numRuns: 200 },
     );
   });
 
   test("paragraphs dropped or added among repeated wording keep every other paragraph paired with its own label", () => {
-    fc.assert(
+    assertProperty(
+      "paragraphs dropped or added among repeated wording keep every other paragraph paired with its own label",
       fc.property(numberedWithDrops, ({ bodies, dropped }) => {
         const all = bodies.map((body, index) =>
           text(`(${String(index + 1)}) ${body}`),
@@ -851,24 +921,26 @@ describe("aligning a renumbered or extended subdivision", () => {
           );
         }
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 200 }),
+      { seed: propertySeed(), numRuns: 200 },
     );
   });
 
   test("identical consolidations have no changed row", () => {
-    fc.assert(
+    assertProperty(
+      "identical consolidations have no changed row",
       fc.property(listInsertion, (edit) => {
         const { newer } = insertItems(edit);
         expect(
           rowsOf(newer, newer).filter((row) => row.status === "changed"),
         ).toEqual([]);
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 100 }),
+      { seed: propertySeed(), numRuns: 100 },
     );
   });
 
   test("swapping the consolidations swaps insertions for deletions", () => {
-    fc.assert(
+    assertProperty(
+      "swapping the consolidations swaps insertions for deletions",
       fc.property(listInsertion, (edit) => {
         const { newer, older } = insertItems(edit);
         const forward = rowsOf(older, newer);
@@ -891,7 +963,7 @@ describe("aligning a renumbered or extended subdivision", () => {
           forward.map(rowShape).filter((s) => s === "inserted").length,
         );
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 200 }),
+      { seed: propertySeed(), numRuns: 200 },
     );
   });
 

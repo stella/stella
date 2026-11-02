@@ -61,10 +61,11 @@ const readActiveTab = async (): Promise<PopupTab | null> =>
 
 const activeTabKind = (tab: PopupTab | null): PopupActiveTab => {
   const url = tab?.url ?? "";
-  if (trustedStellaOriginFromUrl(url) !== null) {
+  const stellaOrigin = trustedStellaOriginFromUrl(url);
+  if (stellaOrigin !== null) {
     return tab?.id === undefined
       ? { kind: "unsupported" }
-      : { kind: "stella", tabId: tab.id };
+      : { kind: "stella", origin: stellaOrigin, tabId: tab.id };
   }
   if (parseControllableUrl(url) !== null) {
     return { kind: "controllable" };

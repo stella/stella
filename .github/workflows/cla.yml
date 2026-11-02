@@ -136,7 +136,6 @@ jobs:
               "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT",
             ]);
             const MAX_PULL_COMMITS = 250;
-            const MAX_GROUP_ENTRIES = 100;
             const MAX_COMMIT_AUTHORS = 1000;
             const { owner, repo } = context.repo;
             const api = github;
@@ -377,25 +376,74 @@ jobs:
             // group head, and GitHub ends that commit's subject with "(#<number>)".
             // Membership comes from these immutable commits, so a merge queue
             // snapshot taken while GitHub is still building groups is never read.
+            // BEGIN GENERATED merge-group parser
+            const parseMergeGroupEntries = ({ group, added, fail }) => {
+              const MAX_GROUP_ENTRIES = 100;
+              /** @param {unknown} value @returns {value is Record<string, unknown>} */
+              const record = (value) =>
+                typeof value === "object" && value !== null && !Array.isArray(value);
+              /** @param {unknown} value @returns {value is unknown[]} */
+              const array = (value) => Array.isArray(value);
+              /** @param {unknown} value @returns {value is number} */
+              const positiveInteger = (value) =>
+                typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+              /** @param {unknown} value @returns {value is string} */
+              const validSha = (value) =>
+                typeof value === "string" && /^[0-9a-f]{40}$/u.test(value);
+              if (
+                !record(group) ||
+                !validSha(group["base_sha"]) ||
+                !validSha(group["head_sha"]) ||
+                !record(added) ||
+                !array(added["commits"]) ||
+                !positiveInteger(added["total_commits"]) ||
+                added["total_commits"] > MAX_GROUP_ENTRIES ||
+                added["commits"].length !== added["total_commits"]
+              )
+                return fail("CLA_UNEXPECTED_GROUP_COMMIT");
+              const entries = [];
+              let base = group["base_sha"];
+              for (const commit of added["commits"]) {
+                const parents = record(commit) ? commit["parents"] : undefined;
+                const parent = array(parents) ? parents.at(0) : undefined;
+                const data = record(commit) ? commit["commit"] : undefined;
+                if (
+                  !record(commit) ||
+                  !validSha(commit["sha"]) ||
+                  !array(parents) ||
+                  parents.length !== 1 ||
+                  !record(parent) ||
+                  parent["sha"] !== base ||
+                  !record(data) ||
+                  typeof data["message"] !== "string"
+                )
+                  return fail("CLA_UNEXPECTED_GROUP_COMMIT");
+                const number = Number(
+                  data["message"]
+                    .split("\n", 1)
+                    .join("")
+                    .trimEnd()
+                    .match(/\(#([1-9][0-9]*)\)$/u)?.[1],
+                );
+                if (!positiveInteger(number)) fail("CLA_UNEXPECTED_GROUP_COMMIT");
+                entries.push({
+                  number,
+                  baseCommit: { oid: base },
+                  headCommit: { oid: commit["sha"] },
+                });
+                base = commit["sha"];
+              }
+              if (base !== group["head_sha"]) fail("CLA_UNEXPECTED_GROUP_COMMIT");
+              if (new Set(entries.map(({ number }) => number)).size !== entries.length)
+                fail("CLA_AMBIGUOUS_GROUP_CHAIN");
+              return entries;
+            };
+            // END GENERATED merge-group parser
             const groupEntries = async (group) => {
               const { data: added } = await request("GET /repos/{owner}/{repo}/compare/{basehead}", {
                 basehead: `${group.base_sha}...${group.head_sha}`,
               });
-              if (!Array.isArray(added.commits) || !positiveInteger(added.total_commits) ||
-                  added.total_commits > MAX_GROUP_ENTRIES || added.commits.length !== added.total_commits) fail("CLA_UNEXPECTED_GROUP_COMMIT");
-              const entries = [];
-              let base = group.base_sha;
-              for (const commit of added.commits) {
-                if (!validSha(commit?.sha) || !Array.isArray(commit.parents) || commit.parents.length !== 1 ||
-                    commit.parents[0]?.sha !== base || typeof commit.commit?.message !== "string") fail("CLA_UNEXPECTED_GROUP_COMMIT");
-                const number = Number(commit.commit.message.split("\n", 1)[0].trimEnd().match(/\(#([1-9][0-9]*)\)$/u)?.[1]);
-                if (!positiveInteger(number)) fail("CLA_UNEXPECTED_GROUP_COMMIT");
-                entries.push({ number, baseCommit: { oid: base }, headCommit: { oid: commit.sha } });
-                base = commit.sha;
-              }
-              if (base !== group.head_sha) fail("CLA_UNEXPECTED_GROUP_COMMIT");
-              if (new Set(entries.map(({ number }) => number)).size !== entries.length) fail("CLA_AMBIGUOUS_GROUP_CHAIN");
-              return entries;
+              return parseMergeGroupEntries({ group, added, fail });
             };
             const verifyGroup = async (group) => {
               const id = await startCheck(group?.head_sha);

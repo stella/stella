@@ -58,13 +58,13 @@ type CitationCommandHit = ReturnType<typeof citationCommandHits>[number];
 
 export const citationCommandRoute = (
   hit: CitationCommandHit,
-  uiLocale: string,
+  readingLanguages: readonly string[],
 ) => {
   const { match } = hit;
   switch (match.type) {
     case "decision": {
       const params = createCaseLawDecisionRouteParams(
-        preferredDecisionTarget(match.decision, { uiLocale }),
+        preferredDecisionTarget(match.decision, { readingLanguages }),
       );
       const search =
         match.resolution.status === "incomplete_identifier"

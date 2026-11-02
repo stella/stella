@@ -1,15 +1,16 @@
-import { panic, Result, UnhandledException } from "better-result";
 /**
  * System prompt builders for chat endpoints.
  *
  * Extracted from the chat actor so both the actor and the
  * REST chat endpoint can share the same prompt logic.
  */
-import * as cheerio from "cheerio";
+import { panic, Result, UnhandledException } from "better-result";
 import { and, asc, count, eq, isNull, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  type BrowserExtensionCapability,
   CHAT_DECISION_HREF_TEMPLATE,
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
   CHAT_THREAD_PLACEHOLDER_TITLE,
@@ -42,6 +43,7 @@ import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-pub
 import { SUBAGENT_TITLE_MAX_CHARS } from "@stll/api-contract/spawn-subagents";
 import { describeSuggestChangesCapabilities } from "@stll/folio-agents";
 import { isFolioAIContentBlock } from "@stll/folio-core/server";
+import { load } from "@stll/html";
 import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
 import {
@@ -70,6 +72,7 @@ import { corpusStorageMode } from "@/api/env-base";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 import type { StatuteProvisionSelection } from "@/api/handlers/chat/active-statute-selection.logic";
+import { browserExtensionPolicy } from "@/api/handlers/chat/browser-extension-capability";
 import {
   CHAT_REVISION_CONTEXT_MAX_EDITS,
   readChatRevisionContextChanges,
@@ -178,6 +181,10 @@ export type {
   ChatCacheStablePrefix,
   ChatSafePromptLayers,
 } from "@/api/lib/chat/chat-prompt-layers";
+
+export const browserExtensionPromptLine = (
+  extension: BrowserExtensionCapability,
+): string => browserExtensionPolicy(extension).promptLine;
 
 const TITLE_MAX_LENGTH = 80;
 const ACTIVE_DECISION_MAX_CHARS = 12_000;
@@ -680,6 +687,7 @@ export const buildChatPromptCacheKey = (
 };
 
 type BuildChatSystemPromptProps = {
+  browserExtension?: BrowserExtensionCapability | undefined;
   caseLawDb?: CaseLawPublicReadDb;
   featureAccessContext?: McpFeatureAccessContext | undefined;
   activeDecision: IncomingActiveDecision | undefined;
@@ -734,6 +742,11 @@ type BuildChatSystemPromptProps = {
   organizationId?: SafeId<"organization"> | undefined;
   userId?: SafeId<"user"> | undefined;
 };
+
+const DEFAULT_BROWSER_EXTENSION = {
+  protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+  status: "unsupported-device",
+} satisfies BrowserExtensionCapability;
 
 const resolveActiveFilePromptContext = async ({
   activeFile,
@@ -942,6 +955,7 @@ const requireActiveSkillInBindingScope = ({
       );
 
 export const buildChatSystemPromptParts = async ({
+  browserExtension = DEFAULT_BROWSER_EXTENSION,
   caseLawDb = caseLawPublicReadDb,
   featureAccessContext,
   activeDecision,
@@ -1125,6 +1139,7 @@ export const buildChatSystemPromptParts = async ({
     const revisionNoteSection = buildChatRevisionNoteSection(revisionChanges);
 
     const appendedUntrusted = [
+      browserExtensionPromptLine(browserExtension),
       decisionSection.prompt,
       statuteSection,
       externalSection,
@@ -1252,8 +1267,7 @@ export const extractTitle = (parts: ChatMessage["parts"]) => {
   const raw = parts
     .map((part) => (part.type === "text" ? part.content : ""))
     .join("");
-  const plainText = cheerio
-    .load(raw, undefined, false)
+  const plainText = load(raw, undefined, false)
     .text()
     .replaceAll(/\s+/gu, " ")
     .trim();

@@ -12,6 +12,11 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { SAFE_AUTOFIX_RULES } from "./autofix-safe-rules";
+import {
+  hasTypeAwareCandidate,
+  TYPE_AWARE_SAFE_RULE_CANDIDATES,
+} from "./autofix-type-aware-precheck";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const cases = [
@@ -35,14 +40,17 @@ const cases = [
     failure: "prepare",
     extra: "",
   },
-  // Nothing to fix: the fixer leaves the file alone, so its project is not
-  // checked, even with a type error CI's typecheck reports instead.
+  // Nothing to fix: no safe rule reports the file without types, so the type
+  // graph is not prepared and its project is not checked, even with a type
+  // error CI's typecheck reports instead.
   {
     name: "no fixable finding",
     failure: "unfixed",
     extra:
       'import { missing } from "./absent";\nexport const broken = missing;\n',
   },
+  // A syntactic pre-check that cannot finish takes the full type-aware path.
+  { name: "failed syntactic pre-check", failure: "precheck", extra: "" },
 ] as const;
 
 test.each(cases)(
@@ -53,10 +61,10 @@ test.each(cases)(
     const fixable =
       'export const value = { name: "fixture" };\nexport const name = value["name"];\n';
     const guarded = `${fixable}export const truth = value.name ? true : false;\nexport const reversed = 1 === value.name.length;\ndebugger;\n`;
-    const source =
-      failure === "unfixed"
-        ? fixable.replace('value["name"]', "value.name")
-        : guarded;
+    const clean = failure === "unfixed" || failure === "precheck";
+    const source = clean
+      ? fixable.replace('value["name"]', "value.name")
+      : guarded;
     try {
       symlinkSync(
         path.join(repo, "node_modules"),
@@ -67,6 +75,7 @@ test.each(cases)(
       for (const file of [
         "autofix-safe-rules.ts",
         "autofix-protected-paths.ts",
+        "autofix-type-aware-precheck.ts",
         "baseline-paths.ts",
         "typecheck-coverage.ts",
       ]) {
@@ -76,7 +85,11 @@ test.each(cases)(
         );
       }
       mkdirSync(path.join(root, "packages/scripts/src"), { recursive: true });
-      for (const file of ["tsc-native.ts", "child-exit-status.ts"]) {
+      for (const file of [
+        "tsc-native.ts",
+        "child-exit-status.ts",
+        "syntax-tree.ts",
+      ]) {
         writeFileSync(
           path.join(root, "packages/scripts/src", file),
           readFileSync(path.join(repo, "packages/scripts/src", file)),
@@ -142,7 +155,7 @@ test.each(cases)(
         ],
         { cwd: root, stdout: "pipe", stderr: "pipe" },
       );
-      if (failure !== "unfixed") {
+      if (!clean) {
         expect(finding.exitCode).toBe(1);
         expect(finding.stdout.toString() + finding.stderr.toString()).toContain(
           "dot-notation",
@@ -155,7 +168,8 @@ test.each(cases)(
         `#!/bin/bash
 if [[ "$1" == scripts/ci-generated-sources.ts && "$2" == prepare ]]; then touch prepared; exit "$PREPARE_EXIT"; fi
 if [[ "$1" == scripts/autofix-plan.ts && "$2" == run ]]; then cp changed.ts generated.html.txt; exit 0; fi
-if [[ "$2" == oxlint && ! -f prepared ]]; then exit 2; fi
+if [[ "$2" == oxlint && "$*" != *--type-aware* && -n "$PRECHECK_EXIT" ]]; then exit "$PRECHECK_EXIT"; fi
+if [[ "$2" == oxlint && "$*" == *--type-aware* && ! -f prepared ]]; then exit 2; fi
 if [[ "$1" == scripts/typecheck-coverage.ts && "$2" == --autofix ]]; then touch compiler_checked; printf '%s\\n' "$@" > compiler_args; fi
 if [[ "$*" == *" --fix "* ]]; then touch fixer_ran; fi
 exec '${process.execPath}' "$@"
@@ -190,6 +204,7 @@ exec '${process.execPath}' "$@"
           RUNNER_TEMP: root,
           GENERATOR_IDS: "fixture",
           PREPARE_EXIT: failure === "prepare" ? "1" : "0",
+          PRECHECK_EXIT: failure === "precheck" ? "2" : "",
           PATH: `${path.join(root, "bin")}:${process.env["PATH"] ?? ""}`,
         },
         stdout: "pipe",
@@ -203,7 +218,7 @@ exec '${process.execPath}' "$@"
         expect(readFileSync(path.join(root, "changed.ts"), "utf-8")).toBe(
           source.replace('value["name"]', "value.name"),
         );
-      } else if (failure === "unfixed") {
+      } else if (clean) {
         expect(
           fixed.exitCode,
           fixed.stdout.toString() + fixed.stderr.toString(),
@@ -230,9 +245,6 @@ exec '${process.execPath}' "$@"
         );
         // Preparation fails before the fixer; every later failure restores the
         // fixer's rewrites, so the source above stays byte-identical.
-        expect(existsSync(path.join(root, "fixer_ran"))).toBe(
-          failure !== "prepare",
-        );
         if (failure === "coverage") {
           expect(fixed.stdout.toString() + fixed.stderr.toString()).toContain(
             "covered by no candidate project",
@@ -250,9 +262,17 @@ exec '${process.execPath}' "$@"
         }
       }
       expect(existsSync(path.join(root, "compiler_checked"))).toBe(
-        failure !== "prepare" && failure !== "unfixed",
+        failure !== "prepare" && !clean,
       );
-      if (failure !== "prepare" && failure !== "unfixed") {
+      // Only a clean syntactic pre-check skips the type graph and the
+      // type-aware fixer; a finding or a failed pre-check prepares both.
+      expect(existsSync(path.join(root, "prepared"))).toBe(
+        failure !== "unfixed",
+      );
+      expect(existsSync(path.join(root, "fixer_ran"))).toBe(
+        failure !== "unfixed" && failure !== "prepare",
+      );
+      if (failure !== "prepare" && !clean) {
         expect(
           readFileSync(path.join(root, "compiler_args"), "utf-8"),
         ).not.toContain("generated.html.txt");
@@ -543,6 +563,180 @@ process.exit(result.exitCode);
       expect(checked).toEqual(
         layout === "nested-sibling" ? [project] : expectedProjects,
       );
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// typescript/* safe rules that oxlint runs without type information. Every
+// other typescript/* safe rule must name a syntax candidate, so adding a rule
+// to the safe list cannot silently skip its type-aware fixes.
+const SYNTAX_ONLY_TYPESCRIPT_RULES = {
+  "typescript/array-type": "export const values: Array<string> = [];\n",
+  "typescript/prefer-as-const": 'export let mode: "a" = "a";\n',
+} as const;
+
+const PRECHECK_SNIPPETS = {
+  doubleQuoted: 'const o = { a: 1 };\nexport const x = o["a"];\n',
+  singleQuoted: "const o = { a: 1 };\nexport const x = o['a'];\n",
+  template: "const o = { a: 1 };\nexport const x = o[`a`];\n",
+  optional:
+    'const o = { a: 1 } as { a?: number } | undefined;\nexport const x = o?.["a"];\n',
+  record: 'const r: Record<string, number> = {};\nexport const x = r["key"];\n',
+  indexSignature:
+    'interface I { [key: string]: number }\ndeclare const i: I;\nexport const x = i["key"];\n',
+  privateMember:
+    'export class C { private p = 1; read(other: C) { return other["p"]; } }\n',
+  keyword: 'const o = { class: 1 };\nexport const x = o["class"];\n',
+  dashed: 'const o = { "a-b": 1 };\nexport const x = o["a-b"];\n',
+  anyTyped: 'declare const a: any;\nexport const x = a["foo"];\n',
+  numericString: 'const o = { 1: 1 };\nexport const x = o["1"];\n',
+  jsx: 'const o = { a: "x" };\nexport const view = () => <div title={o["a"]} />;\n',
+  dotAccess: "const o = { class: 1, a: 2 };\nexport const x = o.class + o.a;\n",
+  variableKey: 'const k = "a";\nconst o = { a: 1 };\nexport const x = o[k];\n',
+  numericIndex: "const values = [1];\nexport const x = values[0];\n",
+  interpolated:
+    'const k = "a";\nconst o: Record<string, number> = { a: 1 };\nexport const x = o[`$' +
+    "{k}`];\n",
+  arrayLiteral: 'export const keys = ["a", `b`];\n',
+  computedKey: 'export const o = { ["a"]: 1 };\n',
+  indexedType: 'type T = { a: number };\nexport type A = T["a"];\n',
+} as const;
+
+const snippetFileName = (name: string) =>
+  `snippet-${name}.${name === "jsx" ? "tsx" : "ts"}`;
+
+test("every type-aware safe rule names a syntax candidate", () => {
+  const safeRules = Object.keys(SAFE_AUTOFIX_RULES);
+  for (const rule of safeRules.filter((name) =>
+    name.startsWith("typescript/"),
+  )) {
+    expect(
+      Object.hasOwn(TYPE_AWARE_SAFE_RULE_CANDIDATES, rule) ||
+        Object.hasOwn(SYNTAX_ONLY_TYPESCRIPT_RULES, rule),
+      rule,
+    ).toBe(true);
+  }
+  for (const rule of Object.keys(TYPE_AWARE_SAFE_RULE_CANDIDATES)) {
+    expect(safeRules).toContain(rule);
+  }
+  // The dot-notation candidate holds under its default allowKeywords; with
+  // `allowKeywords: false` it would also report plain `.class` accesses.
+  const repo = path.resolve(import.meta.dirname, "..");
+  for (const config of [
+    "oxlint.config.ts",
+    "node_modules/@stll/oxlint-config/dist/index.mjs",
+  ]) {
+    expect(readFileSync(path.join(repo, config), "utf-8")).not.toContain(
+      "allowKeywords",
+    );
+  }
+});
+
+test("the type-aware pre-check flags only literal-key member access", () => {
+  const flagged = Object.entries(PRECHECK_SNIPPETS)
+    .filter(([name, source]) =>
+      hasTypeAwareCandidate(snippetFileName(name), source),
+    )
+    .map(([name]) => name)
+    .toSorted();
+  expect(flagged).toEqual(
+    [
+      "anyTyped",
+      "dashed",
+      "doubleQuoted",
+      "indexSignature",
+      "jsx",
+      "keyword",
+      "numericString",
+      "optional",
+      "privateMember",
+      "record",
+      "singleQuoted",
+      "template",
+    ].toSorted(),
+  );
+  // A file the scan cannot parse fails instead of passing unread.
+  expect(() => hasTypeAwareCandidate("broken.ts", "const = ;")).toThrow(
+    "broken.ts does not parse",
+  );
+});
+
+test("oxlint reports type-aware safe rules only where the pre-check flags", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "autofix-type-aware-precheck-"));
+  const repo = path.resolve(import.meta.dirname, "..");
+  const lint = (args: readonly string[]) => {
+    const result = Bun.spawnSync(
+      [
+        process.execPath,
+        "--bun",
+        "oxlint",
+        "-c",
+        "oxlint.config.ts",
+        "--allow",
+        "all",
+        ...args,
+      ],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
+    return {
+      exitCode: result.exitCode,
+      output: result.stdout.toString() + result.stderr.toString(),
+    };
+  };
+  try {
+    symlinkSync(
+      path.join(repo, "node_modules"),
+      path.join(root, "node_modules"),
+    );
+    writeFileSync(
+      path.join(root, "tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          strict: true,
+          target: "ESNext",
+          module: "ESNext",
+          jsx: "preserve",
+          types: [],
+        },
+        include: ["*.ts", "*.tsx"],
+      }),
+    );
+    writeFileSync(
+      path.join(root, "oxlint.config.ts"),
+      'export default { plugins: ["typescript"], categories: { correctness: "off" } };\n',
+    );
+    for (const [name, source] of Object.entries(PRECHECK_SNIPPETS)) {
+      writeFileSync(path.join(root, snippetFileName(name)), source);
+    }
+    const files = Object.keys(PRECHECK_SNIPPETS).map(snippetFileName);
+    for (const rule of Object.keys(TYPE_AWARE_SAFE_RULE_CANDIDATES)) {
+      const { exitCode, output } = lint([
+        "--type-aware",
+        "--deny",
+        rule,
+        ...files,
+      ]);
+      expect(exitCode, output).toBe(1);
+      const reported = Object.entries(PRECHECK_SNIPPETS).filter(([name]) =>
+        output.includes(snippetFileName(name)),
+      );
+      // Not vacuous: the engine reports the plain case.
+      expect(output).toContain(snippetFileName("doubleQuoted"));
+      for (const [name, source] of reported) {
+        expect(
+          hasTypeAwareCandidate(snippetFileName(name), source),
+          `${rule} reported ${name}`,
+        ).toBe(true);
+      }
+    }
+    // Rules listed as syntax-only report without type information.
+    for (const [rule, source] of Object.entries(SYNTAX_ONLY_TYPESCRIPT_RULES)) {
+      writeFileSync(path.join(root, "syntax-only.ts"), source);
+      const { exitCode, output } = lint(["--deny", rule, "syntax-only.ts"]);
+      expect(exitCode, output).toBe(1);
+      expect(output).toContain(rule.replace("typescript/", ""));
     }
   } finally {
     rmSync(root, { recursive: true, force: true });

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { Fetch } from "@/connection/http";
 import {
   createAccessTokenSource,
+  createSessionStore,
   type StoredSession,
 } from "@/connection/session";
 
@@ -16,6 +17,7 @@ import {
 } from "./document-file";
 
 const SESSION: StoredSession = {
+  signInId: "sign-in-1",
   serverUrl: "https://stella.example.com",
   issuer: "https://stella.example.com/api/auth",
   clientId:
@@ -31,18 +33,22 @@ const DOCX =
 const XLSX =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-const sourceFor = (fetch: Fetch) =>
-  createAccessTokenSource({
+const sourceFor = (fetch: Fetch) => {
+  const store = createSessionStore({
+    read: async () => SESSION,
+    write: async () => {},
+    prepareClear: async () => {},
+    clear: async () => {},
+  });
+  return createAccessTokenSource({
     fetch,
     initialAccess: { token: "access-0", expiresAt: Number.MAX_SAFE_INTEGER },
     now: () => 0,
     session: SESSION,
-    store: {
-      read: async () => SESSION,
-      write: async () => {},
-      clear: async () => {},
-    },
+    store,
+    generation: store.generation(),
   });
+};
 
 /** A server answering each path with `respond`, recording what was asked. */
 const server = (respond: (path: string) => Response) => {
@@ -162,6 +168,7 @@ describe("reading a document's file", () => {
     );
     const result = await read(fetch);
     expect(result.isOk() ? result.value : result.error).toEqual({
+      propertyId: "property-1",
       fileName: "Smlouva.docx",
       mimeType: "application/pdf",
       url: "https://storage.example.com/file-1?signature=abc",

@@ -1,6 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import { placeMark } from "@stll/api-contract/pdf-mark-placement";
+import type { MarkPlacement } from "@stll/api-contract/pdf-mark-placement";
 import { Temporal } from "@stll/time";
 
 import type {
@@ -21,13 +23,11 @@ import {
 import type { DocumentAnnotation } from "@/components/pdf/annotations/document-annotations-query";
 import {
   locateSelection,
-  placeMark,
   SELECTION_REFUSAL,
 } from "@/components/pdf/annotations/document-mark-anchor.logic";
 import type {
   LocatedSelection,
   LocatedSpan,
-  MarkPlacement,
   SelectedLayerText,
 } from "@/components/pdf/annotations/document-mark-anchor.logic";
 import { api } from "@/lib/api";

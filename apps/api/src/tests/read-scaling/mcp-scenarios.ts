@@ -12,9 +12,16 @@ import {
   measureWebHandoff,
 } from "@/api/tests/read-scaling/handoff";
 
+import { measureCreateOrganizationTool } from "./organization-create";
+
 type ReadFixture = Awaited<ReturnType<typeof seedEntityReadScaling>>;
 
 export const mcpScalingScenarios = [
+  {
+    name: "create_organization" satisfies McpToolName,
+    kind: "account-create" as const,
+    measure: measureCreateOrganizationTool,
+  },
   {
     name: "list_documents" satisfies McpToolName,
     kind: "database-page" as const,

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/button";
@@ -31,7 +32,6 @@ import { OpenOriginalButton } from "@/components/legal-reader/open-original-butt
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import Tooltip from "@/components/tooltip";
-import { StatuteDisplayLabel } from "@/features/statutes/components/statute-display-label";
 import { StatuteReaderBody } from "@/features/statutes/components/statute-reader-body";
 import {
   statuteOptions,
@@ -102,7 +102,10 @@ export const StatuteInspectorView = ({
     statuteTitle: statute?.title ?? payload.statuteTitle,
   });
   const landingAnchorId = statuteLandingAnchorId(
-    preparedReader.blocks,
+    {
+      blocks: preparedReader.blocks,
+      scheme: statuteAnchorSchemeFor(payload.country),
+    },
     payload.anchorId,
   );
   // The chat is bound to the consolidation the tab holds, which is the
@@ -157,12 +160,8 @@ export const StatuteInspectorView = ({
             ),
           },
         ]}
-        label={tab.label}
-        labelOverflow="wrap"
-        labelContent={
-          statute === undefined ? undefined : (
-            <StatuteDisplayLabel statute={statute} />
-          )
+        label={
+          statute === undefined ? tab.label : statuteDisplayLabel(statute).text
         }
         onClose={onClose}
       />
