@@ -8,7 +8,7 @@ import { contacts } from "@/api/db/schema";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { getAuth } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { createConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { verifyAndDeleteUser } from "@/api/lib/delete-account";
@@ -21,6 +21,7 @@ import {
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { isRecord } from "@/api/lib/type-guards";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
@@ -97,7 +98,6 @@ const createContact = async (
   browser: HumanBrowser,
   input: ContactInput,
 ): Promise<SafeId<"contact">> => {
-  const id = createSafeId<"contact">();
   const response = await server.fetch(
     new Request("http://localhost/contacts", {
       method: "PUT",
@@ -106,7 +106,6 @@ const createContact = async (
         cookie: browser.cookieHeader(),
       },
       body: JSON.stringify({
-        id,
         type: "organization",
         organizationName: input.organizationName ?? input.displayName,
         ...input,
@@ -114,7 +113,12 @@ const createContact = async (
     }),
   );
   expect(response.status, await response.clone().text()).toBeLessThan(300);
-  return id;
+  // The server mints contact ids; the created contact names its own.
+  const created: unknown = await response.json();
+  if (!isRecord(created) || typeof created["id"] !== "string") {
+    return panic("The created contact carries no id");
+  }
+  return toSafeId<"contact">(created["id"]);
 };
 
 /** What the principal's session reads from the contacts list. */
