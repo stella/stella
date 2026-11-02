@@ -1455,10 +1455,12 @@
           "click": "Kattintás",
           "fill": "Szöveg beírása",
           "open": "Webhely megnyitása",
+          "openNewTab": "Webhely megnyitása új lapon",
           "pressKey": "Billentyű lenyomása",
           "select": "Lehetőség kiválasztása",
           "snapshot": "Oldal beolvasása",
-          "snapshotContinue": "Az oldal olvasásának folytatása"
+          "snapshotContinue": "Az oldal olvasásának folytatása",
+          "switchTab": "Váltás a lapra"
         },
         "askAgain": "Kérdezzen újra",
         "autoApproveReads": "Oldalolvasás automatikus jóváhagyása",

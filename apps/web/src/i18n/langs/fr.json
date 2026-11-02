@@ -1455,10 +1455,12 @@
           "click": "Cliquer",
           "fill": "Saisir du texte",
           "open": "Ouvrir le site web",
+          "openNewTab": "Ouvrir le site web dans un nouvel onglet",
           "pressKey": "Appuyer sur une touche",
           "select": "Sélectionner une option",
           "snapshot": "Lire la page",
-          "snapshotContinue": "Continuer la lecture de la page"
+          "snapshotContinue": "Continuer la lecture de la page",
+          "switchTab": "Passer à l’onglet"
         },
         "askAgain": "Redemander",
         "autoApproveReads": "Approuver automatiquement la lecture des pages",
