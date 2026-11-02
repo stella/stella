@@ -84,6 +84,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "oauth_refresh_token",
   "organization_creation_requests",
   "organization_professional_use_acceptances",
+  "outbound_actions",
   "pdf_signing_sessions",
   "pending_uploads",
   "playbook_definition_versions",

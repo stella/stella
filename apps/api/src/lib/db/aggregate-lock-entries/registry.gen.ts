@@ -34,23 +34,24 @@ import entry32 from "./obligation";
 import entry33 from "./orgFeatureAdmission";
 import entry34 from "./organization";
 import entry35 from "./organizationObjectIntent";
-import entry36 from "./personalCatalog";
-import entry37 from "./processingClaim";
-import entry38 from "./professionalUseAcceptance";
-import entry39 from "./rateTableWorkspace";
-import entry40 from "./readerAnnotation";
-import entry41 from "./readerAnswer";
-import entry42 from "./readerAnswerMessage";
-import entry43 from "./requestReceipt";
-import entry44 from "./run";
-import entry45 from "./sampleCase";
-import entry46 from "./schedulerClaim";
-import entry47 from "./scoutCensus";
-import entry48 from "./searchHistory";
-import entry49 from "./searchProjectionRepair";
-import entry50 from "./signal";
-import entry51 from "./signingSession";
-import entry52 from "./workspace";
+import entry36 from "./outboundAction";
+import entry37 from "./personalCatalog";
+import entry38 from "./processingClaim";
+import entry39 from "./professionalUseAcceptance";
+import entry40 from "./rateTableWorkspace";
+import entry41 from "./readerAnnotation";
+import entry42 from "./readerAnswer";
+import entry43 from "./readerAnswerMessage";
+import entry44 from "./requestReceipt";
+import entry45 from "./run";
+import entry46 from "./sampleCase";
+import entry47 from "./schedulerClaim";
+import entry48 from "./scoutCensus";
+import entry49 from "./searchHistory";
+import entry50 from "./searchProjectionRepair";
+import entry51 from "./signal";
+import entry52 from "./signingSession";
+import entry53 from "./workspace";
 
 export default {
   "account": entry0,
@@ -89,21 +90,22 @@ export default {
   "orgFeatureAdmission": entry33,
   "organization": entry34,
   "organizationObjectIntent": entry35,
-  "personalCatalog": entry36,
-  "processingClaim": entry37,
-  "professionalUseAcceptance": entry38,
-  "rateTableWorkspace": entry39,
-  "readerAnnotation": entry40,
-  "readerAnswer": entry41,
-  "readerAnswerMessage": entry42,
-  "requestReceipt": entry43,
-  "run": entry44,
-  "sampleCase": entry45,
-  "schedulerClaim": entry46,
-  "scoutCensus": entry47,
-  "searchHistory": entry48,
-  "searchProjectionRepair": entry49,
-  "signal": entry50,
-  "signingSession": entry51,
-  "workspace": entry52,
+  "outboundAction": entry36,
+  "personalCatalog": entry37,
+  "processingClaim": entry38,
+  "professionalUseAcceptance": entry39,
+  "rateTableWorkspace": entry40,
+  "readerAnnotation": entry41,
+  "readerAnswer": entry42,
+  "readerAnswerMessage": entry43,
+  "requestReceipt": entry44,
+  "run": entry45,
+  "sampleCase": entry46,
+  "schedulerClaim": entry47,
+  "scoutCensus": entry48,
+  "searchHistory": entry49,
+  "searchProjectionRepair": entry50,
+  "signal": entry51,
+  "signingSession": entry52,
+  "workspace": entry53,
 } as const;

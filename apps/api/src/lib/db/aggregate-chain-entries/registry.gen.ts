@@ -28,18 +28,19 @@ import entry26 from "./memberPrefix";
 import entry27 from "./memory";
 import entry28 from "./organizationObjectIntentLifecycle";
 import entry29 from "./organizationObjectIntentWriter";
-import entry30 from "./personalCatalog";
-import entry31 from "./professionalUseAcceptance";
-import entry32 from "./rateTableWorkspace";
-import entry33 from "./readerAnnotation";
-import entry34 from "./readerAnswer";
-import entry35 from "./requestReceipt";
-import entry36 from "./sampleCase";
-import entry37 from "./scoutRun";
-import entry38 from "./searchHistory";
-import entry39 from "./searchProjectionRepair";
-import entry40 from "./signal";
-import entry41 from "./signingSession";
+import entry30 from "./outboundAction";
+import entry31 from "./personalCatalog";
+import entry32 from "./professionalUseAcceptance";
+import entry33 from "./rateTableWorkspace";
+import entry34 from "./readerAnnotation";
+import entry35 from "./readerAnswer";
+import entry36 from "./requestReceipt";
+import entry37 from "./sampleCase";
+import entry38 from "./scoutRun";
+import entry39 from "./searchHistory";
+import entry40 from "./searchProjectionRepair";
+import entry41 from "./signal";
+import entry42 from "./signingSession";
 
 export default {
   "accountDeletionRequest": entry0,
@@ -72,16 +73,17 @@ export default {
   "memory": entry27,
   "organizationObjectIntentLifecycle": entry28,
   "organizationObjectIntentWriter": entry29,
-  "personalCatalog": entry30,
-  "professionalUseAcceptance": entry31,
-  "rateTableWorkspace": entry32,
-  "readerAnnotation": entry33,
-  "readerAnswer": entry34,
-  "requestReceipt": entry35,
-  "sampleCase": entry36,
-  "scoutRun": entry37,
-  "searchHistory": entry38,
-  "searchProjectionRepair": entry39,
-  "signal": entry40,
-  "signingSession": entry41,
+  "outboundAction": entry30,
+  "personalCatalog": entry31,
+  "professionalUseAcceptance": entry32,
+  "rateTableWorkspace": entry33,
+  "readerAnnotation": entry34,
+  "readerAnswer": entry35,
+  "requestReceipt": entry36,
+  "sampleCase": entry37,
+  "scoutRun": entry38,
+  "searchHistory": entry39,
+  "searchProjectionRepair": entry40,
+  "signal": entry41,
+  "signingSession": entry42,
 } as const;
