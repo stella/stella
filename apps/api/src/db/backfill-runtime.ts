@@ -30,6 +30,7 @@ import {
 import { Temporal } from "@stll/time";
 
 import { loadGateHealthConfig } from "@/api/env-online-index";
+import { admitCaseLawPopulationMaintenance } from "@/api/lib/case-law/population-maintenance-admission";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 
 import {
@@ -368,6 +369,33 @@ const throwIfBackfillDeferred = ({
   }
 };
 
+type SettledMaintenanceVerdictReaderOptions = Omit<
+  Parameters<typeof admitCaseLawPopulationMaintenance>[0],
+  "query" | "verdict"
+> & {
+  indicators: { query: Query; settle: () => Promise<void> };
+  readHealth: () => Promise<Verdict>;
+};
+
+/** Finish cancelled indicator reads before the reserved session starts work. */
+const createSettledMaintenanceVerdictReader =
+  ({
+    indicators,
+    readHealth,
+    ...admission
+  }: SettledMaintenanceVerdictReaderOptions) =>
+  async () => {
+    try {
+      return await admitCaseLawPopulationMaintenance({
+        ...admission,
+        query: indicators.query,
+        verdict: await readHealth(),
+      });
+    } finally {
+      await indicators.settle();
+    }
+  };
+
 const createRuntime = <BatchTransaction>({
   name,
   tableName,
@@ -405,13 +433,14 @@ const createRuntime = <BatchTransaction>({
       config,
       sharedReadEbsSignal: readEbsSignal,
     });
-  const readSettledVerdict = async () => {
-    try {
-      return await readHealth();
-    } finally {
-      await indicatorQueries.settle();
-    }
-  };
+  const readSettledVerdict = createSettledMaintenanceVerdictReader({
+    indicators: indicatorQueries,
+    readHealth,
+    tableName,
+    tableContention,
+    name,
+    clock,
+  });
   const readCheckpoint = async (tx: BatchTransaction) => {
     const q = transactionQuery(tx);
     await setSharedQueryTimeouts(q, {
@@ -613,13 +642,20 @@ export const createScriptBackfillHealthReader = ({
     transactionQuery: (tx: Transaction) => drizzleQuery(tx),
     readTimeoutMs: config.readTimeoutMs,
   });
+  const readHealth = createVerdictReader({
+    query: bounded.query,
+    tableName,
+    clock,
+    config,
+  });
   return {
-    readVerdict: createVerdictReader({
-      query: bounded.query,
-      tableName,
-      clock,
-      config,
-    }),
+    readVerdict: async () =>
+      await admitCaseLawPopulationMaintenance({
+        query: bounded.query,
+        tableName,
+        clock,
+        verdict: await readHealth(),
+      }),
     settle: bounded.settle,
   };
 };
@@ -779,7 +815,12 @@ export const createDatabaseLoadVerdictReader = ({
           warn,
         });
       }
-      return verdict;
+      return await admitCaseLawPopulationMaintenance({
+        query: indicators.query,
+        tableName,
+        clock,
+        verdict,
+      });
     });
     await indicators.settle();
     if (Result.isError(result)) {

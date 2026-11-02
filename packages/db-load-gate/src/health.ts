@@ -8,7 +8,11 @@ export type HealthSignalKind = VerdictKind | "not_configured";
 export type WorkKind = "index_build" | "backfill_batch";
 export type Signal = {
   indicator:
-    "ebs_balance" | "long_transaction" | "autovacuum_on_target" | "busy_window";
+    | "ebs_balance"
+    | "long_transaction"
+    | "autovacuum_on_target"
+    | "busy_window"
+    | "population_backlog";
   kind: HealthSignalKind;
   value: number | null;
   threshold: number | null;
