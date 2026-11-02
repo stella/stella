@@ -265,7 +265,8 @@ const proseWord = fc.constantFrom(
 
 describe("reading a docket reference however it is spelled", () => {
   test("every spelling of one reference reads as the same file and the same selector", () => {
-    fc.assert(
+    assertProperty(
+      "every spelling of one reference reads as the same file and the same selector",
       fc.property(referenceArbitrary, ({ docket, entry, tail }) => {
         const intent = docketIntentOf(entry);
         // The family keeps the reader's case and gaps the grammar allows, and
@@ -276,34 +277,37 @@ describe("reading a docket reference however it is spelled", () => {
         expect(intent.selector, entry).toEqual(expectedSelector(tail));
         expect(intent.embeddedIn, entry).toBeUndefined();
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("a reference with no tail never reads as one with a selector", () => {
-    fc.assert(
+    assertProperty(
+      "a reference with no tail never reads as one with a selector",
       fc.property(
         docketArbitrary.chain((docket) => spellingOf(docket, { kind: "none" })),
         (entry) => {
           expect(docketIntentOf(entry).selector).toEqual({ kind: "none" });
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("the spelling a reference reads back as is the same reference", () => {
-    fc.assert(
+    assertProperty(
+      "the spelling a reference reads back as is the same reference",
       fc.property(referenceArbitrary, ({ entry }) => {
         const intent = docketIntentOf(entry);
         expect(parseDecisionQuery(intent.value, CZE)).toEqual(intent);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("a reference among other words is still read, and says so", () => {
-    fc.assert(
+    assertProperty(
+      "a reference among other words is still read, and says so",
       fc.property(
         referenceArbitrary,
         fc.array(proseWord, { minLength: 0, maxLength: 4 }),
@@ -328,12 +332,13 @@ describe("reading a docket reference however it is spelled", () => {
           expect(intent.embeddedIn).toBe(entry);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("two different references in one entry name no single one", () => {
-    fc.assert(
+    assertProperty(
+      "two different references in one entry name no single one",
       fc.property(
         docketArbitrary,
         docketArbitrary,
@@ -349,7 +354,7 @@ describe("reading a docket reference however it is spelled", () => {
           });
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -468,7 +473,8 @@ describe("the stored spellings a file's members carry", () => {
     // One separator set drives both the stored spellings the file is read
     // under and the reader: a spelling the index is read under that the
     // reader would not take as its part would split the two.
-    fc.assert(
+    assertProperty(
+      "each tail spelling reads back as the file and the part it carries",
       fc.property(docketArbitrary, (docket) => {
         const family = filed(docket);
         for (const spelling of decisionDocketTailSpellings(family)) {
@@ -482,12 +488,13 @@ describe("the stored spellings a file's members carry", () => {
           );
         }
       }),
-      propertyConfig({ numRuns: 40 }),
+      { numRuns: 40 },
     );
   });
 
   test("each tail spelling trims back to the file it belongs to", () => {
-    fc.assert(
+    assertProperty(
+      "each tail spelling trims back to the file it belongs to",
       fc.property(docketArbitrary, (docket) => {
         const family = filed(docket);
         for (const spelling of decisionDocketTailSpellings(family)) {
@@ -498,7 +505,7 @@ describe("the stored spellings a file's members carry", () => {
           });
         }
       }),
-      propertyConfig({ numRuns: 40 }),
+      { numRuns: 40 },
     );
   });
 });
@@ -777,7 +784,8 @@ describe("resolving a reference to one decision or to its candidates", () => {
   });
 
   test("decisions of one file on different dates are never collapsed", () => {
-    fc.assert(
+    assertProperty(
+      "decisions of one file on different dates are never collapsed",
       fc.property(
         fc.uniqueArray(
           fc.date({
@@ -799,7 +807,7 @@ describe("resolving a reference to one decision or to its candidates", () => {
           expect(idsOf(resolution)).toHaveLength(hits.length);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -809,7 +817,8 @@ describe("resolving a reference to one decision or to its candidates", () => {
     const sheetOrNull = fc.option(fc.integer({ min: 1, max: 200 }), {
       nil: null,
     });
-    fc.assert(
+    assertProperty(
+      "a resolution only ever names hits of the file, and one only when it can tell",
       fc.property(
         fc.array(
           fc.record({
@@ -856,7 +865,7 @@ describe("resolving a reference to one decision or to its candidates", () => {
           ).toHaveLength(1);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });
@@ -913,18 +922,20 @@ const slovakSpellingOf = ({
 
 describe("the case-file key a stored docket is kept under", () => {
   test("every stored spelling of a Czech file's member keys as the file", () => {
-    fc.assert(
+    assertProperty(
+      "every stored spelling of a Czech file's member keys as the file",
       fc.property(referenceArbitrary, ({ docket, entry }) => {
         const key = docketFamilyKeyOf(entry, "CZE");
         expect(key, entry).not.toBeNull();
         expect(key, entry).toBe(docketFamilyKeyOf(filed(docket), "CZE"));
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("every part and junk tail a member is stored under keys as its file", () => {
-    fc.assert(
+    assertProperty(
+      "every part and junk tail a member is stored under keys as its file",
       fc.property(docketArbitrary, (docket) => {
         const family = filed(docket);
         const key = docketFamilyKeyOf(family, "CZE");
@@ -932,12 +943,13 @@ describe("the case-file key a stored docket is kept under", () => {
           expect(docketFamilyKeyOf(spelling, "CZE"), spelling).toBe(key);
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("every stored spelling of a Slovak file's member keys as the file", () => {
-    fc.assert(
+    assertProperty(
+      "every stored spelling of a Slovak file's member keys as the file",
       fc.property(
         slovakDocketArbitrary.chain((docket) =>
           slovakSpellingOf(docket).map((stored) => ({ docket, stored })),
@@ -949,12 +961,13 @@ describe("the case-file key a stored docket is kept under", () => {
           expect(key, stored).toBe(docketFamilyKeyOf(filedDocket, "SVK"));
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("two different files never share a key", () => {
-    fc.assert(
+    assertProperty(
+      "two different files never share a key",
       fc.property(
         docketArbitrary,
         docketArbitrary,
@@ -971,7 +984,7 @@ describe("the case-file key a stored docket is kept under", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

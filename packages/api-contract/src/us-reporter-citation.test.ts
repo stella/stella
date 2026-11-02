@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   canonicalUsReporterCitation,
@@ -282,10 +282,11 @@ test("any spacing of a canonical citation reads to the same identity", () => {
       const typed = `${volume ?? ""} ${edition} ${page}`;
       return { citation, typed: lower ? typed.toLowerCase() : typed };
     });
-  fc.assert(
+  assertProperty(
+    "any spacing of a canonical citation reads to the same identity",
     fc.property(respaced, ({ citation, typed }) => {
       expect(canonicalUsReporterCitation(typed)).toBe(citation);
     }),
-    propertyConfig(),
+    {},
   );
 });

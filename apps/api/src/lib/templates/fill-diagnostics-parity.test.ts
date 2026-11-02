@@ -22,7 +22,7 @@ import fc from "fast-check";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { DECISION_UNDECIDED_REASONS } from "@stll/api-contract/ai-decision-provider";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
@@ -436,7 +436,8 @@ const mcpVerdict = async (
 
 describe("fill completion parity across surfaces", () => {
   test("every surface reports the owner's verdict", async () => {
-    await fc.assert(
+    await assertProperty(
+      "every surface reports the owner's verdict",
       fc.asyncProperty(
         fillSources,
         unrestoredPaths,
@@ -476,7 +477,7 @@ describe("fill completion parity across surfaces", () => {
           });
         },
       ),
-      propertyConfig({ numRuns: 40 }),
+      { numRuns: 40 },
     );
   });
 });
