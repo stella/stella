@@ -1003,7 +1003,7 @@ export const ActivitySettingsPane = () => {
  */
 const BillingDraftConsentSettings = () => {
   const t = useTranslations("activity");
-  const { settings, setConsent } = useBillingDraftSettings(true);
+  const { settings, setConsent, setPreference } = useBillingDraftSettings(true);
   if (settings.type === "loading" || settings.type === "unavailable") {
     return null;
   }
@@ -1031,6 +1031,24 @@ const BillingDraftConsentSettings = () => {
           {t("billingDraftsWithdrawPending")}
         </p>
       ) : null}
+      {settings.preference === null ? null : (
+        <div className="flex flex-col gap-1">
+          <span className="text-muted-foreground text-xs">
+            {t("billingDraftsPreference")}
+          </span>
+          <bdi className="text-sm text-pretty">{settings.preference}</bdi>
+          <Button
+            className="self-start"
+            onClick={() => {
+              void setPreference(null);
+            }}
+            size="xs"
+            variant="ghost"
+          >
+            {t("billingDraftsForgetPreference")}
+          </Button>
+        </div>
+      )}
       {consent === "granted" ? (
         <Button
           className="self-start"

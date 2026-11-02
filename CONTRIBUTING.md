@@ -251,6 +251,7 @@ it:
 - `@stll/country-codes`
 - `@stll/docx-utils`
 - `@stll/fetch`
+- `@stll/html`
 - `@stll/mcp-kit`
 - `@stll/money`
 - `@stll/scan-engine`

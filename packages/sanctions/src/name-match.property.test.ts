@@ -4,7 +4,6 @@ import fc from "fast-check";
 
 import {
   assertProperty,
-  propertyConfig,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -24,7 +23,6 @@ import {
   runSteps,
 } from "./test-fixtures/legacy-name-match";
 
-const config = () => propertyConfig({ seed: propertySeed() });
 const word = fc.oneof(
   fc.constantFrom(
     "Čapek",
@@ -124,7 +122,8 @@ describe("name matching (properties)", () => {
   test(
     "matches every generated strong name with full coverage",
     () => {
-      fc.assert(
+      assertProperty(
+        "matches every generated strong name with full coverage",
         fc.property(
           fc.array(fullName, { minLength: 1, maxLength: 5 }),
           (names) => {
@@ -140,7 +139,7 @@ describe("name matching (properties)", () => {
             }
           },
         ),
-        config(),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(5000),
@@ -154,7 +153,7 @@ describe("name matching (properties)", () => {
         fc.property(fullName, (name) => {
           expect(score(name, name)).toBe(1);
         }),
-        config(),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(5000),
@@ -172,7 +171,7 @@ describe("name matching (properties)", () => {
         fc.property(differentNames, ([listed, query]) => {
           expect(score(listed, query)).toBeLessThan(0.8);
         }),
-        config(),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(5000),
@@ -181,7 +180,8 @@ describe("name matching (properties)", () => {
   test(
     "keeps scores when query and list change case or whitespace",
     () => {
-      fc.assert(
+      assertProperty(
+        "keeps scores when query and list change case or whitespace",
         fc.property(
           fc.array(fullName, { minLength: 1, maxLength: 5 }),
           fullName,
@@ -201,7 +201,7 @@ describe("name matching (properties)", () => {
             }
           },
         ),
-        config(),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(5000),
@@ -222,7 +222,8 @@ describe("name matching (properties)", () => {
       const latinName = fc
         .array(latinWord, { minLength: 1, maxLength: 4 })
         .map((parts) => parts.join(" "));
-      fc.assert(
+      assertProperty(
+        "keeps scores under composed, decomposed and unaccented Latin spelling",
         fc.property(
           fc.array(latinName, { minLength: 1, maxLength: 5 }),
           latinName,
@@ -250,7 +251,7 @@ describe("name matching (properties)", () => {
             }
           },
         ),
-        config(),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(5000),
@@ -259,14 +260,15 @@ describe("name matching (properties)", () => {
   test(
     "full-name coverage is independent of token order",
     () => {
-      fc.assert(
+      assertProperty(
+        "full-name coverage is independent of token order",
         fc.property(words, (parts) => {
           const value = parts.join(" ");
           const reversed = parts.toReversed().join(" ");
           expect(score(value, reversed)).toBe(1);
           expect(score(reversed, value)).toBe(1);
         }),
-        config(),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(5000),
@@ -275,7 +277,8 @@ describe("name matching (properties)", () => {
   test(
     "single-word strong-name scores are symmetric",
     () => {
-      fc.assert(
+      assertProperty(
+        "single-word strong-name scores are symmetric",
         fc.property(
           word
             .chain((left) =>
@@ -302,7 +305,7 @@ describe("name matching (properties)", () => {
             expect(score(left, right)).toBeCloseTo(score(right, left), 12);
           },
         ),
-        config(),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(5000),
@@ -311,7 +314,8 @@ describe("name matching (properties)", () => {
   test(
     "initials-only queries remain unanchored",
     () => {
-      fc.assert(
+      assertProperty(
+        "initials-only queries remain unanchored",
         fc.property(words, (parts) => {
           const listed = parts.join(" ");
           const index = buildNameIndex([entry(listed)]);
@@ -325,7 +329,7 @@ describe("name matching (properties)", () => {
           expect(matchesFor(index, listed).get(0)?.score).toBe(1);
           expect(matchesFor(index, initialsQuery).size).toBe(0);
         }),
-        config(),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(5000),
@@ -334,7 +338,8 @@ describe("name matching (properties)", () => {
   test(
     "repeated equivalent aliases preserve the strongest quality",
     () => {
-      fc.assert(
+      assertProperty(
+        "repeated equivalent aliases preserve the strongest quality",
         fc.property(fullName, fullName, (listed, query) => {
           const strong = entry(listed);
           const repeated = {
@@ -353,7 +358,7 @@ describe("name matching (properties)", () => {
             expect(scores(duplicate, value)).toEqual(scores(baseline, value));
           }
         }),
-        config(),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(5000),
