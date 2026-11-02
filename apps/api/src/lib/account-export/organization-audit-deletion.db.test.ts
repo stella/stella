@@ -85,13 +85,31 @@ const downloadServer = serveRoutesForTest(
       "/:exportId/download": {
         GET: createDownloadPersonalDataExport({
           openObjectStream: openPublishedArchive,
-          authenticateOAuth: async (token) =>
-            Result.ok({
-              userId: token.slice(OAUTH_TOKEN_PREFIX.length),
-              organizationId: "organization",
+          // A client the user authorized under their current membership, so
+          // the download reaches the archive rule rather than the member check.
+          authenticateOAuth: async (token) => {
+            const userId = token.slice(OAUTH_TOKEN_PREFIX.length);
+            const membership =
+              (
+                await rootDb
+                  .select({
+                    organizationId: member.organizationId,
+                    id: member.id,
+                  })
+                  .from(member)
+                  .where(eq(member.userId, userId))
+                  .orderBy(desc(member.createdAt))
+                  .limit(1)
+              ).at(0) ??
+              panic("OAuth test token names a user without a membership");
+            return Result.ok({
+              userId,
+              organizationId: membership.organizationId,
+              memberId: membership.id,
               scopes: [ACCOUNT_EXPORT_SCOPES.read],
               credential: { type: "oauth_client" as const, clientId: "cli" },
-            }),
+            });
+          },
         }),
       },
     },
