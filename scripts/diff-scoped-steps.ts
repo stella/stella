@@ -320,7 +320,7 @@ export const DIFF_SCOPED_STEPS = {
     "Repeats the changed tests to catch flakes; the full suites run separately.",
   ),
   "ci.yml:ci-browser#Check UI browser test scope": expands(
-    "Pull requests use the planner's specs; the merge queue covers every package and app the browser legs load.",
+    "Pull requests use the specs their legs carry; the merge queue covers every package and app the browser legs load.",
   ),
   "ci.yml:ci-browser#Check extension browser test scope": gap(
     "dependents",
