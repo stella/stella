@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
@@ -134,11 +134,6 @@ describe("cz-us retention against the document page NALUS served", () => {
   });
 
   describe("the enrolled synthetic decision", () => {
-    const originalFetch = globalThis.fetch;
-    afterEach(() => {
-      globalThis.fetch = originalFetch;
-    });
-
     test("keeps its text", async () => {
       const result = await retentionOf(await czUsFixture().buildDecision());
       expect(result.stats.missingWords).toEqual([]);

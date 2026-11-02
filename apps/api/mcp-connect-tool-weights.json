@@ -46,6 +46,14 @@
       "estimatedTokens": 2316
     },
     {
+      "name": "create_organization",
+      "nameChars": 19,
+      "descriptionChars": 275,
+      "inputSchemaChars": 513,
+      "totalChars": 807,
+      "estimatedTokens": 312
+    },
+    {
       "name": "create_reader_annotation",
       "nameChars": 24,
       "descriptionChars": 327,
@@ -160,10 +168,10 @@
     {
       "name": "list_audit_log",
       "nameChars": 14,
-      "descriptionChars": 389,
-      "inputSchemaChars": 1256,
-      "totalChars": 1659,
-      "estimatedTokens": 658
+      "descriptionChars": 165,
+      "inputSchemaChars": 1052,
+      "totalChars": 1231,
+      "estimatedTokens": 499
     },
     {
       "name": "list_capabilities",
@@ -424,10 +432,10 @@
     {
       "name": "remove_matter_member",
       "nameChars": 20,
-      "descriptionChars": 125,
+      "descriptionChars": 107,
       "inputSchemaChars": 423,
-      "totalChars": 568,
-      "estimatedTokens": 225
+      "totalChars": 550,
+      "estimatedTokens": 219
     },
     {
       "name": "resolve_case_law_decision",
@@ -473,9 +481,9 @@
       "name": "save_contact",
       "nameChars": 12,
       "descriptionChars": 172,
-      "inputSchemaChars": 2256,
-      "totalChars": 2440,
-      "estimatedTokens": 1002
+      "inputSchemaChars": 7920,
+      "totalChars": 8104,
+      "estimatedTokens": 3362
     },
     {
       "name": "save_document",
@@ -497,9 +505,9 @@
       "name": "save_matter",
       "nameChars": 11,
       "descriptionChars": 328,
-      "inputSchemaChars": 962,
-      "totalChars": 1301,
-      "estimatedTokens": 514
+      "inputSchemaChars": 908,
+      "totalChars": 1247,
+      "estimatedTokens": 492
     },
     {
       "name": "save_playbook",
@@ -512,10 +520,10 @@
     {
       "name": "save_task",
       "nameChars": 9,
-      "descriptionChars": 418,
-      "inputSchemaChars": 1867,
-      "totalChars": 2294,
-      "estimatedTokens": 921
+      "descriptionChars": 371,
+      "inputSchemaChars": 1863,
+      "totalChars": 2243,
+      "estimatedTokens": 903
     },
     {
       "name": "save_time_entry",
@@ -545,17 +553,17 @@
       "name": "search_boe_legislation",
       "nameChars": 22,
       "descriptionChars": 547,
-      "inputSchemaChars": 1849,
-      "totalChars": 2418,
-      "estimatedTokens": 961
+      "inputSchemaChars": 1591,
+      "totalChars": 2160,
+      "estimatedTokens": 853
     },
     {
       "name": "search_case_law",
       "nameChars": 15,
       "descriptionChars": 499,
-      "inputSchemaChars": 5147,
-      "totalChars": 5661,
-      "estimatedTokens": 2316
+      "inputSchemaChars": 5153,
+      "totalChars": 5667,
+      "estimatedTokens": 2319
     },
     {
       "name": "search_legislation",
@@ -593,9 +601,9 @@
       "name": "update_organization_settings",
       "nameChars": 28,
       "descriptionChars": 163,
-      "inputSchemaChars": 1256,
-      "totalChars": 1447,
-      "estimatedTokens": 587
+      "inputSchemaChars": 1223,
+      "totalChars": 1414,
+      "estimatedTokens": 574
     },
     {
       "name": "update_reader_annotation",
@@ -623,7 +631,7 @@
     }
   ],
   "totals": {
-    "characters": 127340,
-    "estimatedTokens": 50496
+    "characters": 132975,
+    "estimatedTokens": 52845
   }
 }

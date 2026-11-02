@@ -65,6 +65,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_decisions.analysis",
   "case_law_decisions.metadata",
   "case_law_judges.external_refs",
+  // Corpus population buckets: kind/value pairs derived from public decisions.
+  "case_law_population_projections.buckets",
   "case_law_polarity_rules.surface_forms",
   "case_law_provision_extractions.unresolved_counts",
   "case_law_reconciliation_items.payload",
@@ -249,6 +251,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Account-scoped record; organization removal does not erase the user account.",
   "action_cost_records.user_id":
     "Retained accounting, telemetry or contribution history; no membership grant.",
+  "organization_creation_requests.user_id":
+    "Account-owned creation replay receipt; membership removal must not reopen the creation request, and account or organization deletion cascades the row. Grants no membership.",
   "organization_professional_use_acceptances.accepted_by_user_id":
     "Acceptance record of who created the organization; grants no membership.",
   "user_professional_use_acceptances.user_id":
@@ -278,6 +282,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "bilingual_translation_runs.requested_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "case_law_matter_links.linked_by":
+    "Retained attribution or request history; this column grants no matter membership.",
+  "legislation_matter_links.linked_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "case_law_research_columns.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
@@ -385,6 +391,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "notifications.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
+  "push_devices.user_id":
+    "The person's own device registration, holding no organization content; alerts name nothing, and the row moves when the app signs in to another organization.",
   "pending_uploads.user_id":
     "Short-lived operation; current membership is revalidated before use.",
   "playbook_definition_versions.created_by":
@@ -505,6 +513,8 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "billing_draft_user_settings.user_id":
+    "Organization-wide consent and preferences remain for the person's other matters; organization removal deletes them.",
   "request_idempotency_receipts.user_id":
     "Organization-owned request coordination: retain through the bounded replay window so retries in other matters remain single-execution. Replay still passes the route's current authorization; organization removal clears the rows and account deletion cascades.",
   "request_idempotency_receipts.response_body":

@@ -129,9 +129,14 @@
         },
         {
           "path": "scripts/check-migrations.sh",
+          "contains": ["check-migration-schema.ts", "check-migration-safety.ts"]
+        },
+        {
+          "path": "scripts/check-migration-schema.ts",
           "contains": [
             "Database schema changed without a migration file",
-            "check-migration-safety.ts"
+            "linkBaseDependencies(root, baseRoot)",
+            "migration\\.sql$"
           ]
         }
       ]

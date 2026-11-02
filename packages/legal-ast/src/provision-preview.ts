@@ -10,19 +10,8 @@ import {
   resolveDocumentHeadingAnchor,
 } from "./document-ast.js";
 import type { Block, HeadingBlock } from "./document-ast.js";
-
-/**
- * What continues an anchor into one nested under it: `-` in e-Sbírka paths
- * and in every anchor a parser derives from its owner (`…-table_1`), `/` in
- * US code paths (`s1983/a/1`). A duplicate's `~2` is the same provision
- * stated twice, never a child of it.
- */
-const NESTED_ANCHOR_SEPARATORS = ["-", "/"] as const;
-
-const continuesAnchor = (parent: string, child: string): boolean =>
-  NESTED_ANCHOR_SEPARATORS.some((separator) =>
-    child.startsWith(`${parent}${separator}`),
-  );
+import { anchorWithin } from "./statute-anchor-scheme.js";
+import type { StatuteBlocks } from "./statute-anchor-scheme.js";
 
 const blocksOwnedByHeading = (
   blocks: readonly Block[],
@@ -49,13 +38,13 @@ const blocksOwnedByHeading = (
  *
  * Statute subdivisions are not headings, so their nesting lives in the anchor
  * path rather than in a level: `par_3-odst_2` owns `par_3-odst_2-pism_a`,
- * which in turn owns `par_3-odst_2-pism_d-bod_1`. Descendants follow their
- * parent contiguously, so the range ends at the first block that is not one —
- * a cited paragraph therefore stops before the next paragraph. The separator
- * is part of the test, or `odst_2` would swallow `odst_20`.
+ * which in turn owns `par_3-odst_2-pism_d-bod_1`, as `paragraf-3.odsek-2`
+ * owns `paragraf-3.odsek-2.pismeno-a`. Descendants follow their parent
+ * contiguously, so the range ends at the first block that is not one — a
+ * cited paragraph therefore stops before the next paragraph.
  */
 export const blocksNestedUnder = <T extends Pick<Block, "anchorId">>(
-  blocks: readonly T[],
+  { blocks, scheme }: StatuteBlocks<T>,
   cited: T,
 ): T[] => {
   const start = blocks.indexOf(cited);
@@ -65,7 +54,12 @@ export const blocksNestedUnder = <T extends Pick<Block, "anchorId">>(
 
   const owned: T[] = [cited];
   for (const block of blocks.slice(start + 1)) {
-    if (!continuesAnchor(cited.anchorId, block.anchorId)) {
+    if (
+      !anchorWithin(scheme, {
+        ancestor: cited.anchorId,
+        anchor: block.anchorId,
+      })
+    ) {
       break;
     }
     owned.push(block);
@@ -75,11 +69,18 @@ export const blocksNestedUnder = <T extends Pick<Block, "anchorId">>(
 
 /** The complete block range owned by one provision heading. */
 export const provisionBlocks = (
-  blocks: readonly Block[],
+  statute: StatuteBlocks<Block>,
   anchorId: string,
 ): Block[] | null => {
-  const heading = resolveDocumentHeadingAnchor(blocks, anchorId);
-  return heading === null ? null : blocksOwnedByHeading(blocks, heading);
+  const heading = resolveDocumentHeadingAnchor(statute, anchorId);
+  return heading === null
+    ? null
+    : blocksOwnedByHeading(statute.blocks, heading);
+};
+
+type ProvisionPreviewTarget = {
+  provisionAnchorId: string;
+  citedAnchorId: string | undefined;
 };
 
 /**
@@ -90,24 +91,24 @@ export const provisionBlocks = (
  * provision body.
  */
 export const provisionPreviewBlocks = (
-  blocks: readonly Block[],
-  provisionAnchorId: string,
-  citedAnchorId: string | undefined,
+  statute: StatuteBlocks<Block>,
+  { provisionAnchorId, citedAnchorId }: ProvisionPreviewTarget,
 ): Block[] | null => {
-  const provision = provisionBlocks(blocks, provisionAnchorId);
+  const provision = provisionBlocks(statute, provisionAnchorId);
   if (provision === null) {
     return null;
   }
 
+  const owned = { blocks: provision, scheme: statute.scheme };
   const cited = resolveDocumentAnchor(
-    provision,
+    owned,
     citedAnchorId ?? provisionAnchorId,
   );
   if (cited === null || cited.anchorId === provision.at(0)?.anchorId) {
     return provision.slice(1);
   }
   if (cited.type !== "heading") {
-    return blocksNestedUnder(provision, cited);
+    return blocksNestedUnder(owned, cited);
   }
   return blocksOwnedByHeading(provision, cited);
 };
@@ -125,20 +126,20 @@ export const provisionHeadingAnchor = (
   separator === null ? anchor : (anchor.split(separator)[0] ?? anchor);
 
 /**
- * The heading in `blocks` an anchor is nested under: the longest heading
- * anchor the anchor continues. Read off the document, for a reader that
- * holds the statute but not the grammar that cited it. Null when the anchor
- * continues no heading.
+ * The heading in a statute an anchor is nested under: the longest heading
+ * anchor the anchor continues in the publisher's scheme. Read off the
+ * document, for a reader that holds the statute but not the citation that
+ * named the anchor. Null when the anchor continues no heading.
  */
 export const enclosingHeadingAnchor = (
-  blocks: readonly Block[],
+  { blocks, scheme }: StatuteBlocks<Block>,
   anchor: string,
 ): string | null => {
   let enclosing: string | null = null;
   for (const block of blocks) {
     if (
       block.type === "heading" &&
-      continuesAnchor(block.anchorId, anchor) &&
+      anchorWithin(scheme, { ancestor: block.anchorId, anchor }) &&
       (enclosing === null || block.anchorId.length > enclosing.length)
     ) {
       enclosing = block.anchorId;
@@ -153,14 +154,15 @@ export const enclosingHeadingAnchor = (
  * place a section quoted out of its statute.
  */
 export const provisionHeadingChain = (
-  blocks: readonly Block[],
+  statute: StatuteBlocks<Block>,
   anchorId: string,
 ): HeadingBlock[] | null => {
-  const heading = resolveDocumentHeadingAnchor(blocks, anchorId);
+  const heading = resolveDocumentHeadingAnchor(statute, anchorId);
   if (heading === null) {
     return null;
   }
 
+  const { blocks } = statute;
   const start = blocks.indexOf(heading);
   if (start === -1) {
     return null;
