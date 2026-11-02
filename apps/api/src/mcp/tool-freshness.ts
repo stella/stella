@@ -118,7 +118,10 @@ export class McpToolFreshnessRegistry {
         const [oldestId, evicted] = oldest;
         this.#sessions.delete(oldestId);
         // An evicted client would stay connected without further signals.
-        detached(this.#close(evicted), "mcp.tool-freshness-evict");
+        detached(
+          async () => await this.#close(evicted),
+          "mcp.tool-freshness-evict",
+        );
       }
     }
     const reproject: Reprojection = createCoalescedDrain(async () => {
@@ -138,7 +141,7 @@ export class McpToolFreshnessRegistry {
     };
     this.#sessions.set(id, session);
     const opened = this.#reprojectWithinDeadline(session);
-    detached(opened, "mcp.tool-freshness-register");
+    detached(async () => await opened, "mcp.tool-freshness-register");
     return {
       opened,
       unregister: () => {
@@ -266,7 +269,7 @@ export const getMcpToolFreshnessRegistry = (): McpToolFreshnessRegistry => {
 // reaches this one's sessions through the shared broadcast channel.
 registerMcpToolProjectionDelivery((identity) => {
   detached(
-    getMcpToolFreshnessRegistry().publish(identity),
+    async () => await getMcpToolFreshnessRegistry().publish(identity),
     "mcp.replica-tool-projection",
   );
 });
