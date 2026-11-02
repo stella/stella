@@ -509,7 +509,22 @@
     "billingDraftsUnavailable": "stella AI kavandite seadeid ei saa praegu laadida.",
     "aiDraftCodes": "Ülesanne {task} · Tegevus {activity}",
     "aiDraftFlags": "Märkused arveldusjuhiste kohta",
-    "aiDraftFlagSource": "{file}, {section}"
+    "aiDraftFlagSource": "{file}, {section}",
+    "aiRefine": "Täpsusta",
+    "aiRefinePlaceholder": "Kirjutage stellale, kuidas kavandit muuta…",
+    "aiRefining": "stella AI muudab selgitust…",
+    "aiProposal": "stella AI soovitab",
+    "aiAccept": "Nõustu",
+    "aiDismiss": "Loobu",
+    "aiUndo": "Võta tagasi",
+    "aiUseOriginal": "Kasuta originaali",
+    "aiSteerShorter": "Lühemalt",
+    "aiSteerMoreDetail": "Üksikasjalikumalt",
+    "aiSteerClientFriendly": "Kliendile arusaadavalt",
+    "aiSteerWriteIn": "Kirjuta keeles: {language}",
+    "aiSteerRemember": "Jäta järgmiseks korraks meelde",
+    "billingDraftsPreference": "Teie kavandite eelistus",
+    "billingDraftsForgetPreference": "Unusta eelistus"
   },
   "dictation": {
     "title": "Dikteerimine",

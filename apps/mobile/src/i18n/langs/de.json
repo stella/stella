@@ -182,6 +182,17 @@
       "system": "Darstellung: automatisch",
       "light": "Darstellung: hell",
       "dark": "Darstellung: dunkel"
+    },
+    "edit": {
+      "saved": "Gespeichert",
+      "saving": "Wird gespeichert…",
+      "notSaved": "Noch nicht gespeichert",
+      "done": "Fertig",
+      "openFailed": "Dieses Dokument kann gerade nicht bearbeitet werden",
+      "takenOver": "Jemand anderes bearbeitet dieses Dokument jetzt. Ihre Änderungen seit dem letzten Speichern wurden nicht übernommen.",
+      "finishFailed": "Ihre Änderungen sind gespeichert, wurden aber noch nicht zu einer neuen Version. Tippen Sie erneut auf Fertig oder verlassen Sie das Dokument: Die nächste Bearbeitung setzt dort an.",
+      "stay": "Bleiben",
+      "leave": "Verlassen"
     }
   },
   "signIn": {

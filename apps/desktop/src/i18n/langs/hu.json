@@ -509,7 +509,22 @@
     "billingDraftsUnavailable": "A stella AI javaslatok beállításai most nem tölthetők be.",
     "aiDraftCodes": "Feladat {task} · Tevékenység {activity}",
     "aiDraftFlags": "Megjegyzések a számlázási irányelvekhez",
-    "aiDraftFlagSource": "{file}, {section}"
+    "aiDraftFlagSource": "{file}, {section}",
+    "aiRefine": "Finomítás",
+    "aiRefinePlaceholder": "Írja meg a stellának, hogyan módosítsa a javaslatot…",
+    "aiRefining": "A stella AI módosítja a leírást…",
+    "aiProposal": "A stella AI javaslata",
+    "aiAccept": "Elfogadás",
+    "aiDismiss": "Elvetés",
+    "aiUndo": "Visszavonás",
+    "aiUseOriginal": "Eredeti használata",
+    "aiSteerShorter": "Rövidebben",
+    "aiSteerMoreDetail": "Részletesebben",
+    "aiSteerClientFriendly": "Ügyfélbarát megfogalmazás",
+    "aiSteerWriteIn": "Írás ezen a nyelven: {language}",
+    "aiSteerRemember": "Megjegyzés legközelebbre",
+    "billingDraftsPreference": "Az Ön javaslati preferenciája",
+    "billingDraftsForgetPreference": "Preferencia törlése"
   },
   "dictation": {
     "title": "Diktálás",

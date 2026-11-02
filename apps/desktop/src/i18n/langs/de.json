@@ -509,7 +509,22 @@
     "billingDraftsUnavailable": "Die Einstellungen für Entwürfe mit stella AI können gerade nicht geladen werden.",
     "aiDraftCodes": "Aufgabe {task} · Tätigkeit {activity}",
     "aiDraftFlags": "Hinweise zu den Abrechnungsrichtlinien",
-    "aiDraftFlagSource": "{file}, {section}"
+    "aiDraftFlagSource": "{file}, {section}",
+    "aiRefine": "Anpassen",
+    "aiRefinePlaceholder": "Sagen Sie stella, wie der Entwurf angepasst werden soll …",
+    "aiRefining": "stella AI passt die Beschreibung an …",
+    "aiProposal": "stella AI schlägt vor",
+    "aiAccept": "Übernehmen",
+    "aiDismiss": "Verwerfen",
+    "aiUndo": "Rückgängig",
+    "aiUseOriginal": "Original verwenden",
+    "aiSteerShorter": "Kürzer",
+    "aiSteerMoreDetail": "Ausführlicher",
+    "aiSteerClientFriendly": "Für Mandanten verständlich",
+    "aiSteerWriteIn": "Auf {language} schreiben",
+    "aiSteerRemember": "Für das nächste Mal merken",
+    "billingDraftsPreference": "Ihre Vorgabe für Entwürfe",
+    "billingDraftsForgetPreference": "Vorgabe vergessen"
   },
   "dictation": {
     "title": "Diktieren",

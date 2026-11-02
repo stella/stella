@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: The retention check moved to the pipeline, which runs it against the stored XHTML; the parse itself is unchanged.
 // parser-output-unchanged: Validation reparses the original XHTML before hidden-run normalization; stored parser output remains unchanged.
 /**
@@ -26,10 +27,11 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, isTag, isText } from "domhandler";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import { type AnyNode, isTag, isText } from "@stll/html/nodes";
 import { COURT_PARAGRAPH_NUMBERING_LIMITS } from "@stll/legal-ast/court-paragraph-numbers";
 import {
   hasInlineChildren,
@@ -1436,7 +1438,7 @@ export const parseSkUsDocumentXhtml = ({
   decisionType,
   documentUrl,
 }: ParseSkUsDocumentOptions): ParseSkUsDocumentResult => {
-  const $ = cheerio.load(xhtml);
+  const $ = load(xhtml);
   markHiddenRuns($);
   const lines = readTextLayerSeams(removePageFurniture(readMarkupLines($)));
   const words = typographyWords(lines);

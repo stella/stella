@@ -509,7 +509,22 @@
     "billingDraftsUnavailable": "stella AI melnrakstu iestatījumus pašlaik nevar ielādēt.",
     "aiDraftCodes": "Uzdevums {task} · Darbība {activity}",
     "aiDraftFlags": "Piezīmes par norēķinu vadlīnijām",
-    "aiDraftFlagSource": "{file}, {section}"
+    "aiDraftFlagSource": "{file}, {section}",
+    "aiRefine": "Precizēt",
+    "aiRefinePlaceholder": "Uzrakstiet stellai, kā pielāgot šo melnrakstu…",
+    "aiRefining": "stella AI pielāgo aprakstu…",
+    "aiProposal": "stella AI iesaka",
+    "aiAccept": "Pieņemt",
+    "aiDismiss": "Noraidīt",
+    "aiUndo": "Atsaukt",
+    "aiUseOriginal": "Izmantot oriģinālu",
+    "aiSteerShorter": "Īsāk",
+    "aiSteerMoreDetail": "Sīkāk",
+    "aiSteerClientFriendly": "Klientam saprotami",
+    "aiSteerWriteIn": "Rakstīt valodā: {language}",
+    "aiSteerRemember": "Atcerēties nākamajai reizei",
+    "billingDraftsPreference": "Jūsu melnrakstu preference",
+    "billingDraftsForgetPreference": "Aizmirst preferenci"
   },
   "dictation": {
     "title": "Diktēšana",

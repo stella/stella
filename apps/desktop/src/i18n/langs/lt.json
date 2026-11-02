@@ -509,7 +509,22 @@
     "billingDraftsUnavailable": "Šiuo metu nepavyksta įkelti stella AI juodraščių nustatymų.",
     "aiDraftCodes": "Užduotis {task} · Veikla {activity}",
     "aiDraftFlags": "Pastabos dėl atsiskaitymo gairių",
-    "aiDraftFlagSource": "{file}, {section}"
+    "aiDraftFlagSource": "{file}, {section}",
+    "aiRefine": "Patikslinti",
+    "aiRefinePlaceholder": "Parašykite stellai, kaip pakoreguoti šį juodraštį…",
+    "aiRefining": "stella AI koreguoja aprašą…",
+    "aiProposal": "stella AI siūlo",
+    "aiAccept": "Priimti",
+    "aiDismiss": "Atmesti",
+    "aiUndo": "Anuliuoti",
+    "aiUseOriginal": "Naudoti originalą",
+    "aiSteerShorter": "Trumpiau",
+    "aiSteerMoreDetail": "Išsamiau",
+    "aiSteerClientFriendly": "Klientui suprantamai",
+    "aiSteerWriteIn": "Rašyti kalba: {language}",
+    "aiSteerRemember": "Įsiminti kitam kartui",
+    "billingDraftsPreference": "Jūsų juodraščių nuostata",
+    "billingDraftsForgetPreference": "Pamiršti nuostatą"
   },
   "dictation": {
     "title": "Diktavimas",
