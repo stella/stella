@@ -42,7 +42,7 @@ export const REFRESH_CASE_LAW_COVERAGE_TASK =
  */
 export const CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS = 30_000;
 /** Reads not started within the run's budget are left unread, not waited on. */
-export const CASE_LAW_COVERAGE_REFRESH_RUN_BUDGET_MS = 60_000;
+const CASE_LAW_COVERAGE_REFRESH_RUN_BUDGET_MS = 60_000;
 
 /**
  * The refresh reads the corpus under shared locks and writes only its own
