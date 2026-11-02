@@ -1,13 +1,14 @@
 import { panic, Result } from "better-result";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig } from "@stll/db-load-gate/health";
+import { Temporal } from "@stll/time";
 
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import { CASE_LAW_POPULATION_SEED_REPAIR_NAME } from "@/api/lib/case-law/population-count-limits";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 
-import { createBackfillRuntime } from "./backfill-runtime";
+import { BackfillHeldError, createBackfillRuntime } from "./backfill-runtime";
 import type { OnlineRepair } from "./online-migration-connection";
 
 const BATCH_SIZE = 128;
@@ -20,6 +21,7 @@ const BATCH_LOCK_TIMEOUT_MS = 15_000;
 const BATCH_STATEMENT_TIMEOUT_MS = 30_000;
 const LOCK_REFUSAL_RETRIES = 3;
 const LOCK_REFUSAL_BACKOFF_MS = 1000;
+const HOLD_RETRY_FLOOR_MS = 1000;
 
 /** A refused batch rolled back whole, so running it again replays nothing. */
 const retryLockRefusal = async <Value>(
@@ -105,7 +107,7 @@ export const CASE_LAW_POPULATION_REPAIR = {
       tableName: "case_law_decisions",
       initialSize: BATCH_SIZE,
       config: {
-        ...defaultConfig,
+        ...loadGateHealthConfig(),
         maxSize: MAX_BATCH_SIZE,
         batchStatementTimeoutMs: BATCH_STATEMENT_TIMEOUT_MS,
         batchLockTimeoutMs: BATCH_LOCK_TIMEOUT_MS,
@@ -145,7 +147,21 @@ export const CASE_LAW_POPULATION_REPAIR = {
           ),
       });
       if (pass.isErr()) {
-        throw pass.error;
+        if (!(pass.error instanceof BackfillHeldError)) {
+          throw pass.error;
+        }
+        // Startup refuses this seed once a newer migration exists, and only a
+        // migrate run advances it, so a hold defers the phase instead of
+        // ending the run with the seed unfinished.
+        return {
+          type: "deferred",
+          step: CASE_LAW_POPULATION_SEED_REPAIR_NAME,
+          retryAfterMs: Math.max(
+            HOLD_RETRY_FLOOR_MS,
+            (pass.error.holdUntil ?? 0) -
+              Temporal.Now.instant().epochMilliseconds,
+          ),
+        };
       }
       return { type: "complete" };
     } finally {

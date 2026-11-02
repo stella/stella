@@ -1,10 +1,7 @@
 // parser-output-unchanged: transport timeout fields on the fetcher type do not change parsed output.
 export { isConnectionFailure } from "./connection-failure";
-
 export type FetchTimeout =
-  | { type: "total"; ms: number }
-  | { type: "headers"; ms: number }
-  | { type: "idle"; ms: number };
+  { type: "total"; ms: number } | { type: "headers"; ms: number };
 
 export type TransportRequestInit = RequestInit & {
   timeout?: FetchTimeout;
@@ -67,8 +64,6 @@ const executeFetchWithTimeout = async (
       timeoutMs: duration,
     });
   }
-  const policy = timeout;
-
   const controller = new AbortController();
   const combined = AbortSignal.any([...callerSignals, controller.signal]);
   const expire = () =>
@@ -78,18 +73,14 @@ const executeFetchWithTimeout = async (
     clearTimeout(timer);
     timer = undefined;
   };
-  const reset = () => {
-    clear();
-    timer = setTimeout(expire, duration);
-  };
-  reset();
+  timer = setTimeout(expire, duration);
   const response = await Promise.resolve()
     .then(
       async () =>
         await activeFetcher(input, {
           ...init,
           signal: combined,
-          timeout: policy,
+          timeout,
           timeoutMs: duration,
         }),
     )
@@ -100,95 +91,7 @@ const executeFetchWithTimeout = async (
     await Promise.allSettled([response.body?.cancel(combined.reason)]);
     throw combined.reason;
   }
-  if (policy.type === "headers" || response.body === null) {
-    return response;
-  }
-
-  const reader = response.body.getReader();
-  let stopped = false;
-  let cancellation: Promise<void> | undefined;
-  let abort: () => void;
-  const finish = () => {
-    stopped = true;
-    clear();
-    combined.removeEventListener("abort", abort);
-  };
-  const body = new ReadableStream<Uint8Array>({
-    start(stream) {
-      abort = () => {
-        if (stopped) {
-          return;
-        }
-        finish();
-        stream.error(combined.reason);
-        // The fetch signal aborts the transport; cancellation drains the reader
-        // even when an injected fetcher does not implement signal handling.
-        cancellation = reader.cancel(combined.reason).then(
-          () => reader.releaseLock(),
-          () => reader.releaseLock(),
-        );
-      };
-      combined.addEventListener("abort", abort, { once: true });
-      if (combined.aborted) {
-        abort();
-        return;
-      }
-    },
-    async pull(stream) {
-      if (stopped) {
-        await cancellation;
-        return;
-      }
-      reset();
-      await reader
-        .read()
-        .finally(clear)
-        .then(
-          ({ done, value }) => {
-            if (stopped) {
-              return undefined;
-            }
-            if (done) {
-              finish();
-              reader.releaseLock();
-              stream.close();
-              return undefined;
-            }
-            stream.enqueue(value);
-            return undefined;
-          },
-          (error: unknown) => {
-            if (stopped) {
-              return;
-            }
-            finish();
-            reader.releaseLock();
-            stream.error(error);
-          },
-        );
-      await cancellation;
-    },
-    async cancel(reason: unknown) {
-      if (stopped) {
-        await cancellation;
-        return;
-      }
-      finish();
-      await reader.cancel(reason).finally(() => reader.releaseLock());
-    },
-  });
-  const wrapped = new Response(body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
-  // Response's constructor does not carry transport metadata across a stream.
-  Object.defineProperties(wrapped, {
-    url: { value: response.url },
-    redirected: { value: response.redirected },
-    type: { value: response.type },
-  });
-  return wrapped;
+  return response;
 };
 
 /** Creates a wrapper with the supplied transport and an explicit timeout policy. */

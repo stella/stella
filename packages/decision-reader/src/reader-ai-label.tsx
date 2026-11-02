@@ -1,5 +1,5 @@
 import { AI_DISCLOSURES } from "@stll/api-contract/ai-disclosure";
-import type { AiDisclosureContext } from "@stll/api-contract/ai-disclosure";
+import type { ReaderAiDisclosureContext } from "@stll/api-contract/ai-disclosure";
 import { AiLabel } from "@stll/ui/ai-label";
 
 import { useReaderMessages } from "./reader-adapters";
@@ -13,7 +13,7 @@ export const ReaderAiLabel = ({
   context,
   label,
 }: {
-  context: AiDisclosureContext;
+  context: ReaderAiDisclosureContext;
   /** The mark's visible words, already translated. */
   label: string;
 }) => {

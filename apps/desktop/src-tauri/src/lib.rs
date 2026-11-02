@@ -10,6 +10,9 @@ mod activity_window;
 mod app_lifecycle;
 mod app_window;
 mod autostart;
+mod billing_draft_commands;
+mod billing_draft_settings;
+mod billing_draft_submit;
 mod bridge;
 mod chatgpt_auth;
 mod chatgpt_auth_commands;
@@ -68,6 +71,8 @@ mod permissions;
 mod presence;
 mod registry;
 mod relaunch;
+#[cfg(test)]
+mod runner_protocol;
 mod session_manager;
 mod session_store;
 mod sse;
