@@ -167,7 +167,7 @@ describe("contact create by external ref", () => {
     });
     expect(repeat).toBeInstanceOf(HttpStatusResponse);
     if (!(repeat instanceof HttpStatusResponse)) {
-      return panic("A repeated ref was not refused");
+      panic("A repeated ref was not refused");
     }
     expect(repeat.code).toBe(409);
     const refusal = JSON.stringify(repeat.response);
