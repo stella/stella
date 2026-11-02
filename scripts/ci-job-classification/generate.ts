@@ -153,7 +153,10 @@ export const readClassificationInputsAtRevision = (
     SNAPSHOTS,
     readGithubJson("ci-job-classification-sources.json"),
   );
-  readGithubJson("global-rule-inputs.json");
+  // The manifest reaches the digests only through the ci.yml conditions it
+  // generates, so its content is not read here. It is recorded as an input
+  // without a read: a revision from before it existed still classifies.
+  observeRead?.(".github/global-rule-inputs.json");
   const reader: MetadataReader = {
     workflows: () =>
       gitText(root, [

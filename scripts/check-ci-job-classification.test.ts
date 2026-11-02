@@ -18,6 +18,7 @@ import {
 import {
   generateClassification,
   readClassificationInputs,
+  readClassificationInputsAtRevision,
 } from "./ci-job-classification/generate";
 import {
   CLASSIFICATION_DECISIONS_PATH,
@@ -119,6 +120,49 @@ test("the classification input paths load alone, without packages or siblings", 
       { cwd: root, stdout: "pipe", stderr: "pipe" },
     );
     expect(loaded.exitCode, loaded.stderr.toString()).toBe(0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a revision from before the global rule manifest still classifies, and records it", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "classification-revision-"));
+  try {
+    writeClassificationFixtureInputs(root);
+    // The base a branch forked from before the manifest existed.
+    rmSync(path.join(root, ".github/global-rule-inputs.json"));
+    const workflow = "jobs: {check: {steps: []}}";
+    writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflow);
+    for (const [key, decision] of Object.entries(reviewed(workflow, "check"))) {
+      writeDecision(root, key, decision);
+    }
+    const git = (...args: string[]) =>
+      Bun.spawnSync(
+        [
+          "git",
+          "-c",
+          "user.name=Classification Test",
+          "-c",
+          "user.email=classification-test@example.invalid",
+          "-c",
+          "commit.gpgsign=false",
+          "-C",
+          root,
+          ...args,
+        ],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+    expect(git("init", "--quiet").exitCode).toBe(0);
+    expect(git("add", ".").exitCode).toBe(0);
+    expect(git("commit", "--quiet", "-m", "base").exitCode).toBe(0);
+    const reads = new Set<string>();
+    const inputs = readClassificationInputsAtRevision(root, "HEAD", {
+      observeRead: (file) => {
+        reads.add(file);
+      },
+    });
+    expect(generateClassification(inputs).isOk()).toBe(true);
+    expect(reads.has(".github/global-rule-inputs.json")).toBe(true);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
