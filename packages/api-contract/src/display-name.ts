@@ -16,7 +16,7 @@ import { DEFAULT_VARCHAR_MAX_LENGTH } from "./limits";
 const DIRECTIONAL_CONTROLS = /[\u202A-\u202E\u2066-\u2069]/gu;
 
 /** Removes explicit directional formatting from text a person typed. */
-export const stripDirectionalControls = (text: string): string =>
+const stripDirectionalControls = (text: string): string =>
   text.replaceAll(DIRECTIONAL_CONTROLS, "");
 
 type StripDirectionalControlsAction = v.BaseTransformation<
