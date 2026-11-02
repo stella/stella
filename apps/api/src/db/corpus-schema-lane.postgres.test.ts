@@ -65,7 +65,7 @@ describe.skipIf(!enabled)("corpus schema lane", () => {
         if (writerHolds) {
           await writer.unsafe(SHARED_UNLOCK_SQL);
         }
-        migrating.release();
+        await migrating.release();
       }
     });
   });
