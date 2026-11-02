@@ -55,7 +55,7 @@ export const resolveKanbanColumnBands = (
       last.columns.push(column);
       continue;
     }
-    if (last?.band !== null && last?.band !== undefined) {
+    if (last !== undefined && last.band !== null) {
       closedBandIds.add(last.band.id);
     }
     if (band !== null && closedBandIds.has(band.id)) {

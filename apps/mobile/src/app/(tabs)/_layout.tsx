@@ -4,7 +4,7 @@ import { useTranslations } from "use-intl";
 
 import { BAR_GLYPHS } from "@/bar-glyphs.gen";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
-import { useAppColors } from "@/theme";
+import { useAppColors, useUiColors } from "@/theme";
 
 /**
  * The platform's own tab bar (iOS's, with its glass), each tab drawn with the
@@ -19,13 +19,16 @@ import { useAppColors } from "@/theme";
  */
 const TabLayout = () => {
   const colors = useAppColors();
+  const ui = useUiColors();
   const t = useTranslations("tabs");
+  // The selected tab is blue, as in the system's own apps: the web's blue.
+  const selected = ui.info;
 
   return (
     <NativeTabs
-      iconColor={{ default: colors.muted, selected: colors.text }}
+      iconColor={{ default: colors.muted, selected }}
       sidebarAdaptable
-      tintColor={colors.text}
+      tintColor={selected}
       // iOS 27 sets the prominent tab apart from the bar on its own surface.
       unstable_nativeProps={{ ios: { prominentScreenKey: "more" } }}
     >

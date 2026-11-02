@@ -75,8 +75,8 @@
   "allowWebsiteAccess": {
     "message": "Webhely-hozzáférés engedélyezése"
   },
-  "connectTab": {
-    "message": "A stella lap csatlakoztatása"
+  "connectStella": {
+    "message": "A stella csatlakoztatása"
   },
   "adoptTab": {
     "message": "A lap használata a stellával"
@@ -97,9 +97,9 @@
     "message": "Kapcsolat ellenőrzése…"
   },
   "statusConnectedElsewhere": {
-    "message": "Egy másik stella-lap van csatlakoztatva"
+    "message": "A stella egy másik címen van csatlakoztatva"
   },
-  "connectTabInstead": {
-    "message": "Inkább ezt a stella-lapot csatlakoztasd"
+  "connectStellaInstead": {
+    "message": "Inkább itt csatlakoztasd a stellát"
   }
 }

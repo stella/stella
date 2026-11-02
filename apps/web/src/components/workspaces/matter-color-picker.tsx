@@ -3,6 +3,7 @@ import type { ReactNode, SyntheticEvent } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import {
   ColorPicker,
   ColorPickerContent,
@@ -127,18 +128,18 @@ const MatterColorContextPicker = ({
           {content}
         </span>
       ) : (
-        <button
+        <Button
           aria-label={trigger.label}
           className={cn(
-            triggerClassName,
-            "outline-hidden focus-visible:ring-2",
+            "relative flex shrink-0 items-center justify-center",
+            className,
           )}
           onClick={openPicker}
           onContextMenu={openPicker}
-          type="button"
+          variant="plain"
         >
           {content}
-        </button>
+        </Button>
       )}
       <Popover onOpenChange={setOpen} open={open}>
         <PopoverPopup

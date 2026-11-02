@@ -8,6 +8,7 @@ import { containedHandler } from "../hooks/use-contained-handler";
 import { ChevronsUpDownIcon, XIcon } from "../icons";
 import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";
+import { FIELD_TRIGGER_CLASS_NAME } from "../lib/field-trigger";
 import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
 import { Input } from "./input";
@@ -174,10 +175,11 @@ const COMBOBOX_ACTION_SIZE_CLASS_NAMES = {
 
 const ComboboxTrigger = ({
   className,
+  variant = "plain",
   ...props
-}: ComboboxPrimitive.Trigger.Props) => (
+}: ComboboxPrimitive.Trigger.Props & { variant?: "plain" | "field" }) => (
   <ComboboxPrimitive.Trigger
-    className={className}
+    className={cn(variant === "field" && FIELD_TRIGGER_CLASS_NAME, className)}
     data-slot="combobox-trigger"
     {...props}
   />

@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: session-protocol rejection carries explicit failure metadata; accepted sessions and parsed records are unchanged.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
@@ -100,12 +101,14 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { inlineStyleIsItalic } from "@/api/lib/legal-search/document-builders/inline-style";
 import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   sourceTotalRead,
@@ -654,7 +657,16 @@ export const parsePlTkListingPage = (
       const caseNumber = collapse(
         visibleHtmlText(cell.find(".sygnatura").first()),
       );
-      const subjectNode = cell.find('span[style*="italic"]');
+      // Only the outermost italic span: a nested span inherits the italic, and
+      // reading both would repeat the subject.
+      const subjectNode = cell.find("span").filter(
+        (_, el) =>
+          inlineStyleIsItalic(el) &&
+          !$(el)
+            .parentsUntil(cell, "span")
+            .toArray()
+            .some((ancestor) => inlineStyleIsItalic(ancestor)),
+      );
       const subject = collapse(visibleHtmlText(subjectNode));
       const lineNode = cell.clone();
       lineNode.find("a, span").remove();
@@ -1602,6 +1614,7 @@ const plTkFetchPage = async (
     return Result.ok({
       decisions: [],
       sourceUrl: firstUrl,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlTkCursor({
         stage: stageAfter(stage),
         read: { ...cursor.read, [stage]: read },
@@ -1700,6 +1713,7 @@ const plTkFetchPage = async (
           },
         }),
     sourceUrl: listed.value.url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlTkCursor({
       stage,
       read: { ...cursor.read, [stage]: read + consumed },

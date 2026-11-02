@@ -33,18 +33,21 @@ import {
   readHuBhgySearch,
 } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import {
-  rejectionOf,
-  requireReconciliation,
-} from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  rejectionOf,
+  requireReconciliation,
+} from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -146,20 +149,19 @@ const urlOf = (input: string | URL | Request): string => {
 const stubPublisher = (
   answer: (call: Call) => Response,
 ): { calls: Call[]; restore: () => void } => {
-  const original = globalThis.fetch;
   const calls: Call[] = [];
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) => {
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
       const url = urlOf(input);
       const body = typeof init?.body === "string" ? init.body : "";
       calls.push({ url, body });
       return await Promise.resolve(answer({ url, body }));
-    },
+    }),
   );
   return {
     calls,
     restore: () => {
-      globalThis.fetch = original;
+      testFetchState.restore();
     },
   };
 };

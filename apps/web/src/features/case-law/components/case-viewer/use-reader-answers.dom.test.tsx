@@ -2,7 +2,7 @@ import type { PropsWithChildren } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic, Result } from "better-result";
-import { afterAll, afterEach, expect, jest, mock, spyOn, test } from "bun:test";
+import { afterAll, afterEach, expect, jest, test } from "bun:test";
 import { DetachedWindowAPI } from "happy-dom";
 
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
@@ -20,7 +20,7 @@ import { Temporal } from "@stll/time";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { StrictMode, useRef } = await import("react");
-const { QueryClient, QueryClientProvider } =
+const { notifyManager, QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { act, cleanup, fireEvent, render, renderHook, waitFor } =
   await import("@testing-library/react");
@@ -44,6 +44,9 @@ const originalAbortSignalTimeout = AbortSignal.timeout;
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(async () => {
   restoreRealTimers();
+  notifyManager.setScheduler((notify) => {
+    setTimeout(notify, 0);
+  });
   Object.defineProperty(AbortSignal, "timeout", {
     configurable: true,
     value: originalAbortSignalTimeout,
@@ -57,7 +60,6 @@ afterEach(async () => {
   }
   clients.length = 0;
   globalThis.fetch = originalFetch;
-  mock.restore();
 });
 afterAll(async () => {
   // The DOM runner isolates this file. Shared UI roots can queue React work
@@ -120,6 +122,61 @@ const advanceClock = async (milliseconds: number) => {
         setImmediate(resolve);
       }),
   );
+};
+
+type ReaderAnswerStatus = ReaderAnswer["messages"][number]["status"];
+
+/**
+ * Settles once the cached reader answers reach a status, whatever number of
+ * event loop turns the response takes. A test that reads the hook right after
+ * also calls `deliverQueryNotificationsInline`, so the hook has the status by
+ * the time this settles.
+ */
+const cachedLastStatus = async (
+  client: InstanceType<typeof QueryClient>,
+  reached: (status: ReaderAnswerStatus | undefined) => boolean,
+) => {
+  const { queryKey } = readerAnswersOptions({
+    decisionId: "decision-1",
+    organizationId: user.activeOrganizationId,
+    userId: user.id,
+  });
+  const { promise, resolve } = Promise.withResolvers<
+    ReaderAnswerStatus | undefined
+  >();
+  const check = () => {
+    const status = client
+      .getQueryData(queryKey)
+      ?.at(0)
+      ?.messages.at(-1)?.status;
+    if (reached(status)) {
+      unsubscribe();
+      resolve(status);
+    }
+  };
+  const unsubscribe = client.getQueryCache().subscribe(check);
+  check();
+  return await promise;
+};
+
+/**
+ * Hands query notifications to observers as they happen instead of on a timer
+ * turn, so a cached write reaches the hook with no race against the turn a
+ * test waits for. Timers under test stay on the fake clock.
+ */
+const deliverQueryNotificationsInline = () => {
+  notifyManager.setScheduler((notify) => {
+    notify();
+  });
+};
+
+const renderCachedStatus = async (
+  cached: ReturnType<typeof cachedLastStatus>,
+) => {
+  await act(async () => {
+    await cached;
+  });
+  await advanceClock(0);
 };
 
 const fakeServer = (
@@ -1183,10 +1240,6 @@ test("stream admission exhaustion stays a budget failure after reload", async ()
 });
 
 const pollingServer = (settlement: "complete" | "never" | "hanging") => {
-  // Observing the initial claim must not consume its remaining lifetime.
-  let claimClock = Temporal.Instant.from(now);
-  // oxlint-disable-next-line no-restricted-properties -- The HTTP recovery fixture owns its claim clock independently of asynchronous observation.
-  spyOn(Temporal.Now, "instant").mockImplementation(() => claimClock);
   let row: ReaderAnswer | undefined;
   let listRequests = 0;
   let deletions = 0;
@@ -1200,7 +1253,9 @@ const pollingServer = (settlement: "complete" | "never" | "hanging") => {
       }
       listRequests += 1;
       if (row === undefined) {
-        const claimAt = claimClock
+        // oxlint-disable-next-line no-restricted-properties -- The fake HTTP boundary owns this live claim clock; it never runs during SSR.
+        const clock = Temporal.Now.instant();
+        const claimAt = clock
           .subtract({ milliseconds: READER_ANSWER_DEADLINE_MS - 300 })
           .toString();
         row = {
@@ -1266,10 +1321,6 @@ const pollingServer = (settlement: "complete" | "never" | "hanging") => {
     { preconnect: originalFetch.preconnect },
   );
   return {
-    advanceClaimClock: async (milliseconds: number) => {
-      claimClock = claimClock.add({ milliseconds });
-      await advanceClock(milliseconds);
-    },
     reads: () => listRequests,
     deletions: () => deletions,
     releaseRecovery: () => {
@@ -1316,7 +1367,12 @@ test.each(["never", "hanging"] as const)(
   "persisted claims stop polling at timeout when the server is %s",
   async (settlement) => {
     const server = pollingServer(settlement);
-    const { wrapper } = setup();
+    const { client, wrapper } = setup();
+    deliverQueryNotificationsInline();
+    const claimed = cachedLastStatus(
+      client,
+      (status) => status === "streaming",
+    );
     jest.useFakeTimers();
     Object.defineProperty(AbortSignal, "timeout", {
       configurable: true,
@@ -1334,15 +1390,16 @@ test.each(["never", "hanging"] as const)(
         }),
       { wrapper },
     );
-    await waitFor(() =>
-      expect(hook.result.current.answers.at(0)?.messages.at(-1)?.status).toBe(
-        "streaming",
-      ),
+    // Wait for the mounted query to cache the claim without advancing the 5000 ms recovery deadline.
+    await renderCachedStatus(claimed);
+    expect(hook.result.current.answers.at(0)?.messages.at(-1)?.status).toBe(
+      "streaming",
     );
+    const failed = cachedLastStatus(client, (status) => status === "failed");
     server.releaseRecovery();
-    await server.advanceClaimClock(300);
-    await server.advanceClaimClock(5000);
-    await server.advanceClaimClock(0);
+    await advanceClock(300);
+    await advanceClock(5000);
+    await renderCachedStatus(failed);
     expect(hook.result.current.answers.at(0)?.messages.at(-1)).toMatchObject({
       status: "failed",
       errorCode: "timeout",

@@ -28,10 +28,13 @@ import {
   testRevisionOf,
   testRevisionsFor,
 } from "@/api/tests/helpers/corpus-projection-revisions";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const rankingTestOptions = {
@@ -70,37 +73,39 @@ const stubRankingScores = (
   scores: readonly number[],
   passagesPerDocument = 1,
 ) => {
-  globalThis.fetch = Object.assign(
-    async (
-      _input: Parameters<typeof fetch>[0],
-      init?: Parameters<typeof fetch>[1],
-    ) => {
-      const requestBody = init?.body;
-      if (typeof requestBody !== "string") {
-        throw new TypeError("Expected a JSON request body");
-      }
-      const body = JSON.parse(requestBody);
-      const hits = scores.map((score, rank) => ({
-        _source: {
-          document_id: `doc-${Math.floor(rank / passagesPerDocument)}`,
-          projection_revision: testRevisionOf(
-            `doc-${Math.floor(rank / passagesPerDocument)}`,
-          ),
-          chunk_id: `passage-${rank}`,
-          anchor_id: `anchor-${rank}`,
-        },
-        _score: score,
-      }));
-      return new Response(
-        JSON.stringify({
-          hits: {
-            total: { value: hits.length },
-            hits: hits.slice(body.from, body.from + body.size),
+  testFetchState.set(
+    Object.assign(
+      async (
+        _input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) => {
+        const requestBody = init?.body;
+        if (typeof requestBody !== "string") {
+          throw new TypeError("Expected a JSON request body");
+        }
+        const body = JSON.parse(requestBody);
+        const hits = scores.map((score, rank) => ({
+          _source: {
+            document_id: `doc-${Math.floor(rank / passagesPerDocument)}`,
+            projection_revision: testRevisionOf(
+              `doc-${Math.floor(rank / passagesPerDocument)}`,
+            ),
+            chunk_id: `passage-${rank}`,
+            anchor_id: `anchor-${rank}`,
           },
-        }),
-      );
-    },
-    { preconnect: originalFetch.preconnect },
+          _score: score,
+        }));
+        return new Response(
+          JSON.stringify({
+            hits: {
+              total: { value: hits.length },
+              hits: hits.slice(body.from, body.from + body.size),
+            },
+          }),
+        );
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
   );
 };
 
@@ -286,38 +291,40 @@ test("ranking-mode changes invalidate cursor targets while off preserves them", 
 test("BM25 ranking replays a bounded deduplicated universe with scale-invariant pages", async () => {
   let scale = 1;
   const requests: { from: number; size: number }[] = [];
-  globalThis.fetch = Object.assign(
-    async (
-      _input: Parameters<typeof fetch>[0],
-      init?: Parameters<typeof fetch>[1],
-    ) => {
-      const requestBody = init?.body;
-      if (typeof requestBody !== "string") {
-        throw new TypeError("Expected a JSON request body");
-      }
-      const body = JSON.parse(requestBody);
-      requests.push({ from: body.from, size: body.size });
-      const hits = Array.from({ length: 7100 }, (_, rank) => ({
-        _source: {
-          document_id: rank < 2 ? "first" : `doc-${rank}`,
-          projection_revision: testRevisionOf(
-            rank < 2 ? "first" : `doc-${rank}`,
-          ),
-          chunk_id: `passage-${rank}`,
-          anchor_id: `anchor-${rank}`,
-        },
-        _score: (100 - rank / 100) * scale,
-      }));
-      return new Response(
-        JSON.stringify({
-          hits: {
-            total: { value: hits.length },
-            hits: hits.slice(body.from, body.from + body.size),
+  testFetchState.set(
+    Object.assign(
+      async (
+        _input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) => {
+        const requestBody = init?.body;
+        if (typeof requestBody !== "string") {
+          throw new TypeError("Expected a JSON request body");
+        }
+        const body = JSON.parse(requestBody);
+        requests.push({ from: body.from, size: body.size });
+        const hits = Array.from({ length: 7100 }, (_, rank) => ({
+          _source: {
+            document_id: rank < 2 ? "first" : `doc-${rank}`,
+            projection_revision: testRevisionOf(
+              rank < 2 ? "first" : `doc-${rank}`,
+            ),
+            chunk_id: `passage-${rank}`,
+            anchor_id: `anchor-${rank}`,
           },
-        }),
-      );
-    },
-    { preconnect: originalFetch.preconnect },
+          _score: (100 - rank / 100) * scale,
+        }));
+        return new Response(
+          JSON.stringify({
+            hits: {
+              total: { value: hits.length },
+              hits: hits.slice(body.from, body.from + body.size),
+            },
+          }),
+        );
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
   );
 
   let hydratedIds: readonly string[] = [];
@@ -527,21 +534,23 @@ test("with ranking OFF no client cursor can enter the BM25 path", async () => {
       fc.double({ min: 0, max: 1, noNaN: true }),
       async (rankingMode, window, score) => {
         const sizes: number[] = [];
-        globalThis.fetch = Object.assign(
-          async (
-            _input: Parameters<typeof fetch>[0],
-            init?: Parameters<typeof fetch>[1],
-          ) => {
-            const body = init?.body;
-            if (typeof body !== "string") {
-              throw new TypeError("Expected a JSON request body");
-            }
-            sizes.push(JSON.parse(body).size);
-            return new Response(
-              JSON.stringify({ hits: { total: { value: 0 }, hits: [] } }),
-            );
-          },
-          { preconnect: originalFetch.preconnect },
+        testFetchState.set(
+          Object.assign(
+            async (
+              _input: Parameters<typeof fetch>[0],
+              init?: Parameters<typeof fetch>[1],
+            ) => {
+              const body = init?.body;
+              if (typeof body !== "string") {
+                throw new TypeError("Expected a JSON request body");
+              }
+              sizes.push(JSON.parse(body).size);
+              return new Response(
+                JSON.stringify({ hits: { total: { value: 0 }, hits: [] } }),
+              );
+            },
+            { preconnect: originalFetch.preconnect },
+          ),
         );
         const result = await Result.tryPromise(async () =>
           readCorpusIndexSearchPage({
@@ -582,29 +591,33 @@ test("ties below the cutoff page deterministically despite engine tie order", as
       fc.integer({ min: 1, max: 9 }),
       async (count, limit) => {
         let request = 0;
-        globalThis.fetch = Object.assign(
-          async () => {
-            request += 1;
-            const hits = Array.from({ length: count }, (_, index) =>
-              ["p0", "p1"].map((anchor_id) => ({
-                _source: {
-                  document_id: `doc-${String(index).padStart(3, "0")}`,
-                  projection_revision: testRevisionOf(
-                    `doc-${String(index).padStart(3, "0")}`,
-                  ),
-                  anchor_id,
-                },
-                _score: 1,
-              })),
-            ).flat();
-            if (request % 2 === 0) {
-              hits.reverse();
-            }
-            return new Response(
-              JSON.stringify({ hits: { total: { value: hits.length }, hits } }),
-            );
-          },
-          { preconnect: originalFetch.preconnect },
+        testFetchState.set(
+          Object.assign(
+            async () => {
+              request += 1;
+              const hits = Array.from({ length: count }, (_, index) =>
+                ["p0", "p1"].map((anchor_id) => ({
+                  _source: {
+                    document_id: `doc-${String(index).padStart(3, "0")}`,
+                    projection_revision: testRevisionOf(
+                      `doc-${String(index).padStart(3, "0")}`,
+                    ),
+                    anchor_id,
+                  },
+                  _score: 1,
+                })),
+              ).flat();
+              if (request % 2 === 0) {
+                hits.reverse();
+              }
+              return new Response(
+                JSON.stringify({
+                  hits: { total: { value: hits.length }, hits },
+                }),
+              );
+            },
+            { preconnect: originalFetch.preconnect },
+          ),
         );
         const seen: string[] = [];
         let cursor: SearchCursor | null = null;

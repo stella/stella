@@ -1046,12 +1046,21 @@ describe("the oldest layout", () => {
     }).documentAst.blocks;
 
   /** Each paragraph's number, or null, with its text. */
+  /** The grounds' paragraphs: everything before the operative part. */
   const numberedLines = (blocks: readonly Block[]) =>
-    blocks.flatMap((block) =>
-      block.type === "paragraph" && block.role === undefined
-        ? [[block.number ?? null, block.plainText] as const]
-        : [],
-    );
+    blocks
+      .slice(
+        0,
+        blocks.findIndex(
+          (block) =>
+            block.type === "heading" && block.plainText === "Operative part",
+        ),
+      )
+      .flatMap((block) =>
+        block.type === "paragraph" && block.role === undefined
+          ? [[block.number ?? null, block.plainText] as const]
+          : [],
+      );
 
   test("a quoted list item never takes the number of the Court's next paragraph", () => {
     // The quoted item is numbered `2.`, the Court's own `2` follows it: the
@@ -1183,7 +1192,16 @@ describe("the oldest layout", () => {
     expect(after("Parties")).toMatchObject({ role: "intro" });
     expect(after("Grounds")).toMatchObject({ number: 1 });
     expect(after("Grounds")).not.toHaveProperty("role");
-    expect(after("Operative part")).toMatchObject({ role: "holding" });
+    // The sentence introducing the ruling is not part of it.
+    expect(after("Operative part")).toMatchObject({
+      plainText: "On those grounds,",
+    });
+    expect(after("Operative part")).not.toHaveProperty("role");
+    expect(
+      blocks.find((block) =>
+        block.plainText.startsWith("1. The provisions of Council Directive"),
+      ),
+    ).toMatchObject({ role: "holding" });
   });
 
   test("printed report page markers become page anchors", async () => {

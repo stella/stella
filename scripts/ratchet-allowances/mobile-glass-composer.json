@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The iOS app draws its message box as the platform's Liquid Glass (expo-glass-effect's GlassView, shipped with the Expo SDK); the release install links only the app's own dependencies, so the app declares it."
+}

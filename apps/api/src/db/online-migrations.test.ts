@@ -22,6 +22,7 @@ import {
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
 import { FUNCTION_DEPENDENT_INDEX_REINDEXES } from "./function-dependent-index-reindex";
+import { IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS } from "./import-provenance-constraint-validation";
 import type { MigrationTimingRecord } from "./migration-timing";
 import type { OnlineIndexDeclaration } from "./online-ddl";
 import { declaresOnlineBuild } from "./online-ddl";
@@ -712,8 +713,11 @@ describe("online migrations", () => {
     expect(harness.released()).toBe(true);
   });
 
-  test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
-    "validates monitoring constraint $name once and rejects incomplete startup",
+  test.each([
+    ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
+    ...IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
+  ])(
+    "validates registered constraint $name once and rejects incomplete startup",
     async (validation) => {
       const { name } = validation;
       const harness = createHarness({ unvalidatedConstraints: [name] });
@@ -2339,6 +2343,12 @@ const createHarness = ({
         },
         query: async (query: string, params: readonly unknown[] = []) => {
           statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
+          // Maintenance admission: the population owner is not installed.
+          if (
+            query.includes("to_regclass('public.case_law_population_deltas')")
+          ) {
+            return [{ installed: false }];
+          }
           if (query.includes("FROM drizzle.__drizzle_migrations")) {
             return [{ name: newestAppliedMigration }];
           }
@@ -2382,6 +2392,10 @@ const createHarness = ({
           // The contact VAT ID repair's movable-contact probe: none left, so
           // its completion holds and the phase skips it.
           if (query.startsWith('SELECT 1 FROM public."contacts"')) {
+            return [];
+          }
+          // The source config repair's probe: no legacy string config left.
+          if (query.startsWith("SELECT 1 FROM public.case_law_sources")) {
             return [];
           }
           if (query.startsWith("SELECT 1 FROM public.chat_run_log_entries")) {
@@ -2447,6 +2461,10 @@ const createHarness = ({
           // walk is on its last range.
           if (query.includes("corpus_index_projection_intents")) {
             return [];
+          }
+          // The population seed's completion: already seeded.
+          if (query.includes("case_law_population_seed_state")) {
+            return [{ phase: "complete" }];
           }
           // The OAuth-policy repair's completion census: a complete policy.
           // Checked before the table branch below, because the census names

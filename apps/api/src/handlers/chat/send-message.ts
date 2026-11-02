@@ -128,6 +128,11 @@ import {
 } from "@/api/handlers/chat/data-scope";
 import { createTurnDecisionPassageStamper } from "@/api/handlers/chat/decision-passage-numbers";
 import type { DecisionPassageNumbers } from "@/api/handlers/chat/decision-passage-numbers";
+import {
+  authorizeRequestedUserMessageEdit,
+  refuseChatUserMessageEditTarget,
+  refuseChatUserMessageEditTurn,
+} from "@/api/handlers/chat/edit-user-message";
 import { ChatError } from "@/api/handlers/chat/errors";
 import { generateThreadTitle } from "@/api/handlers/chat/generate-thread-title";
 import {
@@ -1334,6 +1339,10 @@ const acceptIncomingTurn = async ({
     });
     const isExplicitRegeneration =
       body.turnIntent === CHAT_TURN_INTENT.regenerate;
+    // An edit rewrites a user message this thread already stores; it was
+    // authorized before the turn was read (`authorizeRequestedUserMessageEdit`)
+    // and every later refusal carries the edit's typed codes.
+    const isEdit = body.turnIntent === CHAT_TURN_INTENT.edit;
     if (
       isExplicitRegeneration &&
       (parsedMessage.message.role !== "user" ||
@@ -1374,10 +1383,12 @@ const acceptIncomingTurn = async ({
       );
       if (truncationTarget === null) {
         return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Truncation target was not found in the chat thread",
-          }),
+          isEdit
+            ? refuseChatUserMessageEditTarget()
+            : new HandlerError({
+                status: 400,
+                message: "Truncation target was not found in the chat thread",
+              }),
         );
       }
       messagesForPersistence = truncationTarget.messagesForPersistence;
@@ -1408,27 +1419,42 @@ const acceptIncomingTurn = async ({
       incomingMessageExists,
     });
     if (
-      isExplicitRegeneration &&
+      (isExplicitRegeneration || isEdit) &&
       baseLatestMessagePlan.persistencePlan.type !== "none"
     ) {
       return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "Regeneration target is not a persisted user message",
-        }),
+        isEdit
+          ? refuseChatUserMessageEditTarget()
+          : new HandlerError({
+              status: 409,
+              message: "Regeneration target is not a persisted user message",
+            }),
       );
     }
-    const latestMessagePlan = isExplicitRegeneration
-      ? {
-          existingIds: baseLatestMessagePlan.existingIds,
-          messages: baseLatestMessagePlan.messages,
-          persistencePlan: {
-            message: parsedMessage.message,
-            messageId: parsedMessage.message.id,
-            type: "update",
-          } satisfies MessagePersistencePlan,
-        }
-      : baseLatestMessagePlan;
+    const rewritePlan = {
+      message: parsedMessage.message,
+      messageId: parsedMessage.message.id,
+      type: "update",
+    } satisfies MessagePersistencePlan;
+    let latestMessagePlan = baseLatestMessagePlan;
+    if (isExplicitRegeneration) {
+      latestMessagePlan = {
+        existingIds: baseLatestMessagePlan.existingIds,
+        messages: baseLatestMessagePlan.messages,
+        persistencePlan: rewritePlan,
+      };
+    } else if (isEdit) {
+      // The run answers the edited message, never the stored copy it replaces.
+      latestMessagePlan = {
+        existingIds: baseLatestMessagePlan.existingIds,
+        messages: baseLatestMessagePlan.messages.map((message) =>
+          message.id === parsedMessage.message.id
+            ? parsedMessage.message
+            : message,
+        ),
+        persistencePlan: rewritePlan,
+      };
+    }
     if (
       replayTargetMessageId !== undefined &&
       latestMessagePlan.persistencePlan.type !== "update"
@@ -1591,6 +1617,7 @@ const acceptIncomingTurn = async ({
       const persistenceResult = await persistAcceptedMessageWithClaim({
         ...persistenceProps,
         plannedOnHistory,
+        ...(isEdit ? { refuseTurn: refuseChatUserMessageEditTurn } : {}),
         turnAcceptance,
       });
       if (Result.isError(persistenceResult)) {
@@ -2382,6 +2409,17 @@ export const createSendMessage = (
 
       const workspaceId =
         scope.scope === "workspace" ? scope.workspaceId : null;
+      // An edit replaces one of the requester's own user messages and drops
+      // every later turn: authorize it before anything else reads or writes
+      // the thread.
+      yield* Result.await(
+        authorizeRequestedUserMessageEdit({
+          body,
+          organizationId: session.activeOrganizationId,
+          safeDb,
+          userId: user.id,
+        }),
+      );
       const registryDispatchResult = Result.tryPromise({
         try: async () =>
           await getOrganizationRegistryDispatch({
