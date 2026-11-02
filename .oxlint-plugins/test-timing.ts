@@ -61,6 +61,17 @@
 //     `propertyTestTimeout(...)` / `propertyTestDefaultTimeout()`, whose
 //     budget the property-testing convention owns.
 //
+// no-file-existence-wait
+//   A writer creates a file before it writes its content, so a file that
+//   exists may still be empty or partial: reading it right after an
+//   existence wait races the writer.
+//   Flagged: a `waitForExternalState` read (from
+//     "@stll/property-testing/external-state"), inline or a function of the
+//     same file, that returns `existsSync(path)` from "node:fs" or "fs",
+//     also through `&&`, `||`, `??` or `?:`.
+//   Allowed: `waitForFileContent`, whose `parse` accepts only complete
+//     content (`() => true` states that existence is the whole
+//     announcement, as for an empty marker).
 // no-literal-wait-timeout
 //   Testing Library condition waits run under the suite's shared hang guard,
 //   so every per-call timeout is redundant. Playwright waits instead keep
@@ -100,6 +111,7 @@ import {
 const REAL_TIME_WAIT_RULE = "no-real-time-wait";
 const POLLING_LOOP_RULE = "no-polling-loop";
 const TIMEOUT_RULE = "no-unreasoned-timeout";
+const FILE_EXISTENCE_WAIT_RULE = "no-file-existence-wait";
 const LITERAL_WAIT_TIMEOUT_RULE = "no-literal-wait-timeout";
 const LEDGER_PATH = "scripts/test-timing-ledger.json";
 
@@ -1059,6 +1071,117 @@ const literalWaitTimeout = (
 
 type WaitSite = { node: ESTree.Node; wait: Wait };
 
+const EXTERNAL_STATE_MODULE = "@stll/property-testing/external-state";
+const FS_MODULES: ReadonlySet<string> = new Set(["node:fs", "fs"]);
+
+const importedAs = (
+  context: ScopeContext,
+  node: unknown,
+  sources: ReadonlySet<string>,
+  name: string,
+): boolean => {
+  const binding = resolveImportedExpressionForEnforcement(context, node);
+  return (
+    binding !== null && sources.has(binding.source) && binding.imported === name
+  );
+};
+
+const isExistsSyncCall = (context: ScopeContext, node: unknown): boolean => {
+  const expression = unwrapExpression(node);
+  return (
+    isAstNode(expression) &&
+    expression.type === "CallExpression" &&
+    importedAs(context, expression.callee, FS_MODULES, "existsSync")
+  );
+};
+
+// What a function hands back: its expression body, or each `return` value of
+// its own body (nested functions return on their own behalf).
+const returnedExpressions = (fn: AstNode): unknown[] => {
+  if (!isAstNode(fn.body)) {
+    return [];
+  }
+  if (fn.body.type !== "BlockStatement") {
+    return [fn.body];
+  }
+  return ownNodes(fn.body)
+    .filter((node) => node.type === "ReturnStatement")
+    .map((node) => node.argument);
+};
+
+// The values that can end a wait through `&&`, `||`, `??` and `?:`:
+// `existsSync(a) && existsSync(b)` and `existsSync(p) || undefined` still end
+// it on existence alone. The left side of `&&` is the result only when it is
+// falsy, which never ends a wait, so `existsSync(p) && contentIsDone(p)` is a
+// guarded content read. A negation (waiting for a file to go away) is its own
+// value.
+const valueBranches = (node: unknown): unknown[] => {
+  const expression = unwrapExpression(node);
+  if (!isAstNode(expression)) {
+    return [];
+  }
+  if (expression.type === "LogicalExpression") {
+    return expression.operator === "&&"
+      ? valueBranches(expression.right)
+      : [...valueBranches(expression.left), ...valueBranches(expression.right)];
+  }
+  if (expression.type === "ConditionalExpression") {
+    return [
+      ...valueBranches(expression.consequent),
+      ...valueBranches(expression.alternate),
+    ];
+  }
+  return [expression];
+};
+
+// Whether a `waitForExternalState({ read })` call's read returns `existsSync`.
+const isFileExistenceWait = (context: ScopeContext, call: AstNode): boolean => {
+  if (
+    !importedAs(
+      context,
+      call.callee,
+      new Set([EXTERNAL_STATE_MODULE]),
+      "waitForExternalState",
+    ) ||
+    !Array.isArray(call.arguments)
+  ) {
+    return false;
+  }
+  const options: unknown = unwrapExpression(call.arguments[0]);
+  if (
+    !isAstNode(options) ||
+    options.type !== "ObjectExpression" ||
+    !Array.isArray(options.properties)
+  ) {
+    return false;
+  }
+  for (const property of options.properties) {
+    if (
+      !isAstNode(property) ||
+      property.type !== "Property" ||
+      property.computed === true ||
+      !isAstNode(property.key) ||
+      !(
+        (isIdentifier(property.key) && property.key.name === "read") ||
+        (property.key.type === "Literal" && property.key.value === "read")
+      )
+    ) {
+      continue;
+    }
+    // An inline callback, or a reference to a function of this file.
+    const read = localFunction(context, property.value);
+    if (
+      read !== null &&
+      returnedExpressions(read)
+        .flatMap(valueBranches)
+        .some((returned) => isExistsSyncCall(context, returned))
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
 export default eslintCompatPlugin({
   meta: { name: "test-timing" },
   rules: {
@@ -1269,6 +1392,33 @@ export default eslintCompatPlugin({
           "Program:exit"(node) {
             for (const report of tracker.stale()) {
               context.report({ node, ...report });
+            }
+          },
+        };
+      },
+    },
+    [FILE_EXISTENCE_WAIT_RULE]: {
+      meta: {
+        type: "problem",
+        schema: [],
+        messages: {
+          existence:
+            "`existsSync` ends this wait as soon as the file exists, but a " +
+            "writer creates the file before it writes, so the content may " +
+            "still be empty or partial. Use `waitForFileContent` from " +
+            "@stll/property-testing/external-state with a `parse` that " +
+            "accepts only complete content.",
+        },
+      },
+      createOnce(context) {
+        return {
+          CallExpression(call) {
+            const node: unknown = call;
+            if (!isAstNode(node)) {
+              return;
+            }
+            if (isFileExistenceWait(context, node)) {
+              context.report({ node: call, messageId: "existence" });
             }
           },
         };
