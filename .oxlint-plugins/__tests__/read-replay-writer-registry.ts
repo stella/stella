@@ -77,6 +77,9 @@ export const readReplayWriterRegistry = (
     ) {
       return panic("Replay owner requires a file and line");
     }
+    if (kind === null) {
+      return panic("Unknown replay owner classification");
+    }
     switch (kind) {
       case "pending":
         return { file, line, kind } satisfies ReplayWriterOwner;

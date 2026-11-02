@@ -137,28 +137,31 @@ describe.serial(RULE, () => {
     ).toEqual([3]);
   });
   test("raw SQL writes and overwritten predicates fail the guard", async () => {
-    expect(
-      await lint(
+    // Independent sources lint concurrently, so the case's wall time stays
+    // one lint run rather than four.
+    const cases: readonly (readonly [string, readonly number[]])[] = [
+      [
         'import { sql } from "drizzle-orm";\nawait tx.execute(sql`UPDATE rows SET value = ' +
           "$" +
           "{value}`);",
-      ),
-    ).toEqual([2]);
-    expect(
-      await lint(
+        [2],
+      ],
+      [
         'import { sql } from "drizzle-orm";\nawait tx.execute(sql.raw("UPDATE rows SET value = 1"));',
-      ),
-    ).toEqual([2]);
-    expect(
-      await lint(
+        [2],
+      ],
+      [
         'import { sql } from "drizzle-orm";\nconst statement = sql.raw("UPDATE rows SET value = 1");\nawait tx.execute(statement);',
-      ),
-    ).toEqual([3]);
-    expect(
-      await lint(
+        [3],
+      ],
+      [
         'import {replayRawWrite} from "@/api/lib/case-law/replay-write"; import {sql} from "drizzle-orm";\nawait replayRawWrite({table:rows,values:{value},predicate:sql`true`,operation:{kind:"update"},ctes:[{name:"x",query:sql.raw("UPDATE rows SET value=1")}]}).execute({kind:"drizzle",connection:tx});',
-      ),
-    ).toEqual([2]);
+        [2],
+      ],
+    ];
+    expect(
+      await Promise.all(cases.map(async ([source]) => await lint(source))),
+    ).toEqual(cases.map(([, lines]) => lines));
   });
   test("a saved update builder must still carry the plan's predicate", async () => {
     expect(
@@ -228,7 +231,7 @@ describe.serial(RULE, () => {
       await lint(
         `${
           imports
-        }import {sql} from "drizzle-orm";\nconst write = plan(rows,{value}); const query = new PgDialect().sqlToQuery(sql\`UPDATE rows SET other = 1 WHERE ${"$"}{write.setWhere}\`);\nawait tx.execute(query.sql,query.params);`,
+        }import {sql} from "drizzle-orm";\nconst write = plan(rows,{value}); const query = new PgDialect().sqlToQuery(sql\`UPDATE rows SET other = 1 WHERE \${write.setWhere}\`);\nawait tx.execute(query.sql,query.params);`,
       ),
     ).toEqual([4]);
   });
