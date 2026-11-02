@@ -5,6 +5,7 @@ import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request
 
 import { signInWithEmailOtp } from "../helpers/sign-in";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 const API_BASE_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
 const WEB_BASE_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
@@ -93,11 +94,15 @@ test("selecting an organization completes login and renders the destination", as
   const organization = page.getByRole("button", {
     name: organizationName,
   });
-  await expect(organization).toBeVisible({ timeout: 30_000 });
+  await expect(organization).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await organization.click();
 
-  await expect(page).toHaveURL(/\/chat\/?$/u, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/chat\/?$/u, {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await expect(
     page.getByRole("textbox", { name: /type your question/iu }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 });
