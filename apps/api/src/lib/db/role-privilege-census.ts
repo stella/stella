@@ -211,6 +211,12 @@ const rolePrivilegeCensusQuery = `
         ON parent.oid <> member.oid
        AND pg_catalog.pg_has_role(member.oid, parent.oid, 'SET')
       WHERE NOT privilege.effective
+        -- A column row the parent's table privilege implies adds nothing to
+        -- that parent's SET_REACHABLE table row.
+        AND NOT (
+          privilege.kind = 'column'
+          AND pg_catalog.has_table_privilege(parent.oid, privilege.object_oid, privilege.privilege_type)
+        )
         AND CASE privilege.kind
           WHEN 'database' THEN pg_catalog.has_database_privilege(parent.oid, privilege.object_oid, privilege.privilege_type)
           WHEN 'schema' THEN pg_catalog.has_schema_privilege(parent.oid, privilege.object_oid, privilege.privilege_type)
@@ -224,9 +230,16 @@ const rolePrivilegeCensusQuery = `
           WHEN 'large_object' THEN pg_catalog.has_largeobject_privilege(parent.oid, privilege.object_oid, privilege.privilege_type)
         END
     ),
+    -- A role reaches a relation through its own effective privileges or by
+    -- SET to a parent that holds one; either way its RLS and policies apply.
+    relation_access AS (
+      SELECT role_oid, kind, object_name FROM role_privileges WHERE effective
+      UNION
+      SELECT role_oid, kind, object_name FROM set_reachable_acl
+    ),
     relation_roles AS (
       SELECT DISTINCT acl.role_oid, relation.oid
-      FROM role_privileges acl
+      FROM relation_access acl
       JOIN application_relations relation
         ON (
           acl.kind IN ('table', 'sequence')
@@ -236,7 +249,6 @@ const rolePrivilegeCensusQuery = `
           AND left(acl.object_name, length(relation.nspname || '.' || relation.relname) + 1) =
               relation.nspname || '.' || relation.relname || '.'
         )
-      WHERE acl.effective
     ),
     results AS (
       SELECT role.rolname AS role, 'attribute'::text AS kind,

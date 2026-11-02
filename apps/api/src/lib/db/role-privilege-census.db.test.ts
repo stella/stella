@@ -856,6 +856,20 @@ describePostgres("database role privilege census", () => {
       expect(rolePrivileges(census, member)).not.toContain(
         "table:public.account:SELECT:EFFECTIVE",
       );
+      // The table row already implies each column; the relation's RLS still
+      // applies to a role that can SET to its reader.
+      expect(
+        rolePrivileges(census, member).filter(
+          (privilege) =>
+            privilege.startsWith("column:public.account.") &&
+            privilege.endsWith(":SELECT:SET_REACHABLE"),
+        ),
+      ).toEqual([]);
+      expect(
+        rolePrivileges(census, member).some((privilege) =>
+          privilege.startsWith("table:public.account:RLS_ENABLED:"),
+        ),
+      ).toBe(true);
     });
   }, 120_000);
 
