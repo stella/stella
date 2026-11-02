@@ -5,7 +5,7 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
-import scenarios from "@stll/playwright-tools/marketing-case-law.json" with { type: "json" };
+import type { MarketingCaseLawScenario } from "@stll/playwright-tools/marketing-case-law";
 
 export class MarketingDecisionPathError extends TaggedError(
   "MarketingDecisionPathError",
@@ -35,7 +35,10 @@ const threadListSchema = v.object({
 });
 
 /** Resolve the seeded readers from public badges, without visiting search. */
-export const getMarketingDecisionPaths = (payload: unknown) => {
+export const getMarketingDecisionPaths = (
+  payload: unknown,
+  scenarios: readonly MarketingCaseLawScenario[],
+) => {
   const parsed = v.safeParse(threadListSchema, payload);
   if (!parsed.success) {
     throw new MarketingDecisionPathError({
