@@ -1,8 +1,23 @@
 import * as v from "valibot";
 
-import { stripDirectionalControls } from "@stll/ui/directional-controls";
-
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "./limits";
+
+/**
+ * Explicit embeddings (U+202A, U+202B), overrides (U+202D, U+202E), their
+ * terminator (U+202C) and isolates (U+2066..U+2069). Each one reorders the
+ * text after it. The implicit marks U+200E and U+200F stay: they only set the
+ * direction of the neutral characters beside them, which right-to-left names
+ * can rely on.
+ *
+ * `@stll/ui` renders the same names and must build standalone, so it keeps
+ * its own copy of this set; `directional-controls-parity.test.ts` in apps/web
+ * holds the two equal for every code point.
+ */
+const DIRECTIONAL_CONTROLS = /[\u202A-\u202E\u2066-\u2069]/gu;
+
+/** Removes explicit directional formatting from text a person typed. */
+export const stripDirectionalControls = (text: string): string =>
+  text.replaceAll(DIRECTIONAL_CONTROLS, "");
 
 type StripDirectionalControlsAction = v.BaseTransformation<
   string,

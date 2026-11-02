@@ -786,7 +786,6 @@
         "@stll/template-conditions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "0.4.1",
-        "@stll/ui": "workspace:*",
         "@stll/uuid-codec": "workspace:*",
         "@tanstack/ai": "catalog:",
         "@valibot/to-json-schema": "^1.8.0",
