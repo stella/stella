@@ -14,6 +14,23 @@ const VIEW_UUID_PATTERN =
 export const isWorkspaceViewId = (segment: string): boolean =>
   segment === DEFAULT_WORKSPACE_VIEW_ID || VIEW_UUID_PATTERN.test(segment);
 
+/** The URL ids a `$viewId` route checks before loading: the default slug
+ * names no view, so only the matter is addressed. */
+export const workspaceViewRouteIds = (
+  workspaceId: string,
+  viewId: string,
+): readonly string[] =>
+  viewId === DEFAULT_WORKSPACE_VIEW_ID ? [workspaceId] : [workspaceId, viewId];
+
+/** Whether a matter's views hold the `$viewId` a URL names. The default slug
+ * always resolves, to the matter's first available view. */
+export const workspaceViewsInclude = (
+  views: readonly { id: string }[],
+  viewId: string,
+): boolean =>
+  viewId === DEFAULT_WORKSPACE_VIEW_ID ||
+  views.some((view) => view.id === viewId);
+
 export type WorkspaceViewParams = { workspaceId: string; viewId: string };
 
 /** The view a navigation into `targetWorkspaceId` opens under. The view on
