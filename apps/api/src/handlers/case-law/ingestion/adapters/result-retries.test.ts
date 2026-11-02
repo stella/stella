@@ -2,7 +2,10 @@ import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const SK_RETRY_DELAY_MS = 500;
 const CZ_RETRY_DELAY_MS = 5000;
@@ -19,10 +22,8 @@ const skEmptyPage = (): Response =>
 const czEmptyPage = (): Response =>
   Response.json({ items: [], totalPages: 1, pageNumber: 0 });
 
-const originalFetch = globalThis.fetch;
-
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   jest.useRealTimers();
 });
 
@@ -30,13 +31,15 @@ describe("case-law adapter Result retries", () => {
   test("SK US retries a transient search failure once", async () => {
     jest.useFakeTimers();
     let fetchCalls = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      fetchCalls++;
-      if (fetchCalls === 1) {
-        throw new TypeError("temporary network failure");
-      }
-      return skEmptyPage();
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        fetchCalls++;
+        if (fetchCalls === 1) {
+          throw new TypeError("temporary network failure");
+        }
+        return skEmptyPage();
+      }),
+    );
 
     const pagePromise = skUsAdapter.fetchPage("2025:0", {});
     await flush();
@@ -52,10 +55,12 @@ describe("case-law adapter Result retries", () => {
 
   test("SK US does not retry an authentication failure", async () => {
     let fetchCalls = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      fetchCalls++;
-      return new Response(null, { status: 401 });
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        fetchCalls++;
+        return new Response(null, { status: 401 });
+      }),
+    );
 
     const result = await skUsAdapter.fetchPage("2025:0", {});
 
@@ -65,10 +70,12 @@ describe("case-law adapter Result retries", () => {
 
   test("SK US does not retry a request timeout", async () => {
     let fetchCalls = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      fetchCalls++;
-      throw new DOMException("request timed out", "TimeoutError");
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        fetchCalls++;
+        throw new DOMException("request timed out", "TimeoutError");
+      }),
+    );
 
     const result = await skUsAdapter.fetchPage("2025:0", {});
 
@@ -81,10 +88,12 @@ describe("case-law adapter Result retries", () => {
     const controller = new AbortController();
     let fetchCalls = 0;
     let settled = false;
-    globalThis.fetch = asFetchMock(async () => {
-      fetchCalls++;
-      return new Response(null, { status: 503 });
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        fetchCalls++;
+        return new Response(null, { status: 503 });
+      }),
+    );
 
     const pagePromise = czRegionalAdapter.fetchPage(
       "2026-01-01:0",
@@ -112,12 +121,14 @@ describe("case-law adapter Result retries", () => {
   test("CZ Regional retries a server failure and preserves the page", async () => {
     jest.useFakeTimers();
     let fetchCalls = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      fetchCalls++;
-      return fetchCalls === 1
-        ? new Response(null, { status: 503 })
-        : czEmptyPage();
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        fetchCalls++;
+        return fetchCalls === 1
+          ? new Response(null, { status: 503 })
+          : czEmptyPage();
+      }),
+    );
 
     const pagePromise = czRegionalAdapter.fetchPage("2026-01-01:0", {});
     await flush();

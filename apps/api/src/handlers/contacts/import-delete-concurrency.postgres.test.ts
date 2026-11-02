@@ -176,6 +176,10 @@ if (!runPostgresTests || databaseUrl === undefined) {
             organizationId,
             contactId,
             recordAuditEvent: auditRecorderDouble(),
+            flushWorkspaceSearchRepairs: async () => ({
+              failed: 0,
+              repaired: 0,
+            }),
           }),
         );
         pending.push(deletion);

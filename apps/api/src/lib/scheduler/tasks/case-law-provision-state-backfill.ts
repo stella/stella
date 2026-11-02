@@ -18,8 +18,8 @@ import { ProvisionBackfillUnitError } from "@/api/lib/case-law/provision-state-b
 import type { ProvisionBackfillSession } from "@/api/lib/case-law/provision-state-backfill/step";
 import {
   logSchedulerBackfillStatus,
-  SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "@/api/lib/scheduler/backfill-config";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
@@ -150,7 +150,7 @@ export const createCaseLawProvisionStateBackfillTask =
               tableName: "case_law_decisions",
               initialSize: 1,
               config: {
-                ...SCHEDULER_BACKFILL_CONFIG,
+                ...schedulerBackfillConfig(),
                 minSize: 1,
                 maxSize: 1,
                 batchLockTimeoutMs: CONNECTION_LOCK_TIMEOUT_MS,

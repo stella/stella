@@ -1,3 +1,5 @@
+import { BROWSER_CONTROL_LIMITS } from "@stll/api-contract/browser-control";
+
 import { NON_PUBLIC_SECURE_URL_PATTERNS } from "./origin-policy";
 import { BROWSER_CONTAINED_TABS_STORAGE_KEY } from "./storage-keys";
 import { STELLA_HOSTNAMES } from "./trusted-origin";
@@ -26,10 +28,11 @@ export const CONTROLLED_TAB_RULE_IDS = [
 ];
 
 /**
- * Tabs a page opened from a contained tab stay contained until they close
- * or control ends. Beyond this many, a page-opened tab is closed at once.
+ * Chat's tabs (the controlled one, and those contained beside it) stay
+ * contained until they close or control ends. Beyond this many, a
+ * page-opened tab is closed at once and chat may not open another.
  */
-const OPENED_TAB_LIMIT = 8;
+const OPENED_TAB_LIMIT = BROWSER_CONTROL_LIMITS.tabs;
 
 const DOCUMENT_RESOURCE_TYPES = ["main_frame", "sub_frame"] as const;
 
@@ -162,21 +165,37 @@ const containmentRules = (
 
 /**
  * Who a tab belongs to while control lasts: the tab chat operates, tabs
- * confined beside it (opened by a confined tab's page, or operated by chat
- * before), which chat never operates, and the user's own tabs. Each tab has
- * at most one owner. Every other tab is unknown and confined too: the network
- * rules exclude the user's tabs rather than list the confined ones, so a tab
+ * confined beside it, and the user's own tabs. Each tab has at most one
+ * owner. Every other tab is unknown and confined too: the network rules
+ * exclude the user's tabs rather than list the confined ones, so a tab
  * Chrome has only just created is confined from its first request, until
  * there is evidence of who opened it.
+ *
+ * Of the confined tabs, only chat's own may be operated again: tabs chat
+ * controlled before, and tabs a page in one of chat's tabs opened. A tab an
+ * unknown tab opened is confined but never chat's, and a tab the user
+ * navigated themselves stops being chat's while it stays confined.
  */
 type ContainedTabs = {
+  /** Chat's tabs it handed over from the popup; restored when switched back to. */
+  adoptedTabIds: number[];
+  /** Confined tabs chat may switch to; a subset of `openedTabIds`. */
+  chatTabIds: number[];
   controlledTabId: number | null;
+  /**
+   * The user navigated the controlled tab themselves; once control leaves
+   * it, it stays confined but is no longer chat's.
+   */
+  controlledUserNavigated: boolean;
   openedTabIds: number[];
   userTabIds: number[];
 };
 
 const NO_CONTAINED_TABS: ContainedTabs = {
+  adoptedTabIds: [],
+  chatTabIds: [],
   controlledTabId: null,
+  controlledUserNavigated: false,
   openedTabIds: [],
   userTabIds: [],
 };
@@ -186,6 +205,11 @@ const NO_TAB_ID = -1;
 
 const isTabId = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value);
+
+const parseTabIds = (input: object, key: string): number[] => {
+  const value: unknown = Reflect.get(input, key);
+  return Array.isArray(value) ? value.filter(isTabId) : [];
+};
 
 const parseContainedTabs = (input: unknown): ContainedTabs => {
   if (
@@ -200,8 +224,15 @@ const parseContainedTabs = (input: unknown): ContainedTabs => {
   ) {
     return NO_CONTAINED_TABS;
   }
+  // A set stored without the newer lists names no tab chat may operate,
+  // which only takes away; every tab in it stays confined.
   return exclusiveOwners({
+    adoptedTabIds: parseTabIds(input, "adoptedTabIds"),
+    chatTabIds: parseTabIds(input, "chatTabIds"),
     controlledTabId: input.controlledTabId,
+    controlledUserNavigated:
+      "controlledUserNavigated" in input &&
+      input.controlledUserNavigated === true,
     openedTabIds: input.openedTabIds.filter(isTabId),
     userTabIds: input.userTabIds.filter(isTabId),
   });
@@ -209,18 +240,31 @@ const parseContainedTabs = (input: unknown): ContainedTabs => {
 
 /**
  * Gives every tab one owner. Should the lists ever overlap, confinement
- * wins: a tab both confined and the user's stays confined.
+ * wins: a tab both confined and the user's stays confined. Chat's tabs are
+ * only ever confined ones.
  */
 export const exclusiveOwners = ({
+  adoptedTabIds,
+  chatTabIds,
   controlledTabId,
+  controlledUserNavigated,
   openedTabIds,
   userTabIds,
 }: ContainedTabs): ContainedTabs => {
   const opened = [...new Set(openedTabIds)].filter(
     (tabId) => tabId !== controlledTabId,
   );
+  const chat = [...new Set(chatTabIds)].filter((tabId) =>
+    opened.includes(tabId),
+  );
   return {
+    adoptedTabIds: [...new Set(adoptedTabIds)].filter(
+      (tabId) => tabId === controlledTabId || chat.includes(tabId),
+    ),
+    chatTabIds: chat,
     controlledTabId,
+    controlledUserNavigated:
+      controlledTabId !== null && controlledUserNavigated,
     openedTabIds: opened,
     userTabIds: [...new Set(userTabIds)].filter(
       (tabId) => tabId !== controlledTabId && !opened.includes(tabId),
@@ -234,6 +278,15 @@ export const containedTabIds = ({
 }: Pick<ContainedTabs, "controlledTabId" | "openedTabIds">): number[] => [
   ...(controlledTabId === null ? [] : [controlledTabId]),
   ...openedTabIds.filter((tabId) => tabId !== controlledTabId),
+];
+
+/** The tabs chat may operate: the controlled one first, then its others. */
+export const operableTabIds = ({
+  chatTabIds,
+  controlledTabId,
+}: Pick<ContainedTabs, "chatTabIds" | "controlledTabId">): number[] => [
+  ...(controlledTabId === null ? [] : [controlledTabId]),
+  ...chatTabIds.filter((tabId) => tabId !== controlledTabId),
 ];
 
 export const readContainedTabs = async (): Promise<ContainedTabs> => {
@@ -291,6 +344,9 @@ const sameIds = (left: readonly number[], right: readonly number[]) =>
 
 const sameContainment = (left: ContainedTabs, right: ContainedTabs) =>
   left.controlledTabId === right.controlledTabId &&
+  left.controlledUserNavigated === right.controlledUserNavigated &&
+  sameIds(left.adoptedTabIds, right.adoptedTabIds) &&
+  sameIds(left.chatTabIds, right.chatTabIds) &&
   sameIds(left.openedTabIds, right.openedTabIds) &&
   sameIds(left.userTabIds, right.userTabIds);
 
@@ -348,16 +404,38 @@ const updateContainedTabs = async <T>(
 const isActive = (containment: ContainedTabs): boolean =>
   containedTabIds(containment).length > 0;
 
+/** Whether chat already has as many tabs as it may keep. */
+export const chatTabsAtLimit = (
+  containment: Pick<ContainedTabs, "chatTabIds" | "controlledTabId">,
+): boolean => operableTabIds(containment).length >= OPENED_TAB_LIMIT;
+
+type ContainControlledTabOptions = {
+  /** The user handed the tab over from the popup. */
+  adopted?: boolean;
+  /**
+   * When the tab would take chat past its tab limit: `refuse` changes
+   * nothing, `drop-oldest` keeps the oldest of chat's other tabs confined
+   * but no longer chat's.
+   */
+  atLimit?: "drop-oldest" | "refuse";
+};
+
+type ControlledTabContainment = "contained" | "over-limit";
+
 /**
  * Confines the tab chat operates before it loads anything: no downloads,
  * and no request outside the public-HTTPS origin policy. When control
  * starts, every other tab open now is the user's; tabs created from then on
  * stay confined until there is evidence they are the user's. A tab chat
- * operated before stays confined, never operated, until control ends or it
- * closes: its page was chat's to drive, so handing chat another tab does not
- * free it.
+ * operated before stays confined until control ends or it closes, and stays
+ * chat's to switch back to unless the user navigated it. The limit is
+ * checked in the same step that adds the tab, so no tab opened meanwhile
+ * can take chat past it.
  */
-export const containControlledTab = async (tabId: number): Promise<void> => {
+export const containControlledTab = async (
+  tabId: number,
+  { adopted = false, atLimit = "refuse" }: ContainControlledTabOptions = {},
+): Promise<ControlledTabContainment> =>
   await updateContainedTabs(async (current, openTabIds) => {
     const userTabIds = isActive(current)
       ? current.userTabIds
@@ -365,24 +443,89 @@ export const containControlledTab = async (tabId: number): Promise<void> => {
           (openTabId) => !containedTabIds(current).includes(openTabId),
         );
     const previous = current.controlledTabId;
-    const retained =
-      previous === null || previous === tabId
-        ? current.openedTabIds
-        : [...current.openedTabIds, previous];
+    const moved = previous !== null && previous !== tabId;
+    const retainedChat = [
+      ...current.chatTabIds.filter((chatTabId) => chatTabId !== tabId),
+      ...(moved && !current.controlledUserNavigated ? [previous] : []),
+    ];
+    const room = OPENED_TAB_LIMIT - 1;
+    if (retainedChat.length > room && atLimit === "refuse") {
+      return { next: current, result: "over-limit" };
+    }
+    const retained = moved
+      ? [...current.openedTabIds, previous]
+      : current.openedTabIds;
     return {
       next: {
+        adoptedTabIds: adopted
+          ? [...current.adoptedTabIds, tabId]
+          : current.adoptedTabIds,
+        chatTabIds: retainedChat.slice(Math.max(0, retainedChat.length - room)),
         controlledTabId: tabId,
+        controlledUserNavigated: moved
+          ? false
+          : current.controlledUserNavigated,
         openedTabIds: retained.filter((opened) => opened !== tabId),
         userTabIds: userTabIds.filter(
           (userTabId) => userTabId !== tabId && !retained.includes(userTabId),
         ),
       },
-      result: undefined,
+      result: "contained",
     };
   });
-};
 
-type TabOwner = "controlled" | "inactive" | "opened" | "unknown" | "user";
+type ChatTabSwitch =
+  { adopted: boolean; status: "switched" } | { status: "refused" };
+
+/**
+ * Makes one of chat's tabs the controlled one; the tab controlled until now
+ * stays confined beside it, and chat's unless the user navigated it. Any
+ * other tab (the user's, an unknown one, one only confined, or any while
+ * nothing is contained) is refused in the same step that would move
+ * control, so a tab that changed owner meanwhile is never taken. `adopted`
+ * says whether the user once handed the tab over from the popup.
+ */
+export const switchContainedTab = async (
+  tabId: number,
+): Promise<ChatTabSwitch> =>
+  await updateContainedTabs(
+    (
+      current,
+    ): {
+      next: ContainedTabs;
+      result: ChatTabSwitch;
+    } => {
+      const adopted = current.adoptedTabIds.includes(tabId);
+      if (current.controlledTabId === tabId) {
+        return { next: current, result: { adopted, status: "switched" } };
+      }
+      if (!current.chatTabIds.includes(tabId)) {
+        return { next: current, result: { status: "refused" } };
+      }
+      const previous = current.controlledTabId;
+      const previousStaysChat =
+        previous !== null && !current.controlledUserNavigated;
+      return {
+        next: {
+          ...current,
+          chatTabIds: [
+            ...current.chatTabIds.filter((chatTabId) => chatTabId !== tabId),
+            ...(previousStaysChat ? [previous] : []),
+          ],
+          controlledTabId: tabId,
+          controlledUserNavigated: false,
+          openedTabIds: [
+            ...current.openedTabIds.filter((opened) => opened !== tabId),
+            ...(previous === null ? [] : [previous]),
+          ],
+        },
+        result: { adopted, status: "switched" },
+      };
+    },
+  );
+
+type TabOwner =
+  "chat" | "confined" | "controlled" | "inactive" | "unknown" | "user";
 
 /** Who a tab belongs to now; `inactive` when nothing is contained. */
 export const readTabOwner = async (tabId: number): Promise<TabOwner> => {
@@ -393,69 +536,134 @@ export const readTabOwner = async (tabId: number): Promise<TabOwner> => {
   if (current.controlledTabId === tabId) {
     return "controlled";
   }
+  if (current.chatTabIds.includes(tabId)) {
+    return "chat";
+  }
   if (current.openedTabIds.includes(tabId)) {
-    return "opened";
+    return "confined";
   }
   return current.userTabIds.includes(tabId) ? "user" : "unknown";
 };
 
-type OpenedTabContainment = "contained" | "inactive" | "over-limit";
+type OpenedTabContainment = "chat" | "confined" | "inactive" | "over-limit";
 
 /**
- * Confines a tab a confined tab's page opened, even one already given to
- * the user: a late report of its source always wins. With `limited`, a tab
- * beyond the limit is refused (`over-limit`) and the caller closes it.
+ * Confines a tab another tab's page opened, even one already given to the
+ * user: a late report of its source always wins. It becomes chat's only
+ * when the page that opened it was in one of chat's tabs and the user has
+ * not taken it meanwhile. A tab an unknown or merely confined tab opened is
+ * confined, never chat's. A tab beyond the limit, chat's or one a confined
+ * page opened, is refused (`over-limit`) and the caller closes it.
  */
 export const containOpenedTab = async (
   tabId: number,
-  { limited }: { limited: boolean },
+  { sourceTabId }: { sourceTabId: number },
 ): Promise<OpenedTabContainment> =>
-  await updateContainedTabs((current) => {
-    const contained = containedTabIds(current);
-    if (contained.length === 0) {
-      return { next: current, result: "inactive" };
-    }
-    if (contained.includes(tabId)) {
-      return { next: current, result: "contained" };
-    }
-    if (limited && current.openedTabIds.length >= OPENED_TAB_LIMIT) {
-      return { next: current, result: "over-limit" };
-    }
-    return {
-      next: {
-        ...current,
-        openedTabIds: [...current.openedTabIds, tabId],
-        userTabIds: current.userTabIds.filter(
-          (userTabId) => userTabId !== tabId,
-        ),
-      },
-      result: "contained",
-    };
-  });
+  await updateContainedTabs(
+    (
+      current,
+    ): {
+      next: ContainedTabs;
+      result: OpenedTabContainment;
+    } => {
+      const contained = containedTabIds(current);
+      if (contained.length === 0) {
+        return { next: current, result: "inactive" };
+      }
+      const operable = operableTabIds(current);
+      if (contained.includes(tabId)) {
+        return {
+          next: current,
+          result: operable.includes(tabId) ? "chat" : "confined",
+        };
+      }
+      const toChat =
+        operable.includes(sourceTabId) && !current.userTabIds.includes(tabId);
+      // Chat's tabs count against chat's limit; a merely confined page may not
+      // open more once that many tabs are confined in all.
+      const overLimit = toChat
+        ? operable.length >= OPENED_TAB_LIMIT
+        : contained.includes(sourceTabId) &&
+          contained.length >= OPENED_TAB_LIMIT;
+      if (overLimit) {
+        return { next: current, result: "over-limit" };
+      }
+      return {
+        next: {
+          ...current,
+          chatTabIds: toChat
+            ? [...current.chatTabIds, tabId]
+            : current.chatTabIds,
+          openedTabIds: [...current.openedTabIds, tabId],
+          userTabIds: current.userTabIds.filter(
+            (userTabId) => userTabId !== tabId,
+          ),
+        },
+        result: toChat ? "chat" : "confined",
+      };
+    },
+  );
 
 /**
  * Gives a tab to the user on evidence that the user, not a page, opened or
  * navigated it. A confined tab stays confined: evidence of the user's hand
- * never outweighs a page having opened it.
+ * never outweighs a page having opened it. It is no longer chat's to switch
+ * to, though, nor listed to chat; the controlled tab is so once control
+ * leaves it.
  */
 export const releaseToUser = async (tabId: number): Promise<TabOwner> =>
-  await updateContainedTabs((current) => {
-    if (!isActive(current)) {
-      return { next: current, result: "inactive" };
-    }
-    if (containedTabIds(current).includes(tabId)) {
+  await updateContainedTabs(
+    (
+      current,
+    ): {
+      next: ContainedTabs;
+      result: TabOwner;
+    } => {
+      if (!isActive(current)) {
+        return { next: current, result: "inactive" };
+      }
+      if (current.controlledTabId === tabId) {
+        return {
+          next: { ...current, controlledUserNavigated: true },
+          result: "controlled",
+        };
+      }
+      if (containedTabIds(current).includes(tabId)) {
+        return {
+          next: {
+            ...current,
+            chatTabIds: current.chatTabIds.filter(
+              (chatTabId) => chatTabId !== tabId,
+            ),
+          },
+          result: "confined",
+        };
+      }
       return {
-        next: current,
-        result: current.controlledTabId === tabId ? "controlled" : "opened",
+        next: current.userTabIds.includes(tabId)
+          ? current
+          : { ...current, userTabIds: [...current.userTabIds, tabId] },
+        result: "user",
       };
-    }
-    return {
-      next: current.userTabIds.includes(tabId)
-        ? current
-        : { ...current, userTabIds: [...current.userTabIds, tabId] },
-      result: "user",
-    };
-  });
+    },
+  );
+
+/**
+ * Chat loaded a page of its own in the controlled tab, over whatever the
+ * user had navigated it to: the tab is chat's again, and stays so once
+ * control leaves it. Chrome commits a navigation the extension starts as a
+ * plain link, never as the user's, so a later commit by the user still
+ * counts.
+ */
+export const reclaimControlledTab = async (tabId: number): Promise<void> => {
+  await updateContainedTabs((current) => ({
+    next:
+      current.controlledTabId === tabId
+        ? { ...current, controlledUserNavigated: false }
+        : current,
+    result: undefined,
+  }));
+};
 
 /** Chrome swapped a tab for another; the new one keeps the old one's owner. */
 export const replaceTab = async (
@@ -467,10 +675,13 @@ export const replaceTab = async (
       tabIds.map((tabId) => (tabId === removedTabId ? addedTabId : tabId));
     return {
       next: {
+        adoptedTabIds: swap(current.adoptedTabIds),
+        chatTabIds: swap(current.chatTabIds),
         controlledTabId:
           current.controlledTabId === removedTabId
             ? addedTabId
             : current.controlledTabId,
+        controlledUserNavigated: current.controlledUserNavigated,
         openedTabIds: swap(current.openedTabIds),
         userTabIds: swap(current.userTabIds),
       },
@@ -482,11 +693,16 @@ export const replaceTab = async (
 /** A closed tab leaves the set; the others stay as they are. */
 export const forgetContainedTab = async (tabId: number): Promise<void> => {
   await updateContainedTabs((current) => {
+    const without = (tabIds: readonly number[]) =>
+      tabIds.filter((other) => other !== tabId);
     const next = {
+      adoptedTabIds: without(current.adoptedTabIds),
+      chatTabIds: without(current.chatTabIds),
       controlledTabId:
         current.controlledTabId === tabId ? null : current.controlledTabId,
-      openedTabIds: current.openedTabIds.filter((opened) => opened !== tabId),
-      userTabIds: current.userTabIds.filter((userTabId) => userTabId !== tabId),
+      controlledUserNavigated: current.controlledUserNavigated,
+      openedTabIds: without(current.openedTabIds),
+      userTabIds: without(current.userTabIds),
     };
     return {
       next: isActive(next) ? next : NO_CONTAINED_TABS,
