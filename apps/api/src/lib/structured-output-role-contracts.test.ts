@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
@@ -29,6 +29,9 @@ import {
   STRUCTURED_OUTPUT_ROLE_FIXTURES,
   type StructuredOutputRoleFixture,
 } from "@/api/tests/helpers/structured-output-role-fixtures";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 // Every structured-output role against every provider it reaches in
 // production: the role's own schema, a recorded model answer for it, and the
@@ -55,11 +58,14 @@ const testState = createTestState({ file: import.meta.path, config: env });
 testState.beforeAll(() => {
   // Real adapters, not the local mock model.
   testState.setConfig("USE_MOCK_AI", false);
-  globalThis.fetch = answeringFetch;
 });
 
-afterAll(() => {
-  globalThis.fetch = realFetch;
+beforeEach(() => {
+  testFetchState.set(answeringFetch);
+});
+
+afterEach(() => {
+  testFetchState.restore();
 });
 
 // --- Which roles exist ------------------------------------------------------

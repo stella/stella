@@ -11,6 +11,7 @@ import type {
   PendingDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
@@ -23,6 +24,8 @@ import {
   type OnDemandDocumentDeps,
   readThroughDeferredDocument,
 } from "./document-on-demand";
+
+const testFetchState = createTestFetch();
 
 const decision = (): PendingDocument => ({
   id: createSafeId<"caseLawDecision">(),
@@ -198,12 +201,14 @@ for (const mode of ["throws", "rejects", "pending", "connecting"] as const) {
     let gateCalls = 0;
     let resolved = false;
     const recorded: string[] = [];
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        requests += 1;
-        return new Response("document");
-      }),
+
+    testFetchState.set(
+      asFetchMock(
+        mock(async () => {
+          requests += 1;
+          return new Response("document");
+        }),
+      ),
     );
     const deps: OnDemandDocumentDeps = {
       recordRequest: async () => {},
@@ -277,7 +282,7 @@ for (const mode of ["throws", "rejects", "pending", "connecting"] as const) {
       jest.advanceTimersByTime(6000);
       expect(requests).toBe(0);
     } finally {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
       jest.useRealTimers();
     }
   });

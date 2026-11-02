@@ -15,7 +15,9 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
+import { Textarea } from "@stll/ui/textarea";
 import { contentDir } from "@stll/ui/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -342,8 +344,8 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
         ? content.value === null
         : content.value.length === 0);
     return (
-      <button
-        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm"
+      <Button
+        className="block w-full min-w-0"
         onClick={(event) => {
           if (stopPropagation) {
             event.stopPropagation();
@@ -355,18 +357,20 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
             event.stopPropagation();
           }
         }}
-        type="button"
+        variant="plain"
       >
-        {isEmpty ? (
-          <span className="text-muted-foreground">—</span>
-        ) : (
-          <FieldValue
-            content={content}
-            property={property}
-            variant={displayVariant}
-          />
-        )}
-      </button>
+        <span className="hover:bg-muted block truncate rounded px-2 py-1 text-sm">
+          {isEmpty ? (
+            <span className="text-muted-foreground">—</span>
+          ) : (
+            <FieldValue
+              content={content}
+              property={property}
+              variant={displayVariant}
+            />
+          )}
+        </span>
+      </Button>
     );
   }
 
@@ -434,8 +438,8 @@ const InlineDateEditor = ({
 
   if (!editing) {
     return (
-      <button
-        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm"
+      <Button
+        className="block w-full min-w-0"
         onClick={(event) => {
           if (stopPropagation) {
             event.stopPropagation();
@@ -447,14 +451,16 @@ const InlineDateEditor = ({
             event.stopPropagation();
           }
         }}
-        type="button"
+        variant="plain"
       >
-        <FieldValue
-          content={{ type: "date", version: 1, value }}
-          property={property}
-          variant={displayVariant}
-        />
-      </button>
+        <span className="hover:bg-muted block truncate rounded px-2 py-1 text-sm">
+          <FieldValue
+            content={{ type: "date", version: 1, value }}
+            property={property}
+            variant={displayVariant}
+          />
+        </span>
+      </Button>
     );
   }
 
@@ -512,8 +518,8 @@ const InlineTextEditor = ({
 
   if (state.status !== "editing") {
     return (
-      <button
-        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm"
+      <Button
+        className="block w-full min-w-0"
         data-open-expanded-cell
         disabled={state.status === "loading"}
         onClick={(event) => {
@@ -541,25 +547,28 @@ const InlineTextEditor = ({
             event.stopPropagation();
           }
         }}
-        type="button"
+        variant="plain"
       >
-        {value ? (
-          <FieldValue
-            content={{ type: "text", version: 1, value }}
-            property={property}
-            variant={displayVariant}
-          />
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </button>
+        <span className="hover:bg-muted block truncate rounded px-2 py-1 text-sm">
+          {value ? (
+            <FieldValue
+              content={{ type: "text", version: 1, value }}
+              property={property}
+              variant={displayVariant}
+            />
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </span>
+      </Button>
     );
   }
 
   return (
-    <textarea
+    <Textarea
       autoFocus
-      className="border-input bg-background focus:ring-ring min-h-20 w-full min-w-0 resize-none rounded-md border px-2 py-1 text-sm outline-none focus:ring-1"
+      className="min-w-0"
+      fieldSizing="fixed"
       dir={contentDir(state.draft)}
       onBlur={() => {
         const trimmed = state.draft.trim();
@@ -621,8 +630,8 @@ const InlineIntEditor = ({
 
   if (!editing) {
     return (
-      <button
-        className="hover:bg-muted block w-full min-w-0 rounded px-2 py-1 text-start text-sm"
+      <Button
+        className="block w-full min-w-0"
         onClick={(event) => {
           if (stopPropagation) {
             event.stopPropagation();
@@ -635,13 +644,15 @@ const InlineIntEditor = ({
             event.stopPropagation();
           }
         }}
-        type="button"
+        variant="plain"
       >
-        <IntFieldValue
-          content={{ type: "int", version: 1, value, currency }}
-          variant={displayVariant}
-        />
-      </button>
+        <span className="hover:bg-muted block rounded px-2 py-1 text-sm">
+          <IntFieldValue
+            content={{ type: "int", version: 1, value, currency }}
+            variant={displayVariant}
+          />
+        </span>
+      </Button>
     );
   }
 
@@ -778,8 +789,8 @@ const TableFileField = ({
       <Tooltip
         content={content.fileName}
         render={
-          <button
-            className="bg-muted grid max-w-full min-w-0 cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start"
+          <Button
+            className="max-w-full min-w-0"
             onClick={() =>
               openFile({
                 id: fieldId,
@@ -792,24 +803,26 @@ const TableFileField = ({
                 propertyId,
               })
             }
-            type="button"
+            variant="plain"
           />
         }
       >
-        <DocumentIcon
-          className="size-3.5 shrink-0"
-          fileName={content.fileName}
-          mimeType={content.mimeType}
-          thumbnail={thumbnail}
-        />
-        {/* The name, not the icon, sets the chip's baseline, so a wrapped
+        <span className="bg-muted grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5">
+          <DocumentIcon
+            className="size-3.5 shrink-0"
+            fileName={content.fileName}
+            mimeType={content.mimeType}
+            thumbnail={thumbnail}
+          />
+          {/* The name, not the icon, sets the chip's baseline, so a wrapped
             row lines the name up with its neighbours' first lines. */}
-        <BidiText
-          as="span"
-          className="min-w-0 self-baseline truncate text-start"
-        >
-          <HighlightedText columnId={propertyId} text={content.fileName} />
-        </BidiText>
+          <BidiText
+            as="span"
+            className="min-w-0 self-baseline truncate text-start"
+          >
+            <HighlightedText columnId={propertyId} text={content.fileName} />
+          </BidiText>
+        </span>
       </Tooltip>
     );
   }

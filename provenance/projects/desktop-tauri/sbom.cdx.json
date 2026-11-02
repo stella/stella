@@ -429,6 +429,92 @@
       "version": "0.3.0"
     },
     {
+      "bom-ref": "pkg:cargo/alsa@0.11.0",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "812947049edcd670a82cd5c73c3661d2e58468577ba8489de58e1a73c04cbd5d"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0/MIT"
+          }
+        }
+      ],
+      "name": "alsa",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/alsa@0.11.0",
+      "type": "library",
+      "version": "0.11.0"
+    },
+    {
+      "bom-ref": "pkg:cargo/alsa-sys@0.4.0",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ad7569085a265dd3f607ebecce7458eaab2132a84393534c95b18dcbc3f31e04"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "alsa-sys",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/alsa-sys@0.4.0",
+      "type": "library",
+      "version": "0.4.0"
+    },
+    {
       "bom-ref": "pkg:cargo/ammonia@4.2.4",
       "evidence": {
         "identity": [
@@ -4108,6 +4194,92 @@
       "version": "0.2.0"
     },
     {
+      "bom-ref": "pkg:cargo/coreaudio-rs@0.14.2",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7d5d7dca3ebcf65a035582c9ad4385371a9d9ee6537474d2a278f4e1e475bb58"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT/Apache-2.0"
+          }
+        }
+      ],
+      "name": "coreaudio-rs",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/coreaudio-rs@0.14.2",
+      "type": "library",
+      "version": "0.14.2"
+    },
+    {
+      "bom-ref": "pkg:cargo/cpal@0.18.2",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6f02e8d0327b42d3e2e4ab2119af397344eb9fc54a34bf0ddeaa1277af8681f1"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "name": "cpal",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/cpal@0.18.2",
+      "type": "library",
+      "version": "0.18.2"
+    },
+    {
       "bom-ref": "pkg:cargo/cpubits@0.1.1",
       "evidence": {
         "identity": [
@@ -4995,6 +5167,54 @@
       "purl": "pkg:cargo/darling_macro@0.23.0",
       "type": "library",
       "version": "0.23.0"
+    },
+    {
+      "bom-ref": "pkg:cargo/dasp_sample@0.11.0",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "0c87e182de0887fd5361989c677c4e8f5000cd9491d6d563161a8f3a5519fc7f"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "dasp_sample",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/dasp_sample@0.11.0",
+      "type": "library",
+      "version": "0.11.0"
     },
     {
       "bom-ref": "pkg:cargo/data-url@0.3.2",
@@ -12710,6 +12930,59 @@
       "version": "0.6.15"
     },
     {
+      "bom-ref": "pkg:cargo/mach2@0.6.0",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "dae608c151f68243f2b000364e1f7b186d9c29845f7d2d85bd31b9ad77ad552b"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "BSD-2-Clause"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "mach2",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/mach2@0.6.0",
+      "type": "library",
+      "version": "0.6.0"
+    },
+    {
       "bom-ref": "pkg:cargo/maplit@1.0.2",
       "evidence": {
         "identity": [
@@ -14129,6 +14402,54 @@
       "version": "0.2.2"
     },
     {
+      "bom-ref": "pkg:cargo/num-derive@0.4.2",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "num-derive",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/num-derive@0.4.2",
+      "type": "library",
+      "version": "0.4.2"
+    },
+    {
       "bom-ref": "pkg:cargo/num-integer@0.1.46",
       "evidence": {
         "identity": [
@@ -14523,6 +14844,112 @@
       "version": "0.3.2"
     },
     {
+      "bom-ref": "pkg:cargo/objc2-audio-toolbox@0.3.2",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6948501a91121d6399b79abaa33a8aa4ea7857fe019f341b8c23ad6e81b79b08"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        },
+        {
+          "license": {
+            "id": "Zlib"
+          }
+        }
+      ],
+      "name": "objc2-audio-toolbox",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/objc2-audio-toolbox@0.3.2",
+      "type": "library",
+      "version": "0.3.2"
+    },
+    {
+      "bom-ref": "pkg:cargo/objc2-avf-audio@0.3.2",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "13a380031deed8e99db00065c45937da434ca987c034e13b87e4441f9e4090be"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        },
+        {
+          "license": {
+            "id": "Zlib"
+          }
+        }
+      ],
+      "name": "objc2-avf-audio",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/objc2-avf-audio@0.3.2",
+      "type": "library",
+      "version": "0.3.2"
+    },
+    {
       "bom-ref": "pkg:cargo/objc2-cloud-kit@0.3.2",
       "evidence": {
         "identity": [
@@ -14572,6 +14999,112 @@
         }
       ],
       "purl": "pkg:cargo/objc2-cloud-kit@0.3.2",
+      "type": "library",
+      "version": "0.3.2"
+    },
+    {
+      "bom-ref": "pkg:cargo/objc2-core-audio@0.3.2",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "e1eebcea8b0dbff5f7c8504f3107c68fc061a3eb44932051c8cf8a68d969c3b2"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        },
+        {
+          "license": {
+            "id": "Zlib"
+          }
+        }
+      ],
+      "name": "objc2-core-audio",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/objc2-core-audio@0.3.2",
+      "type": "library",
+      "version": "0.3.2"
+    },
+    {
+      "bom-ref": "pkg:cargo/objc2-core-audio-types@0.3.2",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "5a89f2ec274a0cf4a32642b2991e8b351a404d290da87bb6a9a9d8632490bd1c"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        },
+        {
+          "license": {
+            "id": "Zlib"
+          }
+        }
+      ],
+      "name": "objc2-core-audio-types",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/objc2-core-audio-types@0.3.2",
       "type": "library",
       "version": "0.3.2"
     },
@@ -25383,6 +25916,92 @@
       "version": "0.3.23"
     },
     {
+      "bom-ref": "pkg:cargo/transcribe-cpp@0.4.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8bab65d30f5a4c3ea0ab6f38236823389f3914b0605bbc0073a4ec88018c0714"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "transcribe-cpp",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/transcribe-cpp@0.4.1",
+      "type": "library",
+      "version": "0.4.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/transcribe-cpp-sys@0.4.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "23a837974fdb873998a59a21ad2bf5a4b7bbf721c20d03d2a3ab8c221726a444"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "transcribe-cpp-sys",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/transcribe-cpp-sys@0.4.1",
+      "type": "library",
+      "version": "0.4.1"
+    },
+    {
       "bom-ref": "pkg:cargo/tray-icon@0.25.1",
       "evidence": {
         "identity": [
@@ -32727,6 +33346,22 @@
     },
     {
       "dependsOn": [
+        "pkg:cargo/alsa-sys@0.4.0",
+        "pkg:cargo/bitflags@2.13.1",
+        "pkg:cargo/cfg-if@1.0.4",
+        "pkg:cargo/libc@0.2.191"
+      ],
+      "ref": "pkg:cargo/alsa@0.11.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/libc@0.2.191",
+        "pkg:cargo/pkg-config@0.3.33"
+      ],
+      "ref": "pkg:cargo/alsa-sys@0.4.0"
+    },
+    {
+      "dependsOn": [
         "pkg:cargo/cssparser@0.38.0",
         "pkg:cargo/html5ever@0.40.1",
         "pkg:cargo/maplit@1.0.2",
@@ -33301,6 +33936,44 @@
       "ref": "pkg:cargo/core-graphics-types@0.2.0"
     },
     {
+      "dependsOn": [
+        "pkg:cargo/bitflags@2.13.1",
+        "pkg:cargo/libc@0.2.191",
+        "pkg:cargo/objc2-audio-toolbox@0.3.2",
+        "pkg:cargo/objc2-core-audio-types@0.3.2",
+        "pkg:cargo/objc2-core-audio@0.3.2",
+        "pkg:cargo/objc2-core-foundation@0.3.2"
+      ],
+      "ref": "pkg:cargo/coreaudio-rs@0.14.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/alsa@0.11.0",
+        "pkg:cargo/block2@0.6.2",
+        "pkg:cargo/coreaudio-rs@0.14.2",
+        "pkg:cargo/dasp_sample@0.11.0",
+        "pkg:cargo/jni@0.22.4",
+        "pkg:cargo/js-sys@0.3.104",
+        "pkg:cargo/libc@0.2.191",
+        "pkg:cargo/mach2@0.6.0",
+        "pkg:cargo/ndk-context@0.1.1",
+        "pkg:cargo/ndk@0.9.0",
+        "pkg:cargo/num-derive@0.4.2",
+        "pkg:cargo/num-traits@0.2.19",
+        "pkg:cargo/objc2-audio-toolbox@0.3.2",
+        "pkg:cargo/objc2-avf-audio@0.3.2",
+        "pkg:cargo/objc2-core-audio-types@0.3.2",
+        "pkg:cargo/objc2-core-audio@0.3.2",
+        "pkg:cargo/objc2-core-foundation@0.3.2",
+        "pkg:cargo/objc2-foundation@0.3.2",
+        "pkg:cargo/objc2@0.6.5",
+        "pkg:cargo/web-sys@0.3.104",
+        "pkg:cargo/windows-core@0.62.2",
+        "pkg:cargo/windows@0.62.2"
+      ],
+      "ref": "pkg:cargo/cpal@0.18.2"
+    },
+    {
       "dependsOn": [],
       "ref": "pkg:cargo/cpubits@0.1.1"
     },
@@ -33402,6 +34075,10 @@
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/darling_macro@0.23.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/dasp_sample@0.11.0"
     },
     {
       "dependsOn": [],
@@ -34573,6 +35250,10 @@
     },
     {
       "dependsOn": [],
+      "ref": "pkg:cargo/mach2@0.6.0"
+    },
+    {
+      "dependsOn": [],
       "ref": "pkg:cargo/maplit@1.0.2"
     },
     {
@@ -34779,6 +35460,14 @@
     },
     {
       "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
+        "pkg:cargo/syn@2.0.119"
+      ],
+      "ref": "pkg:cargo/num-derive@0.4.2"
+    },
+    {
+      "dependsOn": [
         "pkg:cargo/num-traits@0.2.19"
       ],
       "ref": "pkg:cargo/num-integer@0.1.46"
@@ -34849,10 +35538,47 @@
     {
       "dependsOn": [
         "pkg:cargo/bitflags@2.13.1",
+        "pkg:cargo/libc@0.2.191",
+        "pkg:cargo/objc2-core-audio-types@0.3.2",
+        "pkg:cargo/objc2-core-audio@0.3.2",
+        "pkg:cargo/objc2-core-foundation@0.3.2",
+        "pkg:cargo/objc2-foundation@0.3.2",
+        "pkg:cargo/objc2@0.6.5"
+      ],
+      "ref": "pkg:cargo/objc2-audio-toolbox@0.3.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/bitflags@2.13.1",
+        "pkg:cargo/objc2-foundation@0.3.2",
+        "pkg:cargo/objc2@0.6.5"
+      ],
+      "ref": "pkg:cargo/objc2-avf-audio@0.3.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-cloud-kit@0.3.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/dispatch2@0.3.1",
+        "pkg:cargo/objc2-core-audio-types@0.3.2",
+        "pkg:cargo/objc2-core-foundation@0.3.2",
+        "pkg:cargo/objc2-foundation@0.3.2",
+        "pkg:cargo/objc2@0.6.5"
+      ],
+      "ref": "pkg:cargo/objc2-core-audio@0.3.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/bitflags@2.13.1",
+        "pkg:cargo/objc2@0.6.5"
+      ],
+      "ref": "pkg:cargo/objc2-core-audio-types@0.3.2"
     },
     {
       "dependsOn": [
@@ -34865,7 +35591,9 @@
     {
       "dependsOn": [
         "pkg:cargo/bitflags@2.13.1",
+        "pkg:cargo/block2@0.6.2",
         "pkg:cargo/dispatch2@0.3.1",
+        "pkg:cargo/libc@0.2.191",
         "pkg:cargo/objc2@0.6.5"
       ],
       "ref": "pkg:cargo/objc2-core-foundation@0.3.2"
@@ -35941,6 +36669,7 @@
         "pkg:cargo/chrono@0.4.45",
         "pkg:cargo/clipboard-rs@0.3.5",
         "pkg:cargo/clipboard-win@5.4.3",
+        "pkg:cargo/cpal@0.18.2",
         "pkg:cargo/csscolorparser@0.9.0",
         "pkg:cargo/dhat@0.3.3",
         "pkg:cargo/dirs@7.0.0",
@@ -35984,6 +36713,7 @@
         "pkg:cargo/tower@0.5.3",
         "pkg:cargo/tracing-subscriber@0.3.23",
         "pkg:cargo/tracing@0.1.44",
+        "pkg:cargo/transcribe-cpp@0.4.1",
         "pkg:cargo/ts-rs@12.0.1",
         "pkg:cargo/uuid@1.29.0",
         "pkg:cargo/windows-icons@0.4.0",
@@ -36003,6 +36733,7 @@
         "pkg:cargo/libc@0.2.191",
         "pkg:cargo/objc2-app-kit@0.3.2",
         "pkg:cargo/objc2-core-foundation@0.3.2",
+        "pkg:cargo/objc2-core-graphics@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-service-management@0.3.2",
         "pkg:cargo/objc2-user-notifications@0.3.2",
@@ -36797,6 +37528,21 @@
         "pkg:cargo/tracing@0.1.44"
       ],
       "ref": "pkg:cargo/tracing-subscriber@0.3.23"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/log@0.4.33",
+        "pkg:cargo/thiserror@2.0.20",
+        "pkg:cargo/transcribe-cpp-sys@0.4.1"
+      ],
+      "ref": "pkg:cargo/transcribe-cpp@0.4.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/cmake@0.1.58",
+        "pkg:cargo/serde_json@1.0.154"
+      ],
+      "ref": "pkg:cargo/transcribe-cpp-sys@0.4.1"
     },
     {
       "dependsOn": [
