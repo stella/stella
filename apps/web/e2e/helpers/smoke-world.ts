@@ -111,6 +111,7 @@ const worldSchema = v.object({
   cardinalities: cardinalitiesSchema,
 });
 const worldsSchema = v.object({ small: worldSchema, large: worldSchema });
+const createdContactSchema = v.object({ id: v.string() });
 
 // Sessions stay outside Playwright's uploaded artifacts. The run identifier
 // comes from the coordinator process and survives worker replacement.
@@ -305,14 +306,15 @@ const seedWorld = async ({
       await rm(`${recordPath}.tmp`, { force: true });
       throw registered.error;
     }
-    const contactId = randomUUID();
-    await apiPut(request, "/contacts", {
-      id: contactId,
-      type: "person",
-      displayName: "Route Smoke",
-      firstName: "Route",
-      lastName: "Smoke",
-    });
+    const { id: contactId } = v.parse(
+      createdContactSchema,
+      await apiPut(request, "/contacts", {
+        type: "person",
+        displayName: "Route Smoke",
+        firstName: "Route",
+        lastName: "Smoke",
+      }),
+    );
     const documentRoute = await createUploadedDocumentRoute({
       fileName: "route-smoke.docx",
       request,
