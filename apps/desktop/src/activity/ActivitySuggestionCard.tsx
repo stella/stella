@@ -1,24 +1,31 @@
-import { useEffect, useEffectEvent, useRef } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { panic } from "better-result";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
+import { DESKTOP_BILLING_DRAFT_LIMITS } from "@stll/api-contract/desktop-billing-drafts";
 import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "@stll/api-contract/desktop-time-entries";
 import type {
   DesktopMatter,
+  DesktopTimeEntryClassification,
   DesktopTimeEntryMatterCandidate,
 } from "@stll/api-contract/desktop-time-entries";
 import { AiLabel } from "@stll/ui/ai-label";
 import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
 import {
   Collapsible,
   CollapsiblePanel,
   CollapsibleTrigger,
 } from "@stll/ui/collapsible";
 import { CopyButton } from "@stll/ui/copy-button";
+import { Form } from "@stll/ui/form";
 import { AiActionIcon, XIcon } from "@stll/ui/icons";
+import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { ReviewDiffText } from "@stll/ui/review-diff-text";
+import { diffWords } from "@stll/ui/review-word-diff";
 import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { Textarea } from "@stll/ui/textarea";
@@ -44,6 +51,10 @@ export type SuggestionEdit = {
   matter: DesktopMatter | null;
   narrative: string;
   written: number;
+  /** What a guided draft classified the entry as, for the chosen matter. */
+  classification: DesktopTimeEntryClassification | null;
+  /** What the last applied stella AI change replaced, for Undo. */
+  undo: Pick<SuggestionEdit, "narrative" | "classification"> | null;
 };
 
 /** What the stella AI strip above the narrative shows. `hidden` when the
@@ -52,8 +63,17 @@ export type DraftAssistView =
   | { type: "hidden" }
   | { type: "needsMatter" }
   | { pending: boolean; type: "consent" }
-  | { drafted: boolean; type: "ready" }
+  | {
+      canUndo: boolean;
+      canRestoreTemplate: boolean;
+      drafted: boolean;
+      refineFailure: DraftFailureKind | null;
+      type: "ready";
+    }
   | { type: "writing" }
+  | { type: "refining" }
+  /** A refinement shown as a tracked change for the user to accept. */
+  | { after: string; before: string; type: "proposal" }
   | { kind: DraftFailureKind; type: "failed" };
 
 type ActivitySuggestionCardProps = {
@@ -66,8 +86,15 @@ type ActivitySuggestionCardProps = {
   assist: DraftAssistView;
   /** The user's earlier entries the current draft followed. */
   earlierEntries: CardDraft["earlierEntries"];
+  /** The current guided draft's notes against the billing guidelines. */
+  flags: CardDraft["flags"];
   onDraft: () => void;
   onAllow: () => void;
+  onRefine: (steer: string, remember: boolean) => void;
+  onAcceptProposal: () => void;
+  onDismissProposal: () => void;
+  onUndo: () => void;
+  onRestoreTemplate: () => void;
   onEdit: (change: Partial<SuggestionEdit>) => void;
   onAccept: () => void;
   onReject: () => void;
@@ -114,8 +141,14 @@ export const ActivitySuggestionCard = ({
   sourceAppVisuals,
   assist,
   earlierEntries,
+  flags,
   onDraft,
   onAllow,
+  onRefine,
+  onAcceptProposal,
+  onDismissProposal,
+  onUndo,
+  onRestoreTemplate,
   onEdit,
   onAccept,
   onReject,
@@ -226,12 +259,19 @@ export const ActivitySuggestionCard = ({
           candidates={candidates}
           disabled={!editable}
           label={edit.matter?.name ?? t("chooseMatter")}
-          onChoose={(matter) => onEdit({ matter })}
+          // Codes follow the matter's billing format, so a new matter
+          // drops them until it is drafted again.
+          onChoose={(matter) => onEdit({ matter, classification: null })}
         />
       </div>
       <DraftAssistStrip
         view={assist}
         onDraft={onDraft}
+        onRefine={onRefine}
+        onAcceptProposal={onAcceptProposal}
+        onDismissProposal={onDismissProposal}
+        onUndo={onUndo}
+        onRestoreTemplate={onRestoreTemplate}
         onAllow={() => {
           onAllow();
           // The consent buttons go away; keep the card's shortcuts in reach.
@@ -248,6 +288,8 @@ export const ActivitySuggestionCard = ({
         rows={2}
         value={edit.narrative}
       />
+      <DraftClassification classification={edit.classification} />
+      <GuidelineFlags flags={flags} />
       <EarlierEntries entries={earlierEntries} />
       <div className="flex flex-wrap items-center gap-2">
         <Label className="gap-2 text-xs">
@@ -319,10 +361,20 @@ const DraftAssistStrip = ({
   view,
   onDraft,
   onAllow,
+  onRefine,
+  onAcceptProposal,
+  onDismissProposal,
+  onUndo,
+  onRestoreTemplate,
 }: {
   view: DraftAssistView;
   onDraft: () => void;
   onAllow: () => void;
+  onRefine: (steer: string, remember: boolean) => void;
+  onAcceptProposal: () => void;
+  onDismissProposal: () => void;
+  onUndo: () => void;
+  onRestoreTemplate: () => void;
 }) => {
   const t = useTranslations("activity");
   switch (view.type) {
@@ -356,20 +408,70 @@ const DraftAssistStrip = ({
       );
     case "ready":
       return (
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <DraftButton
-            label={view.drafted ? t("aiDraftAgain") : t("aiDraftWrite")}
-            onClick={onDraft}
-          />
-          {view.drafted ? (
-            <span className="text-muted-foreground">
-              <AiLabel
-                disclosure={t("aiDraftDisclosure")}
-                label={t("aiDraftLabel")}
-              />
-            </span>
-          ) : null}
+        <div className="flex flex-col gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <DraftButton
+              label={view.drafted ? t("aiDraftAgain") : t("aiDraftWrite")}
+              onClick={onDraft}
+            />
+            {view.canUndo ? (
+              <Button onClick={onUndo} size="xs" variant="ghost">
+                {t("aiUndo")}
+              </Button>
+            ) : null}
+            {view.canRestoreTemplate ? (
+              <Button onClick={onRestoreTemplate} size="xs" variant="ghost">
+                {t("aiUseOriginal")}
+              </Button>
+            ) : null}
+            {view.drafted ? (
+              <span className="text-muted-foreground ms-auto">
+                <AiLabel
+                  disclosure={t("aiDraftDisclosure")}
+                  label={t("aiDraftLabel")}
+                />
+              </span>
+            ) : null}
+          </div>
+          {view.refineFailure === null ? null : (
+            <p className="text-muted-foreground" role="status">
+              {t(DRAFT_FAILURE_MESSAGES[view.refineFailure])}
+            </p>
+          )}
+          {view.drafted ? <RefineInput onRefine={onRefine} /> : null}
         </div>
+      );
+    case "refining":
+      return (
+        <p
+          className="text-muted-foreground flex items-center gap-1.5 text-xs"
+          role="status"
+        >
+          <AiActionIcon aria-hidden="true" className="size-3.5" />
+          {t("aiRefining")}
+        </p>
+      );
+    case "proposal":
+      return (
+        <section
+          aria-label={t("aiProposal")}
+          className="bg-muted/60 flex flex-col gap-1.5 rounded-lg border px-2.5 py-2 text-xs"
+        >
+          <ReviewDiffText
+            className="text-sm leading-relaxed"
+            segments={diffWords(view.before, view.after).map(
+              ({ type, token }) => ({ type, text: token }),
+            )}
+          />
+          <div className="flex gap-1.5">
+            <Button onClick={onAcceptProposal} size="xs">
+              {t("aiAccept")}
+            </Button>
+            <Button onClick={onDismissProposal} size="xs" variant="ghost">
+              {t("aiDismiss")}
+            </Button>
+          </div>
+        </section>
       );
     case "consent":
       return (
@@ -400,6 +502,77 @@ const DraftAssistStrip = ({
   }
 };
 
+const STEER_CHIPS = [
+  "aiSteerShorter",
+  "aiSteerMoreDetail",
+  "aiSteerClientFriendly",
+] as const;
+
+/** An instruction for stella AI to change the draft, with quick chips and the
+ * choice to remember it for future drafts. */
+const RefineInput = ({
+  onRefine,
+}: {
+  onRefine: (steer: string, remember: boolean) => void;
+}) => {
+  const t = useTranslations("activity");
+  const locale = useLocale();
+  const [text, setText] = useState("");
+  const [remember, setRemember] = useState(false);
+  const language = new Intl.DisplayNames([locale], { type: "language" }).of(
+    locale,
+  );
+  const chips = [
+    ...STEER_CHIPS.map((key) => t(key)),
+    ...(language === undefined ? [] : [t("aiSteerWriteIn", { language })]),
+  ];
+  const steer = text.trim();
+  return (
+    <Form
+      className="flex flex-col gap-1.5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (steer.length === 0) {
+          return;
+        }
+        onRefine(steer, remember);
+        setText("");
+      }}
+    >
+      <div className="flex items-center gap-1.5">
+        <Input
+          aria-label={t("aiRefinePlaceholder")}
+          className="h-8 flex-1"
+          maxLength={DESKTOP_BILLING_DRAFT_LIMITS.steerLength}
+          onChange={(event) => setText(event.target.value)}
+          placeholder={t("aiRefinePlaceholder")}
+          value={text}
+        />
+        <Button disabled={steer.length === 0} size="sm" type="submit">
+          {t("aiRefine")}
+        </Button>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {chips.map((chip) => (
+          <Button
+            key={chip}
+            onClick={() => setText(chip)}
+            size="xs"
+            type="button"
+            variant="outline"
+          >
+            {chip}
+          </Button>
+        ))}
+        <Label className="text-muted-foreground ms-auto gap-1.5 text-xs">
+          <Checkbox checked={remember} onCheckedChange={setRemember} />
+          {t("aiSteerRemember")}
+        </Label>
+      </div>
+    </Form>
+  );
+};
+
 const DraftButton = ({
   label,
   onClick,
@@ -412,6 +585,59 @@ const DraftButton = ({
     {label}
   </Button>
 );
+
+/** The UTBMS codes a guided draft gave an entry billed in LEDES. */
+const DraftClassification = ({
+  classification,
+}: {
+  classification: DesktopTimeEntryClassification | null;
+}) => {
+  const t = useTranslations("activity");
+  if (classification?.type !== "ledes") {
+    return null;
+  }
+  return (
+    <p className="text-muted-foreground text-xs tabular-nums">
+      {t("aiDraftCodes", {
+        task: classification.taskCode,
+        activity: classification.activityCode,
+      })}
+    </p>
+  );
+};
+
+/** What a guided draft noted against the firm's billing guidelines, each
+ * with the file and section it cites. */
+const GuidelineFlags = ({ flags }: { flags: CardDraft["flags"] }) => {
+  const t = useTranslations("activity");
+  if (flags.length === 0) {
+    return null;
+  }
+  return (
+    <section
+      aria-label={t("aiDraftFlags")}
+      className="flex flex-col gap-1.5 text-xs"
+    >
+      <span className="font-medium">{t("aiDraftFlags")}</span>
+      <ul className="flex flex-col gap-1.5">
+        {flags.map((flag) => (
+          <li
+            className="flex flex-col gap-0.5"
+            key={`${flag.fileName}\n${flag.section}\n${flag.text}`}
+          >
+            <bdi className="text-pretty">{flag.text}</bdi>
+            <span className="text-muted-foreground">
+              {t("aiDraftFlagSource", {
+                file: flag.fileName,
+                section: flag.section,
+              })}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+};
 
 /** The user's own earlier entries the draft followed, so its wording can be
  * checked against them. */

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -14,7 +14,8 @@ describe("optional registry strings", () => {
   test(
     "normalization preserves nonempty text and reaches a fixed point",
     () => {
-      fc.assert(
+      assertProperty(
+        "normalization preserves nonempty text and reaches a fixed point",
         fc.property(registryValue, (value) => {
           const normalized = trimToNull(value);
           expect(trimToNull(normalized)).toBe(normalized);
@@ -24,7 +25,7 @@ describe("optional registry strings", () => {
           }
           expect(normalized).toBe(value.replace(/^\s+|\s+$/gu, ""));
         }),
-        propertyConfig({ seed: propertySeed() }),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(5000),

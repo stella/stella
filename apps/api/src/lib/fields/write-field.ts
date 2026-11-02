@@ -17,7 +17,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditAction, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
-import { userIdSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema, userIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
@@ -115,7 +115,7 @@ export const upsertFieldContentSchema = v.pipe(
         v.description("Value type; must match the property's value type"),
       ),
       userId: v.nullable(userIdSchema),
-      name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+      name: displayNameSchema(),
       image: v.nullable(v.pipe(v.string(), v.maxLength(2048))),
     }),
     v.object({

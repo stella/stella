@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   collectRawTemplateInputSources,
@@ -91,7 +91,8 @@ describe("template input contract", () => {
         values: { "rows.name": "Ada" },
       }),
     ).toEqual(["rows.name"]);
-    fc.assert(
+    assertProperty(
+      "raw loops with item fields keep their array root recursion-only",
       fc.property(
         fc.jsonValue().filter((value) => !Array.isArray(value)),
         (rows) => {
@@ -100,7 +101,7 @@ describe("template input contract", () => {
           ).toEqual(["rows"]);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -122,7 +123,8 @@ describe("template input contract", () => {
     });
     const contract = collectTemplateInputKeys({ type: "raw", ...sources });
 
-    fc.assert(
+    assertProperty(
+      "raw value loops explicitly accept supported primitive rows",
       fc.property(
         fc.array(fc.oneof(fc.string(), fc.integer(), fc.boolean())),
         (tags) => {
@@ -131,7 +133,7 @@ describe("template input contract", () => {
           ).toEqual([]);
         },
       ),
-      propertyConfig(),
+      {},
     );
     expect(
       findUnusedTemplateValueKeys({ contract, values: { tags: [null] } }),
@@ -365,13 +367,14 @@ describe("template input contract", () => {
         values: { company: { name: "Acme" } },
       }),
     ).toEqual([]);
-    fc.assert(
+    assertProperty(
+      "raw structural namespaces reject leaf values",
       fc.property(fc.array(fc.jsonValue()), (company) => {
         expect(
           findUnusedTemplateValueKeys({ contract, values: { company } }),
         ).toEqual(["company"]);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -480,7 +483,8 @@ describe("template input contract", () => {
   });
 
   test("INVARIANT: loop descendants require their array container", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: loop descendants require their array container",
       fc.property(
         fc.constantFrom("name", "address.city", "value"),
         fc.jsonValue(),
@@ -499,12 +503,13 @@ describe("template input contract", () => {
           ).toEqual([path]);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("INVARIANT: nested loop descendants cannot flatten inside an outer row", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: nested loop descendants cannot flatten inside an outer row",
       fc.property(fc.jsonValue(), (value) => {
         expect(
           findUnusedTemplateValueKeys({
@@ -518,12 +523,13 @@ describe("template input contract", () => {
           }),
         ).toEqual(["groups.items.name"]);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("INVARIANT: value shape cannot change whether an unknown key is rejected", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: value shape cannot change whether an unknown key is rejected",
       fc.property(fc.jsonValue(), (value) => {
         expect(
           findUnusedTemplateValueKeys({
@@ -532,12 +538,13 @@ describe("template input contract", () => {
           }),
         ).toEqual(["unknown"]);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("INVARIANT: terminal fields accept every JSON value shape", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: terminal fields accept every JSON value shape",
       fc.property(fc.jsonValue(), (value) => {
         expect(
           findUnusedTemplateValueKeys({
@@ -546,7 +553,7 @@ describe("template input contract", () => {
           }),
         ).toEqual([]);
       }),
-      propertyConfig(),
+      {},
     );
   });
 });
