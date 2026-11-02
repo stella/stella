@@ -47,6 +47,7 @@ export const REPLAY_CAPABLE_ROUTES = [
   },
   { method: "PUT", path: "/v1/billing-codes/:workspaceId" },
   { method: "PUT", path: "/v1/client-invoices/:clientId" },
+  { method: "PUT", path: "/v1/contacts" },
   { method: "PUT", path: "/v1/docx-suggestions/:workspaceId/entity/:entityId" },
   { method: "PUT", path: "/v1/entity-views" },
   { method: "PUT", path: "/v1/expenses/:workspaceId" },

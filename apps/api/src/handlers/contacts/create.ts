@@ -8,6 +8,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
+import { mintContactId } from "@/api/handlers/contacts/contact-id";
 import { fingerprintContactImport } from "@/api/handlers/contacts/contact-import-receipt";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import {
@@ -20,8 +21,8 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import type { SafeId } from "@/api/lib/branded-types";
-import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 import { externalRefSchema } from "@/api/lib/imports/external-ref";
 import {
   externalRefValues,
@@ -35,8 +36,7 @@ import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-fl
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
-export const createContactBodySchema = v.object({
-  id: resourceIdSchema("contact"),
+export const createContactBodySchema = v.strictObject({
   ...contactCreateFieldsSchema.entries,
   external: v.optional(externalRefSchema),
 });
@@ -48,6 +48,7 @@ export type CreateContactHandlerProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
+  contactId?: SafeId<"contact">;
   body: CreateContactBody;
 };
 
@@ -77,6 +78,7 @@ export type InsertContactRowProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
+  contactId?: SafeId<"contact">;
   body: CreateContactBody;
 };
 
@@ -90,12 +92,14 @@ export const insertContactRow = async ({
   organizationId,
   userId,
   recordAuditEvent,
+  contactId,
   body,
 }: InsertContactRowProps) => {
+  const id = contactId ?? mintContactId();
   const [row] = await tx
     .insert(contacts)
     .values({
-      id: body.id,
+      id,
       organizationId,
       type: body.type,
       prefix: body.prefix,
@@ -178,6 +182,7 @@ export const createContactHandler = async function* ({
   organizationId,
   userId,
   recordAuditEvent,
+  contactId,
   body,
 }: CreateContactHandlerProps) {
   const personDetailsError = validatePersonDetails(body);
@@ -206,9 +211,9 @@ export const createContactHandler = async function* ({
           organizationId,
           refs: [body.external],
         });
-        const [contactId] = existing.values();
-        if (contactId !== undefined) {
-          return { kind: "external_ref_taken", contactId };
+        const [takenContactId] = existing.values();
+        if (takenContactId !== undefined) {
+          return { kind: "external_ref_taken", contactId: takenContactId };
         }
       }
 
@@ -234,6 +239,7 @@ export const createContactHandler = async function* ({
         organizationId,
         userId,
         recordAuditEvent,
+        ...(contactId === undefined ? {} : { contactId }),
         body,
       });
 
@@ -279,8 +285,9 @@ export const createContactHandler = async function* ({
 const createContact = createSafeRootHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     description:
-      "Create an organization address-book contact. Supply id, type " +
+      "Create an organization address-book contact. Supply type " +
       "(person or organization) and displayName; other fields are optional. " +
       "Refuses the contact limit, attorney IDs outside this organization, " +
       "and an external source/id already used by another contact.",
@@ -298,6 +305,7 @@ const createContact = createSafeRootHandler(
       body,
     });
   },
+  { authorize: authorizeOrganizationReplay },
 );
 
 export default createContact;

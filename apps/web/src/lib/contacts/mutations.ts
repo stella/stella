@@ -13,7 +13,6 @@ import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
-import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 
@@ -110,10 +109,7 @@ export const useCreateContact = () => {
 
   return useIdempotentMutation({
     mutationFn: async (vars: CreateContactVars, request) => {
-      const response = await api.contacts.put({
-        ...vars,
-        id: toSafeId<"contact">(request.headers["Idempotency-Key"]),
-      });
+      const response = await api.contacts.put(vars, request);
 
       return unwrapApiResponse(response);
     },
