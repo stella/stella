@@ -1,11 +1,11 @@
-import { isTag } from "domhandler";
-import type { Element } from "domhandler";
-
 // parser-output-unchanged: adds named readers beside the unchanged `inlineStyleValue`; output changes only in parsers that call them, and those bump their own versions.
 import {
   parseDecimalToken,
   parseIntegerToken,
 } from "@stll/agent-input/numeric-token";
+// parser-output-unchanged: HTML node bindings come from their package owner; DOM behavior is unchanged.
+import { isTag } from "@stll/html/nodes";
+import type { Element } from "@stll/html/nodes";
 
 /** What a property's declaration means, or undefined for a value CSS rejects. */
 export type InlineStyleRead<T> = (
