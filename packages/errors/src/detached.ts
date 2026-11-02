@@ -14,19 +14,14 @@ export type DetachedRejectionSink = (
 /**
  * What a `void` operator would accept, except a function: a function operand
  * is work that was never started (`detached(() => flush())`), so it would be
- * dropped without running. Functions carry `call`; promises and plain values
- * do not.
+ * dropped without running. A promise, a plain value and `void` pass through;
+ * a function type resolves to `never`.
  */
-export type DetachedOperand =
-  | PromiseLike<unknown>
-  | (object & { call?: never })
-  | string
-  | number
-  | boolean
-  | bigint
-  | symbol
-  | null
-  | undefined;
+export type DetachedOperand<Operand> = Operand extends (
+  ...args: never[]
+) => unknown
+  ? never
+  : Operand;
 
 export class DetachedFunctionOperandError extends TaggedError(
   "DetachedFunctionOperandError",
@@ -45,7 +40,10 @@ export class DetachedFunctionOperandError extends TaggedError(
  */
 export const createDetached =
   (onRejection: DetachedRejectionSink) =>
-  (operation: DetachedOperand, context: `${string}.${string}`): void => {
+  <Operand>(
+    operation: DetachedOperand<Operand>,
+    context: `${string}.${string}`,
+  ): void => {
     if (typeof operation === "function") {
       onRejection(
         new DetachedFunctionOperandError({

@@ -6026,6 +6026,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
