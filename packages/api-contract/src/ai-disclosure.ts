@@ -23,6 +23,14 @@ export const AI_DISCLOSURES = {
       "own reasoning; they are aids for legal professionals, and the " +
       "decision text remains the authoritative source.",
   },
+  billingDrafts: {
+    messageKey: "aiDisclosure.billingDrafts",
+    text:
+      "AI drafts are suggestions stella generates from the entry you are " +
+      "reviewing, your earlier entries on the matter and, where your firm " +
+      "has added them, its billing guidelines. Review each entry before you " +
+      "create it.",
+  },
 } as const satisfies Record<
   string,
   { messageKey: `aiDisclosure.${string}`; text: string }

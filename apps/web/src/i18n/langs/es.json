@@ -94,6 +94,7 @@
     "selectedRun": "Ejecutar columnas de IA para {count, plural, one {# fila} other {# filas}}"
   },
   "aiDisclosure": {
+    "billingDrafts": "Las propuestas de IA son sugerencias que stella genera a partir del registro que revisas, tus registros anteriores del asunto y, si tu despacho las ha añadido, sus normas de facturación. Revisa cada registro antes de crearlo.",
     "caseLaw": "Los resúmenes, notas y análisis de resoluciones judiciales elaborados con IA los genera stella; no están avalados por los tribunales ni reflejan su propio razonamiento. Son herramientas de apoyo para profesionales del derecho, y solo el texto de la resolución tiene valor fehaciente."
   },
   "appearance": {

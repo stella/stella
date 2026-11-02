@@ -94,6 +94,7 @@
     "selectedRun": "AI-oszlopok futtatása {count, plural, one {# sorra} other {# sorra}}"
   },
   "aiDisclosure": {
+    "billingDrafts": "Az AI-javaslatok olyan ajánlások, amelyeket a stella az ellenőrzött bejegyzésből, az ügyben korábban rögzített bejegyzéseiből és – ha a szervezete hozzáadta őket – a számlázási irányelvekből készít. Létrehozás előtt ellenőrizzen minden bejegyzést.",
     "caseLaw": "A bírósági határozatokról készült AI-összefoglalókat, -jegyzeteket és -elemzéseket a stella állítja elő; ezeket a bíróságok nem hagyták jóvá, és nem a bíróságok saját érvelését tükrözik. A jogi szakemberek munkáját segítő eszközök; a hiteles forrás továbbra is a határozat szövege."
   },
   "appearance": {
