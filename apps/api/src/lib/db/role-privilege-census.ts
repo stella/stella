@@ -9,7 +9,7 @@ import roleCensus from "./role-privilege-census.json" with { type: "json" };
 const censusPath = path.join(import.meta.dir, "role-privilege-census.json");
 const policyCensusPath = path.join(import.meta.dir, "role-policy-census.json");
 
-export type RoleCensus = {
+type RoleCensus = {
   role: string;
   attributes: string[];
   memberships: string[];
