@@ -9,6 +9,7 @@ import {
 import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
+import { formatMimeTypeLabel } from "@/components/search-dialog.shared";
 import { SEARCH_SCOPES } from "@/components/search-scope";
 import type {
   GlobalSearchHit,
@@ -708,4 +709,18 @@ describe("caseLawFacetCountMessage", () => {
       "search.caseLawMatchingDecisions",
     );
   });
+});
+
+test.each([
+  ["text/plain", "TXT"],
+  ["text/markdown", "Markdown"],
+  ["image/svg+xml", "SVG"],
+  ["application/x-msdownload", "EXE"],
+  ["application/pdf", "PDF"],
+  ["image/png", "PNG"],
+  ["text/csv", "CSV"],
+  ["application/x-7z-compressed", "7Z-COMPRESSED"],
+  ["application/vnd.apple.pages+zip", "APPLE.PAGES"],
+])("names %s as %s", (mimeType, label) => {
+  expect(formatMimeTypeLabel(mimeType)).toBe(label);
 });

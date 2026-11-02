@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "Hermes, the iOS app's JavaScript engine, has no Intl.PluralRules, so use-intl printed message keys such as scan.pages instead of plural messages; @formatjs/intl-pluralrules supplies the rules for every app language."
+}

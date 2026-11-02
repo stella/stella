@@ -43,6 +43,10 @@ type BaselineWriter = {
 
 export const PRUNABLE_BASELINE_WRITERS = [
   {
+    write: ["bun", "scripts/design-lint-baseline.ts", "--write"],
+    baselines: [{ path: BASELINE_PATHS.designLint, collection: [] }],
+  },
+  {
     write: ["bun", "scripts/check-aggregate-locks.ts", "--generate"],
     baselines: [{ path: BASELINE_PATHS.aggregateLocks, collection: [] }],
   },
@@ -61,6 +65,10 @@ export const PRUNABLE_BASELINE_WRITERS = [
   {
     write: ["bun", "scripts/sql-perf-baseline.ts", "--write"],
     baselines: [{ path: BASELINE_PATHS.sqlPerf, collection: [] }],
+  },
+  {
+    write: ["bun", "scripts/render-phase-update-baseline.ts", "--write"],
+    baselines: [{ path: BASELINE_PATHS.renderPhaseUpdate, collection: [] }],
   },
   {
     write: ["bun", "scripts/transfer-read-guard.ts", "--write"],

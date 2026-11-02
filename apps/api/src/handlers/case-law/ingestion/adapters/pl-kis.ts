@@ -1,3 +1,5 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: Fetched PDF bodies are retained independently of parsing; document parsing and eligibility are unchanged.
 import { panic, Result } from "better-result";
@@ -59,35 +61,6 @@ import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseValue,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
@@ -111,6 +84,36 @@ import type { TextField } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseValue,
+  SyncPage,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { logger } from "@/api/lib/observability/logger";
@@ -2056,6 +2059,7 @@ const sweepPage = async (
                 },
               }),
           sourceUrl: url,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: cursor,
         });
       }
@@ -2071,6 +2075,7 @@ const sweepPage = async (
                 },
               }),
           sourceUrl: url,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: encodePlKisCursor({ ...start, month, page: page + 1 }),
         });
       }
@@ -2086,6 +2091,7 @@ const sweepPage = async (
               },
             }),
         sourceUrl: url,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor:
           after === null
             ? tip()
@@ -2094,7 +2100,12 @@ const sweepPage = async (
     }
     const after = nextMonth();
     if (after === null) {
-      return Result.ok({ decisions: [], sourceUrl: url, nextCursor: tip() });
+      return Result.ok({
+        decisions: [],
+        sourceUrl: url,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: tip(),
+      });
     }
     month = after;
     page = 0;
@@ -2102,6 +2113,7 @@ const sweepPage = async (
   return Result.ok({
     decisions: [],
     ...(url === undefined ? {} : { sourceUrl: url }),
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlKisCursor({ ...start, month, page }),
   });
 };
@@ -2155,6 +2167,7 @@ const tipPage = async (
     return Result.ok({
       decisions: [],
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: start.walk === "head" ? cursor : caughtUp(),
     });
   }
@@ -2175,6 +2188,7 @@ const tipPage = async (
             },
           }),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: cursor,
     });
   }
@@ -2190,6 +2204,7 @@ const tipPage = async (
             },
           }),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: caughtUp(),
     });
   }
@@ -2213,6 +2228,7 @@ const tipPage = async (
             },
           }),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: caughtUp(),
     });
   }
@@ -2229,6 +2245,7 @@ const tipPage = async (
           },
         }),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlKisCursor({
       phase: "tip",
       walk: "catch-up",
@@ -2286,6 +2303,7 @@ const undatedPage = async (
             },
           }),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: cursor,
     });
   }
@@ -2300,6 +2318,7 @@ const undatedPage = async (
           },
         }),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlKisCursor(
       (start.page + 1) * CRAWL_PAGE_SIZE < undated
         ? { ...start, page: start.page + 1 }

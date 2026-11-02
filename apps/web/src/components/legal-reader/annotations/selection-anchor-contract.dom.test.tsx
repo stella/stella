@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 /* oxlint-disable no-untranslated-jsx-literal/no-untranslated-jsx-literal -- Static reader fixture, never user-facing copy. */
+/* oxlint-disable require-contract-domains/require-contract-domains -- Generator sizes bound the property's paragraphs, not an API limit. */
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import type { ReaderMessages } from "@stll/decision-reader/reader-adapters";
 import {
@@ -11,6 +13,7 @@ import {
   readerSelectionMatches,
 } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { assertProperty } from "@stll/property-testing";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -124,7 +127,7 @@ type Chip = (typeof CHIP)[keyof typeof CHIP];
 const CHIP_RENDER = {
   [CHIP.real]: (children: ReactNode) => (
     <DecisionCitationChip
-      citingText={children}
+      sourceText={children}
       decision={{
         decisionId: "00000000-0000-4000-8000-000000000001",
         court: "Nejvyšší soud",
@@ -242,10 +245,9 @@ test("a selection past a cited case number keeps the decision's offsets", () => 
   if (!paragraph) {
     throw new TypeError("Missing cited paragraph");
   }
-  // The production chip draws its badge inside the paragraph, after the
-  // citing words.
+  // The production chip decorates the citing words and draws nothing else.
   expect(paragraph.querySelector("[data-decision-citation]")?.textContent).toBe(
-    `${citedCase} NS`,
+    citedCase,
   );
   const from = citing.indexOf("a věc");
   expect(selectionAnchorsFrom(select(paragraph, from), root)).toEqual([
@@ -279,4 +281,101 @@ test("AI-generated text in the reader anchors nothing, so no AI action takes it"
   note.append(text);
   root.append(note);
   expect(selectionAnchorsFrom(select(text, 0), root)).toEqual([]);
+});
+
+/** Characters a citing paragraph is made of, punctuation around references included. */
+const paragraphText = fc
+  .array(
+    fc.constantFrom(
+      "C‑159/12",
+      "EU:C:2013:791",
+      ", ",
+      " až ",
+      "bod 25",
+      "; ",
+      "(",
+      ")",
+      " ",
+      "a",
+      "ř",
+      " ",
+      ".",
+    ),
+    { minLength: 1, maxLength: 24 },
+  )
+  .map((parts) => parts.join(""));
+
+/** Non-overlapping `[start, end)` spans over a text of the given length. */
+const spansOver = (length: number) =>
+  fc
+    .uniqueArray(fc.integer({ min: 0, max: length }), { maxLength: 8 })
+    .map((cuts) => {
+      const sorted = cuts.toSorted((left, right) => left - right);
+      const spans: { start: number; end: number }[] = [];
+      for (let index = 0; index + 1 < sorted.length; index += 2) {
+        const start = sorted[index] ?? 0;
+        const end = sorted[index + 1] ?? start;
+        if (end > start) {
+          spans.push({ start, end });
+        }
+      }
+      return spans;
+    });
+
+const renderParagraph = (
+  text: string,
+  spans: readonly { start: number; end: number }[],
+) => {
+  const root = document.createElement("article");
+  // safe-html: React renderToStaticMarkup escapes the fixture text.
+  root.innerHTML = renderToStaticMarkup(
+    <IntlProvider locale="en" messages={appMessages} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <ReaderPresentationProvider adapters={{ messages }}>
+          <BlockRenderer
+            activeMatchIndex={-1}
+            anchorsByPieceId={{
+              cited: spans.map(({ start, end }, index) => ({
+                end,
+                key: `citation-${String(index)}`,
+                render: CHIP_RENDER[CHIP.real],
+                start,
+              })),
+            }}
+            block={{
+              type: "paragraph",
+              id: "cited",
+              anchorId: "p-1",
+              inlines: [{ type: "text", text }],
+              plainText: text,
+            }}
+            rangesByPieceId={{}}
+            variant="case-law"
+          />
+        </ReaderPresentationProvider>
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+  return root;
+};
+
+test("a reference chip over the decision's text keeps every character the court printed", () => {
+  assertProperty(
+    "a reference chip over the decision's text keeps every character the court printed",
+    fc.property(
+      paragraphText.chain((text) =>
+        fc.tuple(fc.constant(text), spansOver(text.length)),
+      ),
+      ([text, spans]) => {
+        const root = renderParagraph(text, spans);
+        const paragraph = root.querySelector<HTMLElement>("[data-anchor]");
+        expect(paragraph?.textContent).toBe(text);
+        expect(
+          [...root.querySelectorAll("[data-decision-citation]")].map(
+            (chip) => chip.textContent,
+          ),
+        ).toEqual(spans.map(({ start, end }) => text.slice(start, end)));
+      },
+    ),
+  );
 });

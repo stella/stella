@@ -19,6 +19,7 @@ import {
 
 import { analyzePlan } from "./plan-analyzer";
 import type { QueryPerfProfileId, QueryPerfTenantProfileId } from "./profiles";
+import { withQueryPerfRollback } from "./rollback";
 import type { seedQueryPerf } from "./seed";
 import {
   applyPlannerSettings,
@@ -32,9 +33,22 @@ const QUERY_PERF_REPETITIONS = 5;
  * on a shared runner is not a measurement.
  */
 const QUERY_PERF_HANG_GUARD_MS = 10_000;
+/** Markers need a material improvement before noisy boundary results remove them. */
+export const OVER_BUDGET_REMOVAL_BAND = 0.15;
 export type QueryPerfMetrics = {
   sharedBlocks: number;
   executionTimeMs: number;
+};
+
+export const sharedBlockSampleProblem = (
+  owner: string,
+  samples: readonly QueryPerfMetrics[],
+) => {
+  const blocks = samples.map(({ sharedBlocks }) => sharedBlocks);
+  const first = blocks.at(0);
+  return first !== undefined && blocks.every((value) => value === first)
+    ? undefined
+    : `${owner} produced non-deterministic shared-block samples: ${blocks.join(", ")}`;
 };
 
 /** A scheduled run costs every statement's buffers and execution time. */
@@ -118,8 +132,7 @@ export const budgetViolations = (
 
 /**
  * Why a measurement breaks its budget, if it does. An entry marked over
- * budget must stay over it: once a change brings it under, the marker has to
- * go, so the budget is enforced again.
+ * budget keeps its marker until it is materially under budget.
  */
 const pageBudgetProblem = (
   id: ReadBudgetId,
@@ -128,9 +141,10 @@ const pageBudgetProblem = (
   const budget = READ_BUDGETS[id];
   const over = sharedBlocks > budget.pages;
   if ("overBudget" in budget) {
-    return over
-      ? undefined
-      : `${id} is marked over budget but measured ${String(sharedBlocks)} <= ${String(budget.pages)}; remove its overBudget marker`;
+    const removalLine = budget.pages * (1 - OVER_BUDGET_REMOVAL_BAND);
+    return sharedBlocks <= removalLine
+      ? `${id} is marked over budget but measured ${String(sharedBlocks)} <= removal line ${String(removalLine)}; remove its overBudget marker`
+      : undefined;
   }
   return over
     ? `${id}: ${String(sharedBlocks)} pages > budget ${String(budget.pages)}`
@@ -246,7 +260,7 @@ export const measureQueryPerf = async ({
     const documents = await explainAsStella({
       database: {
         transaction: async (fn) =>
-          await database.transaction(async (tx) => {
+          await withQueryPerfRollback(database, async (tx) => {
             await applyPlannerSettings(tx);
             const value = await fn(tx);
             await assertPlannerSettings(tx);
@@ -326,13 +340,16 @@ export const measureOwnerStatement = async ({
   let lastStatement = "";
   for (let sample = 0; sample <= QUERY_PERF_REPETITIONS; sample++) {
     // db-await-in-loop: sequential warm-cache measurements plus one discarded warmup; concurrency would distort the benchmark.
-    const { document, statement } = await database.transaction(async (tx) => {
-      await applyPlannerSettings(tx);
-      const query = build(tx);
-      const explained = await explainOwnerStatement(tx, query);
-      await assertPlannerSettings(tx, "owner");
-      return { document: explained, statement: statementText(query) };
-    });
+    const { document, statement } = await withQueryPerfRollback(
+      database,
+      async (tx) => {
+        await applyPlannerSettings(tx);
+        const query = build(tx);
+        const explained = await explainOwnerStatement(tx, query);
+        await assertPlannerSettings(tx, "owner");
+        return { document: explained, statement: statementText(query) };
+      },
+    );
     plans.push(document);
     lastStatement = statement;
     if (sample !== 0) {

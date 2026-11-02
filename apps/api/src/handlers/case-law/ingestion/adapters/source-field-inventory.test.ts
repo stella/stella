@@ -30,16 +30,6 @@ import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
-  decodeSourceRawEnvelope,
-  EMPTY_AST,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceFieldDisposition,
-  SourceFieldTarget,
-  SourceRawParts,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   getSourceRegistration,
   listSourceRegistrations,
   type SourceRegistrationKey,
@@ -52,8 +42,16 @@ import { composeDecisionWithSupplements } from "@/api/handlers/case-law/ingestio
 import { storeTextField } from "@/api/lib/case-law/decision-text";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
+  decodeSourceRawEnvelope,
+  EMPTY_AST,
   PLAIN_TEXT_FIELD_DEBT,
   PLAIN_TEXT_RESULT_FIELDS,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SourceFieldDisposition,
+  SourceFieldTarget,
+  SourceRawParts,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
   approveMetadataUrls,
@@ -76,11 +74,12 @@ import {
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
 import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const DECLARED_ADAPTER_KEYS = listSourceRegistrations().map(
@@ -397,7 +396,7 @@ describe("the display-text census classifies exactly the metadata adapters emit"
       // Fixtures stub the global fetch, so they build one at a time.
       const decision =
         await CASE_LAW_CONFORMANCE_FIXTURES[key]().buildDecision();
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
       for (const metadataKey of Object.keys(decision.metadata)) {
         emitted.add(metadataKey);
       }

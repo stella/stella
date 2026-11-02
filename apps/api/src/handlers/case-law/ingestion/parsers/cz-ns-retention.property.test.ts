@@ -88,7 +88,8 @@ test(
 /**
  * An older print page sets each caption line in its own run, which the
  * parser merges into one paragraph and then cuts at the case number. Every
- * caption character must survive the cut, in order.
+ * caption character must survive the cut, in order; only a letter-spaced
+ * word's spacing may change, as the letter-spacing reader states.
  */
 const captionPreamble = fc.option(
   fc.constantFrom("NEJVYŠŠÍ SOUD ČESKÉ REPUBLIKY", "NEJVYŠŠÍ SOUD"),
@@ -109,6 +110,23 @@ const captionTitleLines = fc.array(
   { minLength: 1, maxLength: 4 },
 );
 
+const parseCaption = (lines: readonly string[]) => {
+  const runs = lines
+    .map((line) => `<font face="Arial CE">${line} </font><br>\n<br>\n`)
+    .join("");
+  return parseNsDecisionHtml({
+    documentId: "property-fixture",
+    webUrl: "https://example.test/detail",
+    printUrl: "https://example.test/print",
+    webHtml: "",
+    printHtml: `<html><body><table id="box-table-a"><tr><td>Soud:</td><td>NS</td></tr></table><br><p><br>${runs}<font face="Arial CE">Nejvyšší soud České republiky rozhodl v senátě takto:</font><br></p></body></html>`,
+  });
+};
+
+const withoutWhitespace = (text: string): string => text.replaceAll(/\s/gu, "");
+
+const LETTER_SPACED = /^\p{L}(?: \p{L})+$/u;
+
 test(
   "a run-on caption keeps every character in order",
   () => {
@@ -124,21 +142,59 @@ test(
             caseNumber,
             ...titleLines,
           ];
-          const runs = lines
-            .map((line) => `<font face="Arial CE">${line} </font><br>\n<br>\n`)
-            .join("");
-          const parsed = parseNsDecisionHtml({
-            documentId: "property-fixture",
-            webUrl: "https://example.test/detail",
-            printUrl: "https://example.test/print",
-            webHtml: "",
-            printHtml: `<html><body><table id="box-table-a"><tr><td>Soud:</td><td>NS</td></tr></table><br><p><br>${runs}<font face="Arial CE">Nejvyšší soud České republiky rozhodl v senátě takto:</font><br></p></body></html>`,
-          });
+          const parsed = parseCaption(lines);
           const text = parsed.documentAst.blocks
             .map((block) => block.plainText)
-            .join(" ")
-            .replaceAll(/\s+/gu, " ");
-          expect(text).toContain(lines.join(" "));
+            .join(" ");
+          expect(withoutWhitespace(text)).toContain(
+            withoutWhitespace(lines.join("")),
+          );
+          // A line that is not letter-spaced keeps its own spacing.
+          for (const line of lines.filter((l) => !LETTER_SPACED.test(l))) {
+            expect(text.replaceAll(/\s+/gu, " ")).toContain(line);
+          }
+        },
+      ),
+    );
+  },
+  propertyTestTimeout(30_000),
+);
+
+/**
+ * A printed caption: the state above the decision type, the formula below
+ * it, each on a line of its own. Whichever lines the court printed, the
+ * decision type is the decision's title.
+ */
+const printedCaption = fc.record({
+  state: fc.boolean(),
+  decisionType: fc.constantFrom("ROZSUDEK", "USNESENÍ", "U S N E S E N Í"),
+  formula: fc.boolean(),
+});
+
+test(
+  "a printed caption's decision type is its title",
+  () => {
+    assertProperty(
+      "a printed caption's decision type is its title",
+      fc.property(
+        captionPreamble,
+        captionCaseNumber,
+        printedCaption,
+        (preamble, caseNumber, { state, decisionType, formula }) => {
+          const parsed = parseCaption([
+            ...(preamble === undefined ? [] : [preamble]),
+            caseNumber,
+            ...(state ? ["ČESKÁ REPUBLIKA"] : []),
+            decisionType,
+            ...(formula ? ["JMÉNEM REPUBLIKY"] : []),
+          ]);
+          const titles = parsed.documentAst.blocks.filter(
+            (block) =>
+              block.type === "heading" && block.role === "decision-title",
+          );
+          expect(
+            titles.map(({ plainText }) => withoutWhitespace(plainText)),
+          ).toEqual([withoutWhitespace(decisionType)]);
         },
       ),
     );

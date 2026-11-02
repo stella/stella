@@ -16,7 +16,10 @@ import {
 } from "@/api/lib/db/rls-role-posture";
 import { logger } from "@/api/lib/observability/logger";
 
-import { reportOnlineMigrations } from "../../db/online-migrations";
+import {
+  ONLINE_MIGRATION_REPAIRS,
+  reportOnlineMigrations,
+} from "../../db/online-migrations";
 import {
   APPLICATION_RLS_ROLE_NAME,
   INGESTION_ROLE_NAME,
@@ -88,21 +91,24 @@ export const assertMigrationsApplied = async (): Promise<void> => {
       `Run \`bun run db:migrate\` against this database, or set ${ESCAPE_HATCH_ENV}=true ` +
       "to bypass the check (emergency only).",
   });
-  const onlineReport = await reportOnlineMigrations({
-    reserve: async () => {
-      const connection = await rootDb.$client.reserve();
-      return {
-        execute: async (query, params = []) => {
-          await connection.unsafe(query, [...params]);
-        },
-        query: async (query, params = []) =>
-          await connection.unsafe(query, [...params]),
-        release: async () => {
-          await connection.release();
-        },
-      };
+  const onlineReport = await reportOnlineMigrations(
+    {
+      reserve: async () => {
+        const connection = await rootDb.$client.reserve();
+        return {
+          execute: async (query, params = []) => {
+            await connection.unsafe(query, [...params]);
+          },
+          query: async (query, params = []) =>
+            await connection.unsafe(query, [...params]),
+          release: async () => {
+            await connection.release();
+          },
+        };
+      },
     },
-  });
+    { repairs: ONLINE_MIGRATION_REPAIRS },
+  );
   switch (onlineReport.type) {
     case "migrator_active":
       logger.warn("startup.online_validation_left_to_migrator");

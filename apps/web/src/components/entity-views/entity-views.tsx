@@ -413,7 +413,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
               properties={sortProperties}
               maxSorts={VIEW_SORTS_MAX}
               labels={{
-                add: t("common.add"),
+                addSort: t("common.sort"),
                 remove: t("common.remove"),
                 directions: sortDirectionLabels((key) => t(key)),
               }}

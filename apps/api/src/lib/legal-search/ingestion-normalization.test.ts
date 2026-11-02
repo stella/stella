@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import { isDocumentAst, parseDocumentAst } from "@stll/legal-ast/document-ast";
+
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   absentDecisionTextFields,
@@ -49,7 +52,7 @@ describe("decision storage normalization", () => {
         for (const length of [width - 1, width, width + 1]) {
           const value = token.repeat(length);
           const result = Result.try({
-            try: () => sanitizeResult({ ...decision, [field]: value }),
+            try: () => sanitizeResult({ ...decision, [field]: value }).unwrap(),
             catch: (error: unknown) => error,
           });
           if (length <= width) {
@@ -75,11 +78,13 @@ describe("decision storage normalization", () => {
       const normalized = sanitizeResult({
         ...decision,
         [field]: `\0${value}\0`,
-      });
+      }).unwrap();
       expect(value).toBe(normalized[field]);
       expect(normalized.sourceDocumentId).toBe(decision.sourceDocumentId);
       expect(value).toBe(
-        sanitizeResult({ ...decision, [field]: normalized[field] })[field],
+        sanitizeResult({ ...decision, [field]: normalized[field] }).unwrap()[
+          field
+        ],
       );
     });
   }
@@ -87,7 +92,7 @@ describe("decision storage normalization", () => {
   test("a 512 character emoji court is normalized intact and fails the aggregate byte check", () => {
     const court = "😀".repeat(512);
     expect(Array.from(court).length).toBe(CITATION_STORAGE_WIDTHS.court);
-    const normalized = sanitizeResult({ ...decision, court });
+    const normalized = sanitizeResult({ ...decision, court }).unwrap();
     expect(court).toBe(normalized.court);
     expect(fitsDecisionSearchCandidateRow(normalized)).toBe(false);
   });
@@ -112,7 +117,7 @@ describe("decision storage normalization", () => {
       court: `\0${court}`,
       decisionType: ` JMÉNEM REPUBLIKY ${"X".repeat(typeBytes)}\0 `,
     };
-    const normalized = sanitizeResult(input);
+    const normalized = sanitizeResult(input).unwrap();
     expect(normalized.court === court).toBe(true);
     expect(normalized.decisionType === "x".repeat(typeBytes)).toBe(true);
     expect(
@@ -120,13 +125,13 @@ describe("decision storage normalization", () => {
         ...decision,
         court: normalized.court,
         decisionType: normalized.decisionType,
-      }),
+      }).unwrap(),
     ).toEqual(normalized);
     expect(fitsDecisionSearchCandidateRow(normalized)).toBe(true);
     const overBudget = sanitizeResult({
       ...input,
       decisionType: ` JMÉNEM REPUBLIKY ${"X".repeat(typeBytes + 1)}\0 `,
-    });
+    }).unwrap();
     expect(fitsDecisionSearchCandidateRow(overBudget)).toBe(false);
   });
 
@@ -160,5 +165,64 @@ describe("decision storage normalization", () => {
         );
       }
     }
+  });
+});
+
+describe("document AST block identities at the write boundary", () => {
+  /** A decision title set over two lines, each read as the title heading. */
+  const titleLine = (id: string, text: string): Block => ({
+    id,
+    anchorId: "h-title",
+    type: "heading",
+    level: 1,
+    role: "decision-title",
+    inlines: [{ type: "text", text }],
+    plainText: text,
+  });
+  const splitTitle = {
+    version: 1,
+    source: { system: "test", documentId: "1", webUrl: "", printUrl: "" },
+    metadata: {
+      caseNumber: "reference",
+      ecli: null,
+      court: "court",
+      decisionDate: null,
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      titleLine("b1", "ROZSUDOK V MENE"),
+      titleLine("b2", "SLOVENSKEJ REPUBLIKY"),
+    ],
+  } satisfies DocumentAst;
+
+  test("a parsed document repeating an identity is stored re-keyed, not dropped", () => {
+    const stored = sanitizeResult({
+      ...decision,
+      documentAst: splitTitle,
+    }).unwrap();
+    expect(isDocumentAst(stored.documentAst)).toBe(true);
+    expect(
+      "blocks" in stored.documentAst
+        ? stored.documentAst.blocks.map(({ anchorId, plainText }) => [
+            anchorId,
+            plainText,
+          ])
+        : null,
+    ).toEqual([
+      ["h-title", "ROZSUDOK V MENE"],
+      ["h-title-2", "SLOVENSKEJ REPUBLIKY"],
+    ]);
+  });
+
+  test("a row stored before reads as the write now stores it", () => {
+    const written = sanitizeResult({
+      ...decision,
+      documentAst: splitTitle,
+    }).unwrap();
+    expect(parseDocumentAst(splitTitle)).toEqual(
+      parseDocumentAst(written.documentAst),
+    );
   });
 });

@@ -56,6 +56,7 @@ import {
   pdfSigningSessions,
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
   pendingUploads,
+  pushDevices,
   rateEntries,
   searchHistoryEntries,
   searchHistoryOwners,
@@ -1416,6 +1417,23 @@ export const deleteSearchHistory = async (
   await recordAuditGroups({ tx, groups: auditGroups });
 };
 
+const DELETE_PUSH_DEVICES_TABLES = [
+  pushDevices,
+] as const satisfies readonly PgTable[];
+
+/**
+ * 15. Mobile push devices, in every organization. A device token is personal
+ * data with no history value, and the user row is soft-deleted, so the
+ * `user_id` cascade never fires.
+ */
+export const deletePushDevices = async (
+  tx: Transaction,
+  currentUserId: SafeId<"user">,
+): Promise<void> => {
+  // audit: skip - the account deletion request records this erasure
+  await tx.delete(pushDevices).where(eq(pushDevices.userId, currentUserId));
+};
+
 export type RecordAccountDeletionRequestParams = {
   tx: Transaction;
   deletionRequestId: SafeId<"accountDeletionRequest">;
@@ -1509,6 +1527,7 @@ export const ACCOUNT_DELETION_MANUAL_TABLES = [
   ...DELETE_WORKSPACE_VIEW_TEMPLATES_TABLES,
   ...DELETE_BILLING_RATES_TABLES,
   ...DELETE_SEARCH_HISTORY_TABLES,
+  ...DELETE_PUSH_DEVICES_TABLES,
 ] as const satisfies readonly PgTable[];
 
 type AccountDeletionNonFkOwnership = {

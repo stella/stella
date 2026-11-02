@@ -245,6 +245,17 @@ export const decisionTypeKind = (
   }
 };
 
+/** The normalized kind exposed beside a publisher's spelling on decision rows. */
+export const classifiedDecisionTypeKind = (
+  stated: string | null,
+): DecisionTypeKind | null => {
+  if (stated === null) {
+    return null;
+  }
+  const kind = decisionTypeKind(stated);
+  return kind === DECISION_TYPE_KIND_OTHER ? null : kind;
+};
+
 /**
  * Every spelling a stored type is known in: the table's keys and the exact
  * values the inventory recorded (`Uznesenie` beside `uznesenie`, joined

@@ -126,7 +126,7 @@ type BoundaryOptions = {
 const SETTINGS_SNAPSHOT = {
   bridgePort: 45_901,
   bridgeVersion: BRIDGE_VERSION,
-  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v5"],
+  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v6"],
   notificationPreferences: {
     documentReady: true,
     revisionCreated: true,
@@ -296,6 +296,9 @@ const installNativeBoundary = async (
           }
           return null;
         },
+        // The Settings window asks whether to show its Activity tab; these
+        // accounts have no activity timeline.
+        is_activity_enabled: () => false,
         get_desktop_telemetry_enabled: () => telemetryEnabled,
         set_desktop_telemetry_enabled: (args) => {
           if (typeof args["enabled"] !== "boolean") {
@@ -312,6 +315,7 @@ const installNativeBoundary = async (
           welcomeStatus: "completed",
         }),
         get_state: () => settingsSnapshot,
+        dictation_get_snapshot: () => ({ available: false }),
         shortcut_get_snapshot: () => ({
           defaultKeys: { code: "KeyV", modifiers: ["shift", "super"] },
           keys: { code: "KeyV", modifiers: ["shift", "super"] },

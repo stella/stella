@@ -95,6 +95,7 @@ const decisionWithText = (text: string) => {
     sections: [{ index: 0, type: "header", title: text, blockIndices: [0] }],
     sourceUrl: text,
     sourceAttributionUrl: text,
+    sourceLanguages: Array.from({ length: 256 }, () => text),
     documentUrl: text,
     metadata: {
       title: text,
@@ -196,6 +197,23 @@ test("decision readers bound every non-document Unicode field and retain officia
     ),
     { numRuns: 12 },
   );
+});
+
+test("decision readers serve the publisher's language list whole, past the metadata budget", () => {
+  const languages = ["bg", "cs", "da", "de", "en", "fr", "ga", "ro"];
+  const response = projectDecisionReader({
+    ...decisionWithText("text"),
+    // A multilingual record states more keys than the metadata projection
+    // keeps; the language list must not depend on where it sorts among them.
+    metadata: Object.fromEntries(
+      Array.from({ length: 64 }, (_, index) => [`key${index}`, "value"]),
+    ),
+    sourceLanguages: languages,
+  });
+
+  expect(Object.keys(response.metadata).length).toBeLessThan(64);
+  expect(response.sourceLanguages).toEqual(languages);
+  expect(schemaIssues(response)).toEqual([]);
 });
 
 test("decision readers preserve section block references so citation section indices resolve", () => {

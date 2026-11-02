@@ -27,13 +27,18 @@ type ReadLinkRecallPayloadOptions = {
   maxDecompressedBytes: number;
 };
 
+type ReadLinkRecallPayloadResult = Result<
+  string,
+  LinkRecallPayloadError | PayloadBudgetError
+>;
+
 /** Import-pure read seam for audits that do not initialize the API storage client. */
 export const readLinkRecallPayload = async ({
   location,
   readObject,
   maxCompressedBytes,
   maxDecompressedBytes,
-}: ReadLinkRecallPayloadOptions) => {
+}: ReadLinkRecallPayloadOptions): Promise<ReadLinkRecallPayloadResult> => {
   if (
     !Number.isSafeInteger(maxCompressedBytes) ||
     maxCompressedBytes <= 0 ||
@@ -43,84 +48,91 @@ export const readLinkRecallPayload = async ({
     return panic("Link recall payload budgets must be positive safe integers");
   }
   const parsed = parseCorpusLocation(location);
-  let request: LinkRecallObjectRequest;
-  switch (parsed.type) {
-    case "object":
-      request = { key: parsed.key };
-      break;
-    case "packed":
-      if (
-        parsed.length <= 0 ||
-        !Number.isSafeInteger(parsed.offset + parsed.length)
-      ) {
-        return Result.err(
-          new LinkRecallPayloadError({
-            message: "Packed audit payload has an invalid byte range",
-          }),
-        );
-      }
-      if (parsed.length > maxCompressedBytes) {
-        return Result.err(
-          new PayloadBudgetError({
-            message: "Packed audit payload exceeds the compressed-byte ceiling",
-          }),
-        );
-      }
-      request = {
-        key: parsed.packKey,
-        range: { offset: parsed.offset, length: parsed.length },
-      };
-      break;
-    default: {
-      parsed satisfies never;
-      return panic("Unhandled link recall corpus location");
+  return await Result.gen(async function* () {
+    let request: LinkRecallObjectRequest;
+    switch (parsed.type) {
+      case "object":
+        request = { key: parsed.key };
+        break;
+      case "packed":
+        if (
+          parsed.length <= 0 ||
+          !Number.isSafeInteger(parsed.offset + parsed.length)
+        ) {
+          return Result.err(
+            new LinkRecallPayloadError({
+              message: "Packed audit payload has an invalid byte range",
+            }),
+          );
+        }
+        if (parsed.length > maxCompressedBytes) {
+          return Result.err(
+            new PayloadBudgetError({
+              message:
+                "Packed audit payload exceeds the compressed-byte ceiling",
+            }),
+          );
+        }
+        request = {
+          key: parsed.packKey,
+          range: { offset: parsed.offset, length: parsed.length },
+        };
+        break;
+      default:
+        parsed satisfies never;
+        return panic("Unhandled link recall corpus location");
     }
-  }
-  const read = await Result.tryPromise({
-    try: async () => await readObject(request),
-    catch: (cause) =>
-      new LinkRecallPayloadError({
-        message: "Audit payload could not be read",
-        cause,
-      }),
-  });
-  if (read.isErr()) {
-    return read;
-  }
-  const bytes = read.value;
-  if (bytes.byteLength > maxCompressedBytes) {
-    return Result.err(
-      new PayloadBudgetError({
-        message: "Audit payload exceeds the compressed-byte ceiling",
+    const bytes = yield* Result.await(
+      Result.tryPromise({
+        try: async () => await readObject(request),
+        catch: (cause) =>
+          cause instanceof PayloadBudgetError ||
+          cause instanceof LinkRecallPayloadError
+            ? cause
+            : new LinkRecallPayloadError({
+                message: "Audit corpus object could not be read",
+                cause,
+              }),
       }),
     );
-  }
-  if (parsed.type === "packed") {
-    if (bytes.byteLength !== parsed.length) {
+    if (bytes.byteLength > maxCompressedBytes) {
       return Result.err(
-        new LinkRecallPayloadError({
-          message:
-            "Packed audit payload does not match the declared range length",
+        new PayloadBudgetError({
+          message: "Audit payload exceeds the compressed-byte ceiling",
         }),
       );
     }
-    if (corpusMemberDigest(bytes) !== parsed.sha256) {
-      return Result.err(
-        new LinkRecallPayloadError({
-          message: "Packed audit payload digest does not match its address",
-        }),
-      );
-    }
-  }
-  return await Result.tryPromise({
-    try: async () =>
-      await zstdDecompressToStringBounded(bytes, maxDecompressedBytes),
-    catch: (cause) =>
-      cause instanceof PayloadBudgetError
-        ? cause
-        : new LinkRecallPayloadError({
-            message: "Audit payload could not be decoded",
-            cause,
+    if (parsed.type === "packed") {
+      if (bytes.byteLength !== parsed.length) {
+        return Result.err(
+          new LinkRecallPayloadError({
+            message:
+              "Packed audit payload does not match the declared range length",
           }),
+        );
+      }
+      if (corpusMemberDigest(bytes) !== parsed.sha256) {
+        return Result.err(
+          new LinkRecallPayloadError({
+            message: "Packed audit payload digest does not match its address",
+          }),
+        );
+      }
+    }
+    const text = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await zstdDecompressToStringBounded(bytes, maxDecompressedBytes),
+        catch: (cause) =>
+          cause instanceof PayloadBudgetError ||
+          cause instanceof LinkRecallPayloadError
+            ? cause
+            : new LinkRecallPayloadError({
+                message: "Audit corpus payload could not be decompressed",
+                cause,
+              }),
+      }),
+    );
+    return Result.ok(text);
   });
 };

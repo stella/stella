@@ -73,6 +73,22 @@ describe("consent client identity", () => {
     }
   });
 
+  test("stella's own clients carry stella's name, and the iOS app its own", () => {
+    for (const [brand, name] of [
+      ["stella", "stella"],
+      ["stella_ios", "stella for iOS"],
+    ] as const) {
+      const client = { type: "verified", brand } as const;
+      expect(resolveConsentClientIdentity(info(client), FALLBACK_NAME)).toEqual(
+        { type: "verified", brand, name, publisher: "stella" },
+      );
+      const markup = renderCardHeader(client);
+      expect(markup).toContain("Verified app by stella");
+      expect(markup).not.toContain(UNVERIFIED_MARK);
+      expect(renderSuccess(client)).toContain(`Connected to ${name}`);
+    }
+  });
+
   test("an unverified client claiming a product name shows no branding", () => {
     const client = { type: "unverified", name: "Claude" } as const;
     expect(resolveConsentClientIdentity(info(client), FALLBACK_NAME)).toEqual({

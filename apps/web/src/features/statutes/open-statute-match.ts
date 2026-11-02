@@ -45,6 +45,27 @@ type OpenStatuteMatchOptions = {
   queryClient: QueryClient;
 };
 
+/** Shared act lookup for the legal database and global search. */
+export const readStatuteMatch = async ({
+  country,
+  q,
+  queryClient,
+}: Omit<OpenStatuteMatchOptions, "navigate">) => {
+  const intent = readStatuteIntent(country, q);
+  if (intent.type !== "act") {
+    return null;
+  }
+  const pages = await ensureRouteInfiniteQueryData(
+    queryClient,
+    statutesInfiniteOptions(createStatuteFilters(country, intent)),
+  );
+  const page = pages.pages.at(0);
+  if (page === undefined) {
+    return panic("Statute lookup must return its initial page");
+  }
+  return { intent, items: page.items };
+};
+
 /**
  * Open the act the entry names, when exactly one work answers to it. Several
  * (the same number in two collections) are left to the reader to choose
@@ -57,23 +78,12 @@ export const openStatuteMatch = async ({
   q,
   queryClient,
 }: OpenStatuteMatchOptions): Promise<boolean> => {
-  const intent = readStatuteIntent(country, q);
-  if (intent.type !== "act") {
+  const match = await readStatuteMatch({ country, q, queryClient });
+  const only = match?.items.length === 1 ? match.items.at(0) : undefined;
+  if (only === undefined || match === null) {
     return false;
   }
-
-  const pages = await ensureRouteInfiniteQueryData(
-    queryClient,
-    statutesInfiniteOptions(createStatuteFilters(country, intent)),
-  );
-  const firstPage = pages.pages.at(0);
-  if (firstPage?.items.length !== 1) {
-    return false;
-  }
-  const only = firstPage.items.at(0);
-  if (only === undefined) {
-    return false;
-  }
+  const { intent } = match;
 
   const params = createStatuteRouteParams({
     country: only.country,

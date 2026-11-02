@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import {
   type DocumentAst,
+  headMatterOrderDegradations,
   persistedAstDegradations,
 } from "@stll/legal-ast/document-ast";
 
@@ -176,11 +177,16 @@ export const parsePersistedCorpusAst = (
     }
     throw error;
   }
-  const degradations = persistedAstDegradations(value);
+  const degradations = [
+    ...persistedAstDegradations(value),
+    ...(parsed.output !== null && "blocks" in parsed.output
+      ? headMatterOrderDegradations(parsed.output.blocks)
+      : []),
+  ];
   if (degradations.length > 0) {
     captureError(
       new StoredAstDegradedError({
-        message: "Stored document AST carries undeclared vocabulary",
+        message: "Stored document AST was degraded on read",
         degradations,
       }),
       handlerErrorContext("legalsearch.parsePersistedCorpusAst", {
@@ -196,11 +202,24 @@ const STORED_CORPUS_VALIDATION_SINK = failureSink({
   expected: [],
 });
 
+const reportedStoredValidationErrors = new WeakMap<
+  StoredCorpusValidationError,
+  Set<string>
+>();
+
 /** Correlate a rejected payload without logging its values or validator messages. */
 const reportStoredCorpusValidation = (
   error: StoredCorpusValidationError,
   documentId: string,
 ): void => {
+  // A row parser and its recovery boundary can observe the same rejection.
+  const reportedDecisions =
+    reportedStoredValidationErrors.get(error) ?? new Set<string>();
+  if (reportedDecisions.has(documentId)) {
+    return;
+  }
+  reportedDecisions.add(documentId);
+  reportedStoredValidationErrors.set(error, reportedDecisions);
   observeFailure(error, {
     sink: STORED_CORPUS_VALIDATION_SINK,
     ctx: { decisionId: documentId },
@@ -632,14 +651,18 @@ export const corpusPayloadDisposition = ({
 export const writeCorpusDocument = async (
   uncheckedInput: WriteCorpusInput,
   { signal, s3Policy }: CorpusIoOptions = {},
-): Promise<CorpusWriteOutcome> => {
-  const input = {
-    ...uncheckedInput,
-    ast: prepareCorpusAst({ ast: uncheckedInput.ast }).ast,
-  };
+): Promise<Result<CorpusWriteOutcome, StoredCorpusValidationError>> => {
+  const prepared = prepareCorpusAst({
+    ast: uncheckedInput.ast,
+    fallbackText: uncheckedInput.text,
+  });
+  if (prepared.isErr()) {
+    return prepared;
+  }
+  const input = { ...uncheckedInput, ast: prepared.value.ast };
   const plan = planCorpusDocumentWrite(input);
   if (plan.type !== "put") {
-    return plan;
+    return Result.ok(plan);
   }
   const { written } = plan;
   const frames = await corpusPayloadFrames(input);
@@ -699,7 +722,7 @@ export const writeCorpusDocument = async (
     operations: writes,
   });
 
-  return { type: "written", written };
+  return Result.ok({ type: "written", written });
 };
 
 type BoundedObjectReader = (options: {
@@ -988,9 +1011,17 @@ export const readSizedCorpusAst = async (
     { ...(signal === undefined ? {} : { signal }) },
   );
   const decoded = await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
-  const parsed: unknown = JSON.parse(decoded);
+  const parsed = Result.try((): unknown => JSON.parse(decoded));
+  if (!Result.isOk(parsed)) {
+    const error = new StoredCorpusValidationError({
+      message: "Stored document AST failed validation",
+      code: STORED_CORPUS_VALIDATION_CODE,
+      paths: ["$"],
+    });
+    throw error;
+  }
   return {
-    ast: parsePersistedCorpusAst(parsed),
+    ast: parsePersistedCorpusAst(parsed.value),
     decodedLength: decoded.length,
   };
 };
@@ -1056,6 +1087,33 @@ export const storedCorpusValidationFailure = (
   }
   const cause = rejectionCause(raised.cause);
   return StoredCorpusValidationError.is(cause) ? cause : null;
+};
+
+type RecoverableCorpusReadOptions<T> = {
+  documentId: string;
+  read: () => Promise<T>;
+};
+
+/** Classified validation failures are recoverable; other read failures propagate. */
+export const readCorpusForRecovery = async <T>({
+  documentId,
+  read,
+}: RecoverableCorpusReadOptions<T>): Promise<
+  Result<T, StoredCorpusValidationError>
+> => {
+  const outcome = await Result.tryPromise(read);
+  if (Result.isOk(outcome)) {
+    return Result.ok(outcome.value);
+  }
+  const raised = rejectionCause(outcome.error);
+  const invalid = storedCorpusValidationFailure(raised);
+  if (invalid === null) {
+    throw raised;
+  }
+  if (StoredCorpusValidationError.is(raised)) {
+    reportStoredCorpusValidation(invalid, documentId);
+  }
+  return Result.err(invalid);
 };
 
 type CorpusReadWithFallbackInput<T> = {

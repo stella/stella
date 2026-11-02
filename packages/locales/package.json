@@ -33,7 +33,8 @@
       "types": "./src/index.ts",
       "bun": "./src/index.ts",
       "import": "./src/index.ts"
-    }
+    },
+    "./languages": "./src/languages.ts"
   },
   "publishConfig": {
     "access": "public"

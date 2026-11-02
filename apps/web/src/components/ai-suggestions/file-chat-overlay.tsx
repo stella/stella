@@ -54,6 +54,7 @@ import type {
   FolioDocumentOperationResult,
 } from "@stll/folio-core";
 import type {
+  AISuggestionPreset,
   DocxEditorRef,
   FolioAIEditOperation,
   FolioAIEditSeverity,
@@ -111,6 +112,7 @@ import {
   CHAT_SEND_KEPT,
   CHAT_SEND_SENT,
   useChatEditor,
+  useChatEditorManager,
 } from "@/components/chat-editor-provider";
 import type {
   ChatDraftAttachment,
@@ -761,6 +763,8 @@ type FileChatOverlayProps = {
    * on screen rather than about whatever the words happen to match.
    */
   activeLegal?: ActiveLegalDocument | undefined;
+  /** Chips over the empty composer, each sent as it is on a click. */
+  presets?: AISuggestionPreset[] | undefined;
   docxEditorRef?: RefObject<DocxEditorRef | null> | undefined;
   docxEditable?: boolean | undefined;
   /**
@@ -839,6 +843,7 @@ export const FileChatOverlay = ({
   onDocxCommentsChange,
   onNewThread,
   onActiveDraftChatBound,
+  presets,
   requestDocxEditMode,
 }: FileChatOverlayProps) => {
   if (chatThreadId === undefined) {
@@ -885,6 +890,7 @@ export const FileChatOverlay = ({
         onDocxCommentsChange={onDocxCommentsChange}
         onActiveDraftChatBound={onActiveDraftChatBound}
         onNewThread={onNewThread}
+        presets={presets}
         requestDocxEditMode={requestDocxEditMode}
         workspaceId={workspaceId}
       />
@@ -1175,6 +1181,7 @@ const FileChatOverlayInner = ({
   onDocxCommentsChange,
   onActiveDraftChatBound,
   onNewThread,
+  presets,
 }: FileChatOverlayInnerProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -1195,6 +1202,7 @@ const FileChatOverlayInner = ({
     () => getFileChatThreadRef(chatThreadId, workspaceId),
     [chatThreadId, workspaceId],
   );
+  const { insertPastedTextIntoThread } = useChatEditorManager();
   // Per-send anonymization now reads the shared per-thread store keyed by
   // `threadRef`, same as every other chat surface: the dock's shield
   // shows `useChatAnonymized(threadRef)`, the transport reads
@@ -2121,26 +2129,43 @@ const FileChatOverlayInner = ({
     if (getLiveEditor(editorController.editor) === null) {
       return undefined;
     }
-    editorController.setContent(pendingFileChatDraft.markdown);
-    switch (pendingFileChatDraft.delivery) {
-      case FILE_CHAT_DRAFT_DELIVERY.draft: {
+    const { handoff } = pendingFileChatDraft;
+    switch (handoff.type) {
+      case "passage": {
+        // A selected passage joins what the reader already typed, as a chip,
+        // and the caret waits after it for the question.
+        insertPastedTextIntoThread(threadRef, handoff.quote);
         editorController.focus();
-        setPanelOpen(true);
         break;
       }
-      case FILE_CHAT_DRAFT_DELIVERY.send: {
-        detached(
-          editorController.submit(
-            async ({ files, html }) =>
-              await handlePromptSubmit({ files, prompt: html }),
-          ),
-          "file-chat-overlay.handoff-send",
-        );
+      case "prose": {
+        editorController.setContent(handoff.markdown);
+        switch (handoff.delivery) {
+          case FILE_CHAT_DRAFT_DELIVERY.draft: {
+            editorController.focus();
+            setPanelOpen(true);
+            break;
+          }
+          case FILE_CHAT_DRAFT_DELIVERY.send: {
+            detached(
+              editorController.submit(
+                async ({ files, html }) =>
+                  await handlePromptSubmit({ files, prompt: html }),
+              ),
+              "file-chat-overlay.handoff-send",
+            );
+            break;
+          }
+          default: {
+            handoff.delivery satisfies never;
+            panic("Unhandled file chat draft delivery");
+          }
+        }
         break;
       }
       default: {
-        pendingFileChatDraft.delivery satisfies never;
-        panic("Unhandled file chat draft delivery");
+        handoff satisfies never;
+        panic("Unhandled file chat handoff");
       }
     }
     useInspectorCommandStore
@@ -2151,7 +2176,9 @@ const FileChatOverlayInner = ({
     activeFileFieldId,
     editorController,
     handlePromptSubmit,
+    insertPastedTextIntoThread,
     pendingFileChatDraft,
+    threadRef,
   ]);
   const [newThreadChoice, setNewThreadChoice] = useState<NewThreadChoiceState>({
     status: NEW_THREAD_CHOICE_STATUS.idle,
@@ -2758,7 +2785,9 @@ const FileChatOverlayInner = ({
           }}
           onSubmit={handleComposerSubmit}
           pendingCount={0}
+          presets={presets}
           queueWhileGenerating
+          threadHasMessages={hasMessages}
           sendDisabledReason={sendDisabledReason}
           status={isGenerating ? "generating" : "idle"}
           dock={

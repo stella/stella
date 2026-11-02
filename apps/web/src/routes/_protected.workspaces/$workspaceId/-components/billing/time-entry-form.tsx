@@ -340,13 +340,11 @@ const TimeEntryRateInput = ({
       <div className="flex items-center justify-between">
         <Label>{t("billing.rates.hourlyRate")}</Label>
         {!rateOverride && (
-          <button
-            className="text-muted-foreground text-xs underline"
-            onClick={beginOverride}
-            type="button"
-          >
-            {t("billing.rates.override")}
-          </button>
+          <Button onClick={beginOverride} size="inline" variant="muted">
+            <span className="text-xs underline">
+              {t("billing.rates.override")}
+            </span>
+          </Button>
         )}
       </div>
       {rateOverride ? (

@@ -45,7 +45,10 @@ import {
   createTestPglite,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
-import { explainRoot } from "@/api/tests/query-plans/plan-walker";
+import {
+  explainRoot,
+  indexedAccessPaths,
+} from "@/api/tests/query-plans/plan-walker";
 import { vacuumUntilAllVisible } from "@/api/tests/query-plans/visibility";
 
 const WORK = "89/2012 Sb.";
@@ -191,6 +194,14 @@ const pageReads = (root: PlanNode): PageReads => {
     subtreeHeapFetches: 0,
     subtreeRanges: 0,
   };
+  // These ranges prove the subtree index covers the read; heap fetches below
+  // verify that the covering path remains physically heap-free. Classified
+  // per scan: another scan of the same index may still read the heap.
+  const coveringScans = new Set(
+    indexedAccessPaths(root, "case_law_provision_citations", {
+      accessKind: "index-only",
+    }).map(({ node }) => node),
+  );
   for (const node of planNodes(root)) {
     const nodeType = node["Node Type"];
     const relation = node["Relation Name"];
@@ -207,7 +218,7 @@ const pageReads = (root: PlanNode): PageReads => {
     if (relation !== "case_law_provision_citations") {
       continue;
     }
-    if (nodeType === "Index Only Scan") {
+    if (coveringScans.has(node)) {
       reads.subtreeRanges += 1;
       reads.subtreeHeapFetches += numberField(node, "Heap Fetches");
     } else {

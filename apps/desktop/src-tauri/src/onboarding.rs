@@ -486,7 +486,7 @@ pub fn show_if_pending(app: &AppHandle, background_launch: bool) {
 pub fn feature_enabled(app: &AppHandle, feature: DesktopFeature) {
   let introduction = match feature {
     DesktopFeature::ActivityTimeline => Introduction::ActivityTimeline,
-    DesktopFeature::TimeBilling | DesktopFeature::LocalAgents => return,
+    DesktopFeature::Dictation | DesktopFeature::LocalAgents => return,
   };
   if app.get_webview_window(ONBOARDING_WINDOW_LABEL).is_some() {
     return;
@@ -709,7 +709,7 @@ pub async fn onboarding_restart(app: AppHandle) -> Result<(), String> {
 /// Opens the main window's settings from the last step.
 #[tauri::command]
 pub async fn onboarding_open_settings(app: AppHandle) -> Result<(), String> {
-  crate::ensure_main_window(&app, "general");
+  crate::ensure_main_window(&app, crate::PreferencesTab::General);
   Ok(())
 }
 

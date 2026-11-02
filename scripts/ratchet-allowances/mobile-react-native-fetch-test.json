@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The iOS app's request tests run responses through the fetch classes React Native installs on a phone (whatwg-fetch), which differ from Bun's; the app declares that test dependency."
+}

@@ -1,9 +1,49 @@
 import { describe, expect, test } from "bun:test";
 
-import { runEuEcjRefetch } from "@/api/scripts/eu-ecj-refetch";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import {
+  acquireFormexBatch,
+  runEuEcjRefetch,
+} from "@/api/scripts/eu-ecj-refetch";
 import { rootPoolConnectionCount } from "@/api/tests/test-database-environment";
 
 describe("EU refresh command boundaries", () => {
+  test("releases the maintenance lane when source lease acquisition rejects", async () => {
+    const acquisitionError = new Error("lease database unavailable");
+    let releases = 0;
+    const acquisition = acquireFormexBatch({
+      enterLane: async () => ({
+        ingestionDb: "ingestion-db",
+        release: async () => {
+          releases++;
+        },
+      }),
+      acquireSourceLease: async () => {
+        throw acquisitionError;
+      },
+    });
+
+    expect(await rejectionOf(acquisition)).toBe(acquisitionError);
+    expect(releases).toBe(1);
+  });
+
+  test("releases the maintenance lane once for a held source lease", async () => {
+    let releases = 0;
+    const batch = await acquireFormexBatch({
+      enterLane: async () => ({
+        ingestionDb: "ingestion-db",
+        release: async () => {
+          releases++;
+        },
+      }),
+      acquireSourceLease: async () => null,
+    });
+
+    expect(batch).toBeNull();
+    expect(releases).toBe(1);
+  });
+
   // The image runner forwards this exit code unchanged; that forwarding is
   // covered in apps/legal-atlas-runner's own tests.
   test("returns exit 1 for a resumable publisher refusal", async () => {
@@ -47,6 +87,33 @@ describe("EU refresh command boundaries", () => {
         after: null,
       },
     ]);
+    expect(rootPoolConnectionCount()).toBe(0);
+  });
+
+  test("the missing-languages mode runs the backfill with its own flags", async () => {
+    const calls: (readonly string[])[] = [];
+    const exitCode = await runEuEcjRefetch(
+      ["--missing-languages", "--newest", "2026-10", "--oldest", "2023-01"],
+      {
+        missingLanguages: async (argv) => {
+          calls.push(argv);
+          return 0;
+        },
+        formexRefresh: async () => {
+          throw new Error("a backfill run must not reach the Formex refresh");
+        },
+      },
+    );
+    expect(exitCode).toBe(0);
+    expect(calls).toEqual([["--newest", "2026-10", "--oldest", "2023-01"]]);
+    expect(rootPoolConnectionCount()).toBe(0);
+  });
+
+  test("the missing-languages mode refuses an applied run without a journal", async () => {
+    expect(await runEuEcjRefetch(["--missing-languages", "--apply"])).toBe(1);
+    expect(
+      await runEuEcjRefetch(["--missing-languages", "--newest", "2026-13"]),
+    ).toBe(1);
     expect(rootPoolConnectionCount()).toBe(0);
   });
 

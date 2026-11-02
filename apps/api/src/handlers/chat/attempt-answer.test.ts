@@ -14,6 +14,7 @@ import {
   scriptedTurnChunks,
 } from "@/api/tests/helpers/chat-round-trip";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const ANSWERED_QUESTION = {
   arguments: "{}",
@@ -213,4 +214,18 @@ test("explicit snapshots count new answer content without counting continuation 
       initial: undefined,
     }),
   ).toBe(true);
+});
+
+describe("chunk types the installed SDK does not name", () => {
+  test("an unknown or inherited event type carries no answer", () => {
+    for (const type of [
+      ...Object.getOwnPropertyNames(Object.prototype),
+      "__proto__",
+      "FUTURE_EVENT",
+    ]) {
+      expect(
+        chunkCarriesAnswer(asTestRaw<StreamChunk>({ type, delta: "Yes." })),
+      ).toBe(false);
+    }
+  });
 });

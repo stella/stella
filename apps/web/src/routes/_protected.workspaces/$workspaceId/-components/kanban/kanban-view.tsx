@@ -159,12 +159,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       });
       const body = taskStatus
         ? {
-            queryKey: entitiesKeys.all(workspaceId),
             name: t("tasks.untitled"),
             status: taskStatus,
           }
         : {
-            queryKey: entitiesKeys.all(workspaceId),
             name: t("tasks.untitled"),
           };
 

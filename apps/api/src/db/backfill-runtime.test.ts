@@ -13,6 +13,7 @@ import {
   AUTOVACUUM_SQL,
   LONG_TRANSACTION_SQL,
 } from "@stll/db-load-gate/indicators";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -25,6 +26,88 @@ import {
 } from "./backfill-runtime";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import type { Transaction } from "./root";
+
+test.each([
+  BACKFILL_TABLE_CONTENTION.WRITE,
+  BACKFILL_TABLE_CONTENTION.SHARED_READ,
+])(
+  "population pressure gates %s work and releases after folding",
+  async (tableContention) => {
+    const config = {
+      ...defaultConfig,
+      minSize: 1,
+      maxSize: 1,
+      busyWindows: [],
+    };
+    let pending = 8193;
+    let checkpoint: {
+      cursor: string | null;
+      batch: ReturnType<typeof initialBatchState>;
+    } = {
+      cursor: null,
+      batch: initialBatchState(config),
+    };
+    let now = 0;
+    let workCalls = 0;
+    const runtime = createBackfillRuntime({
+      name: "decision-reparse",
+      tableName: "case_law_decisions",
+      tableContention,
+      initialSize: 1,
+      config,
+      clock: () => now,
+      readVerdict: async () => ({ kind: "normal", signals: [] }),
+      log: () => {},
+      connection: {
+        execute: async () => {},
+        query: async (statement, parameters = []) => {
+          if (statement.includes("transaction_isolation")) {
+            return [{ isolation: "read committed" }];
+          }
+          if (statement.includes("to_regclass")) {
+            return [{ installed: true }];
+          }
+          if (statement.includes("AS pending")) {
+            return [{ pending }];
+          }
+          if (statement.startsWith("SELECT cursor, batch")) {
+            return [checkpoint];
+          }
+          if (statement.startsWith("UPDATE database_backfill_states")) {
+            checkpoint = {
+              cursor: parameters.at(1)?.toString() ?? null,
+              batch: JSON.parse(String(parameters.at(2))),
+            };
+          }
+          return [{ acquired: true }];
+        },
+      },
+    });
+    const work = async () => {
+      workCalls += 1;
+      return { cursor: "next", done: false, value: 1 };
+    };
+    try {
+      if (tableContention === BACKFILL_TABLE_CONTENTION.WRITE) {
+        expect(await rejectionOf(runtime.step(work))).toBeInstanceOf(
+          BackfillHeldError,
+        );
+        expect(workCalls).toBe(0);
+      } else {
+        await runtime.step(work);
+        expect(workCalls).toBe(1);
+      }
+      pending = 0;
+      now = 60_000;
+      await runtime.step(work);
+      expect(workCalls).toBe(
+        tableContention === BACKFILL_TABLE_CONTENTION.WRITE ? 1 : 2,
+      );
+    } finally {
+      await runtime.close();
+    }
+  },
+);
 
 test.each([undefined, null, "unknown", {}, 4])(
   "an unrecognized checkpoint cause %p uses the legacy hold policy",
@@ -92,6 +175,9 @@ test.each([
       execute: async () => {},
       release: () => {},
       query: async (statement, parameters = []) => {
+        if (statement.includes("transaction_isolation")) {
+          return [{ isolation: "read committed" }];
+        }
         if (statement.startsWith("SELECT cursor, batch")) {
           return [checkpoint];
         }
@@ -173,6 +259,9 @@ test("observed completion clears a durable hold without reading load or running 
     connection: {
       execute: async () => {},
       query: async (statement, parameters = []) => {
+        if (statement.includes("transaction_isolation")) {
+          return [{ isolation: "read committed" }];
+        }
         if (statement.startsWith("SELECT cursor, batch")) {
           return [checkpoint];
         }
@@ -269,6 +358,9 @@ test.each(["default", "changes"] as const)(
       connection: {
         execute: async () => {},
         query: async (statement, parameters = []) => {
+          if (statement.includes("transaction_isolation")) {
+            return [{ isolation: "read committed" }];
+          }
           if (statement.startsWith("SELECT cursor, batch")) {
             return [checkpoint];
           }
@@ -374,6 +466,9 @@ test("a quiet multi-unit run retains its first resume transition in the final st
     connection: {
       execute: async () => {},
       query: async (statement, parameters = []) => {
+        if (statement.includes("transaction_isolation")) {
+          return [{ isolation: "read committed" }];
+        }
         if (statement.startsWith("SELECT cursor, batch")) {
           return [checkpoint];
         }
@@ -423,6 +518,9 @@ for (const mode of ["database", "script"] as const) {
         statement: string,
         parameters: readonly unknown[] = [],
       ) => {
+        if (statement.includes("transaction_isolation")) {
+          return [{ isolation: "read committed" }];
+        }
         if (
           statement.startsWith("INSERT INTO database_backfill_states") ||
           statement.startsWith("UPDATE database_backfill_states")

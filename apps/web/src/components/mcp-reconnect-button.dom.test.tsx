@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { requireBrowserStorage } from "@/lib/account/browser-storage";
+import { MCP_OAUTH_REQUEST_STORAGE_KEY } from "@/lib/account/storage-keys";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -34,6 +36,7 @@ const { mcpConnectionsOptions, mcpConnectorsOptions } =
   await import("@/lib/knowledge/queries");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { default: arabicMessages } = await import("@/i18n/langs/ar.json");
+const { broadcastMcpOAuthOutcome } = await import("@/lib/mcp-oauth-channel");
 const { McpReconnectButton } = await import("./mcp-reconnect-button");
 const { McpReconnectNotice, McpReconnectNoticeContent } =
   await import("./chat/mcp-reconnect-notice");
@@ -310,12 +313,7 @@ for (const { removal } of [
       ).toBeNull();
       expect(client?.getQueryState(key)?.isInvalidated).toBe(false);
       await act(async () => {
-        window.dispatchEvent(
-          new MessageEvent("message", {
-            origin: window.location.origin,
-            data: { kind: "stll.mcp-oauth", status: "connected" },
-          }),
-        );
+        broadcastMcpOAuthOutcome({ status: "connected" });
       });
       await waitFor(() =>
         expect(client?.getQueryState(key)?.isInvalidated).toBe(true),
@@ -420,7 +418,10 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-const mount = async (authType: "oauth2" | "bearer") => {
+const mount = async (
+  authType: "oauth2" | "bearer",
+  slugs = ["example-server"],
+) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -430,7 +431,11 @@ const mount = async (authType: "oauth2" | "bearer") => {
     getParentRoute: () => root,
     path: "/chat",
     component: () => (
-      <McpReconnectButton authType={authType} slug="example-server" />
+      <>
+        {slugs.map((slug) => (
+          <McpReconnectButton key={slug} authType={authType} slug={slug} />
+        ))}
+      </>
     ),
   });
   const tools = router.createRoute({
@@ -490,12 +495,7 @@ test("OAuth reconnect opens the authorization window and refreshes connections o
     ]);
     expect(client.getQueryState(key)?.isInvalidated).toBe(false);
     await act(async () => {
-      window.dispatchEvent(
-        new MessageEvent("message", {
-          origin: window.location.origin,
-          data: { kind: "stll.mcp-oauth", status: "connected" },
-        }),
-      );
+      broadcastMcpOAuthOutcome({ status: "connected" });
     });
     await waitFor(() =>
       expect(client.getQueryState(key)?.isInvalidated).toBe(true),
@@ -522,4 +522,62 @@ test("bearer reconnect opens its tools entry without starting OAuth", async () =
     ),
   );
   expect(requests).toEqual([]);
+});
+
+test("two concurrent reconnects handle their own completion independently", async () => {
+  const { stellaToast } = await import("@stll/ui/toast");
+  const toast = spyOn(stellaToast, "add");
+  const open = spyOn(window, "open").mockReturnValue(window);
+  try {
+    await mount("oauth2", ["example-server", "second-server"]);
+    const buttons = screen.getAllByRole("button", {
+      name: messages.knowledge.mcp.reconnect,
+    });
+    const first = buttons.at(0);
+    const second = buttons.at(1);
+    if (!first || !second) {
+      throw new TypeError("Both reconnect controls must be mounted");
+    }
+    await act(async () => {
+      fireEvent.click(first);
+    });
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
+    const firstNonce = requireBrowserStorage("session")
+      .unwrap()
+      .getItem(MCP_OAUTH_REQUEST_STORAGE_KEY);
+    await act(async () => {
+      fireEvent.click(second);
+    });
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(2));
+    const secondNonce = requireBrowserStorage("session")
+      .unwrap()
+      .getItem(MCP_OAUTH_REQUEST_STORAGE_KEY);
+    if (!firstNonce || !secondNonce) {
+      throw new TypeError("Each reconnect must hold a nonce");
+    }
+    expect(firstNonce).not.toBe(secondNonce);
+    await act(async () => {
+      requireBrowserStorage("session")
+        .unwrap()
+        .setItem(MCP_OAUTH_REQUEST_STORAGE_KEY, firstNonce);
+      broadcastMcpOAuthOutcome({ status: "connected" });
+    });
+    await act(async () => {
+      requireBrowserStorage("session")
+        .unwrap()
+        .setItem(MCP_OAUTH_REQUEST_STORAGE_KEY, secondNonce);
+      broadcastMcpOAuthOutcome({ status: "error", reason: "cancelled" });
+    });
+    await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      requireBrowserStorage("session")
+        .unwrap()
+        .setItem(MCP_OAUTH_REQUEST_STORAGE_KEY, firstNonce);
+      broadcastMcpOAuthOutcome({ status: "error", reason: "cancelled" });
+    });
+    expect(toast).toHaveBeenCalledTimes(1);
+  } finally {
+    toast.mockRestore();
+    open.mockRestore();
+  }
 });

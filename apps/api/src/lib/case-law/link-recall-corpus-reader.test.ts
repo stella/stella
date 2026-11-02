@@ -1,5 +1,7 @@
-import { panic } from "better-result";
+import { Panic, panic } from "better-result";
 import { expect, test } from "bun:test";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { PayloadBudgetError, zstdCompress } from "@/api/lib/compression";
 import { corpusMemberDigest } from "@/api/lib/legal-search/corpus-pack";
@@ -11,24 +13,113 @@ import {
 
 const budgets = { maxCompressedBytes: 4096, maxDecompressedBytes: 4096 };
 
-test("audit reads return typed failures for unavailable or undecodable objects", async () => {
-  const cause = new LinkRecallPayloadError({ message: "Object unavailable" });
-  for (const readObject of [
-    async () => await Promise.reject(cause),
-    async () => new Uint8Array([0, 1, 2]),
+test("audit reads pass tagged reader errors through with their identity", async () => {
+  for (const failure of [
+    new LinkRecallPayloadError({ message: "Object unavailable" }),
+    new PayloadBudgetError({ message: "Read overflow" }),
   ]) {
     const result = await readLinkRecallPayload({
       location: "corpus/text.zst",
-      readObject,
+      readObject: async () => await Promise.reject(failure),
       ...budgets,
     });
     expect(result.isErr()).toBe(true);
     if (result.isOk()) {
       panic("Expected audit read failure");
     }
-    expect(result.error).toBeInstanceOf(LinkRecallPayloadError);
-    expect(result.error).toMatchObject({ cause: expect.anything() });
+    expect(result.error).toBe(failure);
   }
+});
+
+test("audit reads wrap unknown read and decode failures with their cause", async () => {
+  const cause = new TypeError("Storage unavailable");
+  const unreadable = await readLinkRecallPayload({
+    location: "corpus/text.zst",
+    readObject: async () => await Promise.reject(cause),
+    ...budgets,
+  });
+  expect(unreadable.isErr()).toBe(true);
+  if (unreadable.isOk()) {
+    panic("Expected audit read failure");
+  }
+  expect(unreadable.error).toBeInstanceOf(LinkRecallPayloadError);
+  expect(unreadable.error).toMatchObject({
+    message: "Audit corpus object could not be read",
+    cause,
+  });
+  const undecodable = await readLinkRecallPayload({
+    location: "corpus/text.zst",
+    readObject: async () => new Uint8Array([0, 1, 2]),
+    ...budgets,
+  });
+  expect(undecodable.isErr()).toBe(true);
+  if (undecodable.isOk()) {
+    panic("Expected audit decode failure");
+  }
+  expect(undecodable.error).toBeInstanceOf(LinkRecallPayloadError);
+  expect(undecodable.error).toMatchObject({
+    message: "Audit corpus payload could not be decompressed",
+    cause: expect.any(Error),
+  });
+});
+
+test("audit reads panic on corrupt corpus locations before reading an object", async () => {
+  const requests: unknown[] = [];
+  for (const [location, message] of [
+    ["pack:malformed", "Malformed packed corpus address"],
+    [
+      `pack:pack.stlpack@${Number.MAX_SAFE_INTEGER}0+1#${"a".repeat(64)}`,
+      "unrepresentable integer",
+    ],
+  ] as const) {
+    const failure = await rejectionOf(
+      readLinkRecallPayload({
+        location,
+        readObject: async (request) => {
+          requests.push(request);
+          return new Uint8Array();
+        },
+        ...budgets,
+      }),
+    );
+    expect(failure).toBeInstanceOf(Panic);
+    expect(failure).toMatchObject({
+      message: expect.stringContaining(message),
+    });
+  }
+  expect(requests).toEqual([]);
+});
+
+test("audit reads panic on invalid budgets before reading an object", async () => {
+  const requests: unknown[] = [];
+  for (const invalid of [
+    0,
+    -1,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.MAX_SAFE_INTEGER + 1,
+  ]) {
+    for (const limits of [
+      { maxCompressedBytes: invalid, maxDecompressedBytes: 4096 },
+      { maxCompressedBytes: 4096, maxDecompressedBytes: invalid },
+    ]) {
+      const failure = await rejectionOf(
+        readLinkRecallPayload({
+          location: "corpus/text.zst",
+          readObject: async (request) => {
+            requests.push(request);
+            return new Uint8Array();
+          },
+          ...limits,
+        }),
+      );
+      expect(failure).toBeInstanceOf(Panic);
+      expect(failure).toMatchObject({
+        message: expect.stringContaining("positive safe integers"),
+      });
+    }
+  }
+  expect(requests).toEqual([]);
 });
 
 test("audit corpus reads decode plain objects as text without requiring JSON", async () => {

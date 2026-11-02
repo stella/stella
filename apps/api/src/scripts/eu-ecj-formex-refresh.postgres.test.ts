@@ -8,10 +8,6 @@ import path from "node:path";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import {
-  EMPTY_AST,
-  StoredRawReadError,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -19,8 +15,16 @@ import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import {
+  STORED_CORPUS_VALIDATION_CODE,
+  StoredCorpusValidationError,
+} from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  EMPTY_AST,
+  StoredRawReadError,
+  toPlainTextIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   parseEcjFormexRefreshIds,
   runEcjFormexRefresh as runRefresh,
@@ -200,10 +204,13 @@ if (!databaseUrl || !runPostgresTests) {
             return outcome.type === "refreshed"
               ? {
                   ...outcome,
-                  decision: {
+                  decision: toPlainTextIngestionResult({
                     ...outcome.decision,
+                    caseNumber: stored.caseNumber,
                     sourceDocumentId: stored.sourceDocumentId ?? undefined,
-                  },
+                  }).unwrap(
+                    "Fixture refreshed values are plain publisher text",
+                  ),
                 }
               : outcome;
           },
@@ -220,11 +227,11 @@ if (!databaseUrl || !runPostgresTests) {
               })
               .where(eq(caseLawDecisions.sourceDocumentId, identity));
             writes.push(identity);
-            return {
+            return Result.ok({
               status: "complete",
               inserted: true,
               searchVectorFailed: false,
-            };
+            });
           },
         } satisfies RunnerOptions;
         await work(options, {
@@ -398,7 +405,13 @@ if (!databaseUrl || !runPostgresTests) {
       await withFixture(async (options) => {
         const results = await runEcjFormexRefresh({
           ...options,
-          writeDecision: processDecision,
+          writeDecision: async (input) => {
+            const written = await processDecision(input);
+            expect(
+              written.unwrap("The fixture pipeline write completes"),
+            ).toMatchObject({ status: "complete", inserted: true });
+            return written;
+          },
         });
         expect(results.at(-1)?.outcome).toBe("refreshed");
         expect(s3.requests.some(({ method }) => method === "PUT")).toBe(true);
@@ -508,13 +521,29 @@ if (!databaseUrl || !runPostgresTests) {
         const results = await runEcjFormexRefresh({
           ...options,
           resultsOut: path.join(directory, `${written.status}.jsonl`),
-          writeDecision: async () => written,
+          writeDecision: async () => Result.ok(written),
         });
         expect(results.at(-1)?.outcome).toBe("write-rejected");
         expect(results.some(({ outcome }) => outcome === "refreshed")).toBe(
           false,
         );
       }
+      const rejected = await runEcjFormexRefresh({
+        ...options,
+        resultsOut: path.join(directory, "validation-error.jsonl"),
+        writeDecision: async () =>
+          Result.err(
+            new StoredCorpusValidationError({
+              message: "Fixture document validation failure",
+              code: STORED_CORPUS_VALIDATION_CODE,
+              paths: ["blocks"],
+            }),
+          ),
+      });
+      expect(rejected.at(-1)?.outcome).toBe("write-rejected");
+      expect(rejected.some(({ outcome }) => outcome === "refreshed")).toBe(
+        false,
+      );
     });
   });
 

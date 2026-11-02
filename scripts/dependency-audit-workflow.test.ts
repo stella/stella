@@ -95,7 +95,7 @@ test("full audits run on main and every six hours with one stable remediation id
   expect(auditWorkflow.on.schedule).toEqual([{ cron: "0 */6 * * *" }]);
   const remediation = step(auditWorkflow, "remediate", "Prepare remediation");
   expect(auditWorkflow.jobs["remediate"]?.if).toBe(
-    "always() && github.event_name != 'pull_request' && (needs.audit.outputs.advisory_failure == 'true' || needs.audit.outputs.stale_acceptance == 'true')",
+    "always() && (needs.audit.outputs.advisory_failure == 'true' || needs.audit.outputs.stale_acceptance == 'true')",
   );
   expect(auditWorkflow.jobs["audit"]?.outputs?.["stale_acceptance"]).toContain(
     "steps.full-audit.outputs.stale_acceptance || 'false'",
@@ -176,6 +176,25 @@ test("remediation commits use the shared signed action and app identity", () => 
   expect(commit.with?.["branch"]).toBe(prepare.env?.["FIX_BRANCH"]);
   expect(commit.with?.["base"]).toBe("main");
   expect(commit.with?.["paths"]).toBe(
-    "bun.lock\nscripts/dependency-audit-baseline.json\n:(glob)**/package.json\n",
+    "bun.lock\nbunfig.toml\nscripts/dependency-audit-baseline.json\n:(glob)**/package.json\n",
   );
+  expect(commit.id).toBe("signed-commit");
+  expect(commit.with?.["pr-body"]).toContain(
+    "steps.remediation.outputs.quarantined == 'true'",
+  );
+  const hold = step(
+    auditWorkflow,
+    "remediate",
+    "Hold quarantined remediation for publisher review",
+  );
+  expect(hold.if).toBe(
+    "steps.remediation.outputs.changed == 'true' && steps.remediation.outputs.quarantined == 'true'",
+  );
+  expect(hold.env?.["GH_TOKEN"]).toBe(
+    githubExpression("steps.app-token.outputs.token"),
+  );
+  expect(hold.env?.["PR_NUMBER"]).toBe(
+    githubExpression("steps.signed-commit.outputs.pull-request-number"),
+  );
+  expect(hold.run).toBe('gh pr edit "$PR_NUMBER" --add-label hold');
 });

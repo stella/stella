@@ -3,6 +3,8 @@
 import { createContext, use, useId, useState } from "react";
 import type { CSSProperties } from "react";
 
+import { mergeProps } from "@base-ui/react/merge-props";
+import { useRender } from "@base-ui/react/use-render";
 import { panic } from "better-result";
 import { cva } from "class-variance-authority";
 import type { VariantProps } from "class-variance-authority";
@@ -567,7 +569,7 @@ const SidebarGroupLabel = ({
   return (
     <Comp
       className={cn(
-        "text-sidebar-foreground/70 ring-sidebar-ring flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium outline-hidden transition-[margin,opacity] duration-200 ease-in-out focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
+        "text-sidebar-foreground ring-sidebar-ring flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium outline-hidden transition-[margin,opacity] duration-200 ease-in-out focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
         "group-data-[collapsible=icon]:hidden",
         className,
       )}
@@ -677,6 +679,29 @@ const sidebarIdentityTriggerClassName = (layout: SidebarLayout): string =>
     "ring-sidebar-ring hover:bg-sidebar-accent flex items-center overflow-hidden rounded-md text-start text-sm outline-hidden focus-visible:ring-2",
     layout === "rail" ? "size-8 justify-center p-0.5" : "w-full gap-2 p-2",
   );
+
+/**
+ * The footer's avatar trigger as a button, laid out for the sidebar's
+ * current layout: the sign-in action, or (through `render`) any overlay
+ * trigger that opens from the identity slot.
+ */
+const SidebarIdentityButton = ({
+  className,
+  render,
+  ...props
+}: useRender.ComponentProps<"button">) => {
+  const layout = useSidebarLayout();
+  const defaultProps = {
+    className: cn(sidebarIdentityTriggerClassName(layout), className),
+    "data-slot": "sidebar-identity-button",
+    type: render === undefined ? ("button" as const) : undefined,
+  };
+  return useRender({
+    defaultTagName: "button",
+    props: mergeProps<"button">(defaultProps, props),
+    render,
+  });
+};
 
 const SidebarMenuButton = ({
   asChild = false,
@@ -835,6 +860,7 @@ const SidebarMenuSubItem = ({
   <li
     className={cn("group/menu-sub-item relative", className)}
     data-sidebar="menu-sub-item"
+    data-context-menu-target=""
     data-slot="sidebar-menu-sub-item"
     {...props}
   />
@@ -889,6 +915,7 @@ export {
   SidebarMenuBadge,
   SidebarMenuButton,
   sidebarIdentityTriggerClassName,
+  SidebarIdentityButton,
   SidebarMenuItem,
   SidebarMenuSkeleton,
   SidebarMenuSub,

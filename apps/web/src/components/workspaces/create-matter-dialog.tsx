@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -85,18 +86,26 @@ const toActionErrorTitle = ({
 }) => userErrorFromThrown(error, fallback);
 
 export const CreateMatterDialog = () => {
-  const { closeDialog, dialog } = useCreateMatterStore(
-    useShallow((s) => ({
-      closeDialog: s.closeDialog,
-      dialog: s.dialog,
-    })),
-  );
+  const { closeDialog, dialog, finishClosing, returnFocus } =
+    useCreateMatterStore(
+      useShallow((s) => ({
+        closeDialog: s.closeDialog,
+        dialog: s.dialog,
+        finishClosing: s.finishClosing,
+        returnFocus: s.returnFocus,
+      })),
+    );
   const isOpen = dialog.status === "open";
-  const draftClient = dialog.status === "open" ? dialog.draftClient : null;
-  const onCreated = dialog.status === "open" ? dialog.onCreated : undefined;
+  const draftClient = dialog.status !== "closed" ? dialog.draftClient : null;
+  const onCreated = dialog.status !== "closed" ? dialog.onCreated : undefined;
 
   return (
     <Dialog
+      onOpenChangeComplete={(open) => {
+        if (!open) {
+          finishClosing();
+        }
+      }}
       onOpenChange={(open) => {
         if (!open) {
           closeDialog();
@@ -104,11 +113,12 @@ export const CreateMatterDialog = () => {
       }}
       open={isOpen}
     >
-      {isOpen ? (
+      {dialog.status !== "closed" ? (
         <CreateMatterDialogBody
           closeDialog={closeDialog}
           draftClient={draftClient}
           key={draftClient?.id ?? "new"}
+          returnFocus={returnFocus}
           {...(onCreated === undefined ? {} : { onCreated })}
         />
       ) : null}
@@ -120,12 +130,14 @@ type CreateMatterDialogBodyProps = {
   closeDialog: () => void;
   draftClient: MatterDraftClient | null;
   onCreated?: (workspaceId: string) => void | Promise<void>;
+  returnFocus: RefObject<HTMLElement | null>;
 };
 
 const CreateMatterDialogBody = ({
   closeDialog,
   draftClient,
   onCreated,
+  returnFocus,
 }: CreateMatterDialogBodyProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
@@ -256,7 +268,7 @@ const CreateMatterDialogBody = ({
         });
 
   return (
-    <DialogPopup className="max-w-md">
+    <DialogPopup className="max-w-md" finalFocus={returnFocus}>
       <DialogFormState
         dirty={name !== "" || selectedClient?.id !== draftClient?.id}
         onDiscard={() => {

@@ -24,8 +24,6 @@ import {
   relations,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { SOURCE_DOCUMENT_ID_MAX_LENGTH } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
@@ -63,6 +61,11 @@ import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import {
+  PUBLISHER_REQUEST,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
   approveMetadataUrls,
   META_URL_DIAGNOSTICS,
 } from "@/api/lib/legal-search/metadata-urls";
@@ -72,7 +75,10 @@ import { plCourtsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures"
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createIngestionRoleScopedDb,
+  createTestPglite,
+} from "@/api/tests/pglite-test-db";
 
 // One batch application behind two callers: a crawl page and a caller that
 // hands over records it already holds. Whatever stops a batch short of every
@@ -86,8 +92,7 @@ let scopedDb: ScopedDb;
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client, relations: { ...relations, ...authRelationsPart } });
-  scopedDb = async (callback) =>
-    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+  scopedDb = createIngestionRoleScopedDb(db);
 }, propertyTestTimeout(120_000));
 
 afterAll(async () => {
@@ -324,7 +329,11 @@ const crawlCaller: Caller = {
     const nextCursor = `${sourceLease.source.syncCursor ?? "page"}+`;
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
-        Result.ok({ decisions: [...decisions], nextCursor }),
+        Result.ok({
+          decisions: [...decisions],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor,
+        }),
       );
     const run = await Result.tryPromise({
       try: async () =>
@@ -407,7 +416,11 @@ describe("crawl cancellation", () => {
             return await scopedDb(operation);
           };
           czNsAdapter.fetchPage = async () =>
-            Result.ok({ decisions, nextCursor: "next-page" });
+            Result.ok({
+              decisions,
+              nextCursor: "next-page",
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+            });
           const sourceLease = await leaseFor(sourceId);
           try {
             const result = await runIngestionPipeline({
@@ -463,7 +476,11 @@ describe("crawl cancellation", () => {
     const sourceId = await crawlSource();
     const sourceLease = await leaseFor(sourceId);
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: records(3), nextCursor: "next-page" });
+      Result.ok({
+        decisions: records(3),
+        nextCursor: "next-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      });
     let batches = 0;
     try {
       const result = await runIngestionPipeline({
@@ -498,7 +515,11 @@ describe("crawl cancellation", () => {
       return await scopedDb(operation);
     };
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: records(1), nextCursor: "next-page" });
+      Result.ok({
+        decisions: records(1),
+        nextCursor: "next-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      });
     try {
       const result = await runIngestionPipeline({
         source: sourceLease.source,

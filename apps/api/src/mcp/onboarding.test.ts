@@ -532,6 +532,7 @@ describe("empty-result onboarding next step", () => {
           decisionDate: "2024-02-01",
           decisionId: "dec_1",
           decisionType: "judgment",
+          decisionTypeKind: "judgment",
           ecli: null,
           headline: "hit",
           language: "cs",

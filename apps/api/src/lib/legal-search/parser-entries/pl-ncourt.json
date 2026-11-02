@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_NCOURT",
   "key": "pl-ncourt",
-  "parserVersion": 19,
+  "parserVersion": 20,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Re-read printed title order and opening, operative and signature roles from stored source; roles and block ordering have no independent feature storage."
+    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Re-read portal statute links against their anchor text: links whose provisions the anchor does not print lose them, links naming another act or a bare paragraph become plain text, and the metadata lists what was dropped. Also revalidates publisher head-matter ordering across the complete document AST."
   }
 }

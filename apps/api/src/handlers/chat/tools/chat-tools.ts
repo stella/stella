@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 
 import {
-  type BrowserClientCapability,
+  type BrowserExtensionCapability,
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type ChatSourceScope,
 } from "@stll/api-contract";
@@ -12,6 +12,7 @@ import type { SkillMetadata } from "@stll/skills/frontmatter";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageEventLane } from "@/api/db/schema";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
+import { browserExtensionPolicy } from "@/api/handlers/chat/browser-extension-capability";
 import {
   CHAT_EDIT_APPLY_MODE,
   type ChatEditApplyMode,
@@ -537,7 +538,7 @@ export type GetChatToolsProps = {
    * Present only when the requesting web surface has a live, permissioned
    * extension executor; absent means the tool is not registered.
    */
-  browserClient?: BrowserClientCapability | undefined;
+  browserExtension?: BrowserExtensionCapability | undefined;
   /**
    * Which client executor resolves `suggest_changes` this turn, and so
    * which per-surface schema the model sees. Not derivable from the two
@@ -959,7 +960,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     hasActiveDocxEditClient,
     hasActiveDocxFileClient,
     docxSuggestionSurface,
-    browserClient,
+    browserExtension,
     webSearchEnabled,
     webSearchProviders,
     externalTools = {},
@@ -1112,7 +1113,10 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const { boeTools, infosoudTools } = nativeSourceTools(
     disabledNativeToolSlugs,
   );
-  const browserControlTools = browserClient ? createBrowserControlTool() : {};
+  const browserControlTools =
+    browserExtension && browserExtensionPolicy(browserExtension).toolOffered
+      ? createBrowserControlTool()
+      : {};
   const { webSearchProvider, urlFetcher } = webSearchProviders;
   // The `webSearchProvider !== null` re-check narrows the type for
   // createWebSearchTools; it is implied by `webResearchAvailable`.
@@ -1400,7 +1404,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
         buildSubagentToolset: (proposalSink) =>
           getChatTools({
             ...props,
-            browserClient: undefined,
+            browserExtension: undefined,
             visualTools: undefined,
             hasActiveDocxEditClient: false,
             delegationDepth: delegationDepth + 1,
@@ -1501,7 +1505,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
         .filter((name) => {
           const featureId = toolFeatureId(name);
           return (
-            !(name in tools) &&
+            !Object.hasOwn(tools, name) &&
             featureId !== undefined &&
             Object.hasOwn(featureRegistry, featureId) &&
             featureRegistry[featureId]?.enrolment === "general-availability"
@@ -1512,7 +1516,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
             [name, "unavailable for this caller or deployment"] as const,
         ),
       ...Object.keys(registered)
-        .filter((name) => !(name in projected))
+        .filter((name) => !Object.hasOwn(projected, name))
         .map((name) => [name, "subagents cannot call it"] as const),
       ...sourceScopeDroppedTools(sourceScope).map(
         (name) => [name, sourceScopeUnavailableReason(sourceScopes)] as const,
