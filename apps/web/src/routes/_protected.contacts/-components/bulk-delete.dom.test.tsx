@@ -7,7 +7,6 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { CONTACT_BULK_DELETE_LIMIT } from "@stll/api-contract";
 
 import messages from "@/i18n/langs/en.json";
-import { contactsKeys } from "@/lib/contacts/queries";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const receivedBatches: string[][] = [];
@@ -32,6 +31,9 @@ const { act, cleanup, fireEvent, render, screen } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { ToastProvider } = await import("@stll/ui/toast");
+// Loaded after the DOM exists: its import graph reaches UI modules that
+// decide at load time whether a document is present to portal into.
+const { contactsKeys } = await import("@/lib/contacts/queries");
 const { BulkDeleteContacts } = await import("./bulk-delete");
 
 afterEach(async () => {
@@ -175,9 +177,9 @@ test("selects three contacts and confirms one bulk request", async () => {
   await act(async () =>
     fireEvent.click(screen.getByRole("button", { name: "Delete 3 contacts" })),
   );
-  await act(async () =>
-    fireEvent.click(screen.getByRole("button", { name: "Delete" })),
-  );
+  // The confirmation renders in a portal the dialog mounts after it opens.
+  const confirm = await screen.findByRole("button", { name: "Delete" });
+  await act(async () => fireEvent.click(confirm));
 
   expect(receivedBatches).toEqual([
     ["contact-one", "contact-two", "contact-three"],
@@ -205,9 +207,9 @@ test("keeps blocked contacts selected and resolves deleted or missing contacts",
   await act(async () =>
     fireEvent.click(screen.getByRole("button", { name: "Delete 3 contacts" })),
   );
-  await act(async () =>
-    fireEvent.click(screen.getByRole("button", { name: "Delete" })),
-  );
+  // The confirmation renders in a portal the dialog mounts after it opens.
+  const confirm = await screen.findByRole("button", { name: "Delete" });
+  await act(async () => fireEvent.click(confirm));
 
   expect(await screen.findByText("Contacts not removed: 2")).toBeTruthy();
   expect(screen.getByText("contact-two")).toBeTruthy();

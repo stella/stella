@@ -2600,10 +2600,10 @@
     "deleteContactBlockedByMatters": "Ce contact est encore défini comme client dans des dossiers. Réattribuez ou supprimez ces dossiers avant de supprimer le contact.",
     "deleteContactConfirmDescription": "Voulez-vous vraiment supprimer ce contact ? Cette action est irréversible.",
     "deleteNotFoundCount": "Contacts introuvables : {count}.",
-    "deleteSelected": "Supprimer {count, plural, one {# contact} other {# contacts}}",
-    "deleteSelectedConfirm": "Supprimer définitivement {count, plural, one {ce contact} other {ces # contacts}} ? Cette action est irréversible.",
+    "deleteSelected": "Supprimer {count, plural, one {# contact} many {# contacts} other {# contacts}}",
+    "deleteSelectedConfirm": "Supprimer définitivement {count, plural, one {ce contact} many {ces # contacts} other {ces # contacts}} ? Cette action est irréversible.",
     "deleteSelectedLimit": "Sélectionnez au maximum {limit} contacts à supprimer à la fois.",
-    "deletedCount": "{count, plural, one {# contact supprimé} other {# contacts supprimés}}",
+    "deletedCount": "{count, plural, one {# contact supprimé} many {# contacts supprimés} other {# contacts supprimés}}",
     "editContact": "Modifier le contact",
     "emailTypes": {
       "other": "Autre",
