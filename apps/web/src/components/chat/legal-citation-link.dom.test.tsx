@@ -730,7 +730,7 @@ for (const interactive of [false, true]) {
 const openConsultedSources = async (view: { container: HTMLElement }) => {
   const trigger = await waitFor(() => {
     const button = [...view.container.querySelectorAll("button")].find(
-      (candidate) => candidate.textContent?.startsWith("Also consulted"),
+      (candidate) => candidate.textContent.startsWith("Also consulted"),
     );
     expect(button).toBeDefined();
     return button;
