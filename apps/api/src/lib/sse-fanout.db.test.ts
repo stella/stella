@@ -38,7 +38,9 @@ import { realtimeAuthorizers } from "@/api/lib/auth";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  type QueryCounter,
   queryCountLogger,
+  runOutsideQueryCounter,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
 import {
@@ -207,6 +209,12 @@ let testDb: TestDatabase;
 /** Redis stand-in: a publish reaches every attached subscriber callback. */
 const subscriberCallbacks = new Set<(message: string) => void>();
 let redisPublishes = 0;
+/**
+ * One counter per Redis delivery. A real subscriber receives the message on
+ * its own connection, outside the publisher's context, so its statements
+ * (the audience reauthorization) are counted there and added to the publish.
+ */
+const deliveryCounters: Readonly<QueryCounter>[] = [];
 
 type FakeSubscriberClient = {
   close: ReturnType<typeof mock>;
@@ -237,7 +245,12 @@ const loopbackPublisher = createSseBroadcastPublisher({
     publish: async (_channel, message) => {
       redisPublishes += 1;
       for (const deliver of subscriberCallbacks) {
-        deliver(message);
+        runOutsideQueryCounter(() => {
+          runWithQueryCounter((counter) => {
+            deliveryCounters.push(counter);
+            deliver(message);
+          });
+        });
       }
       return subscriberCallbacks.size;
     },
@@ -616,6 +629,7 @@ const measurePublish = async <C extends RealtimeChannel>({
   const entitled = subscribers.entitled.map((stream) => stream.getReader());
   const excluded = subscribers.excluded.map((stream) => stream.getReader());
   const publishesBefore = redisPublishes;
+  const deliveriesBefore = deliveryCounters.length;
   const encode = spyOn(TextEncoder.prototype, "encode");
   try {
     const { reads, statements } = await runWithQueryCounter(async (counter) => {
@@ -625,6 +639,9 @@ const measurePublish = async <C extends RealtimeChannel>({
       );
       return { reads: received, statements: counter.count };
     });
+    const deliveryStatements = deliveryCounters
+      .slice(deliveriesBefore)
+      .reduce((total, counter) => total + counter.count, 0);
     const sseFrameEncodes = encode.mock.calls.filter(isSseFrameEncode).length;
     return {
       entitled: reads.map(({ done }) => (done ? "closed" : "frame")),
@@ -634,7 +651,7 @@ const measurePublish = async <C extends RealtimeChannel>({
       ),
       redisPublishes: redisPublishes - publishesBefore,
       sseFrameEncodes,
-      statements,
+      statements: statements + deliveryStatements,
     };
   } finally {
     encode.mockRestore();
