@@ -1019,6 +1019,42 @@ describe("chat's tabs", () => {
     });
   });
 
+  test("a page chat opens over the user's navigation makes the tab chat's again", async () => {
+    const installed = installChatTabs();
+    // The user typed an address into the controlled tab earlier.
+    installed.session["browserContainedTabs"] = {
+      adoptedTabIds: [],
+      chatTabIds: [RESULTS_TAB_ID],
+      controlledTabId: CONTROLLED_TAB_ID,
+      controlledUserNavigated: true,
+      openedTabIds: [RESULTS_TAB_ID],
+      userTabIds: [CONTROLLER_TAB_ID, USER_TAB_ID],
+    };
+    installed.handlers["snapshot"] = () => [
+      { frameId: 0, result: frameSnapshot("Invoice") },
+    ];
+
+    expect(await run({ action: "open", url: PAGE_URL })).toMatchObject({
+      status: "success",
+    });
+    expect(installed.session["browserContainedTabs"]).toMatchObject({
+      controlledTabId: CONTROLLED_TAB_ID,
+      controlledUserNavigated: false,
+    });
+
+    // Moving on to a new tab keeps the one chat just operated as chat's.
+    expect(
+      await run(
+        { action: "open", newTab: true, url: RESULTS_URL },
+        { observedTab: null },
+      ),
+    ).toMatchObject({ status: "success" });
+    expect(installed.session["browserContainedTabs"]).toMatchObject({
+      chatTabIds: [RESULTS_TAB_ID, CONTROLLED_TAB_ID],
+      controlledTabId: 7,
+    });
+  });
+
   test("ownership, not a listing, decides which tab chat may switch to", async () => {
     const { handlers, tabs } = installChatTabs({ opened: [RESULTS_TAB_ID, 6] });
     // Tab 6 was on an error page when chat last read, so no list showed it;

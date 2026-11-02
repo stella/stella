@@ -41,6 +41,7 @@ import {
   operableTabIds,
   readContainedTabs,
   readTabOwner,
+  reclaimControlledTab,
   switchContainedTab,
 } from "./tab-containment";
 
@@ -1902,6 +1903,10 @@ const runOpen = async (
       `The page redirected away from ${requested.origin} to ${landedUrl?.origin ?? "an unsupported address"} and was not read. Use snapshot to read it after approval.`,
     );
   }
+  // The tab now shows the page chat opened, whatever the user had navigated
+  // it to before. Its own commit was a plain link, which never counts as
+  // the user's, so this runs after it and a later user commit still counts.
+  await reclaimControlledTab(opened.tabId);
   return await readSnapshot({
     controllerId,
     tabId: opened.tabId,

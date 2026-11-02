@@ -12,6 +12,7 @@ import {
   operableTabIds,
   readContainedTabs,
   readTabOwner,
+  reclaimControlledTab,
   releaseContainedTabs,
   switchContainedTab,
 } from "./tab-containment";
@@ -296,6 +297,39 @@ describe("controlled tab containment", () => {
     expect(await readTabOwner(CONTROLLED)).toBe("confined");
     expect(confines(state.rules, CONTROLLED)).toBe(true);
     expect(operableTabIds(await readContainedTabs())).toEqual([4]);
+  });
+
+  test("chat's own navigations never count as the user's", async () => {
+    await startControl();
+    // What Chromium reports for a page the extension loads with
+    // `chrome.tabs.update`, and for going back through history.
+    await sortCommittedNavigation({
+      ...typed(CONTROLLED),
+      transitionType: "link",
+    });
+    await sortCommittedNavigation({
+      ...typed(CONTROLLED),
+      transitionQualifiers: ["forward_back"],
+      transitionType: "link",
+    });
+    await containControlledTab(4);
+    expect(await readTabOwner(CONTROLLED)).toBe("chat");
+  });
+
+  test("a page chat loads over the user's navigation makes the tab chat's again", async () => {
+    await startControl();
+    await sortCommittedNavigation(typed(CONTROLLED));
+    await reclaimControlledTab(CONTROLLED);
+    await containControlledTab(4);
+    expect(await readTabOwner(CONTROLLED)).toBe("chat");
+
+    // A navigation by the user after chat's page counts again.
+    await startControl();
+    await sortCommittedNavigation(typed(CONTROLLED));
+    await reclaimControlledTab(CONTROLLED);
+    await sortCommittedNavigation(typed(CONTROLLED));
+    await containControlledTab(4);
+    expect(await readTabOwner(CONTROLLED)).toBe("confined");
   });
 
   test("a tab the user handed over is still theirs when chat switches back", async () => {

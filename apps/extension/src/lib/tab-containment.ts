@@ -648,6 +648,23 @@ export const releaseToUser = async (tabId: number): Promise<TabOwner> =>
     },
   );
 
+/**
+ * Chat loaded a page of its own in the controlled tab, over whatever the
+ * user had navigated it to: the tab is chat's again, and stays so once
+ * control leaves it. Chrome commits a navigation the extension starts as a
+ * plain link, never as the user's, so a later commit by the user still
+ * counts.
+ */
+export const reclaimControlledTab = async (tabId: number): Promise<void> => {
+  await updateContainedTabs((current) => ({
+    next:
+      current.controlledTabId === tabId
+        ? { ...current, controlledUserNavigated: false }
+        : current,
+    result: undefined,
+  }));
+};
+
 /** Chrome swapped a tab for another; the new one keeps the old one's owner. */
 export const replaceTab = async (
   addedTabId: number,
