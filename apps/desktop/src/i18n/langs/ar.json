@@ -524,7 +524,12 @@
     "aiSteerWriteIn": "الكتابة بلغة {language}",
     "aiSteerRemember": "التذكّر للمرة القادمة",
     "billingDraftsPreference": "تفضيلك للمسودات",
-    "billingDraftsForgetPreference": "نسيان التفضيل"
+    "billingDraftsForgetPreference": "نسيان التفضيل",
+    "aiStructureSplit": "{count, plural, zero {يقترح stella AI تقسيم هذا الإدخال إلى # أجزاء} one {يقترح stella AI تقسيم هذا الإدخال إلى جزء واحد} two {يقترح stella AI تقسيم هذا الإدخال إلى جزأين} few {يقترح stella AI تقسيم هذا الإدخال إلى # أجزاء} many {يقترح stella AI تقسيم هذا الإدخال إلى # جزءًا} other {يقترح stella AI تقسيم هذا الإدخال إلى # جزء}}",
+    "aiStructureMove": "يقترح stella AI نقل {duration} إلى {matter}",
+    "aiStructureCreate": "{count, plural, zero {إنشاء # إدخالات} one {إنشاء إدخال واحد} two {إنشاء إدخالين} few {إنشاء # إدخالات} many {إنشاء # إدخالًا} other {إنشاء # إدخال}}",
+    "aiStructureMoveAccept": "نقل",
+    "aiFlagSplit": "تقسيم الإدخال"
   },
   "dictation": {
     "title": "الإملاء",
