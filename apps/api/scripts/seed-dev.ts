@@ -3899,14 +3899,8 @@ export async function seed(organizationId?: string, userId?: string) {
   });
   console.log("  Issuing setup: seller profile, VAT rates, number series");
 
-  // The Slovak firm is one organization every run shares, and its matters keep
-  // their references there, so a locale firm's run would skip each namespaced
-  // matter on the reference and then add members to matters that do not
-  // exist. Only the primary run seeds it.
-  if (seedsSharedCorpus(ORG_ID)) {
-    await seedSlovakFirm({ db, primaryUserId: USER_ID, now });
-    console.log("  Slovak firm: separate EUR time and invoicing scenario");
-  }
+  await seedSlovakFirm({ db, primaryUserId: USER_ID, now });
+  console.log("  Slovak firm: separate EUR time and invoicing scenario");
 
   // 14. Templates & clauses (knowledge base)
   await seedTemplates(ORG_ID, seedUserIds, SEED_CONTENT.templates);
