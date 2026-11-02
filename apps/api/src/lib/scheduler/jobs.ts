@@ -37,6 +37,7 @@ import { RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK } from "@/api/lib/schedul
 import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK } from "@/api/lib/scheduler/tasks/case-law-decision-identifier-reconciliation";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import { BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-parsed-input-state-backfill";
 import { FOLD_CASE_LAW_POPULATION_COUNTS_TASK } from "@/api/lib/scheduler/tasks/case-law-population-fold";
 import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import {
@@ -62,6 +63,7 @@ import { RECEIVE_EMAIL_DELIVERABILITY_TASK } from "@/api/lib/scheduler/tasks/ema
 import { SWEEP_FILE_COMPARISON_UPLOADS_TASK } from "@/api/lib/scheduler/tasks/file-comparison-sweep";
 import { REPAIR_FILE_DERIVATIVES_TASK } from "@/api/lib/scheduler/tasks/file-derivative-repair";
 import { RECONCILE_FLOW_RUN_ORPHANS_TASK } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
+import { ERASE_HOSTED_CUSTOMERS_TASK } from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
 import { REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK } from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
 import { RECEIVE_INBOUND_MAIL_TASK } from "@/api/lib/scheduler/tasks/inbound-mail-receive";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
@@ -574,6 +576,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     },
   },
   {
+    description: "Derive parsed input state for historical case-law decisions",
+    id: SCHEDULER_BACKFILL_IDS.parsedInputState,
+    mode: "oneShot",
+    payloadUpdate: "preserve",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK,
+    reads: "load-governed",
+  },
+  {
     description: "Emit persisted backfill health gauges",
     id: "backfill.heartbeat.minutely",
     mode: "recurring",
@@ -684,6 +695,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK,
     reads: "unmeasured",
     enabled: env.HOSTED_USAGE_WEBHOOK_RETENTION_DAYS !== undefined,
+  },
+  {
+    description: "Erase deleted organizations' hosted billing customers",
+    id: "usage.eraseHostedCustomers.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: ERASE_HOSTED_CUSTOMERS_TASK,
+    reads: { budget: "scheduled.usage.eraseHostedCustomers" },
+    enabled: env.HOSTED_USAGE_PROVIDER === "polar",
   },
   {
     description: "Delete expired action cost observations",

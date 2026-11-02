@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 1,
+  "reason": "The organization delete hook refuses a deletion without a current audit archive with the auth plugin APIError, the hook contract its subscription refusal already uses."
+}

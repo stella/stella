@@ -51,6 +51,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import createSampleCase, { loadSampleCase } from "./create";
 import { SAMPLE_FACTS } from "./sample-case.data";
@@ -183,9 +184,7 @@ const withSampleFixture = async (
         });
       } finally {
         requests.stop();
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         await db.delete(user).where(eq(user.id, userId));
       }
     },

@@ -121,6 +121,8 @@ export const DIFF_SCOPED_STEPS = {
   ),
   "autofix.yml:regenerate-derived-files#Prune stale baseline entries":
     operational("Rewrites baselines on the fix branch; no verdict."),
+  "autofix.yml:regenerate-derived-files#Raise stale bridge version":
+    operational("Bumps the bridge version on the fix branch; CI enforces it."),
   "autofix.yml:regenerate-derived-files#Restrict autofix changes": diffComplete(
     "Limits the fix to the paths the change touched.",
   ),
