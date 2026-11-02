@@ -97,6 +97,25 @@ export const provisionAnchorSubtreeSql = (
 };
 
 /**
+ * The same subtree predicate with its gap check left as a heap filter. This
+ * keeps an ordered, limited subtree walk from becoming a bitmap union.
+ */
+export const orderedProvisionAnchorSubtreeSql = (
+  column: SQLWrapper,
+  { jurisdiction, anchor }: ProvisionAnchorTarget,
+): SQL => {
+  const bytes = sql`(${column} COLLATE "C")`;
+  const separator = provisionAnchorSeparator(jurisdiction);
+  if (separator === null) {
+    return sql`${bytes} = ${anchor}`;
+  }
+  const next = String.fromCodePoint(
+    (separator.codePointAt(0) ?? panic("The separator is one code point")) + 1,
+  );
+  return sql`(${bytes} >= ${anchor} AND ${bytes} < ${`${anchor}${next}`} AND CASE WHEN ${bytes} = ${anchor} OR ${bytes} >= ${`${anchor}${separator}`} THEN TRUE ELSE FALSE END)`;
+};
+
+/**
  * The provisions a stored citation row counts toward, as a SQL array. The
  * function is the stored projection's own rule, so a read-time aggregate and
  * the maintained counts cannot disagree on it.

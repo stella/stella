@@ -24,6 +24,17 @@ const UNSAFE_CHARS_RE = /["/\\<>\r\n\0|*?:]/gu;
 const PATH_TRAVERSAL_RE = /\.\./gu;
 const MAX_FILENAME_LENGTH = 255;
 
+/**
+ * Every format character (`Cf`) except ZWNJ and ZWJ: those two select letter
+ * forms in Persian and Indic scripts and join emoji sequences, so removing
+ * them changes what a name says, and neither can reorder text.
+ */
+const INVISIBLE_FORMATTING_RE = /(?![\u200C\u200D])\p{Cf}/gu;
+
+/** Removes the characters a stored name or a download name must not carry. */
+export const stripInvisibleFormatting = (text: string): string =>
+  text.replaceAll(INVISIBLE_FORMATTING_RE, "");
+
 const truncateUnicode = (value: string, maxLength: number): string => {
   const characters: string[] = [];
   let length = 0;
@@ -54,8 +65,9 @@ const stripLeadingAndTrailingDots = (name: string): string => {
 };
 
 export const sanitizeFilename = (name: string): SanitizedFileName => {
-  const sanitized = name
-    .toWellFormed()
+  // Format characters go first: one hidden between two dots would otherwise
+  // survive the traversal check and leave `..` behind.
+  const sanitized = stripInvisibleFormatting(name.toWellFormed())
     .replace(UNSAFE_CHARS_RE, "_")
     .replace(PATH_TRAVERSAL_RE, "__");
   const sanitizedWithoutEdgeDots = stripLeadingAndTrailingDots(sanitized);
@@ -73,7 +85,7 @@ export const sanitizeFilename = (name: string): SanitizedFileName => {
 export const sanitizeFilenamePreservingExtension = (
   name: string,
 ): SanitizedFileName => {
-  const wellFormedName = name.toWellFormed();
+  const wellFormedName = stripInvisibleFormatting(name.toWellFormed());
   const lastDot = wellFormedName.lastIndexOf(".");
   if (lastDot === -1) {
     return sanitizeFilename(wellFormedName);
