@@ -6428,7 +6428,8 @@
       "errored": "Błąd",
       "formatNotSupported": "Format nie jest obsługiwany",
       "selectAValue": "Wybierz wartość",
-      "selectValues": "Wybierz wartości"
+      "selectValues": "Wybierz wartości",
+      "wholeNumberOnly": "Wpisz liczbę całkowitą"
     },
     "files": {
       "addFilePropertyToUpload": "Dodaj właściwość typu plik, aby przesyłać pliki",

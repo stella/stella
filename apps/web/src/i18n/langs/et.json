@@ -6428,7 +6428,8 @@
       "errored": "Viga",
       "formatNotSupported": "Formaat ei ole toetatud",
       "selectAValue": "Valige väärtus",
-      "selectValues": "Valige väärtused"
+      "selectValues": "Valige väärtused",
+      "wholeNumberOnly": "Sisestage täisarv"
     },
     "files": {
       "addFilePropertyToUpload": "Lisage failide üleslaadimiseks failide omadus",
