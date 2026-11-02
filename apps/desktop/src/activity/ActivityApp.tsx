@@ -634,7 +634,6 @@ const ActivityApp = () => {
   const view = useActivityDay(date, setError);
   const [preferences, setPreferences] = useState<ActivityCalendarPreferences>({
     granularity: 30,
-    narrativeDeclines: 0,
   });
   const errorRead = t("errorRead");
 

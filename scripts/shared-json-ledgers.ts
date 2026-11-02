@@ -22,6 +22,7 @@ export const SHARED_LEDGER_PATHS = [
   "scripts/model-defaults-exceptions.json",
   "scripts/offline-check-exceptions.json",
   "scripts/projection-totality.allowlist.json",
+  "scripts/refusal-code-ledger.json",
   "scripts/sha256-migration-ledger.json",
   "scripts/suppression-waivers.json",
   "scripts/swallowed-item-error-ledger.json",

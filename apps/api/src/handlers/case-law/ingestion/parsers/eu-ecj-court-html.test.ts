@@ -9,7 +9,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
+
+import { load } from "@stll/html";
 
 import { parseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 
@@ -50,7 +51,7 @@ describe("an order published only as the Court's HTML", () => {
   });
 
   test("keeps every word of the body in order", () => {
-    const body = cheerio.load(html)("body").text();
+    const body = load(html)("body").text();
     const stored = words(parsed.fulltext);
     const source = words(body);
     let cursor = 0;
