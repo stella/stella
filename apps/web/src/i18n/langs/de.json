@@ -5454,7 +5454,7 @@
         "workspace_member": "Mitglied der Akte"
       },
       "billingDrafts": {
-        "description": "Abrechnungstexte aus ausgewählten Aktivitäten und Wissensdateien der Kanzlei oder des Mandanten entwerfen. Jeder Nutzer erteilt zusätzlich seine Zustimmung. Fügen Sie vor dem Aktivieren Kanzleirichtlinien hinzu.",
+        "description": "Abrechnungstexte aus ausgewählten Aktivitäten und Wissensdateien der Kanzlei oder des Mandanten entwerfen. Jeder Nutzer erteilt zusätzlich seine Zustimmung. Entwürfe werden anhand der Richtlinien geprüft, sobald Kanzleirichtlinien hinzugefügt sind.",
         "firm": "Kanzleirichtlinien",
         "ledes": "Elektronische Abrechnung (LEDES)",
         "title": "KI-Abrechnungsentwürfe"

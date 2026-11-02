@@ -5454,7 +5454,7 @@
         "workspace_member": "bylos narys"
       },
       "billingDrafts": {
-        "description": "Kurkite darbo aprašymus iš pasirinktų veiklų ir kontoros arba kliento žinių failų. Kiekvienas naudotojas taip pat duoda savo sutikimą. Prieš įjungdami juodraščius pridėkite kontoros gaires.",
+        "description": "Kurkite darbo aprašymus iš pasirinktų veiklų ir kontoros arba kliento žinių failų. Kiekvienas naudotojas taip pat duoda savo sutikimą. Pridėjus kontoros gaires, juodraščiai tikrinami pagal jas.",
         "firm": "Kontoros gairės",
         "ledes": "Elektroninis sąskaitų išrašymas (LEDES)",
         "title": "DI atsiskaitymo juodraščiai"

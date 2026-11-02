@@ -9,6 +9,7 @@ import {
   planModelCompaction,
 } from "@/api/handlers/chat/compaction";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import { admitDraftingWithGateReader } from "@/api/handlers/desktop-time-entries/drafting-model";
 import {
   capNarrative,
   generateDesktopTimeEntryNarrative,
@@ -20,7 +21,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { compactionGenerationRequest } from "@/api/lib/chat/compaction-tokens";
 import { HISTORY_TRIMMED_NOTICE } from "@/api/lib/chat/context-notice";
 import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import type { TanStackTextFinishPolicy } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -363,12 +364,31 @@ const desktopNarrativeDriver = textCallSiteDriver({
       organizationId,
       "desktop-time-entries.narrative",
     );
+    // The organization allows drafting and the member consents throughout.
+    const drafting = (
+      await admitDraftingWithGateReader({
+        safeDb: async () =>
+          await Promise.resolve(panic("The replay reads no database")),
+        organizationId,
+        userId: toSafeId<"user">("user_ai_text_replay"),
+        loadGate: async () =>
+          await Promise.resolve(
+            Result.ok({
+              organizationMode: "enabled" as const,
+              consentAt: new Date("2026-10-01T12:00:00Z"),
+              preference: null,
+              draftingMode: "plain" as const,
+            }),
+          ),
+      })
+    ).unwrap();
     const result = await generateDesktopTimeEntryNarrative({
       request: {
         titles: ["Smlouva o dílo – návrh.docx", "Katastr nemovitostí"],
         locale: "cs-CZ",
         matterName: null,
       },
+      drafting,
       admission,
       organizationId,
       userId: toSafeId<"user">("user_ai_text_replay"),
@@ -384,6 +404,9 @@ const desktopNarrativeDriver = textCallSiteDriver({
       abortSignal: new AbortController().signal,
     });
     if (Result.isError(result)) {
+      if (!HandlerError.is(result.error)) {
+        return panic("The replay's gate never fails", result.error);
+      }
       const { status, message, cause } = result.error;
       return { type: "keep-template", status, message, cause };
     }
@@ -420,7 +443,7 @@ export const TEXT_CALL_SITE_DRIVERS: Readonly<
   Record<string, readonly TextCallSiteDriver[]>
 > = {
   "handlers/chat/compaction.ts": [chatCompactionDriver, modelCompactionDriver],
-  "handlers/desktop-time-entries/narrative-model.ts": [desktopNarrativeDriver],
+  "handlers/desktop-time-entries/drafting-model.ts": [desktopNarrativeDriver],
 };
 
 /**

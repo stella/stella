@@ -1,4 +1,5 @@
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: footnoteIds is supplied only by the PL-SN and UOKIK PDF readers; other callers retain sanitizeUrl and their existing link output.
 // parser-output-unchanged: [cz-nss] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
 // parser-output-unchanged: [cz-uohs] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
 // parser-output-unchanged: [pl-sn] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
@@ -106,6 +107,8 @@ type ParsePlDecisionInput = {
    * the unwrapped reading their stored documents were made with.
    */
   superscripts?: boolean | undefined;
+  /** IDs of footnotes actually parsed from this document; all other links keep URL sanitization. */
+  footnoteIds?: readonly string[] | undefined;
   /**
    * Whose markup conventions the HTML follows. Omitted, the HTML is read as
    * any publisher's.
@@ -202,6 +205,7 @@ type ParserState = {
   pendingMarker: Inline[] | undefined;
   listMarkers: WeakMap<Element, WeakMap<Element, string | null>>;
   listItemBoundaries: WeakMap<Element, boolean>;
+  footnoteHrefs: ReadonlySet<string>;
 };
 
 const hasHtmlTags = (content: string): boolean =>
@@ -250,9 +254,11 @@ type CreateStateOptions = {
   markup: PlDecisionMarkup | undefined;
   caseNumber: string;
   fallbackDecisionTitle: string | undefined;
+  footnoteIds: readonly string[] | undefined;
 };
 
 const createState = ({
+  footnoteIds,
   superscripts,
   markup,
   caseNumber,
@@ -270,6 +276,7 @@ const createState = ({
   fallbackDecisionTitle,
   normalizedCaseNumber: caseNumber.replace(/\s+/gu, " ").trim(),
   panelNames: [],
+  footnoteHrefs: new Set(footnoteIds?.map((noteId) => `#${noteId}`)),
   superscripts,
   markup,
   pendingMarker: undefined,
@@ -417,7 +424,8 @@ const walkInlines = (
       readMarkupInlines(
         state,
         walkInlinesShared($, el, {
-          sanitizeHref: sanitizeUrl,
+          sanitizeHref: (href) =>
+            state.footnoteHrefs.has(href) ? href : sanitizeUrl(href),
           anonymized: false,
           superscripts: state.superscripts,
         }),
@@ -1558,6 +1566,7 @@ export const parsePlDecisionContent = (
 ): ParsePlDecisionOutput => {
   const loadHtml = input.loadHtml ?? load;
   const state = createState({
+    footnoteIds: input.footnoteIds,
     superscripts: input.superscripts === true,
     markup: input.markup,
     caseNumber: input.caseNumber,

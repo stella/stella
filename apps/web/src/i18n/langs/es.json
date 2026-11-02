@@ -5454,7 +5454,7 @@
         "workspace_member": "miembro del asunto"
       },
       "billingDrafts": {
-        "description": "Redacte descripciones a partir de las actividades seleccionadas y los archivos de conocimiento del despacho o del cliente. Cada usuario también da su consentimiento. Adjunte las directrices del despacho antes de activar los borradores.",
+        "description": "Redacte descripciones a partir de las actividades seleccionadas y los archivos de conocimiento del despacho o del cliente. Cada usuario también da su consentimiento. Una vez adjuntas las directrices del despacho, los borradores se comprueban con ellas.",
         "firm": "Directrices del despacho",
         "ledes": "Facturación electrónica (LEDES)",
         "title": "Borradores de facturación con IA"
