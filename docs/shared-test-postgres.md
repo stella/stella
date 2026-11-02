@@ -64,7 +64,7 @@ It checks template reuse, older/newer schema differences, owner posture, isolate
 contents, idempotent cleanup, active-template retention, and idle-template expiry:
 
 ```sh
-STELLA_RUN_SHARED_POSTGRES_TESTS=true bun --filter @stll/api test scripts/shared-test-postgres.test.ts
+STELLA_RUN_SHARED_POSTGRES_TESTS=true bun --filter @stll/api test scripts/shared-test-postgres.postgres.test.ts
 ```
 
 Respect host load gates for this service-backed test. Measure the container

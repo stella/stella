@@ -4162,7 +4162,7 @@ jobs:
         timeout-minutes: 5
         env:
           STELLA_RUN_SHARED_POSTGRES_TESTS: "true"
-        run: bun --filter @stll/api test scripts/shared-test-postgres.test.ts
+        run: bun --filter @stll/api test scripts/shared-test-postgres.postgres.test.ts
 
       - name: Run Postgres-gated API suites
         id: postgres-tests
