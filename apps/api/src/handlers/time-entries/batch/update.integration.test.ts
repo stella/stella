@@ -294,3 +294,111 @@ test("every batch action preserves billed and written-off entries and their appr
   }
   expect(events).toEqual([]);
 });
+
+/**
+ * A builder that runs `before` once, right before the statement it builds is
+ * executed: a write another request commits between this action's lock and
+ * its update, which the update would otherwise see.
+ */
+const runningFirst = (before: () => Promise<void>, builder: object): object =>
+  new Proxy(builder, {
+    get(target, property) {
+      const value: unknown = Reflect.get(target, property, target);
+      if (property === "then" && typeof value === "function") {
+        return async (
+          onFulfilled?: (result: unknown) => unknown,
+          onRejected?: (error: unknown) => unknown,
+        ) => {
+          await before();
+          return await Reflect.apply(value, target, [onFulfilled, onRejected]);
+        };
+      }
+      return typeof value === "function"
+        ? (...args: unknown[]) => {
+            const next: unknown = Reflect.apply(value, target, args);
+            return typeof next === "object" && next !== null
+              ? runningFirst(before, next)
+              : next;
+          }
+        : value;
+    },
+  });
+
+test("approval updates only the entries it locked and checked, never one moved into the matter since", async () => {
+  const lockedId = await createEntry();
+  // The caller's own draft on another matter, with no narrative: approving it
+  // would skip the narrative check.
+  const movedId = createSafeId<"timeEntry">();
+  await db.insert(timeEntries).values({
+    id: movedId,
+    organizationId: ids.orgA,
+    userId: ids.userAdmin,
+    workspaceId: ids.wsA1,
+    dateWorked: "2026-09-01",
+    timezoneId: "UTC",
+    durationMinutes: 30,
+    billedMinutes: 30,
+    narrative: "",
+    rateAtEntry: cents(0),
+    currency: "USD",
+    billable: false,
+  });
+  createdEntryIds.push(movedId);
+  const base = createSafeDb(db, [ids.wsA1, ids.wsA2], ids.orgA, ids.userAdmin);
+  let moved = false;
+  const safeDb: typeof base = async (fn, retry) =>
+    await base(async (tx) => {
+      const moveIn = async () => {
+        if (moved) {
+          return;
+        }
+        moved = true;
+        await tx
+          .update(timeEntries)
+          .set({ workspaceId: ids.wsA2 })
+          .where(eq(timeEntries.id, movedId));
+      };
+      const watched = new Proxy(tx, {
+        get(target, property) {
+          const value: unknown = Reflect.get(target, property, target);
+          if (property === "update" && typeof value === "function") {
+            return (table: unknown) =>
+              table === timeEntries
+                ? runningFirst(moveIn, Reflect.apply(value, target, [table]))
+                : Reflect.apply(value, target, [table]);
+          }
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+      return await fn(watched);
+    }, retry);
+  const events: AuditEvent[] = [];
+  const result = await batchUpdate.handler(
+    asTestRaw<BatchContext>({
+      request: new Request("https://example.test/time-entries/batch", {
+        method: "PATCH",
+      }),
+      route: "/v1/time-entries/:workspaceId/batch" satisfies ApiRoutePath,
+      body: { ids: [lockedId, movedId], action: "approve" },
+      memberRole: sessionMemberRole("owner"),
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userAdmin },
+      workspaceId: ids.wsA2,
+      safeDb,
+      scopedDb: createScopedDb(db, [ids.wsA2], ids.orgA, ids.userAdmin),
+      recordAuditEvent: (async (_tx, event) => {
+        events.push(...(Array.isArray(event) ? event : [event]));
+      }) satisfies BatchContext["recordAuditEvent"],
+    }),
+  );
+  expect(moved).toBe(true);
+  expect(result).toEqual({ updated: 1 });
+  expect(await readEntry(lockedId)).toMatchObject({
+    status: BILLING_STATUS.APPROVED,
+  });
+  expect(await readEntry(movedId)).toMatchObject({
+    status: BILLING_STATUS.DRAFT,
+    workspaceId: ids.wsA2,
+  });
+  expect(events.map(({ resourceId }) => resourceId)).toEqual([lockedId]);
+});

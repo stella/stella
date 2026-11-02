@@ -141,6 +141,7 @@ const getFileTabEditorState = ({
   isNativeDocxDisplay,
   isOfficeDisplay,
   isPdfDisplay,
+  isTextDisplay,
   readsDocumentInInspector,
   tab,
 }: {
@@ -154,6 +155,7 @@ const getFileTabEditorState = ({
   isNativeDocxDisplay: boolean;
   isOfficeDisplay: boolean;
   isPdfDisplay: boolean;
+  isTextDisplay: boolean;
   readsDocumentInInspector: boolean;
   tab: FileTabPanelProps["tab"];
 }) => {
@@ -203,6 +205,7 @@ const getFileTabEditorState = ({
         isCurrentVersion: isCurrentFileField,
         workspaceId: tab.workspaceId,
       }),
+      printsTextPreview: isTextDisplay,
       tab,
     }),
   };
@@ -382,6 +385,7 @@ export const FileTabPanel = ({
     isNativeDocxDisplay,
     isOfficeDisplay,
     isPdfDisplay,
+    isTextDisplay: isMarkdownDisplay || isPlainTextDisplay,
     readsDocumentInInspector,
     tab,
   });

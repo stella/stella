@@ -56,8 +56,13 @@ let fakeS3: FakeS3;
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client, relations: { ...relations, ...authRelationsPart } });
+  // The pipeline runs as the deployment's ingestion role, so a write to a
+  // column that role holds no grant for fails here as it does in a deployment.
   scopedDb = async (callback) =>
-    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+      return await callback(asTestRaw(tx));
+    });
   fakeS3 = startFakeS3();
 }, 120_000);
 

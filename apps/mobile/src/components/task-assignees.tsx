@@ -129,7 +129,11 @@ export const TaskAssignees = ({
   );
 };
 
-const MemberList = ({
+/**
+ * A matter's members, each with a check when `assigned` holds them; a tap
+ * hands the member and the wanted state to `onToggle`.
+ */
+export const MemberList = ({
   assigned,
   load,
   onToggle,

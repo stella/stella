@@ -133,16 +133,11 @@ describe("the margin's citation filter", () => {
     expect(margin.getByRole("group").textContent).toContain("¶9");
   });
 
-  test("a paragraph citing nothing says so beside the way back", () => {
+  test("clicking a paragraph citing nothing leaves the margin listing every card", () => {
     const { listed, margin, view } = renderReader();
     fireEvent.click(view.getByText(TENTH));
-    expect(listed()).toEqual([]);
-    const bar = margin.getByRole("group");
-    expect(bar.textContent).toContain("No provisions cited in ¶10");
-    fireEvent.click(
-      within(bar).getByRole("button", { name: messages.common.showAll }),
-    );
     expect(listed()).toEqual(["§ 72", "§ 257", "§ 87"]);
+    expect(margin.queryByRole("group")).toBeNull();
   });
 
   test("a selection narrows to what it cites and, once cleared, gives the paragraph back", () => {

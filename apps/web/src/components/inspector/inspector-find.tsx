@@ -12,6 +12,7 @@ import { SEARCH_HIT_MARK, textMarkHighlightRule } from "@stll/ui/text-mark";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFindSurface } from "@/lib/find-owner";
+import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 
 import {
   buildReaderFindIndex,
@@ -690,21 +691,16 @@ const scrollRootOf = (element: HTMLElement): Element | null => {
 };
 
 /**
- * Opens every disclosure the range sits in. A match inside a closed
- * `<details>` (the decision reader folds its reporter apparatus) is counted
- * but has no box to highlight or scroll to until the fold is open.
+ * Opens every disclosure the range sits in. A match inside a closed fold
+ * (the decision reader folds its reporter apparatus) is counted but has no
+ * box to highlight or scroll to until the fold is open.
  */
 const revealRange = (range: Range): void => {
   const container = range.commonAncestorContainer;
-  let element =
+  const element =
     container instanceof Element ? container : container.parentElement;
-  while (element) {
-    const details = element.closest("details");
-    if (!details) {
-      return;
-    }
-    details.open = true;
-    element = details.parentElement;
+  if (element) {
+    revealEnclosingDisclosures(element);
   }
 };
 

@@ -348,6 +348,10 @@
     "reason": "not a row projection: matter rows supply only id, name and reference as the label of each day's suggestion group; the suggestions are derived activity clusters, never stored rows"
   },
   {
+    "file": "apps/api/src/handlers/time-entries/report/get.ts",
+    "reason": "not a row projection: it returns per-bucket sums and counts keyed by the grouped member, matter or client id and display name; no time entry row or column set reaches the client"
+  },
+  {
     "file": "apps/api/src/handlers/time-entries/summary/get.ts",
     "reason": "unguarded as of 2026-09-02; add the projection guard when next touched"
   },

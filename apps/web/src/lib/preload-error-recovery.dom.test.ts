@@ -125,6 +125,26 @@ describe("failed chunk recovery", () => {
     expect(await classifyFailedChunkLoad()).toEqual({ type: "not-skew" });
   });
 
+  test("an oversized manifest is cancelled without waiting for the body to close", async () => {
+    let cancelled = false;
+    spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array(1025));
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }),
+      ),
+    );
+
+    expect(await classifyFailedChunkLoad()).toEqual({ type: "not-skew" });
+    await Promise.resolve();
+    expect(cancelled).toBe(true);
+  });
+
   test("the Vite listener leaves unrelated import failures for the route boundary", () => {
     installPreloadErrorRecovery();
     const event = Object.assign(

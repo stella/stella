@@ -13,10 +13,12 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, Element, isTag, isText, Text } from "domhandler";
 
+import { labelledHeading } from "@stll/legal-ast/case-law-heading";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_NAME_RE as SIGNATURE_RE,
   CZ_JUDGE_TITLE_RE as PREDSEDA_RE,
+  isCzechOpeningFormula,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: The output is typed as a decision document AST; the emitted AST is unchanged.
@@ -29,8 +31,10 @@ import type {
   TableCell,
 } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/inline";
+import { rewriteInlineWhitespace } from "@stll/legal-ast/inline-line";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
+import { withAttestedLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   isPageNumberLine,
   isRunningHeaderLine,
@@ -71,7 +75,9 @@ export const parseNsDecisionHtml = (
   const { canonical, source, relatedProceedingsTable } = extractNsMetadata($);
   const rawChunks = extractRawChunks($);
   const blocks = courtParagraphNumbers(
-    classifyBlocks(rawChunks, relatedProceedingsTable),
+    withAttestedLetterSpacing(
+      classifyBlocks(rawChunks, relatedProceedingsTable),
+    ),
     {
       parser: "cz-ns",
       caseNumber: canonical.caseNumber ?? input.documentId,
@@ -547,6 +553,16 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
     if (tag === "p" || tag === "div") {
       flushBuffer();
       const centered = parentCentered || isCentered($node);
+      // A centred caption or heading block holds one element per line
+      // (`<div><p>Odůvodnění:<p>I. Dosavadní průběh</div>`): each is its own
+      // chunk, never one run with the line break between them.
+      if (centered && $node.children("p, div").length > 0) {
+        $node.contents().each((_, child) => {
+          processNode(child, true);
+        });
+        flushBuffer();
+        return;
+      }
       const inlines = walkInlines($, $node);
       flushInlines(inlines, centered);
       return;
@@ -645,8 +661,13 @@ const SECTION_HEADING_RE =
 
 const RULING_ITEM_RE = /^(?:[IVXLCDM]+\.)\s+/u;
 
+// The state and the formula a decision opens with are the court's words, not
+// its title, however they are set: both callers share the exclusion.
 const isDecisionTitle = (plainText: string): boolean => {
   const trimmed = plainText.trim();
+  if (isCzechOpeningFormula(trimmed)) {
+    return false;
+  }
   if (DECISION_TITLE_RE.test(trimmed)) {
     return true;
   }
@@ -684,6 +705,11 @@ const shouldMerge = (prev: Block, next: Block): prev is ParagraphBlock => {
     (text.length < 80 && PREDSEDA_RE.test(text));
 
   if (isClosingOrSig(prevText) || isClosingOrSig(nextText)) {
+    return false;
+  }
+
+  // The state and the formula are lines of their own, however short.
+  if (isCzechOpeningFormula(prevText) || isCzechOpeningFormula(nextText)) {
     return false;
   }
 
@@ -739,17 +765,24 @@ const embeddedCaption = (text: string): EmbeddedCaption | null => {
   if (match === null || caseNumber === undefined) {
     return null;
   }
+  const preamble = text.slice(0, match.index).trim();
   const title = text.slice(match.index + caseNumber.length).trim();
+  // The case number ends the court's line; the title follows on lines of
+  // its own, beside the state and the formula.
+  if (title === "") {
+    return preamble !== "" && CAPTION_TITLE_RE.test(preamble)
+      ? { preamble, caseNumber, title }
+      : null;
+  }
   const letters = title.match(/\p{L}/gu)?.length ?? 0;
   if (!CAPTION_TITLE_RE.test(title) || letters < MIN_CAPTION_TITLE_LETTERS) {
     return null;
   }
-  return {
-    preamble: text.slice(0, match.index).trim(),
-    caseNumber,
-    title,
-  };
+  return { preamble, caseNumber, title };
 };
+
+/** How far below the case number a caption's own title line may stand. */
+const CAPTION_TITLE_LOOKAHEAD = 3;
 
 /**
  * The paragraph holding the caption: the first one, or the one after it
@@ -768,6 +801,106 @@ const captionParagraphIndex = (blocks: readonly Block[]): number => {
     embeddedCaption(next.plainText) !== null
     ? first + 1
     : first;
+};
+
+/**
+ * A caption whose case number ends its line takes as its title the
+ * decision-type line among the caption's own lines below it.
+ */
+const markCaptionTitleLine = (merged: Block[], caseNumberIdx: number): void => {
+  const titleIdx = merged.findIndex(
+    (block, index) =>
+      index > caseNumberIdx &&
+      index <= caseNumberIdx + CAPTION_TITLE_LOOKAHEAD &&
+      block.type === "paragraph" &&
+      isDecisionTitle(block.plainText),
+  );
+  const titleBlock = merged.at(titleIdx);
+  if (titleIdx === -1 || titleBlock?.type !== "paragraph") {
+    return;
+  }
+  merged.splice(titleIdx, 1, {
+    id: titleBlock.id,
+    anchorId: `p-dt`,
+    type: "heading",
+    level: 1,
+    role: "decision-title",
+    inlines: titleBlock.inlines,
+    plainText: titleBlock.plainText,
+  });
+};
+
+/**
+ * Split the first paragraph if it contains an embedded caption (older HTML:
+ * "NEJVYŠŠÍ SOUD ČESKÉ REPUBLIKY 29 Odo 975/2006 U S N E S E N Í", "21 Cdo
+ * 4994/2007 ČESKÁ REPUBLIKA ROZSUDEK JMÉNEM REPUBLIKY"): the court preamble
+ * before the case number, the case number, and the capitals after it as the
+ * title. Every character stays in a block.
+ */
+const splitEmbeddedCaption = (
+  merged: Block[],
+  makeBlockId: () => string,
+): void => {
+  const firstParaIdx = captionParagraphIndex(merged);
+  if (firstParaIdx !== -1) {
+    const firstPara = merged.at(firstParaIdx);
+    if (!firstPara) {
+      return;
+    }
+    if (firstPara.type === "paragraph") {
+      const caption = embeddedCaption(firstPara.plainText);
+
+      if (caption !== null) {
+        // The court's name keeps the block it was stored in.
+        const preamble: Block[] =
+          caption.preamble === ""
+            ? []
+            : [
+                {
+                  id: firstPara.id,
+                  anchorId: firstPara.anchorId,
+                  type: "paragraph",
+                  inlines: [{ type: "text", text: caption.preamble }],
+                  plainText: caption.preamble,
+                },
+              ];
+        const caseNumberBlock: Block = {
+          id: makeBlockId(),
+          anchorId: `p-cn`,
+          type: "paragraph",
+          role: "case-number",
+          inlines: [{ type: "text", text: caption.caseNumber }],
+          plainText: caption.caseNumber,
+        };
+        if (caption.title === "") {
+          markCaptionTitleLine(merged, firstParaIdx);
+        }
+        const replacements: Block[] =
+          caption.title === ""
+            ? [...preamble, caseNumberBlock]
+            : [
+                ...preamble,
+                caseNumberBlock,
+                {
+                  id: makeBlockId(),
+                  anchorId: `p-dt`,
+                  type: "heading",
+                  level: 1,
+                  role: "decision-title",
+                  inlines: [{ type: "text", text: caption.title }],
+                  plainText: caption.title,
+                },
+              ];
+        merged.splice(firstParaIdx, 1, ...replacements);
+      } else if (
+        firstPara.plainText.length < 30 &&
+        /^\d+\s+\w+\s+\d+\/\d{4}/u.test(firstPara.plainText)
+      ) {
+        firstPara.role = "case-number";
+        markCaptionTitleLine(merged, firstParaIdx);
+      }
+    }
+  }
 };
 
 const mergeBlocks = (
@@ -816,64 +949,7 @@ const mergeBlocks = (
     break;
   }
 
-  // Split the first paragraph if it contains an embedded
-  // caption (older HTML: "NEJVYŠŠÍ SOUD ČESKÉ REPUBLIKY 29 Odo
-  // 975/2006 U S N E S E N Í", "21 Cdo 4994/2007 ČESKÁ
-  // REPUBLIKA ROZSUDEK JMÉNEM REPUBLIKY"): the court preamble
-  // before the case number, the case number, and the capitals
-  // after it as the title. Every character stays in a block.
-  const firstParaIdx = captionParagraphIndex(merged);
-  if (firstParaIdx !== -1) {
-    const firstPara = merged.at(firstParaIdx);
-    if (!firstPara) {
-      return merged;
-    }
-    if (firstPara.type === "paragraph") {
-      const caption = embeddedCaption(firstPara.plainText);
-
-      if (caption !== null) {
-        // The court's name keeps the block it was stored in.
-        const preamble: Block[] =
-          caption.preamble === ""
-            ? []
-            : [
-                {
-                  id: firstPara.id,
-                  anchorId: firstPara.anchorId,
-                  type: "paragraph",
-                  inlines: [{ type: "text", text: caption.preamble }],
-                  plainText: caption.preamble,
-                },
-              ];
-        const replacements: Block[] = [
-          ...preamble,
-          {
-            id: makeBlockId(),
-            anchorId: `p-cn`,
-            type: "paragraph",
-            role: "case-number",
-            inlines: [{ type: "text", text: caption.caseNumber }],
-            plainText: caption.caseNumber,
-          },
-          {
-            id: makeBlockId(),
-            anchorId: `p-dt`,
-            type: "heading",
-            level: 1,
-            role: "decision-title",
-            inlines: [{ type: "text", text: caption.title }],
-            plainText: caption.title,
-          },
-        ];
-        merged.splice(firstParaIdx, 1, ...replacements);
-      } else if (
-        firstPara.plainText.length < 30 &&
-        /^\d+\s+\w+\s+\d+\/\d{4}/u.test(firstPara.plainText)
-      ) {
-        firstPara.role = "case-number";
-      }
-    }
-  }
+  splitEmbeddedCaption(merged, makeBlockId);
 
   // Tag paragraphs in the holding zone (výrok): blocks
   // between the intro ending with "takto:" and the first
@@ -912,6 +988,16 @@ const mergeBlocks = (
 };
 
 // ── Classification ────────────────────────────────────────
+
+const withoutLineBreaks = (inlines: readonly Inline[]): Inline[] =>
+  inlines.map((node): Inline => {
+    if (node.type === "line-break") {
+      return { type: "text", text: " " };
+    }
+    return hasInlineChildren(node)
+      ? { ...node, children: withoutLineBreaks(node.children) }
+      : node;
+  });
 
 const makeAnchorId = (index: number): string => `p-${index}`;
 
@@ -999,6 +1085,20 @@ const classifyBlocks = (
       continue;
     }
 
+    // The state and the formula open the decision beside its title; they
+    // are the court's words, not a title of their own.
+    if (isCzechOpeningFormula(plainText)) {
+      blocks.push({
+        id,
+        anchorId,
+        type: "paragraph",
+        role: "intro",
+        inlines,
+        plainText,
+      });
+      continue;
+    }
+
     // Section heading: Odůvodnění
     if (isSectionHeading(plainText)) {
       blocks.push({
@@ -1009,6 +1109,33 @@ const classifyBlocks = (
         role: "section-heading",
         inlines,
         plainText,
+      });
+      continue;
+    }
+
+    // A numeral and its title, set on two lines of one centred block,
+    // are one heading.
+    // Spacing inside a line is the editor's; the break between the numeral
+    // and the title is the pattern's.
+    const labelled = centered
+      ? labelledHeading(plainText.replace(/[^\S\n]+/gu, " "))
+      : null;
+    if (labelled !== null) {
+      // However the court spaced the break, the heading keeps its inlines.
+      const joined = rewriteInlineWhitespace(
+        withoutLineBreaks(inlines),
+        (text) => text.replace(/\s+/gu, " ").trim(),
+      );
+      blocks.push({
+        id,
+        anchorId,
+        type: "heading",
+        level: 3,
+        inlines:
+          inlinesToPlainText(joined) === labelled.text
+            ? joined
+            : [{ type: "text", text: labelled.text }],
+        plainText: labelled.text,
       });
       continue;
     }
