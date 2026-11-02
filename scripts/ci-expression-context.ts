@@ -255,6 +255,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   outcome: { required_summary: "", required_violations: "" },
   "patch-id": {
     patch_id: "",
+    entry_base_sha: "",
     workflow_version: "",
     tested_tree: "",
     workflow_tree: "",

@@ -1455,10 +1455,12 @@
           "click": "Klicken",
           "fill": "Text eingeben",
           "open": "Website öffnen",
+          "openNewTab": "Website in neuem Tab öffnen",
           "pressKey": "Taste drücken",
           "select": "Option auswählen",
           "snapshot": "Seite lesen",
-          "snapshotContinue": "Seite weiterlesen"
+          "snapshotContinue": "Seite weiterlesen",
+          "switchTab": "Zum Tab wechseln"
         },
         "askAgain": "Wieder nachfragen",
         "autoApproveReads": "Seitenlesen automatisch genehmigen",
@@ -1496,7 +1498,11 @@
       "connected": "Erweiterung verbunden",
       "description": "stella kann auf Ihren Wunsch Websites in einem separaten Tab öffnen und lesen.",
       "install": "Erweiterung installieren",
-      "installDescription": "Mit der stella-Erweiterung kann stella auf Ihren Wunsch Websites in einem separaten Tab öffnen und lesen. Sie erhalten die Erweiterung im Chrome Web Store."
+      "installDescription": "Mit der stella-Erweiterung kann stella auf Ihren Wunsch Websites in einem separaten Tab öffnen und lesen. Sie erhalten die Erweiterung im Chrome Web Store.",
+      "reload": "Tab neu laden",
+      "reloadDescription": "Ihre stella-Erweiterung ist neuer als dieser Tab. Laden Sie den Tab neu, um sie weiter zu nutzen.",
+      "updating": "Erweiterungs-Update ausstehend",
+      "updatingDescription": "Ihre stella-Erweiterung ist eine ältere Version. Chrome aktualisiert sie automatisch, meist innerhalb weniger Stunden; danach kann stella wieder Websites für Sie öffnen und lesen."
     },
     "cancelQueuedMessage": "Eingereihte Nachricht abbrechen",
     "caseLawGreeting": "Stellen Sie Fragen zu dieser Entscheidung; der vollständige Text ist hier verfügbar.",

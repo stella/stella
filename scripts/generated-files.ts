@@ -80,6 +80,7 @@ const MODEL_CATALOG_INPUTS = [
   "packages/scripts/src/model-catalog-capabilities.ts",
   "packages/scripts/src/model-catalog-rates-gen.ts",
   "packages/scripts/src/model-catalog-snapshot.ts",
+  "packages/scripts/src/offline-check-startup.ts",
 ] as const;
 
 const TRANSITIVE_GENERATOR_INPUTS = {
@@ -1278,6 +1279,19 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "online-migration-entries",
+    outputKind: "committed",
+    outputs: ["apps/api/src/db/online-migration-entries.gen.ts"],
+    inputs: [
+      "scripts/generate-online-migration-entries.ts",
+      "apps/api/src/db/online-migration-entries/*.ts",
+    ],
+    write: ["bun", "scripts/generate-online-migration-entries.ts"],
+    check: ["bun", "scripts/generate-online-migration-entries.ts", "--check"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "online-unique-index-names",
     outputKind: "committed",
     outputs: ["apps/api/src/db/online-unique-indexes.ts"],
@@ -1954,6 +1968,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/fetch/src/index.ts",
       "packages/fetch/src/race-abort.ts",
       "packages/scripts/src/model-catalog-snapshot.ts",
+      "packages/scripts/src/offline-check-startup.ts",
       "packages/skills/src/streaming.ts",
     ],
     inputs: [
@@ -2208,6 +2223,8 @@ const GENERATOR_DECLARATIONS = [
       "packages/stable-stringify/src/index.ts",
       "packages/stable-stringify/src/stable-stringify.ts",
       "scripts/offline-network-preload.ts",
+      "scripts/offline-check-startup.ts",
+      "packages/scripts/src/offline-check-startup.ts",
     ],
     inputs: [
       "packages/catalogue/entries/**",

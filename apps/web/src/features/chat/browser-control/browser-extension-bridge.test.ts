@@ -294,6 +294,48 @@ describe("live browser extension state", () => {
     jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
     expect(getBrowserExtensionState().status).toBe("not-paired");
   });
+
+  test.each([
+    {
+      side: "an older extension waits for its update",
+      version: BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      status: "extension-outdated",
+    },
+    {
+      side: "a newer extension asks for a reload of this tab",
+      version: BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+      status: "stella-outdated",
+    },
+  ])("$side, never reads as not installed", ({ status, version }) => {
+    jest.useFakeTimers();
+    unmount = mountBrowserExtensionBridge();
+    // Another version's announcement: same source and version fields, a
+    // shape this tab's protocol does not accept.
+    deliver({
+      allSitesGranted: true,
+      protocolVersion: version,
+      requestId: "extension-ready",
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+      type: "pong",
+    });
+    expect(getBrowserExtensionState().status).toBe(status);
+    jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
+    expect(getBrowserExtensionState().status).toBe(status);
+    // Once Chrome updated the extension, it reports on this tab's protocol.
+    report("controller-1");
+    expect(getBrowserExtensionState().status).toBe("connected");
+  });
+
+  test("a message from a stella page is not taken for an extension", () => {
+    jest.useFakeTimers();
+    unmount = mountBrowserExtensionBridge();
+    deliver({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.web,
+    });
+    jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
+    expect(getBrowserExtensionState().status).toBe("not-installed");
+  });
   test("covers discovery, permission, pairing, disconnect, and late installation", () => {
     jest.useFakeTimers();
     unmount = mountBrowserExtensionBridge();
@@ -363,6 +405,7 @@ const snapshotResult = (tabId: number, revision: string) =>
       elements: [],
       revision,
       tabId,
+      tabs: [{ active: true, tabId, url: "https://example.com/" }],
       text: "",
       textOffset: 0,
       textTotalChars: 0,
