@@ -5,7 +5,7 @@ import { compareCodeUnit } from "@stll/collation";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
 
-import { waiverKey } from "./dated-waiver-fix-task";
+import { waiverKey } from "./dated-waiver-core";
 import {
   applyHealing,
   armRemoval,

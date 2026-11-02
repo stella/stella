@@ -346,7 +346,7 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   // Offline, over the tracked tree, always scoped to the run's change: an
   // unset list fails the check instead of widening it to every waiver.
   expect(check?.run).toBe(
-    'bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files" --changed-files "$DATED_WAIVER_CHANGED_FILES"',
+    'bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files" --changed-files "$DATED_WAIVER_CHANGED_FILES" --base-files "$RUNNER_TEMP/dated-waiver-base-files"',
   );
   for (const step of guardSteps) {
     expect(step.env?.["GH_TOKEN"]).toBeUndefined();
@@ -407,23 +407,44 @@ test("CI expiry runs list the files their change touched", () => {
     const listed = (event: string, env: Record<string, string> = {}) => {
       const githubEnv = path.join(runnerTemp, `${event}.env`);
       writeFileSync(githubEnv, "");
-      const run = Bun.spawnSync(["bash", "-euo", "pipefail", "-c", list], {
-        cwd: directory,
-        env: {
-          ...process.env,
-          GITHUB_ENV: githubEnv,
-          GITHUB_EVENT_NAME: event,
-          RUNNER_TEMP: runnerTemp,
-          TARGET_REF: "",
-          PUSH_BEFORE: "",
-          ...env,
+      const run = Bun.spawnSync(
+        [
+          "bash",
+          "-euo",
+          "pipefail",
+          "-c",
+          list.replace(
+            /^.*bun scripts\/dated-waiver-base\.ts.*$/mu,
+            'printf "%s" "$base" > "$RUNNER_TEMP/base-ref"',
+          ),
+        ],
+        {
+          cwd: directory,
+          env: {
+            ...process.env,
+            GITHUB_ENV: githubEnv,
+            GITHUB_EVENT_NAME: event,
+            RUNNER_TEMP: runnerTemp,
+            TARGET_REF: "",
+            PUSH_BEFORE: "",
+            ...env,
+          },
         },
-      });
+      );
       expect(run.stderr.toString(), event).toBe("");
       expect(run.exitCode, event).toBe(0);
       const changed = path.join(runnerTemp, "dated-waiver-changed-files");
       expect(readFileSync(githubEnv, "utf-8"), event).toBe(
         `DATED_WAIVER_CHANGED_FILES=${changed}\n`,
+      );
+      const expectedBase =
+        event === "pull_request" ||
+        event === "merge_group" ||
+        (event === "push" && env["PUSH_BEFORE"] === before)
+          ? before
+          : "";
+      expect(readFileSync(path.join(runnerTemp, "base-ref"), "utf-8")).toBe(
+        expectedBase,
       );
       return readFileSync(changed, "utf-8");
     };
@@ -431,10 +452,9 @@ test("CI expiry runs list the files their change touched", () => {
     expect(listed("push", { PUSH_BEFORE: before })).toBe(
       "unrelated.ts\0waivers.ts\0",
     );
-    // A pushed-from commit outside the checkout lists every tracked file.
-    expect(listed("push", { PUSH_BEFORE: "0".repeat(40) })).toBe(
-      "readme.md\0unrelated.ts\0waivers.ts\0",
-    );
+    // A pushed-from commit outside the checkout lists nothing: the merge group
+    // already checked the change, and an expiry alone never fails main.
+    expect(listed("push", { PUSH_BEFORE: "0".repeat(40) })).toBe("");
     expect(listed("pull_request", { TARGET_REF: "main" })).toBe(
       "unrelated.ts\0waivers.ts\0",
     );

@@ -4,15 +4,13 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 import { sha256Hex } from "@stll/sha256/bun";
 
+import { waiverKey } from "./dated-waiver-core";
 import type { githubRequest } from "./dated-waiver-publish";
 import type { DatedWaiver, ProbeKind } from "./dated-waivers";
 
 export const DATED_WAIVER_AUTOFIX_LABEL = "dated-waiver-failure";
 export const EXPIRY_ALERT_LABEL = "dated-waiver-expiry-alert";
 export const FIX_TASK_IDENTITY_LABEL = "dated-waiver:task";
-
-export const waiverKey = (entry: DatedWaiver): string =>
-  sha256Hex(JSON.stringify([entry.kind, entry.source, entry.id])).slice(0, 24);
 
 export type FixEvidence = {
   attempts: number;

@@ -1896,7 +1896,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"
 
-      # An expired waiver fails a run only when its change touches the file
+      # An expired waiver fails a run only when its change touches the entry
       # declaring it; the scheduled healing run checks every waiver on the
       # default branch and alerts its owner. A pull request or merge group
       # changes everything since its target, and a push everything since the
@@ -1911,6 +1911,7 @@ jobs:
           PUSH_BEFORE: ${{ github.event.before }}
         run: |
           changed="$RUNNER_TEMP/dated-waiver-changed-files"
+          base=""
           case "$GITHUB_EVENT_NAME" in
             pull_request | merge_group)
               target="origin/${TARGET_REF#refs/heads/}"
@@ -1919,19 +1920,23 @@ jobs:
               ;;
             push)
               if git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
-                git diff --name-only -z "$PUSH_BEFORE" HEAD > "$changed"
+                base="$PUSH_BEFORE"
+                git diff --name-only -z "$base" HEAD > "$changed"
               else
-                git ls-files -z > "$changed"
+                # The merge group already checked this change; with no
+                # reachable base the push checks nothing, as a schedule does.
+                : > "$changed"
               fi
               ;;
             *) : > "$changed" ;;
           esac
           echo "DATED_WAIVER_CHANGED_FILES=$changed" >> "$GITHUB_ENV"
+          bun scripts/dated-waiver-base.ts "$base" "$RUNNER_TEMP/dated-waiver-tracked-files" "$changed" "$RUNNER_TEMP/dated-waiver-base-files"
 
       - name: "dated-waiver-expiry: Check dated waiver expiry on the current tree"
         if: ${{ !cancelled() }}
         continue-on-error: false
-        run: bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files" --changed-files "$DATED_WAIVER_CHANGED_FILES"
+        run: bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files" --changed-files "$DATED_WAIVER_CHANGED_FILES" --base-files "$RUNNER_TEMP/dated-waiver-base-files"
 
       - *merge_group_cancel
 
