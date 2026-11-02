@@ -18,7 +18,6 @@ export const READER_MESSAGE_KEYS = {
   "statutes.provisionTextUnavailable": "statutes.provisionTextUnavailable",
   "statutes.showCitedPartOnly": "statutes.showCitedPartOnly",
   "statutes.showFullProvision": "statutes.showFullProvision",
-  "aiDisclosure.billingDrafts": "aiDisclosure.billingDrafts",
   "aiDisclosure.caseLaw": "aiDisclosure.caseLaw",
 } as const satisfies Record<ReaderMessageKey, ReaderMessageKey>;
 
