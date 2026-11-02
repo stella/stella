@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray, or, sql } from "drizzle-orm";
+import { eq, or, sql } from "drizzle-orm";
 
 import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -15,6 +15,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import {
   AggregateLockBusy,
@@ -115,9 +116,10 @@ const withLockFixture = async (
       });
     } finally {
       await holder.execute(sql`DROP SCHEMA ${sql.identifier(schema)} CASCADE`);
-      await holder
-        .delete(organization)
-        .where(inArray(organization.id, [organizationId, otherOrganizationId]));
+      await deleteOrganizationsForTest(holder, [
+        organizationId,
+        otherOrganizationId,
+      ]);
     }
   });
 };

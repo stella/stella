@@ -55,6 +55,7 @@ import {
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteListVerificationBudgets,
+  installPgliteOrganizationDeleteOwnerGuard,
   installPgliteOrganizationMemberCapacity,
   installPglitePdfSigningTokenScopes,
   installPglitePlaybookDocumentTypeKey,
@@ -893,6 +894,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteReaderAnnotationMatterRows(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
+  await installPgliteOrganizationDeleteOwnerGuard(db);
 
   await applyStellaTablePrivileges(client);
   for (const statement of ROLE_GRANT_STATEMENTS) {

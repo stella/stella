@@ -50,6 +50,7 @@ import {
   requestBudgetExpiry,
   runWithinRequestLatencyBudget,
 } from "@/api/lib/load/request-latency-budget";
+import { failureSink } from "@/api/lib/observability/failure";
 import {
   flushFailureObservations,
   resetFailureObservationsForTesting,
@@ -80,6 +81,11 @@ import {
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+const TIMEOUT_FIXTURE_SINK = failureSink({
+  event: "mcp.search_index_unavailable_test.timeout",
+  expected: [],
+});
 
 const testFetchState = createTestFetch();
 
@@ -553,7 +559,12 @@ describe("a search the tool's latency budget ends is a timeout", () => {
     test(`${tool.toolName} (${tool.mode}) maps a returned timeout envelope to a retryable timeout`, async () => {
       const context = createContext();
       const timedOut = async () =>
-        await Promise.resolve(publicReadTimeoutResponse());
+        await Promise.resolve(
+          publicReadTimeoutResponse({
+            sink: TIMEOUT_FIXTURE_SINK,
+            cause: new Error("Fixture public read timeout"),
+          }),
+        );
       const result = await handleMcpToolCall({
         args: tool.args,
         context: {

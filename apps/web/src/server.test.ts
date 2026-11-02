@@ -155,3 +155,45 @@ test("a public response requires an explicit freshness policy", async () => {
   );
   expect(response.headers.get("Cache-Control")).toBe(DOCUMENT_POLICY);
 });
+
+test("an unknown document path stays a direct 404 response", async () => {
+  const { renderToString } = await import("react-dom/server");
+  const {
+    createMemoryHistory,
+    createRootRoute,
+    createRoute,
+    createRouter,
+    RouterProvider,
+  } = await import("@tanstack/react-router");
+  const { getSsrStatus } = await import("@tanstack/react-router/ssr/server");
+  const { IntlProvider } = await import("use-intl");
+  const { DefaultNotFoundComponent } =
+    await import("@/components/route-components");
+  const { default: messages } = await import("@/i18n/langs/en.json");
+  const root = createRootRoute();
+  const router = createRouter({
+    isServer: true,
+    history: createMemoryHistory({ initialEntries: ["/time/invoices"] }),
+    routeTree: root.addChildren([
+      createRoute({ getParentRoute: () => root, path: "/workspaces" }),
+    ]),
+    defaultNotFoundComponent: () =>
+      IntlProvider({
+        children: createElement(DefaultNotFoundComponent),
+        locale: "en",
+        messages,
+        timeZone: "UTC",
+      }),
+  });
+  await router.load();
+  const response = new Response(
+    renderToString(createElement(RouterProvider, { router })),
+    { status: getSsrStatus(router) },
+  );
+
+  expect(response.status).toBe(404);
+  expect(response.headers.get("Location")).toBeNull();
+  expect(await response.text()).toContain(
+    "We could not find what you requested.",
+  );
+});

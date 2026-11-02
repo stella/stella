@@ -658,6 +658,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/organizations/audit-export": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/organizations/slug": {
     type: "non-replay",
     reason: "current-state",

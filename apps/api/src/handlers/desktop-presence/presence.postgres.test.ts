@@ -17,6 +17,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -189,9 +190,7 @@ if (!databaseUrl || !runPostgres) {
         } finally {
           release.resolve(undefined);
           await Promise.allSettled(tasks);
-          await firstDb
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(firstDb, [organizationId]);
           await firstDb.delete(user).where(eq(user.id, userId));
         }
       });
@@ -346,9 +345,7 @@ if (!databaseUrl || !runPostgres) {
         } finally {
           release.resolve(undefined);
           await Promise.allSettled(tasks);
-          await reportingDb
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(reportingDb, [organizationId]);
           await reportingDb.delete(user).where(eq(user.id, userId));
           await reportingDb.delete(user).where(eq(user.id, actorUserId));
         }
