@@ -282,9 +282,9 @@ Published packages also commit `packages/<name>/api-report.json`. After changing
 an entrypoint, export, or signature, run `bun run update:package-api` and commit
 the updated reports. Check them with `bun run check:package-api` (against
 `origin/main`; pass another base ref as its argument).
-Removing or renaming an export, or narrowing a signature, requires a major
-changeset for that package: published packages have consumers outside this
-repository. CI compares the reports with the target branch and rejects stale
+Removing or renaming an export, or narrowing a signature, requires a
+breaking-release changeset for that package: major, or minor while the package
+is still at `0.x`. Published packages have consumers outside this repository. CI compares the reports with the target branch and rejects stale
 reports or breaking changes without that changeset.
 
 ## Pull Request Checklist

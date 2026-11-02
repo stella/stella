@@ -116,3 +116,112 @@ test("private constructors retain their construction restriction", () => {
   expect(normalized).toContain("private constructor()");
   expect(normalized).not.toContain("state");
 });
+
+test.each([
+  [
+    "export interface Client { value?: string; read(): string; }",
+    "export interface Client { read(): string; }",
+    "removed member value",
+  ],
+  [
+    "export type Client = { value?: string };",
+    "export type Client = {};",
+    "removed member value",
+  ],
+  [
+    "export interface Client { value: number; }",
+    "export interface Client { readonly value: number; }",
+    "member value became readonly",
+  ],
+  [
+    "export declare class Client { value: number; }",
+    "export declare class Client { get value(): number; }",
+    "member value became readonly",
+  ],
+])("assignable member narrowing is visible: %s", (old, next, message) => {
+  expect(
+    breakingApiChanges({
+      before: report(old),
+      after: report(next),
+      packageDir: process.cwd(),
+    }),
+  ).toContainEqual(
+    expect.objectContaining({
+      type: "signature",
+      entrypoint: ".",
+      message: expect.stringContaining(message),
+    }),
+  );
+});
+
+test("an optional member removed from an exported value's type is visible", () => {
+  const value = (declaration: string) =>
+    ({
+      ...report(""),
+      entrypoints: {
+        ".": {
+          type: "module",
+          file: "./src/index.d.ts",
+          exports: [{ name: "options", kind: "value", space: "value" }],
+        },
+      },
+      declarations: {
+        "./src/index.d.ts": normalizeCompatibilityDeclarations(declaration),
+      },
+    }) as const satisfies ApiReport;
+  expect(
+    breakingApiChanges({
+      before: value("export declare const options: { value?: string };"),
+      after: value("export declare const options: {};"),
+      packageDir: process.cwd(),
+    }),
+  ).toContainEqual(
+    expect.objectContaining({
+      message: expect.stringContaining("removed member value"),
+    }),
+  );
+});
+
+test("adding members and widening readonly to writable stay compatible", () => {
+  const before = report("export interface Client { readonly value: number; }");
+  const after = report(
+    "export interface Client { value: number; extra?: string; }",
+  );
+  expect(
+    breakingApiChanges({ before, after, packageDir: process.cwd() }),
+  ).toEqual([]);
+});
+
+test("two aliases of one namespace are compared against each new target", () => {
+  const aliases = (declaration: string) =>
+    ({
+      ...report(""),
+      entrypoints: {
+        ".": {
+          type: "module",
+          file: "./src/index.d.ts",
+          exports: [
+            { name: "One", kind: "namespace", space: "type+value" },
+            { name: "Two", kind: "namespace", space: "type+value" },
+          ],
+        },
+      },
+      declarations: {
+        "./src/index.d.ts": normalizeCompatibilityDeclarations(declaration),
+      },
+    }) as const satisfies ApiReport;
+  const before = aliases(
+    "declare namespace Model { type Input = string; const value = 1; }\nexport { Model as One, Model as Two };\n",
+  );
+  const after = aliases(
+    "declare namespace Model { type Input = string; const value = 1; }\ndeclare namespace Other { const value = 1; }\nexport { Model as One, Other as Two };\n",
+  );
+  expect(
+    breakingApiChanges({ before, after, packageDir: process.cwd() }),
+  ).toContainEqual(
+    expect.objectContaining({
+      type: "removal",
+      message: expect.stringContaining(".#Two.Input: removed export"),
+    }),
+  );
+});

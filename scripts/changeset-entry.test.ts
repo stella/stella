@@ -25,13 +25,24 @@ test.each([
   "Major",
   "majorly",
   "premajor",
-  '"major"',
-  "major # comment",
+  '"Major"',
+  "'major",
+  "# major",
   "",
   "false",
 ])("invalid bump %s cannot authorize a breaking release", (bump) => {
   const entry = `---\n"@stll/ui": ${bump}\n---\nRelease summary.`;
   expect(parseChangesetReleases(entry)).toEqual([]);
+});
+
+test.each([
+  ['"major"', "major"],
+  ["'minor'", "minor"],
+  ["major # breaking", "major"],
+  ['"patch" # comment', "patch"],
+])("YAML bump %s reads as %s like the Changesets reader", (bump, type) => {
+  const entry = `---\n"@stll/ui": ${bump}\n---\nRelease summary.`;
+  expect(parseChangesetReleases(entry)).toEqual([{ name: "@stll/ui", type }]);
 });
 
 test("empty changesets and summaries never authorize a release", () => {

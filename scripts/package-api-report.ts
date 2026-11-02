@@ -402,6 +402,65 @@ export const generateApiReport = (packageDir: string): ApiReport => {
   };
 };
 
+const hasModifierFlag = (
+  declaration: ts.Declaration,
+  flag: ts.ModifierFlags,
+): boolean =>
+  // oxlint-disable-next-line no-bitwise -- TypeScript exposes modifiers as a bitmask.
+  (ts.getCombinedModifierFlags(declaration) & flag) !== 0;
+
+const isNonPublicMember = (member: ts.Symbol): boolean =>
+  member.name.startsWith("#") ||
+  member.name.startsWith("__#") ||
+  (member.declarations ?? []).some(
+    (declaration) =>
+      hasModifierFlag(declaration, ts.ModifierFlags.Private) ||
+      hasModifierFlag(declaration, ts.ModifierFlags.Protected),
+  );
+
+const isReadonlyMember = (member: ts.Symbol): boolean => {
+  const declarations = member.declarations ?? [];
+  return (
+    declarations.some((declaration) =>
+      hasModifierFlag(declaration, ts.ModifierFlags.Readonly),
+    ) ||
+    (declarations.some(ts.isGetAccessorDeclaration) &&
+      !declarations.some(ts.isSetAccessorDeclaration))
+  );
+};
+
+/**
+ * Assignability lets an optional member disappear and a mutable one become
+ * readonly, yet consumers that read or assign that member break. Every public
+ * member the old type exposes must stay, and stay writable if it was.
+ */
+const narrowedMembers = (
+  checker: ts.TypeChecker,
+  oldType: ts.Type,
+  nextType: ts.Type,
+  label: string,
+): string[] => {
+  // Keyed on the escaped name: symbol-keyed members such as
+  // `[Symbol.iterator]` have no string name a lookup by name would accept.
+  const nextMembers = new Map(
+    checker
+      .getPropertiesOfType(nextType)
+      .map((member) => [member.escapedName, member]),
+  );
+  return checker.getPropertiesOfType(oldType).flatMap((member) => {
+    if (isNonPublicMember(member)) {
+      return [];
+    }
+    const nextMember = nextMembers.get(member.escapedName);
+    if (nextMember === undefined) {
+      return [`${label}: removed member ${member.name}`];
+    }
+    return isReadonlyMember(nextMember) && !isReadonlyMember(member)
+      ? [`${label}: member ${member.name} became readonly`]
+      : [];
+  });
+};
+
 type SignatureComparisonOptions = {
   checker: ts.TypeChecker;
   old: ts.Symbol;
@@ -426,6 +485,9 @@ const incompatibleSymbolSignatures = ({
     const nextType = checker.getTypeOfSymbolAtLocation(next, location);
     if (!checker.isTypeAssignableTo(nextType, oldType)) {
       breaks.push(`${label}: incompatible value signature`);
+    } else if (!hasSymbolFlag(old, ts.SymbolFlags.Module)) {
+      // A namespace's members are its exports, compared one by one below.
+      breaks.push(...narrowedMembers(checker, oldType, nextType, label));
     }
   }
   if (hasSymbolFlag(old, ts.SymbolFlags.Type)) {
@@ -436,6 +498,8 @@ const incompatibleSymbolSignatures = ({
       !checker.isTypeAssignableTo(nextType, oldType)
     ) {
       breaks.push(`${label}: incompatible type signature`);
+    } else {
+      breaks.push(...narrowedMembers(checker, oldType, nextType, label));
     }
   }
   return breaks;
@@ -523,7 +587,9 @@ export const breakingApiChanges = ({
         prefix: `${entry}#`,
       },
     ];
-    const compared = new Set<ts.Symbol>();
+    // Keyed on the old and new symbol pair: two aliases of one old namespace
+    // can resolve to different new namespaces, and each pair needs comparing.
+    const compared = new Map<ts.Symbol, Set<ts.Symbol>>();
     for (const pair of pending) {
       const newSymbols = new Map(
         pair.newSymbols.map((symbol) => [symbol.name, symbol]),
@@ -562,8 +628,13 @@ export const breakingApiChanges = ({
           });
           continue;
         }
-        if (hasSymbolFlag(old, ts.SymbolFlags.Module) && !compared.has(old)) {
-          compared.add(old);
+        const comparedTargets = compared.get(old) ?? new Set<ts.Symbol>();
+        if (
+          hasSymbolFlag(old, ts.SymbolFlags.Module) &&
+          !comparedTargets.has(next)
+        ) {
+          comparedTargets.add(next);
+          compared.set(old, comparedTargets);
           pending.push({
             oldSymbols: checker.getExportsOfModule(old),
             newSymbols: checker.getExportsOfModule(next),

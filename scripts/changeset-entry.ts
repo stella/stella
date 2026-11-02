@@ -67,11 +67,26 @@ export const parseChangesetEntry = (
 
 type ChangesetRelease = { name: string; type: "major" | "minor" | "patch" };
 
+/**
+ * The bump as the YAML reader Changesets uses sees it: a single- or
+ * double-quoted scalar is unquoted, and a trailing ` # comment` is dropped.
+ * Anything else stays as written, so only an exact bump name authorizes.
+ */
+const changesetBumpValue = (raw: string): string => {
+  const quoted = /^(["'])([^"']*)\1(?:\s+#.*)?$/u.exec(raw);
+  if (quoted !== null) {
+    return quoted[2] ?? "";
+  }
+  const comment = /\s#/u.exec(raw);
+  return comment === null ? raw : raw.slice(0, comment.index).trimEnd();
+};
+
 export const parseChangesetReleases = (
   entry: string,
 ): readonly ChangesetRelease[] =>
-  parseChangesetFrontmatter(entry).entries.flatMap(({ name, bump }) =>
-    bump === "major" || bump === "minor" || bump === "patch"
-      ? [{ name, type: bump }]
-      : [],
-  );
+  parseChangesetFrontmatter(entry).entries.flatMap(({ name, bump }) => {
+    const type = changesetBumpValue(bump);
+    return type === "major" || type === "minor" || type === "patch"
+      ? [{ name, type }]
+      : [];
+  });
