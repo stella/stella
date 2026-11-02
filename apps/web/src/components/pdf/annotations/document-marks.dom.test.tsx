@@ -34,8 +34,10 @@ const { PDF_SELECTION_CHAT, PdfSelectionToolbar } =
   await import("@/components/pdf/pdf-selection-toolbar");
 const { pdfSelectionPassage } =
   await import("@/components/pdf/pdf-selection.logic");
-const { DETACHED_REASON, locateSelection, placeMark } =
+const { locateSelection } =
   await import("@/components/pdf/annotations/document-mark-anchor.logic");
+const { DETACHED_REASON, placeMark } =
+  await import("@stll/api-contract/pdf-mark-placement");
 const { DOCUMENT_MARK_BOX_ATTRIBUTE, DocumentMarkBoxes } =
   await import("@/components/pdf/annotations/document-mark-boxes");
 const { DocumentMarksPanel } =

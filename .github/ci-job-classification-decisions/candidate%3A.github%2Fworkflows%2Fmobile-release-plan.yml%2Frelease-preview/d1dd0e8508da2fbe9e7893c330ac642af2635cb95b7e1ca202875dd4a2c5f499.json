@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Starts the preview TestFlight build or signed update on main after a merge; dispatch only, no secrets.",
+  "reviewedDigest": "d1dd0e8508da2fbe9e7893c330ac642af2635cb95b7e1ca202875dd4a2c5f499"
+}

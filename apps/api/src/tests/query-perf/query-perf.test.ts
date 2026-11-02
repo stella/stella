@@ -8,6 +8,7 @@ import type { Verdict } from "@stll/db-load-gate/health";
 import * as schema from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
+import { READ_COMMITTED_BEGIN } from "@/api/lib/db/read-committed-unit";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusProjectionOutstandingIntentProbe,
@@ -15,6 +16,8 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
+import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
+import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { scanOccurrences } from "@/api/tests/query-plans/plan-walker";
 
 import {
@@ -29,8 +32,12 @@ import {
   type CaseLawScenarioGeneration,
   coverageRefreshWroteSummary,
   describeServed,
+  EXPRESSION_ID_BACKFILL_SIZES,
+  PROVISION_BACKFILL_SIZES,
   readCoverageRefreshState,
   seedCorpusReadBudgets,
+  seedExpressionIdBackfillRows,
+  seedProvisionBackfillRows,
   serveCaseLaw,
 } from "./corpus-seed";
 import { withQueryPerfFixture } from "./fixture";
@@ -39,8 +46,10 @@ import {
   budgetViolations,
   measureOwnerStatement,
   measureQueryPerf,
+  OVER_BUDGET_REMOVAL_BAND,
   scaleViolations,
   shapeViolations,
+  sharedBlockSampleProblem,
 } from "./measurement";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { QUERY_PERF_PROFILES } from "./profiles";
@@ -52,7 +61,13 @@ import {
   type ScheduledJobScenario,
 } from "./registry";
 import { seedRequestReceiptScenario } from "./request-receipt-seed";
-import { measureScheduledJobRun, QUERY_PERF_ADMISSION } from "./scheduled-run";
+import {
+  isTransactionControl,
+  measureScheduledJobRun,
+  measureScheduledStatementsInOrder,
+  QUERY_PERF_ADMISSION,
+  statementsForMeasurement,
+} from "./scheduled-run";
 import { seedQueryPerf } from "./seed";
 import { QUERY_PERF_TABLE_SIZES } from "./table-sizes";
 import { UNBOUNDED_FRESHNESS_STATEMENTS } from "./unbounded-freshness-fixture";
@@ -75,6 +90,91 @@ const profileBudgets = (
     .filter(([, owner]) => owner === profile)
     .map(([id]) => id)
     .toSorted();
+
+const backfillFixture = (jobId: string) => {
+  if (jobId === SCHEDULER_BACKFILL_IDS.provisionState) {
+    return {
+      seed: seedProvisionBackfillRows,
+      sizes: PROVISION_BACKFILL_SIZES,
+    };
+  }
+  if (jobId === SCHEDULER_BACKFILL_IDS.expressionIds) {
+    return {
+      seed: seedExpressionIdBackfillRows,
+      sizes: EXPRESSION_ID_BACKFILL_SIZES,
+    };
+  }
+  return undefined;
+};
+
+const provisionBackfillFixtureBytes = async (database: GatedTestDb) => {
+  const result = await database.execute(sql`SELECT jsonb_build_object(
+    'decisions', (SELECT coalesce(jsonb_agg(to_jsonb(row) ORDER BY row.id), '[]'::jsonb)
+      FROM case_law_decisions row
+      WHERE row.source_id = '01990000-00c3-7000-8000-000000000001'::uuid),
+    'units', (SELECT coalesce(jsonb_agg(to_jsonb(row) ORDER BY row.decision_id), '[]'::jsonb)
+      FROM case_law_provision_extractions row
+      JOIN case_law_decisions decision ON decision.id = row.decision_id
+      WHERE decision.source_id = '01990000-00c3-7000-8000-000000000001'::uuid),
+    'scopes', (SELECT coalesce(jsonb_agg(to_jsonb(row) ORDER BY row.country, row.language), '[]'::jsonb)
+      FROM case_law_provision_extraction_scopes row),
+    'transitions', (SELECT coalesce(jsonb_agg(to_jsonb(row) ORDER BY row.country, row.language, row.generation), '[]'::jsonb)
+      FROM case_law_provision_scope_transitions row),
+    'admission', (SELECT coalesce(jsonb_agg(to_jsonb(row) ORDER BY row.key), '[]'::jsonb)
+      FROM case_law_provision_admission row),
+    'repairCursors', (SELECT coalesce(jsonb_agg(to_jsonb(row) ORDER BY row.name), '[]'::jsonb)
+      FROM case_law_provision_repair_cursors row),
+    'checkpoint', (SELECT coalesce(jsonb_agg(to_jsonb(row) ORDER BY row.name), '[]'::jsonb)
+      FROM database_backfill_states row
+      WHERE row.name = 'caseLaw.backfillProvisionState.minutely')
+  )::text AS bytes`);
+  const row = executedRows(result).at(0);
+  if (
+    typeof row !== "object" ||
+    row === null ||
+    !("bytes" in row) ||
+    typeof row.bytes !== "string"
+  ) {
+    return panic("Provision backfill fixture snapshot is missing");
+  }
+  return row.bytes;
+};
+
+test("a measured fixture job cannot hide DDL", () => {
+  expect(() =>
+    statementsForMeasurement("fixture.alter", [
+      {
+        text: "ALTER TABLE fixture_table VALIDATE CONSTRAINT fixture_check",
+        params: [],
+      },
+    ]),
+  ).toThrow(
+    "fixture.alter issued unmeasurable DDL: ALTER TABLE fixture_table VALIDATE CONSTRAINT fixture_check",
+  );
+});
+
+test("every transaction control form the capture maps is left out of measurement", () => {
+  const forms = [
+    "BEGIN",
+    READ_COMMITTED_BEGIN,
+    "START TRANSACTION",
+    "COMMIT",
+    "END",
+    "ROLLBACK",
+    "SAVEPOINT job_step",
+    "RELEASE job_step",
+    "RELEASE SAVEPOINT job_step",
+    "ROLLBACK TO job_step",
+    "ROLLBACK TO SAVEPOINT job_step",
+  ];
+  expect(forms.filter((text) => !isTransactionControl(text))).toEqual([]);
+  expect(
+    statementsForMeasurement(
+      "fixture.transaction-control",
+      forms.map((text) => ({ text, params: [] })),
+    ),
+  ).toEqual([]);
+});
 
 test("query-perf table size declarations name real schema tables", () => {
   const schemaTables: ReadonlySet<string> = new Set(
@@ -106,19 +206,28 @@ test("every measurement execution guard applies even when pages fit or carry an 
   }
 });
 
-test("corpus page markers still reflect pages within the execution guard", () => {
+test("over-budget markers use hysteresis while unmarked budgets retain their edge", () => {
   const id = "statement.legislation.candidateRows";
+  const budget = READ_BUDGETS[id].pages;
+  expect(OVER_BUDGET_REMOVAL_BAND).toBe(0.15);
+  const removalLine = budget * 0.85;
   expect(
     budgetProblem(id, {
-      sharedBlocks: READ_BUDGETS[id].pages,
+      sharedBlocks: removalLine,
       executionTimeMs: 10_000,
     }),
   ).toContain("remove its overBudget marker");
   expect(
     budgetProblem(id, {
-      sharedBlocks: READ_BUDGETS[id].pages + 1,
+      sharedBlocks: removalLine + 1,
       executionTimeMs: 10_000,
     }),
+  ).toBeUndefined();
+  expect(
+    budgetProblem(id, { sharedBlocks: budget, executionTimeMs: 10_000 }),
+  ).toBeUndefined();
+  expect(
+    budgetProblem(id, { sharedBlocks: budget + 1, executionTimeMs: 10_000 }),
   ).toBeUndefined();
   expect(
     budgetProblem("statement.documents.searchHits", {
@@ -129,6 +238,42 @@ test("corpus page markers still reflect pages within the execution guard", () =>
 });
 
 describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
+  test("measuring the provision-state backfill preserves its fixture and fresh-run pages", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("DATABASE_URL required for query perf");
+    await withQueryPerfFixture({
+      databaseUrl,
+      profileId: "corpus",
+      timeoutMs: CORPUS_PROFILE_TIMEOUT_MS,
+      run: async (db, _deadline, openClient) => {
+        await seedCorpusReadBudgets(db);
+        await seedProvisionBackfillRows(db, PROVISION_BACKFILL_SIZES.base);
+        const before = await provisionBackfillFixtureBytes(db);
+        const first = await measureScheduledJobRun({
+          database: db,
+          openClient,
+          jobId: SCHEDULER_BACKFILL_IDS.provisionState,
+          task: BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
+        });
+        expect(await provisionBackfillFixtureBytes(db)).toBe(before);
+        const second = await measureScheduledJobRun({
+          database: db,
+          openClient,
+          jobId: SCHEDULER_BACKFILL_IDS.provisionState,
+          task: BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
+        });
+        const measuredPages = (run: typeof first) =>
+          run.statements.filter(({ statement }) =>
+            statement.startsWith(
+              "SELECT id::text AS id FROM case_law_decisions",
+            ),
+          ).length;
+        expect(measuredPages(second)).toBe(measuredPages(first));
+      },
+    });
+  }, 420_000); // timeout: the corpus profile seeds about a million rows before the integration assertion.
+
   test("global Case Law search enriches only its page at both corpus sizes", async () => {
     const budgetId = "statement.caseLaw.globalSearchHits";
     const databaseUrl =
@@ -290,6 +435,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               plan: good.plan.Plan,
             });
             expect(shapeViolations(good.plan, profileId)).toEqual([]);
+            expect(
+              sharedBlockSampleProblem(budgetId, good.samples),
+            ).toBeUndefined();
             expect(good.planViolations.map(({ message }) => message)).toEqual(
               [],
             );
@@ -348,6 +496,50 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
     expect([...measured].toSorted()).toEqual(profileBudgets("tenant"));
   }, 420_000); // timeout: two fresh databases are seeded and measured; each profile owns a 150-second deadline.
 
+  test("a fixture job measures reads against each statement's original state", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("DATABASE_URL required for query perf");
+    await withQueryPerfFixture({
+      databaseUrl,
+      profileId: "corpus",
+      run: async (db) => {
+        await db.execute(sql`CREATE TABLE query_perf_pending_fixture (
+          id integer PRIMARY KEY,
+          status text NOT NULL
+        )`);
+        await db.execute(
+          sql`INSERT INTO query_perf_pending_fixture (id, status)
+              VALUES (1, 'pending'), (2, 'pending')`,
+        );
+        const statements = await measureScheduledStatementsInOrder({
+          database: db,
+          jobId: "scheduled.caseLaw.refreshCoverage",
+          readBudgetId: "scheduled.caseLaw.refreshCoverage",
+          captured: [
+            {
+              text: "SELECT id FROM query_perf_pending_fixture WHERE status = 'pending' ORDER BY id",
+              params: [],
+            },
+            {
+              text: "UPDATE query_perf_pending_fixture SET status = 'done' WHERE status = 'pending'",
+              params: [],
+            },
+            {
+              text: "SELECT id FROM query_perf_pending_fixture WHERE status = 'pending' ORDER BY id",
+              params: [],
+            },
+          ],
+        });
+        expect(
+          [statements.at(0), statements.at(2)].map(
+            (statement) => statement?.actualRows,
+          ),
+        ).toEqual([2, 0]);
+      },
+    });
+  });
+
   test("corpus statements and scheduled jobs stay within their budgets at production shape", async () => {
     const databaseUrl =
       process.env["DATABASE_URL"] ??
@@ -401,6 +593,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             budgetId,
             plan: result.plan.Plan,
           });
+          note(sharedBlockSampleProblem(budgetId, result.samples));
           note(
             result.plan.Plan["Actual Rows"] === entry.expectedRows
               ? undefined
@@ -448,18 +641,18 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
         const runMetrics = async (
           jobId: string,
           task: string,
-          scenario: ScheduledJobScenario,
+          scenario?: ScheduledJobScenario,
         ) => {
-          if (scenario.type === "case-law") {
+          if (scenario?.type === "case-law") {
             await serveCaseLaw(db, scenario.served);
-          } else {
+          } else if (scenario !== undefined) {
             await seedRequestReceiptScenario(db, scenario);
           }
           const measurement =
             SCHEDULED_JOB_MEASUREMENTS[jobId] ??
             panic(`No measurement for ${jobId}`);
           const release =
-            scenario.type === "case-law"
+            scenario?.type === "case-law"
               ? await measurement.prepare?.({
                   database: db,
                   served: scenario.served,
@@ -467,13 +660,17 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                 })
               : undefined;
           try {
-            const generation = describeScheduledScenario(scenario);
+            const generation =
+              scenario === undefined
+                ? "backfill-source"
+                : describeScheduledScenario(scenario);
             const run = await measureScheduledJobRun({
               database: db,
+              openClient,
               jobId,
               task,
             });
-            if (scenario.type === "request-receipts") {
+            if (scenario?.type === "request-receipts") {
               const retained = await db.$count(
                 schema.requestIdempotencyReceipts,
               );
@@ -537,6 +734,58 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             continue;
           }
           measured.add(budgetId);
+          const backfill = backfillFixture(jobId);
+          if (backfill !== undefined) {
+            const pages: number[] = [];
+            for (const rows of [backfill.sizes.base, backfill.sizes.double]) {
+              // db-await-in-loop: the source table grows before the second bounded run is measured.
+              const result = await deadline.run(
+                `run ${jobId} with ${String(rows)} source rows`,
+                async () => {
+                  await backfill.seed(db, rows);
+                  const countResult = await db.execute(
+                    jobId === SCHEDULER_BACKFILL_IDS.provisionState
+                      ? sql`SELECT count(*)::int AS count FROM case_law_decisions
+                          WHERE source_id = '01990000-00c3-7000-8000-000000000001'::uuid`
+                      : sql`SELECT count(*)::int AS count FROM legislation_documents
+                          WHERE publisher_expression_id IS NULL`,
+                  );
+                  const countRow = executedRows(countResult).at(0);
+                  const count =
+                    typeof countRow === "object" &&
+                    countRow !== null &&
+                    "count" in countRow
+                      ? countRow.count
+                      : undefined;
+                  expect(
+                    count,
+                    `${jobId} fixture must grow to ${String(rows)} source rows`,
+                  ).toBe(rows);
+                  if (jobId === SCHEDULER_BACKFILL_IDS.provisionState) {
+                    const firstPage =
+                      await db.execute(sql`SELECT source_id::text AS source
+                      FROM case_law_decisions ORDER BY id LIMIT 50`);
+                    expect(executedRows(firstPage)).toEqual(
+                      Array.from({ length: 50 }, () => ({
+                        source: "01990000-00c3-7000-8000-000000000001",
+                      })),
+                    );
+                  }
+                  return await runMetrics(jobId, measurement.task);
+                },
+              );
+              pages.push(result.sharedBlocks);
+              note(budgetProblem(budgetId, result));
+            }
+            const size =
+              pages.at(0) ?? panic("missing base backfill measurement");
+            const double =
+              pages.at(1) ?? panic("missing double backfill measurement");
+            for (const violation of scaleViolations({ size, double })) {
+              note(`${jobId} on backfill source rows: ${violation}`);
+            }
+            continue;
+          }
           for (const scenario of measurement.scenarios) {
             const label = describeScheduledScenario(scenario.size);
             // db-await-in-loop: scenarios move the served generations, so they run one at a time.
@@ -587,6 +836,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           try {
             const run = await measureScheduledJobRun({
               database: db,
+              openClient,
               jobId: coverageJob.id,
               task: coverageMeasurement.task,
               admission,

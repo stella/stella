@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
 import type { TransportRequestInit } from "./index";
+import { raceAbort } from "./race-abort";
 
 const ROBOTS_MAX_BYTES = 512 * 1024;
 const ROBOTS_TTL_MS = 60 * 60 * 1000;
@@ -401,34 +402,6 @@ export const evaluatePublisherRobots = (
       ...selected.map(({ crawlDelayMs }) => crawlDelayMs ?? 0),
     ),
   };
-};
-
-const abortReason = (signal: AbortSignal) =>
-  signal.reason instanceof Error
-    ? signal.reason
-    : new DOMException("The operation was aborted", "AbortError");
-
-// Detaches its listener once either side settles, so a long-lived caller
-// signal does not retain a listener (and its race result) per request.
-const raceAbort = async <T>(
-  work: Promise<T>,
-  signal: AbortSignal | undefined,
-): Promise<T> => {
-  if (!signal) {
-    return await work;
-  }
-  const { promise: aborted, reject } = Promise.withResolvers<never>();
-  const onAbort = () => reject(abortReason(signal));
-  if (signal.aborted) {
-    onAbort();
-  } else {
-    signal.addEventListener("abort", onAbort, { once: true });
-  }
-  try {
-    return await Promise.race([work, aborted]);
-  } finally {
-    signal.removeEventListener("abort", onAbort);
-  }
 };
 
 export class PublisherBodyLimitError extends TaggedError(

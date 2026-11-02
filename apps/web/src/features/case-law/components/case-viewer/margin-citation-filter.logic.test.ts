@@ -36,6 +36,7 @@ describe("the margin's cited provisions", () => {
 
   test("a focused paragraph keeps only the cards it cites", () => {
     const filter = resolveMarginCitationFilter({
+      cards: CARDS,
       paragraph: { type: MARGIN_CITATION_FILTER.paragraph, paragraphId: "p-8" },
       selection: null,
     });
@@ -45,13 +46,17 @@ describe("the margin's cited provisions", () => {
     ]);
   });
 
-  test("a focused paragraph that cites nothing leaves no card", () => {
+  test("a focused paragraph that cites nothing does not filter", () => {
     expect(
-      visibleProvisionCards(CARDS, {
-        type: MARGIN_CITATION_FILTER.paragraph,
-        paragraphId: "p-10",
+      resolveMarginCitationFilter({
+        cards: CARDS,
+        paragraph: {
+          type: MARGIN_CITATION_FILTER.paragraph,
+          paragraphId: "p-10",
+        },
+        selection: null,
       }),
-    ).toEqual([]);
+    ).toBe(ALL_CITATIONS);
   });
 
   test("a selection finds a citation it partly covers and skips one it only touches", () => {
@@ -117,7 +122,7 @@ describe("the margin's cited provisions", () => {
     }
   });
 
-  test("no selected words is no filter; selected words citing nothing filter to no card", () => {
+  test("no selected words is no filter, and neither are selected words citing nothing", () => {
     expect(selectionCitationFilter({ cards: CARDS, spans: [] })).toBeNull();
     const nothingCited = selectionCitationFilter({
       cards: CARDS,
@@ -127,9 +132,56 @@ describe("the margin's cited provisions", () => {
       type: MARGIN_CITATION_FILTER.selection,
       citationIds: [],
     });
-    expect(visibleProvisionCards(CARDS, nothingCited ?? ALL_CITATIONS)).toEqual(
-      [],
+    expect(
+      resolveMarginCitationFilter({
+        cards: CARDS,
+        paragraph: null,
+        selection: nothingCited,
+      }),
+    ).toBe(ALL_CITATIONS);
+  });
+
+  test("selected words citing nothing leave the focused paragraph in place", () => {
+    const paragraph = {
+      type: MARGIN_CITATION_FILTER.paragraph,
+      paragraphId: "p-8",
+    };
+    expect(
+      resolveMarginCitationFilter({
+        cards: CARDS,
+        paragraph,
+        selection: { type: MARGIN_CITATION_FILTER.selection, citationIds: [] },
+      }),
+    ).toBe(paragraph);
+  });
+
+  test("whatever is focused or selected, a margin with cards keeps at least one", () => {
+    const paragraphs = [null, "p-8", "p-9", "p-10", "p-missing"].map((id) =>
+      id === null
+        ? null
+        : { type: MARGIN_CITATION_FILTER.paragraph, paragraphId: id },
     );
+    const selections = [
+      null,
+      [],
+      ["cite-72"],
+      ["cite-87"],
+      ["cite-missing"],
+    ].map((citationIds) =>
+      citationIds === null
+        ? null
+        : { type: MARGIN_CITATION_FILTER.selection, citationIds },
+    );
+    for (const paragraph of paragraphs) {
+      for (const selection of selections) {
+        const filter = resolveMarginCitationFilter({
+          cards: CARDS,
+          paragraph,
+          selection,
+        });
+        expect(visibleProvisionCards(CARDS, filter).length).toBeGreaterThan(0);
+      }
+    }
   });
 
   test("a selection outranks the focused paragraph, which returns once it clears", () => {
@@ -143,18 +195,24 @@ describe("the margin's cited provisions", () => {
     };
     expect(
       resolveMarginCitationFilter({
+        cards: CARDS,
         paragraph: paragraphFilter,
         selection: selectionFilter,
       }),
     ).toBe(selectionFilter);
     expect(
       resolveMarginCitationFilter({
+        cards: CARDS,
         paragraph: paragraphFilter,
         selection: null,
       }),
     ).toBe(paragraphFilter);
     expect(
-      resolveMarginCitationFilter({ paragraph: null, selection: null }),
+      resolveMarginCitationFilter({
+        cards: CARDS,
+        paragraph: null,
+        selection: null,
+      }),
     ).toBe(ALL_CITATIONS);
   });
 

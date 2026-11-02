@@ -16,6 +16,7 @@ import { getMcpBaseUrl } from "@/api/mcp/constants";
 
 const personalDataExportDownloadLink = createSafeSessionHandler(
   {
+    accountScope: "stella:account_export_read",
     accountAccess: ACCOUNT_ACCESS.accountControl,
     contract: "patch",
     access: "read",

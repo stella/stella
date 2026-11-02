@@ -199,6 +199,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/ci-affected-selection.ts",
     "scripts/ci-api-test-plan.ts",
     "scripts/ci-browser-scope.ts",
+    "scripts/ci-browser-suites.ts",
     "scripts/ci-check-pool-registry.ts",
     "scripts/ci-install-store.ts",
     "scripts/ci-package-scope.ts",
@@ -217,6 +218,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/run-unlisted-script-tests.ts",
     "scripts/test-input-readers.ts",
     "scripts/test-shards.ts",
+    "scripts/ui-playground-selection.ts",
   ],
   "ci-checks-rest/Tauri counterpart autofix tests": [
     "scripts/check-tauri-package-alignment.ts",
@@ -239,6 +241,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/schema-introspection.ts",
   ],
   "ci-checks-rest/Test capability shard merge and package parity": [
+    "packages/scripts/src/tree-base-revision.ts",
     "scripts/capability-shard-merge.test.ts",
     "scripts/capability-shard-pack.test.ts",
     "scripts/changeset-guard.ts",
@@ -325,6 +328,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/generated-artifacts.ts",
   ],
   "ci-checks-rest/Schema introspection invariants": [
+    "packages/scripts/src/tree-base-revision.ts",
     "packages/scripts/src/typescript-program.ts",
     "scripts/generated-artifacts.ts",
     "scripts/outbound-transport-ownership.ts",
@@ -362,6 +366,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/publish-manifest.test.ts",
   ],
   "ci-checks-rest/Test main heavy workflow contracts": [
+    "packages/scripts/src/tree-base-revision.ts",
     "scripts/ci-expression-context.ts",
     "scripts/ci-plan-variables.ts",
     "scripts/main-heavy-plan.test.ts",
@@ -400,26 +405,32 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/check-standalone-lockfiles.ts",
     "scripts/check-stll-quarantine-excludes.ts",
     "scripts/ci-browser-scope.ts",
+    "scripts/ci-browser-suites.ts",
     "scripts/ci-check-pool-registry.ts",
     "scripts/ci-package-scope.ts",
     "scripts/ci-plan-scope.ts",
     "scripts/detect-route-smoke-changes.ts",
     "scripts/detect-service-suite-changes.ts",
+    "scripts/e2e-spec-shards-core.ts",
     "scripts/generated-files.ts",
     "scripts/install-free-ci.ts",
     "scripts/production-e2e-inputs.mjs",
     "scripts/test-input-readers.ts",
+    "scripts/ui-playground-selection.ts",
   ],
   "ci-checks-rest/Test changed e2e shard selection": [
     "apps/api/scripts/api-test-plan.ts",
     "apps/api/scripts/test-file-shards.ts",
     "apps/api/scripts/test-timings.ts",
     "scripts/api-test-impact.ts",
+    "scripts/ci-browser-suite-selection.ts",
+    "scripts/ci-browser-suites.ts",
     "scripts/ci-check-pool-registry.ts",
     "scripts/detect-route-smoke-changes.ts",
     "scripts/e2e-runner-inputs.ts",
     "scripts/e2e-spec-shards-core.ts",
     "scripts/e2e-spec-shards.test.ts",
+    "scripts/ui-playground-selection.ts",
   ],
   "ci-checks-rest/Test geometry shard plan": [
     "apps/web/e2e/helpers/docked-chat-hosts.ts",
@@ -446,6 +457,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/check-stll-quarantine-excludes.ts",
     "scripts/check-tauri-package-alignment.ts",
     "scripts/ci-browser-scope.ts",
+    "scripts/ci-browser-suites.ts",
     "scripts/ci-check-pool-registry.ts",
     "scripts/ci-install-store.ts",
     "scripts/ci-package-scope.ts",
@@ -456,12 +468,14 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/detect-e2e-changes.test.ts",
     "scripts/detect-route-smoke-changes.ts",
     "scripts/detect-service-suite-changes.ts",
+    "scripts/e2e-spec-shards-core.ts",
     "scripts/generated-files.ts",
     "scripts/install-free-ci.ts",
     "scripts/network-baseline-scope.test.ts",
     "scripts/network-baseline-scope.ts",
     "scripts/production-e2e-inputs.mjs",
     "scripts/test-input-readers.ts",
+    "scripts/ui-playground-selection.ts",
   ],
   "ci-checks-rest/Test reusable workflow permission contracts": [
     "scripts/workflow-call-permissions.ts",
@@ -478,6 +492,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/autofix-protected-paths.ts",
   ],
   "ci-checks-rest/Test type-aware autofix": [
+    "scripts/autofix-type-aware-precheck.ts",
     "scripts/autofix-type-aware.test.ts",
     "scripts/ci-check-pool-registry.ts",
   ],
@@ -507,6 +522,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "packages/scripts/src/generated-file-inventory.ts",
     "packages/scripts/src/generated-input-identity.ts",
     "packages/scripts/src/process-memory.ts",
+    "packages/scripts/src/tree-base-revision.ts",
     "scripts/api-test-impact.ts",
     "scripts/ci-check-pool-registry.ts",
     "scripts/ci-checks-partition.test.ts",
@@ -572,8 +588,10 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test preview scope tool availability": [
     "scripts/visual-preview-scope.test.ts",
+    "scripts/visual-preview-scope.ts",
   ],
   "ci-checks-rest/Test public document fetch": [
+    "packages/property-testing/src/external-state.ts",
     "scripts/fetch-public-documents.test.ts",
   ],
   "ci-checks-rest/Test migration identity logic": [
@@ -876,4 +894,27 @@ test("derived capability inputs retain API readers and shell bodies retain lockf
       }),
     ).toContain(check);
   }
+});
+
+test("i18n sync follows locale catalogs and its source lock on pull requests", () => {
+  const check = "ci-checks-rest/Check i18n sync";
+  for (const changed of [
+    "apps/web/src/i18n/langs/en.json",
+    "apps/web/src/i18n/langs/fr.json",
+    "apps/web/src/i18n/i18n-source-lock.json",
+    "packages/transactional/i18n/langs/de.json",
+    "TERMINOLOGY.md",
+  ]) {
+    expect(
+      selectRootChecks({ changed: [changed], graph, pathChange: "content" }),
+      changed,
+    ).toContain(check);
+  }
+  expect(
+    selectRootChecks({
+      changed: ["docs/architecture.md"],
+      graph,
+      pathChange: "content",
+    }),
+  ).not.toContain(check);
 });

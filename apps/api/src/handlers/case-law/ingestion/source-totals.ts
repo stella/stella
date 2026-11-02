@@ -4,7 +4,6 @@ import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as v from "valibot";
 
-import { defaultConfig } from "@stll/db-load-gate/health";
 import type { HealthConfig, Signal } from "@stll/db-load-gate/health";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Bytes } from "@stll/sha256/bun";
@@ -22,6 +21,7 @@ import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorSystemFields } from "@/api/lib/errors/utils";
@@ -709,6 +709,12 @@ export const refreshNextSourceStoredTotal = async (
       }),
   );
   if (Result.isError(selected)) {
+    if (
+      CorpusSchemaLaneUnavailableError.is(selected.error) ||
+      signal?.aborted
+    ) {
+      return "held";
+    }
     observeFailure(selected.error, {
       sink: sourceStoredTotalSelectionFailure,
       ctx: { step: "refreshNextSourceStoredTotal.select" },
@@ -759,7 +765,7 @@ export const createSourceStoredTotalMaintenanceRuntime = (
   {
     clock = () => Temporal.Now.instant().epochMilliseconds,
     readEbsSignal,
-    config = defaultConfig,
+    config = loadGateHealthConfig(),
   }: SourceStoredTotalMaintenanceOptions = {},
 ) => {
   const readVerdict = createDatabaseLoadVerdictReader({

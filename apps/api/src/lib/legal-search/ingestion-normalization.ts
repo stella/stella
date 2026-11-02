@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { storedDecisionDocketOf } from "@stll/api-contract/decision-docket-grammar";
 import { DECISION_DOCUMENT_ROLE_METADATA_KEY } from "@stll/api-contract/decision-document-role";
@@ -31,7 +31,9 @@ import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
+import type { PreparedCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import {
   DANGEROUS_CHARS,
   sanitizeMetadata,
@@ -265,7 +267,7 @@ export const storedCaseNumberOf = (
 };
 
 const isPreparedDocumentAst = (
-  ast: ReturnType<typeof prepareCorpusAst>["ast"],
+  ast: PreparedCorpusAst["ast"],
 ): ast is DocumentAst => ast !== null && Array.isArray(ast.blocks);
 
 /**
@@ -285,7 +287,7 @@ const isPreparedDocumentAst = (
 export const sanitizeResult = (
   result: RawIngestionResult,
   metadataUrlSchema?: unknown,
-): IngestionResult => {
+): Result<IngestionResult, StoredCorpusValidationError> => {
   const strip = (value: string | undefined): string | undefined =>
     value ? stripDangerousChars(value) : undefined;
 
@@ -324,10 +326,15 @@ export const sanitizeResult = (
   // rewrites inline text (no-break spaces become spaces), which can turn a
   // run into a collapsible one.
   const sanitizedDocumentAst = deepSanitize(result.documentAst);
-  const preparedAst = prepareCorpusAst({
+  const preparedAstResult = prepareCorpusAst({
     ast: sanitizedDocumentAst,
+    fallbackText: result.fulltext,
     parserVersion: result.parserVersion,
   });
+  if (preparedAstResult.isErr()) {
+    return preparedAstResult;
+  }
+  const preparedAst = preparedAstResult.value;
   const readableAst = preparedAst.ast;
   const documentAst = isPreparedDocumentAst(readableAst)
     ? withProjectedPlainText(readableAst)
@@ -437,56 +444,58 @@ export const sanitizeResult = (
   const ecli = strip(result.ecli);
   // The write planner checks aggregate index bytes against its actual language group key.
 
-  return plainTextIngestionResult(
-    {
-      ...result,
-      observationDetail,
-      caseNumber,
-      court,
-      caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
-      identifiers,
-      sourceDocumentId,
-      sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
-        (identity): identity is string =>
-          strip(identity) === identity &&
-          isPersistableSourceDocumentId(identity),
-      ),
-      sourceDocumentIdRepairAliases:
-        result.sourceDocumentIdRepairAliases?.filter(
+  return Result.ok(
+    plainTextIngestionResult(
+      {
+        ...result,
+        observationDetail,
+        caseNumber,
+        court,
+        caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
+        identifiers,
+        sourceDocumentId,
+        sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
           (identity): identity is string =>
             strip(identity) === identity &&
             isPersistableSourceDocumentId(identity),
         ),
-      legacySourceUrls: result.legacySourceUrls
-        ?.map((url) => strip(url))
-        .filter((url): url is string => url !== undefined),
-      legacyEcli: strip(result.legacyEcli),
-      legacyCaseNumber: strip(result.legacyCaseNumber),
-      sheetNumber: strip(result.sheetNumber),
-      fulltext: result.fulltext
-        ? collapseSpacedLetters(strip(result.fulltext) ?? "")
-        : undefined,
-      ecli,
-      decisionDate: boundDecisionDate(result.decisionDate),
-      decisionType,
-      sourceUrl: strip(result.sourceUrl),
-      documentUrl: strip(result.documentUrl),
-      metadata,
-      textFields,
-      publisherCitedCases: result.publisherCitedCases?.map((cited) =>
-        stripDangerousChars(cited),
-      ),
-      sections: result.sections?.map((section) => ({
-        ...section,
-        title:
-          section.title === null ? null : stripDangerousChars(section.title),
-        text: collapseSpacedLetters(strip(section.text) ?? ""),
-      })),
-      documentAst,
-      citationScopes:
-        preparedAst.type === "text-only" ? undefined : result.citationScopes,
-      sourceRaw: strip(result.sourceRaw),
-    },
-    metadataUrlSchema,
+        sourceDocumentIdRepairAliases:
+          result.sourceDocumentIdRepairAliases?.filter(
+            (identity): identity is string =>
+              strip(identity) === identity &&
+              isPersistableSourceDocumentId(identity),
+          ),
+        legacySourceUrls: result.legacySourceUrls
+          ?.map((url) => strip(url))
+          .filter((url): url is string => url !== undefined),
+        legacyEcli: strip(result.legacyEcli),
+        legacyCaseNumber: strip(result.legacyCaseNumber),
+        sheetNumber: strip(result.sheetNumber),
+        fulltext: result.fulltext
+          ? collapseSpacedLetters(strip(result.fulltext) ?? "")
+          : undefined,
+        ecli,
+        decisionDate: boundDecisionDate(result.decisionDate),
+        decisionType,
+        sourceUrl: strip(result.sourceUrl),
+        documentUrl: strip(result.documentUrl),
+        metadata,
+        textFields,
+        publisherCitedCases: result.publisherCitedCases?.map((cited) =>
+          stripDangerousChars(cited),
+        ),
+        sections: result.sections?.map((section) => ({
+          ...section,
+          title:
+            section.title === null ? null : stripDangerousChars(section.title),
+          text: collapseSpacedLetters(strip(section.text) ?? ""),
+        })),
+        documentAst,
+        citationScopes:
+          preparedAst.type === "text-only" ? undefined : result.citationScopes,
+        sourceRaw: strip(result.sourceRaw),
+      },
+      metadataUrlSchema,
+    ),
   );
 };

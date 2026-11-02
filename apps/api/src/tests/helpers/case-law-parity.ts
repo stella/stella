@@ -4,10 +4,10 @@ import { compareCodeUnit } from "@stll/collation";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { decodeSourceRawEnvelopeObjects } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import type { ParserParityEntry } from "@/api/handlers/case-law/ingestion/parsers/parity-manifest";
+import { decodeSourceRawEnvelopeObjects } from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   euEcjFixture,
   huBhgyFixture,
@@ -54,14 +54,8 @@ const PARITY_FIXTURES = {
   (documentUrl: URL) => EnrolledAdapterFixture
 >;
 
-export const buildCaseLawFixture = async (fixture: EnrolledAdapterFixture) => {
-  const originalFetch = globalThis.fetch;
-  try {
-    return await fixture.buildDecision();
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-};
+export const buildCaseLawFixture = async (fixture: EnrolledAdapterFixture) =>
+  await fixture.buildDecision();
 
 export const parserParityOutput = async (
   entry: ParserParityEntry,

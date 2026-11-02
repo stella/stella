@@ -202,6 +202,7 @@ esac
           display_title: `${title}${proofSha}`,
           status: "completed",
           conclusion: "success",
+          run_attempt: 1,
         }),
       );
       return {

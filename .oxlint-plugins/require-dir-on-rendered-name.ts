@@ -33,7 +33,7 @@ const NAME_PROPS = new Set([
   "citationText",
 ]);
 
-const SELF_ISOLATING = new Set(["BidiText", "UserText"]);
+const SELF_ISOLATING = new Set(["BidiText", "UserText", "IdentityText"]);
 const RAW_ISOLATING = new Set(["bdi", "bdo"]);
 
 const hasDirAttr = (opening) =>

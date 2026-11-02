@@ -1,0 +1,14 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 3becfdee05549f3e180d1b6787a3c523c1c71828..21ef1b7a3285fa25b9fba0d7bc48b961028d0f9b 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -35419,8 +35419,7 @@
+ 	const params = new PdfDict(paramsEntries);
+ 	const streamEntries = [["Type", PdfName.of("EmbeddedFile")], ["Params", params]];
+ 	if (mimeType) {
+-		const encodedMime = mimeType.replaceAll("/", "#2F").replaceAll(" ", "#20");
+-		streamEntries.push(["Subtype", PdfName.of(encodedMime)]);
++		streamEntries.push(["Subtype", PdfName.of(mimeType)]);
+ 	}
+ 	return new PdfStream(streamEntries, data);
+ }

@@ -29,14 +29,6 @@ import { and, asc, eq, gt, isNotNull, or, sql } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import {
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  StoredRawReader,
-  StoredRawReparseOutcome,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   CZ_US_RECORD_CARD_METADATA_KEY,
   CZ_US_RECORD_CARD_STATE,
   czUsAdapter,
@@ -49,7 +41,15 @@ import { NALUS_DAILY_REQUEST_LIMIT } from "@/api/handlers/case-law/ingestion/ada
 import { applyStoredDecisionBackfill } from "@/api/handlers/case-law/ingestion/pipeline/stored-decision-backfill";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  StoredRawReader,
+  StoredRawReparseOutcome,
+} from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
 /** The decision type the court gives the rulings a dissent is filed against. */

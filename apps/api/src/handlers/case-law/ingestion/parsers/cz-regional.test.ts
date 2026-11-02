@@ -140,7 +140,7 @@ describe("parseRegionalDecision", () => {
       expect(introBlocks.length).toBe(2);
     });
 
-    test("adds takto: heading before verdict", () => {
+    test("adds the takto: lead-in before verdict", () => {
       const input = baseInput({
         verdict: [makePara("Žaloba se zamítá.")],
       });
@@ -149,6 +149,9 @@ describe("parseRegionalDecision", () => {
 
       const texts = collectPlainTexts(documentAst.blocks);
       expect(texts).toContain("takto:");
+      expect(findAllByType(documentAst.blocks, "heading")).not.toContainEqual(
+        expect.objectContaining({ plainText: "takto:" }),
+      );
     });
 
     test("maps verdict paragraphs to holding role", () => {
@@ -219,17 +222,25 @@ describe("parseRegionalDecision", () => {
       const headings = findAllByType(documentAst.blocks, "heading");
       const headingTexts = headings.map((h) => h.plainText);
       expect(headingTexts).toContain("ROZSUDEK");
-      expect(headingTexts).toContain("takto:");
       expect(headingTexts).toContain("Odůvodnění:");
       expect(headingTexts).toContain("Poučení:");
 
       // Verify order: title < takto < oduvodneni < pouceni
       const titleIdx = headingTexts.indexOf("ROZSUDEK");
-      const taktoIdx = headingTexts.indexOf("takto:");
+      const taktoIdx = documentAst.blocks.findIndex(
+        (b) => b.plainText === "takto:",
+      );
+      const titleBlockIdx = documentAst.blocks.findIndex(
+        (b) => b.plainText === "ROZSUDEK",
+      );
+      const oduvBlockIdx = documentAst.blocks.findIndex(
+        (b) => b.plainText === "Odůvodnění:",
+      );
       const oduvIdx = headingTexts.indexOf("Odůvodnění:");
       const poucIdx = headingTexts.indexOf("Poučení:");
-      expect(titleIdx).toBeLessThan(taktoIdx);
-      expect(taktoIdx).toBeLessThan(oduvIdx);
+      expect(titleIdx).toBeGreaterThanOrEqual(0);
+      expect(titleBlockIdx).toBeLessThan(taktoIdx);
+      expect(taktoIdx).toBeLessThan(oduvBlockIdx);
       expect(oduvIdx).toBeLessThan(poucIdx);
 
       // Fulltext includes all content

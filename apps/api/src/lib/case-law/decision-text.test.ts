@@ -339,6 +339,77 @@ describe("decision text fields", () => {
     );
   });
 
+  test("a text fidelity marker is stored as stated and checked", () => {
+    const textFields = absentDecisionTextFields(
+      TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+    );
+    const textFidelity = {
+      status: "mismatch",
+      missingChars: 3,
+      extraChars: 0,
+      firstDifferenceAt: 12,
+    };
+    expect(
+      storeDecisionTextFields({ metadata: { textFidelity }, textFields })[
+        "textFidelity"
+      ],
+    ).toEqual(textFidelity);
+    for (const invalid of [
+      { status: "mismatch" },
+      {
+        status: "mismatch",
+        missingChars: -1,
+        extraChars: 0,
+        firstDifferenceAt: 0,
+      },
+      {
+        status: "mismatch",
+        missingChars: 0,
+        extraChars: -2,
+        firstDifferenceAt: 0,
+      },
+      {
+        status: "mismatch",
+        missingChars: 1,
+        extraChars: 0,
+        firstDifferenceAt: -1,
+      },
+      {
+        status: "reordered",
+        missingChars: 1,
+        extraChars: 0,
+        firstDifferenceAt: 4,
+      },
+      {
+        status: "reordered",
+        missingChars: 0,
+        extraChars: 2,
+        firstDifferenceAt: 4,
+      },
+    ]) {
+      expect(() =>
+        storeDecisionTextFields({
+          metadata: { textFidelity: invalid },
+          textFields,
+        }),
+      ).toThrow(
+        "Text fidelity must carry a status, character counts and its first difference",
+      );
+    }
+    const reordered = {
+      status: "reordered",
+      missingChars: 0,
+      extraChars: 0,
+      firstDifferenceAt: 4,
+    };
+    expect(
+      storeDecisionTextFields({
+        metadata: { textFidelity: reordered },
+        textFields,
+      })["textFidelity"],
+    ).toEqual(reordered);
+  });
+
   test("preserves stored text when a new parse fails", () => {
     expect(
       preserveStoredTextAfterParseFailure({

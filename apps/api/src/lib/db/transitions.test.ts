@@ -18,7 +18,10 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { timestamptz } from "@/api/db/columns";
 import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
 import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import {
+  SITEMAP_DRAIN_TRANSITION_IDENTITY,
+  TRANSITIONS,
+} from "@/api/lib/db/transition-specs";
 import {
   defineFixedLifecycle,
   defineKeyedTransitions,
@@ -94,6 +97,7 @@ test("state-column ownership covers every scoped runtime transition", () => {
   expect(registered.toSorted(order)).toEqual(
     [
       ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
+      SITEMAP_DRAIN_TRANSITION_IDENTITY,
       desktopBatchReceipt,
       {
         tableName: "requestIdempotencyReceipts",
@@ -102,6 +106,13 @@ test("state-column ownership covers every scoped runtime transition", () => {
         stateColumn: "state",
       },
       organizationAccessState,
+      // The population seed advances one singleton row through its phases.
+      {
+        tableName: "caseLawPopulationSeedState",
+        key: "slot",
+        scope: [],
+        stateColumn: "phase",
+      },
       ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
       ...Object.values(FOLIO_COLLAB_TRANSITION_IDENTITIES),
     ].toSorted(order),

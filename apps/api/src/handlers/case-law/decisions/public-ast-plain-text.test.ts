@@ -67,7 +67,7 @@ const storedAst = (documentAst: DocumentAst, name = ""): DocumentAst => {
     rawHash: "0".repeat(64),
     documentAst,
   });
-  const sanitized = sanitizeResult(result).documentAst;
+  const sanitized = sanitizeResult(result).unwrap().documentAst;
   if (!isDocumentAst(sanitized)) {
     throw new Error(`sanitizeResult dropped the AST: ${name}`);
   }

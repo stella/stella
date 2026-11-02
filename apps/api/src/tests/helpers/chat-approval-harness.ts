@@ -109,6 +109,7 @@ import type {
   WebChatContext,
 } from "@/api/tests/helpers/chat-web-client";
 import { findTranscriptViolations } from "@/api/tests/helpers/provider-request-transcript";
+import { installTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -1543,9 +1544,11 @@ export const createApprovalHarness = ({
       });
     }
   };
-  globalThis.fetch = Object.assign(routedFetch, {
-    preconnect: originalFetch.preconnect,
-  });
+  const fetchInstallation = installTestFetch(
+    Object.assign(routedFetch, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 
   /** A browser tab that loads `threadId` now, as a page load does. */
   const openWebClient = async (
@@ -1780,7 +1783,7 @@ export const createApprovalHarness = ({
           await relinquishChatTurnRuns();
           await Promise.all(abandonedReads);
         } finally {
-          globalThis.fetch = originalFetch;
+          fetchInstallation.restore();
           provider.restore();
         }
         if (turnSettlementFailures.size > 0) {

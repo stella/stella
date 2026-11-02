@@ -1,3 +1,4 @@
+// parser-output-unchanged: span styles are read only under the opt-in `parseSpanStyle` option, which only cz-nss passes and cz-nss bumps its own version; every other walk is unchanged.
 // parser-output-unchanged: [cz-uohs] its reader supplies text directly and retains the same footnote inlines; replay fixture fields are unchanged.
 // parser-output-unchanged: [cz-ns] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: [cz-nss] registered replay fixture fields are unchanged by numeric index normalization.
@@ -56,6 +57,12 @@ import { flattenInlineText } from "@stll/legal-ast/inline";
 // parser-output-unchanged: the inline-line helpers moved unchanged to their package owner so library parsers can import them.
 import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
 
+import {
+  inlineStyleIsAsposeSpacer,
+  inlineStyleIsBold,
+  inlineStyleIsInlineBlock,
+  inlineStyleIsItalic,
+} from "@/api/lib/legal-search/document-builders/inline-style";
 // parser-output-unchanged: the visible-text helpers moved unchanged to visible-html-text.ts so AST validation can reuse them without importing the parser module.
 import {
   EXCLUDED_HTML_SELECTOR,
@@ -239,8 +246,6 @@ export const walkInlines = (
       }
 
       if (options.parseSpanStyle && tag === "span") {
-        const style = $child.attr("style") ?? "";
-
         // Aspose spacer spans carry horizontal space rather than words:
         // tab stops, alignment fills, and the gap between two
         // letter-spaced words. Emit that gap instead of dropping the
@@ -248,21 +253,26 @@ export const walkInlines = (
         // leaves the letter-spacing reassembly to guess a boundary that
         // is no longer in the text. Older conversions sometimes put real
         // words inside these spans, so only whitespace-only spans become
-        // a gap.
+        // a gap. Image alt text counts as words: `.text()` does not see it.
         if (
-          style.includes("-aw-import:ignore") ||
-          style.includes("-aw-import:spaces") ||
-          style.includes("display:inline-block")
+          inlineStyleIsAsposeSpacer(child) ||
+          inlineStyleIsInlineBlock(child)
         ) {
           const innerText = $child.text().trim();
-          if (!innerText) {
+          const carriesAltText =
+            options.parseImgAlt === true &&
+            $child
+              .find("img")
+              .toArray()
+              .some((img) => ($(img).attr("alt") ?? "").trim() !== "");
+          if (!innerText && !carriesAltText) {
             appendTextInline(inlines, ASPOSE_SPACER_GAP, childAnon);
             return;
           }
         }
 
-        const isBold = style.includes("font-weight:bold");
-        const isItalic = style.includes("font-style:italic");
+        const isBold = inlineStyleIsBold(child);
+        const isItalic = inlineStyleIsItalic(child);
         const children = walk($child, childAnon);
         if (children.length === 0) {
           return;

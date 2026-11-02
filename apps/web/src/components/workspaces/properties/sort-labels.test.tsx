@@ -40,7 +40,7 @@ test.each(
   (type, kind, direction) => {
     const markup = renderToStaticMarkup(
       <SortChips
-        labels={{ add: "Add", remove: "Remove", directions: labels }}
+        labels={{ addSort: "Sort", remove: "Remove", directions: labels }}
         onUpdate={() => undefined}
         properties={[{ id: "p", name: type, type: "text", sortKind: kind }]}
         sorts={[{ propertyId: "p", desc: direction === "desc" }]}

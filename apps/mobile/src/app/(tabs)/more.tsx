@@ -83,6 +83,7 @@ const MoreScreen = () => {
       style={{ backgroundColor: colors.background, flex: 1 }}
     >
       <ScrollView
+        alwaysBounceVertical={false}
         contentContainerStyle={screenStyles.content}
         // The header is the platform's translucent bar; the list scrolls under it.
         contentInsetAdjustmentBehavior="automatic"

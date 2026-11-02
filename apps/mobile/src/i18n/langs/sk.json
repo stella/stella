@@ -22,7 +22,8 @@
     "toolUsed": "Použité: {tool}",
     "threadTitle": "Konverzácia",
     "threadLoadFailed": "Túto konverzáciu sa nepodarilo načítať.",
-    "threadEmptyDescription": "Táto konverzácia zatiaľ nemá žiadne správy.",
+    "greeting": "Na čom chcete pracovať?",
+    "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
     "sections": {
       "today": "Dnes",
       "yesterday": "Včera",
@@ -39,6 +40,19 @@
     "answerNeedsInput": "Táto odpoveď čaká na váš vstup. Pokračujte v nej vo webovej aplikácii stella.",
     "answerFailed": "Odpoveď sa nepodarilo dokončiť.",
     "composerMenu": "Otvoriť ponuku príloh a nástrojov",
+    "attachFile": "Priložiť súbor",
+    "attachment": "Príloha",
+    "fileTooLarge": "Súbor prekračuje limit {maxSize}",
+    "maxAttachmentsReached": "Maximálne {count} súborov na správu",
+    "unsupportedFileType": "Nepodporovaný typ súboru",
+    "uploadFailed": "Spracovanie súboru zlyhalo",
+    "scanDocument": "Naskenovať dokument",
+    "removeAttachment": "Odstrániť {name}",
+    "attachmentReading": "Pripravujem…",
+    "attachmentUploading": "Nahrávam…",
+    "pickFailed": "Výber súborov sa nepodarilo otvoriť. Skúste to znova.",
+    "sendFileRefused": "Súbor sa nepodarilo odoslať, takže sa správa neodoslala. Odstráňte súbor a skúste to znova.",
+    "sendFileNotAnonymizable": "Táto konverzácia je anonymizovaná a stella nedokázala anonymizovať jeden zo súborov, takže sa nič neodoslalo. Odstráňte súbor a skúste to znova.",
     "pickTitle": "Vyberte konverzáciu",
     "pickDescription": "Vyberte vlákno zo zoznamu alebo začnite nové tlačidlom +."
   },
@@ -60,7 +74,8 @@
       "none": "Bez termínu",
       "today": "Dnes",
       "tomorrow": "Zajtra",
-      "nextWeek": "O týždeň"
+      "nextWeek": "O týždeň",
+      "pick": "Vybrať dátum"
     },
     "due": {
       "overdue": "Po termíne",
@@ -75,7 +90,14 @@
     "statusFailed": "Úlohu sa nepodarilo zmeniť. Skúste to znova.",
     "pickTitle": "Vyberte úlohu",
     "pickDescription": "Vyberte úlohu zo zoznamu a zobrazí sa tu.",
-    "openMatter": "Otvoriť spis"
+    "openMatter": "Otvoriť spis",
+    "assignedTo": "Riešiteľ",
+    "nobody": "Nepriradené",
+    "assign": "Priradiť",
+    "doneAssigning": "Hotovo",
+    "someone": "Niekto",
+    "membersFailed": "Členov spisu sa nepodarilo načítať.",
+    "assignFailed": "Úlohu sa nepodarilo prideliť. Skúste to znova."
   },
   "matters": {
     "emptyTitle": "Zatiaľ žiadne spisy",
@@ -119,7 +141,9 @@
     },
     "add": "Pridať",
     "scanDocument": "Naskenovať dokument",
-    "newTask": "Nová úloha"
+    "newTask": "Nová úloha",
+    "uploadDocument": "Nahrať dokument",
+    "uploadFailed": "Dokument sa nepodarilo nahrať. Skúste to znova."
   },
   "entity": {
     "type": "Typ",
@@ -141,7 +165,16 @@
     "preview": "Otvoriť náhľad",
     "previewDescription": "Tento súbor sa otvorí v systémovom náhľade.",
     "unrendered": "Tento dokument sa tu nedá zobraziť, systémový náhľad ho však možno otvorí.",
-    "details": "Podrobnosti"
+    "details": "Podrobnosti",
+    "zoomOut": "Oddialiť",
+    "zoomIn": "Priblížiť",
+    "zoomFit": "Prispôsobiť šírke",
+    "fit": "Šírka",
+    "appearance": {
+      "system": "Vzhľad: automaticky",
+      "light": "Vzhľad: svetlý",
+      "dark": "Vzhľad: tmavý"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -169,7 +202,8 @@
     "server": "Server",
     "signOut": "Odhlásiť sa",
     "deleteAccount": "Odstrániť účet",
-    "deleteAccountHint": "Otvorí váš účet na webe, kde ho môžete odstrániť aj so všetkým, čo je vaše."
+    "deleteAccountHint": "Otvorí váš účet na webe, kde ho môžete odstrániť aj so všetkým, čo je vaše.",
+    "signOutFailed": "Odhlásenie sa nepodarilo dokončiť. Skúste to znova."
   },
   "header": {
     "search": "Hľadať"
@@ -183,6 +217,7 @@
     "headnote": "Právna veta",
     "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
     "openSource": "Otvoriť originál",
+    "openFailed": "Odkaz sa nepodarilo otvoriť.",
     "loadFailed": "Judikatúru sa nepodarilo načítať.",
     "share": "Zdieľať"
   },
@@ -268,6 +303,29 @@
   "palette": {
     "placeholder": "Hľadajte spisy a konverzácie alebo spustite príkaz",
     "noResults": "Nič nezodpovedá „{query}“"
+  },
+  "search": {
+    "placeholder": "Hľadať v stella",
+    "clear": "Vymazať hľadanie",
+    "cancel": "Zrušiť",
+    "recent": "Nedávne hľadania",
+    "clearRecent": "Vymazať",
+    "hint": "Hľadajte v spisoch, dokumentoch, úlohách, konverzáciách a judikatúre.",
+    "filters": "Filtre",
+    "noResultsTitle": "Žiadne výsledky",
+    "noResults": "Nič nezodpovedá „{query}“. Skúste iné slová alebo odstráňte filter.",
+    "loadFailed": "Hľadanie sa nepodarilo vykonať.",
+    "retry": "Skúsiť znova",
+    "type": {
+      "document": "Dokumenty",
+      "matter": "Spisy",
+      "task": "Úlohy",
+      "caseLaw": "Judikatúra",
+      "chat": "Konverzácie",
+      "folder": "Priečinky",
+      "message": "E-maily",
+      "link": "Odkazy"
+    }
   },
   "pane": {
     "showList": "Zobraziť zoznam",

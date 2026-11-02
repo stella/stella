@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { ciExpressionContext, modelledEvent } from "./ci-expression-context";
@@ -66,7 +68,7 @@ const baselineGit = (args: string[]) => {
   }
   return result.stdout.toString().trim();
 };
-const baselineRevision = baselineGit(["merge-base", "origin/main", "HEAD"]);
+const baselineRevision = treeBaseRevision({ repoRoot: root });
 const original = v.parse(
   workflowSchema,
   Bun.YAML.parse(
@@ -1037,6 +1039,7 @@ test("heavy queue evidence follows Git tree identity and remains conservative wh
       paginate: async (_method: unknown, options: { run_id: number }) =>
         options.run_id === 100 ? [job] : [queueJob],
       rest: {
+        checks: { listAnnotations: async () => ({ data: [] }) },
         actions: {
           listJobsForWorkflowRun: "current-jobs",
           listJobsForWorkflowRunAttempt: "queue-jobs",
@@ -1135,6 +1138,7 @@ test("heavy classification uses passing evidence from any matching-tree run", as
           return run_id === 200 ? first.jobs : second.jobs;
         },
         rest: {
+          checks: { listAnnotations: async () => ({ data: [] }) },
           actions: {
             listJobsForWorkflowRun: "current-jobs",
             listJobsForWorkflowRunAttempt: "queue-jobs",

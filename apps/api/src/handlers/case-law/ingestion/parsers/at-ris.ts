@@ -1,19 +1,33 @@
-// parser-output-unchanged: retention is checked by the pipeline against the stored raw; the parser no longer validates itself, and its blocks are unchanged.
 /** Parse the publisher-structured XML served by Austria's RIS. */
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
 import {
   type Block,
   type DocumentAst,
+  type HeadingBlock,
   isApparatusRole,
   type ParagraphBlock,
   type ParagraphRole,
+  plainTextOf,
   startsDecisionBody,
 } from "@stll/legal-ast/document-ast";
+import { rewriteInlineWhitespace } from "@stll/legal-ast/inline-line";
 
+import {
+  type AtCourtTextSection,
+  type AtPrintedLine,
+  isAtBenchRecital,
+  readAtDecisionRoles,
+} from "@/api/handlers/case-law/ingestion/parsers/at-decision-regions";
+import {
+  readRisContent,
+  type RisItem,
+  risTextFidelity,
+} from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
+import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 
 export type ParseRisDecisionInput = {
   sourceDocumentId: string;
@@ -38,21 +52,13 @@ export type RisDocumentSections = Readonly<Record<string, string>>;
 
 export type ParseRisDecisionOutput = {
   documentAst: DocumentAst;
+  /** Set when the text read differs from what the publisher printed. */
+  textFidelity: DecisionTextFidelity | undefined;
+  /** Elements outside the RIS vocabulary; their text is kept. */
+  unknownElements: readonly string[];
   fulltext: string;
   sections: RisDocumentSections;
 };
-
-const normalizedText = (text: string): string =>
-  text
-    .replace(/\u00a0/gu, " ")
-    .replace(/\s+/gu, " ")
-    .trim();
-
-const elementText = ($: cheerio.CheerioAPI, element: Element): string =>
-  normalizedText($(element).text());
-
-const isPageFurniture = ($: cheerio.CheerioAPI, node: AnyNode): boolean =>
-  $(node).closest("kzinhalt, fzinhalt").length > 0;
 
 const paragraphRole = (
   contentType: string | undefined,
@@ -109,6 +115,46 @@ const paragraphRole = (
 };
 
 /**
+ * The court's own text, by where the publisher filed it. Its role comes from
+ * what the court printed (`readAtDecisionRoles`); the label only says
+ * where the text starts.
+ */
+const courtTextSection = (
+  contentType: string | undefined,
+): AtCourtTextSection | undefined => {
+  switch (contentType) {
+    case "spruch": {
+      return "operative";
+    }
+    case "begruendung":
+    case "rechtlichebeurteilung": {
+      return "reasons";
+    }
+    case "text": {
+      return "text";
+    }
+    case undefined: {
+      return undefined;
+    }
+    default: {
+      return undefined;
+    }
+  }
+};
+
+/**
+ * The role of a publisher field. The VwGH files its bench recital under
+ * `betreff`; elsewhere that label holds the publisher's subject line.
+ */
+const publisherFieldRole = (
+  contentType: string | undefined,
+  text: string,
+): ParagraphRole | undefined =>
+  contentType === "betreff" && isAtBenchRecital(text)
+    ? "intro"
+    : paragraphRole(contentType);
+
+/**
  * Every content type this document labels a section with.
  *
  * The inventory reads the stored XML through this, so a section type the
@@ -135,12 +181,165 @@ export const listRisDocumentContentTypes = (xml: string): readonly string[] => {
   return [...contentTypes];
 };
 
+type RisParagraphItem = Extract<RisItem, { type: "paragraph" }>;
+
+/**
+ * A printed line this long was filled to a margin; a shorter one is a
+ * heading, a label or a field. The `abstand` share of a document does not
+ * say which it is: across the recorded decisions it runs continuously from
+ * 0 to 0.96, with transcripts and one-paragraph-per-`absatz` decisions on
+ * both sides of any cut. The boundary between two lines does.
+ */
+export const MIN_WRAPPED_LINE_CHARS = 55;
+
+/** A sentence ends here: the author ended the line, not a margin. */
+const SENTENCE_END_RE = /[.!?:;]["'’“”»«)\]]*$/u;
+
+/**
+ * A list marker, numbered point or `Label:` field opens a unit of its own. A
+ * point's number is never followed by another digit, so a section reference
+ * that wrapped (`nach Nummer` / `5.3.3 oder …`) is not one.
+ */
+const STRUCTURAL_START_RE =
+  /^(?:\(?\d{1,3}[.)](?!\d)|\(?[IVXLC]{1,6}[.)]|\(?\p{L}\)|[-–•*]|\p{Lu}[\p{L}/ ]{1,30}:\s)/u;
+
+/** No sentence opens on a lowercase letter or a digit. */
+const CONTINUATION_START_RE = /^[\p{Ll}\d]/u;
+
+const LOWERCASE_START_RE = /^\p{Ll}/u;
+
+/**
+ * A line that fills the measure and stops mid-sentence goes on in the next.
+ * A shorter one ends its paragraph, unless the next line opens in lowercase
+ * or on a digit: a justified line that wrapped one long word
+ * (`Grundstücksflächen` / `erhalten.`) or a number (`§ 74 GewO` / `1994`)
+ * still continues.
+ */
+const continuesLine = (above: string, below: string): boolean =>
+  !SENTENCE_END_RE.test(above) &&
+  !STRUCTURAL_START_RE.test(below) &&
+  (above.length >= MIN_WRAPPED_LINE_CHARS || CONTINUATION_START_RE.test(below));
+
+type WrappedLine = { item: RisParagraphItem; lastLine: string };
+
+/**
+ * Whether `item` goes on from the open line. Lines of one element join as
+ * `continuesLine` says, an `abstand` between them only before a lowercase
+ * line. A list item joins only the closing text after its list, when that
+ * text goes on in lowercase: the publisher closed the list mid-sentence.
+ */
+const joinsLine = (
+  current: WrappedLine,
+  item: RisParagraphItem,
+  { below, spaced }: { below: string; spaced: boolean },
+): boolean => {
+  if (item.contentType !== current.item.contentType) {
+    return false;
+  }
+  if (current.item.element === "listelem") {
+    return (
+      item.element === "schluss" &&
+      !spaced &&
+      !SENTENCE_END_RE.test(current.lastLine) &&
+      LOWERCASE_START_RE.test(below)
+    );
+  }
+  return (
+    item.element === current.item.element &&
+    continuesLine(current.lastLine, below) &&
+    (!spaced || LOWERCASE_START_RE.test(below))
+  );
+};
+
+/**
+ * An apparatus section (citing decisions, norms, numbers) is a register:
+ * each `absatz` is an entry of its own, however it ends, so none wraps.
+ */
+const wrappableText = (item: RisItem | undefined): string | undefined =>
+  item?.type === "paragraph" &&
+  (item.element === "absatz" ||
+    item.element === "schluss" ||
+    item.element === "listelem") &&
+  item.layout !== "pre" &&
+  paragraphRole(item.contentType) !== "apparatus"
+    ? plainTextOf(item.inlines)
+    : undefined;
+
+/**
+ * Join the printed lines of a transcript into paragraphs: consecutive
+ * `absatz` lines of one prose content type belong to one paragraph when the
+ * first stops mid-sentence and the second goes on (see `continuesLine`). An
+ * `abstand` between them ends the paragraph unless the second line opens in
+ * lowercase: a transcript that spaces its printed lines still continues its
+ * sentence. Each boundary is judged on the printed line before it, never on
+ * the paragraph joined so far.
+ */
+export const joinWrappedLines = (items: readonly RisItem[]): RisItem[] => {
+  const joined: RisItem[] = [];
+  let current: WrappedLine | undefined;
+  let spacing: RisItem[] = [];
+  for (const item of items) {
+    if (item.type === "break" && current !== undefined) {
+      spacing.push(item);
+      continue;
+    }
+    const below = wrappableText(item);
+    if (
+      current !== undefined &&
+      item.type === "paragraph" &&
+      below !== undefined &&
+      joinsLine(current, item, { below, spaced: spacing.length > 0 })
+    ) {
+      current.item.inlines.push({ type: "text", text: " " }, ...item.inlines);
+      current.lastLine = below;
+      spacing = [];
+      continue;
+    }
+    if (current !== undefined) {
+      joined.push(current.item, ...spacing);
+      current = undefined;
+      spacing = [];
+    }
+    if (item.type === "paragraph" && below !== undefined) {
+      current = {
+        item: { ...item, inlines: [...item.inlines] },
+        lastLine: below,
+      };
+      continue;
+    }
+    joined.push(item);
+  }
+  if (current !== undefined) {
+    joined.push(current.item, ...spacing);
+  }
+  return joined;
+};
+
+type RisParseFailure = "no-text" | "no-blocks";
+
+const FAILURE_MESSAGE = {
+  "no-text": "RIS XML nutzdaten element has no decision text",
+  "no-blocks": "RIS XML decision text produced no document blocks",
+} as const satisfies Record<RisParseFailure, string>;
+
+const parseFailure = (failure: RisParseFailure, cause?: unknown) =>
+  Result.err(new ParseXmlError({ message: FAILURE_MESSAGE[failure], cause }));
+
+/** Whether a heading over `next` titles publisher head matter, not the decision. */
+const titlesHeadMatter = (next: RisItem | undefined): boolean => {
+  if (next?.type !== "paragraph" || next.element !== "absatz") {
+    return false;
+  }
+  const role = paragraphRole(next.contentType);
+  return isApparatusRole(role) || role === "intro" || role === "case-number";
+};
+
 export const parseRisDecisionXml = (
   input: ParseRisDecisionInput,
 ): Result<ParseRisDecisionOutput, ParseXmlError> => {
   const $ = cheerio.load(input.xml, { xml: true });
-  const content = $("nutzdaten").first();
-  if (content.length === 0) {
+  const content = $("nutzdaten").first().get(0);
+  if (content === undefined) {
     return Result.err(
       new ParseXmlError({
         message: "RIS XML has no nutzdaten element",
@@ -149,39 +348,91 @@ export const parseRisDecisionXml = (
     );
   }
 
-  const decisionContent = content.clone();
-  decisionContent.find("kzinhalt, fzinhalt").remove();
-  if (normalizedText(decisionContent.text()) === "") {
-    return Result.err(
-      new ParseXmlError({
-        message: "RIS XML nutzdaten element has no decision text",
-        cause: undefined,
-      }),
-    );
+  const { items, unknownElements } = readRisContent(content);
+  if (items.length === 0) {
+    return parseFailure("no-text");
   }
+  const textFidelity = risTextFidelity(content, items);
 
   const blocks: Block[] = [];
   const sections = new Map<string, string[]>();
   let blockIndex = 0;
   let bodyStarted = false;
-
-  const appendSection = (contentType: string, text: string): void => {
-    const printed = sections.get(contentType);
-    if (printed === undefined) {
-      sections.set(contentType, [text]);
-      return;
+  const units = joinWrappedLines(items);
+  const rendered = units.map((unit) => {
+    if (unit.type === "break") {
+      return undefined;
     }
-    printed.push(text);
-  };
-
-  const appendParagraph = (
-    text: string,
-    role: ParagraphRole | undefined,
-  ): void => {
-    if (text === "") {
-      return;
+    const inlines = rewriteInlineWhitespace(
+      unit.inlines,
+      collapseLetterSpacing,
+    );
+    return { inlines, text: plainTextOf(inlines) };
+  });
+  // The court's text is read whole before any role is given: where its
+  // parts start and end can depend on lines further down.
+  const courtRoles = readAtDecisionRoles(
+    units.map((unit, index): AtPrintedLine => {
+      const text = rendered[index]?.text ?? "";
+      if (unit.type === "break") {
+        return { type: "break" };
+      }
+      if (unit.type === "heading") {
+        return { type: "heading", text };
+      }
+      const section = courtTextSection(unit.contentType);
+      return section === undefined
+        ? { type: "field" }
+        : { type: "paragraph", text, section };
+    }),
+    [
+      input.caseNumber,
+      ...units.flatMap((unit, index) =>
+        unit.type === "paragraph" && unit.contentType === "gz"
+          ? [rendered[index]?.text ?? ""]
+          : [],
+      ),
+    ],
+  );
+  for (const [index, item] of units.entries()) {
+    const line = rendered[index];
+    if (item.type === "break" || line === undefined) {
+      continue;
     }
+    const { inlines, text } = line;
     blockIndex += 1;
+    if (item.type === "heading") {
+      const heading = {
+        id: `b${blockIndex}`,
+        anchorId: `h-${blockIndex}`,
+        type: "heading",
+        level: 1,
+        role:
+          !bodyStarted &&
+          titlesHeadMatter(
+            units.slice(index + 1).find((unit) => unit.type !== "break"),
+          )
+            ? "publisher-heading"
+            : "section-heading",
+        inlines,
+        plainText: text,
+      } satisfies HeadingBlock;
+      blocks.push(heading);
+      bodyStarted ||= startsDecisionBody(heading);
+      continue;
+    }
+    if (item.contentType !== undefined) {
+      const sectionText = sections.get(item.contentType);
+      if (sectionText === undefined) {
+        sections.set(item.contentType, [text]);
+      } else {
+        sectionText.push(text);
+      }
+    }
+    const role =
+      courtTextSection(item.contentType) === undefined
+        ? publisherFieldRole(item.contentType, text)
+        : courtRoles[index];
     const block = {
       id: `b${blockIndex}`,
       anchorId: `p-${blockIndex}`,
@@ -192,78 +443,14 @@ export const parseRisDecisionXml = (
               bodyStarted && isApparatusRole(role) ? "publisher-note" : role,
           }
         : {}),
-      inlines: [{ type: "text", text }],
+      inlines,
       plainText: text,
     } satisfies ParagraphBlock;
     blocks.push(block);
     bodyStarted ||= startsDecisionBody(block);
-  };
-
-  const appendNode = (node: AnyNode): void => {
-    if (!isTag(node)) {
-      if (isText(node)) {
-        appendParagraph(normalizedText(node.data), undefined);
-      }
-      return;
-    }
-    if (isPageFurniture($, node)) {
-      return;
-    }
-    const text = elementText($, node);
-    if (text === "") {
-      return;
-    }
-    if (node.tagName === "ueberschrift") {
-      const nextRole = paragraphRole($(node).next("absatz").attr("ct"));
-      const publisherHeading =
-        !bodyStarted &&
-        (isApparatusRole(nextRole) ||
-          nextRole === "intro" ||
-          nextRole === "case-number");
-      blockIndex += 1;
-      blocks.push({
-        id: `b${blockIndex}`,
-        anchorId: `h-${blockIndex}`,
-        type: "heading",
-        level: 1,
-        role: publisherHeading ? "publisher-heading" : "section-heading",
-        inlines: [{ type: "text", text }],
-        plainText: text,
-      });
-      bodyStarted ||= !publisherHeading;
-      return;
-    }
-
-    if (node.tagName === "absatz") {
-      const contentType = $(node).attr("ct");
-      if (contentType !== undefined && contentType !== "") {
-        appendSection(contentType, text);
-      }
-      appendParagraph(text, paragraphRole(contentType));
-      return;
-    }
-
-    if ($(node).find("ueberschrift, absatz").length === 0) {
-      appendParagraph(text, undefined);
-      return;
-    }
-    $(node)
-      .contents()
-      .each((_, child) => {
-        appendNode(child);
-      });
-  };
-
-  content.contents().each((_, node) => {
-    appendNode(node);
-  });
+  }
   if (blocks.length === 0) {
-    return Result.err(
-      new ParseXmlError({
-        message: "RIS XML decision text produced no document blocks",
-        cause: undefined,
-      }),
-    );
+    return parseFailure("no-blocks");
   }
 
   return Result.ok({
@@ -293,5 +480,7 @@ export const parseRisDecisionXml = (
         printed.join("\n\n"),
       ]),
     ),
+    unknownElements,
+    textFidelity,
   });
 };

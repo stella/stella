@@ -16,7 +16,10 @@ import {
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { explainRoot } from "@/api/tests/query-plans/plan-walker";
+import {
+  explainRoot,
+  indexedAccessPaths,
+} from "@/api/tests/query-plans/plan-walker";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const WORKS = 500;
@@ -82,12 +85,16 @@ const assertAmendmentProbe = (root: Record<string, unknown>) => {
   expect(indexes).toHaveLength(1);
   const index =
     indexes.at(0) ?? panic("The amendment count has no canonical work index");
-  if (index["Node Type"] === "Bitmap Index Scan") {
-    expect(scan["Node Type"]).toBe("Bitmap Heap Scan");
-  } else {
-    expect(index["Node Type"]).toBe("Index Scan");
-    expect(scan).toBe(index);
-  }
+  // The work scan is the work index's access path: the index scan itself, or
+  // the heap scan over its bitmap.
+  expect(
+    indexedAccessPaths(count, "legislation_documents").filter(
+      ({ node, accessKind, branches }) =>
+        node === scan &&
+        accessKind !== "index-only" &&
+        branches.every(({ indexName }) => indexName === WORK_INDEX),
+    ),
+  ).toHaveLength(1);
   const condition = index["Index Cond"];
   if (typeof condition !== "string") {
     panic("The amendment count has no index condition");

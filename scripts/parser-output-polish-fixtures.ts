@@ -2,10 +2,6 @@ import { panic } from "better-result";
 import { readdir } from "node:fs/promises";
 import nodePath from "node:path";
 
-import type {
-  DecisionSupplement,
-  IngestionResult,
-} from "../apps/api/src/handlers/case-law/ingestion/adapter";
 import {
   buildPlDecision,
   normalizeSaosDumpItem,
@@ -55,6 +51,10 @@ import {
   readPlTkCasePage,
   readPlTkRuling,
 } from "../apps/api/src/handlers/case-law/ingestion/parsers/pl-tk";
+import type {
+  DecisionSupplement,
+  IngestionResult,
+} from "../apps/api/src/lib/legal-search/ingestion-types";
 import { isRecord } from "../apps/api/src/lib/type-guards";
 
 /** Replay recorded responses through the same pure builders as ingestion. */

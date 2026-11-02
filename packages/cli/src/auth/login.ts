@@ -8,11 +8,6 @@ import { createInterface } from "node:readline/promises";
 import { Temporal } from "temporal-polyfill/full";
 
 import { openInBrowser } from "./browser-open.js";
-import {
-  getRegisteredClient,
-  registeredClientSupportsScopes,
-  setRegisteredClient,
-} from "./cli-config.js";
 import { cliClientMetadataUrl } from "./client-metadata-document.js";
 import {
   CLI_IDENTITY_SCOPES,
@@ -21,7 +16,10 @@ import {
   LOOPBACK_REDIRECT_URI,
 } from "./constants.js";
 import type { StoredCredential } from "./credential-store.js";
-import { MissingOrgClaimError } from "./errors.js";
+import {
+  ClientDocumentUnsupportedError,
+  MissingOrgClaimError,
+} from "./errors.js";
 import type { CliAuthError, LoopbackTimeoutError } from "./errors.js";
 import { decodeAccessTokenClaims, decodeIdTokenClaims } from "./jwt.js";
 import {
@@ -30,7 +28,6 @@ import {
 } from "./loopback-listener.js";
 import type { LoopbackCallback } from "./loopback-listener.js";
 import { parseManualCallbackInput } from "./manual-callback.js";
-import { registerLoopbackClient } from "./oauth-client-registration.js";
 import { discoverAuthorizationServerMetadata } from "./oauth-metadata.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
 import { persistLogin } from "./persist-login.js";
@@ -42,7 +39,6 @@ import { redeemAuthorizationCode } from "./token-exchange.js";
 export type LoginOptions = {
   readonly configDir: string;
   readonly orgHint: string | undefined;
-  readonly registrationScopes: readonly string[];
   /**
    * `stella:*` scopes to request. `login` adds `CLI_IDENTITY_SCOPES` itself,
    * so no caller (or `--scopes` value) can drop `offline_access` and end up
@@ -122,45 +118,27 @@ const buildAuthorizeUrl = (input: {
 };
 
 /**
- * The CLI's client id for this server: its published client metadata
- * document when the server accepts those, otherwise the cached loopback
- * registration for `serverUrl`, registering one if none exists yet.
+ * The CLI's fixed public client id on this server: the URL of the client
+ * metadata document the server publishes for it, on the issuer's origin. The
+ * CLI never registers a client of its own: the server shows a registered
+ * client as an unverified app, whatever name it gives.
  */
-const resolveClientId = async (
-  configDir: string,
+const resolveClientId = (
   serverUrl: string,
   metadata: AuthorizationServerMetadata,
-  registrationScopes: readonly string[],
-): Promise<Result<string, CliAuthError>> => {
+): Result<string, ClientDocumentUnsupportedError> => {
   const documentClientId =
     metadata.client_id_metadata_document_supported === true
       ? cliClientMetadataUrl(metadata.issuer)
       : undefined;
-  if (documentClientId) {
-    return Result.ok(documentClientId);
-  }
-
-  const cached = await getRegisteredClient(configDir, serverUrl);
-  if (cached && registeredClientSupportsScopes(cached, registrationScopes)) {
-    return Result.ok(cached.clientId);
-  }
-
-  const registered = await registerLoopbackClient(
-    metadata,
-    registrationScopes,
-    getMcpResourceUrl(serverUrl),
-  );
-  if (Result.isError(registered)) {
-    return registered;
-  }
-
-  await setRegisteredClient(
-    configDir,
-    serverUrl,
-    registered.value,
-    registrationScopes,
-  );
-  return Result.ok(registered.value);
+  return documentClientId
+    ? Result.ok(documentClientId)
+    : Result.err(
+        new ClientDocumentUnsupportedError({
+          message: `${serverUrl} cannot identify the stella CLI: its authorization server needs an https issuer that accepts client metadata documents. Use an API key (STELLA_API_KEY) for this server instead.`,
+          serverUrl,
+        }),
+      );
 };
 
 const isLoopbackCallback = (
@@ -288,18 +266,10 @@ export const login = async (
     );
     const scopes = yield* negotiateOAuthScopes({
       advertisedScopes: metadata.scopes_supported,
-      registrationScopes: options.registrationScopes,
       requestedScopes: [...CLI_IDENTITY_SCOPES, ...options.resourceScopes],
       requiredScopes: options.requiredScopes,
     });
-    const clientId = yield* Result.await(
-      resolveClientId(
-        options.configDir,
-        serverUrl,
-        metadata,
-        scopes.registrationScopes,
-      ),
-    );
+    const clientId = yield* resolveClientId(serverUrl, metadata);
 
     const { codeChallenge, codeVerifier } = createPkcePair();
     const state = createAuthorizationState();
@@ -324,7 +294,7 @@ export const login = async (
       codeChallenge,
       redirectUri,
       resource: getMcpResourceUrl(serverUrl),
-      scopes: scopes.requestedScopes,
+      scopes,
       state,
     });
 
@@ -371,7 +341,7 @@ export const login = async (
       orgId: claims.org_id,
       ...(options.orgHint ? { orgLabel: options.orgHint } : {}),
       refreshToken: token.refresh_token,
-      scope: token.scope ?? scopes.requestedScopes.join(" "),
+      scope: token.scope ?? scopes.join(" "),
       serverUrl,
       tokenType: token.token_type,
       updatedAt: now,
