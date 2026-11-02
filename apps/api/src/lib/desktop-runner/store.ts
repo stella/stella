@@ -231,6 +231,16 @@ export const claimRunnerSession = async (
   }: ClaimSessionOptions,
 ): Promise<ClaimSessionResult> =>
   await withAggregateTransaction(db, async (tx) => {
+    // Claims of one account are serialized before the current session is
+    // read, so overlapping claims for one runner each see the earlier claim's
+    // committed session as `previous`. Admissions stay serialized from the
+    // count through the insert, so concurrent new installations never pass
+    // the cap together.
+    await withAggregateLock({
+      aggregate: "desktopRunnerCapacity",
+      id: { organizationId: binding.organizationId, userId: binding.userId },
+      tx,
+    });
     const [existing] = await tx
       .select({
         sessionId: runner.sessionId,
@@ -241,13 +251,6 @@ export const claimRunnerSession = async (
       .where(runnerKey(binding))
       .limit(1);
     if (existing === undefined) {
-      // Admissions of one account are serialized from the count through the
-      // insert, so concurrent new installations never pass the cap together.
-      await withAggregateLock({
-        aggregate: "desktopRunnerCapacity",
-        id: { organizationId: binding.organizationId, userId: binding.userId },
-        tx,
-      });
       const registered = await countRunners(tx, binding);
       if (registered >= limits.maxRunnersPerAccount) {
         await evictIdleRunners(
@@ -1020,20 +1023,15 @@ type PendingCommandsResult =
 
 /**
  * Commands queued after `afterId` for the open runs bound to this socket, in
- * queue order. A socket that is no longer the desktop's current one gets none.
+ * queue order. A socket that is no longer the desktop's current one gets none:
+ * the commands are read in the same statement that matches this socket's
+ * session on the runner row, so a takeover committed at any point leaves the
+ * superseded socket without them.
  */
 export const readPendingCommands = async (
   db: DesktopRunnerDb,
   { binding, sessionId, afterId, limit }: PendingCommandsOptions,
 ): Promise<PendingCommandsResult> => {
-  const [current] = await db
-    .select({ sessionId: runner.sessionId })
-    .from(runner)
-    .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
-    .limit(1);
-  if (current === undefined) {
-    return { type: "superseded" };
-  }
   const rows = await db
     .select({
       id: desktopRunnerCommands.id,
@@ -1044,6 +1042,7 @@ export const readPendingCommands = async (
     })
     .from(desktopRunnerCommands)
     .innerJoin(runs, eq(runs.runId, desktopRunnerCommands.runId))
+    .innerJoin(runner, and(runnerKey(binding), eq(runner.sessionId, sessionId)))
     .where(
       and(
         boundTo(binding),
@@ -1053,6 +1052,18 @@ export const readPendingCommands = async (
     )
     .orderBy(asc(desktopRunnerCommands.id))
     .limit(limit);
+  if (rows.length === 0) {
+    // No command in a snapshot where this socket was current, or none at all
+    // because it was not: the runner row says which.
+    const [current] = await db
+      .select({ sessionId: runner.sessionId })
+      .from(runner)
+      .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
+      .limit(1);
+    if (current === undefined) {
+      return { type: "superseded" };
+    }
+  }
   return {
     type: "current",
     commands: rows.map((row) => ({
@@ -1299,7 +1310,8 @@ export type InsertedCommand =
 
 /**
  * Queue one command for an open run of `owner`. The command key makes a
- * repeat a duplicate; the holder is returned only while its socket is open.
+ * repeat a duplicate, also once the run holds its cap; the holder is returned
+ * only while its socket is open.
  */
 export const insertRunCommand = async (
   db: DesktopRunnerDb,
@@ -1307,6 +1319,14 @@ export const insertRunCommand = async (
 ): Promise<InsertedCommand> =>
   await withAggregateTransaction(db, async (tx) => {
     const { owner, runId } = options;
+    // Commands for the account's runs are serialized from the cap count
+    // through the insert, so concurrent commands never pass a run's cap
+    // together.
+    await withAggregateLock({
+      aggregate: "desktopRunnerCapacity",
+      id: { organizationId: owner.organizationId, userId: owner.userId },
+      tx,
+    });
     const [run] = await tx
       .select({
         state: runs.state,
@@ -1337,6 +1357,20 @@ export const insertRunCommand = async (
     }
     if (!DESKTOP_RUNNER_OPEN_RUN_STATES.some((state) => state === run.state)) {
       return { type: "run_ended", state: run.state };
+    }
+    const [repeat] = await tx
+      .select({ id: desktopRunnerCommands.id })
+      .from(desktopRunnerCommands)
+      .where(
+        and(
+          eq(desktopRunnerCommands.runId, runId),
+          eq(desktopRunnerCommands.kind, options.kind),
+          eq(desktopRunnerCommands.commandKey, options.commandKey),
+        ),
+      )
+      .limit(1);
+    if (repeat !== undefined) {
+      return { type: "duplicate" };
     }
     const [queued] = await tx
       .select({ count: sql<number>`count(*)::int` })

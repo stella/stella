@@ -12,6 +12,7 @@ import {
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
 } from "@stll/api-contract/desktop-runner";
+import { compareCodeUnit } from "@stll/collation";
 
 import { user } from "@/api/db/auth-schema";
 import {
@@ -1415,17 +1416,34 @@ describe("what one run may store", () => {
       limits: { maxCommandsPerRun: 2 },
     });
     const { runId, desktop } = await acceptedRun(first);
-    const input = () => ({
+    const inputs = Array.from({ length: 4 }, () => ({
       owner,
       runId,
       inputId: Bun.randomUUIDv7(),
       message: { role: "user" as const, content: "More." },
-    });
-    expect((await cappedControl.sendInput(input())).unwrap()).toEqual({
-      type: "queued",
-    });
-    expect((await cappedControl.sendInput(input())).unwrap()).toEqual({
-      type: "command_limit",
+    }));
+    // Concurrent commands never pass the cap together: one fits beside the
+    // start, the rest are refused.
+    const outcomes = await Promise.all(
+      inputs.map(async (input) =>
+        (await cappedControl.sendInput(input)).unwrap(),
+      ),
+    );
+    expect(outcomes.map(({ type }) => type).toSorted(compareCodeUnit)).toEqual([
+      "command_limit",
+      "command_limit",
+      "command_limit",
+      "queued",
+    ]);
+    // A retry of the queued command stays a duplicate once the run is full.
+    const queued = inputs.find(
+      (_, index) => outcomes[index]?.type === "queued",
+    );
+    if (queued === undefined) {
+      return panic("one command is queued");
+    }
+    expect((await cappedControl.sendInput(queued)).unwrap()).toEqual({
+      type: "duplicate",
     });
     await desktop.close();
   });
@@ -1484,8 +1502,9 @@ describe("sweep delivery", () => {
     ).toEqual({ type: "queued" });
     directReads.count = 0;
     await sweeping.gateway.sweep();
-    // One read finds the socket; its delivery reads its runner and one page.
-    expect(directReads.count).toBe(3);
+    // One read finds the socket; its delivery reads one page, which matches
+    // the socket's runner in the same statement.
+    expect(directReads.count).toBe(2);
     expect(
       (
         await busy.receive(
