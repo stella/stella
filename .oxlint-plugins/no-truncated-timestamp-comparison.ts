@@ -491,9 +491,29 @@ const LEADING_TEXT_COMPARISON =
 // name, and a grouping paren or text function around it, closed by `)` or by
 // the rest of the function's argument list.
 const SQL_OPERAND = String.raw`(?:'(?:[^']|'')*'|"[^"]*"|[\w$.]+)`;
-// A text function's opening, or a grouping paren that follows no name.
-const TEXT_OPENER_END =
-  /(?:\b(?:coalesce|lower|upper|btrim|ltrim|rtrim|trim|concat)\s*\(|(?<![\w$"]\s*)\()\s*$/iu;
+// A text function's opening at the end of trimmed text.
+const TEXT_FUNCTION_OPEN_END =
+  /\b(?:coalesce|lower|upper|btrim|ltrim|rtrim|trim|concat)\s*\($/iu;
+const NAME_END = /[\w$"]$/u;
+
+/**
+ * Where a text function's opening, or a grouping paren that follows no name,
+ * ends `text`; `null` when neither does. Trailing space is trimmed first, so
+ * no pattern scans it from every position.
+ */
+const textOpenerStart = (text: string): number | null => {
+  const trimmed = text.trimEnd();
+  const call = TEXT_FUNCTION_OPEN_END.exec(trimmed);
+  if (call !== null) {
+    return call.index;
+  }
+  if (!trimmed.endsWith("(")) {
+    return null;
+  }
+  return NAME_END.test(trimmed.slice(0, -1).trimEnd())
+    ? null
+    : trimmed.length - 1;
+};
 const CONCAT_BEFORE_END = new RegExp(
   String.raw`${SQL_OPERAND}\s*\|\|\s*$`,
   "iu",
@@ -522,10 +542,10 @@ const unwrapRenderedText = (
   let head = before;
   let opened = 0;
   for (let step = 0; step < MAX_PASSTHROUGH_STEPS; step += 1) {
-    const opener = TEXT_OPENER_END.exec(head);
+    const opener = textOpenerStart(head);
     if (opener !== null) {
       opened += 1;
-      head = head.slice(0, opener.index);
+      head = head.slice(0, opener);
       continue;
     }
     const concat = CONCAT_BEFORE_END.exec(head);
