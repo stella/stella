@@ -1496,7 +1496,11 @@
       "connected": "Rozszerzenie połączone",
       "description": "Na Twoją prośbę stella może otwierać i czytać strony internetowe w osobnej karcie.",
       "install": "Zainstaluj rozszerzenie",
-      "installDescription": "Rozszerzenie stella pozwala na Twoją prośbę otwierać i czytać strony w osobnej karcie. Zainstaluj je z Chrome Web Store."
+      "installDescription": "Rozszerzenie stella pozwala na Twoją prośbę otwierać i czytać strony w osobnej karcie. Zainstaluj je z Chrome Web Store.",
+      "reload": "Odśwież tę kartę",
+      "reloadDescription": "Twoje rozszerzenie stella jest nowsze niż ta karta. Odśwież kartę, aby dalej z niego korzystać.",
+      "updating": "Oczekiwanie na aktualizację rozszerzenia",
+      "updatingDescription": "Twoje rozszerzenie stella jest w starszej wersji. Chrome aktualizuje je automatycznie, zwykle w ciągu kilku godzin; potem stella znów będzie mogła otwierać i czytać dla Ciebie strony."
     },
     "cancelQueuedMessage": "Anuluj wiadomość w kolejce",
     "caseLawGreeting": "Zapytaj mnie o to orzeczenie — mam dostęp do pełnej treści.",

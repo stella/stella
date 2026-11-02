@@ -1496,7 +1496,11 @@
       "connected": "Rozšíření připojeno",
       "description": "stella pro vás na požádání otevře a přečte webové stránky v samostatné kartě.",
       "install": "Nainstalovat rozšíření",
-      "installDescription": "S rozšířením stella pro vás může stella na požádání otevírat a číst weby v samostatné kartě. Nainstalujete jej z Internetového obchodu Chrome."
+      "installDescription": "S rozšířením stella pro vás může stella na požádání otevírat a číst weby v samostatné kartě. Nainstalujete jej z Internetového obchodu Chrome.",
+      "reload": "Znovu načíst kartu",
+      "reloadDescription": "Vaše rozšíření stella je novější než tato karta. Načtěte kartu znovu, abyste jej mohli dál používat.",
+      "updating": "Čeká se na aktualizaci rozšíření",
+      "updatingDescription": "Vaše rozšíření stella je ve starší verzi. Chrome jej aktualizuje automaticky, obvykle během několika hodin, a pak pro vás stella bude moct znovu otevírat a číst weby."
     },
     "cancelQueuedMessage": "Zrušit zařazenou zprávu",
     "caseLawGreeting": "Zeptejte se na toto rozhodnutí — plný text je k dispozici.",
