@@ -157,12 +157,9 @@ test.each([
     // availability read is the one the overlay host makes for itself, and the
     // composer below registers with the host's own editor. Without either the
     // overlay panics and its boundary shows the error fallback instead.
-    await waitFor(
-      () => {
-        expect(availabilityReads).toBeGreaterThan(0);
-      },
-      { timeout: 15_000 },
-    );
+    await waitFor(() => {
+      expect(availabilityReads).toBeGreaterThan(0);
+    });
     expect(screen.getByText(READER_CONTENT)).toBeDefined();
     expect(screen.queryByText(messages.common.somethingWentWrong)).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
@@ -236,9 +233,7 @@ test("asking about a passage leaves the docked chat as the only composer", async
     await act(async () => {
       useInspectorTabsStore.setState({ minimized: true });
     });
-    const composer = await screen.findByRole("textbox", undefined, {
-      timeout: 15_000,
-    });
+    const composer = await screen.findByRole("textbox");
     if (!("editor" in composer) || !(composer.editor instanceof Editor)) {
       panic("Expected the reader overlay's mounted TipTap composer");
     }

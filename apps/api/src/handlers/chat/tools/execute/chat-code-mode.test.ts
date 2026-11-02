@@ -1,5 +1,13 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -18,6 +26,7 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -29,6 +38,8 @@ import {
 } from "./chat-code-mode";
 import { CHAT_READ_SCRIPT_POLICY } from "./chat-read-script-policy";
 import { classifyScriptName } from "./script-call-guide";
+
+const testFetchState = createTestFetch();
 
 // Drives the real QuickJS sandbox through execute_typescript: share the sandbox
 // suite's 15s ceiling and drain the process-global admission state after each
@@ -601,7 +612,10 @@ describe("the chat read script policy", () => {
   ])(
     "a script calling the direct-only read %s fails before any request",
     async (name, args) => {
-      const fetchSpy = spyOn(globalThis, "fetch");
+      const fetchSpy = Object.assign(mock(globalThis.fetch), {
+        preconnect: globalThis.fetch.preconnect,
+      });
+      testFetchState.set(fetchSpy);
       try {
         const execute =
           buildChatCodeMode(buildProps(selectScopedDb([]))).tool.execute ??
@@ -612,7 +626,7 @@ describe("the chat read script policy", () => {
         expect(output).toMatchObject({ success: false });
         expect(fetchSpy).not.toHaveBeenCalled();
       } finally {
-        fetchSpy.mockRestore();
+        testFetchState.restore();
       }
     },
   );

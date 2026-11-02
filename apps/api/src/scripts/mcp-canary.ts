@@ -28,6 +28,11 @@ import {
 import { cliClientMetadataUrl } from "@stll/cli/client-metadata-document";
 import { printError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
+import {
+  BodyByteLimitError,
+  readBodyTextWithIdleDeadline,
+  readBodyWithIdleDeadline,
+} from "@stll/fetch/body-reader";
 import { sha256Base64Url, sha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
@@ -372,8 +377,11 @@ export const evaluateToolsList = ({
 
 const readProbeResponse = async (
   response: Response,
+  idleMs = PROBE_TIMEOUT_MS,
 ): Promise<ProbeResponse> => {
-  const text = await response.text();
+  const text = await readBodyTextWithIdleDeadline(response, {
+    idleMs,
+  });
   let body: unknown;
   try {
     body = JSON.parse(text);
@@ -509,7 +517,7 @@ const postJsonRpc = async (
 ): Promise<ProbeResponse> =>
   await readProbeResponse(
     await fetcher(createJsonRpcRequest(call), {
-      timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+      timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
     }),
   );
 
@@ -521,7 +529,7 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> =>
           await deploymentFetcher(new URL(MCP_DISCOVERY_PATH, baseUrl), {
             headers: { accept: "application/json" },
             method: "GET",
-            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
           }),
         ),
       ),
@@ -540,7 +548,7 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> =>
               "content-type": "application/json",
             },
             method: "POST",
-            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
           }),
         ),
       ),
@@ -612,7 +620,7 @@ export const runAuthenticatedStreamProbe = async (
       authorization: `Bearer ${token}`,
     },
     method: "GET",
-    timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+    timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
   });
   const headerResult = evaluateStreamAvailability({
     contentType: response.headers.get("content-type"),
@@ -954,24 +962,9 @@ const CANARY_SCOPE = MCP_DEFAULT_RESOURCE_SCOPES.filter(
   (scope) => scope === "stella:search" || scope === "stella:read",
 ).join(" ");
 
-const readBoundedJsonObjectBody = async (
-  body: ReadableStream<Uint8Array>,
-): Promise<Record<string, unknown> | undefined> => {
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  for await (const chunk of body) {
-    length += chunk.byteLength;
-    if (length > CLIENT_METADATA_BYTE_CAP) {
-      return undefined;
-    }
-    chunks.push(chunk);
-  }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
+const parseJsonObjectBody = (
+  bytes: Uint8Array,
+): Record<string, unknown> | undefined => {
   const parsed = Result.try((): unknown =>
     JSON.parse(new TextDecoder().decode(bytes)),
   );
@@ -980,7 +973,7 @@ const readBoundedJsonObjectBody = async (
     : undefined;
 };
 
-const readBoundedJsonObject = async (
+const readClientMetadataBody = async (
   response: Response,
 ): Promise<Record<string, unknown> | undefined> => {
   const declaredLength = Number(response.headers.get("content-length"));
@@ -991,9 +984,19 @@ const readBoundedJsonObject = async (
     await response.body?.cancel();
     return undefined;
   }
-  return response.body
-    ? await readBoundedJsonObjectBody(response.body)
-    : undefined;
+  const bytes = await Result.tryPromise(async () =>
+    readBodyWithIdleDeadline(response, {
+      idleMs: PROBE_TIMEOUT_MS,
+      maxBytes: CLIENT_METADATA_BYTE_CAP,
+    }),
+  );
+  if (Result.isError(bytes)) {
+    if (BodyByteLimitError.is(bytes.error.cause)) {
+      return undefined;
+    }
+    throw bytes.error.cause;
+  }
+  return parseJsonObjectBody(bytes.value);
 };
 
 type AuthorizeResponseOptions = {
@@ -1075,7 +1078,7 @@ export const runOAuthJourneys = async (
     await runNamedProbe("authorization server discovery", async () => {
       const resource = await readProbeResponse(
         await fetcher(new URL(MCP_DISCOVERY_PATH, baseUrl), {
-          timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+          timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
         }),
       );
       const discovery = evaluateDiscovery(resource);
@@ -1096,7 +1099,7 @@ export const runOAuthJourneys = async (
       );
       const metadata = await readProbeResponse(
         await fetcher(metadataUrl, {
-          timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+          timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
         }),
       );
       const evaluation = evaluateAuthorizationMetadata(metadata);
@@ -1123,7 +1126,7 @@ export const runOAuthJourneys = async (
           await fetcher(registrationEndpoint, {
             method: "POST",
             headers: { "content-type": "application/json" },
-            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
             body: JSON.stringify({
               client_name: CANARY_CLIENT_NAME,
               redirect_uris: LOOPBACK_REDIRECTS,
@@ -1166,7 +1169,7 @@ export const runOAuthJourneys = async (
             {
               headers: { accept: "application/json" },
               method: "GET",
-              timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+              timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
             },
           );
           if (!response.ok) {
@@ -1176,13 +1179,12 @@ export const runOAuthJourneys = async (
               `client metadata unavailable upstream (HTTP ${String(response.status)})`,
             );
           }
-          if (!(await readBoundedJsonObject(response))) {
-            return upstream(
-              metadataName,
-              "client metadata unavailable upstream (invalid JSON document)",
-            );
-          }
-          return passed(metadataName, "client metadata available upstream");
+          return (await readClientMetadataBody(response))
+            ? passed(metadataName, "client metadata available upstream")
+            : upstream(
+                metadataName,
+                "client metadata unavailable upstream (invalid JSON document)",
+              );
         });
         if (Result.isOk(attempt)) {
           return attempt.value;
@@ -1235,7 +1237,7 @@ export const runOAuthJourneys = async (
           const response = await fetchWithRateLimitRetry(name, fetcher, url, {
             method: "GET",
             redirect: "manual",
-            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
           });
           const result = evaluateAuthorize({
             response,
@@ -1342,7 +1344,7 @@ export const runCredentialExpiryProbe = async (
     ...(await readProbeResponse(
       await fetcher(new URL("/v1/api-keys/current", baseUrl), {
         headers: { authorization: `Bearer ${token}` },
-        timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+        timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
       }),
     )),
     nowMs: Temporal.Now.instant().epochMilliseconds,
@@ -1386,7 +1388,7 @@ export const runDesktopProbe = async (
         const sessionResponse = await readProbeResponse(
           await fetcher(new URL("/api/auth/get-session", baseUrl), {
             headers: { cookie: sessionCookie },
-            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
           }),
         );
         const schema = v.object({
@@ -1424,7 +1426,7 @@ export const runDesktopProbe = async (
                 deviceJkt,
                 verifierHash: canaryVerifierHash(verifier),
               }),
-              timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+              timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
             },
           );
           await grant.body?.cancel();
@@ -1456,7 +1458,7 @@ export const runDesktopProbe = async (
                   expectedUserId: identity.userId,
                   expectedOrganizationId: identity.organizationId,
                 }),
-                timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+                timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
               },
             ),
           );
@@ -1503,7 +1505,7 @@ export const runDesktopProbe = async (
                 "content-type": "application/json",
               },
               body: JSON.stringify({ type: "revoke" }),
-              timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+              timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
             }),
           );
           if (
@@ -1566,7 +1568,7 @@ export const runStagingCredentialJourneys = async (
           await fetcher(new URL("/smoke/session", baseUrl), {
             method: "POST",
             headers: { "x-smoke-secret": smokeSecret },
-            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
           }),
         );
         if (
@@ -1592,7 +1594,7 @@ export const runStagingCredentialJourneys = async (
               cookie: sessionCookie,
               "content-type": "application/json",
             },
-            timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
             body: JSON.stringify({
               name: STAGING_KEY_NAME,
               scopes: CANARY_SCOPE.split(" "),
@@ -1671,7 +1673,7 @@ export const runStagingCredentialJourneys = async (
                 cookie: browserCookie,
                 "content-type": "application/json",
               },
-              timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+              timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
               body: JSON.stringify({ keyId: idToRevoke }),
             }),
           );
@@ -1915,7 +1917,7 @@ const createReviewJourneyContext = (
       {
         ...init,
         headers,
-        timeout: { type: "idle", ms: requestBudgetMs ?? PROBE_TIMEOUT_MS },
+        timeout: { type: "headers", ms: requestBudgetMs ?? PROBE_TIMEOUT_MS },
       },
     );
     const responseCookies = cookies.get(origin) ?? new Map<string, string>();
@@ -1930,7 +1932,10 @@ const createReviewJourneyContext = (
       }
     }
     cookies.set(origin, responseCookies);
-    state.lastResponse = await readProbeResponse(response);
+    state.lastResponse = await readProbeResponse(
+      response,
+      requestBudgetMs ?? PROBE_TIMEOUT_MS,
+    );
     if (
       requestBudgetMs !== undefined &&
       performance.now() - started >= requestBudgetMs
@@ -2262,7 +2267,7 @@ const captureReviewCallback = async ({
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the canary's own loopback receiver; origin, path and state checked against the issued redirect before this call; no credentials, redirects manual
   const delivered = await fetchWithTimeout(redirect, {
     redirect: "manual",
-    timeout: { type: "idle", ms: PROBE_TIMEOUT_MS },
+    timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
   });
   await delivered.body?.cancel();
   state.lastResponse = { status: delivered.status, body: undefined };
