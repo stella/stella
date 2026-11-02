@@ -2,7 +2,7 @@ import { Err, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
-import { defaultConfig, type HealthConfig } from "@stll/db-load-gate/health";
+import type { HealthConfig } from "@stll/db-load-gate/health";
 
 import {
   BACKFILL_TABLE_CONTENTION,
@@ -11,6 +11,7 @@ import {
 } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
 import { caseLawCoverageSummaries } from "@/api/db/schema";
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/coverage-refresh-interval";
 import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
@@ -36,18 +37,21 @@ const REFRESH_RUN_BUDGET_MS = 60_000;
 /**
  * The refresh reads the corpus under shared locks and writes only its own
  * summary row, so it is governed as a reader rather than a corpus writer:
- * the shared IO balance and busy windows hold it at the default floors, and a
+ * the shared IO balance and the configured busy windows hold it at the
+ * configured floors, and a
  * hold never outlasts one refresh interval, so the next scheduled run always
  * re-reads the load instead of sitting out a backoff it no longer needs. It
  * still takes the shared backfill slot, so it never runs beside a backfill.
  */
-export const CASE_LAW_COVERAGE_REFRESH_CONFIG = {
-  ...defaultConfig,
+export const caseLawCoverageRefreshConfig = (
+  health: HealthConfig = loadGateHealthConfig(),
+): HealthConfig => ({
+  ...health,
   minSize: 1,
   maxSize: 1,
   batchStatementTimeoutMs: CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
   holdBackoffCapMs: CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS,
-} as const satisfies HealthConfig;
+});
 
 type CoverageRefreshBatch = {
   cursor: null;
@@ -90,7 +94,7 @@ export const createCaseLawCoverageRefreshTask =
       tableName: "case_law_decisions",
       tableContention: BACKFILL_TABLE_CONTENTION.SHARED_READ,
       initialSize: 1,
-      config: CASE_LAW_COVERAGE_REFRESH_CONFIG,
+      config: caseLawCoverageRefreshConfig(),
       observeStatus: logSchedulerBackfillStatus,
       reporting: "changes",
       statementTimeoutPolicy: "fail",

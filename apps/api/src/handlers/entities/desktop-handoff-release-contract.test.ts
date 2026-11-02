@@ -26,6 +26,7 @@ import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/a
 import type { DesktopHandoffAuthorizationDependencies } from "@/api/lib/business-registries/desktop/handoff-auth";
 import { recordDesktopHandoffFailure } from "@/api/lib/desktop-edit-handoffs";
 import { hashDesktopEditHandoffToken } from "@/api/lib/desktop-edit-sessions";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import {
   hashPdfSigningToken,
   recordPdfSigningHandoffFailure,
@@ -290,6 +291,15 @@ test("a supported PDF desktop with its matching account redeems the signing sess
       redemptionDatabase: tokenDb,
       authorizeAccount: async (request) =>
         Result.ok({
+          featureAccessSnapshot: buildFeatureAccessSnapshot({
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+            identity: {
+              email: `${ids.userA1}@example.test`,
+              emailVerified: true,
+            },
+            enrolments: [],
+          }),
           consumedProof: await claimFixtureDeviceProof({
             request: await device.signRequest({
               request,

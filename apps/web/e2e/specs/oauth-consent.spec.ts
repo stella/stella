@@ -580,7 +580,7 @@ test("consent discloses permissions on demand and brands only verified locations
     );
     await expect(permission).toBeHidden();
     const disclosure = page.locator(
-      '[data-slot="consent-permissions"] > summary',
+      '[data-slot="consent-permissions"] button[aria-expanded]',
     );
     await disclosure.click();
     await expect(permission).toBeVisible();
