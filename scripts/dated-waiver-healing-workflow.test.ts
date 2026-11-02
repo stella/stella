@@ -378,9 +378,11 @@ test("CI expiry runs list the files their change touched", () => {
   const list = quickChecks.find(
     ({ name }) => name === "dated-waiver-expiry: List files the change touches",
   )?.run;
-  if (list === undefined) {
-    throw new TypeError("Missing dated waiver change listing");
-  }
+  expect(list?.trim()).toBe("bash scripts/dated-waiver-changed-files.sh");
+  const listing = readFileSync(
+    new URL("dated-waiver-changed-files.sh", import.meta.url),
+    "utf-8",
+  );
   const directory = mkdtempSync(path.join(tmpdir(), "dated-waiver-scope-"));
   const runnerTemp = mkdtempSync(path.join(tmpdir(), "dated-waiver-runner-"));
   try {
@@ -413,7 +415,7 @@ test("CI expiry runs list the files their change touched", () => {
           "-euo",
           "pipefail",
           "-c",
-          list.replace(
+          listing.replace(
             /^.*bun scripts\/dated-waiver-base\.ts.*$/mu,
             'printf "%s" "$base" > "$RUNNER_TEMP/base-ref"',
           ),
