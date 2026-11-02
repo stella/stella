@@ -1,0 +1,20 @@
+[
+  {
+    "file": "apps/api/src/handlers/entities/copy-utils.ts",
+    "from": "98cd7cb60a713d341e6e0828f08fc0b80f87b37d8ba36017239afac88ae4243e",
+    "to": "967f4e5695ca1cc03734e94f136c8637c38fafda85d7fa1a37f86c24f6524c5e",
+    "reason": "A move now locks the source's tombstoned versions with its live ones, since they travel with it; same lock, same count."
+  },
+  {
+    "file": "apps/api/src/handlers/entities/copy-utils.ts",
+    "from": "e0dc6d9e35ce81868d56ddabebb7112d01d3755a830b055b6b566d6b2b927528",
+    "to": "283d775750eceb2316124405129bd37a7c02e865c1714f888636ef9a59898fcd",
+    "reason": "The field lock follows the moved versions, tombstones included; same lock, same count."
+  },
+  {
+    "file": "apps/api/src/lib/entity-versions/insert-entity-version.ts",
+    "from": "32926171d96c6201ad4e99a743aa597ca989f855d36cedccd952ed43044100a6",
+    "to": "a8c617873ab9527542001f85c1adce6b8f01d9f37b0dc1c00e7f45d77c804a1b",
+    "reason": "Verification codes of tombstoned versions now travel with them, so the code lock reads those rows too; same lock, same count."
+  }
+]
