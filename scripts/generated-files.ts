@@ -164,7 +164,11 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   "mobile-ui-theme": ["packages/portable-path/src/index.ts"],
   "mobile-icons": ["packages/portable-path/src/index.ts"],
   "mobile-folio-fonts": ["packages/portable-path/src/index.ts"],
-  "capability-catalog": ["apps/api/package.json", "apps/api/scripts/*"],
+  "capability-catalog": [
+    "apps/api/package.json",
+    "apps/api/scripts/*",
+    "apps/api/scripts/seed-content/*",
+  ],
   "capability-runtime": [
     "packages/legal-ast/src/analysis.ts",
     "packages/legal-ast/src/decision-identifier.ts",
@@ -199,6 +203,9 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/email/correspondence/create.ts",
     "apps/api/src/lib/email/correspondence/provenance.ts",
     "apps/api/src/lib/email/inbound/*",
+    "apps/api/src/lib/hosted-usage-provider/client.ts",
+    "apps/api/src/lib/hosted-usage-provider/config.ts",
+    "apps/api/src/lib/hosted-usage-provider/external-account-ref.ts",
     "apps/api/src/lib/hosted-usage-provider/webhook-retention.ts",
     "apps/api/src/lib/infosoud/agenda-import.ts",
     "apps/api/src/lib/infosoud/client.ts",
