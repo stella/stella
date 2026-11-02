@@ -13,7 +13,7 @@ import type { ReplayRunReport } from "@/api/handlers/case-law/ingestion/replay";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 
-import { REPLAY_HEALTH_CONFIG } from "./replay-enrolment";
+import { replayHealthConfig } from "./replay-enrolment";
 import {
   classifyReplayFailure,
   type ReplayFailure,
@@ -597,7 +597,7 @@ export const runBackgroundReplayTick = async ({
   dependencies,
   maxRows,
   maxDurationMs,
-  healthConfig = REPLAY_HEALTH_CONFIG,
+  healthConfig = replayHealthConfig(),
   signal,
 }: BackgroundReplayTickOptions): Promise<BackgroundReplayTickReport> => {
   if (

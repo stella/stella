@@ -1,0 +1,18 @@
+{
+  "id": "no-global-fetch-replacement",
+  "rules": ["no-global-fetch-replacement/no-global-fetch-replacement"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-06T09:57:36.943Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-global-fetch-replacement/no-global-fetch-replacement",
+    "apps/api/src"
+  ]
+}
