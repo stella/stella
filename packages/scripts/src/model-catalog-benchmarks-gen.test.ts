@@ -172,6 +172,8 @@ describe("benchmark check availability", () => {
     await Bun.write(
       preload,
       `
+      const { installOfflineCheckPreloadMarker } = await import(${JSON.stringify(path.join(import.meta.dir, "offline-check-startup.ts"))});
+      installOfflineCheckPreloadMarker();
       const fixture = await Bun.file(${JSON.stringify(responseFile)}).json();
       if (fixture.slow) {
         const schedule = globalThis.setTimeout;

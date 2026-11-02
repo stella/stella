@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/button";
@@ -101,7 +102,10 @@ export const StatuteInspectorView = ({
     statuteTitle: statute?.title ?? payload.statuteTitle,
   });
   const landingAnchorId = statuteLandingAnchorId(
-    preparedReader.blocks,
+    {
+      blocks: preparedReader.blocks,
+      scheme: statuteAnchorSchemeFor(payload.country),
+    },
     payload.anchorId,
   );
   // The chat is bound to the consolidation the tab holds, which is the
