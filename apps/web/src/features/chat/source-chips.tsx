@@ -6,6 +6,7 @@ import { isEntityKind } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Separator } from "@stll/ui/separator";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { chatAppOrigins } from "@/components/chat/chat-app-origins";
@@ -65,30 +66,30 @@ export const SourceChips = ({
         data-chat-answer-citations-divider
         orientation="vertical"
       />
+      {/* The sources sit in the answer footer's own row, after Copy and
+          Retry: one line that wraps only when it runs out of room. */}
       <div className="contents" data-chat-answer-citations>
-        <div className="w-full space-y-2">
-          {cited.length > 0 && (
-            <SourceEntryList
-              entries={cited}
-              messageId={messageId}
-              workspaceId={workspaceId}
-            />
-          )}
-          {consulted.length > 0 && (
-            <details className="group">
-              <summary className="focus-visible:ring-ring text-muted-foreground cursor-pointer rounded-sm text-xs focus-visible:ring-2 focus-visible:outline-none">
-                {t("alsoConsulted", { count: consulted.length })}
-              </summary>
-              <div className="mt-2">
-                <SourceEntryList
-                  entries={consulted}
-                  messageId={`${messageId}-consulted`}
-                  workspaceId={workspaceId}
-                />
-              </div>
-            </details>
-          )}
-        </div>
+        {cited.length > 0 && (
+          <SourceEntryList
+            entries={cited}
+            messageId={messageId}
+            workspaceId={workspaceId}
+          />
+        )}
+        {consulted.length > 0 && (
+          <details className="group min-w-0">
+            <summary className="focus-visible:ring-ring text-muted-foreground cursor-pointer rounded-sm text-xs focus-visible:ring-2 focus-visible:outline-none">
+              {t("alsoConsulted", { count: consulted.length })}
+            </summary>
+            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <SourceEntryList
+                entries={consulted}
+                messageId={`${messageId}-consulted`}
+                workspaceId={workspaceId}
+              />
+            </div>
+          </details>
+        )}
       </div>
     </>
   );
@@ -107,49 +108,45 @@ const SourceEntryList = ({
   const caseLaw = entries.filter((entry) => entry.type === "case-law");
   const remaining = entries.filter((entry) => entry.type !== "case-law");
   const tiers = COURT_TIER_LABELS;
+  // Flat items for the surrounding flex row: each court tier is a short
+  // label followed by its decisions, so the sources stay on the footer line.
   return (
-    <div className="space-y-2">
+    <>
       {tiers.map((tier) => {
         const rows = caseLaw.filter((entry) => entry.caseLaw.tier === tier);
         if (rows.length === 0) {
           return null;
         }
         return (
-          <section key={tier}>
-            <h4 className="text-muted-foreground mb-1 text-xs font-medium">
+          <section className="contents" key={tier}>
+            <h4 className="text-muted-foreground shrink-0 text-xs font-medium">
               {t(tier)}
             </h4>
-            <div className="space-y-1">
-              {rows.map((entry) => (
-                <CaseLawSourceRow
-                  key={`${messageId}-${entry.source.url}`}
-                  entry={entry}
-                />
-              ))}
-            </div>
+            {rows.map((entry) => (
+              <CaseLawSourceRow
+                key={`${messageId}-${entry.source.url}`}
+                entry={entry}
+              />
+            ))}
           </section>
         );
       })}
-      {remaining.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {remaining.map((entry) =>
-            entry.type === "document" ? (
-              <SourceChip
-                key={`${messageId}-${entry.source.data.entityId}`}
-                sourceDocument={entry.source.data}
-                workspaceId={workspaceId}
-              />
-            ) : (
-              <PublisherSourceChip
-                key={`${messageId}-${entry.source.url}`}
-                source={entry.source}
-                workspaceId={workspaceId ?? null}
-              />
-            ),
-          )}
-        </div>
+      {remaining.map((entry) =>
+        entry.type === "document" ? (
+          <SourceChip
+            key={`${messageId}-${entry.source.data.entityId}`}
+            sourceDocument={entry.source.data}
+            workspaceId={workspaceId}
+          />
+        ) : (
+          <PublisherSourceChip
+            key={`${messageId}-${entry.source.url}`}
+            source={entry.source}
+            workspaceId={workspaceId ?? null}
+          />
+        ),
       )}
-    </div>
+    </>
   );
 };
 
@@ -166,6 +163,33 @@ const CaseLawSourceRow = ({
         timeZone: "UTC",
       })
     : null;
+  // One line, centred on the chip: the holding is hover text, so a long one
+  // never makes the chip two rows tall.
+  const label = (
+    <>
+      <span
+        aria-label={caseLaw.court}
+        className="bg-muted shrink-0 rounded px-1 font-medium"
+      >
+        {caseLaw.courtShortCode}
+      </span>
+      <BidiText as="span" className="min-w-0 truncate font-medium">
+        {caseLaw.caseNumber}
+        {date ? ` · ${date}` : ""}
+      </BidiText>
+    </>
+  );
+  const rowClassName = "flex min-w-0 items-center gap-1.5";
+  const row = caseLaw.holding ? (
+    <Tooltip>
+      <TooltipTrigger render={<span className={rowClassName} />}>
+        {label}
+      </TooltipTrigger>
+      <TooltipPopup className="max-w-sm">{caseLaw.holding}</TooltipPopup>
+    </Tooltip>
+  ) : (
+    <span className={rowClassName}>{label}</span>
+  );
   return (
     <LegalCitationLink
       appearance="tray"
@@ -174,25 +198,7 @@ const CaseLawSourceRow = ({
       linkIconSource={{ kind: "tool-source" }}
       source={source}
     >
-      <span className="flex min-w-0 items-start gap-2">
-        <span
-          aria-label={caseLaw.court}
-          className="bg-muted shrink-0 rounded px-1.5 py-0.5 text-xs font-medium"
-        >
-          {caseLaw.courtShortCode}
-        </span>
-        <span className="min-w-0">
-          <BidiText as="span" className="block text-xs font-medium">
-            {caseLaw.caseNumber}
-            {date ? ` · ${date}` : ""}
-          </BidiText>
-          {caseLaw.holding && (
-            <span className="text-muted-foreground block truncate text-xs">
-              {caseLaw.holding}
-            </span>
-          )}
-        </span>
-      </span>
+      {row}
     </LegalCitationLink>
   );
 };

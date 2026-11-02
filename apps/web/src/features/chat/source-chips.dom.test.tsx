@@ -171,6 +171,25 @@ test("shows cited court groups and keeps consulted decisions collapsed", () => {
   }
 });
 
+test("a cited decision is one uncapped line in the answer footer row", () => {
+  renderSources();
+  const citations = document.querySelector("[data-chat-answer-citations]");
+  // The tier label and its decisions are items of the footer row itself, so
+  // they sit beside Copy and Retry rather than in a full-width block below.
+  expect(citations?.className).toBe("contents");
+  expect(citations?.firstElementChild?.className).toBe("contents");
+  const label = screen.getByText(/I\. ÚS 1\/26 · /u, {
+    selector: ".font-medium",
+  });
+  // The case number and date keep the row's width, not the compact 20ch cap.
+  const chipLabel = label.closest("bdi");
+  expect(chipLabel?.className).toContain("min-w-0");
+  expect(chipLabel?.className).not.toContain("max-w-[20ch]");
+  // The holding is hover text, never a second row inside the chip.
+  expect(label.parentElement?.className).toContain("items-center");
+  expect(screen.queryByText("Holding for I. ÚS 1/26")).toBeNull();
+});
+
 test("renders a case-law source without an invalid decision date", () => {
   renderInvalidDateSource();
   const disclosure = screen.getByText("Also consulted (1)");
