@@ -506,7 +506,10 @@
     "billingDraftsRevoked": "لا يصوغ stella AI الأوصاف إلا بعد أن تسمح له عند إدخال وقت.",
     "billingDraftsWithdraw": "سحب الموافقة",
     "billingDraftsWithdrawPending": "stella AI متوقف على هذا الحاسوب. سيُرسَل سحب موافقتك إلى stella فور إمكانية الوصول إليه.",
-    "billingDraftsUnavailable": "يتعذّر تحميل إعدادات مسودات stella AI حاليًا."
+    "billingDraftsUnavailable": "يتعذّر تحميل إعدادات مسودات stella AI حاليًا.",
+    "aiDraftCodes": "المهمة {task} · النشاط {activity}",
+    "aiDraftFlags": "ملاحظات على إرشادات الفوترة",
+    "aiDraftFlagSource": "{file}، {section}"
   },
   "dictation": {
     "title": "الإملاء",

@@ -506,7 +506,10 @@
     "billingDraftsRevoked": "stella AI navrhuje popisy až poté, co ji povolíte u časového záznamu.",
     "billingDraftsWithdraw": "Odvolat souhlas",
     "billingDraftsWithdrawPending": "stella AI je na tomto počítači vypnutá. Odvolání se stelle odešle, jakmile bude dostupná.",
-    "billingDraftsUnavailable": "Nastavení návrhů stella AI se teď nepodařilo načíst."
+    "billingDraftsUnavailable": "Nastavení návrhů stella AI se teď nepodařilo načíst.",
+    "aiDraftCodes": "Úkon {task} · Činnost {activity}",
+    "aiDraftFlags": "Poznámky k fakturačním pravidlům",
+    "aiDraftFlagSource": "{file}, {section}"
   },
   "dictation": {
     "title": "Diktování",

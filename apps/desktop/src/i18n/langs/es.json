@@ -506,7 +506,10 @@
     "billingDraftsRevoked": "stella AI solo redacta descripciones después de que lo permitas en un registro de tiempo.",
     "billingDraftsWithdraw": "Retirar el consentimiento",
     "billingDraftsWithdrawPending": "stella AI está desactivado en este ordenador. Tu retirada se enviará a stella en cuanto esté disponible.",
-    "billingDraftsUnavailable": "Ahora no se pueden cargar los ajustes de las propuestas de stella AI."
+    "billingDraftsUnavailable": "Ahora no se pueden cargar los ajustes de las propuestas de stella AI.",
+    "aiDraftCodes": "Tarea {task} · Actividad {activity}",
+    "aiDraftFlags": "Notas sobre las normas de facturación",
+    "aiDraftFlagSource": "{file}, {section}"
   },
   "dictation": {
     "title": "Dictado",

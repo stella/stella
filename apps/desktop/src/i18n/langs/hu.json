@@ -506,7 +506,10 @@
     "billingDraftsRevoked": "A stella AI csak akkor javasol leírást, ha egy időbejegyzésnél engedélyezi.",
     "billingDraftsWithdraw": "Hozzájárulás visszavonása",
     "billingDraftsWithdrawPending": "A stella AI ki van kapcsolva ezen a számítógépen. A visszavonást elküldjük a stellának, amint elérhető.",
-    "billingDraftsUnavailable": "A stella AI javaslatok beállításai most nem tölthetők be."
+    "billingDraftsUnavailable": "A stella AI javaslatok beállításai most nem tölthetők be.",
+    "aiDraftCodes": "Feladat {task} · Tevékenység {activity}",
+    "aiDraftFlags": "Megjegyzések a számlázási irányelvekhez",
+    "aiDraftFlagSource": "{file}, {section}"
   },
   "dictation": {
     "title": "Diktálás",

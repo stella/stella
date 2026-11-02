@@ -506,7 +506,10 @@
     "billingDraftsRevoked": "stella AI entwirft Beschreibungen erst, nachdem Sie es bei einem Zeiteintrag erlaubt haben.",
     "billingDraftsWithdraw": "Einwilligung widerrufen",
     "billingDraftsWithdrawPending": "stella AI ist auf diesem Computer aus. Ihr Widerruf wird an stella gesendet, sobald es erreichbar ist.",
-    "billingDraftsUnavailable": "Die Einstellungen für Entwürfe mit stella AI können gerade nicht geladen werden."
+    "billingDraftsUnavailable": "Die Einstellungen für Entwürfe mit stella AI können gerade nicht geladen werden.",
+    "aiDraftCodes": "Aufgabe {task} · Tätigkeit {activity}",
+    "aiDraftFlags": "Hinweise zu den Abrechnungsrichtlinien",
+    "aiDraftFlagSource": "{file}, {section}"
   },
   "dictation": {
     "title": "Diktieren",

@@ -10,6 +10,7 @@ import type {
   DesktopBillingDraftReview,
   DesktopBillingDraftSettingsResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
+import type { DesktopTimeEntryClassification } from "@stll/api-contract/desktop-time-entries";
 
 import { documentName } from "./activity-logic";
 import type { DayReviewGroup } from "./day-review-logic";
@@ -122,11 +123,18 @@ export const draftFailureKind = (cause: unknown): DraftFailureKind => {
   return isDraftFailureKind(type) ? type : "failed";
 };
 
-/** What a card shows from a review: its description and the earlier entries
- * the draft followed. */
+/** A note a guided draft raises against the firm's billing guidelines, with
+ * the file and section it cites. */
+type GuidelineFlag = { text: string; fileName: string; section: string };
+
+/** What a card shows from a review: its description, the earlier entries the
+ * draft followed and, from a guided draft, the entry's classification and
+ * the guideline notes. */
 export type CardDraft = {
   narrative: string;
   earlierEntries: DesktopBillingDraftReview["earlierEntries"];
+  classification: DesktopTimeEntryClassification | null;
+  flags: GuidelineFlag[];
 };
 
 /** The card's draft from a server review, or `null` when the answer does not
@@ -137,16 +145,38 @@ export const cardDraftFrom = (value: unknown): CardDraft | null => {
     return null;
   }
   const { result, earlierEntries } = parsed.output;
+  const followed = (matched: readonly string[]) => {
+    const cited = new Set(matched);
+    return earlierEntries.filter(({ id }) => cited.has(id));
+  };
+  if (result.mode === "plain") {
+    const draft = result.drafts.find(
+      ({ entryId }) => entryId === CARD_DRAFT_ENTRY_ID,
+    );
+    return draft === undefined
+      ? null
+      : {
+          narrative: draft.narrative,
+          earlierEntries: followed(draft.matchedEarlierEntryIds),
+          classification: null,
+          flags: [],
+        };
+  }
   const draft = result.drafts.find(
     ({ entryId }) => entryId === CARD_DRAFT_ENTRY_ID,
   );
   if (draft === undefined) {
     return null;
   }
-  const cited = new Set(draft.matchedEarlierEntryIds);
   return {
     narrative: draft.narrative,
-    earlierEntries: earlierEntries.filter(({ id }) => cited.has(id)),
+    earlierEntries: followed(draft.matchedEarlierEntryIds),
+    classification: draft.classification,
+    flags: draft.flags.map(({ text, ruleRef }) => ({
+      text,
+      fileName: ruleRef.fileName,
+      section: ruleRef.section,
+    })),
   };
 };
 
