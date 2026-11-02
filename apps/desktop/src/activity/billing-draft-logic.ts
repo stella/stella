@@ -296,12 +296,14 @@ export const partitionRanges = (
   ranges: readonly ActivityRange[],
   weights: readonly number[],
 ): ActivityRange[][] => {
+  // `map` returns a fresh array; sorting it in place keeps to what the oldest
+  // supported WebView provides.
   const spans = ranges
     .map(({ start, end }) => ({
       startMs: Temporal.Instant.from(start).epochMilliseconds,
       endMs: Temporal.Instant.from(end).epochMilliseconds,
     }))
-    .toSorted((left, right) => left.startMs - right.startMs);
+    .sort((left, right) => left.startMs - right.startMs);
   const totalMs = spans.reduce(
     (sum, { startMs, endMs }) => sum + endMs - startMs,
     0,
