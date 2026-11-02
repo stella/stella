@@ -111,8 +111,8 @@ export const openingProductStory = [
 export const productStoryThumbnails = (locale: Locale) =>
   ({
     workspace: {
-      src: productCaptures["workspace"].src[locale],
-      darkSrc: productCaptures["workspace"].darkSrc[locale],
+      src: productCaptures.workspace.src[locale],
+      darkSrc: productCaptures.workspace.darkSrc[locale],
       alt: "Matter workspace in stella",
     },
     review: {
@@ -129,13 +129,13 @@ export const productStoryThumbnails = (locale: Locale) =>
       alt: "Contract review table in stella",
     },
     editor: {
-      src: productCaptures["editor"].src[locale],
-      darkSrc: productCaptures["editor"].darkSrc[locale],
+      src: productCaptures.editor.src[locale],
+      darkSrc: productCaptures.editor.darkSrc[locale],
       alt: "Word document open in the stella Editor",
     },
     agent: {
-      src: productCaptures["agent"].src[locale],
-      darkSrc: productCaptures["agent"].darkSrc[locale],
+      src: productCaptures.agent.src[locale],
+      darkSrc: productCaptures.agent.darkSrc[locale],
       alt: "AI agent in stella: a cited change-of-control review with a generated exposure view",
     },
     cli: {
