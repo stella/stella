@@ -125,7 +125,7 @@
         "title": "AI agent, ktorý pracuje s vašimi spismi, súbormi aj nástrojmi."
       },
       "anonymization": {
-        "blurb": "Odstráňte mená, subjekty a identifikačné údaje skôr, než sa podklady dostanú k AI, a to priamo z chatu aj z revízie dokumentov. Výsledok si pred ďalším použitím skontrolujete.",
+        "blurb": "Odstráňte mená, organizácie a identifikačné údaje skôr, než sa podklady dostanú k AI, a to priamo z chatu aj z revízie dokumentov. Výsledok si pred ďalším použitím skontrolujete.",
         "discover": "Objavte Anonymizáciu",
         "eyebrow": "Anonymizácia",
         "title": "Pripravte podklady pre AI bez odhalenia identifikačných údajov."
@@ -278,7 +278,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Odstráni mená, subjekty a identifikačné údaje skôr, než sa podklady dostanú k AI.",
+          "body": "Odstráni mená, organizácie a identifikačné údaje skôr, než sa podklady dostanú k AI.",
           "title": "Identifikačné údaje zostanú bokom"
         },
         "1": {
@@ -303,20 +303,20 @@
           "question": "Je anonymizácia dostupná už teraz?"
         },
         "1": {
-          "answer": "S prípravou podkladov pre postupy s AI bez odhalenia mien, subjektov či identifikačných údajov, pričom upravený výsledok zostáva na kontrolu.",
+          "answer": "S prípravou podkladov pre postupy s AI bez odhalenia mien, organizácií či identifikačných údajov, pričom upravený výsledok zostáva na kontrolu.",
           "question": "S čím pomáha?"
         }
       },
-      "metaDescription": "Odstráňte mená, subjekty a identifikačné údaje skôr, než sa podklady dostanú k AI, priamo z chatu aj z revízie dokumentov, s výsledkom na kontrolu.",
+      "metaDescription": "Odstráňte mená, organizácie a identifikačné údaje skôr, než sa podklady dostanú k AI, priamo z chatu aj z revízie dokumentov, s výsledkom na kontrolu.",
       "metaTitle": "Anonymizácia dokumentov pre právnu AI | stella",
       "quickAnswer": {
-        "answer": "Odstráni mená, subjekty a identifikačné údaje skôr, než podklady vstúpia do pracovného postupu s AI, a ukáže vám upravený výsledok, takže si potvrdíte, čo zo spisu odchádza. Je zabudovaná priamo do chatu a revízie dokumentov.",
+        "answer": "Odstráni mená, organizácie a identifikačné údaje skôr, než podklady vstúpia do pracovného postupu s AI, a ukáže vám upravený výsledok, takže si potvrdíte, čo zo spisu odchádza. Je zabudovaná priamo do chatu a revízie dokumentov.",
         "question": "Čo je anonymizácia v aplikácii stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Drží mená, subjekty a identifikačné údaje mimo krokov s AI",
+            "0": "Drží mená, organizácie a identifikačné údaje mimo krokov s AI",
             "1": "Stavané pre právne postupy s AI, nie pre všeobecné maskovanie dokumentov",
             "2": "Pred ďalším krokom zostáva upravený dokument na kontrolu"
           },

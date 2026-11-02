@@ -125,7 +125,7 @@
         "title": "Agent AI, który działa w Twoich sprawach, plikach i narzędziach."
       },
       "anonymization": {
-        "blurb": "Usuń nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do AI, prosto z czatu i z przeglądu dokumentów, z zanonimizowanym wynikiem, który sprawdzisz, zanim cokolwiek pójdzie dalej.",
+        "blurb": "Usuń nazwiska, nazwy organizacji i dane identyfikujące, zanim materiały trafią do AI, prosto z czatu i z przeglądu dokumentów, z zanonimizowanym wynikiem, który sprawdzisz, zanim cokolwiek pójdzie dalej.",
         "discover": "Poznaj Anonimizację",
         "eyebrow": "Anonimizacja",
         "title": "Przygotuj materiały dla AI bez ujawniania danych identyfikujących."
@@ -278,7 +278,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Usuwa nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do AI.",
+          "body": "Usuwa nazwiska, nazwy organizacji i dane identyfikujące, zanim materiały trafią do AI.",
           "title": "Dane identyfikujące zostają poza AI"
         },
         "1": {
@@ -303,20 +303,20 @@
           "question": "Czy anonimizacja jest już dostępna?"
         },
         "1": {
-          "answer": "W przygotowaniu materiałów do pracy z AI bez ujawniania nazwisk, podmiotów ani danych identyfikujących, z zanonimizowanym wynikiem do sprawdzenia.",
+          "answer": "W przygotowaniu materiałów do pracy z AI bez ujawniania nazwisk, nazw organizacji ani danych identyfikujących, z zanonimizowanym wynikiem do sprawdzenia.",
           "question": "W czym pomaga?"
         }
       },
-      "metaDescription": "Usuń nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do AI, prosto z czatu i przeglądu dokumentów, z wynikiem do sprawdzenia.",
+      "metaDescription": "Usuń nazwiska, nazwy organizacji i dane identyfikujące, zanim materiały trafią do AI, prosto z czatu i przeglądu dokumentów, z wynikiem do sprawdzenia.",
       "metaTitle": "Anonimizacja dokumentów przed wysłaniem do AI | stella",
       "quickAnswer": {
-        "answer": "Usuwa nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do pracy z AI, i pokazuje zanonimizowany wynik, więc potwierdzasz, co opuszcza sprawę. Jest wbudowana wprost w czat i w przegląd dokumentów.",
+        "answer": "Usuwa nazwiska, nazwy organizacji i dane identyfikujące, zanim materiały trafią do pracy z AI, i pokazuje zanonimizowany wynik, więc potwierdzasz, co opuszcza sprawę. Jest wbudowana wprost w czat i w przegląd dokumentów.",
         "question": "Czym jest anonimizacja w aplikacji stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Nazwiska, podmioty i dane identyfikujące nie trafiają do AI",
+            "0": "Nazwiska, nazwy organizacji i dane identyfikujące nie trafiają do AI",
             "1": "Zbudowana z myślą o pracy prawników z AI, nie o ogólnym maskowaniu dokumentów",
             "2": "Przed kolejnym krokiem zostaje zanonimizowany dokument do sprawdzenia"
           },

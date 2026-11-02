@@ -125,7 +125,7 @@
         "title": "DI agentas, dirbantis su jūsų bylomis, failais ir įrankiais."
       },
       "anonymization": {
-        "blurb": "Pašalinkite vardus, subjektus ir identifikuojančius duomenis, kol medžiaga dar nepasiekė DI, tiesiai iš pokalbio ir dokumentų peržiūros, o nuasmenintą rezultatą patikrinkite prieš tęsdami.",
+        "blurb": "Pašalinkite vardus, organizacijas ir identifikuojančius duomenis, kol medžiaga dar nepasiekė DI, tiesiai iš pokalbio ir dokumentų peržiūros, o nuasmenintą rezultatą patikrinkite prieš tęsdami.",
         "discover": "Atraskite Anonimizavimą",
         "eyebrow": "Anonimizavimas",
         "title": "Paruoškite medžiagą DI neatskleisdami identifikuojančių duomenų."
@@ -278,7 +278,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Pašalina vardus, subjektus ir identifikuojančius duomenis, kol medžiaga dar nepasiekė DI žingsnio.",
+          "body": "Pašalina vardus, organizacijas ir identifikuojančius duomenis, kol medžiaga dar nepasiekė DI žingsnio.",
           "title": "Identifikuojantys duomenys lieka nuošalyje"
         },
         "1": {
@@ -303,20 +303,20 @@
           "question": "Ar anonimizavimas jau veikia?"
         },
         "1": {
-          "answer": "Jis padeda paruošti medžiagą DI darbo eigoms neatskleidžiant vardų, subjektų ar identifikuojančių duomenų; nuasmenintas rezultatas lieka peržiūrai.",
+          "answer": "Jis padeda paruošti medžiagą DI darbo eigoms neatskleidžiant vardų, organizacijų ar identifikuojančių duomenų; nuasmenintas rezultatas lieka peržiūrai.",
           "question": "Kam jis padeda?"
         }
       },
-      "metaDescription": "Pašalinkite vardus, subjektus ir identifikuojančius duomenis, kol medžiaga nepasiekė DI, tiesiai iš pokalbio ir peržiūros; rezultatą patikrinsite.",
+      "metaDescription": "Pašalinkite vardus, organizacijas ir identifikuojančius duomenis, kol medžiaga nepasiekė DI, tiesiai iš pokalbio ir peržiūros; rezultatą patikrinsite.",
       "metaTitle": "Dokumentų anonimizavimas teisiniam DI | stella",
       "quickAnswer": {
-        "answer": "Jis pašalina vardus, subjektus ir identifikuojančius duomenis, kol medžiaga dar nepateko į DI darbo eigą, ir parodo nuasmenintą rezultatą, kad patvirtintumėte, kas išeina iš bylos. Jis integruotas tiesiai į pokalbį ir dokumentų peržiūrą.",
+        "answer": "Jis pašalina vardus, organizacijas ir identifikuojančius duomenis, kol medžiaga dar nepateko į DI darbo eigą, ir parodo nuasmenintą rezultatą, kad patvirtintumėte, kas išeina iš bylos. Jis integruotas tiesiai į pokalbį ir dokumentų peržiūrą.",
         "question": "Kas yra anonimizavimas programoje stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Vardai, subjektai ir identifikuojantys duomenys nepatenka į DI žingsnius",
+            "0": "Vardai, organizacijos ir identifikuojantys duomenys nepatenka į DI žingsnius",
             "1": "Sukurta teisinėms DI darbo eigoms, o ne bendram dokumentų maskavimui",
             "2": "Prieš kitą žingsnį palieka nuasmenintą dokumentą peržiūrai"
           },
