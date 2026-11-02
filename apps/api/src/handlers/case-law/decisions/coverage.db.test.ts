@@ -357,7 +357,9 @@ const loadCoverage = async (
     onPartialFailure: () => undefined,
     now: NOW,
     readSources: async () =>
-      await readAsReader(readCaseLawCoverageSourcesQuery),
+      await readAsReader(
+        async (tx) => await readCaseLawCoverageSourcesQuery(tx, []),
+      ),
     readArrivals: async (sourceIds) =>
       await readAsReader(
         async (tx) =>
@@ -688,7 +690,7 @@ test(
         ),
       );
       const sources = await readAsReader(async (tx) =>
-        readCaseLawCoverageSourcesQuery(tx),
+        readCaseLawCoverageSourcesQuery(tx, []),
       );
       // Held, not searchable: the unindexed endpoints still bound the years,
       // while withdrawn and listing-only decisions never do.
@@ -772,7 +774,9 @@ test(
 test(
   "the reader role can run every statement the coverage page needs",
   async () => {
-    const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
+    const sources = await readAsReader(
+      async (tx) => await readCaseLawCoverageSourcesQuery(tx, []),
+    );
     // The withheld source is filtered in SQL, so it never reaches the loader.
     expect(sources.map(({ adapterKey }) => adapterKey).toSorted()).toEqual([
       ADAPTER_KEYS.AT_COURTS,
@@ -862,7 +866,9 @@ test(
   async () => {
     const coverage = await loadCoverage({
       readSources: async () => {
-        const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
+        const sources = await readAsReader(
+          async (tx) => await readCaseLawCoverageSourcesQuery(tx, []),
+        );
         // A retired adapter leaves its row behind; the column is a varchar
         // and the registry is deployment state, so the two legitimately
         // disagree. Without a manifest there is no country to file it under.
@@ -1136,7 +1142,9 @@ test(
   async () => {
     const coverage = await loadCoverage({
       readSources: async () => {
-        const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
+        const sources = await readAsReader(
+          async (tx) => await readCaseLawCoverageSourcesQuery(tx, []),
+        );
         // As a source looks before its first sync cycle stamps a count.
         for (const source of sources) {
           if (source.adapterKey === ADAPTER_KEYS.CZ_NS) {
@@ -1284,7 +1292,9 @@ test(
     const coverage = await loadCoverage({
       readSources: async () => {
         sourceReads += 1;
-        return await readAsReader(readCaseLawCoverageSourcesQuery);
+        return await readAsReader(
+          async (tx) => await readCaseLawCoverageSourcesQuery(tx, []),
+        );
       },
       readArrivals: async (sourceIds) => {
         arrivalsReads += 1;

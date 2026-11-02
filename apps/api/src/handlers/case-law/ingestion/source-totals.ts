@@ -768,6 +768,12 @@ export const refreshNextSourceStoredTotal = async (
       }),
   );
   if (Result.isError(selected)) {
+    if (
+      CorpusSchemaLaneUnavailableError.is(selected.error) ||
+      signal?.aborted
+    ) {
+      return "held";
+    }
     observeFailure(selected.error, {
       sink: sourceStoredTotalSelectionFailure,
       ctx: { step: "refreshNextSourceStoredTotal.select" },

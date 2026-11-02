@@ -19,6 +19,7 @@ import {
   segmentTitles,
   shortSegmentThresholdMs,
   titleRows,
+  TOPIC_BRIDGE_GAP_MS,
 } from "../src/activity/activity-calendar-logic";
 import { timedSegments } from "../src/activity/activity-logic";
 import type { ActivitySegment } from "../src/activity/activity-types";
@@ -49,9 +50,9 @@ const SERVICES = matter("services", "Service agreement");
 type SegmentOptions = {
   from: number;
   to: number;
-  app?: string;
-  title?: string;
-  matterId?: string;
+  app?: string | undefined;
+  title?: string | undefined;
+  matterId?: string | undefined;
 };
 const segment = ({
   from,
@@ -81,44 +82,204 @@ const day = (
   });
 
 describe("activity blocks", () => {
-  test("runs of short segments merge into one mixed block and no time is lost", () => {
-    const { segments } = day([
-      segment({ from: 0, to: 30 }),
-      segment({ from: 30, to: 32, app: "browser" }),
-      segment({ from: 32, to: 33 }),
-      segment({ from: 33, to: 35, app: "browser" }),
-      segment({ from: 35, to: 60, matterId: "lease" }),
-    ]);
+  test("quick switching between apps with no matter is one block, and no segment is lost", () => {
+    // Ten-second pauses between switches, as the recorder leaves them.
+    const pause = 10_000;
+    const switches = Array.from({ length: 12 }, (_, index) =>
+      segment({
+        from: index * 2,
+        to: index * 2 + 2 - pause / MINUTE,
+        app: index % 2 === 0 ? "editor" : "browser",
+        title: `Window ${String(index % 3)}`,
+      }),
+    );
+    const { segments } = day(switches);
     for (const granularity of [15, 30, 60] as const) {
       const blocks = activityBlocks(segments, granularity);
-      const covered = blocks.reduce(
-        (sum, block) => sum + block.endMs - block.startMs,
-        0,
+      expect(blocks).toHaveLength(1);
+      expect(blocks.flatMap(({ sources }) => sources)).toHaveLength(
+        segments.length,
       );
-      expect(covered).toBe(60 * MINUTE);
-      for (const block of blocks) {
-        if (block.type === "single") {
-          expect(block.endMs - block.startMs).toBeGreaterThanOrEqual(
-            Math.min(
-              shortSegmentThresholdMs(granularity),
-              block.segment.endMs - block.segment.startMs,
-            ),
-          );
+      expect(blocks.at(0)).toMatchObject({ matter: null, startMs: ms(0) });
+      // Both apps had the same time, so their order is not part of this.
+      expect(
+        blocks
+          .at(0)
+          ?.apps.map(({ identifier }) => identifier)
+          .toSorted((left, right) => left.localeCompare(right)),
+      ).toEqual(["com.example.browser", "com.example.editor"]);
+    }
+  });
+
+  test("a matter's time is one block through other apps and short pauses", () => {
+    const { segments } = day([
+      segment({ from: 0, to: 12, matterId: "lease", title: "Lease.docx" }),
+      // A quick look at mail, then back after a pause under two minutes.
+      segment({ from: 12, to: 13, app: "browser", title: "Inbox" }),
+      segment({ from: 14.5, to: 30, matterId: "lease", title: "Lease.docx" }),
+      segment({
+        from: 30,
+        to: 41,
+        app: "browser",
+        matterId: "lease",
+        title: "Land registry",
+      }),
+    ]);
+    const blocks = activityBlocks(segments, 30);
+    expect(blocks).toHaveLength(1);
+    expect(blocks.at(0)).toMatchObject({
+      matter: { id: "lease" },
+      startMs: ms(0),
+      endMs: ms(41),
+      title: "Lease.docx",
+    });
+    expect(blocks.at(0)?.apps.map(({ identifier }) => identifier)).toEqual([
+      "com.example.editor",
+      "com.example.browser",
+    ]);
+  });
+
+  test("a pause longer than the bridge splits a topic, and a short matter stretch keeps its block", () => {
+    const resume = 40 + TOPIC_BRIDGE_GAP_MS / MINUTE + 1;
+    const { segments } = day([
+      segment({ from: 0, to: 20, matterId: "lease" }),
+      // Three minutes on another matter between two stretches of the lease.
+      segment({ from: 20, to: 23, matterId: "services" }),
+      segment({ from: 23, to: 40, matterId: "lease" }),
+      // Back on the lease after a pause longer than the bridge.
+      segment({ from: resume, to: 70, matterId: "lease" }),
+    ]);
+    expect(
+      activityBlocks(segments, 60).map((block) => [
+        block.matter?.id,
+        block.startMs,
+        block.endMs,
+      ]),
+    ).toEqual([
+      ["lease", ms(0), ms(20)],
+      ["services", ms(20), ms(23)],
+      ["lease", ms(23), ms(40)],
+      ["lease", ms(resume), ms(70)],
+    ]);
+  });
+
+  test("a quick look at another app between two short pauses keeps a matter in one block", () => {
+    const { segments } = day([
+      segment({ from: 0, to: 10, matterId: "lease" }),
+      // A minute's pause, a minute in the inbox, a minute and a half's pause.
+      segment({ from: 11, to: 12, app: "browser", title: "Inbox" }),
+      segment({ from: 13.5, to: 25, matterId: "lease" }),
+    ]);
+    expect(
+      activityBlocks(segments, 30).map((block) => [
+        block.matter?.id,
+        block.startMs,
+        block.endMs,
+        block.sources.length,
+      ]),
+    ).toEqual([["lease", ms(0), ms(25), 3]]);
+  });
+
+  test("a pause longer than the bridge on either side of a quick look splits the matter", () => {
+    const { segments } = day([
+      segment({ from: 0, to: 10, matterId: "lease" }),
+      segment({ from: 13, to: 14, app: "browser", title: "Inbox" }),
+      segment({ from: 15, to: 25, matterId: "lease" }),
+    ]);
+    expect(
+      activityBlocks(segments, 30).map((block) => [
+        block.matter?.id,
+        block.startMs,
+        block.endMs,
+      ]),
+    ).toEqual([
+      ["lease", ms(0), ms(10)],
+      ["lease", ms(13), ms(25)],
+    ]);
+  });
+
+  test("time no matter claimed splits by the document it was on", () => {
+    const { segments } = day([
+      segment({ from: 0, to: 25, title: "Board minutes.docx" }),
+      segment({ from: 25, to: 26, app: "browser", title: "Inbox" }),
+      segment({ from: 26, to: 50, title: "Engagement letter.docx" }),
+    ]);
+    const blocks = activityBlocks(segments, 30);
+    expect(blocks.map(({ title }) => title)).toEqual([
+      "Board minutes.docx",
+      "Engagement letter.docx",
+    ]);
+    // The minute in the inbox joins a neighbour instead of drawing a sliver.
+    expect(blocks.flatMap(({ sources }) => sources)).toHaveLength(3);
+  });
+
+  test("blocks keep every segment once, and only an isolated stretch with no matter is shorter than a label", () => {
+    // Deterministic pseudo-random days: segments of 10 s to 25 min, pauses of
+    // 0 to 4 min, on two matters or none, three apps and four titles.
+    let seed = 7;
+    const random = () => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return seed / 2_147_483_648;
+    };
+    const apps = ["editor", "browser", "mail"] as const;
+    const matterFor = (pick: number) => {
+      if (pick < 0.3) {
+        return "lease";
+      }
+      return pick < 0.45 ? "services" : undefined;
+    };
+    for (let round = 0; round < 40; round += 1) {
+      const generated: ActivitySegment[] = [];
+      let minute = 0;
+      for (let index = 0; index < 60; index += 1) {
+        minute += random() < 0.5 ? 0 : random() * 4;
+        const length = 1 / 6 + random() * 25 * (random() < 0.7 ? 0.1 : 1);
+        const pick = random();
+        generated.push(
+          segment({
+            from: minute,
+            to: minute + length,
+            app: apps[Math.floor(random() * apps.length)],
+            title: `Title ${String(Math.floor(random() * 4))}`,
+            matterId: matterFor(pick),
+          }),
+        );
+        minute += length;
+      }
+      const { segments } = day(generated);
+      for (const granularity of [15, 30, 60] as const) {
+        const blocks = activityBlocks(segments, granularity);
+        const placed = blocks.flatMap(({ sources }) => sources);
+        expect(placed).toHaveLength(segments.length);
+        expect(new Set(placed).size).toBe(segments.length);
+        const threshold = shortSegmentThresholdMs(granularity);
+        for (const [index, block] of blocks.entries()) {
+          for (const source of block.sources) {
+            expect(source.startMs).toBeGreaterThanOrEqual(block.startMs);
+            expect(source.endMs).toBeLessThanOrEqual(block.endMs);
+            if (source.matter !== null) {
+              // A matter's own time is never drawn under another matter.
+              expect(block.matter?.id).toBe(source.matter.id);
+            }
+          }
+          if (
+            block.matter === null &&
+            block.endMs - block.startMs < threshold
+          ) {
+            const before = blocks[index - 1];
+            const after = blocks[index + 1];
+            expect(
+              before === undefined ||
+                block.startMs - before.endMs > TOPIC_BRIDGE_GAP_MS,
+            ).toBe(true);
+            expect(
+              after === undefined ||
+                after.startMs - block.endMs > TOPIC_BRIDGE_GAP_MS,
+            ).toBe(true);
+          }
         }
       }
     }
-    const mixed = activityBlocks(segments, 15).filter(
-      (block) => block.type === "mixed",
-    );
-    expect(mixed).toHaveLength(1);
-    expect(mixed.at(0)).toMatchObject({
-      startMs: ms(30),
-      endMs: ms(35),
-      apps: [
-        { identifier: "com.example.browser", durationMs: 4 * MINUTE },
-        { identifier: "com.example.editor", durationMs: MINUTE },
-      ],
-    });
   });
 
   test("a block's details list its apps longest first with their longest title", () => {
@@ -169,7 +330,7 @@ describe("activity blocks", () => {
     ).toBe(appCount * 2 * MINUTE);
   });
 
-  test("a segment one label line tall stays its own block at every grid", () => {
+  test("a stretch one label line tall stays its own block at every grid", () => {
     for (const granularity of [15, 30, 60] as const) {
       const threshold = shortSegmentThresholdMs(granularity);
       expect(threshold).toBeLessThan(granularity * MINUTE);
@@ -183,8 +344,14 @@ describe("activity blocks", () => {
         segment({ from: 30 + Math.ceil(threshold / MINUTE), to: 90 }),
       ]);
       expect(
-        activityBlocks(segments, granularity).map(({ type }) => type),
-      ).toEqual(["single", "single", "single"]);
+        activityBlocks(segments, granularity).map(({ apps }) =>
+          apps.map(({ identifier }) => identifier),
+        ),
+      ).toEqual([
+        ["com.example.editor"],
+        ["com.example.browser"],
+        ["com.example.editor"],
+      ]);
     }
   });
 

@@ -482,6 +482,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/autofix-protected-paths.ts",
   ],
   "ci-checks-rest/Test type-aware autofix": [
+    "scripts/autofix-type-aware-precheck.ts",
     "scripts/autofix-type-aware.test.ts",
     "scripts/ci-check-pool-registry.ts",
   ],
