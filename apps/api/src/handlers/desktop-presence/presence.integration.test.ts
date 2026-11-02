@@ -16,6 +16,7 @@ import { desktopPresence } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -73,6 +74,15 @@ test("authenticated reports converge on one row and use the server clock", async
   const endpoint = createDesktopPresenceReportEndpoint({
     authorizeAccount: async (request) =>
       Result.ok({
+        featureAccessSnapshot: buildFeatureAccessSnapshot({
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          identity: {
+            email: `${ids.userA1}@example.test`,
+            emailVerified: true,
+          },
+          enrolments: [],
+        }),
         consumedProof: await claimFixtureDeviceProof({
           request: await device.signRequest({
             request,

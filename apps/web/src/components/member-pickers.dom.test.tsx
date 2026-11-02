@@ -515,6 +515,7 @@ const contactFixture = {
   vatId: null,
   vatPayer: null,
   invoiceLanguage: null,
+  timeBillingFormat: "categories",
   bankAccounts: null,
   billingAddress: null,
   defaultHourlyRate: null,

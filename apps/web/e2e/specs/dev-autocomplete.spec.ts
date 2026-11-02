@@ -1,5 +1,6 @@
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 test("autocomplete playground matches the web runtime mode", async ({
   page,
@@ -11,7 +12,7 @@ test("autocomplete playground matches the web runtime mode", async ({
       url.pathname.startsWith("/workspaces"),
     );
     await expect(page.locator("main").first()).toBeVisible({
-      timeout: 30_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
     await expect(
       page.locator('[data-playground-section="fixture:autocomplete"]'),
@@ -24,5 +25,5 @@ test("autocomplete playground matches the web runtime mode", async ({
     page.getByRole("heading", {
       name: "stella autocomplete — dev playground",
     }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 });
