@@ -33,6 +33,7 @@ const PlainTextBody = ({ tab }: PlainTextFileViewerProps) => {
       <pre
         {...DOCKED_COMPOSER_CLEARANCE}
         className="text-foreground p-6 font-sans text-sm leading-6 wrap-break-word whitespace-pre-wrap"
+        data-print-root=""
         dir="auto"
       >
         {data.text}

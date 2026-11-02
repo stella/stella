@@ -175,9 +175,11 @@ test("the OCR scheduler dispatches only OCR runs", async () => {
 test("the native scheduler dispatches only native runs", async () => {
   const recording = recordedIds();
   const before = Date.now();
-  await createDispatchNativeExtractionTask(recording.enqueue)(
-    schedulerContext(),
-  );
+  await createDispatchNativeExtractionTask(
+    recording.enqueue,
+    async () =>
+      await Promise.resolve({ attempted: 0, failed: 0, moreQueued: false }),
+  )(schedulerContext());
 
   expect(recording.enqueued.toSorted()).toEqual(
     [runIds.nativeFirst, runIds.nativeRetry].toSorted(),
