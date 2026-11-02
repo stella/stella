@@ -1,3 +1,5 @@
+import { PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT } from "@/api/lib/public-law-relations";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { isRecord } from "@/api/lib/type-guards";
 import type { ExplainPlanDocument } from "@/api/tests/explain-as-stella";
 
@@ -52,6 +54,22 @@ const nodeLabel = (node: Record<string, unknown>) => {
   return `${typeof nodeType === "string" ? nodeType : "unknown node"}${typeof relation === "string" ? ` on ${relation}` : ""}`;
 };
 
+// The folded queue is deliberately empty in this job profile. PostgreSQL
+// chooses a zero-buffer sequential scan there; its nonempty maximum window
+// is measured separately, without relaxing classification of queue storage.
+const isEmptyPopulationDeltaScan = (
+  node: Record<string, unknown>,
+  owner: string,
+) =>
+  owner === SCHEDULER_BACKFILL_IDS.coverage &&
+  node["Node Type"] === "Seq Scan" &&
+  node["Relation Name"] ===
+    PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT.caseLawPopulationDeltas &&
+  ["Actual Rows", "Shared Hit Blocks", "Shared Read Blocks"].every(
+    (field) => node[field] === 0,
+  ) &&
+  (node["Rows Removed by Filter"] ?? 0) === 0;
+
 export const analyzePlan = ({
   document,
   owner,
@@ -95,6 +113,7 @@ export const analyzePlan = ({
     if (
       typeof relation === "string" &&
       isLargeQueryPerfRelation(relation) &&
+      !isEmptyPopulationDeltaScan(node, owner) &&
       (nodeType === "Seq Scan" ||
         (nodeType === "Bitmap Heap Scan" &&
           ((typeof discarded === "number" && discarded > 0) ||

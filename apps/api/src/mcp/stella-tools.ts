@@ -220,6 +220,7 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
+  caseLawSearchTimeoutResult,
   DEFAULT_LIST_LIMIT,
   DEFAULT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
@@ -2060,6 +2061,10 @@ const readCaseLawSearchAnswer = (
   answer: Parameters<typeof isSearchCaseLawSuccess>[0],
   cursor: string | undefined,
 ): CaseLawSearchAnswer => {
+  const timeout = caseLawSearchTimeoutResult(answer);
+  if (timeout !== null) {
+    return { type: "failed", result: timeout };
+  }
   if (isSearchIndexUnavailable(answer)) {
     return { type: "failed", result: searchIndexUnavailableResult(answer) };
   }
@@ -2440,7 +2445,7 @@ type SearchProvisionArgRead =
 /**
  * The provision argument, resolved and, for a search with queries, its
  * citing set read once for every phrasing. A set too wide for one search to
- * filter by is said in a warning on each phrasing, with its exact size.
+ * filter by is said in a warning on each phrasing, without enumerating every citation.
  */
 const readSearchProvision = async ({
   args,
@@ -2497,7 +2502,6 @@ const readSearchProvision = async ({
         ? [
             provisionCitedWidelyWarning({
               provision: text,
-              citingDecisions: provisionScope.citingDecisions,
             }),
           ]
         : [],

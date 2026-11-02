@@ -72,12 +72,15 @@ const MODEL_CATALOG_INPUTS = [
   "packages/ai-catalog/src/model-rate.ts",
   "packages/ai-catalog/src/model-rates.gen.ts",
   "packages/ai-catalog/src/reasoning-capabilities.ts",
+  "packages/fetch/src/body-reader.ts",
   "packages/fetch/src/connection-failure.ts",
   "packages/fetch/src/index.ts",
+  "packages/fetch/src/race-abort.ts",
   "packages/scripts/src/model-catalog-capabilities-gen.ts",
   "packages/scripts/src/model-catalog-capabilities.ts",
   "packages/scripts/src/model-catalog-rates-gen.ts",
   "packages/scripts/src/model-catalog-snapshot.ts",
+  "packages/scripts/src/offline-check-startup.ts",
 ] as const;
 
 const TRANSITIVE_GENERATOR_INPUTS = {
@@ -385,6 +388,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/analytics-config/src/index.ts",
     "packages/api-contract/src/*",
     "packages/auth-model/src/contract.ts",
+    "packages/auth-model/src/invitation-sections.ts",
     "packages/boe/src/*",
     "packages/business-registries/src/default-formats.ts",
     "packages/business-registries/src/format-clauses.ts",
@@ -1285,6 +1289,19 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "online-migration-entries",
+    outputKind: "committed",
+    outputs: ["apps/api/src/db/online-migration-entries.gen.ts"],
+    inputs: [
+      "scripts/generate-online-migration-entries.ts",
+      "apps/api/src/db/online-migration-entries/*.ts",
+    ],
+    write: ["bun", "scripts/generate-online-migration-entries.ts"],
+    check: ["bun", "scripts/generate-online-migration-entries.ts", "--check"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "online-unique-index-names",
     outputKind: "committed",
     outputs: ["apps/api/src/db/online-unique-indexes.ts"],
@@ -1501,6 +1518,8 @@ const GENERATOR_DECLARATIONS = [
     ],
     checkInputs: [
       "apps/api/src/lib/write-contract/write-contract.ts",
+      "packages/fetch/src/body-reader.ts",
+      "packages/fetch/src/race-abort.ts",
       ...TRANSITIVE_GENERATOR_INPUTS["cli-registry"],
     ],
     write: ["bun", "--cwd=packages/cli", "run", "codegen"],
@@ -1802,6 +1821,26 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "merge-group-parser",
+    outputKind: "committed",
+    outputs: [".github/workflows/cla.yml"],
+    blocks: [
+      {
+        path: ".github/workflows/cla.yml",
+        begin: "// BEGIN GENERATED merge-group parser",
+        end: "// END GENERATED merge-group parser",
+      },
+    ],
+    inputs: [
+      "scripts/merge-group-entries.mjs",
+      "scripts/sync-merge-group-parser.mjs",
+    ],
+    write: ["node", "scripts/sync-merge-group-parser.mjs"],
+    check: ["node", "scripts/sync-merge-group-parser.mjs", "--check"],
+    autofix: false,
+    after: [],
+  },
+  {
     id: "design-tokens",
     outputKind: "committed",
     outputs: ["DESIGN.md"],
@@ -1944,9 +1983,12 @@ const GENERATOR_DECLARATIONS = [
       "packages/ai-catalog/src/model-rate.ts",
       "packages/ai-catalog/src/model-rates.gen.ts",
       "packages/ai-catalog/src/reasoning-capabilities.ts",
+      "packages/fetch/src/body-reader.ts",
       "packages/fetch/src/connection-failure.ts",
       "packages/fetch/src/index.ts",
+      "packages/fetch/src/race-abort.ts",
       "packages/scripts/src/model-catalog-snapshot.ts",
+      "packages/scripts/src/offline-check-startup.ts",
       "packages/skills/src/streaming.ts",
     ],
     inputs: [
@@ -2201,6 +2243,8 @@ const GENERATOR_DECLARATIONS = [
       "packages/stable-stringify/src/index.ts",
       "packages/stable-stringify/src/stable-stringify.ts",
       "scripts/offline-network-preload.ts",
+      "scripts/offline-check-startup.ts",
+      "packages/scripts/src/offline-check-startup.ts",
     ],
     inputs: [
       "packages/catalogue/entries/**",

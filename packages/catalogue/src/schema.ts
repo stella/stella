@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
 export const CATALOGUE_KINDS = ["skill", "mcp", "native-tool"] as const;
@@ -281,6 +282,27 @@ export const catalogueEntrySchema = v.variant("kind", [
 ]);
 
 export type CatalogueEntry = v.InferOutput<typeof catalogueEntrySchema>;
+
+export const formatCatalogueIssues = (
+  issues: readonly v.BaseIssue<unknown>[],
+): string =>
+  issues
+    .map((issue) => `${v.getDotPath(issue) ?? "<root>"}: ${issue.message}`)
+    .join("; ");
+
+/**
+ * One manifest as the catalogue loads it. Manifests are committed and
+ * validated in CI, so a refused one is a build defect, not a runtime state.
+ */
+export const parseCatalogueEntry = (manifest: unknown): CatalogueEntry => {
+  const parsed = v.safeParse(catalogueEntrySchema, manifest);
+  if (!parsed.success) {
+    return panic(
+      `Invalid catalogue entry: ${formatCatalogueIssues(parsed.issues)}`,
+    );
+  }
+  return parsed.output;
+};
 export type SkillEntry = v.InferOutput<typeof skillEntrySchema>;
 export type InTreeSkillEntry = v.InferOutput<typeof inTreeSkillEntrySchema>;
 export type GithubSkillEntry = v.InferOutput<typeof githubSkillEntrySchema>;

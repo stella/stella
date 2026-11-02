@@ -25,8 +25,12 @@ import {
   reportToolOutputDegrade,
 } from "@/api/lib/chat/tool-output-degrade";
 import { maskUuids } from "@/api/lib/chat/uuid-mask";
+import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
+import {
+  PUBLIC_READ_TIMEOUT_CODE,
+  publicReadTimeoutError,
+} from "@/api/lib/legal-search/public-read-timeout";
 import {
   isSearchIndexUnavailable,
   SEARCH_INDEX_UNAVAILABLE_CODE,
@@ -44,6 +48,7 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { stripSearchHighlightMarkup } from "@/api/lib/search/highlight";
 import { isRecord } from "@/api/lib/type-guards";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
@@ -521,6 +526,35 @@ export const notFoundResult = (
   hint?: string,
 ): InternalToolErrorResult =>
   structuredErrorResult({ code: "not_found", hint, message });
+
+/** A bounded case-law read may be retried with a narrower search. */
+const CASE_LAW_SEARCH_TIMEOUT_SINK = failureSink({
+  event: "mcp.case_law_search_timeout",
+  expected: [],
+});
+
+export const caseLawSearchTimeoutResult = (
+  error: unknown,
+): InternalToolErrorResult | null => {
+  const response = isRecord(error) ? error["response"] : undefined;
+  if (
+    getPgErrorCode(error) !== PG_ERROR.QUERY_CANCELED &&
+    resolveHandlerError(error)?.code !== PUBLIC_READ_TIMEOUT_CODE &&
+    !(isRecord(response) && response["code"] === PUBLIC_READ_TIMEOUT_CODE)
+  ) {
+    return null;
+  }
+  observeFailure(error, {
+    sink: CASE_LAW_SEARCH_TIMEOUT_SINK,
+    ctx: { source: "mcp" },
+  });
+  return structuredErrorResult({
+    code: "upstream_unavailable",
+    message: "Case-law search exceeded its time budget.",
+    hint: "Retry search_case_law with fewer queries or a narrower court, date range or provision filter. If it still times out, retry shortly.",
+    retryable: true,
+  });
+};
 
 const SEARCH_INDEX_UNAVAILABLE_SINK = failureSink({
   event: "mcp.search_index_unavailable",

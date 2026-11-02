@@ -1,11 +1,17 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import {
   AUDIT_CHANGES_STATUS,
   AUDIT_RESOURCE_TYPE,
 } from "@stll/api-contract/audit-log";
+import {
+  ORGANIZATION_EVALUATION_LIMIT,
+  ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
+  organizationCreateOutputSchema,
+} from "@stll/api-contract/organization-create";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
 
@@ -17,6 +23,7 @@ import {
 } from "@/api/handlers/audit-logs/query";
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-settings/update";
+import { organizationCreateBodySchema } from "@/api/handlers/organizations/schema";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
 import {
@@ -61,6 +68,7 @@ import {
 import {
   defineChatProjectionMcpToolOutput,
   defineMcpToolOutput,
+  defineProjectedMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
@@ -71,7 +79,8 @@ type ResearchAdminToolName =
   | "list_audit_log"
   | "add_matter_member"
   | "remove_matter_member"
-  | "update_organization_settings";
+  | "update_organization_settings"
+  | "create_organization";
 
 /** Consolidated-law relation kinds accepted by search_boe_legislation `relation_type`. */
 const RELATION_TYPE_VALUES = [
@@ -124,40 +133,26 @@ const listAuditLogArgsSchema = nullAsAbsent(
         uuidInputSchema("Only entries scoped to this matter."),
       ),
       action: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.description("Only entries with this audit action"),
-        ),
+        v.pipe(v.string(), v.minLength(1), v.description("Audit action")),
       ),
       resource_type: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.description("Only entries about this resource type"),
-        ),
+        v.pipe(v.string(), v.minLength(1), v.description("Resource type")),
       ),
       resource_id: v.optional(
         v.pipe(
           v.string(),
           v.minLength(1),
-          v.description(
-            "Only entries about this resource id; requires resource_type",
-          ),
+          v.description("Resource id; requires resource_type"),
         ),
       ),
       user_id: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.description("Only entries whose actor is this user"),
-        ),
+        v.pipe(v.string(), v.minLength(1), v.description("Actor user id")),
       ),
       from: v.optional(
         v.pipe(
           auditRangeBoundSchema,
           v.description(
-            "Only entries created on or after this ISO date-time, or from the start of this YYYY-MM-DD date (UTC)",
+            "Created at or after this ISO date-time or YYYY-MM-DD start (UTC)",
           ),
         ),
       ),
@@ -165,7 +160,7 @@ const listAuditLogArgsSchema = nullAsAbsent(
         v.pipe(
           auditRangeBoundSchema,
           v.description(
-            "Only entries created on or before this ISO date-time, or up to the end of this YYYY-MM-DD date (UTC)",
+            "Created at or before this ISO date-time or YYYY-MM-DD end (UTC)",
           ),
         ),
       ),
@@ -179,8 +174,7 @@ const listAuditLogArgsSchema = nullAsAbsent(
         ),
       ),
       cursor: cursorInput({
-        description:
-          "Opaque cursor from a previous list_audit_log call to fetch the next page",
+        description: "Next-page cursor from list_audit_log",
       }),
     }),
     v.forward(
@@ -204,13 +198,9 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: false,
   },
   description:
-    "Read the organization's audit trail (compliance view). Returns audit " +
-    "entries newest first, each with its action, resource type and id, actor " +
-    "user id, matter, timestamp, and change detail (null unless " +
-    'changesStatus is "visible"). Filter by matter_id, ' +
-    "action, resource_type (with optional resource_id), user_id, and a " +
-    "created-at range (from/to, ISO date-time). Paginate with limit and " +
-    "cursor. Requires organization audit-log access.",
+    "Read organization audits newest first. Change detail is null unless " +
+    'changesStatus is "visible". Filter and paginate with the fields below. ' +
+    "Requires audit-log access.",
   inputSchema: listAuditLogArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "partial_check"],
@@ -271,7 +261,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(256),
-          v.description("Free-text search over consolidated legislation"),
+          v.description("Consolidated legislation full-text query"),
         ),
       ),
       title: v.optional(
@@ -279,7 +269,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(256),
-          v.description("Filter search results by title text"),
+          v.description("Title text"),
         ),
       ),
       department_code: v.optional(
@@ -287,7 +277,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(32),
-          v.description("Filter search results by department code"),
+          v.description("Department code"),
         ),
       ),
       legal_range_code: v.optional(
@@ -295,7 +285,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(32),
-          v.description("Filter search results by legal-range code (law rank)"),
+          v.description("Legal-range code (law rank)"),
         ),
       ),
       matter_code: v.optional(
@@ -303,7 +293,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(32),
-          v.description("Filter search results by subject-matter code"),
+          v.description("Subject-matter code"),
         ),
       ),
       date_from: v.optional(
@@ -311,7 +301,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.regex(BOE_DATE),
           v.maxLength(8),
-          v.description("Only laws published on or after this date (YYYYMMDD)"),
+          v.description("Published on or after YYYYMMDD"),
         ),
       ),
       date_to: v.optional(
@@ -319,9 +309,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.regex(BOE_DATE),
           v.maxLength(8),
-          v.description(
-            "Only laws published on or before this date (YYYYMMDD)",
-          ),
+          v.description("Published on or before YYYYMMDD"),
         ),
       ),
       limit: v.optional(
@@ -330,7 +318,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.integer(),
           v.minValue(1),
           v.maxValue(100),
-          v.description("Max search results to return"),
+          v.description("Result limit"),
         ),
       ),
       cursor: cursorInput({
@@ -347,9 +335,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
         v.pipe(
           v.string(),
           v.regex(BOE_LAW_ID),
-          v.description(
-            "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search",
-          ),
+          v.description("BOE law id (e.g. BOE-A-1889-4763); omit to search"),
         ),
       ),
       block_id: v.optional(
@@ -357,25 +343,21 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(128),
-          v.description(
-            "With law_id, return this text block's content instead of the whole law",
-          ),
+          v.description("With law_id: read this block instead of the law"),
         ),
       ),
       relation_type: v.optional(
         v.pipe(
           v.picklist(RELATION_TYPE_VALUES),
           v.description(
-            "With law_id, list related laws of this relation kind instead of the law body",
+            "With law_id: list this relation kind instead of the law",
           ),
         ),
       ),
       full_text: v.optional(
         v.pipe(
           v.boolean(),
-          v.description(
-            "With law_id (no block_id/relation_type), include the consolidated full text",
-          ),
+          v.description("With law_id only: include consolidated full text"),
         ),
       ),
     }),
@@ -771,7 +753,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(LIMITS.matterNumberPatternMinLength),
           v.maxLength(LIMITS.matterNumberPatternMaxLength),
-          v.description("Number pattern; pair with matter_number_padding"),
+          v.description("Pattern; send with matter_number_padding"),
         ),
       ),
       matter_number_padding: v.optional(
@@ -784,12 +766,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
         ),
       ),
       matter_numbering_enabled: v.optional(
-        v.pipe(
-          v.boolean(),
-          v.description(
-            "Show the matter number beside the matter name in titles",
-          ),
-        ),
+        v.pipe(v.boolean(), v.description("Show matter numbers in titles")),
       ),
       prompt_caching_enabled: v.optional(
         v.pipe(v.boolean(), v.description("Toggle AI prompt caching")),
@@ -880,7 +857,7 @@ const REMOVE_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   name: "remove_matter_member",
   description:
-    "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "Revoke matter access and cancel desktop edits; reassign or unassign work. Requires approval (confirm:true).",
   inputSchema: removeMatterMemberArgsSchema,
   annotations: {
     title: "Remove matter member",
@@ -896,6 +873,59 @@ const REMOVE_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
   destructiveBehavior: { type: "always" },
   scope: "stella:admin_write",
 });
+
+const CREATE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
+  name: "create_organization",
+  description: `Create an owned organization after human approval (confirm:true). Lifetime cap: ${ORGANIZATION_EVALUATION_LIMIT} evaluations; deletion never resets it. ${ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE}: no evaluations left. Existing paid organizations keep access. Next: stella auth login; select the new organization.`,
+  inputNormalization: {
+    slug: { kind: AGENT_INPUT_NORMALIZATION_KIND.slug },
+  },
+  inputSchema: nullAsAbsent(
+    v.strictObject({
+      ...organizationCreateBodySchema.entries,
+      confirm: v.optional(
+        v.pipe(v.boolean(), v.description("True after human approval")),
+      ),
+    }),
+  ),
+  jsonSchemaProjectionWaiver: {
+    ignoreActions: ["trim"],
+    reason:
+      "The runtime schema trims organization names and slugs before validation.",
+  },
+  nonDestructiveReason:
+    "Creates a new organization without modifying existing organizations or their memberships.",
+  annotations: {
+    title: "Create organization",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  access: "write",
+  accountAccess: "account-control",
+  permissions: {
+    type: "delegated",
+    reason:
+      "The organizations.create session capability checks the account-level organization creation scope before dispatch.",
+  },
+  anonymized: { exposure: "excluded", reason: "write" },
+  scope: "stella:organization_create",
+});
+
+const handleCreateOrganizationTool: McpToolHandler = async ({
+  args,
+  context,
+}) => {
+  const { CAPABILITY_TOOL_HANDLERS } =
+    await import("@/api/mcp/capability-tools");
+  const { confirm, ...body } = args;
+  return await CAPABILITY_TOOL_HANDLERS.write_capability({
+    args: { capability: "organizations.create", input: { body }, confirm },
+    context,
+  });
+};
 
 const UPDATE_ORGANIZATION_SETTINGS_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
@@ -1112,6 +1142,7 @@ const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
   ADD_MATTER_MEMBER_TOOL_DEFINITION,
   REMOVE_MATTER_MEMBER_TOOL_DEFINITION,
   UPDATE_ORGANIZATION_SETTINGS_TOOL_DEFINITION,
+  CREATE_ORGANIZATION_TOOL_DEFINITION,
 ] as const satisfies readonly McpToolDefinition[];
 
 export const RESEARCH_ADMIN_TOOL_HANDLERS = {
@@ -1120,6 +1151,7 @@ export const RESEARCH_ADMIN_TOOL_HANDLERS = {
   add_matter_member: handleAddMatterMemberTool,
   remove_matter_member: handleRemoveMatterMemberTool,
   update_organization_settings: handleUpdateOrganizationSettingsTool,
+  create_organization: handleCreateOrganizationTool,
 } satisfies Record<ResearchAdminToolName, McpToolHandler>;
 
 export const RESEARCH_ADMIN_TOOL_SET = defineMcpToolSet(
@@ -1127,6 +1159,10 @@ export const RESEARCH_ADMIN_TOOL_SET = defineMcpToolSet(
   RESEARCH_ADMIN_TOOL_HANDLERS,
   {
     list_audit_log: defineMcpToolOutput(LIST_AUDIT_LOG_OUTPUT_SCHEMA),
+    create_organization: defineProjectedMcpToolOutput(
+      organizationCreateOutputSchema,
+      (result) => v.parse(organizationCreateOutputSchema, result),
+    ),
     add_matter_member: defineChatProjectionMcpToolOutput(
       ADD_MATTER_MEMBER_PROJECTION,
     ),

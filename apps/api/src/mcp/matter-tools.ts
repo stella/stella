@@ -16,6 +16,7 @@ import {
   MAX_CONTACT_NATIONALITY_CODES,
   updateContactBodySchema,
 } from "@stll/api-contract/contact-write";
+import { DEFAULT_FILE_PROPERTY_NAME } from "@stll/api-contract/property-policy";
 import {
   organizationMemberSelectorSchema,
   taskDescriptionSchema,
@@ -107,6 +108,7 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceContactId,
 } from "@/api/lib/safe-id-boundaries";
+import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { TASK_ASSIGNEE_FILTERS } from "@/api/lib/tasks/assigned";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import {
@@ -185,13 +187,6 @@ const MATTER_STATUSES = ["active", "archived"] as const;
  * target check rejects a non-linkable kind before any mutation runs.
  */
 const LINKABLE_ENTITY_KINDS = ["document", "folder", "task"] as const;
-
-/**
- * System file-column name for a matter created via MCP. Mirrors the web
- * client's default (`_protected.workspaces/-mutations.ts`) so an
- * agent-created matter and a UI-created matter start with the same column.
- */
-const DEFAULT_FILE_PROPERTY_NAME = "Documents";
 
 // --- list_tasks text-field specs -----------------------------------------
 
@@ -1191,6 +1186,7 @@ const handleDeleteContactTool: TypedMcpToolHandler<
       organizationId: context.organizationId,
       contactId: brandPersistedContactId(parsed.output.contact_id),
       recordAuditEvent: context.recordAuditEvent,
+      flushWorkspaceSearchRepairs,
     }),
   );
   if (Result.isError(deleted)) {
