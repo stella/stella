@@ -550,7 +550,7 @@ describe("a search the tool's latency budget ends is a timeout", () => {
   }
 
   for (const tool of INDEX_BACKED_TOOLS) {
-    test(`${tool.toolName} (${tool.mode}) maps a returned timeout envelope to public_read_timeout`, async () => {
+    test(`${tool.toolName} (${tool.mode}) maps a returned timeout envelope to a retryable timeout`, async () => {
       const context = createContext();
       const timedOut = async () =>
         await Promise.resolve(publicReadTimeoutResponse());
@@ -569,12 +569,16 @@ describe("a search the tool's latency budget ends is a timeout", () => {
       });
 
       expect(result.isError).toBe(true);
+      // search_case_law answers its own timeouts with a case-law-specific hint.
       expect(payloadOf(result)).toMatchObject({
-        error: {
-          code: "public_read_timeout",
-          hint: PUBLIC_READ_TIMEOUT_HINT,
-          retryable: true,
-        },
+        error:
+          tool.toolName === "search_case_law"
+            ? { code: "upstream_unavailable", retryable: true }
+            : {
+                code: "public_read_timeout",
+                hint: PUBLIC_READ_TIMEOUT_HINT,
+                retryable: true,
+              },
       });
     });
   }
