@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Read-only validation and conversion of pinned public CLDR inputs; uploads a CI evidence artifact without publication, deployment, secrets or repository writes.",
+  "reviewedDigest": "419b667d75ba15d30a901ff34aef48ccf86f9b34fef2d37909e21222b69647cc"
+}

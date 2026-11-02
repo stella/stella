@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Publishes the refreshed API test memory profile as a signed-commit pull request.",
+  "reviewedDigest": "ca71c271fd591be4ecc44224eab5bf2247a7b2defc3d93fbcf2b6c42fadb068b"
+}
