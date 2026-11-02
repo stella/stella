@@ -12,14 +12,18 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  bunfigRuntimePreloadViolations,
   catalogGeneratorNetworkViolations,
   enumerateOfflineChecks,
   offlineCheckExceptionGrowth,
   OfflineCheckPolicyError,
+  offlineCheckStartupViolations,
   offlineCheckViolations,
   offlineImportGraphViolations,
   parseOfflineCheckExceptions,
   parseOfflineImportAllowances,
+  protectedOfflineCheckCallerViolations,
+  trackedOfflineCheckCallerSources,
   usesOfflineCheckPreload,
 } from "./offline-check-policy";
 
@@ -57,6 +61,56 @@ test("new check invocations cannot bypass the offline preload in nested shell or
   );
   expect(protectedChecks).toHaveLength(1);
   expect(offlineCheckViolations(protectedChecks, [])).toEqual([]);
+});
+
+test("protected caller census covers manifests, turbo commands, workflows, and test spawns", () => {
+  const entry = path.join(root, "scripts/protected-check.ts");
+  const badCommand = "bun scripts/protected-check.ts --check";
+  const goodCommand =
+    "bun --preload ./scripts/offline-network-preload.ts scripts/protected-check.ts --check";
+  const violations = protectedOfflineCheckCallerViolations(
+    [entry],
+    [
+      {
+        file: "package.json",
+        source: JSON.stringify({
+          scripts: { bad: badCommand, good: goodCommand },
+        }),
+        type: "package",
+      },
+      {
+        file: "turbo.json",
+        source: JSON.stringify({ tasks: { check: { command: badCommand } } }),
+        type: "turbo",
+      },
+      {
+        file: ".github/workflows/check.yml",
+        source: Bun.YAML.stringify({
+          jobs: { check: { steps: [{ run: badCommand }] } },
+        }),
+        type: "workflow",
+      },
+      {
+        file: "scripts/check.test.ts",
+        source: `Bun.spawn([process.execPath, "scripts/protected-check.ts", "--check"]);`,
+        type: "test",
+      },
+    ],
+  );
+  expect(violations).toHaveLength(4);
+  expect(violations).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("package.json:1"),
+      expect.stringContaining("turbo.json:1"),
+      expect.stringContaining(".github/workflows/check.yml:1"),
+      expect.stringContaining("scripts/check.test.ts:1"),
+    ]),
+  );
+  for (const violation of violations) {
+    expect(violation).toContain(
+      "add `--preload ./scripts/offline-network-preload.ts` before the entry",
+    );
+  }
 });
 
 test("the preload must precede the Bun entry and package-script arguments", () => {
@@ -163,6 +217,21 @@ test("committed check invocations and catalog generator transports are exhaustiv
   );
   expect(checks.length).toBeGreaterThan(0);
   expect(offlineCheckViolations(checks, exceptions())).toEqual([]);
+  expect(
+    offlineCheckStartupViolations(
+      checks.flatMap((check) =>
+        check.protected && check.entry !== null ? [check.entry] : [],
+      ),
+    ),
+  ).toEqual([]);
+  expect(
+    protectedOfflineCheckCallerViolations(
+      checks.flatMap((check) =>
+        check.protected && check.entry !== null ? [check.entry] : [],
+      ),
+      trackedOfflineCheckCallerSources(),
+    ),
+  ).toEqual([]);
   const sourceRoot = path.join(root, "packages/scripts/src");
   const sources = new Map(
     [
@@ -171,6 +240,164 @@ test("committed check invocations and catalog generator transports are exhaustiv
   );
   expect(sources.size).toBeGreaterThan(0);
   expect(catalogGeneratorNetworkViolations(sources, exceptions())).toEqual([]);
+});
+
+test("startup proof requires the canonical runtime binding in an executed entry branch", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "offline-startup-proof-"));
+  const entry = path.join(directory, "check.ts");
+  const owner = path.join(root, "scripts/offline-check-startup.ts");
+  const imported = `import { assertOfflineCheckPreload } from ${JSON.stringify(owner)};`;
+  const cases = [
+    { source: `${imported} assertOfflineCheckPreload();`, valid: true },
+    {
+      source: `${imported} export const result = doCheckWork(); assertOfflineCheckPreload();`,
+      valid: false,
+    },
+    {
+      source: `${imported} export function helper() {} assertOfflineCheckPreload();`,
+      valid: true,
+    },
+    {
+      source: `${imported} if (import.meta.main) { assertOfflineCheckPreload(); }`,
+      valid: true,
+    },
+    {
+      source: `import { assertOfflineCheckPreload as guard } from ${JSON.stringify(owner)}; if (import.meta.main) { guard(); }`,
+      valid: true,
+    },
+    { source: `${imported} // assertOfflineCheckPreload();`, valid: false },
+    {
+      source: `${imported} const text = "assertOfflineCheckPreload();";`,
+      valid: false,
+    },
+    {
+      source: `${imported} const unused = () => assertOfflineCheckPreload();`,
+      valid: false,
+    },
+    {
+      source: `${imported} if (false) { assertOfflineCheckPreload(); }`,
+      valid: false,
+    },
+    {
+      source: `${imported} if (import.meta.main) { const unused = () => assertOfflineCheckPreload(); }`,
+      valid: false,
+    },
+    {
+      source: `${imported} function unused(assertOfflineCheckPreload) { assertOfflineCheckPreload(); }`,
+      valid: false,
+    },
+    {
+      source: `${imported} if (import.meta.main) { assertOfflineCheckPreload(); function assertOfflineCheckPreload() {} }`,
+      valid: false,
+    },
+    {
+      source: `${imported} if (import.meta.main) { assertOfflineCheckPreload(); function unrelated(assertOfflineCheckPreload) {} }`,
+      valid: true,
+    },
+    {
+      source: `${imported} if (import.meta.main) { assertOfflineCheckPreload(); if (flag) { const assertOfflineCheckPreload = () => {}; } }`,
+      valid: true,
+    },
+    {
+      source: `${imported} if (import.meta.main) { assertOfflineCheckPreload(); const { guard: assertOfflineCheckPreload } = helpers; }`,
+      valid: false,
+    },
+    {
+      source: `${imported} doCheckWork(); assertOfflineCheckPreload();`,
+      valid: false,
+    },
+    {
+      source: `import type { assertOfflineCheckPreload } from ${JSON.stringify(owner)}; assertOfflineCheckPreload();`,
+      valid: false,
+    },
+    {
+      source:
+        'import { assertOfflineCheckPreload } from "./offline-check-startup"; assertOfflineCheckPreload();',
+      valid: false,
+    },
+  ];
+  try {
+    writeFileSync(
+      path.join(directory, "offline-check-startup.ts"),
+      "export const assertOfflineCheckPreload = () => {};\n",
+    );
+    for (const { source, valid } of cases) {
+      writeFileSync(entry, source);
+      expect(offlineCheckStartupViolations([entry]), source).toHaveLength(
+        valid ? 0 : 1,
+      );
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("tracked bunfig files cannot displace the command-line network preload", () => {
+  expect(
+    bunfigRuntimePreloadViolations(
+      new Map([
+        ["bunfig.toml", '[install]\nauto = "disable"\n'],
+        ["apps/web/bunfig.toml", '[test]\npreload = ["./setup.ts"]\n'],
+      ]),
+    ),
+  ).toEqual([]);
+  expect(
+    bunfigRuntimePreloadViolations(
+      new Map([["bunfig.toml", 'preload = ["./runtime.ts"]\n']]),
+    ),
+  ).toEqual([
+    "Tracked bunfig must not declare a top-level runtime preload: bunfig.toml",
+  ]);
+});
+
+test("a displaced command-line preload makes check startup fail closed", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "offline-preload-"));
+  try {
+    writeFileSync(
+      path.join(directory, "bunfig.toml"),
+      'preload = ["./runtime-preload.ts"]\n',
+    );
+    writeFileSync(
+      path.join(directory, "runtime-preload.ts"),
+      `const defineProperty = Object.defineProperty;
+Object.defineProperty = (target, key, descriptor) =>
+  target === globalThis && key === Symbol.for("stella.offline-check-preload")
+    ? target
+    : defineProperty(target, key, descriptor);
+`,
+    );
+    writeFileSync(
+      path.join(directory, "check.ts"),
+      `import { assertOfflineCheckPreload } from ${JSON.stringify(path.join(root, "scripts/offline-check-startup.ts"))};\nassertOfflineCheckPreload();\nconsole.log("check ran");\n`,
+    );
+    const displaced = Bun.spawnSync(
+      [
+        process.execPath,
+        "--preload",
+        path.join(root, "scripts/offline-network-preload.ts"),
+        "./check.ts",
+        "--check",
+      ],
+      { cwd: directory },
+    );
+    expect(displaced.exitCode).not.toBe(0);
+    expect(displaced.stderr.toString()).toContain("OfflineCheckPreloadMissing");
+    expect(displaced.stderr.toString()).toContain(
+      "run this check with `bun --preload ./scripts/offline-network-preload.ts <check> --check`",
+    );
+    expect(displaced.stdout.toString()).not.toContain("check ran");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("check startup accepts the installed network preload sentinel", () => {
+  const checked = runPreloaded(
+    "const { assertOfflineCheckPreload } = await import('./scripts/offline-check-startup.ts'); assertOfflineCheckPreload(); console.log('check ran');",
+    "--check",
+  );
+  expect(checked.exitCode).toBe(0);
+  expect(checked.stdout.toString()).toContain("check ran");
 });
 
 const runPreloaded = (code: string, mode: string) =>

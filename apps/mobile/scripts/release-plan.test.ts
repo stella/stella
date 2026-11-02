@@ -5,6 +5,7 @@ import {
   fingerprintSchema,
   movedSources,
   planVariant,
+  releaseOutputs,
   renderPlan,
   type TestFlightBuild,
 } from "./release-plan";
@@ -112,11 +113,26 @@ describe("rendered plan", () => {
       planVariant("production", head, build(null)),
     ]);
     expect(rendered).toContain(
-      "- **preview** iOS fingerprint at this commit: `head`\n  - native code matches the [TestFlight build](https://github.com/stella/stella/actions/runs/1) from `012345678`. Run _Publish Mobile Update_ (preview)",
+      "- **preview** iOS fingerprint at this commit: `head`\n  - native code matches the [TestFlight build](https://github.com/stella/stella/actions/runs/1) from `012345678`. _Publish Mobile Update_ (preview) starts automatically",
     );
     expect(rendered).toContain(
       "- **production** iOS fingerprint at this commit: `head`\n  - native code changed since the [TestFlight build]",
     );
+    expect(rendered).toContain("Run _Release Mobile iOS_ (production)");
     expect(rendered).toContain("that build predates native fingerprints");
+  });
+});
+
+describe("release outputs", () => {
+  test("give the workflow each variant's kind of release", () => {
+    expect(
+      releaseOutputs([
+        planVariant("preview", head, build(head)),
+        planVariant("production", head, build(null)),
+      ]),
+    ).toBe("preview=update\nproduction=build\n");
+    expect(releaseOutputs([planVariant("preview", head, undefined)])).toBe(
+      "preview=first-build\n",
+    );
   });
 });

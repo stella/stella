@@ -1496,7 +1496,11 @@
       "connected": "Bővítmény csatlakoztatva",
       "description": "A stella kérésére külön lapon nyithat meg és olvashat el weboldalakat.",
       "install": "Bővítmény telepítése",
-      "installDescription": "A stella bővítménnyel a stella kérésére külön lapon nyithat meg és olvashat el weboldalakat. A Chrome Webáruházból telepítheti."
+      "installDescription": "A stella bővítménnyel a stella kérésére külön lapon nyithat meg és olvashat el weboldalakat. A Chrome Webáruházból telepítheti.",
+      "reload": "Lap újratöltése",
+      "reloadDescription": "A stella bővítménye újabb, mint ez a lap. Töltse újra a lapot, hogy továbbra is használhassa.",
+      "updating": "A bővítmény frissítésre vár",
+      "updatingDescription": "A stella bővítménye régebbi verzió. A Chrome automatikusan frissíti, általában néhány órán belül; utána a stella ismét megnyithat és elolvashat weboldalakat Önnek."
     },
     "cancelQueuedMessage": "Sorba állított üzenet visszavonása",
     "caseLawGreeting": "Kérdezzen erről a határozatról — a teljes szöveg itt elérhető.",

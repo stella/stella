@@ -108,6 +108,7 @@ import type {
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { seedCaseLaw } from "./seed-case-law";
+import type { CaseLawSeedProfile } from "./seed-case-law";
 import {
   buildExportReviewCitationSeeds,
   buildExportReviewDocumentText,
@@ -156,6 +157,9 @@ export const seedRequiredCaseLaw = async (
 };
 
 const db = openMaintenanceDb({ readOnly: false });
+
+const caseLawSeedProfile: CaseLawSeedProfile =
+  process.env["STELLA_MARKETING_CAPTURE"] === "1" ? "recorded" : "development";
 
 // ─── Mock file generators ───────────────────────────────
 
@@ -6348,7 +6352,7 @@ export async function seed(organizationId?: string, userId?: string) {
   // 16. Global case-law corpus for search and references. The marketing seed
   // needs these rows, so either failure must fail the whole seed.
   await seedRequiredCaseLaw(
-    seedCaseLaw,
+    async () => await seedCaseLaw(caseLawSeedProfile),
     async () =>
       await seedMarketingCaseLaw({
         db,
