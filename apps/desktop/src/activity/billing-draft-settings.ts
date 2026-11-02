@@ -22,7 +22,7 @@ import { scopedDraftSettingsFrom } from "./billing-draft-logic";
 import { BillingDraftConsent } from "./billing-draft-transport";
 import type { DraftConsentStatus } from "./billing-draft-transport";
 
-export type BillingDraftSettings =
+type BillingDraftSettings =
   | { type: "loading" }
   | { type: "unavailable" }
   | { type: "failed" }
