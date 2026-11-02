@@ -8,6 +8,7 @@ import { sleep } from "@stll/concurrency/sleep";
 import { installRenderProbe, measureAction } from "../helpers/render-probe";
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 test("the injected probe counts the same known component across three app loads", async ({
   context,
@@ -241,7 +242,7 @@ createRoot(host).render(<RenderCensusHmr />);
         await writeFile(componentPath, updated);
         await expect(
           fixture.getByText("After refresh", { exact: true }),
-        ).toBeVisible({ timeout: 30_000 });
+        ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
       },
     );
     const component = measured.components["RenderCensusHmr"];

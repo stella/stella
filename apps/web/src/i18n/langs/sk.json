@@ -1455,10 +1455,12 @@
           "click": "Kliknúť",
           "fill": "Zadať text",
           "open": "Otvoriť web",
+          "openNewTab": "Otvoriť web na novej karte",
           "pressKey": "Stlačiť kláves",
           "select": "Vybrať možnosť",
           "snapshot": "Prečítať stránku",
-          "snapshotContinue": "Pokračovať v čítaní stránky"
+          "snapshotContinue": "Pokračovať v čítaní stránky",
+          "switchTab": "Prepnúť na kartu"
         },
         "askAgain": "Znova sa pýtať",
         "autoApproveReads": "Automaticky schvaľovať čítanie stránok",
@@ -1496,7 +1498,11 @@
       "connected": "Rozšírenie pripojené",
       "description": "stella vám na požiadanie otvorí a prečíta webové stránky v samostatnej karte.",
       "install": "Nainštalovať rozšírenie",
-      "installDescription": "S rozšírením stella vám môže stella na požiadanie otvárať a čítať weby v samostatnej karte. Nainštalujete ho z Internetového obchodu Chrome."
+      "installDescription": "S rozšírením stella vám môže stella na požiadanie otvárať a čítať weby v samostatnej karte. Nainštalujete ho z Internetového obchodu Chrome.",
+      "reload": "Znova načítať kartu",
+      "reloadDescription": "Vaše rozšírenie stella je novšie ako táto karta. Načítajte kartu znova, aby ste ho mohli ďalej používať.",
+      "updating": "Čaká sa na aktualizáciu rozšírenia",
+      "updatingDescription": "Vaše rozšírenie stella je v staršej verzii. Chrome ho aktualizuje automaticky, zvyčajne v priebehu niekoľkých hodín, a potom pre vás stella bude môcť znova otvárať a čítať weby."
     },
     "cancelQueuedMessage": "Zrušiť správu v poradí",
     "caseLawGreeting": "Spýtajte sa na toto rozhodnutie — plný text je k dispozícii.",
@@ -5446,6 +5452,12 @@
         "work_obligation": "pracovná povinnosť",
         "workspace_contact": "kontakt spisu",
         "workspace_member": "člen spisu"
+      },
+      "billingDrafts": {
+        "description": "Navrhujte opisy práce z vybranej aktivity a znalostných súborov kancelárie alebo klienta. Každý používateľ tiež udeľuje súhlas. Pred zapnutím návrhov pripojte pravidlá kancelárie.",
+        "firm": "Pravidlá kancelárie",
+        "ledes": "Elektronická fakturácia (LEDES)",
+        "title": "AI návrhy výkazov práce"
       },
       "documentProcessing": {
         "description": "Automaticky rozpoznávajte text v naskenovaných PDF, aby sa v ich obsahu dalo vyhľadávať.",
