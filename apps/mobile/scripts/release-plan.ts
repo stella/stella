@@ -3,11 +3,14 @@
 // (scripts/fingerprint.ts) still matches the variant's latest TestFlight
 // build, or a new TestFlight build first, when it does not.
 //
-// The plan only reports; it publishes and builds nothing. The release
-// workflows stay manual and reviewed, and the plan names the one to run.
+// The plan itself publishes and builds nothing. It names the release each
+// variant needs and, given an outputs file, writes `<variant>=<kind>` lines
+// to it: the release plan workflow starts the preview release from them, so
+// every merge reaches internal testers, while production stays a manual,
+// reviewed release.
 //
 // Usage (the release plan workflow runs this):
-//   bun scripts/release-plan.ts <dir>
+//   bun scripts/release-plan.ts <dir> [outputs-file]
 // where <dir> holds, for each variant, `head-<variant>.json`, the merge's
 // iOS fingerprint as `fingerprint.ts ios --json` prints it under that
 // variant, and, when the variant has a TestFlight build,
@@ -17,7 +20,7 @@
 // variant is fingerprinted on its own.
 
 import { panic } from "better-result";
-import { existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -27,6 +30,9 @@ import type { FingerprintSourceHash } from "./fingerprint";
 const RELEASED_VARIANTS = ["preview", "production"] as const;
 
 type ReleasedVariant = (typeof RELEASED_VARIANTS)[number];
+
+/** The variant the release plan workflow releases after every merge. */
+const AUTOMATIC_VARIANT: ReleasedVariant = "preview";
 
 export const fingerprintSchema = v.object({
   hash: v.string(),
@@ -121,6 +127,16 @@ export const planVariant = (
 
 const shortSha = (sha: string): string => sha.slice(0, 9);
 
+/** How the plan asks for a release: started for preview, named for the rest. */
+const releaseStep = (variant: ReleasedVariant, workflow: string): string =>
+  variant === AUTOMATIC_VARIANT
+    ? `_${workflow}_ (${variant}) starts automatically`
+    : `Run _${workflow}_ (${variant})`;
+
+/** The `<variant>=<kind>` lines the release plan workflow reads. */
+export const releaseOutputs = (plans: readonly VariantPlan[]): string =>
+  plans.map((plan) => `${plan.variant}=${plan.kind}\n`).join("");
+
 export const renderPlan = (plans: readonly VariantPlan[]): string => {
   const lines = ["## Mobile release plan", ""];
   for (const plan of plans) {
@@ -130,17 +146,17 @@ export const renderPlan = (plans: readonly VariantPlan[]): string => {
     switch (plan.kind) {
       case "first-build":
         lines.push(
-          `  - no TestFlight build yet. Run _Release Mobile iOS_ (${plan.variant}) to ship the first one.`,
+          `  - no TestFlight build yet. ${releaseStep(plan.variant, "Release Mobile iOS")} to ship the first one.`,
         );
         break;
       case "update":
         lines.push(
-          `  - native code matches the [TestFlight build](${plan.build.url}) from \`${shortSha(plan.build.sha)}\`. Run _Publish Mobile Update_ (${plan.variant}) to ship this commit over the air.`,
+          `  - native code matches the [TestFlight build](${plan.build.url}) from \`${shortSha(plan.build.sha)}\`. ${releaseStep(plan.variant, "Publish Mobile Update")} to ship this commit over the air.`,
         );
         break;
       case "build":
         lines.push(
-          `  - native code changed since the [TestFlight build](${plan.build.url}) from \`${shortSha(plan.build.sha)}\`; updates from this commit cannot reach it. Run _Release Mobile iOS_ (${plan.variant}), then publish updates again.`,
+          `  - native code changed since the [TestFlight build](${plan.build.url}) from \`${shortSha(plan.build.sha)}\`; updates from this commit cannot reach it. ${releaseStep(plan.variant, "Release Mobile iOS")} to ship a new build.`,
         );
         if (plan.build.fingerprint === null) {
           lines.push("    - that build predates native fingerprints");
@@ -168,9 +184,11 @@ const readJson = <Schema extends v.GenericSchema>(
 };
 
 if (import.meta.main) {
-  const [dir] = process.argv.slice(2);
+  const [dir, outputs] = process.argv.slice(2);
   if (dir === undefined) {
-    process.stderr.write("usage: bun scripts/release-plan.ts <dir>\n");
+    process.stderr.write(
+      "usage: bun scripts/release-plan.ts <dir> [outputs-file]\n",
+    );
     process.exit(1);
   }
   const plans = RELEASED_VARIANTS.map((variant) => {
@@ -182,4 +200,7 @@ if (import.meta.main) {
     );
   });
   process.stdout.write(renderPlan(plans));
+  if (outputs !== undefined) {
+    appendFileSync(outputs, releaseOutputs(plans));
+  }
 }

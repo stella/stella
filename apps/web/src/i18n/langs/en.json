@@ -1455,10 +1455,12 @@
           "click": "Click",
           "fill": "Enter text",
           "open": "Open website",
+          "openNewTab": "Open website in a new tab",
           "pressKey": "Press key",
           "select": "Select option",
           "snapshot": "Read page",
-          "snapshotContinue": "Continue reading page"
+          "snapshotContinue": "Continue reading page",
+          "switchTab": "Switch to tab"
         },
         "askAgain": "Ask again",
         "autoApproveReads": "Auto-approve page reads",
@@ -1496,7 +1498,11 @@
       "connected": "Extension connected",
       "description": "stella can open and read websites for you in a separate tab when you ask.",
       "install": "Install extension",
-      "installDescription": "The stella extension lets stella open and read websites for you in a separate tab when you ask. Install it from the Chrome Web Store."
+      "installDescription": "The stella extension lets stella open and read websites for you in a separate tab when you ask. Install it from the Chrome Web Store.",
+      "reload": "Reload this tab",
+      "reloadDescription": "Your stella extension is newer than this tab. Reload this tab to keep using it.",
+      "updating": "Extension update pending",
+      "updatingDescription": "Your stella extension is an older version. Chrome updates it automatically, usually within a few hours; then stella can open and read websites for you again."
     },
     "cancelQueuedMessage": "Cancel queued message",
     "caseLawGreeting": "Ask about this decision — its full text is available here.",

@@ -1455,10 +1455,12 @@
           "click": "Klõpsa",
           "fill": "Sisesta tekst",
           "open": "Ava veebisait",
+          "openNewTab": "Ava veebisait uuel vahekaardil",
           "pressKey": "Vajuta klahvi",
           "select": "Vali suvand",
           "snapshot": "Loe lehte",
-          "snapshotContinue": "Jätka lehe lugemist"
+          "snapshotContinue": "Jätka lehe lugemist",
+          "switchTab": "Lülitu vahekaardile"
         },
         "askAgain": "Küsi uuesti",
         "autoApproveReads": "Kinnita lehtede lugemine automaatselt",
@@ -1496,7 +1498,11 @@
       "connected": "Laiendus on ühendatud",
       "description": "stella saab sinu palvel veebilehti eraldi vahekaardil avada ja lugeda.",
       "install": "Paigalda laiendus",
-      "installDescription": "stella laiendus võimaldab stellal sinu palvel veebilehti eraldi vahekaardil avada ja lugeda. Paigalda see Chrome’i veebipoest."
+      "installDescription": "stella laiendus võimaldab stellal sinu palvel veebilehti eraldi vahekaardil avada ja lugeda. Paigalda see Chrome’i veebipoest.",
+      "reload": "Laadi vahekaart uuesti",
+      "reloadDescription": "Sinu stella laiendus on uuem kui see vahekaart. Laadi vahekaart uuesti, et laiendust edasi kasutada.",
+      "updating": "Laienduse uuendus ootel",
+      "updatingDescription": "Sinu stella laiendus on vanem versioon. Chrome uuendab selle automaatselt, tavaliselt mõne tunni jooksul; siis saab stella sinu eest jälle veebilehti avada ja lugeda."
     },
     "cancelQueuedMessage": "Tühista järjekorras sõnum",
     "caseLawGreeting": "Esita küsimusi selle otsuse kohta — täistekst on siin saadaval.",

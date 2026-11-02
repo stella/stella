@@ -98,6 +98,25 @@ const report = async ({
   });
 };
 
+/** An extension on another protocol announces itself in a shape this tab rejects. */
+const announceVersion = async (protocolVersion: number) => {
+  await act(async () => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          allSitesGranted: true,
+          protocolVersion,
+          requestId: "extension-ready",
+          source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+          type: "pong",
+        },
+        origin: window.location.origin,
+        source: window,
+      }),
+    );
+  });
+};
+
 const showChip = () =>
   render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
@@ -150,7 +169,19 @@ const states = {
   [BROWSER_EXTENSION_STATUS.connected]: async () => {
     await report({ allSitesGranted: true, controllerId: "controller-1" });
   },
+  [BROWSER_EXTENSION_STATUS.extensionOutdated]: async () => {
+    await announceVersion(BROWSER_CONTROL_PROTOCOL_VERSION - 1);
+  },
+  [BROWSER_EXTENSION_STATUS.stellaOutdated]: async () => {
+    await announceVersion(BROWSER_CONTROL_PROTOCOL_VERSION + 1);
+  },
 } satisfies Record<BrowserExtensionStatus, () => Promise<void>>;
+
+const expectSteps = async (label: string, description: string) => {
+  fireEvent.click(screen.getByRole("button", { name: label }));
+  expect(await screen.findByText(description)).toBeTruthy();
+  expect(screen.queryByRole("link")).toBeNull();
+};
 
 for (const status of Object.values(BROWSER_EXTENSION_STATUS)) {
   test(`the live bridge renders ${status}`, async () => {
@@ -201,6 +232,18 @@ for (const status of Object.values(BROWSER_EXTENSION_STATUS)) {
           ),
         ).toBeTruthy();
         expect(screen.queryByRole("link")).toBeNull();
+        break;
+      case BROWSER_EXTENSION_STATUS.extensionOutdated:
+        await expectSteps(
+          messages.chat.browserExtension.updating,
+          messages.chat.browserExtension.updatingDescription,
+        );
+        break;
+      case BROWSER_EXTENSION_STATUS.stellaOutdated:
+        await expectSteps(
+          messages.chat.browserExtension.reload,
+          messages.chat.browserExtension.reloadDescription,
+        );
         break;
     }
   });
