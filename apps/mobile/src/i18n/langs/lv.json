@@ -34,6 +34,14 @@
     "composerPlaceholder": "Jautājiet stellai",
     "send": "Sūtīt",
     "stop": "Apturēt",
+    "dictate": "Diktēt",
+    "dictationCancel": "Atcelt diktēšanu",
+    "dictationFinish": "Pabeigt diktēšanu",
+    "dictationListening": "Klausos… {elapsed} no {limit}",
+    "dictationTranscribing": "Transkribē…",
+    "dictationDenied": "Diktēšanai vajag mikrofonu. Atļaujiet to stella iestatījumos.",
+    "dictationFailed": "Ierakstu neizdevās transkribēt. Mēģiniet vēlreiz.",
+    "dictationSilent": "Runa netika sadzirdēta.",
     "sendFailed": "Ziņojumu neizdevās nosūtīt. Mēģiniet vēlreiz.",
     "answerWorking": "Strādāju…",
     "answerStopped": "Apturēts.",
@@ -222,9 +230,7 @@
     "share": "Kopīgot"
   },
   "more": {
-    "soon": "Drīzumā",
-    "timers": "Taimeri",
-    "voiceInput": "Balss ievade"
+    "timers": "Taimeri"
   },
   "writes": {
     "consentNeeded": "Lai lietotnē veiktu izmaiņas, stella nepieciešama jūsu atļauja. Piesakieties vēlreiz, lai to piešķirtu.",

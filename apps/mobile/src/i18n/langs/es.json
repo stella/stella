@@ -34,6 +34,14 @@
     "composerPlaceholder": "Pregunta a stella",
     "send": "Enviar",
     "stop": "Detener",
+    "dictate": "Dictar",
+    "dictationCancel": "Cancelar dictado",
+    "dictationFinish": "Terminar dictado",
+    "dictationListening": "Escuchando… {elapsed} de {limit}",
+    "dictationTranscribing": "Transcribiendo…",
+    "dictationDenied": "El dictado necesita el micrófono. Permítelo para stella en Ajustes.",
+    "dictationFailed": "No se pudo transcribir la grabación. Inténtalo de nuevo.",
+    "dictationSilent": "No se oyó ninguna voz.",
     "sendFailed": "No se pudo enviar el mensaje. Inténtalo de nuevo.",
     "answerWorking": "Trabajando…",
     "answerStopped": "Detenido.",
@@ -222,9 +230,7 @@
     "share": "Compartir"
   },
   "more": {
-    "soon": "Próximamente",
-    "timers": "Temporizadores",
-    "voiceInput": "Entrada de voz"
+    "timers": "Temporizadores"
   },
   "writes": {
     "consentNeeded": "Para hacer cambios desde la app, stella necesita su permiso. Vuelva a iniciar sesión para concederlo.",
