@@ -11,10 +11,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  defaultVarcharSchema,
-  resourceIdSchema,
-} from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   isTreeParentGuardError,
@@ -93,13 +90,13 @@ const parentChainWouldCycle = async ({
 // ── Schemas ─────────────────────────────────────────
 
 export const createTemplateCategoryBodySchema = v.object({
-  name: defaultVarcharSchema,
+  name: displayNameSchema(),
   description: v.optional(v.pipe(v.string(), v.maxLength(2000))),
   parentId: v.optional(resourceIdSchema("templateCategory")),
 });
 
 export const updateTemplateCategoryBodySchema = v.object({
-  name: v.optional(defaultVarcharSchema),
+  name: v.optional(displayNameSchema()),
   description: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(2000)))),
   parentId: v.optional(v.nullable(resourceIdSchema("templateCategory"))),
   sortOrder: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),

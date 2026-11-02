@@ -25,7 +25,7 @@ import {
 } from "@stll/api-contract/chat";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { encodeStoredChatContent } from "@/api/db/stored-chat-part-codec";
 import {
@@ -1119,7 +1119,8 @@ describe("chat attachment parts", () => {
   });
 
   test("persists only canonical rich output fields", () => {
-    fc.assert(
+    assertProperty(
+      "persists only canonical rich output fields",
       fc.property(
         fc.jsonValue(),
         fc.dictionary(fc.string(), fc.jsonValue()),
@@ -1148,12 +1149,13 @@ describe("chat attachment parts", () => {
           });
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("bounds every mixed rich-part sequence and reaches a fixed point", () => {
-    fc.assert(
+    assertProperty(
+      "bounds every mixed rich-part sequence and reaches a fixed point",
       fc.property(
         fc.array(fc.integer({ min: 0, max: 3 }), { maxLength: 100 }),
         (kinds) => {
@@ -1174,7 +1176,7 @@ describe("chat attachment parts", () => {
           expect(second.droppedPartTypes).toHaveLength(0);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -1198,7 +1200,8 @@ describe("chat attachment parts", () => {
   });
 
   test("restores exactly the persisted server-owned sequence", () => {
-    fc.assert(
+    assertProperty(
+      "restores exactly the persisted server-owned sequence",
       fc.property(
         fc.array(fc.integer({ min: 0, max: 3 }), { maxLength: 20 }),
         fc.array(fc.integer({ min: 1, max: 3 }), { maxLength: 10 }),
@@ -1214,7 +1217,7 @@ describe("chat attachment parts", () => {
           ).toEqual(persistedParts);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
