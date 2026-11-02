@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { getAuth } from "@/api/lib/auth";
 import type { UpdateApiKey } from "@/api/lib/auth/api-key-endpoints";
 import type { SafeId } from "@/api/lib/branded-types";
-import { uniqueItems } from "@/api/lib/custom-schema";
+import { displayNameSchema, uniqueItems } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   API_KEY_KIND,
@@ -68,11 +68,9 @@ const reportUnreadableKey = (
  * on either endpoint so the two paths cannot drift into accepting different
  * shapes for the same credential.
  */
-export const machineApiKeyNameSchema = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.maxLength(MACHINE_API_KEY_NAME_MAX_LENGTH),
-);
+export const machineApiKeyNameSchema = displayNameSchema({
+  maxLength: MACHINE_API_KEY_NAME_MAX_LENGTH,
+});
 
 /**
  * Scopes are constrained at the HTTP boundary to the grantable set, so an
