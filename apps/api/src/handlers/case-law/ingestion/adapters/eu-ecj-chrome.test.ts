@@ -2,12 +2,12 @@ import { Glob } from "bun";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import * as cheerio from "cheerio";
 
+import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import { SHELL_STEM } from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
 import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import { SHELL_STEM } from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
+} from "@/api/lib/legal-search/ingestion-types";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 
 setDefaultTimeout(30_000);

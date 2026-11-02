@@ -82,7 +82,7 @@ import {
   publicLawDatabaseRolePermissionsSql,
 } from "@/api/lib/public-law-read-db";
 import {
-  CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE,
+  CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE,
   CASE_LAW_DECISION_VIEWS,
   caseLawDecisionViewGrantStatements,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
@@ -936,13 +936,22 @@ describe("public-law reader role", () => {
         columns.at(0) ??
           panic("An existing relation must have a declared column"),
       );
+      const privileges = await testDb.execute<{ writable: boolean }>(sql`
+        SELECT has_table_privilege(${READER_ROLE}, ${relation}, ${WRITE_PRIVILEGES})
+          OR has_any_column_privilege(${READER_ROLE}, ${relation}, 'INSERT, UPDATE, REFERENCES') AS writable
+      `);
+      expect(privileges.rows).toEqual([{ writable: false }]);
       for (const statement of [
         `UPDATE ${quoted(relation)} SET ${column} = ${column}`,
         `DELETE FROM ${quoted(relation)}`,
         `INSERT INTO ${quoted(relation)} DEFAULT VALUES`,
       ]) {
         const failure = await readerStatementFailure(statement);
-        if (!errorMessageChain(failure).includes("permission denied")) {
+        const message = errorMessageChain(failure);
+        if (
+          !message.includes("permission denied") &&
+          !/cannot (?:update|delete from|insert into) view/u.test(message)
+        ) {
           written.push(statement);
         }
       }
@@ -1189,7 +1198,7 @@ describe("public-law reader role", () => {
         });
         exercised.add(readCaseLawCourtActivityQuery.publicLawSharedQuery);
 
-        await readCaseLawCoverageSourcesQuery(tx);
+        await readCaseLawCoverageSourcesQuery(tx, []);
         exercised.add(readCaseLawCoverageSourcesQuery.publicLawSharedQuery);
 
         expect(await readCaseLawCoverageSummaryQuery(tx)).toEqual({
@@ -1349,11 +1358,11 @@ describe("public-law reader role", () => {
     `);
 
     const policies = result.rows.map(({ tablename }) => tablename);
-    const viewRelations = new Set([
-      "case_law_published_decisions",
-      "case_law_unredacted_decisions",
-      "case_law_withdrawal_status",
-    ]);
+    const views = await testDb.execute<{ relation: string }>(sql`
+      SELECT relname AS relation FROM pg_class
+      WHERE relnamespace = 'public'::regnamespace AND relkind = 'v'
+    `);
+    const viewRelations = new Set(views.rows.map(({ relation }) => relation));
     const requiredRelations = declaredColumnPairs
       .filter(({ grant }) => grant === "required")
       .map(({ relation }) => relation);
@@ -1403,10 +1412,15 @@ const stripLineComments = (contents: string): string =>
     .join("\n");
 
 const identifiers = (list: string): string[] =>
-  list.split(",").map((entry) => entry.trim().replaceAll('"', ""));
+  list.split(",").map((entry) =>
+    entry
+      .trim()
+      .replaceAll('"', "")
+      .replace(/^public\./u, ""),
+  );
 
 const STATEMENT_PATTERN =
-  /^(?<verb>GRANT|REVOKE) SELECT(?: \((?<columns>[^)]+)\))? ON TABLE (?<tables>.+?) (?:TO|FROM) "?(?<role>stella_(?:caselaw_reader|public_law_reader))"?$/iu;
+  /^(?<verb>GRANT|REVOKE) SELECT(?: \((?<columns>[^)]+)\))? ON (?:TABLE )?(?<tables>(?:(?:"public"|public)\.)?(?:"[a-z_][a-z0-9_]*"|[a-z_][a-z0-9_]*)(?:, (?:(?:"public"|public)\.)?(?:"[a-z_][a-z0-9_]*"|[a-z_][a-z0-9_]*))*) (?:TO|FROM) "?(?<role>stella_(?:caselaw_reader|public_law_reader))"?$/iu;
 const READER_SELECT_STATEMENT_PATTERN = /^(?:GRANT|REVOKE) SELECT\b/iu;
 const READER_ROLE_NAME_PATTERN =
   /\bstella_(?:caselaw_reader|public_law_reader)\b/iu;
@@ -1474,42 +1488,55 @@ const sortedColumns = (grants: EffectiveSelectGrants) =>
   );
 
 describe("public-law reader migrations", () => {
-  test("committed decision-view grants match the canonical role registry", () => {
-    const migrations = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) =>
-        nodePath.resolve(DRIZZLE_DIR, entry.name, "migration.sql"),
-      )
-      .filter((path) => existsSync(path))
-      .map((path) => readFileSync(path, "utf-8"))
-      .filter((source) =>
-        source.includes("-- generated case-law decision view grants: start"),
-      );
-    expect(migrations).toHaveLength(1);
-    const migration = migrations.at(0) ?? panic("Grant migration not found");
-    const startMarker = "-- generated case-law decision view grants: start";
-    const endMarker = "-- generated case-law decision view grants: end";
-    const start = migration.indexOf(startMarker) + startMarker.length;
-    const end = migration.indexOf(endMarker);
-    expect(end).toBeGreaterThan(start);
-    const statements = migration
-      .slice(start, end)
-      .replaceAll("--> statement-breakpoint", "")
-      .split(";")
-      .map((statement) => statement.trim())
-      .filter(Boolean);
-    const expected = caseLawDecisionViewGrantStatements();
+  test.each(["initial", "later"] as const)(
+    "%s committed decision-view grants match their stage registry",
+    (stage) => {
+      const migrations = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) =>
+          nodePath.resolve(DRIZZLE_DIR, entry.name, "migration.sql"),
+        )
+        .filter((path) => existsSync(path))
+        .toSorted()
+        .map((path) => readFileSync(path, "utf-8"))
+        .filter((source) =>
+          source.includes("-- generated case-law decision view grants: start"),
+        );
+      expect(migrations).toHaveLength(2);
+      const migration =
+        migrations.at(stage === "initial" ? 0 : 1) ??
+        panic("Grant migration not found");
+      const startMarker = "-- generated case-law decision view grants: start";
+      const endMarker = "-- generated case-law decision view grants: end";
+      const start = migration.indexOf(startMarker) + startMarker.length;
+      const end = migration.indexOf(endMarker);
+      expect(end).toBeGreaterThan(start);
+      const statements = migration
+        .slice(start, end)
+        .replaceAll("--> statement-breakpoint", "")
+        .split(";")
+        .map((statement) => statement.trim())
+        .filter(Boolean);
+      const expected = caseLawDecisionViewGrantStatements(stage);
 
-    expect(statements).toEqual(expected);
-    expect(expected).toHaveLength(
-      Object.keys(CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE).length,
-    );
-    for (const statement of statements) {
-      for (const view of CASE_LAW_DECISION_VIEWS) {
-        expect(statement).toContain(`"${view}"`);
+      expect(statements).toEqual(expected);
+      expect(statements.join("\n")).not.toContain('"text_state"');
+      if (stage === "initial") {
+        expect(statements.join("\n")).not.toContain('"extraction_warnings"');
+      } else {
+        expect(statements.join("\n")).toContain('"extraction_warnings"');
       }
-    }
-  });
+      expect(expected).toHaveLength(
+        Object.keys(CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE[stage])
+          .length,
+      );
+      for (const statement of statements) {
+        for (const view of CASE_LAW_DECISION_VIEWS) {
+          expect(statement).toContain(`"${view}"`);
+        }
+      }
+    },
+  );
 
   // The attestation's bounds, held against what the migrations grant: every
   // required column, nothing beyond required plus permitted, and no table-wide

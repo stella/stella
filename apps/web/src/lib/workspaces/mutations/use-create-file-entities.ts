@@ -1,13 +1,10 @@
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
-import { panic } from "better-result";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyTextWithIdleDeadline } from "@stll/fetch/body-reader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
@@ -32,6 +29,7 @@ import {
 } from "@/lib/files/attached-template-upload-preflight";
 import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
 import {
@@ -232,16 +230,14 @@ const prepareSingleFileEntityUpload = async ({
     workspaceId: toSafeId<"workspace">(workspaceId),
   });
   const presign = await wsClient.presign.post(
-    readQueryResult(
-      buildEntityCreatePresignPayload({
-        propertyId,
-        parentId,
-        name: file.name,
-        mimeType: file.type || "application/octet-stream",
-        size: file.size,
-        sha256Hex,
-      }),
-    ),
+    buildEntityCreatePresignPayload({
+      propertyId,
+      parentId,
+      name: file.name,
+      mimeType: file.type || "application/octet-stream",
+      size: file.size,
+      sha256Hex,
+    }),
     { fetch: { signal } },
   );
   if (presign.error) {
@@ -283,7 +279,7 @@ const putFileEntity = async ({
       headers,
       body: file,
       signal,
-      timeout: { type: "idle", ms: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS },
+      timeout: { type: "headers", ms: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS },
     });
   } catch (error) {
     // Best-effort cleanup: abortUpload swallows its own errors and its
@@ -303,9 +299,15 @@ const putFileEntity = async ({
     });
   }
   if (!putResponse.ok) {
+    const errorBody = await Result.tryPromise(async () =>
+      readBodyTextWithIdleDeadline(putResponse, {
+        idleMs: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
+        signal,
+      }),
+    );
     const error = toAPIError({
       status: putResponse.status,
-      value: await putResponse.text().catch(() => undefined),
+      value: errorBody.isErr() ? undefined : errorBody.value,
     });
     attachResponseForRetry(error, putResponse);
     await abortUpload(workspaceId, uploadId);
@@ -724,7 +726,8 @@ export const useCreateFileEntities = (workspaceId: string) => {
     }
   };
 
-  const { isPending, mutate } = useMutation({
+  const { isPending, mutate } = useIdempotentMutation({
+    idempotencyScope: workspaceId,
     mutationFn: async (input: CreateFileEntitiesInput) => {
       const parentId = input.parentId ?? null;
 

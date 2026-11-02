@@ -75,7 +75,8 @@ globalThis.fetch = Object.assign(
 );
 
 const testing = await import("@testing-library/react");
-const query = await import("@tanstack/react-query");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -105,14 +106,14 @@ const SK: PracticeJurisdiction = { countryCode: "SK", isPrimary: false };
 const drain = async () => await testing.act(async () => await sleep(0));
 
 const mountCard = async () => {
-  const client = new query.QueryClient({
+  const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Infinity },
       mutations: { retry: false },
     },
   });
   const view = testing.render(
-    <query.QueryClientProvider client={client}>
+    <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <FormattingProvider locale="en" timeZone="UTC">
           <AuthenticatedUserProvider
@@ -131,7 +132,7 @@ const mountCard = async () => {
           </AuthenticatedUserProvider>
         </FormattingProvider>
       </IntlProvider>
-    </query.QueryClientProvider>,
+    </QueryClientProvider>,
   );
   await testing.waitFor(() => {
     expect(
@@ -151,11 +152,11 @@ const mountCard = async () => {
 };
 
 // The picker renders a "make primary" star for every selected country once
-// two or more are selected; its pressed styling marks the primary one.
+// two or more are selected; its pressed state marks the primary one.
 const displayedSelection = (view: ReturnType<typeof testing.render>) =>
   view.queryAllByLabelText(/^Make .* primary/u).map((star) => ({
     name: star.getAttribute("aria-label"),
-    isPrimary: star.className.split(/\s+/u).includes("text-primary"),
+    isPrimary: star.getAttribute("aria-pressed") === "true",
   }));
 
 const EXPECTED_DISPLAY = [

@@ -114,9 +114,10 @@ import { PageOrganizerCrop } from "./page-organizer-crop";
 import { PageOrganizerSignAction } from "./page-organizer-sign";
 import type { PageOrganizerSign } from "./page-organizer-sign";
 import {
-  commitCompletedUpload,
+  createPageOrganizerOperationOwner,
   createPageOrganizerUploadOwner,
 } from "./page-organizer-upload.logic";
+import type { OrganizerOperationRequest } from "./page-organizer-upload.logic";
 import {
   createPageOrganizerState,
   DEFAULT_CLEAN_SCAN_OPTIONS,
@@ -743,6 +744,7 @@ const LoadedPDFPageOrganizer = ({
   const savedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const uploadOwnerRef = useRef(createPageOrganizerUploadOwner());
+  const [operationOwner] = useState(() => createPageOrganizerOperationOwner());
   const cleanScanAbortRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
   const addedSourceDocumentsRef = useRef(new Set<PDFDocument>());
@@ -792,17 +794,24 @@ const LoadedPDFPageOrganizer = ({
     sourceDocument.pages.size > MAX_PAGE_EDITOR_PAGES ||
     originalBytes.byteLength > MAX_PAGE_EDITOR_SOURCE_BYTES;
 
-  useMountEffect(() => () => {
-    isMountedRef.current = false;
-    abortRef.current?.abort();
-    uploadOwnerRef.current.cancelCurrent();
-    cleanScanAbortRef.current?.abort();
-    for (const document of addedSourceDocumentsRef.current) {
-      detached(
-        destroyPDFDocument(document),
-        "pdf-page-organizer.destroy-added-source",
-      );
-    }
+  // React can unmount and remount effects while keeping this state (StrictMode
+  // in development), so the setup re-arms what the cleanup revokes.
+  useMountEffect(() => {
+    isMountedRef.current = true;
+    operationOwner.activate();
+    return () => {
+      isMountedRef.current = false;
+      operationOwner.revoke();
+      abortRef.current?.abort();
+      uploadOwnerRef.current.cancelCurrent();
+      cleanScanAbortRef.current?.abort();
+      for (const document of addedSourceDocumentsRef.current) {
+        detached(
+          destroyPDFDocument(document),
+          "pdf-page-organizer.destroy-added-source",
+        );
+      }
+    };
   });
 
   const dispatch = (action: Parameters<typeof reducePageOrganizer>[1]) => {
@@ -812,11 +821,19 @@ const LoadedPDFPageOrganizer = ({
   const pageInfoFor = (page: OrganizerPage): PageInfo | undefined =>
     pageInfoBySource.get(page.sourceId)?.at(page.sourcePageIndex);
 
-  const transform = async (requestedOutputs: string[][]) => {
+  const transform = async (
+    operationRequest: OrganizerOperationRequest,
+    requestedOutputs: string[][],
+  ) => {
+    const operationToken = operationRequest.operation;
+    if (!operationOwner.isCurrent(operationRequest)) {
+      return { type: "cancelled" } as const;
+    }
     const controller = new AbortController();
+    operationOwner.ownController(operationRequest, controller);
     abortRef.current = controller;
     setOperation({ type: "transforming" });
-    return await withCleanup(
+    const outputs = await withCleanup(
       async () =>
         transformPDFInWorker({
           sources: [
@@ -829,12 +846,23 @@ const LoadedPDFPageOrganizer = ({
           pages: transformPagePlanEntries(state),
           outputs: requestedOutputs,
           signal: controller.signal,
+          operation: operationToken,
+          operationRequest,
+          isOperationCurrent: (candidate, request) =>
+            operationOwner.isLive(candidate) &&
+            operationOwner.isCurrent(request),
         }),
       () => {
-        abortRef.current = null;
-        setOperation({ type: "idle" });
+        operationOwner.releaseController(operationRequest, controller);
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+          setOperation({ type: "idle" });
+        }
       },
     );
+    return operationOwner.isCurrent(operationRequest)
+      ? ({ type: "completed", outputs } as const)
+      : ({ type: "cancelled" } as const);
   };
 
   const reportOperationError = (error: unknown) => {
@@ -920,17 +948,31 @@ const LoadedPDFPageOrganizer = ({
   };
 
   /** Upload the edited PDF as a new version; the caller closes the editor. */
-  const saveVersion = async () => {
-    const [bytes] = await transform([plan.pages.map((page) => page.id)]);
+  const saveVersion = async (request: OrganizerOperationRequest) => {
+    const transformed = await transform(request, [
+      plan.pages.map((page) => page.id),
+    ]);
+    if (transformed.type === "cancelled") {
+      return transformed;
+    }
+    const [bytes] = transformed.outputs;
     if (!bytes) {
       return { type: "skipped" } as const;
     }
+    if (!operationOwner.isCurrent(request)) {
+      return { type: "cancelled" } as const;
+    }
     setOperation({ type: "uploading" });
     const uploadController = new AbortController();
+    operationOwner.ownController(request, uploadController);
     abortRef.current = uploadController;
-    const pendingUpload = uploadOwnerRef.current.begin();
+    const pendingUpload = uploadOwnerRef.current.begin(request);
     return await withCleanup(
       async () => {
+        if (!operationOwner.isCurrent(request)) {
+          uploadOwnerRef.current.cancel(pendingUpload);
+          return { type: "cancelled" } as const;
+        }
         const uploadResult = await uploadEntityVersion({
           workspaceId,
           entityId,
@@ -956,12 +998,20 @@ const LoadedPDFPageOrganizer = ({
         if (provisional.type !== "provisional") {
           return provisional;
         }
+        if (!operationOwner.isCurrent(request)) {
+          uploadOwnerRef.current.cancelCurrent();
+          return { type: "cancelled" } as const;
+        }
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
           }),
           queryClient.invalidateQueries({ queryKey: filesKeys.all() }),
         ]);
+        if (!operationOwner.isCurrent(request)) {
+          uploadOwnerRef.current.cancelCurrent();
+          return { type: "cancelled" } as const;
+        }
         const outcome = uploadOwnerRef.current.commit(provisional);
         if (outcome.type !== "completed") {
           return outcome;
@@ -974,14 +1024,21 @@ const LoadedPDFPageOrganizer = ({
         return outcome;
       },
       () => {
-        abortRef.current = null;
-        setOperation({ type: "idle" });
+        operationOwner.releaseController(request, uploadController);
+        if (abortRef.current === uploadController) {
+          abortRef.current = null;
+          setOperation({ type: "idle" });
+        }
       },
     );
   };
 
   const handleSaveVersion = async () => {
-    if ((await saveVersion()).type === "completed") {
+    const request = operationOwner.beginRequest(operationOwner.operation);
+    if (
+      (await saveVersion(request)).type === "completed" &&
+      operationOwner.isCurrent(request)
+    ) {
       onClose();
     }
   };
@@ -989,19 +1046,20 @@ const LoadedPDFPageOrganizer = ({
   /**
    * Save the edits, then resolve that exact version from the upload receipt so the
    * sign flow stamps and signs it rather than the version the editor opened.
-   * The editor closes either way once the version exists.
    */
   const saveVersionForSigning = async (
+    request: OrganizerOperationRequest,
     target: PdfSignTarget,
   ): Promise<PdfSignTarget | null> => {
     const result = await Result.tryPromise({
       try: async () => {
-        const savedVersion = await saveVersion();
+        const savedVersion = await saveVersion(request);
         if (savedVersion.type !== "completed") {
           return Result.ok(null);
         }
-        onClose();
-        const saved = await commitCompletedUpload(
+        const targetResult = await uploadOwnerRef.current.consume(
+          request,
+          operationOwner,
           savedVersion,
           async (upload) =>
             await readSavedPdfSignTarget({
@@ -1010,7 +1068,10 @@ const LoadedPDFPageOrganizer = ({
               target,
             }),
         );
-        if (saved === null) {
+        if (!operationOwner.isCurrent(request)) {
+          return Result.ok(null);
+        }
+        if (targetResult === null) {
           return Result.err(
             new ClientOperationError({
               action: "sign-saved-pdf-version",
@@ -1018,7 +1079,7 @@ const LoadedPDFPageOrganizer = ({
             }),
           );
         }
-        return Result.ok(saved);
+        return Result.ok(targetResult);
       },
       catch: (cause) => cause,
     }).then(Result.flatten);
@@ -1159,11 +1220,22 @@ const LoadedPDFPageOrganizer = ({
             .filter((page) => selectedIds.has(page.id))
             .map((page) => page.id)
         : plan.pages.map((page) => page.id);
-    const [output] = await transform([pageIds]);
+    const request = operationOwner.beginRequest(operationOwner.operation);
+    const transformed = await transform(request, [pageIds]);
+    if (transformed.type === "cancelled") {
+      return;
+    }
+    const [output] = transformed.outputs;
     if (!output) {
       return;
     }
+    if (!operationOwner.isCurrent(request)) {
+      return;
+    }
     await authorizePDFOrganizerExport({ fieldId, workspaceId });
+    if (!operationOwner.isCurrent(request)) {
+      return;
+    }
     downloadOutput({
       baseName:
         selectedIds.size > 0 ? `${baseName} - selected pages` : baseName,
@@ -1472,8 +1544,12 @@ const LoadedPDFPageOrganizer = ({
             closeEditor={onClose}
             disabled={isBusy || (isDirty && !canSaveVersion)}
             isDirty={isDirty}
-            saveVersion={async () =>
-              await saveVersionForSigning(pdfSign.target)
+            beginRequest={(operationToken) =>
+              operationOwner.beginRequest(operationToken)
+            }
+            operation={operationOwner.operation}
+            saveVersion={async (request) =>
+              await saveVersionForSigning(request, pdfSign.target)
             }
             sign={pdfSign}
           />
@@ -1617,6 +1693,7 @@ export const PDFPageOrganizer = ({
 
   return (
     <LoadedPDFPageOrganizer
+      key={`${workspaceId}:${entityId}:${fieldId}`}
       canSaveVersion={canSaveVersion}
       entityId={entityId}
       fieldId={fieldId}

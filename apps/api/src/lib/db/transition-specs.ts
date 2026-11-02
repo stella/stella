@@ -3,7 +3,9 @@ import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-ti
 import {
   accountExports,
   caseLawDecisionCitationStatsState,
+  caseLawPopulationSeedState,
   caseLawReplayBatches,
+  caseLawSitemapDrainProgress,
   desktopEditSessions,
   desktopTimeEntryBatches,
   EU_COMPLETION_STATUSES,
@@ -45,6 +47,7 @@ import type {
   ScopedTransitionDeclaration,
   TransitionSpec,
 } from "@/api/lib/db/transitions";
+import { REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS } from "@/api/lib/idempotency/request-receipt-transition-spec";
 import {
   CONTACT_MONITORING_TRANSITIONS,
   FIRM_MONITORING_TRANSITIONS,
@@ -150,6 +153,40 @@ const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
   key: "decisionId",
   edges: { pending: ["exact"], exact: [] },
   options: { terminal: ["exact"] },
+});
+
+export const SITEMAP_DRAIN_TRANSITION_IDENTITY = {
+  tableName: "caseLawSitemapDrainProgress",
+  key: "country",
+  scope: ["year", "month"],
+  stateColumn: "phase",
+} as const;
+
+const SITEMAP_DRAIN_TRANSITIONS = defineScopedTransitions({
+  table: caseLawSitemapDrainProgress,
+  key: SITEMAP_DRAIN_TRANSITION_IDENTITY.key,
+  scope: SITEMAP_DRAIN_TRANSITION_IDENTITY.scope,
+  stateColumn: SITEMAP_DRAIN_TRANSITION_IDENTITY.stateColumn,
+  edges: {
+    draining: ["awaiting_visibility"],
+    awaiting_visibility: ["draining"],
+  },
+  initial: ["draining"],
+});
+
+// The population seed scans every source, folds its queued deltas, then
+// completes; one call may finish the scan and the fold together.
+const CASE_LAW_POPULATION_SEED_TRANSITIONS = defineScopedTransitions({
+  table: caseLawPopulationSeedState,
+  key: "slot",
+  scope: [],
+  stateColumn: "phase",
+  edges: {
+    scan: ["fold", "complete"],
+    fold: ["complete"],
+    complete: [],
+  },
+  initial: ["scan"],
 });
 
 // Readmission and recovery move the attempt and receipt status atomically.
@@ -409,6 +446,7 @@ export const TRANSITIONS = {
   caseLawDecisions: { unmanaged: UNMANAGED_REASONS.projection },
   caseLawIndexJobs: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawIngestionEvents: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawPopulationSeedState: CASE_LAW_POPULATION_SEED_TRANSITIONS,
   caseLawProvisionCitations: { unmanaged: UNMANAGED_REASONS.projection },
   caseLawProvisionExtractions: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawProvisionExtractionScopes: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -416,6 +454,7 @@ export const TRANSITIONS = {
   caseLawReplayBatches: CASE_LAW_REPLAY_BATCH_TRANSITIONS,
   caseLawResearchAnswers: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawSearchBackfillFailures: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawSitemapDrainProgress: SITEMAP_DRAIN_TRANSITIONS,
   caseLawStatuteCitationCountState: { unmanaged: UNMANAGED_REASONS.projection },
   chatThreadCompactions: { unmanaged: UNMANAGED_REASONS.workerRun },
   chatTurns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -473,6 +512,7 @@ export const TRANSITIONS = {
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
   properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   reportExports: { unmanaged: UNMANAGED_REASONS.workerRun },
+  requestIdempotencyReceipts: REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS,
   sanctionsContactMatches: {
     scoped: {
       state: MATCH_MEMBERSHIP_TRANSITIONS,

@@ -4,8 +4,9 @@
 // step it replaced. The pool evaluates every condition against the job's own
 // context (event, `needs`, earlier step outcomes and outputs), so selection by
 // changed inputs and static-receipt reuse behave exactly as they did per step.
-// Selected checks run concurrently, one fewer than the runner CPUs; each log is
-// printed whole, in registry order, and every failure is annotated. Any failed
+// Selected checks run concurrently, one fewer than the runner CPUs, and only
+// while their measured peak memory fits the runner (see memoryBudgetMiB); each
+// log is printed whole, in registry order, and every failure is annotated. Any failed
 // check fails the step after all selected checks have finished, unless its
 // `continue-on-error` holds: then its conclusion is success. Every failed check
 // still emits an error annotation so the failure digest can report its cause.
@@ -33,13 +34,15 @@ import {
   writeFileSync,
   writeSync,
 } from "node:fs";
-import { availableParallelism } from "node:os";
+import { availableParallelism, totalmem } from "node:os";
 import path from "node:path";
+import { constrainedMemory } from "node:process";
 
 import {
   CHECK_POOL_JOBS,
   checkBudgetMinutes,
   type CheckBudgets,
+  checkPeakRssMiB,
   type CheckPoolJob,
   checkPoolResultsPath,
   type PoolCheck,
@@ -266,9 +269,47 @@ const launchedOutcome = (
     : { outcome: "failure", detail: exitCodeDetail(launched.exitCode) };
 };
 
+/** Admission by memory: checks start only while their peaks fit the budget. */
+export type MemoryAdmission = {
+  budgetMiB: number;
+  peakMiB: (check: PoolCheck) => number;
+};
+
+const MIB = 1_048_576;
+/** What the runner's OS, its agent and the pool itself keep: at least 2 GiB. */
+export const MEMORY_HEADROOM_MIB = 2048;
+export const MEMORY_HEADROOM_SHARE = 0.15;
+/**
+ * The runner's real memory: the host's, or less when a cgroup limits this
+ * process (a container reports the host's memory but cannot use it).
+ */
+export const runnerMemoryBytes = (
+  host: number,
+  constrained: number | undefined,
+) =>
+  constrained !== undefined && constrained > 0 && constrained < host
+    ? constrained
+    : host;
+
+/**
+ * The memory concurrent checks may use: the runner's real memory less a
+ * headroom of 15 %, at least 2 GiB. Checks that exceed the runner together
+ * make it stop the job, which then fails without a failed step.
+ */
+export const memoryBudgetMiB = (totalBytes: number) => {
+  const total = Math.floor(totalBytes / MIB);
+  return Math.max(
+    1,
+    total -
+      Math.max(MEMORY_HEADROOM_MIB, Math.ceil(total * MEMORY_HEADROOM_SHARE)),
+  );
+};
+
 type RunChecksOptions = {
   planned: readonly PlannedCheck[];
   concurrency: number;
+  /** Without it, only `concurrency` bounds the pool. */
+  memory?: MemoryAdmission;
   launch: (
     index: number,
     check: PoolCheck,
@@ -283,11 +324,15 @@ type RunChecksOptions = {
 
 /**
  * Run selected checks with at most `concurrency` in flight, in registry
- * order. A failure never stops other checks; results come back in order.
+ * order. With memory admission, a check starts only while the measured peaks
+ * of the checks in flight plus its own fit the budget; the first queued check
+ * that fits starts, and a check above the whole budget runs alone. A failure
+ * never stops other checks; results come back in order.
  */
 export const runChecks = async ({
   planned,
   concurrency,
+  memory,
   launch,
   report,
   finished = () => undefined,
@@ -334,40 +379,94 @@ export const runChecks = async ({
       },
     ];
   });
-  const worker = async () => {
-    for (let item = queue.shift(); item !== undefined; item = queue.shift()) {
-      const started = now();
-      const base = { name: item.check.name, id: item.check.id };
-      let result: CheckResult;
-      try {
-        const launched = await launch(item.index, item.check, item.env);
-        const seconds = (now() - started) / 1000;
-        const outcome = launchedOutcome(launched);
-        result = {
-          ...base,
-          seconds,
-          maxRssBytes: launched.maxRssBytes,
-          ...outcome,
-          continuedOnError:
-            item.continueOnError && outcome.outcome === "failure",
-        };
-      } catch (error) {
-        result = {
-          ...base,
-          seconds: (now() - started) / 1000,
-          maxRssBytes: undefined,
-          outcome: "failure",
-          continuedOnError: item.continueOnError,
-          detail: error instanceof Error ? error.message : String(error),
-        };
-      }
+  type Queued = (typeof queue)[number];
+  const runOne = async (item: Queued) => {
+    const started = now();
+    const base = { name: item.check.name, id: item.check.id };
+    let result: CheckResult;
+    try {
+      const launched = await launch(item.index, item.check, item.env);
+      const seconds = (now() - started) / 1000;
+      const outcome = launchedOutcome(launched);
+      result = {
+        ...base,
+        seconds,
+        maxRssBytes: launched.maxRssBytes,
+        ...outcome,
+        continuedOnError: item.continueOnError && outcome.outcome === "failure",
+      };
+    } catch (error) {
+      result = {
+        ...base,
+        seconds: (now() - started) / 1000,
+        maxRssBytes: undefined,
+        outcome: "failure",
+        continuedOnError: item.continueOnError,
+        detail: error instanceof Error ? error.message : String(error),
+      };
+    }
+    finished(item.index, result);
+    settle(item.index, result);
+  };
+  // Every weight is read before any check starts. A check without a measured
+  // peak fails on its own, before it runs, like a check without a budget.
+  const weights = new Map<number, number>();
+  for (const item of queue.splice(0)) {
+    try {
+      weights.set(item.index, memory?.peakMiB(item.check) ?? 0);
+      queue.push(item);
+    } catch (error) {
+      const result: CheckResult = {
+        name: item.check.name,
+        id: item.check.id,
+        seconds: 0,
+        maxRssBytes: undefined,
+        outcome: "failure",
+        continuedOnError: item.continueOnError,
+        detail: error instanceof Error ? error.message : String(error),
+      };
       finished(item.index, result);
       settle(item.index, result);
     }
-  };
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, queue.length) }, worker),
-  );
+  }
+  const peak = (item: Queued) => weights.get(item.index) ?? 0;
+  await new Promise<void>((resolve, reject) => {
+    let running = 0;
+    let runningMiB = 0;
+    const admits = (item: Queued) =>
+      running === 0 ||
+      memory === undefined ||
+      runningMiB + peak(item) <= memory.budgetMiB;
+    // Runs one admitted check and, once it ends, admits what now fits.
+    const run = async (item: Queued) => {
+      try {
+        await runOne(item);
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error(String(error)));
+        return;
+      }
+      running -= 1;
+      runningMiB -= peak(item);
+      pump();
+    };
+    const pump = () => {
+      if (queue.length === 0 && running === 0) {
+        resolve();
+        return;
+      }
+      while (running < concurrency) {
+        const at = queue.findIndex(admits);
+        const [item] = at === -1 ? [] : queue.splice(at, 1);
+        if (item === undefined) {
+          return;
+        }
+        running += 1;
+        runningMiB += peak(item);
+        void run(item);
+      }
+    };
+    pump();
+  });
   return results.map((result, index) => {
     if (result === undefined) {
       throw new CheckPoolError(
@@ -674,6 +773,21 @@ export const processLauncher =
 const logPath = (directory: string, index: number) =>
   path.join(directory, `${String(index).padStart(3, "0")}.log`);
 
+/**
+ * A check's log. A check that never launched, or whose launch failed before
+ * its log was opened, has none; its result's detail is then its only record.
+ */
+export type CheckLog =
+  { type: "output"; output: string } | { type: "no-output"; output: "" };
+
+/** Read a completed check's log without turning absent output into a pool crash. */
+export const readCheckLog = (directory: string, index: number): CheckLog => {
+  const file = logPath(directory, index);
+  return existsSync(file)
+    ? { type: "output", output: readFileSync(file, "utf-8") }
+    : { type: "no-output", output: "" };
+};
+
 const CANCELLATION_LOG_TAIL_BYTES = 8 * 1024;
 const CANCELLATION_LOG_TAIL_LINES = 40;
 const CANCELLATION_LOG_TOTAL_BYTES = 64 * 1024;
@@ -793,6 +907,24 @@ export const checkLogText = (
     .replace(NESTED_GROUP_START, "");
   return outcome === "failure" ? flat : flat.replace(ERROR_COMMAND, "| $1");
 };
+
+/** A check's group body: its log, or the error that ended it before it wrote one. */
+const checkGroupText = (
+  log: CheckLog,
+  result: Pick<CheckResult, "outcome" | "detail">,
+): string => {
+  switch (log.type) {
+    case "output": {
+      const text = checkLogText(log.output, result.outcome);
+      return text === "" || text.endsWith("\n") ? text : `${text}\n`;
+    }
+    case "no-output":
+      return result.outcome === "failure" ? `error: ${result.detail}\n` : "";
+    default:
+      log satisfies never;
+      throw new CheckPoolError(`Unhandled check log: ${JSON.stringify(log)}`);
+  }
+};
 const escapeProperty = (value: string) =>
   value
     .replaceAll("%", "%25")
@@ -901,6 +1033,23 @@ const cell = (value: string) =>
     .replaceAll("\\", "\\\\")
     .replaceAll("|", "\\|")
     .replaceAll(/\r?\n/gu, " ");
+
+/**
+ * A check whose peak grew a quarter past its measured one: admission used too
+ * little for it, so its budgets want a refresh.
+ */
+export const peakAboveDeclared = (
+  result: Pick<CheckResult, "name" | "maxRssBytes">,
+  declaredMiB: number,
+) => {
+  if (result.maxRssBytes === undefined) {
+    return undefined;
+  }
+  const measured = Math.round(result.maxRssBytes / MIB);
+  return measured > declaredMiB * 1.25
+    ? `Peak memory of ${result.name}: ${measured} MiB, above its measured ${declaredMiB} MiB; run bun scripts/ci-check-budgets.ts refresh`
+    : undefined;
+};
 
 export const summaryTable = (results: readonly CheckResult[]) =>
   [
@@ -1315,8 +1464,14 @@ const main = async () => {
     ? Number(override)
     : Math.max(1, availableParallelism() - 1);
   const selected = planned.filter(({ status }) => status === "selected").length;
+  const budgets = readCheckBudgets(root);
+  const runnerBytes = runnerMemoryBytes(totalmem(), constrainedMemory());
+  const memory: MemoryAdmission = {
+    budgetMiB: memoryBudgetMiB(runnerBytes),
+    peakMiB: (check) => checkPeakRssMiB(budgets, job, check.name),
+  };
   print(
-    `${job}: ${selected} of ${planned.length} checks selected; running ${Math.min(concurrency, selected)} at a time`,
+    `${job}: ${selected} of ${planned.length} checks selected; running ${Math.min(concurrency, selected)} at a time within ${memory.budgetMiB} of ${Math.floor(runnerBytes / MIB)} MiB`,
   );
   const unreported = new Map<number, UnreportedCheck>();
   const stop = poolStopper(directory, unreported);
@@ -1324,7 +1479,6 @@ const main = async () => {
   process.on("SIGTERM", () => stop({ kind: "signal", signal: "SIGTERM" }));
   const deadlineTimer = armDeadline({ root, job, stop });
   const started = performance.now();
-  const budgets = readCheckBudgets(root);
   const launch = processLauncher({
     root,
     directory,
@@ -1333,6 +1487,7 @@ const main = async () => {
   const results = await runChecks({
     planned,
     concurrency,
+    memory,
     launch: async (index, check, env) => {
       const entry: UnreportedCheck = {
         name: check.name,
@@ -1347,8 +1502,17 @@ const main = async () => {
         unreported.set(index, { ...entry, status: "completed" });
       }
     },
-    finished: (_index, result) => {
+    finished: (index, result) => {
       print(finishedCheckLine(result));
+      // Only a check that ran measured a peak; one without a budget never ran.
+      const check = planned[index]?.check;
+      const above =
+        check === undefined || result.maxRssBytes === undefined
+          ? undefined
+          : peakAboveDeclared(result, memory.peakMiB(check));
+      if (above !== undefined) {
+        print(above);
+      }
     },
     report: (index, result) => {
       unreported.delete(index);
@@ -1363,15 +1527,13 @@ const main = async () => {
           : "FAILED";
       }
       print(`::group::${result.name}: ${label} in ${seconds(result.seconds)}`);
-      const output =
+      const log: CheckLog =
         planned[index]?.status === "selected"
-          ? readFileSync(logPath(directory, index), "utf-8")
-          : "";
-      if (planned[index]?.status === "selected") {
-        const text = checkLogText(output, result.outcome);
-        writeOut(text === "" || text.endsWith("\n") ? text : `${text}\n`);
-      }
+          ? readCheckLog(directory, index)
+          : { type: "no-output", output: "" };
+      writeOut(checkGroupText(log, result));
       print("::endgroup::");
+      const { output } = log;
       if (result.outcome === "failure") {
         print(failedCheckAnnotation(result, output));
         print(failedCheckRecord(result.name, failedCheckCause(result, output)));

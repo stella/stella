@@ -10,7 +10,8 @@ import * as v from "valibot";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  type BrowserClientCapability,
+  BROWSER_EXTENSION_STATUS,
+  type BrowserExtensionCapability,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_EDIT_APPLY_MODE,
   CHAT_RICH_PART_LIMITS,
@@ -40,6 +41,7 @@ import {
 } from "@/api/handlers/chat/attachment-validation";
 import {
   chatMessageFromPersisted,
+  continueStoredChatPart,
   getAwaitingUserInteractions,
   getResumedUserInteraction,
   hasServerOwnedChatPartType,
@@ -202,23 +204,21 @@ export const activeExternalSchema = activeContextSchema({
   url: v.string(),
 });
 
-// Any version parses so a tab running an older or newer web build can still
-// chat; `resolveBrowserClientCapability` decides whether the tool registers.
-// A JSON number that is whole, not a numeric string.
-const browserClientSchema = v.strictObject({
-  protocolVersion: v.pipe(v.number(), v.minValue(1), v.multipleOf(1)),
+// Accept version skew so chat can continue; the capability policy disables
+// browser tools and supplies recovery guidance. Unknown statuses stay invalid.
+const browserExtensionSchema = v.strictObject({
+  protocolVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  status: v.picklist(Object.values(BROWSER_EXTENSION_STATUS)),
 });
 
-/**
- * The browser tool is offered only to a client speaking this server's
- * extension protocol; another version chats without it.
- */
-export const resolveBrowserClientCapability = (
-  browserClient: v.InferOutput<typeof browserClientSchema> | undefined,
-): BrowserClientCapability | undefined =>
-  browserClient?.protocolVersion === BROWSER_CONTROL_PROTOCOL_VERSION
-    ? { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION }
-    : undefined;
+/** Non-web chat clients have no local Chrome-extension executor. */
+export const resolveBrowserExtensionCapability = (
+  browserExtension: v.InferOutput<typeof browserExtensionSchema> | undefined,
+): BrowserExtensionCapability =>
+  browserExtension ?? {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: BROWSER_EXTENSION_STATUS.unsupportedDevice,
+  };
 
 export const activeSkillSchema = activeContextSchema({
   // A built-in skill has no row: `skillName` alone names it.
@@ -263,7 +263,12 @@ const sendMessageCommonProperties = {
    */
   contextMatterIds: v.exactOptional(v.array(resourceIdSchema("workspace"))),
   truncateAfterMessageId: v.exactOptional(resourceIdSchema("chatMessage")),
-  turnIntent: v.exactOptional(v.literal(CHAT_TURN_INTENT.regenerate)),
+  turnIntent: v.exactOptional(
+    v.union([
+      v.literal(CHAT_TURN_INTENT.edit),
+      v.literal(CHAT_TURN_INTENT.regenerate),
+    ]),
+  ),
   /**
    * Optional named tool scope for this turn. Only server-defined
    * scope names validate; the server maps the name to a fixed tool
@@ -284,7 +289,7 @@ const sendMessageCommonProperties = {
   activeExternal: v.exactOptional(activeExternalSchema),
   activeSkill: v.exactOptional(activeSkillSchema),
   activeStatute: v.exactOptional(activeStatuteSchema),
-  browserClient: v.exactOptional(browserClientSchema),
+  browserExtension: v.exactOptional(browserExtensionSchema),
   /**
    * Which DOCX-edit review mode this turn uses; omitted means
    * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which
@@ -336,6 +341,47 @@ export const sendMessageBodySchema = v.union([
 ]);
 
 export type ChatSendRequest = v.InferOutput<typeof sendMessageBodySchema>;
+
+/**
+ * The stored user message a request edits, or null for any other request.
+ * An edit names the incoming user message itself as its truncation target;
+ * a user message that cuts stored history without the edit intent is refused,
+ * so every such request passes the edit authorization
+ * (`authorizeChatUserMessageEdit`).
+ */
+export const resolveEditedUserMessageId = (
+  body: Pick<
+    ChatSendRequest,
+    "message" | "truncateAfterMessageId" | "turnIntent"
+  >,
+): Result<SafeId<"chatMessage"> | null, HandlerError<400>> => {
+  if (body.turnIntent === CHAT_TURN_INTENT.edit) {
+    return body.message.role === "user" &&
+      body.truncateAfterMessageId !== undefined &&
+      body.truncateAfterMessageId === body.message.id
+      ? Result.ok(body.truncateAfterMessageId)
+      : Result.err(
+          new HandlerError({
+            status: 400,
+            message:
+              "An edit must name the incoming user message as its truncation target",
+          }),
+        );
+  }
+  if (
+    body.message.role === "user" &&
+    body.truncateAfterMessageId !== undefined &&
+    body.turnIntent === undefined
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Replacing a stored user message requires the edit intent",
+      }),
+    );
+  }
+  return Result.ok(null);
+};
 
 const agUiMessageEnvelopeSchema = v.looseObject({
   id: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
@@ -807,12 +853,12 @@ const applyValidatedContinuationTransitions = ({
     }
     const validatedCall = validatedCallsById.get(part.id);
     if (validatedCall === undefined) {
-      return canonicalizeToolCall(part);
+      return continueStoredChatPart(part, canonicalizeToolCall(part));
     }
     if (validatedCall.type === "transitioned") {
       transitionedCallIds.add(part.id);
     }
-    return validatedCall.call;
+    return continueStoredChatPart(part, validatedCall.call);
   });
   const resultCallIds = new Set(
     persistedParts.flatMap((part) =>

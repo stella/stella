@@ -25,6 +25,7 @@ import {
   SEARCH_HISTORY_TITLE_MAX_LENGTH,
   SEARCH_QUERY_MAX_LENGTH,
   TIME_ENTRIES_APPROVAL_BATCH_MAX,
+  UPLOAD_DOCUMENT_MAX_BYTES,
 } from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
@@ -45,6 +46,7 @@ export {
 } from "@/api/lib/rate-limit/budget-config";
 
 const VERSIONS_PAGE_SIZE_DEFAULT = 50;
+const SITEMAP_PROTOCOL_URL_LIMIT = 50_000;
 
 export const LIMITS = {
   matterNumberPatternMinLength: 1,
@@ -370,6 +372,9 @@ export const LIMITS = {
    *  version, read whole when the reader opens the document. */
   readerAnnotationsPageSizeDefault: 100,
   readerAnnotationsPageSizeMax: 100,
+  /** Mark rows a downloaded copy of a matter document's PDF carries, read in
+   *  one query; far above what readers leave on one document. */
+  markedPdfMarkRowsMax: 10_000,
   decisionReaderPageMaxChars: READER_PAGE_MAX_CHARS,
   decisionReaderPageContentChars: 50_000,
   decisionReaderOpenTextChars: 8000,
@@ -428,6 +433,20 @@ export const LIMITS = {
    * provision cited more widely is checked candidate by candidate instead.
    */
   caseLawProvisionIdSetMax: 5000,
+  /**
+   * Physical citation links one provision scope read examines before it
+   * calls the provision broad. Larger than the id-set bound, so links of other
+   * countries, levels or unpublished decisions do not make a narrow citing
+   * set broad, and still a fixed read.
+   */
+  caseLawProvisionScopeLinkScanMax: 20_000,
+  /** Physical citation rows examined by one correlated provision probe. */
+  caseLawProvisionLinkProbeMax: 128,
+  /**
+   * Rank-index rows a broad provision-list request examines, counted before
+   * the request's own filters.
+   */
+  caseLawProvisionCandidateBudget: 5000,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
   /** Maximum visible text returned by any global-search preview response. */
@@ -530,6 +549,14 @@ export const LIMITS = {
   extractionTimeoutMs: 30_000,
   /** Hard timeout for durable background document extraction. */
   documentProcessingExtractionTimeoutMs: 2 * 60_000,
+  /**
+   * Largest file the API process extracts itself. Parsing runs in a subprocess
+   * but the bytes pass through this process, so the bound protects its memory;
+   * larger files wait for the scheduled batch worker.
+   */
+  documentProcessingInlineMaxBytes: 5 * 1024 * 1024,
+  /** Runs one inline extraction tick takes, one after another. */
+  documentProcessingInlineBatchSize: 5,
   /** Wall-clock ceiling for one document-processing object-storage read. */
   documentProcessingObjectReadTimeoutMs: 30_000,
   /** Wall-clock ceiling (ms) for the live DOCX-to-Markdown read path in
@@ -546,6 +573,7 @@ export const LIMITS = {
   clauseImportBatchLimit: 200,
   templateFillsRetentionDays: 365,
   caseLawMatterLinksPerWorkspace: 1000,
+  legislationMatterLinksPerWorkspace: 1000,
   /** An empty coverage country reads as unset: all jurisdictions. */
   caseLawCoverageCountryMinLength: 1,
   /**
@@ -649,9 +677,11 @@ export const LIMITS = {
    *  malformed/over-merged group key cannot load an unbounded set. */
   caseLawLanguageAlternatesPerGroupMax: 30,
   /** Max URL entries in one sitemap file by protocol. */
-  caseLawSitemapUrlLimit: 50_000,
-  /** Conservative per-shard case-law sitemap cap; leaves room for hreflang alternates under the XML byte limit. */
-  caseLawSitemapShardUrlLimit: 5000,
+  caseLawSitemapUrlLimit: SITEMAP_PROTOCOL_URL_LIMIT,
+  /** URL ceiling; XML serialization separately enforces the byte ceiling. */
+  caseLawSitemapShardUrlLimit: SITEMAP_PROTOCOL_URL_LIMIT,
+  /** Hreflang groups reserve room for their language alternates. */
+  caseLawSitemapMultilingualShardUrlLimit: 5000,
   /** Max child sitemap entries in one sitemap index by protocol. */
   caseLawSitemapIndexEntryLimit: 50_000,
   caseLawSourceFacetCountCap: 1000,
@@ -900,7 +930,7 @@ export const LIMITS = {
 
 export const FILE_SIZE_LIMIT_BYTES = {
   /** General document uploads (entities, templates). */
-  document: 50 * 1024 * 1024,
+  document: UPLOAD_DOCUMENT_MAX_BYTES,
   /** Structured data imports (clause JSON, contact sheets). */
   dataImport: 10 * 1024 * 1024,
   /** Agent skill packs (`SKILL.md` or a ZIP folder). */
@@ -1036,10 +1066,11 @@ export const getPublicCorpusLimits = (
         global: aggregateGlobal,
       },
       sitemap: {
-        address: addressBudget({
-          configuredMax: 10,
-          globalMax: sitemapGlobal.max,
-        }),
+        // Shared crawler origins keep an address quota independent of fleet capacity.
+        address: {
+          duration: 60_000,
+          max: Math.min(600, sitemapGlobal.max - 1),
+        },
         global: sitemapGlobal,
       },
       browse: { address: API_RATE_LIMITS.api },

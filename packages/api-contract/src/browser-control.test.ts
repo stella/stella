@@ -12,6 +12,7 @@ import {
   isReadOnlyBrowserCommand,
   parseBrowserControlCommand,
   parseBrowserControlResult,
+  parseBrowserExtensionPeerVersion,
   parseBrowserExtensionRequest,
   parseBrowserExtensionResponse,
   parseElementReference,
@@ -320,5 +321,33 @@ describe("browser control result contract", () => {
     expect(parseBrowserExtensionResponse(pong)).toEqual(pong);
     const { controlledTabId: _tabId, ...previousVersion } = pong;
     expect(parseBrowserExtensionResponse(previousVersion)).toBeNull();
+  });
+});
+
+describe("extension peer version", () => {
+  test("reads the version of an extension message from another protocol", () => {
+    const olderPong = {
+      allSitesGranted: true,
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      requestId: "extension-ready",
+      source: "stella-browser-extension",
+      type: "pong",
+    };
+    expect(parseBrowserExtensionResponse(olderPong)).toBeNull();
+    expect(parseBrowserExtensionPeerVersion(olderPong)).toBe(
+      BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+    );
+  });
+
+  test.each([
+    ["a stella page message", { protocolVersion: 3, source: "stella-web" }],
+    ["no version", { source: "stella-browser-extension" }],
+    [
+      "a fractional version",
+      { protocolVersion: 1.5, source: "stella-browser-extension" },
+    ],
+    ["not an object", "stella-browser-extension"],
+  ])("ignores %s", (_name, input) => {
+    expect(parseBrowserExtensionPeerVersion(input)).toBeNull();
   });
 });

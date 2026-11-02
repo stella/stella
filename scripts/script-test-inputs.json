@@ -79,6 +79,7 @@
       "apps/**/*.{png,jpg,jpeg,webp,gif}"
     ],
     "scripts/check-mcp-generated-tracking.test.ts": ["**"],
+    "scripts/check-merge-group-hold.test.ts": ["**"],
     "scripts/check-migrations.test.ts": [
       "apps/api/drizzle/**",
       "packages/**",
@@ -99,6 +100,7 @@
       "scripts/check-oxlint-node-loader.sh"
     ],
     "scripts/check-oxlint-plugin-registry.test.ts": ["**"],
+    "scripts/check-pr-body.test.ts": ["**"],
     "scripts/check-public-assets.test.ts": ["**"],
     "scripts/check-registrations.test.ts": [
       ".github/ci-checks/**",
@@ -169,6 +171,7 @@
     "scripts/ci-expression-context.test.ts": [".github/**"],
     "scripts/ci-gate-classes.test.ts": [".github/**"],
     "scripts/ci-install-store.test.ts": [".github/**"],
+    "scripts/ci-job-classification.test.ts": ["**"],
     "scripts/ci-mirror-reconciliation.test.ts": [".github/**"],
     "scripts/ci-plan-bun.test.ts": [".github/**"],
     "scripts/ci-plan-scope.test.ts": ["**"],
@@ -208,6 +211,7 @@
     "scripts/code-quality-task-budget.test.ts": ["**"],
     "scripts/codemod-icons.test.ts": ["packages/ui/**"],
     "scripts/dated-waiver-renewal.test.ts": [".claude/mcp/doc-sources.ts"],
+    "scripts/db-registry-entries.test.ts": ["**"],
     "scripts/decision-reader-surfaces.test.ts": ["**"],
     "scripts/dependency-audit-acceptance.test.ts": [
       "scripts/dependency-audit-baseline.json"
@@ -217,6 +221,7 @@
     ],
     "scripts/dependency-audit-workflow.test.ts": [".github/**"],
     "scripts/dependency-review-workflow.test.ts": ["**"],
+    "scripts/desktop-release-artifacts.test.ts": ["**"],
     "scripts/desktop-release-step.test.ts": [
       ".github/**",
       "apps/desktop/src-tauri/Cargo.lock",
@@ -231,10 +236,13 @@
       "scripts/fixtures/codeql-supported-versions-compilers.rst"
     ],
     "scripts/dev-seeded-e2e-guard.test.ts": ["**"],
+    "scripts/diff-scoped-steps.test.ts": ["**"],
     "scripts/disarm-auto-merge.test.ts": [
       ".github/workflows/disarm-auto-merge.yml"
     ],
+    "scripts/download-run-artifact.test.ts": ["**"],
     "scripts/draft-release-reads.test.ts": ["**"],
+    "scripts/drizzle-config.test.ts": ["**"],
     "scripts/extension-release-step.test.ts": [".github/**"],
     "scripts/failure-tags.test.ts": ["**"],
     "scripts/fast-required-predicates.test.ts": [".github/workflows/ci.yml"],
@@ -261,6 +269,7 @@
       ".node-version",
       "stll-toolchain.json"
     ],
+    "scripts/generate-mobile-folio-fonts.test.ts": ["**"],
     "scripts/generate-npm-release-jobs.test.ts": ["**"],
     "scripts/generate-playwright-devices.test.ts": ["**"],
     "scripts/generated-conflicts-workflows.test.ts": [
@@ -310,6 +319,7 @@
     ],
     "scripts/migration-catalog.test.ts": ["apps/api/drizzle/**"],
     "scripts/migration-lock-census.test.ts": ["**"],
+    "scripts/migration-restamp.test.ts": ["**"],
     "scripts/model-catalog-check.test.ts": [
       ".editorconfig",
       ".github/workflows/model-catalog-check.yml",
@@ -324,11 +334,13 @@
       "apps/api/src/db/online-ddl.ts"
     ],
     "scripts/oxlint-additional-guards.test.ts": [".oxlint-plugins/**"],
+    "scripts/oxlint-idle-scheduler.test.ts": ["**"],
     "scripts/oxlint-rule-decisions.test.ts": ["**"],
     "scripts/oxlint-safe-fixers.test.ts": [".oxlint-plugins/**"],
     "scripts/oxlint-tailwind-design-system.test.ts": ["**"],
     "scripts/oxlint-ui-test-helper-imports.test.ts": ["**"],
     "scripts/pack-reproducibly.test.ts": ["**"],
+    "scripts/parser-registry.test.ts": ["**"],
     "scripts/post-staging-verification.test.ts": ["**"],
     "scripts/postgres-test-maintenance-workflow.test.ts": [".github/**"],
     "scripts/pr-regeneration.test.ts": [".github/workflows/autofix.yml"],
@@ -389,10 +401,12 @@
       "scripts/__fixtures__/release-health/overflow.json",
       "scripts/__fixtures__/release-health/unclassified.json"
     ],
+    "scripts/release-heavy-verdict.test.ts": ["**"],
     "scripts/release-pull-request-refresh.test.ts": [
       ".github/workflows/release-pr.yml"
     ],
     "scripts/release-rc-selection.test.ts": ["**"],
+    "scripts/release-rehearsal.test.ts": ["**"],
     "scripts/release-tag-order.test.ts": ["**"],
     "scripts/release-tree-proof-policy.test.ts": [
       ".github/workflows/deploy-staging.yml",
@@ -439,6 +453,7 @@
     "scripts/safe-chain-install.test.ts": [
       ".github/actions/safe-chain/install.sh"
     ],
+    "scripts/schema-import-changes.test.ts": ["**"],
     "scripts/selfhost-contract.test.ts": ["docker-compose.selfhost.yml"],
     "scripts/sha256-migration-ledger.test.ts": [
       ".oxlint-plugins/**",
@@ -514,6 +529,7 @@
     ],
     "scripts/workflow-app-token-permissions.test.ts": ["**"],
     "scripts/workflow-dispatch-run.test.ts": [".github/**"],
+    "scripts/workflow-event-conditions.test.ts": ["**"],
     "scripts/workflow-git-environment.test.ts": [".github/**", "turbo.json"],
     "scripts/workflow-helper-checkout.test.ts": ["**"],
     "scripts/workflow-install-baseline.test.ts": [".github/**"],

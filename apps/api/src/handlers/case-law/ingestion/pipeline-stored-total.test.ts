@@ -1,10 +1,9 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { databaseRelations } from "@/api/db/database-relations";
-import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -13,8 +12,11 @@ import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline
 import { createSafeId } from "@/api/lib/branded-types";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { remainingCycleMs } from "@/api/lib/legal-search/cycle-deadline";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
+import {
+  createIngestionRoleScopedDb,
+  createTestPglite,
+} from "@/api/tests/pglite-test-db";
 
 import {
   createSourceStoredTotalAdmission,
@@ -25,11 +27,7 @@ import { sourceStoredTotalCountQuery } from "./source-totals";
 test("a real pipeline deadline admits one exact count and persists its pair", async () => {
   const client = await createTestPglite();
   const db = drizzle({ client, relations: databaseRelations });
-  const scopedDb: ScopedDb = async (callback) =>
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
-      return await callback(asTestRaw<Transaction>(tx));
-    });
+  const scopedDb: ScopedDb = createIngestionRoleScopedDb(db);
   const sourceId = createSafeId<"caseLawSource">();
   const originalFetchPage = czNsAdapter.fetchPage;
   try {
@@ -56,7 +54,11 @@ test("a real pipeline deadline admits one exact count and persists its pair", as
       panic("Expected source ingestion lease");
     }
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [], nextCursor: null });
+      Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: null,
+      });
     const budgetMs = 300_000;
     const startedAt = performance.now();
     let admissions = 0;

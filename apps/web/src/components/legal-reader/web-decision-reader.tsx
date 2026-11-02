@@ -23,17 +23,13 @@ import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { citationOccurrencesByDecision } from "@/components/legal-reader/citation-occurrences.logic";
-import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
+import { CitedDecisionSourceText } from "@/components/legal-reader/cited-decision-link";
 import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
-import {
-  decisionCitationCourtLabel,
-  presentationBesideCitationText,
-} from "@/components/references/decision-citation-chip.logic";
-import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
 import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 
 export type WebDecisionReaderProps = Omit<
   DecisionTextProps,
@@ -54,17 +50,6 @@ type WebDecisionReaderContentProps = WebDecisionReaderProps & {
 };
 
 const NO_ANCHORS = [] as const;
-
-/** A paragraph inside a folded section is out of sight until it unfolds. */
-const openEnclosingDisclosures = (target: HTMLElement) => {
-  for (
-    let disclosure = target.closest("details");
-    disclosure !== null;
-    disclosure = disclosure.parentElement?.closest("details") ?? null
-  ) {
-    disclosure.open = true;
-  }
-};
 
 const WebDecisionReaderContent = ({
   annotationAnchors = NO_ANCHORS,
@@ -88,14 +73,6 @@ const WebDecisionReaderContent = ({
   );
   const citations = hydrated ? citationAnchors : NO_ANCHORS;
   const citationSpans = locateCitationSpans({ blocks, citations });
-  const presentations = decisionCitationPresentationsById(
-    Object.values(citationSpans).flatMap((spans) =>
-      spans.map(({ source: { decision } }) => ({
-        decisionId: decision.id,
-        courtShortCode: decisionCitationCourtLabel(decision),
-      })),
-    ),
-  );
   const occurrences = citationOccurrencesByDecision({
     blocks,
     spansByBlockId: citationSpans,
@@ -106,7 +83,7 @@ const WebDecisionReaderContent = ({
     const target =
       readerBlockByAnchor(article, anchorId) ??
       panic("Citation jump to a paragraph the reader did not render");
-    openEnclosingDisclosures(target);
+    revealEnclosingDisclosures(target);
     target.scrollIntoView({
       behavior: "instant",
       block: "center",
@@ -118,8 +95,8 @@ const WebDecisionReaderContent = ({
       renderStatuteLink: adapters.renderStatuteLink,
       // The card leaves out the citing passage: it is the text the reader is
       // pointing at. It offers the decision's other mentions instead.
-      renderDecisionLink: ({ citation, blockId, ...linkProps }) => (
-        <CitedDecisionLink
+      renderDecisionLink: ({ citation: _citation, blockId, ...linkProps }) => (
+        <CitedDecisionSourceText
           {...linkProps}
           occurrences={{
             occurrences:
@@ -128,13 +105,6 @@ const WebDecisionReaderContent = ({
             currentBlockId: blockId,
             onJump: jumpToParagraph,
           }}
-          presentation={presentationBesideCitationText({
-            caseNumber: linkProps.decision.caseNumber,
-            citationText: citation.citationText,
-            presentation:
-              presentations.get(linkProps.decision.id) ??
-              panic("Reader citation missing collected identity"),
-          })}
         />
       ),
     },
@@ -163,7 +133,7 @@ const WebDecisionReaderContent = ({
     if (!target) {
       return undefined;
     }
-    openEnclosingDisclosures(target);
+    revealEnclosingDisclosures(target);
     return holdLanding({ article, target });
   }, [landingAnchorId, landingSessionId]);
 

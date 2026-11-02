@@ -15,6 +15,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { classifyFailure } from "@stll/errors";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -82,7 +83,7 @@ const isCredentialsShape = (
 type CredentialResponseOptions<T> = {
   url: string;
   fetchImpl: Fetcher;
-  consume: (response: Response) => Promise<T>;
+  consume: (bytes: Uint8Array) => T | Promise<T>;
   signal?: AbortSignal | undefined;
   headers?: Record<string, string> | undefined;
   method?: string;
@@ -108,7 +109,7 @@ const readCredentialResponse = async <T>({
               ...(headers === undefined ? {} : { headers }),
               ...(method === undefined ? {} : { method }),
               signal,
-              timeout: { type: "idle", ms: 2000 },
+              timeout: { type: "headers", ms: 2000 },
             },
             async (response) => {
               if (!response.ok) {
@@ -119,7 +120,11 @@ const readCredentialResponse = async <T>({
                   }),
                 );
               }
-              return Result.ok(await consume(response));
+              const bytes = await readBodyWithIdleDeadline(response, {
+                idleMs: 2000,
+                signal,
+              });
+              return Result.ok(await consume(bytes));
             },
             fetchImpl,
           ),
@@ -149,8 +154,8 @@ const fetchCredentialJson = async (
     fetchImpl,
     headers,
     signal,
-    consume: async (response) => {
-      const creds: unknown = await response.json();
+    consume: (bytes) => {
+      const creds: unknown = JSON.parse(new TextDecoder().decode(bytes));
       if (!isCredentialsShape(creds)) {
         return null;
       }
@@ -280,7 +285,7 @@ const fetchImdsCredentials = async ({
     method: "PUT",
     headers: { "X-aws-ec2-metadata-token-ttl-seconds": "300" },
     signal,
-    consume: async (response) => await response.text(),
+    consume: (bytes) => new TextDecoder().decode(bytes),
   });
   const fetched = await token.andThenAsync(async (imdsToken) => {
     const role = await readCredentialResponse({
@@ -288,7 +293,7 @@ const fetchImdsCredentials = async ({
       fetchImpl,
       headers: { "X-aws-ec2-metadata-token": imdsToken },
       signal,
-      consume: async (response) => (await response.text()).trim(),
+      consume: (bytes) => new TextDecoder().decode(bytes).trim(),
     });
     return await role.andThenAsync(async (roleName) => {
       const credentials = await readCredentialResponse({
@@ -296,7 +301,8 @@ const fetchImdsCredentials = async ({
         fetchImpl,
         headers: { "X-aws-ec2-metadata-token": imdsToken },
         signal,
-        consume: async (response) => await response.json(),
+        consume: (bytes): unknown =>
+          JSON.parse(new TextDecoder().decode(bytes)),
       });
       return credentials.map((creds) => {
         if (!isCredentialsShape(creds)) {
@@ -846,6 +852,14 @@ export const writeS3ObjectWithRetry = async (
   throw lastError;
 };
 
+export const S3_OBJECT_CREATE_STATUS = {
+  WRITTEN: "written",
+  EXISTING: "existing",
+} as const;
+
+type S3ObjectCreateStatus =
+  (typeof S3_OBJECT_CREATE_STATUS)[keyof typeof S3_OBJECT_CREATE_STATUS];
+
 /**
  * Write one object only when its key holds none, through the same deadline
  * and retry as {@link writeS3ObjectWithRetry}.
@@ -859,8 +873,9 @@ export const writeS3ObjectWithRetry = async (
  */
 export const createS3ObjectIfAbsent = async (
   object: S3ObjectWrite,
-): Promise<void> => {
+): Promise<S3ObjectCreateStatus> => {
   let conditional = true;
+  let status: S3ObjectCreateStatus = S3_OBJECT_CREATE_STATUS.WRITTEN;
   await writeS3ObjectWithRetry(
     object,
     {
@@ -907,6 +922,7 @@ export const createS3ObjectIfAbsent = async (
       const code =
         failure instanceof Error ? safeErrorCode(failure) : undefined;
       if (code === "PreconditionFailed") {
+        status = S3_OBJECT_CREATE_STATUS.EXISTING;
         return;
       }
       if (code === "NotImplemented") {
@@ -926,6 +942,7 @@ export const createS3ObjectIfAbsent = async (
       throw failure;
     },
   );
+  return status;
 };
 
 export class S3ObjectBudgetError extends TaggedError("S3ObjectBudgetError")<{

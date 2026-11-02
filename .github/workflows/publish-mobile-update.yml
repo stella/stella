@@ -7,7 +7,9 @@ defaults:
 
 # Publishes the mobile app's JavaScript as a signed over-the-air update to
 # the downloads CDN, for the builds whose native fingerprint matches this
-# commit (apps/mobile/scripts/fingerprint.ts). Manual only, from main.
+# commit (apps/mobile/scripts/fingerprint.ts). From main only: Mobile
+# Release Plan starts the preview update after a merge that keeps native code
+# as the latest TestFlight build has it; production is started by hand.
 #
 # The manifest is signed here with the update signing key and never again:
 # the API's update route relays it unchanged, and a phone runs it only when
@@ -77,6 +79,12 @@ jobs:
 
       - name: Export each platform's bundle
         working-directory: apps/mobile
+        env:
+          # The document viewer's DOM bundle must stay one file: Expo renames
+          # a DOM component's split chunks to their md5 after bundling but
+          # keeps the old names in the chunk graph, and the export then fails
+          # with "Asset not found: __common-*.js" (https://github.com/expo/expo/blob/sdk-58/packages/%40expo/cli/src/export/exportDomComponents.ts).
+          EXPO_NO_BUNDLE_SPLITTING: "1"
         run: |
           set -euo pipefail
           case "$PLATFORM_INPUT" in

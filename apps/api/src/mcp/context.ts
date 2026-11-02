@@ -200,7 +200,10 @@ export type McpRequestContext = {
     listCaseLawProvisionDecisions?: typeof listCaseLawProvisionDecisions;
     /** Reads a provision's citing set once per agent search. */
     readCaseLawProvisionScope?: (
-      scope: Omit<Parameters<typeof readCaseLawProvisionScope>[1], "idSetMax">,
+      scope: Omit<
+        Parameters<typeof readCaseLawProvisionScope>[1],
+        "idSetMax" | "linkScanMax"
+      >,
     ) => ReturnType<typeof readCaseLawProvisionScope>;
     /** Whether any recorded link names the provision's act. */
     readProvisionWorkLinked?: (
@@ -304,6 +307,7 @@ export type McpRequestContext = {
    * empty list (it never dispatches the generic path).
    */
   grantedScopes: readonly string[];
+  credential?: McpSession["credential"];
   /**
    * Registry slugs this org may actually call (credential/deployment available
    * AND enabled for the org). The `lookup_business_registry` list projection narrows its
@@ -606,7 +610,8 @@ export const resolveMcpSessionContext = async (
     organizationId,
     userId,
   });
-  if (!authorization) {
+
+  if (!authorization || authorization.userDeleted) {
     throw new McpOrganizationAccessError({
       message: "User is not a member of this organization",
     });
@@ -737,6 +742,9 @@ export const resolveMcpSessionContext = async (
   return {
     ...webHandoffIdentity,
     ...(auditExecution ? { auditExecution } : {}),
+    ...(session.credential === undefined
+      ? {}
+      : { credential: session.credential }),
     accessibleWorkspaceIds: usableWorkspaceIds,
     accessibleWorkspaceIdSet: workspaceAccessBoundary.accessibleWorkspaceIdSet,
     accessibleWorkspaceStatusById: new Map(

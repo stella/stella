@@ -26,9 +26,9 @@ import {
 } from "@/api/handlers/case-law/decisions/get";
 import { listDecisionsPageQuery } from "@/api/handlers/case-law/decisions/list";
 import {
-  candidateDecisionRowsStatement,
   decisionIdsByIdentityQuery,
-  pageDecisionRowsStatement,
+  unresolvedCandidateDecisionRowsStatement,
+  unresolvedPageDecisionRowsStatement,
 } from "@/api/handlers/case-law/decisions/search";
 import {
   getShardConditions,
@@ -53,6 +53,11 @@ import {
   DECISION_DATE_BANDS,
   type DecisionDateBand,
 } from "@/api/lib/case-law/decision-date-order";
+import {
+  DECISION_WORK_MANIFESTATIONS_MAX,
+  decisionWorkQuery,
+} from "@/api/lib/case-law/decision-work";
+import type { DecisionWork } from "@/api/lib/case-law/decision-work";
 import {
   decisionPageSql,
   ID_PAGE_SIZE,
@@ -113,6 +118,16 @@ if (!Array.isArray(shardConditions)) {
 const sampleCountry =
   publicCaseLawCountry("CZE") ?? panic("The query-plan country must be public");
 const citationPageSize = 10;
+/** The sample decision as its work's only version. */
+const sampleWork: DecisionWork = {
+  subjectId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+  manifestationIds: [QUERY_PLAN_SAMPLE.caseLaw.decisionId],
+};
+/** Three versions: the read shape of a judgment held in several languages. */
+const sampleMultilingualWork: DecisionWork = {
+  subjectId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+  manifestationIds: QUERY_PLAN_SAMPLE.caseLaw.candidateIds.slice(0, 3),
+};
 /** A generous bound for a heavy ingest week. */
 const SOURCE_ARRIVALS_REFRESH_HEAP_FETCH_BUDGET = 1_000_000;
 
@@ -396,7 +411,7 @@ export const QUERY_PLAN_REGISTRY = [
     class: "page",
     role: "public-law-reader",
     build: (tx) =>
-      candidateDecisionRowsStatement(tx, {
+      unresolvedCandidateDecisionRowsStatement(tx, {
         body: { country: sampleCountry },
         generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
         ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
@@ -430,7 +445,7 @@ export const QUERY_PLAN_REGISTRY = [
     class: "page",
     role: "public-law-reader",
     build: (tx) =>
-      pageDecisionRowsStatement(tx, {
+      unresolvedPageDecisionRowsStatement(tx, {
         body: { country: sampleCountry },
         generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
         ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
@@ -451,7 +466,7 @@ export const QUERY_PLAN_REGISTRY = [
         // The public reader holds no doctrine grants in this release.
         doctrineAvailable: false,
         cursorId: undefined,
-        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        work: sampleWork,
         direction: "incoming",
         limit: citationPageSize,
         countries: CASE_LAW_SURFACE_COUNTRIES.search,
@@ -468,7 +483,7 @@ export const QUERY_PLAN_REGISTRY = [
       decisionCitationPageQuery({
         doctrineAvailable: true,
         cursorId: undefined,
-        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        work: sampleWork,
         direction: "incoming",
         doctrine: "limits",
         limit: citationPageSize,
@@ -487,7 +502,7 @@ export const QUERY_PLAN_REGISTRY = [
         // The public reader holds no doctrine grants in this release.
         doctrineAvailable: false,
         cursorId: undefined,
-        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        work: sampleWork,
         direction: "outgoing",
         limit: citationPageSize,
         countries: CASE_LAW_SURFACE_COUNTRIES.search,
@@ -503,7 +518,7 @@ export const QUERY_PLAN_REGISTRY = [
     build: (tx) =>
       decisionCitationSummaryQuery({
         currentYear: 2026,
-        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        work: sampleWork,
         countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }).summary,
@@ -545,13 +560,77 @@ export const QUERY_PLAN_REGISTRY = [
     build: (tx) =>
       decisionCitationSummaryQuery({
         currentYear: 2026,
-        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        work: sampleWork,
         countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }).topCiting(CITATION_DIGEST_TOP_CITING),
     seed: "case-law",
     planMode: "covering-index",
     contract: planContracts["case-law.top-citing-decisions"],
+  },
+  {
+    // The versions of one judgment: one bounded group read of its language
+    // key, whatever the corpus holds. The limit is the overflow probe
+    // `readBounded` adds to the ceiling `readDecisionWork` reads under.
+    id: "case-law.decision-work",
+    class: "point",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionWorkQuery(tx, QUERY_PLAN_SAMPLE.caseLaw.decisionId).limit(
+        DECISION_WORK_MANIFESTATIONS_MAX + 1,
+      ),
+    seed: "case-law",
+    contract: planContracts["case-law.decision-work"],
+  },
+  {
+    // A judgment held in several languages: one anchor range per version
+    // under a merge on citation id, never every edge of the work.
+    id: "case-law.citation-page-incoming-work",
+    class: "page",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionCitationPageQuery({
+        doctrineAvailable: false,
+        cursorId: undefined,
+        work: sampleMultilingualWork,
+        direction: "incoming",
+        limit: citationPageSize,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.citation-page-incoming-work"],
+  },
+  {
+    id: "case-law.citation-page-outgoing-work",
+    class: "page",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionCitationPageQuery({
+        doctrineAvailable: false,
+        cursorId: undefined,
+        work: sampleMultilingualWork,
+        direction: "outgoing",
+        limit: citationPageSize,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.citation-page-outgoing-work"],
+  },
+  {
+    id: "case-law.citation-summary-work",
+    class: "aggregate",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionCitationSummaryQuery({
+        currentYear: 2026,
+        work: sampleMultilingualWork,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
+        tx,
+      }).summary,
+    seed: "case-law",
+    contract: planContracts["case-law.citation-summary-work"],
   },
   {
     // A provision's cited-by page: its subtree of link rows is one

@@ -113,13 +113,17 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-raw-storage.ts",
     "Public legal corpus storage reconciliation.",
   ),
+  "caseLaw.reconcileDecisionIdentifiers": platform(
+    "case-law-decision-identifier-reconciliation.ts",
+    "Public legal corpus identifier reconciliation.",
+  ),
   "caseLaw.reconcileRawSweeps": platform(
     "case-law-raw-storage.ts",
     "Public legal corpus storage reconciliation.",
   ),
-  "caseLaw.refreshBrowseFacets": platform(
-    "case-law-browse-facet-refresh.ts",
-    "Public legal corpus aggregates.",
+  "caseLaw.foldPopulationCounts": platform(
+    "case-law-population-fold.ts",
+    "Folds public legal corpus population deltas under the load governor.",
   ),
   "caseLaw.refreshSitemapShards": platform(
     "case-law-sitemap-shard-refresh.ts",
@@ -165,7 +169,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
   ),
   "documentProcessing.dispatchNativeExtraction": platform(
     "document-processing-native-extraction.ts",
-    "Hands queued native extraction runs to their queue.",
+    "Hands queued native extraction runs to their queue and extracts small ones through the run's own lease, as the worker does.",
   ),
   "documentProcessing.recoverDeadlineScouts": platform(
     "document-deadline-scout-recovery.ts",
@@ -262,6 +266,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "reportExports.reconcileQueued": platform(
     "report-export-reconcile.ts",
     "Recovers stuck exports and hands queued ones back to their queue, whose worker resolves the requester's run actor.",
+  ),
+  "requests.sweepReceipts": platform(
+    "request-receipt-retention.ts",
+    "Retention sweep of expired technical request receipts under each receipt's organization and user scope.",
   ),
   "sanctions.backfillMonitoring": platform(
     "sanctions-monitoring-backfill.ts",

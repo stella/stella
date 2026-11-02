@@ -22,6 +22,9 @@
     "allow-account-disconnect",
     "allow-get-desktop-telemetry-enabled",
     "allow-set-desktop-telemetry-enabled",
+    "allow-dictation-get-snapshot",
+    "allow-dictation-set-enabled",
+    "allow-dictation-download-model",
     "allow-shortcut-get-snapshot",
     "allow-shortcut-check",
     "allow-shortcut-pause",
@@ -35,6 +38,20 @@
     "allow-chatgpt-auth-cancel",
     "allow-chatgpt-auth-complete",
     "allow-chatgpt-auth-disconnect",
-    "allow-chatgpt-auth-open-usage"
+    "allow-chatgpt-auth-open-usage",
+    "allow-is-activity-enabled",
+    "allow-activity-get-settings",
+    "allow-activity-set-capture-details",
+    "allow-activity-set-detect-calls",
+    "allow-activity-set-narrative-assist",
+    "allow-activity-set-browser-title-capture",
+    "allow-activity-set-app-detail-capture",
+    "allow-activity-open-accessibility-settings",
+    "allow-activity-set-retention",
+    "allow-activity-exclude-app",
+    "allow-activity-remove-app-exclusion",
+    "allow-activity-delete-day",
+    "allow-activity-delete-all",
+    "allow-activity-delete-other-account-history"
   ]
 }

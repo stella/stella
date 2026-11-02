@@ -2,17 +2,17 @@ import { useMemo, useState } from "react";
 
 import { panic } from "better-result";
 
-import { readerBlockByAnchor } from "@stll/decision-reader/reader-landing";
+import {
+  readerBlockByAnchor,
+  scrollReaderToBlock,
+} from "@stll/decision-reader/reader-landing";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 import { ReaderBreadcrumb } from "./reader-breadcrumb";
 import { readerBreadcrumbPaths } from "./reader-breadcrumb-paths";
-import {
-  observeReaderBreadcrumb,
-  scrollReaderBreadcrumbToHeading,
-} from "./reader-breadcrumb-scroll";
+import { observeReaderBreadcrumb } from "./reader-breadcrumb-scroll";
 import { readerContents } from "./reader-contents.logic";
 import type {
   ReaderAnalysisOutline,
@@ -82,6 +82,7 @@ export const LegalReaderBreadcrumb = ({
     <ReaderBreadcrumb
       activeAnchorId={position?.anchorId ?? null}
       trail={position?.trail ?? NO_TRAIL}
+      depths={contents.depths}
       rows={contents.rows}
       onJump={(anchorId) => {
         if (content === null || viewport === null) {
@@ -91,7 +92,7 @@ export const LegalReaderBreadcrumb = ({
         if (target === null) {
           return;
         }
-        scrollReaderBreadcrumbToHeading({ viewport, target });
+        scrollReaderToBlock(target, viewport);
       }}
     />
   );

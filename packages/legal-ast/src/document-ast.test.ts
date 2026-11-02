@@ -5,6 +5,7 @@ import {
   getDocumentAstMetadata,
   hasUsableAst,
   HEADING_ROLES,
+  headMatterOrderDegradations,
   headMatterPrecedesBody,
   isApparatusRole,
   isDocumentAst,
@@ -16,6 +17,7 @@ import {
   resolveDocumentAnchor,
   resolveDocumentHeadingAnchor,
   withProjectedPlainText,
+  withUniqueBlockIdentities,
 } from "./document-ast";
 import type {
   Block,
@@ -143,9 +145,6 @@ describe("isDocumentAst", () => {
         blocks: [first, { ...second, anchorId: first.anchorId }],
       }),
     ).toBe(false);
-    expect(
-      parseDocumentAst({ ...documentAst, blocks: [first, first] }),
-    ).toBeNull();
   });
 
   test("rejects an AST missing required source and metadata", () => {
@@ -907,6 +906,114 @@ describe("persisted kinds outside the declared sets", () => {
   });
 });
 
+describe("persisted block identities that repeat", () => {
+  /** A decision title set over two lines, each read as the title heading:
+   * the shape a parser wrote before identities were checked. */
+  const titleLine = (id: string, text: string) => ({
+    id,
+    anchorId: "h-title",
+    type: "heading",
+    level: 1,
+    role: "decision-title",
+    inlines: [{ type: "text", text }],
+  });
+  const splitTitle = {
+    ...documentAst,
+    blocks: [
+      titleLine("b1", "ROZSUDOK V MENE"),
+      titleLine("b2", "SLOVENSKEJ REPUBLIKY"),
+      { ...documentAst.blocks[1], id: "b3", anchorId: "p1" },
+    ],
+  };
+
+  test("the persisted reader serves the document, the first block keeping its identity", () => {
+    const parsed = parseDocumentAst(splitTitle);
+    expect(parsed?.blocks.map(({ anchorId, id }) => [id, anchorId])).toEqual([
+      ["b1", "h-title"],
+      ["b2", "h-title-2"],
+      ["b3", "p1"],
+    ]);
+    expect(parsed?.blocks.map(({ plainText }) => plainText)).toEqual([
+      "ROZSUDOK V MENE",
+      "SLOVENSKEJ REPUBLIKY",
+      "Soud rozhodl...",
+    ]);
+    expect(parsed === null ? false : isDocumentAst(parsed)).toBe(true);
+  });
+
+  test("a re-keyed identity never takes one another block already holds", () => {
+    const parsed = parseDocumentAst({
+      ...documentAst,
+      blocks: [
+        titleLine("b1", "A"),
+        titleLine("b1", "B"),
+        { ...titleLine("b1-2", "C"), anchorId: "h-title-2" },
+      ],
+    });
+    expect(parsed?.blocks.map(({ anchorId, id }) => [id, anchorId])).toEqual([
+      ["b1", "h-title"],
+      ["b1-3", "h-title-3"],
+      ["b1-2", "h-title-2"],
+    ]);
+  });
+
+  test("the canonical guard still rejects them, so a writer must re-key first", () => {
+    expect(isDocumentAst(splitTitle)).toBe(false);
+    const parsed = parseDocumentAst(splitTitle);
+    expect(parsed).not.toBeNull();
+    if (parsed === null) {
+      return;
+    }
+    const written = {
+      ...parsed,
+      blocks: withUniqueBlockIdentities(
+        parsed.blocks.map((block, index) =>
+          index === 1 ? { ...block, anchorId: "h-title" } : block,
+        ),
+      ),
+    };
+    expect(isDocumentAst(written)).toBe(true);
+  });
+
+  test("blocks whose identities are already unique come back unchanged", () => {
+    const blocks: readonly Block[] = documentAst.blocks;
+    const unique = withUniqueBlockIdentities(blocks);
+    expect(unique).toEqual([...blocks]);
+    for (const [index, block] of unique.entries()) {
+      expect(blocks.at(index)).toBe(block);
+    }
+  });
+
+  test("reports each repeated identity, once per re-keyed block", () => {
+    expect(persistedAstDegradations(splitTitle)).toEqual([
+      {
+        kind: "block-identity",
+        blockId: "b2",
+        field: "anchorId",
+        value: "h-title",
+      },
+    ]);
+    expect(persistedAstDegradations(documentAst)).toEqual([]);
+  });
+
+  test("invariant: the persisted reader always yields unique identities", () => {
+    const anchors = ["a", "a-2", "b", "a", "b", "a-3", "a"];
+    const parsed = parseDocumentAst({
+      ...documentAst,
+      blocks: anchors.map((anchor, index) => ({
+        ...titleLine(index % 2 === 0 ? "x" : `y${String(index)}`, anchor),
+        anchorId: anchor,
+      })),
+    });
+    expect(parsed).not.toBeNull();
+    const ids = parsed?.blocks.map(({ id }) => id) ?? [];
+    const anchorIds = parsed?.blocks.map(({ anchorId }) => anchorId) ?? [];
+    expect(new Set(ids).size).toBe(anchors.length);
+    expect(new Set(anchorIds).size).toBe(anchors.length);
+    expect(parsed?.blocks.map(({ plainText }) => plainText)).toEqual(anchors);
+  });
+});
+
 describe("head matter ordering", () => {
   const paragraph = (role: ParagraphRole, id: string) => ({
     id,
@@ -918,7 +1025,7 @@ describe("head matter ordering", () => {
   });
 
   for (const role of APPARATUS_ROLES) {
-    test(`${role} cannot interrupt or follow any substantive body role`, () => {
+    test(`${role} cannot be written to interrupt or follow any substantive body role`, () => {
       for (const bodyRole of [
         "argumentation",
         "holding",
@@ -936,8 +1043,18 @@ describe("head matter ordering", () => {
         expect(headMatterPrecedesBody([head, body])).toBe(true);
         expect(headMatterPrecedesBody(invalid.blocks)).toBe(false);
         expect(isDocumentAst(invalid)).toBe(false);
-        expect(parseDocumentAst(invalid)).toBeNull();
-        expect(parseDocumentAst(JSON.stringify(invalid))).toBeNull();
+        // A row stored before the rule reads in its stored order.
+        for (const stored of [invalid, JSON.stringify(invalid)]) {
+          const read = parseDocumentAst(stored);
+          expect(read?.blocks.map(({ id }) => id)).toEqual([
+            "head",
+            "body",
+            "late",
+          ]);
+          expect(headMatterOrderDegradations(read?.blocks ?? [])).toEqual([
+            { kind: "head-matter-order", blockId: "late" },
+          ]);
+        }
       }
     });
   }

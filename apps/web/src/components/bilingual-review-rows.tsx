@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   annotatedOriginLabelKey,
@@ -141,9 +142,7 @@ const BilingualReviewRow = ({
         {row.ordinal + 1}
       </TableCell>
       <TableCell className="max-w-0">
-        <span className="block truncate" title={row.sourceText}>
-          {row.sourceText}
-        </span>
+        <TruncatedText>{row.sourceText}</TruncatedText>
       </TableCell>
       <TableCell className="text-muted-foreground">
         {t(BILINGUAL_ROW_KIND_LABEL_KEYS[row.kind])}

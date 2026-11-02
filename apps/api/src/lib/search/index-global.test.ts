@@ -23,9 +23,25 @@ import {
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const { scopedDb } = createScopedDbMock(rootDbTestDouble);
+type SearchQuery = Parameters<typeof searchGlobalWithDatabase>[0];
+// A browser session's search unless a test passes an access token's scopes.
 const searchGlobal = async (
-  query: Parameters<typeof searchGlobalWithDatabase>[0],
-) => await searchGlobalWithDatabase(query, { scopedDb });
+  query: Omit<SearchQuery, "grantedScopes"> &
+    Partial<Pick<SearchQuery, "grantedScopes">>,
+) =>
+  await searchGlobalWithDatabase(
+    { grantedScopes: undefined, ...query },
+    { scopedDb },
+  );
+
+// The final SQL LIMIT bounds the source page; chat has earlier candidate limits.
+const sourcePageLimit = (compiled: ReturnType<PgDialect["sqlToQuery"]>) => {
+  const parameter = [...compiled.sql.matchAll(/\bLIMIT \$(\d+)/gu)]
+    .at(-1)
+    ?.at(1);
+  expect(parameter).toBeDefined();
+  return compiled.params[Number(parameter) - 1];
+};
 
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
 process.env["S3_BUCKET"] ??= "test";
@@ -281,7 +297,7 @@ describe("global search SQL scope", () => {
       expect(compiled.sql).toContain(source.idSql);
       expect(compiled.sql).toContain('COLLATE "C" <');
       expect(compiled.params).toContain(0.75);
-      expect(compiled.params.at(-1)).toBe(4);
+      expect(sourcePageLimit(compiled)).toBe(4);
     }
 
     const matterQuery = sourceQueries.at(1)?.compiled;
@@ -298,9 +314,9 @@ describe("global search SQL scope", () => {
       CHAT_SEARCH_DISPLAY_METADATA_GENERATION,
     );
     expect(chatQuery?.sql).not.toContain('COLLATE "C" <');
-    expect(chatQuery?.params.at(-1)).toBe(
-      LIMITS.searchChatCandidateThreadsMax + 1,
-    );
+    expect(
+      chatQuery === undefined ? undefined : sourcePageLimit(chatQuery),
+    ).toBe(LIMITS.searchChatCandidateThreadsMax + 1);
   });
 
   test("continues legacy offset cursors during a rolling deployment", async () => {
@@ -323,7 +339,7 @@ describe("global search SQL scope", () => {
     for (const [query] of rootDbExecuteMock.mock.calls) {
       const compiled = dialect.sqlToQuery(query);
       expect(compiled.sql).not.toContain('COLLATE "C" <');
-      expect(compiled.params.at(-1)).toBe(
+      expect(sourcePageLimit(compiled)).toBe(
         compiled.sql.includes("FROM chat_thread_search_documents cst")
           ? LIMITS.searchChatCandidateThreadsMax + 1
           : 29,
@@ -364,7 +380,7 @@ describe("global search SQL scope", () => {
     );
     expect(compiled.sql).not.toContain("sd.tsv @@");
     expect(compiled.params).toContain(cursorValue);
-    expect(compiled.params.at(-1)).toBe(4);
+    expect(sourcePageLimit(compiled)).toBe(4);
   });
 
   test("preserves the SQL timestamp score in filter-only cursors", async () => {

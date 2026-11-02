@@ -30,7 +30,6 @@
     "@stll/permissions": "workspace:*",
     "@stll/portable-path": "workspace:*",
     "@stll/sha256": "workspace:*",
-    "@stll/skills": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "0.4.1",
     "better-result": "catalog:",
@@ -39,6 +38,7 @@
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
+    "@stll/test-state": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "fast-check": "catalog:"

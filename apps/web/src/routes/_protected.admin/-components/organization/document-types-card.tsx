@@ -77,8 +77,8 @@ export const DocumentTypesCard = () => {
       type: "handler",
       handlerId: "DocumentTypesCard.createMutation.useSettingsMutation",
     },
-    mutationFn: async (label: string) =>
-      unwrapApiResponse(await api["document-types"].post({ label })),
+    mutationFn: async (label: string, request) =>
+      unwrapApiResponse(await api["document-types"].post({ label }, request)),
     invalidate: documentTypesInvalidationKey,
     errorToast: {
       title: t("errors.actionFailed"),
@@ -328,9 +328,6 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
         }}
         value={draft}
       />
-      <span className="text-muted-foreground shrink-0 font-mono text-xs">
-        {type.key}
-      </span>
       <Button
         aria-label={t("common.delete")}
         className="shrink-0"

@@ -2,9 +2,18 @@ import { panic } from "better-result";
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { isEntityKind, RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import {
+  ENTITY_KINDS,
+  GLOBAL_SEARCH_RESULT_TYPES,
+  isEntityKind,
+  RESOURCE_TYPE,
+  resourceRef,
+} from "@stll/api-contract";
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
-import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
+import {
+  GLOBAL_SEARCH_CHAT_COVERAGE,
+  GLOBAL_SEARCH_RESULT_LIMIT,
+} from "@stll/api-contract/search";
 import { compareCodeUnit } from "@stll/collation";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
@@ -25,7 +34,6 @@ import { readPublicDecisionLanguageAlternatesForGroupKeys } from "@/api/lib/case
 import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
-import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { escapeLike } from "@/api/lib/escape-like";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { LIMITS } from "@/api/lib/limits";
@@ -69,6 +77,7 @@ import {
   buildSearchTsQuery,
 } from "@/api/lib/search/query";
 import { globalSearchIdentity } from "@/api/lib/search/resource-search";
+import { permittedSearchResultTypes } from "@/api/lib/search/result-type-scopes";
 import { searchTitleTierSql } from "@/api/lib/search/search-ranking";
 import { typedPgArray } from "@/api/lib/search/sql";
 import type {
@@ -84,7 +93,10 @@ import {
   projectChatSearchCandidates,
   readChatCandidateBatches,
 } from "@/api/lib/search/withdrawn-chat-candidates";
-import type { ChatSearchCandidateRow } from "@/api/lib/search/withdrawn-chat-candidates";
+import type {
+  ChatCandidateRead,
+  ChatSearchCandidateRow,
+} from "@/api/lib/search/withdrawn-chat-candidates";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const REINDEX_BATCH_SIZE = 100;
@@ -169,6 +181,12 @@ export type GlobalSearchQuery = {
   /** User-selected subset to filter by; empty means no extra filter. */
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
   types: readonly GlobalSearchResultType[];
+  /**
+   * The caller's access-token scopes, or `undefined` for a browser session.
+   * A result type the scopes do not reach is neither searched nor counted,
+   * whatever `types` asks for (`permittedSearchResultTypes`).
+   */
+  grantedScopes: readonly string[] | undefined;
   editedByUserIds: readonly string[];
   mimeTypes: readonly string[];
   updatedFrom?: string | undefined;
@@ -262,18 +280,41 @@ const toHeadline = (value: unknown): string | null => {
   return text === null ? null : escapeAndHighlight(text);
 };
 
-const selectedTypes = (types: readonly GlobalSearchResultType[]) =>
-  new Set<GlobalSearchResultType>(types);
+/**
+ * The result types one search reads. `searched` is what the caller asked for
+ * (every type when it asked for none), kept to the types it is `permitted`;
+ * `narrowed` says whether that falls short of every type.
+ */
+type ResultTypeSelection = {
+  readonly searched: ReadonlySet<GlobalSearchResultType>;
+  readonly permitted: ReadonlySet<GlobalSearchResultType>;
+  readonly narrowed: boolean;
+};
+
+const selectedTypes = (
+  types: readonly GlobalSearchResultType[],
+  permittedTypes: readonly GlobalSearchResultType[],
+): ResultTypeSelection => {
+  const permitted = new Set(permittedTypes);
+  const requested: readonly GlobalSearchResultType[] =
+    types.length === 0 ? GLOBAL_SEARCH_RESULT_TYPES : types;
+  return {
+    searched: new Set(requested.filter((type) => permitted.has(type))),
+    permitted,
+    narrowed:
+      types.length > 0 || permitted.size < GLOBAL_SEARCH_RESULT_TYPES.length,
+  };
+};
 
 const shouldSearchType = (
-  selected: ReadonlySet<GlobalSearchResultType>,
+  selected: ResultTypeSelection,
   type: GlobalSearchResultType,
-) => selected.size === 0 || selected.has(type);
+) => selected.searched.has(type);
 
 const NATIVE_PREVIEW_MIME_TYPES = [PDF_MIME_TYPE, DOCX_MIME_TYPE] as const;
 
-const hasSelectedEntityType = (selected: ReadonlySet<GlobalSearchResultType>) =>
-  selected.size === 0 || [...selected].some(isEntityKind);
+const hasSelectedEntityType = (selected: ResultTypeSelection) =>
+  [...selected.searched].some(isEntityKind);
 
 const fileFieldJoin = (mimeTypes: readonly string[]) => {
   const mimeFilter =
@@ -485,6 +526,14 @@ const facetBuckets = (
 
 const totalFrom = (rows: CountRow[]): number => Number(rows.at(0)?.total ?? 0);
 
+const readChatLeg = async (
+  condition: boolean,
+  read: () => Promise<ChatCandidateRead>,
+): Promise<ChatCandidateRead> =>
+  condition
+    ? await read()
+    : { rows: [], coverage: GLOBAL_SEARCH_CHAT_COVERAGE.COMPLETE };
+
 const rowsWhen = async <Row extends RawRow>(
   condition: boolean,
   query: () => Promise<Row[]>,
@@ -544,6 +593,7 @@ const toMimeTypeFacetMap = (
 type FilterFragmentInput = {
   query: string;
   types: readonly GlobalSearchResultType[];
+  permittedTypes: readonly GlobalSearchResultType[];
   editedByUserIds: readonly string[];
   mimeTypes: readonly string[];
   updatedFrom?: string | undefined;
@@ -560,12 +610,13 @@ type FilterFragmentInput = {
 const buildSearchFilterFragments = ({
   query,
   types,
+  permittedTypes,
   editedByUserIds,
   mimeTypes,
   updatedFrom,
   updatedTo,
 }: FilterFragmentInput) => {
-  const selected = selectedTypes(types);
+  const selected = selectedTypes(types, permittedTypes);
   const hasEditorFilter = editedByUserIds.length > 0;
   const hasMimeTypeFilter = mimeTypes.length > 0;
   const hasSearchQuery = query.trim().length > 0;
@@ -584,7 +635,8 @@ const buildSearchFilterFragments = ({
           fractionalSecondDigits: 3,
         });
 
-  const entityTypes = [...selected].filter(isEntityKind);
+  const entityTypes = [...selected.searched].filter(isEntityKind);
+  const permittedEntityTypes = [...selected.permitted].filter(isEntityKind);
   const entityEditorFilter = sqlWhen(
     hasEditorFilter,
     () =>
@@ -679,13 +731,19 @@ const buildSearchFilterFragments = ({
       ? sql`tier DESC, score DESC, ${id} DESC`
       : sql`${updatedAt} DESC, ${id} DESC`;
   const entityTypeFilter = sqlWhen(
-    selected.size > 0,
+    selected.narrowed,
     () => sql`AND sd.kind = ANY(${typedPgArray(entityTypes, "text")})`,
   );
+  // The type facet counts every kind the caller may see, so a text search can
+  // offer the kinds it did not select; a kind outside the grant is never counted.
+  const permittedEntityTypeFilter = sqlWhen(
+    permittedEntityTypes.length < ENTITY_KINDS.length,
+    () => sql`AND sd.kind = ANY(${typedPgArray(permittedEntityTypes, "text")})`,
+  );
   const entityTypeFacetFilter =
-    selected.size > 0 && !hasSearchQuery && normalizedUpdatedFrom === undefined
+    selected.narrowed && !hasSearchQuery && normalizedUpdatedFrom === undefined
       ? entityTypeFilter
-      : sql``;
+      : permittedEntityTypeFilter;
 
   return {
     selected,
@@ -724,6 +782,7 @@ const readGlobalSearch = async (
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
     types,
+    grantedScopes,
     editedByUserIds,
     mimeTypes,
     updatedFrom,
@@ -798,6 +857,7 @@ const readGlobalSearch = async (
   } = buildSearchFilterFragments({
     query,
     types,
+    permittedTypes: permittedSearchResultTypes(grantedScopes),
     editedByUserIds,
     mimeTypes,
     updatedFrom,
@@ -946,52 +1006,15 @@ const readGlobalSearch = async (
   const caseLawPromise = rowsWhen(
     !restrictToEntities && shouldSearchType(selected, "case-law"),
     () =>
-      database.execute(sql`
-      SELECT
-        clsd.decision_id AS id,
-        d.case_number,
-        d.ecli,
-        d.case_number_type,
-        d.court,
-        d.country,
-        d.decision_date,
-        d.slug,
-        d.language,
-        d.language_group_key,
-        (
-          SELECT coalesce(
-            jsonb_agg(
-              jsonb_build_object('type', identifier.type, 'value', identifier.value)
-              ORDER BY identifier.type, identifier.value
-            ),
-            '[]'::jsonb
-          )
-          FROM case_law_decision_identifiers identifier
-          WHERE identifier.decision_id = d.id
-        ) AS identifiers,
-        ${searchHeadline(sql`coalesce(nullif(body_preview.text, ''), d.fulltext, clsd.searchable_text)`)},
-        ${searchTier(sql`clsd.title`)},
-        ${searchScore({ tsv: sql`clsd.tsv`, updatedAt: sql`d.updated_at` })},
-        d.updated_at
-      FROM case_law_search_documents clsd
-      JOIN case_law_published_decisions d ON d.id = clsd.decision_id
-      ${publicCaseLawDecisionJoin}
-      ${caseLawBodyPreviewJoin}
-      WHERE TRUE
-        ${caseLawTextSearchFilter}
-        ${caseLawUpdatedFilter}
-        ${globalSearchCursorSql({
-          cursor: searchCursor,
-          tier: searchTierValue(sql`clsd.title`),
-          score: searchScoreValue({
-            tsv: sql`clsd.tsv`,
-            updatedAt: sql`d.updated_at`,
-          }),
-          id: sql`'case-law:' || clsd.decision_id::text`,
-        })}
-      ORDER BY ${searchOrderBy({ id: sql`clsd.decision_id`, updatedAt: sql`d.updated_at` })}
-      LIMIT ${fetchLimit}
-    `),
+      database.execute(
+        globalCaseLawHitsStatement({
+          query,
+          updatedFrom,
+          updatedTo,
+          searchCursor,
+          fetchLimit,
+        }),
+      ),
   );
 
   const chatScope = chatThreadScopeSql({
@@ -1004,7 +1027,7 @@ const readGlobalSearch = async (
   const chatSourceOrder = hasSearchQuery
     ? sql`ms.created_at, ms.message_id`
     : sql`ms.created_at DESC, ms.message_id DESC`;
-  const chatPromise = rowsWhen(
+  const chatPromise = readChatLeg(
     !restrictToEntities && shouldSearchType(selected, "chat"),
     async () => {
       const readPage = async (
@@ -1063,16 +1086,15 @@ const readGlobalSearch = async (
       LIMIT ${rowLimit}
     `);
       if (!hasSearchQuery) {
-        return await readPage(searchCursor, fetchLimit);
+        return {
+          rows: await readPage(searchCursor, fetchLimit),
+          coverage: GLOBAL_SEARCH_CHAT_COVERAGE.COMPLETE,
+        };
       }
-      const read = await readChatCandidateBatches({
+      return await readChatCandidateBatches({
         readBatch: async (batchCursor) =>
           await readPage(batchCursor, LIMITS.searchChatCandidateThreadsMax + 1),
       });
-      if (read.isErr()) {
-        return abortTransaction(read.error);
-      }
-      return read.value;
     },
   );
 
@@ -1194,6 +1216,7 @@ const readGlobalSearch = async (
   ): boolean =>
     isFirstPage &&
     !restrictToEntities &&
+    selected.permitted.has(type) &&
     !shouldSearchType(selected, type) &&
     hasAlternativeFacetPredicate;
 
@@ -1350,7 +1373,7 @@ const readGlobalSearch = async (
     matterRows,
     contactRows,
     caseLawRows,
-    chatRows,
+    chatRead,
     entityCount,
     matterCount,
     contactCount,
@@ -1383,7 +1406,7 @@ const readGlobalSearch = async (
 
   const projectedChatRows = await projectChatSearchCandidates({
     database,
-    rows: chatRows,
+    rows: chatRead.rows,
     query,
     cursor: searchCursor,
     limit: fetchLimit,
@@ -1462,9 +1485,127 @@ const readGlobalSearch = async (
       },
       totalCount,
       nextCursor: page.nextCursor,
+      chatCoverage: chatRead.coverage,
     },
     caseLawLanguageGroups,
   };
+};
+
+type GlobalCaseLawHitsOptions = {
+  query: string;
+  updatedFrom?: string | undefined;
+  updatedTo?: string | undefined;
+  searchCursor: GlobalSearchCursor | null;
+  fetchLimit: number;
+};
+
+/** Rank narrow candidates first; only the returned page reads and aggregates bodies. */
+export const globalCaseLawHitsStatement = ({
+  query,
+  updatedFrom,
+  updatedTo,
+  searchCursor,
+  fetchLimit,
+}: GlobalCaseLawHitsOptions): SQL => {
+  const {
+    caseLawTextSearchFilter,
+    caseLawUpdatedFilter,
+    searchHeadline,
+    searchTier,
+    searchScore,
+    searchTierValue,
+    searchScoreValue,
+    searchOrderBy,
+  } = buildSearchFilterFragments({
+    query,
+    updatedFrom,
+    updatedTo,
+    types: ["case-law"],
+    permittedTypes: ["case-law"],
+    editedByUserIds: [],
+    mimeTypes: [],
+  });
+  // Text matches drive indexed publication checks. A flattened join instead
+  // hashes the hits and scans every decision, even when the hit set is fixed.
+  // Filter-only search keeps the planner free to use the updated-time order.
+  const candidateDecisionJoin =
+    query.trim().length > 0
+      ? sql`JOIN LATERAL (
+          SELECT decision.id, decision.updated_at, decision.source_id
+          FROM case_law_published_decisions decision
+          WHERE decision.id = clsd.decision_id
+          OFFSET 0
+        ) d ON true`
+      : sql`JOIN case_law_published_decisions d ON d.id = clsd.decision_id`;
+  // MATERIALIZED keeps the body lateral join outside the candidate scan even
+  // when the planner would otherwise inline the page and move its work earlier.
+  // OFFSET 0 retains parameterized primary-key enrichment probes: flattening them
+  // lets a hash join scan the whole corpus even though its other side is bounded.
+  return sql`
+    WITH page AS MATERIALIZED (
+      SELECT clsd.decision_id, d.updated_at,
+        ${searchTier(sql`clsd.title`)},
+        ${searchScore({ tsv: sql`clsd.tsv`, updatedAt: sql`d.updated_at` })}
+      FROM case_law_search_documents clsd
+      ${candidateDecisionJoin}
+      ${publicCaseLawDecisionJoin}
+      WHERE TRUE
+        ${caseLawTextSearchFilter}
+        ${caseLawUpdatedFilter}
+        ${globalSearchCursorSql({
+          cursor: searchCursor,
+          tier: searchTierValue(sql`clsd.title`),
+          score: searchScoreValue({
+            tsv: sql`clsd.tsv`,
+            updatedAt: sql`d.updated_at`,
+          }),
+          id: sql`'case-law:' || clsd.decision_id::text`,
+        })}
+      ORDER BY ${searchOrderBy({ id: sql`clsd.decision_id`, updatedAt: sql`d.updated_at` })}
+      LIMIT ${fetchLimit}
+    )
+      SELECT
+        clsd.decision_id AS id,
+        d.case_number,
+        d.ecli,
+        d.case_number_type,
+        d.court,
+        d.country,
+        d.decision_date,
+        d.slug,
+        d.language,
+        d.language_group_key,
+        (
+          SELECT coalesce(
+            jsonb_agg(
+              jsonb_build_object('type', identifier.type, 'value', identifier.value)
+              ORDER BY identifier.type, identifier.value
+            ),
+            '[]'::jsonb
+          )
+          FROM case_law_decision_identifiers identifier
+          WHERE identifier.decision_id = d.id
+        ) AS identifiers,
+        ${searchHeadline(sql`coalesce(nullif(body_preview.text, ''), d.fulltext, clsd.searchable_text)`)},
+        page.tier,
+        page.score,
+        d.updated_at
+      FROM page
+      JOIN LATERAL (
+        SELECT document.*
+        FROM case_law_search_documents document
+        WHERE document.decision_id = page.decision_id
+        OFFSET 0
+      ) clsd ON true
+      JOIN LATERAL (
+        SELECT decision.*
+        FROM case_law_published_decisions decision
+        WHERE decision.id = page.decision_id
+        OFFSET 0
+      ) d ON true
+      ${caseLawBodyPreviewJoin}
+      ORDER BY ${searchOrderBy({ id: sql`clsd.decision_id`, updatedAt: sql`d.updated_at` })}
+`;
 };
 
 /**
@@ -1500,6 +1641,8 @@ export type GlobalFacetSearchQuery = {
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
   types: readonly GlobalSearchResultType[];
+  /** As on `GlobalSearchQuery`: the result types the buckets may count. */
+  grantedScopes: readonly string[] | undefined;
   editedByUserIds: readonly string[];
   mimeTypes: readonly string[];
   updatedFrom?: string | undefined;
@@ -1525,6 +1668,7 @@ const readGlobalFacet = async (
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
     types,
+    grantedScopes,
     editedByUserIds,
     mimeTypes,
     updatedFrom,
@@ -1546,6 +1690,7 @@ const readGlobalFacet = async (
   } = buildSearchFilterFragments({
     query,
     types,
+    permittedTypes: permittedSearchResultTypes(grantedScopes),
     editedByUserIds,
     mimeTypes,
     updatedFrom,

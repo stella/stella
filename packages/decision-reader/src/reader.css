@@ -22,7 +22,9 @@
   --reader-list-gutter: 1.75em;
   --reader-section-gap-top: 2.5em;
   --reader-section-gap-bottom: 0.8em;
-  --reader-anchor-offset: 88px;
+  /* Where a followed address lands a block: below the controls bar, on the
+     line a jump lands on (READER_BREADCRUMB_CLEARANCE in reader-landing.ts). */
+  --reader-anchor-offset: 64px;
 
   /* Statute heading rhythm: the shallower the container, the wider the
      approach to it. Absolute rather than em, so the gap ordering is the
@@ -320,15 +322,19 @@ div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
 }
 
 /* In-text note reference: superscript mark, no underline; the anchor jump
-   plus the :target flash is the interaction. */
+   plus the :target flash is the interaction. An excerpt, which has no note
+   to jump to, keeps the mark in the text's own colour. */
 .reader-note-ref {
   font-size: 0.72em;
   vertical-align: super;
   text-decoration: none;
+}
+
+a.reader-note-ref {
   color: var(--color-primary);
 }
 
-.reader-note-ref:hover {
+a.reader-note-ref:hover {
   text-decoration: underline;
 }
 

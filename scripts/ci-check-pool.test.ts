@@ -27,7 +27,9 @@ import {
   jobTimeout,
   type Launched,
   madeProgress,
+  memoryBudgetMiB,
   partitionChecks,
+  peakAboveDeclared,
   planChecks,
   type PlannedCheck,
   POOL_CONTEXT_ROOTS,
@@ -38,8 +40,10 @@ import {
   processTree,
   procStatRow,
   psSeconds,
+  readCheckLog,
   resolveEnv,
   runChecks,
+  runnerMemoryBytes,
   runnerWorkerStartedAt,
   selectChecks,
   stillRunningLines,
@@ -50,8 +54,10 @@ import {
   CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
   checkBudgetMinutes,
+  checkPeakRssMiB,
   checkPoolJob,
   checkPoolStepRun,
+  parseCheckBudgets,
   parseCheckPool,
   type PoolCheck,
   readCheckBudgets,
@@ -481,6 +487,34 @@ test("the pool bounds concurrency, reports in order and reports every failure", 
   );
 });
 
+test("a selected check without a log reports typed no output", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-check-pool-no-log-"));
+  const planned: PlannedCheck[] = [
+    {
+      check: check("fails before opening its log"),
+      status: "selected",
+      env: {},
+      continueOnError: false,
+    },
+  ];
+  let reportedLog: ReturnType<typeof readCheckLog> | undefined;
+  try {
+    await runChecks({
+      planned,
+      concurrency: 1,
+      launch: async () => {
+        throw new Error("launch failed");
+      },
+      report: (index) => {
+        reportedLog = readCheckLog(directory, index);
+      },
+    });
+    expect(reportedLog).toEqual({ type: "no-output", output: "" });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("a launched check runs as a bash step with its env, output and timeout", async () => {
   const directory = mkdtempSync(path.join(tmpdir(), "ci-check-pool-"));
   try {
@@ -692,7 +726,7 @@ test("a check's process tree follows descendants that left its group", () => {
 test("a declared timeout-minutes only ever lowers a check's budget", () => {
   const budgets = {
     "ci-checks-policy": {},
-    "ci-checks-rest": { Check: { minutes: 12, samples: 3 } },
+    "ci-checks-rest": { Check: { minutes: 12, samples: 3, peakRssMiB: 100 } },
     "code-quality-web-rest": {},
   };
   const effective = (timeoutMinutes: number | undefined) =>
@@ -712,11 +746,206 @@ test("every pooled check has exactly one budget", () => {
     expect(Object.keys(budgets[job]).toSorted()).toEqual(names.toSorted());
     for (const name of names) {
       expect(checkBudgetMinutes(budgets, job, name)).toBeGreaterThanOrEqual(5);
+      expect(checkPeakRssMiB(budgets, job, name)).toBeGreaterThanOrEqual(1);
     }
   }
   expect(() =>
     checkBudgetMinutes(budgets, "ci-checks-rest", "No such check"),
   ).toThrow("no budget");
+  expect(() =>
+    checkPeakRssMiB(budgets, "ci-checks-rest", "No such check"),
+  ).toThrow("no budget");
+});
+
+test("a budget without a measured peak fails only its own check", () => {
+  const budgets = (budget: Record<string, number>) =>
+    JSON.stringify({
+      "ci-checks-policy": {},
+      "ci-checks-rest": { Lint: budget },
+      "code-quality-web-rest": {},
+    });
+  const unmeasured = parseCheckBudgets(budgets({ minutes: 5, samples: 0 }));
+  expect(checkBudgetMinutes(unmeasured, "ci-checks-rest", "Lint")).toBe(5);
+  expect(() => checkPeakRssMiB(unmeasured, "ci-checks-rest", "Lint")).toThrow(
+    "Lint: no measured peak memory",
+  );
+  expect(() =>
+    parseCheckBudgets(budgets({ minutes: 5, samples: 0, peakRssMiB: 0 })),
+  ).toThrow("invalid budget: Lint");
+  expect(
+    checkPeakRssMiB(
+      parseCheckBudgets(budgets({ minutes: 5, samples: 0, peakRssMiB: 512 })),
+      "ci-checks-rest",
+      "Lint",
+    ),
+  ).toBe(512);
+});
+
+test("a cgroup limit below the host's memory is the runner's memory", () => {
+  expect(runnerMemoryBytes(16, 8)).toBe(8);
+  expect(runnerMemoryBytes(16, 32)).toBe(16);
+  expect(runnerMemoryBytes(16, 0)).toBe(16);
+  expect(runnerMemoryBytes(16, undefined)).toBe(16);
+});
+
+test("the memory budget keeps 15 % of the runner, at least 2 GiB", () => {
+  const gib = 1_073_741_824;
+  // A 16 GiB runner: 16384 - 2458.
+  expect(memoryBudgetMiB(16 * gib)).toBe(13_926);
+  // A small runner keeps the 2 GiB floor.
+  expect(memoryBudgetMiB(4 * gib)).toBe(2048);
+  expect(memoryBudgetMiB(gib)).toBe(1);
+});
+
+/** Run checks with memory admission; record the peaks in flight at each start. */
+const admitted = async (
+  peaks: readonly number[],
+  concurrency: number,
+  budgetMiB: number,
+) => {
+  const planned: PlannedCheck[] = peaks.map((_, index) => ({
+    check: check(`check ${index}`),
+    status: "selected",
+    env: {},
+    continueOnError: false,
+  }));
+  const inFlight = new Set<number>();
+  const starts: { index: number; inFlight: number[] }[] = [];
+  const order: number[] = [];
+  const results = await runChecks({
+    planned,
+    concurrency,
+    memory: {
+      budgetMiB,
+      peakMiB: (pooled) => peaks[Number(pooled.name.slice(6))] ?? 0,
+    },
+    report: (index) => {
+      order.push(index);
+    },
+    launch: async (index): Promise<Launched> => {
+      inFlight.add(index);
+      starts.push({ index, inFlight: [...inFlight] });
+      for (let tick = 0; tick < (index % 3) + 1; tick++) {
+        await Promise.resolve();
+      }
+      inFlight.delete(index);
+      return { exitCode: 0, stopped: undefined, maxRssBytes: undefined };
+    },
+  });
+  return { results, starts, order };
+};
+
+test("memory admission keeps checks in flight within the budget", async () => {
+  await assertProperty(
+    "memory admission keeps checks in flight within the budget",
+    fc.asyncProperty(
+      fc.array(fc.integer({ min: 1, max: 6000 }), { maxLength: 12 }),
+      fc.integer({ min: 1, max: 5 }),
+      fc.integer({ min: 1000, max: 8000 }),
+      async (peaks, concurrency, budgetMiB) => {
+        const { results, starts, order } = await admitted(
+          peaks,
+          concurrency,
+          budgetMiB,
+        );
+        expect(results.map(({ outcome }) => outcome)).toEqual(
+          peaks.map(() => "success"),
+        );
+        expect(order).toEqual(peaks.map((_, index) => index));
+        for (const { inFlight } of starts) {
+          expect(inFlight.length).toBeLessThanOrEqual(concurrency);
+          const sum = inFlight.reduce(
+            (total, index) => total + (peaks[index] ?? 0),
+            0,
+          );
+          // Only a check alone may exceed the budget.
+          if (inFlight.length > 1) {
+            expect(sum).toBeLessThanOrEqual(budgetMiB);
+          }
+        }
+      },
+    ),
+  );
+});
+
+test("the code-quality legs never run together on a 16 GiB runner, and light checks fill around them", async () => {
+  // Peaks measured in a passing full run of code-quality-web-rest: Code
+  // quality (web), Result consumption (web), Code quality (rest), Query cache
+  // types, Database awaits in loops. Together the two legs exceed the runner.
+  const peaks = [11_960, 922, 5720, 1006, 1874];
+  const { starts } = await admitted(
+    peaks,
+    3,
+    memoryBudgetMiB(16 * 1_073_741_824),
+  );
+  for (const { inFlight } of starts) {
+    expect(inFlight.includes(0) && inFlight.includes(2)).toBe(false);
+  }
+  // The web leg starts first and a light check runs beside it.
+  expect(starts[0]?.index).toBe(0);
+  expect(starts[1]).toEqual({ index: 1, inFlight: [0, 1] });
+});
+
+test("a check above the whole budget runs alone", async () => {
+  const { starts } = await admitted([500, 9000, 500], 3, 4000);
+  const alone = starts.find(({ index }) => index === 1);
+  expect(alone?.inFlight).toEqual([1]);
+});
+
+test("a check without a measured peak fails on its own before it runs", async () => {
+  const launched: string[] = [];
+  const results = await runChecks({
+    planned: [
+      {
+        check: check("unmeasured"),
+        status: "selected",
+        env: {},
+        continueOnError: false,
+      },
+      {
+        check: check("measured"),
+        status: "selected",
+        env: {},
+        continueOnError: false,
+      },
+    ],
+    concurrency: 2,
+    memory: {
+      budgetMiB: 4000,
+      peakMiB: (pooled) =>
+        pooled.name === "measured"
+          ? 100
+          : checkPeakRssMiB(
+              readCheckBudgets(root),
+              "ci-checks-rest",
+              pooled.name,
+            ),
+    },
+    report: () => undefined,
+    launch: async (index): Promise<Launched> => {
+      launched.push(String(index));
+      return { exitCode: 0, stopped: undefined, maxRssBytes: undefined };
+    },
+  });
+  expect(launched).toEqual(["1"]);
+  expect(results[0]).toMatchObject({ outcome: "failure" });
+  expect(results[0]?.detail).toContain("unmeasured: no budget");
+  expect(results[1]).toMatchObject({ outcome: "success" });
+});
+
+test("a peak a quarter above the measured one asks for a budget refresh", () => {
+  const mib = 1_048_576;
+  expect(
+    peakAboveDeclared({ name: "Lint", maxRssBytes: 1250 * mib }, 1000),
+  ).toBeUndefined();
+  expect(
+    peakAboveDeclared({ name: "Lint", maxRssBytes: 1251 * mib }, 1000),
+  ).toBe(
+    "Peak memory of Lint: 1251 MiB, above its measured 1000 MiB; run bun scripts/ci-check-budgets.ts refresh",
+  );
+  expect(
+    peakAboveDeclared({ name: "Lint", maxRssBytes: undefined }, 1000),
+  ).toBeUndefined();
 });
 
 // timeout: The signal fixture has a 10 s child watchdog; allow its forced
@@ -778,7 +1007,10 @@ test("cancellation retains bounded running and buffered failure diagnostics and 
     JSON.stringify({
       "ci-checks-policy": {},
       "ci-checks-rest": Object.fromEntries(
-        names.map((name) => [name, { minutes: 30, samples: 0 }]),
+        names.map((name) => [
+          name,
+          { minutes: 30, samples: 0, peakRssMiB: 100 },
+        ]),
       ),
       "code-quality-web-rest": {},
     }),
@@ -1105,8 +1337,8 @@ test("the pool stops before its job's timeout and names the check still running"
     JSON.stringify({
       "ci-checks-policy": {},
       "ci-checks-rest": {
-        "Hung check": { minutes: 10, samples: 0 },
-        "Quick check": { minutes: 10, samples: 0 },
+        "Hung check": { minutes: 10, samples: 0, peakRssMiB: 100 },
+        "Quick check": { minutes: 10, samples: 0, peakRssMiB: 100 },
       },
       "code-quality-web-rest": {},
     }),
@@ -1184,6 +1416,89 @@ test("the pool stops before its job's timeout and names the check still running"
     rmSync(directory, { recursive: true, force: true });
   }
 }, 25_000);
+
+test("a check that fails before it writes a log reports its own error", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-check-pool-unlogged-"));
+  const scripts = path.join(directory, "scripts");
+  mkdirSync(scripts);
+  mkdirSync(path.join(directory, ".github/ci-checks"), { recursive: true });
+  mkdirSync(path.join(directory, ".github/workflows"), { recursive: true });
+  for (const file of [
+    "ci-check-pool.ts",
+    "ci-check-pool-registry.ts",
+    "github-expression.ts",
+  ]) {
+    copyFileSync(path.join(root, "scripts", file), path.join(scripts, file));
+  }
+  writeFileSync(
+    path.join(directory, ".github/workflows/ci.yml"),
+    Bun.YAML.stringify({
+      jobs: { "ci-checks-rest": { "timeout-minutes": 60, steps: [] } },
+    }),
+  );
+  writeFileSync(
+    path.join(directory, ".github/ci-checks/ci-checks-rest.yml"),
+    Bun.YAML.stringify({
+      checks: [
+        { name: "Unbudgeted check", run: "echo unreachable" },
+        { name: "Quick check", run: "echo quick" },
+      ].map((entry) => ({ ...entry, if: "true" })),
+    }),
+  );
+  // The first check has no budget, so its launch throws before its log exists.
+  writeFileSync(
+    path.join(directory, ".github/ci-checks/budgets.json"),
+    JSON.stringify({
+      "ci-checks-policy": {},
+      "ci-checks-rest": {
+        "Quick check": { minutes: 10, samples: 0, peakRssMiB: 100 },
+      },
+      "code-quality-web-rest": {},
+    }),
+  );
+  writeFileSync(path.join(directory, "needs.json"), "{}");
+  try {
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        path.join(scripts, "ci-check-pool.ts"),
+        "run",
+        "ci-checks-rest",
+      ],
+      {
+        cwd: directory,
+        env: {
+          PATH: process.env["PATH"] ?? "",
+          RUNNER_TEMP: directory,
+          GITHUB_JOB: "ci-checks-rest",
+          CI_CHECK_POOL_JOB_STARTED_AT: String(Date.now()),
+          CI_CHECK_POOL_CONCURRENCY: "2",
+          CI_CHECK_POOL_NEEDS_FILE: path.join(directory, "needs.json"),
+          CI_CHECK_POOL_STEPS: "{}",
+          CI_CHECK_POOL_INPUTS: "{}",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [output, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    const cause =
+      "Unbudgeted check: no budget in .github/ci-checks/budgets.json; run bun scripts/ci-check-budgets.ts refresh";
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(1);
+    expect(output).toContain(`FAILED check: Unbudgeted check -- ${cause}`);
+    expect(output).toMatch(/^::group::Unbudgeted check: FAILED in /mu);
+    expect(output).toContain(`\nerror: ${cause}\n::endgroup::`);
+    expect(output).toContain("Quick check: passed");
+    expect(output).toContain("quick");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test("flattening steps that already carry their pooled checks adds none", () => {
   for (const job of CHECK_POOL_JOBS) {
@@ -1423,4 +1738,92 @@ test("only a failed check's own error commands reach the job log", () => {
       ...flat,
     ].join("\n"),
   );
+});
+
+test("the pool run admits checks by the peaks in its budgets file", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-check-pool-memory-"));
+  const scripts = path.join(directory, "scripts");
+  mkdirSync(scripts);
+  mkdirSync(path.join(directory, ".github/ci-checks"), { recursive: true });
+  mkdirSync(path.join(directory, ".github/workflows"), { recursive: true });
+  for (const file of [
+    "ci-check-pool.ts",
+    "ci-check-pool-registry.ts",
+    "github-expression.ts",
+  ]) {
+    copyFileSync(path.join(root, "scripts", file), path.join(scripts, file));
+  }
+  writeFileSync(
+    path.join(directory, ".github/workflows/ci.yml"),
+    Bun.YAML.stringify({
+      jobs: { "ci-checks-rest": { "timeout-minutes": 60, steps: [] } },
+    }),
+  );
+  writeFileSync(
+    path.join(directory, ".github/ci-checks/ci-checks-rest.yml"),
+    Bun.YAML.stringify({
+      checks: [
+        { name: "Heavy check", run: "echo heavy" },
+        { name: "Light check", run: "echo light" },
+      ].map((entry) => ({ ...entry, if: "true" })),
+    }),
+  );
+  // The heavy check exceeds any runner, so it runs alone; the light one
+  // declares less than any process uses, so its peak asks for a refresh.
+  writeFileSync(
+    path.join(directory, ".github/ci-checks/budgets.json"),
+    JSON.stringify({
+      "ci-checks-policy": {},
+      "ci-checks-rest": {
+        "Heavy check": { minutes: 10, samples: 0, peakRssMiB: 100_000_000 },
+        "Light check": { minutes: 10, samples: 0, peakRssMiB: 1 },
+      },
+      "code-quality-web-rest": {},
+    }),
+  );
+  writeFileSync(path.join(directory, "needs.json"), "{}");
+  try {
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        path.join(scripts, "ci-check-pool.ts"),
+        "run",
+        "ci-checks-rest",
+      ],
+      {
+        cwd: directory,
+        env: {
+          PATH: process.env["PATH"] ?? "",
+          RUNNER_TEMP: directory,
+          GITHUB_JOB: "ci-checks-rest",
+          CI_CHECK_POOL_JOB_STARTED_AT: String(Date.now()),
+          CI_CHECK_POOL_CONCURRENCY: "2",
+          CI_CHECK_POOL_NEEDS_FILE: path.join(directory, "needs.json"),
+          CI_CHECK_POOL_STEPS: "{}",
+          CI_CHECK_POOL_INPUTS: "{}",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [output, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(output).toMatch(/running 2 at a time within \d+ of \d+ MiB/u);
+    // Two slots, yet the light check starts only after the heavy one ended.
+    const heavyFinished = output.indexOf("Finished check: Heavy check");
+    const lightStarted = output.indexOf("Starting check: Light check");
+    expect(heavyFinished).toBeGreaterThan(-1);
+    expect(lightStarted).toBeGreaterThan(heavyFinished);
+    expect(output).toMatch(
+      /^Peak memory of Light check: \d+ MiB, above its measured 1 MiB; run bun scripts\/ci-check-budgets.ts refresh$/mu,
+    );
+    expect(output).not.toContain("Peak memory of Heavy check");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

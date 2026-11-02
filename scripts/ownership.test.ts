@@ -13,13 +13,18 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import ts from "typescript6";
 
 import { lintSingleRule } from "../.oxlint-plugins/__tests__/lint-single-rule.ts";
 import {
   MEMBER_RUN_QUEUES,
   MEMBER_RUN_SCHEDULER_TASKS,
 } from "../apps/api/src/lib/member-run-queues.ts";
+import {
+  type Node,
+  parseSource,
+  type Statement,
+  walk,
+} from "../packages/scripts/src/syntax-tree.ts";
 import type { OwnershipEntry } from "./ownership";
 import {
   OWNERSHIP,
@@ -27,6 +32,7 @@ import {
   ROOT_CONNECTION_DOORS,
   SCHEMA_INTROSPECTION,
   validateOwnership,
+  withSchemaIntrospection,
 } from "./ownership";
 import { loadOwnershipDeclarations } from "./ownership-loader.ts";
 
@@ -67,6 +73,31 @@ const run = (root: string, command: string[]) => {
 };
 
 describe("ownership file loading", () => {
+  test("imports the receipt ownership declaration without handler files", () => {
+    withDirectory((root) => {
+      const directory = path.join(root, "scripts/ownership");
+      mkdirSync(directory, { recursive: true });
+      copyFileSync(
+        path.join(
+          repoRoot,
+          "scripts/ownership/request-idempotency-receipts.ts",
+        ),
+        path.join(directory, "request-idempotency-receipts.ts"),
+      );
+      symlinkSync(
+        path.join(repoRoot, "node_modules"),
+        path.join(root, "node_modules"),
+        "dir",
+      );
+      const output = run(root, [
+        process.execPath,
+        "-e",
+        'const {default: entry} = await import("./scripts/ownership/request-idempotency-receipts.ts"); console.log(entry.id);',
+      ]);
+      expect(output.trim()).toBe("request-idempotency-receipts");
+    });
+  });
+
   test("loads every row in filename order and ignores documentation", () => {
     withDirectory((root) => {
       for (const id of ["z-last", "a-first"]) {
@@ -103,9 +134,12 @@ describe("ownership file loading", () => {
       process.execPath,
       "--input-type=module",
       "-e",
-      'const { OWNERSHIP } = await import("./scripts/ownership.ts"); console.log(JSON.stringify(OWNERSHIP));',
+      'const { OWNERSHIP, renderOwnershipDocument } = await import("./scripts/ownership.ts"); console.log(JSON.stringify({entries: OWNERSHIP.map(({summary, ...entry}) => entry), document: renderOwnershipDocument(OWNERSHIP)}));',
     ]);
-    expect(JSON.parse(output.split("\n").at(0) ?? "")).toEqual(OWNERSHIP);
+    expect(JSON.parse(output.split("\n").at(0) ?? "")).toEqual({
+      entries: OWNERSHIP.map(({ summary, ...declaration }) => declaration),
+      document: renderOwnershipDocument(OWNERSHIP),
+    });
   });
 });
 
@@ -237,6 +271,28 @@ describe("renderOwnershipDocument", () => {
         ).toBe(true);
       }
     }
+  });
+
+  test("evaluates dynamic scope only when rendering its document", () => {
+    let calls = 0;
+    const declaration = withSchemaIntrospection(
+      entry({
+        summary: () => {
+          calls += 1;
+          return "Declared create scope";
+        },
+        enforcement: {
+          kind: "import",
+          specifiers: ["@/api/db/schema"],
+          allowed: [],
+        },
+      }),
+    );
+    expect(calls).toBe(0);
+    expect(renderOwnershipDocument([declaration])).toContain(
+      "Declared create scope",
+    );
+    expect(calls).toBe(1);
   });
 
   test("renders the same bytes for the same table", () => {
@@ -417,6 +473,17 @@ test("the run actor allowlist names exactly the member-run modules", () => {
   expect(allowed).toEqual(memberRunModules);
 });
 
+// The declaration an `export` or `export default` statement exports.
+const exportedDeclaration = (statement: Statement) => {
+  if (
+    statement.type === "ExportNamedDeclaration" ||
+    statement.type === "ExportDefaultDeclaration"
+  ) {
+    return statement.declaration ?? undefined;
+  }
+  return undefined;
+};
+
 describe("stored-reader ownership coverage", () => {
   for (const id of ["stored-file-read", "stored-tenant-file-read"]) {
     test(`${id} covers every exported stored-reader primitive`, () => {
@@ -435,49 +502,41 @@ describe("stored-reader ownership coverage", () => {
         );
       }
       const filename = `${specifier.replace("@/api/", "apps/api/src/")}.ts`;
-      const source = ts.createSourceFile(
+      const { program } = parseSource(
         filename,
         readFileSync(
           new URL(filename, new URL("../", import.meta.url)),
           "utf-8",
         ),
-        ts.ScriptTarget.Latest,
-        true,
-        ts.ScriptKind.TS,
       );
       const exportedNames: string[] = [];
-      for (const statement of source.statements) {
+      for (const statement of program.body) {
         if (
-          ts.isExportDeclaration(statement) &&
-          statement.exportClause !== undefined &&
-          ts.isNamedExports(statement.exportClause)
+          statement.type === "ExportNamedDeclaration" &&
+          statement.declaration === null
         ) {
           exportedNames.push(
-            ...statement.exportClause.elements.map(({ name }) => name.text),
+            ...statement.specifiers.map(({ exported }) =>
+              exported.type === "Literal" ? exported.value : exported.name,
+            ),
           );
           continue;
         }
-        if (
-          !ts.canHaveModifiers(statement) ||
-          !ts
-            .getModifiers(statement)
-            ?.some(({ kind }) => kind === ts.SyntaxKind.ExportKeyword)
-        ) {
-          continue;
-        }
-        if (ts.isVariableStatement(statement)) {
-          for (const declaration of statement.declarationList.declarations) {
-            if (ts.isIdentifier(declaration.name)) {
-              exportedNames.push(declaration.name.text);
+        const declaration = exportedDeclaration(statement);
+        if (declaration?.type === "VariableDeclaration") {
+          for (const declarator of declaration.declarations) {
+            if (declarator.id.type === "Identifier") {
+              exportedNames.push(declarator.id.name);
             }
           }
           continue;
         }
         if (
-          ts.isFunctionDeclaration(statement) &&
-          statement.name !== undefined
+          (declaration?.type === "FunctionDeclaration" ||
+            declaration?.type === "TSDeclareFunction") &&
+          declaration.id !== null
         ) {
-          exportedNames.push(statement.name.text);
+          exportedNames.push(declaration.id.name);
         }
       }
       expect(names?.toSorted()).toEqual(
@@ -496,36 +555,37 @@ describe("stored-reader ownership coverage", () => {
 // Every export of the chat runtime that starts a `chat()` run, found from the
 // source: a new raw run form joins the confined names or this fails.
 const chatRunExports = (sourceText: string): string[] => {
-  const source = ts.createSourceFile(
-    "tanstack-chat-runtime.ts",
-    sourceText,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
-  const callsChat = (node: ts.Node): boolean =>
-    (ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "chat") ||
-    (ts.forEachChild(node, (child) => (callsChat(child) ? true : undefined)) ??
-      false);
+  const { program } = parseSource("tanstack-chat-runtime.ts", sourceText);
+  const callsChat = (root: Node): boolean => {
+    let found = false;
+    walk(root, (node) => {
+      if (found) {
+        return "skip-children";
+      }
+      found =
+        node.type === "CallExpression" &&
+        node.callee.type === "Identifier" &&
+        node.callee.name === "chat";
+      return undefined;
+    });
+    return found;
+  };
   const names: string[] = [];
-  for (const statement of source.statements) {
-    if (
-      !ts.isVariableStatement(statement) ||
-      !ts
-        .getModifiers(statement)
-        ?.some(({ kind }) => kind === ts.SyntaxKind.ExportKeyword)
-    ) {
+  for (const statement of program.body) {
+    const declaration =
+      statement.type === "ExportNamedDeclaration"
+        ? statement.declaration
+        : null;
+    if (declaration?.type !== "VariableDeclaration") {
       continue;
     }
-    for (const declaration of statement.declarationList.declarations) {
+    for (const declarator of declaration.declarations) {
       if (
-        ts.isIdentifier(declaration.name) &&
-        declaration.initializer !== undefined &&
-        callsChat(declaration.initializer)
+        declarator.id.type === "Identifier" &&
+        declarator.init !== null &&
+        callsChat(declarator.init)
       ) {
-        names.push(declaration.name.text);
+        names.push(declarator.id.name);
       }
     }
   }
@@ -588,42 +648,45 @@ const renewalDoor = () => {
 };
 
 const assertRenewalExports = (text: string) => {
-  const source = ts.createSourceFile(
-    RENEWAL_OWNER,
-    text,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const { program } = parseSource(RENEWAL_OWNER, text);
   const names: string[] = [];
-  for (const statement of source.statements) {
-    if (ts.isExportDeclaration(statement) || ts.isExportAssignment(statement)) {
+  for (const statement of program.body) {
+    if (
+      (statement.type === "ExportNamedDeclaration" &&
+        statement.declaration === null) ||
+      statement.type === "ExportAllDeclaration" ||
+      statement.type === "TSExportAssignment" ||
+      (statement.type === "ExportDefaultDeclaration" &&
+        statement.declaration.type !== "FunctionDeclaration" &&
+        statement.declaration.type !== "ClassDeclaration" &&
+        statement.declaration.type !== "TSInterfaceDeclaration")
+    ) {
       throw new TypeError(
         "Renewal cannot re-export a root handle or another module",
       );
     }
+    const declaration = exportedDeclaration(statement);
+    if (declaration === undefined) {
+      continue;
+    }
     if (
-      !ts.canHaveModifiers(statement) ||
-      !ts
-        .getModifiers(statement)
-        ?.some(({ kind }) => kind === ts.SyntaxKind.ExportKeyword)
+      (declaration.type === "FunctionDeclaration" ||
+        declaration.type === "TSDeclareFunction") &&
+      declaration.id !== null
     ) {
+      names.push(declaration.id.name);
       continue;
     }
-    if (ts.isFunctionDeclaration(statement) && statement.name) {
-      names.push(statement.name.text);
-      continue;
-    }
-    if (!ts.isVariableStatement(statement)) {
+    if (declaration.type !== "VariableDeclaration") {
       throw new TypeError("Renewal exports only its two bounded operations");
     }
-    for (const declaration of statement.declarationList.declarations) {
-      if (!ts.isIdentifier(declaration.name)) {
+    for (const declarator of declaration.declarations) {
+      if (declarator.id.type !== "Identifier") {
         throw new TypeError(
           "Renewal exports must have explicit operation names",
         );
       }
-      names.push(declaration.name.text);
+      names.push(declarator.id.name);
     }
   }
   if (
@@ -637,25 +700,21 @@ const assertRenewalExports = (text: string) => {
 };
 
 const assertRenewalDatabaseBoundary = (text: string) => {
-  const source = ts.createSourceFile(
-    RENEWAL_OWNER,
-    text,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const { program } = parseSource(RENEWAL_OWNER, text);
   const tables = new Set<string>();
   let updates = 0;
-  const visit = (node: ts.Node) => {
+  walk(program, (node) => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression)
+      node.type === "CallExpression" &&
+      node.callee.type === "MemberExpression" &&
+      !node.callee.computed &&
+      node.callee.property.type === "Identifier"
     ) {
-      const method = node.expression.name.text;
-      const receiver = node.expression.expression;
+      const method = node.callee.property.name;
+      const receiver = node.callee.object;
       if (
-        ts.isIdentifier(receiver) &&
-        receiver.text === "tx" &&
+        receiver.type === "Identifier" &&
+        receiver.name === "tx" &&
         method !== "select" &&
         method !== "update"
       ) {
@@ -665,30 +724,28 @@ const assertRenewalDatabaseBoundary = (text: string) => {
       }
       // Deadline parsing is a clock read, not a table access.
       const isInstantParse =
-        method === "from" && receiver.getText(source) === "Temporal.Instant";
+        method === "from" &&
+        text.slice(receiver.start, receiver.end) === "Temporal.Instant";
       if ((method === "from" && !isInstantParse) || method === "update") {
         const table = node.arguments.at(0);
         if (
-          !table ||
-          !ts.isIdentifier(table) ||
-          (table.text !== "apikey" && table.text !== "member")
+          table?.type !== "Identifier" ||
+          (table.name !== "apikey" && table.name !== "member")
         ) {
           throw new TypeError(
             "Renewal database access is bounded to credential and membership rows",
           );
         }
-        tables.add(table.text);
+        tables.add(table.name);
         if (method === "update") {
-          if (table.text !== "apikey") {
+          if (table.name !== "apikey") {
             throw new TypeError("Renewal may only update the credential");
           }
           updates += 1;
         }
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+  });
   if (updates !== 1 || tables.size !== 2) {
     throw new TypeError(
       "Renewal must retain its membership read and single credential CAS",
@@ -823,4 +880,61 @@ describe("desktop proof replay ownership", () => {
       }),
     ).toEqual([1, 2, 3]);
   }, 60_000);
+});
+
+describe("organization opaque slug alphabet ownership", () => {
+  test("allows the alphabet in the owner and rejects it in a slug handler", async () => {
+    const door = OWNERSHIP.find(({ id }) => id === "organization-opaque-slug");
+    if (!door || door.enforcement.kind !== "literal-pattern") {
+      throw new TypeError(
+        "Opaque slug generation requires literal confinement",
+      );
+    }
+    const source =
+      'const OPAQUE_SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";';
+    const ruleOptionsForRoot = () => ({ entries: [door] });
+
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        sourcePath: "packages/auth-model/src/contract.ts",
+        ruleOptionsForRoot,
+      }),
+    ).toEqual([]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        sourcePath: "apps/api/src/handlers/organizations/slug/update.ts",
+        ruleOptionsForRoot,
+      }),
+    ).toEqual([1]);
+  });
+});
+
+describe("MCP OAuth channel literal ownership", () => {
+  test("allows channel literals in the owner and rejects them in unrelated web files", async () => {
+    const door = OWNERSHIP.find(({ id }) => id === "mcp-oauth-channel");
+    if (!door || door.enforcement.kind !== "literal-pattern") {
+      throw new TypeError("MCP OAuth channel requires literal confinement");
+    }
+    expect(door.owner).toContain("apps/web/src/lib/mcp-oauth-channel.ts");
+    const source = [
+      'const channel = new BroadcastChannel("mcp-oauth");',
+      'const messageType = "stll.mcp-oauth";',
+      'const refresh = new BroadcastChannel("mcp-oauth-refresh");',
+      'const refreshType = "stll.mcp-oauth-refresh";',
+    ].join("\n");
+    const ruleOptionsForRoot = () => ({ entries: [door] });
+
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        sourcePath: "apps/web/src/lib/mcp-oauth-channel.ts",
+        ruleOptionsForRoot,
+      }),
+    ).toEqual([]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        sourcePath: "apps/web/src/lib/unrelated-channel.ts",
+        ruleOptionsForRoot,
+      }),
+    ).toEqual([1, 2, 3, 4]);
+  });
 });

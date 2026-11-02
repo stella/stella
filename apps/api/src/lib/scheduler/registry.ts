@@ -21,18 +21,22 @@ import {
   reconcileBufferIntents,
 } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import {
-  REFRESH_CASE_LAW_BROWSE_FACETS_TASK,
-  refreshCaseLawBrowseFacetsTask,
-} from "@/api/lib/scheduler/tasks/case-law-browse-facet-refresh";
-import {
   RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
   reconcileCaseLawCorpusUploadIntentsTask,
 } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
 import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import {
+  RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK,
+  reconcileCaseLawDecisionIdentifiersTask,
+} from "@/api/lib/scheduler/tasks/case-law-decision-identifier-reconciliation";
+import {
   REPORT_CASE_LAW_FRESHNESS_TASK,
   reportCaseLawFreshnessTask,
 } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import {
+  FOLD_CASE_LAW_POPULATION_COUNTS_TASK,
+  foldCaseLawPopulationCountsTask,
+} from "@/api/lib/scheduler/tasks/case-law-population-fold";
 import {
   BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
   backfillCaseLawProvisionState,
@@ -171,6 +175,10 @@ import {
   reconcileReportExports,
 } from "@/api/lib/scheduler/tasks/report-export-reconcile";
 import {
+  SWEEP_REQUEST_RECEIPTS_TASK,
+  sweepRequestReceipts,
+} from "@/api/lib/scheduler/tasks/request-receipt-retention";
+import {
   RESET_REVIEW_ORGANIZATION_TASK,
   resetReviewOrganizationTask,
 } from "@/api/lib/scheduler/tasks/review-organization-reset";
@@ -237,6 +245,7 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [SWEEP_REQUEST_RECEIPTS_TASK]: sweepRequestReceipts,
   [RECONCILE_PUBLISHER_REMOVALS_TASK]: reconcilePublisherRemovalsTask,
   [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
@@ -265,8 +274,10 @@ const SCHEDULER_TASKS = {
   [RECONCILE_CASE_LAW_RAW_ROWS_TASK]: reconcileCaseLawRawRowsTask,
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
-  [REFRESH_CASE_LAW_BROWSE_FACETS_TASK]: refreshCaseLawBrowseFacetsTask,
+  [FOLD_CASE_LAW_POPULATION_COUNTS_TASK]: foldCaseLawPopulationCountsTask,
   [REPORT_CASE_LAW_FRESHNESS_TASK]: reportCaseLawFreshnessTask,
+  [RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK]:
+    reconcileCaseLawDecisionIdentifiersTask,
   [REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK]: refreshCaseLawSourceArrivalsTask,
   [REFRESH_LEGISLATION_FACETS_TASK]: refreshLegislationFacetsTask,
   [REFRESH_STATUTE_SITEMAP_SHARDS_TASK]: refreshStatuteSitemapShardsTask,

@@ -1,7 +1,4 @@
 import { afterEach, describe, expect, jest, test } from "bun:test";
-import fc from "fast-check";
-
-import { assertProperty } from "@stll/property-testing";
 
 import { createFetchWithTimeout } from "./index";
 
@@ -87,31 +84,6 @@ describe("response timeout policies", () => {
     expect(await result).toBe(reason);
   });
 
-  test("reports a deadline as a typed timeout reason", async () => {
-    jest.useFakeTimers();
-    const request = createFetchWithTimeout(async (_input, init) => {
-      await new Promise<never>((_resolve, reject) => {
-        init?.signal?.addEventListener(
-          "abort",
-          () =>
-            reject(
-              init.signal?.reason instanceof Error
-                ? init.signal.reason
-                : new DOMException("Fetch aborted", "AbortError"),
-            ),
-          { once: true },
-        );
-      });
-      throw new Error("unreachable");
-    });
-    const result = request("https://example.com", {
-      timeout: { type: "total", ms: 20 },
-    }).catch((error: unknown) => error);
-    await flush();
-    await advance(20);
-    expect(await result).toMatchObject({ name: "TimeoutError" });
-  });
-
   test("a transport response that wins a caller abort remains settled without affecting the next request", async () => {
     const controller = new AbortController();
     let requests = 0;
@@ -136,7 +108,7 @@ describe("response timeout policies", () => {
   });
 
   test("abort after an ignoring fetcher resolves cancels the response body", async () => {
-    for (const type of ["headers", "idle"] as const) {
+    for (const type of ["headers"] as const) {
       const controller = new AbortController();
       const reason = new DOMException("Caller aborted", "AbortError");
       let cancelledWith: unknown;
@@ -162,113 +134,7 @@ describe("response timeout policies", () => {
     }
   });
 
-  test("idle timeout preserves a completed body when consumption starts later", async () => {
-    jest.useFakeTimers();
-    const fixture = streamFixture();
-    fixture.chunk();
-    fixture.close();
-    const response = await fixture.request("https://example.com", {
-      timeout: { type: "idle", ms: 20 },
-    });
-    await flush();
-    await advance(100);
-    expect(fixture.signal()?.aborted).toBe(false);
-    expect(await response.text()).toBe("x");
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  test("idle timeout excludes consumer pauses while a body chunk is buffered", async () => {
-    jest.useFakeTimers();
-    const fixture = streamFixture();
-    fixture.chunk();
-    fixture.chunk();
-    fixture.close();
-    const response = await fixture.request("https://example.com", {
-      timeout: { type: "idle", ms: 20 },
-    });
-    const reader = response.body?.getReader();
-    expect(await reader?.read()).toEqual({
-      done: false,
-      value: new Uint8Array([120]),
-    });
-    await flush();
-    await advance(100);
-    expect(fixture.signal()?.aborted).toBe(false);
-    expect(await reader?.read()).toEqual({
-      done: false,
-      value: new Uint8Array([120]),
-    });
-    expect(await reader?.read()).toEqual({ done: true, value: undefined });
-    reader?.releaseLock();
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  test("idle timeout still aborts an upstream read pending after buffered chunks are consumed", async () => {
-    jest.useFakeTimers();
-    const fixture = streamFixture();
-    fixture.chunk();
-    const response = await fixture.request("https://example.com", {
-      timeout: { type: "idle", ms: 20 },
-    });
-    const reader = response.body?.getReader();
-    expect(await reader?.read()).toEqual({
-      done: false,
-      value: new Uint8Array([120]),
-    });
-    const pending = reader?.read().catch((error: unknown) => error);
-    await flush();
-    await advance(19);
-    expect(fixture.signal()?.aborted).toBe(false);
-    await advance(1);
-    expect(await pending).toMatchObject({ name: "TimeoutError" });
-    expect(fixture.signal()?.aborted).toBe(true);
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  test("idle wrapper preserves response status, headers and transport metadata", async () => {
-    jest.useFakeTimers();
-    const original = new Response("content", {
-      status: 206,
-      statusText: "Partial Content",
-      headers: { "content-type": "text/plain", "x-source": "upstream" },
-    });
-    Object.defineProperties(original, {
-      url: { value: "https://example.com/redirected" },
-      redirected: { value: true },
-      type: { value: "cors" },
-    });
-    const request = createFetchWithTimeout(async () => original);
-    const response = await request("https://example.com", {
-      timeout: { type: "idle", ms: 20 },
-    });
-    expect(response.status).toBe(original.status);
-    expect(response.statusText).toBe(original.statusText);
-    expect([...response.headers]).toEqual([...original.headers]);
-    expect(response.url).toBe(original.url);
-    expect(response.redirected).toBe(original.redirected);
-    expect(response.type).toBe(original.type);
-    expect(await response.text()).toBe("content");
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  test("response without a body leaves no idle timer", async () => {
-    jest.useFakeTimers();
-    const request = createFetchWithTimeout(
-      async () => new Response(null, { status: 204 }),
-    );
-    const response = await request("https://example.com", {
-      timeout: { type: "idle", ms: 20 },
-    });
-    expect(response.status).toBe(204);
-    expect(response.body).toBeNull();
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  for (const policy of [
-    { timeout: { type: "total", ms: 20 } },
-    { timeout: { type: "headers", ms: 20 } },
-    { timeout: { type: "idle", ms: 20 } },
-  ] as const) {
+  for (const policy of [{ timeout: { type: "headers", ms: 20 } }] as const) {
     const { type } = policy.timeout;
     test(`${type} policy clears its timer when the transport rejects before headers`, async () => {
       jest.useFakeTimers();
@@ -332,66 +198,7 @@ describe("response timeout policies", () => {
     expect(fixture.signal()?.aborted).toBe(false);
   });
 
-  for (const consumption of ["json", "stream"] as const) {
-    test(`total timeout aborts a stalled body during ${consumption} consumption and cancels the source`, async () => {
-      jest.useFakeTimers();
-      const fixture = streamFixture();
-      const response = await fixture.request("https://example.com", {
-        timeout: { type: "total", ms: 20 },
-      });
-      const result =
-        consumption === "json"
-          ? response.json().catch((error: unknown) => error)
-          : response.body
-              ?.getReader()
-              .read()
-              .catch((error: unknown) => error);
-      await advance(19);
-      expect(fixture.signal()?.aborted).toBe(false);
-      await advance(1);
-      const reason = await result;
-      expect(reason).toMatchObject({ name: "TimeoutError" });
-      expect(fixture.signal()?.reason).toBe(reason);
-      expect(fixture.cancelledWith()).toBe(reason);
-      expect(jest.getTimerCount()).toBe(0);
-    });
-  }
-
-  test("total timeout permits a body that completes before its deadline and clears the timer", async () => {
-    jest.useFakeTimers();
-    const fixture = streamFixture();
-    const response = await fixture.request("https://example.com", {
-      timeout: { type: "total", ms: 20 },
-    });
-    const result = response.json();
-    await advance(19);
-    fixture.chunk("0");
-    fixture.close();
-    expect(await result).toBe(0);
-    expect(fixture.signal()?.aborted).toBe(false);
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  test("caller abort during a total-timeout body read retains its reason", async () => {
-    jest.useFakeTimers();
-    const fixture = streamFixture();
-    const controller = new AbortController();
-    const reason = new DOMException("Caller cancelled", "AbortError");
-    const response = await fixture.request("https://example.com", {
-      timeout: { type: "total", ms: 20 },
-      signal: controller.signal,
-    });
-    const result = response.body
-      ?.getReader()
-      .read()
-      .catch((error: unknown) => error);
-    controller.abort(reason);
-    expect(await result).toBe(reason);
-    expect(fixture.cancelledWith()).toBe(reason);
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  for (const type of ["headers", "idle"] as const) {
+  for (const type of ["headers"] as const) {
     test(`${type} timeout aborts a request whose headers never arrive`, async () => {
       jest.useFakeTimers();
       const request = createFetchWithTimeout(
@@ -423,152 +230,4 @@ describe("response timeout policies", () => {
       expect(jest.getTimerCount()).toBe(0);
     });
   }
-
-  test("idle timeout permits a transfer longer than its window while chunks keep arriving", async () => {
-    jest.useFakeTimers();
-    const fixture = streamFixture();
-    const response = await fixture.request("https://example.com", {
-      timeout: { type: "idle", ms: 20 },
-    });
-    const result = response.text().then(
-      (text) => ({ type: "complete", text }) as const,
-      (error: unknown) => ({ type: "failed", error }) as const,
-    );
-    for (let index = 0; index < 6; index += 1) {
-      await advance(15);
-      expect(fixture.signal()?.aborted).toBe(false);
-      fixture.chunk();
-      await flush();
-    }
-    fixture.close();
-    expect(await result).toEqual({ type: "complete", text: "xxxxxx" });
-    expect(fixture.signal()?.aborted).toBe(false);
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  test("idle timeout aborts a stalled body and cancels the source", async () => {
-    jest.useFakeTimers();
-    const fixture = streamFixture();
-    const response = await fixture.request("https://example.com", {
-      timeout: { type: "idle", ms: 20 },
-    });
-    const result = response.text().then(
-      () => undefined,
-      (error: unknown) => error,
-    );
-    await advance(10);
-    fixture.chunk();
-    await flush();
-    await advance(19);
-    expect(fixture.signal()?.aborted).toBe(false);
-    await advance(1);
-    const reason = await result;
-    expect(reason).toMatchObject({ name: "TimeoutError" });
-    expect(fixture.signal()?.reason).toBe(reason);
-    expect(fixture.cancelledWith()).toBe(reason);
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  test("caller abort during a body read retains its reason and clears the timer", async () => {
-    jest.useFakeTimers();
-    const fixture = streamFixture();
-    const controller = new AbortController();
-    const reason = new DOMException("Caller cancelled", "AbortError");
-    const response = await fixture.request("https://example.com", {
-      timeout: { type: "idle", ms: 20 },
-      signal: controller.signal,
-    });
-    const result = response.text().then(
-      () => undefined,
-      (error: unknown) => error,
-    );
-    await flush();
-    controller.abort(reason);
-    expect(await result).toBe(reason);
-    expect(fixture.cancelledWith()).toBe(reason);
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  test("reader cancellation clears the idle timer and cancels the source", async () => {
-    jest.useFakeTimers();
-    const fixture = streamFixture();
-    const response = await fixture.request("https://example.com", {
-      timeout: { type: "idle", ms: 20 },
-    });
-    const reason = "Reader cancelled";
-    await response.body?.cancel(reason);
-    expect(fixture.cancelledWith()).toBe(reason);
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  test("body failure retains its reason and clears the idle timer", async () => {
-    jest.useFakeTimers();
-    const reason = new TypeError("Source failed");
-    const request = createFetchWithTimeout(
-      async () =>
-        new Response(
-          new ReadableStream({
-            start: (controller) => controller.error(reason),
-          }),
-        ),
-    );
-    const response = await request("https://example.com", {
-      timeout: { type: "idle", ms: 20 },
-    });
-    expect(await response.text().catch((error: unknown) => error)).toBe(reason);
-    expect(jest.getTimerCount()).toBe(0);
-  });
-
-  test("idle windows follow chunk gaps independently of total transfer duration", async () => {
-    jest.useFakeTimers();
-    await assertProperty(
-      "idle windows follow chunk gaps independently of total transfer duration",
-      fc.asyncProperty(
-        fc.array(fc.integer({ min: 1, max: 30 }), {
-          minLength: 1,
-          maxLength: 8,
-        }),
-        async (gaps) => {
-          const timersBefore = jest.getTimerCount();
-          const fixture = streamFixture();
-          const response = await fixture.request("https://example.com", {
-            timeout: { type: "idle", ms: 20 },
-          });
-          const result = response.text().then(
-            (text) => ({ type: "complete", text }) as const,
-            (error: unknown) => ({ type: "failed", error }) as const,
-          );
-          let chunks = 0;
-          let stalled = false;
-          for (const gap of gaps) {
-            await advance(gap);
-            if (gap >= 20) {
-              stalled = true;
-              break;
-            }
-            fixture.chunk();
-            chunks += 1;
-            await flush();
-          }
-          if (!stalled) {
-            fixture.close();
-          }
-          const outcome = await result;
-          if (stalled) {
-            expect(outcome).toMatchObject({
-              type: "failed",
-              error: { name: "TimeoutError" },
-            });
-          } else {
-            expect(outcome).toEqual({
-              type: "complete",
-              text: "x".repeat(chunks),
-            });
-          }
-          expect(jest.getTimerCount()).toBe(timersBefore);
-        },
-      ),
-      { numRuns: 50 },
-    );
-  });
 });

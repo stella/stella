@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "EU_ECJ",
+  "key": "eu-ecj",
+  "parserVersion": 21,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "The sentence introducing the ruling (On those grounds, THE COURT hereby rules:) loses the holding role where the Court sets it on several lines: the General Court's unmarked opening row and the oldest layout's bare paragraphs."
+  }
+}

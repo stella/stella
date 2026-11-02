@@ -81,6 +81,8 @@ const CONSUMERS = {
   // Crawler rules.
   "apps/web/src/public-crawl-policy.ts": "crawl",
   // Search, listing and browse.
+  "apps/api/src/handlers/case-law/decisions/filter-validation.ts": "search",
+  "apps/api/src/lib/case-law/filter-country-scope.ts": "search",
   "apps/api/src/handlers/case-law/decisions/list.ts": "search",
   "apps/api/src/handlers/case-law/decisions/search.ts": "search",
   "apps/api/src/handlers/case-law/decisions/search-expand.ts": "search",
@@ -98,9 +100,13 @@ const CONSUMERS = {
   "apps/api/src/handlers/legislation/resolve.ts": "search",
   "apps/api/src/handlers/legislation/search.ts": "search",
   "apps/api/src/handlers/legislation/search-schema.ts": "search",
+  "apps/api/src/lib/legal-search/legislation-matter-link-provisions.ts":
+    "search",
+  "apps/api/src/lib/legal-search/legislation-work-names.ts": "search",
   "apps/api/src/handlers/chat/chat-prompt.ts": "search",
   "apps/api/src/lib/observability/data-invariants/catalog.ts": "search",
   "apps/web/src/lib/case-law-route.ts": "search",
+  "apps/web/src/components/legal-citation-search.ts": "search",
   "apps/web/src/routes/law/index.tsx": "search",
   "apps/web/src/routes/law/cases/index.tsx": "search",
   "apps/web/src/routes/law/$country/statutes/index.tsx": "search",
@@ -142,6 +148,9 @@ const SQL_HELPER_CALLERS = {
   // Page reads and the SQL behind sitemaps.
   "apps/api/src/handlers/legislation/by-slug.ts": "pages",
   "apps/api/src/handlers/legislation/provision-preview.ts": "pages",
+  "apps/api/src/handlers/legislation/matter-links/link-writes.ts": "search",
+  "apps/api/src/lib/legal-search/legislation-matter-link-provisions.ts":
+    "search",
   "apps/api/src/lib/legal-search/statute-sitemap-shard-sql.ts": "pages",
   // Search, listing, facets, agent and reader surfaces.
   "apps/api/src/handlers/legislation/search.ts": "search",

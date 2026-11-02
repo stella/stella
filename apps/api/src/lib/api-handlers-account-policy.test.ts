@@ -88,7 +88,7 @@ test.each(["when-used", "always"] as const)(
           usesFeature,
           projectInputSchema: (schemas) => schemas,
         },
-      },
+      } satisfies HandlerConfig,
       async function* () {
         return Result.ok({ success: true });
       },
@@ -242,6 +242,58 @@ describe("session handler account policy", () => {
         expect(result).toMatchObject({
           code: 403,
           response: { code: "account_access_unavailable" },
+        });
+      } else {
+        expect(result).toEqual({ success: true });
+      }
+    },
+  );
+});
+
+describe("session capability account consent", () => {
+  test.each([
+    { scopes: ["stella:read", "stella:write"], calls: 0 },
+    { scopes: ["stella:organization_create"], calls: 1 },
+  ])(
+    "requires the declared account scope: $scopes",
+    async ({ scopes, calls: expectedCalls }) => {
+      const run = mock(() => ({ success: true }));
+      const definition = createSafeSessionHandler(
+        {
+          contract: "patch",
+          accountAccess: ACCOUNT_ACCESS.accountControl,
+          accountScope: "stella:organization_create",
+          access: "write",
+          mcp: {
+            type: "capability",
+            reason: "organization_management",
+            consumesServices: false,
+          },
+        },
+        async function* () {
+          return Result.ok(run());
+        },
+        { checkAccountOperation: () => Result.ok() },
+      );
+      const result = await definition.handler(
+        createTestHandlerContext<Parameters<typeof definition.handler>[0]>({
+          audit: NO_AUDIT,
+          safeDb: NO_DB,
+          scopedDb: NO_DB,
+          accountAuthority: {
+            credential: {
+              type: "oauth_client",
+              clientId: "account-consent-fixture",
+            },
+            grantedScopes: scopes,
+          },
+        }),
+      );
+      expect(run).toHaveBeenCalledTimes(expectedCalls);
+      if (expectedCalls === 0) {
+        expect(result).toMatchObject({
+          code: 403,
+          response: { code: "missing_scope" },
         });
       } else {
         expect(result).toEqual({ success: true });

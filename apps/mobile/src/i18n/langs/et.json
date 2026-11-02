@@ -22,7 +22,8 @@
     "toolUsed": "Kasutatud: {tool}",
     "threadTitle": "Vestlus",
     "threadLoadFailed": "Seda vestlust ei õnnestunud laadida.",
-    "threadEmptyDescription": "Selles vestluses pole veel sõnumeid.",
+    "greeting": "Millega soovite tegeleda?",
+    "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "sections": {
       "today": "Täna",
       "yesterday": "Eile",
@@ -39,6 +40,19 @@
     "answerNeedsInput": "See vastus vajab teie sisendit. Jätkake seda stella veebirakenduses.",
     "answerFailed": "Vastust ei õnnestunud lõpetada.",
     "composerMenu": "Ava manuste ja tööriistade menüü",
+    "attachFile": "Lisa fail",
+    "attachment": "Manus",
+    "fileTooLarge": "Fail ületab {maxSize} piirangu",
+    "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
+    "unsupportedFileType": "Toetamata failitüüp",
+    "uploadFailed": "Faili töötlemine ebaõnnestus",
+    "scanDocument": "Skanni dokument",
+    "removeAttachment": "Eemalda {name}",
+    "attachmentReading": "Ettevalmistamine…",
+    "attachmentUploading": "Üleslaadimine…",
+    "pickFailed": "Failivalijat ei õnnestunud avada. Proovi uuesti.",
+    "sendFileRefused": "Üht faili ei saanud saata, seega sõnumit ei saadetud. Eemalda fail ja proovi uuesti.",
+    "sendFileNotAnonymizable": "See vestlus on anonüümitud ja stella ei saanud üht faili anonüümida, seega midagi ei saadetud. Eemalda fail ja proovi uuesti.",
     "pickTitle": "Vali vestlus",
     "pickDescription": "Vali loendist lõim või alusta uut nupuga +."
   },
@@ -60,7 +74,8 @@
       "none": "Kuupäevata",
       "today": "Täna",
       "tomorrow": "Homme",
-      "nextWeek": "Nädala pärast"
+      "nextWeek": "Nädala pärast",
+      "pick": "Vali kuupäev"
     },
     "due": {
       "overdue": "Tähtaeg möödas",
@@ -75,7 +90,14 @@
     "statusFailed": "Ülesannet ei õnnestunud muuta. Proovige uuesti.",
     "pickTitle": "Vali ülesanne",
     "pickDescription": "Vali loendist ülesanne, et seda siin näha.",
-    "openMatter": "Ava asi"
+    "openMatter": "Ava asi",
+    "assignedTo": "Määratud",
+    "nobody": "Määramata",
+    "assign": "Määra",
+    "doneAssigning": "Valmis",
+    "someone": "Keegi",
+    "membersFailed": "Asja liikmeid ei õnnestunud laadida.",
+    "assignFailed": "Ülesannet ei õnnestunud määrata. Proovige uuesti."
   },
   "matters": {
     "emptyTitle": "Toimikuid veel pole",
@@ -119,13 +141,40 @@
     },
     "add": "Lisa",
     "scanDocument": "Skanni dokument",
-    "newTask": "Uus ülesanne"
+    "newTask": "Uus ülesanne",
+    "uploadDocument": "Laadi üles dokument",
+    "uploadFailed": "Dokumenti ei õnnestunud üles laadida. Proovige uuesti."
   },
   "entity": {
     "type": "Tüüp",
     "reference": "Viitenumber",
     "currentVersion": "Praegune versioon",
     "loadFailed": "Kirjet ei õnnestunud laadida."
+  },
+  "document": {
+    "title": "Dokument",
+    "failedTitle": "Dokumenti ei õnnestunud avada",
+    "failure": {
+      "offline": "Olete võrguühenduseta. Looge internetiühendus ja proovige uuesti.",
+      "noFile": "Sellel dokumendil pole veel faili.",
+      "failed": "Avamisel läks midagi valesti. Proovige hetke pärast uuesti.",
+      "unsupported": "Dokumentide avamiseks värskendage rakendust.",
+      "android": "Androidi rakenduses ei saa dokumente veel avada."
+    },
+    "retry": "Proovi uuesti",
+    "preview": "Ava eelvaade",
+    "previewDescription": "See fail avaneb süsteemi eelvaates.",
+    "unrendered": "Seda dokumenti ei saa siin kuvada, kuid süsteemi eelvaade võib selle avada.",
+    "details": "Üksikasjad",
+    "zoomOut": "Vähenda",
+    "zoomIn": "Suurenda",
+    "zoomFit": "Sobita laiusega",
+    "fit": "Laius",
+    "appearance": {
+      "system": "Välimus: automaatne",
+      "light": "Välimus: hele",
+      "dark": "Välimus: tume"
+    }
   },
   "signIn": {
     "beta": "Beeta",
@@ -153,7 +202,8 @@
     "server": "Server",
     "signOut": "Logi välja",
     "deleteAccount": "Kustuta konto",
-    "deleteAccountHint": "Avab teie konto veebis, kus saate selle koos kõigega, mis on teie oma, kustutada."
+    "deleteAccountHint": "Avab teie konto veebis, kus saate selle koos kõigega, mis on teie oma, kustutada.",
+    "signOutFailed": "Väljalogimist ei saanud lõpule viia. Proovige uuesti."
   },
   "header": {
     "search": "Otsing"
@@ -163,11 +213,11 @@
     "newest": "Uusimad lahendid",
     "noResults": "Miski ei vasta sõnadele, mida see otsing nõudis.",
     "noResultsHint": "Proovige vähem või teisi sõnu: mõisteid, mida kasutaks kohtulahend, mitte lauset, millega küsimus esitatakse.",
-    "unavailable": "Otsing pole ajutiselt saadaval",
     "retry": "Proovi uuesti",
     "headnote": "Lühikokkuvõte",
     "textUnavailable": "Selle lahendi teksti ei ole saadaval",
     "openSource": "Ava algallikas",
+    "openFailed": "Linki ei õnnestunud avada.",
     "loadFailed": "Kohtupraktikat ei õnnestunud laadida.",
     "share": "Jaga"
   },
@@ -179,6 +229,14 @@
   "writes": {
     "consentNeeded": "Et rakendusest muudatusi teha, vajab stella teie luba. Selle andmiseks logige uuesti sisse.",
     "signInAgain": "Logi uuesti sisse"
+  },
+  "loads": {
+    "offline": "stella ei saanud teie serveriga ühendust. Kontrollige ühendust ja proovige uuesti.",
+    "outdated": "Server vastas kujul, millest see rakenduse versioon aru ei saa. Uuendage rakendust või serverit, kui seda haldate.",
+    "consent": "See sisselogimine ei luba rakendusel seda lugeda. Logige uuesti sisse, et juurdepääs anda.",
+    "session": "Teie sisselogimine on aegunud. Logige uuesti sisse.",
+    "server": "Serveris tekkis viga (veakood {status}). Proovige hetke pärast uuesti.",
+    "refused": "Server keeldus päringust (veakood {status})."
   },
   "timers": {
     "title": "Taimerid",
@@ -213,7 +271,27 @@
     "matterTitle": "Asi",
     "uploadFailed": "Skanni ei õnnestunud üles laadida. Proovige uuesti.",
     "failedTitle": "Skannimine ebaõnnestus",
-    "failed": "Kaamera ei saanud skanni salvestada. Proovige uuesti."
+    "failed": "Kaamera ei saanud skanni salvestada. Proovige uuesti.",
+    "save": "Salvesta",
+    "saveTitle": "Salvesta asja juurde",
+    "share": "Jaga",
+    "addPages": "Lisa lehekülgi",
+    "page": "Lehekülg {number}",
+    "rotatePage": "Pööra lehekülge {number}",
+    "removePage": "Eemalda lehekülg {number}",
+    "deletePage": "Kustuta",
+    "movePage": "Liiguta lehekülge {number}",
+    "moveUp": "Liiguta üles",
+    "moveDown": "Liiguta alla",
+    "noPages": "Lehekülgi pole enam. Skannige juurde nupuga „Lisa lehekülgi“.",
+    "kilobytes": "{size} kB",
+    "megabytes": "{size} MB",
+    "pdfFailed": "PDF-i ei õnnestunud luua. Proovige uuesti.",
+    "shareFailed": "PDF-i ei õnnestunud jagada. Proovige uuesti.",
+    "discardTitle": "Kas loobuda sellest skannist?",
+    "discardMessage": "Selle leheküljed pole asja juurde salvestatud ja kustutatakse sellest seadmest.",
+    "discard": "Loobu",
+    "keepEditing": "Jätka muutmist"
   },
   "shortcuts": {
     "search": "Otsi",
@@ -225,6 +303,29 @@
   "palette": {
     "placeholder": "Otsi asju ja vestlusi või käivita käsk",
     "noResults": "Päringule „{query}” ei vasta midagi"
+  },
+  "search": {
+    "placeholder": "Otsi stellast",
+    "clear": "Tühjenda otsing",
+    "cancel": "Loobu",
+    "recent": "Hiljutised otsingud",
+    "clearRecent": "Tühjenda",
+    "hint": "Otsige toimikutest, dokumentidest, ülesannetest, vestlustest ja kohtupraktikast.",
+    "filters": "Filtrid",
+    "noResultsTitle": "Tulemusi pole",
+    "noResults": "Päringule „{query}” ei vasta midagi. Proovige teisi sõnu või eemaldage filter.",
+    "loadFailed": "Otsingut ei õnnestunud teha.",
+    "retry": "Proovi uuesti",
+    "type": {
+      "document": "Dokumendid",
+      "matter": "Toimikud",
+      "task": "Ülesanded",
+      "caseLaw": "Kohtupraktika",
+      "chat": "Vestlused",
+      "folder": "Kaustad",
+      "message": "E-kirjad",
+      "link": "Lingid"
+    }
   },
   "pane": {
     "showList": "Näita loendit",

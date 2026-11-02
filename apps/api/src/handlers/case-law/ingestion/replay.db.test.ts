@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -14,11 +15,6 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  SourceAdapter,
-  StoredRawReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   CASE_LAW_REPLAY_SCOPE,
   countReplayability,
@@ -44,7 +40,21 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
+import type {
+  SourceAdapter,
+  StoredRawReader,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import {
+  RAW_SOURCE_FAMILY,
+  sourceBinaryRef,
+} from "@/api/lib/legal-search/raw-source-storage";
+import {
+  decodeSourceRawEnvelopeObjects,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/source-raw-envelope";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // The walk's boundary is the thing under test. Postgres stores `timestamptz`
@@ -351,6 +361,117 @@ const stubAdapter = ({ reparse }: StubAdapterOptions): SourceAdapter => ({
 });
 
 describe("replay of a source", () => {
+  test("stored document replay uses the configured reader for both envelope and document objects", async () => {
+    const sourceId = await createSource();
+    const id = createSafeId<"caseLawDecision">();
+    const caseNumber = "C-objects/26";
+    await insertDecision({
+      sourceId,
+      id,
+      sub: 1,
+      caseNumber,
+      storedRaw: true,
+      sourceHash: "stored-metadata-hash",
+    });
+    await db
+      .update(caseLawDecisions)
+      .set({
+        sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      })
+      .where(eq(caseLawDecisions.id, id));
+    const envelopeKey = `case-law/raw/${sourceId}/${id}`;
+    const document = new TextEncoder().encode("stored document text");
+    const reference = sourceBinaryRef({
+      family: RAW_SOURCE_FAMILY.CASE_LAW,
+      sourceId,
+      documentId: id,
+      bytes: document,
+      contentType: "application/pdf",
+    });
+    const envelope = new TextEncoder().encode(
+      encodeSourceRawEnvelope(
+        { listing: JSON.stringify({ caseNumber }) },
+        { "document-pdf": reference },
+      ),
+    );
+    const objects = new Map([
+      [envelopeKey, envelope],
+      [reference.location, document],
+    ]);
+    const reads: string[] = [];
+    const ran = await replayCaseLawSource({
+      adapter: stubAdapter({
+        reparse: async (stored) => {
+          if (stored.readObject === undefined) {
+            return {
+              type: "rejected",
+              rejection: "incomplete-metadata",
+              detail: "The driver supplied no stored-object reader",
+            };
+          }
+          const documentRef = decodeSourceRawEnvelopeObjects(
+            new TextDecoder().decode(stored.raw),
+          )["document-pdf"];
+          if (documentRef === undefined) {
+            return {
+              type: "rejected",
+              rejection: "incomplete-metadata",
+              detail: "The stored envelope did not name its document",
+            };
+          }
+          const read = await stored.readObject(documentRef.location);
+          if (Result.isError(read) || read.value === null) {
+            return {
+              type: "rejected",
+              rejection: "incomplete-metadata",
+              detail:
+                "The configured reader did not return the stored document",
+            };
+          }
+          return {
+            type: "parsed",
+            result: plainTextIngestionResult({
+              caseNumber: stored.caseNumber,
+              court: stored.court,
+              country: "EU",
+              language: stored.language,
+              metadata: stored.metadata,
+              textFields: absentDecisionTextFields(
+                TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+              ),
+              rawHash: "stored-metadata-hash",
+              documentAst: EMPTY_AST,
+              fulltext: new TextDecoder().decode(read.value),
+            }),
+          };
+        },
+      }),
+      scopedDb,
+      sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      readStoredRaw: async (key) => {
+        reads.push(key);
+        return await Promise.resolve(objects.get(key) ?? null);
+      },
+      sourceLease: null,
+      bound: { type: "at-most", limit: 1 },
+      pageSize: 1,
+    });
+    if (ran.type !== "ran") {
+      throw new TypeError("Expected the stored-document adapter to run");
+    }
+    expect(reads).toEqual([envelopeKey, reference.location]);
+    expect(ran.report.outcomes[REPLAY_ROW_OUTCOME.WOULD_APPLY]).toBe(1);
+    expect(ran.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(0);
+    expect(ran.report.haltReason).toBeNull();
+    expect(
+      await db.query.caseLawDecisions.findFirst({
+        where: { id: { eq: id } },
+        columns: { fulltext: true },
+      }),
+    ).toEqual({ fulltext: null });
+  });
+
   test("an adapter that cannot re-parse a stored payload is refused, not run", async () => {
     const sourceId = await createSource();
     for (const sub of [1, 2, 3]) {
@@ -773,6 +894,55 @@ describe("replay of a source", () => {
     expect(ran.report.visited).toBe(1);
     expect(ran.report.resumeAfter).toBe(matchingId);
     expect(reads).toHaveLength(1);
+  });
+
+  test("a parser-version scope selects only the decisions that version wrote", async () => {
+    const sourceId = await createSource();
+    const writtenId = createSafeId<"caseLawDecision">();
+    const earlierId = createSafeId<"caseLawDecision">();
+    const laterId = createSafeId<"caseLawDecision">();
+    for (const [index, id] of [writtenId, earlierId, laterId].entries()) {
+      await insertDecision({
+        sourceId,
+        id,
+        sub: 21 + index,
+        caseNumber: `III. ÚS ${String(index + 1)}/2026`,
+        storedRaw: true,
+        sourceHash: `version-${String(index)}`,
+      });
+    }
+    for (const [id, version] of [
+      [writtenId, 12],
+      [earlierId, 11],
+      [laterId, 13],
+    ] as const) {
+      await db
+        .update(caseLawDecisions)
+        .set({ parserVersion: version })
+        .where(eq(caseLawDecisions.id, id));
+    }
+    const scope = {
+      type: "parser-version",
+      parserVersion: 12,
+    } as const satisfies CaseLawReplayScope;
+
+    const end = await selectScopeEnd({ scopedDb, sourceId, scope });
+    if (end === null) {
+      throw new TypeError("Expected the version scope to hold a row");
+    }
+    const selected = await selectReplayPage({
+      scopedDb,
+      sourceId,
+      scope,
+      after: null,
+      until: end,
+      limit: 10,
+    });
+    expect(selected.map(({ id }) => id)).toEqual([writtenId]);
+    expect(await countReplayability({ scopedDb, sourceId, scope })).toEqual({
+      storedLocally: 1,
+      needsRefetch: 0,
+    });
   });
 
   test("a dry run classifies each row by its re-parsed hash and writes nothing", async () => {

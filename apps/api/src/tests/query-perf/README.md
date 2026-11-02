@@ -46,6 +46,22 @@ it before closing the connection.
   report's scan cap, so a cap applied per generation instead of per run goes
   over the budget.
 
+- Global Case Law search (`case-law-search-fixture.ts`): 3,000 and 30,000
+  decisions with 200 fixed full-text matches and an 11-row page. Wide section
+  bodies exercise TOAST reads. The production statement must fit its buffer
+  budget at both sizes and preserve the same rows, fields and ordering as a
+  control that moves the page bound after enrichment. That control must exceed
+  the budget. Logs report both measurements and plans; the read cost must stay
+  stable as unrelated decisions grow.
+
+The corpus fixture uses 60,000-row generations and a 120,000-row twin (a 2x
+scale factor); equal reads at both sizes establish the bound independently of
+the total corpus size. The 10-second per-statement execution guard is below
+the API pool's `DATABASE_STATEMENT_TIMEOUT_MS` source in
+`apps/api/src/env-base-schema.ts`; the query-perf sessions install the same
+30-second upper bound explicitly. Shared buffers, rather than timing, remain
+the acceptance metric.
+
 The corpus profile also checks the gate itself on every run: the freshness
 report's former unbounded reads (`unbounded-freshness-fixture.ts`) must exceed
 its budget, and the census-readiness revision checks must fail the scale rule.
@@ -79,3 +95,19 @@ Declarations are checked without a database by
 every MCP tool has a budget or an entry in the shrink-only ledger
 `apps/api/src/lib/db/read-budgets-unmeasured.json`, and a job outside the shared
 load governor stays under the per-run page ceiling.
+
+Registry declarations live in one file per entry: read budgets and MCP tool
+assignments under `src/lib/db/*-entries/`, and measurements, profiles, and owner
+deadlines beside this file in `*-entries/`. Each file default-exports its entry;
+its filename is the registry key. Add the corresponding profile and deadline
+when adding a budget so total type coverage remains enforced.
+
+Run `bun scripts/db-registry-entries.ts` from the repository root after adding or
+removing entries, and commit the generated indices. Editing an existing entry
+does not change an index. The indices contain only re-exports (and the aggregate
+identity type projection). Independent additions at separate positions merge
+normally. If adjacent exports conflict, retain both entry modules and regenerate
+the index; never resolve generated exports by hand. Freshness and layout checks
+reject inline declarations and stale indices. Measurement arrays sort by budget
+id; lock ordering comes from declared ranks and chains. Filesystem enumeration
+never determines execution order.
