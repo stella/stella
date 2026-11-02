@@ -185,12 +185,15 @@ export const useDictation = (onText: (text: string) => void) => {
       }
       const { uri } = recorder;
       keep.current = false;
+      // Whether the closing cleaned up fully; with no one to tell, each step
+      // runs whatever the one before it did.
       void (async () => {
-        await Result.tryPromise(async () => await recorder.stop());
-        await Result.tryPromise(releaseMicrophone);
-        if (uri !== null) {
-          discardRecording(uri);
-        }
+        const stopped = await Result.tryPromise(
+          async () => await recorder.stop(),
+        );
+        const released = await Result.tryPromise(releaseMicrophone);
+        const removed = uri === null || discardRecording(uri);
+        return stopped.isOk() && released.isOk() && removed;
       })();
     },
     [recorder],
