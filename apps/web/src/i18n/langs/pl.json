@@ -658,6 +658,8 @@
       "noExpenses": "W tej sprawie nie ma zatwierdzonych, niezafakturowanych wydatków.",
       "noTime": "W tej sprawie nie ma zatwierdzonego, niezafakturowanego czasu.",
       "noVat": "Bez VAT",
+      "notReadyDescription": "Możesz teraz zapisać szkic i wystawić go po skonfigurowaniu.",
+      "notReadyTitle": "Jeszcze nie można wystawić",
       "nothingToBill": "Na razie nie ma czego fakturować. Zatwierdź wpisy czasu lub wydatki w tej sprawie, aby je rozliczyć.",
       "openInvoice": "Otwórz fakturę",
       "otherCurrency": "{count, plural, one {# pozycja jest zapisana} few {# pozycje są zapisane} many {# pozycji jest zapisanych} other {# pozycji jest zapisanych}} w innej walucie niż {currency} i czekają na osobną fakturę.",
@@ -2966,6 +2968,8 @@
       "invitationLimitReached": "Ta organizacja osiągnęła limit zaproszeń. Najpierw anuluj oczekujące zaproszenie.",
       "invitationOtherRecipient": "To zaproszenie wysłano na inny adres e-mail.",
       "invitationRoleNotAllowed": "Nie możesz zaprosić nikogo z tą rolą. Wybierz inną rolę.",
+      "invoiceNumberSeriesMissing": "Skonfiguruj domyślną serię numeracji faktur w ustawieniach organizacji w sekcji Serie numeracji, a następnie wystaw fakturę.",
+      "invoiceSellerProfileMissing": "Dodaj profil sprzedawcy w ustawieniach organizacji w sekcji Profile rozliczeniowe, a następnie wystaw fakturę.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
       "matterContactCapacityExceeded": "Ta sprawa zawiera więcej kontaktów, niż można wyświetlić. Usuń widoczne powiązania z kontaktami, aby wyświetlić pozostałe kontakty.",
@@ -5463,7 +5467,7 @@
         "workspace_member": "członek sprawy"
       },
       "billingDrafts": {
-        "description": "Twórz opisy pracy na podstawie wybranych aktywności i plików wiedzy kancelarii lub klienta. Każdy użytkownik wyraża również zgodę. Przed włączeniem projektów dołącz wytyczne kancelarii.",
+        "description": "Twórz opisy pracy na podstawie wybranych aktywności i plików wiedzy kancelarii lub klienta. Każdy użytkownik wyraża również zgodę. Po dołączeniu wytycznych kancelarii projekty są sprawdzane pod ich kątem.",
         "firm": "Wytyczne kancelarii",
         "ledes": "Fakturowanie elektroniczne (LEDES)",
         "title": "Projekty rozliczeń z AI"
@@ -6407,6 +6411,10 @@
     "deleteWorkspaceConfirmDescription": "Czy na pewno chcesz usunąć tę sprawę? Tej operacji nie można cofnąć.",
     "deletedItem": "Usunięto: {name}",
     "deletingWorkspace": "Usuwanie sprawy",
+    "documentSwitcher": {
+      "searchPlaceholder": "Znajdź dokument…",
+      "trigger": "Przełącz dokument"
+    },
     "documentsCount": "{count, plural, one {# dokument} few {# dokumenty} many {# dokumentów} other {# dokumentu}}",
     "dropToUploadFiles": "Upuść pliki, aby je przesłać",
     "duplicateMatter": "Duplikuj sprawę",
@@ -7047,7 +7055,7 @@
         "addAnother": "Dodaj kolejną kolumnę",
         "createFailed": "Nie udało się utworzyć kolumn",
         "createMany": "Utwórz {count} kolumn",
-        "createdMany": "Utworzono {count} kolumn",
+        "createdMany": "{count, plural, one {Utworzono # kolumnę} few {Utworzono # kolumny} many {Utworzono # kolumn} other {Utworzono # kolumny}}",
         "createdOne": "Utworzono kolumnę",
         "promptPlaceholder": "Co ta kolumna ma wyodrębnić? Aby użyć / i @, doprecyzuj ją w oknie dialogowym kolumny.",
         "title": "Dodaj kolumny"

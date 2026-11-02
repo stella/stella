@@ -34,6 +34,14 @@
     "composerPlaceholder": "stella fragen",
     "send": "Senden",
     "stop": "Stoppen",
+    "dictate": "Diktieren",
+    "dictationCancel": "Diktat abbrechen",
+    "dictationFinish": "Diktat beenden",
+    "dictationListening": "Hört zu… {elapsed} von {limit}",
+    "dictationTranscribing": "Wird transkribiert…",
+    "dictationDenied": "Zum Diktieren braucht stella das Mikrofon. Erlaube es in den Einstellungen.",
+    "dictationFailed": "Die Aufnahme konnte nicht transkribiert werden. Versuche es erneut.",
+    "dictationSilent": "Es wurde keine Sprache erkannt.",
     "sendFailed": "Ihre Nachricht konnte nicht gesendet werden. Versuchen Sie es erneut.",
     "answerWorking": "Wird bearbeitet…",
     "answerStopped": "Gestoppt.",
@@ -174,6 +182,17 @@
       "system": "Darstellung: automatisch",
       "light": "Darstellung: hell",
       "dark": "Darstellung: dunkel"
+    },
+    "edit": {
+      "saved": "Gespeichert",
+      "saving": "Wird gespeichert…",
+      "notSaved": "Noch nicht gespeichert",
+      "done": "Fertig",
+      "openFailed": "Dieses Dokument kann gerade nicht bearbeitet werden",
+      "takenOver": "Jemand anderes bearbeitet dieses Dokument jetzt. Ihre Änderungen seit dem letzten Speichern wurden nicht übernommen.",
+      "finishFailed": "Ihre Änderungen sind gespeichert, wurden aber noch nicht zu einer neuen Version. Tippen Sie erneut auf Fertig oder verlassen Sie das Dokument: Die nächste Bearbeitung setzt dort an.",
+      "stay": "Bleiben",
+      "leave": "Verlassen"
     }
   },
   "signIn": {
@@ -222,9 +241,7 @@
     "share": "Teilen"
   },
   "more": {
-    "soon": "Demnächst verfügbar",
-    "timers": "Timer",
-    "voiceInput": "Spracheingabe"
+    "timers": "Timer"
   },
   "writes": {
     "consentNeeded": "Damit die App Änderungen vornehmen kann, braucht stella Ihre Erlaubnis. Melden Sie sich erneut an, um sie zu erteilen.",

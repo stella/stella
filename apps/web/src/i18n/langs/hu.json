@@ -658,6 +658,8 @@
       "noExpenses": "Ebben az ügyben nincs jóváhagyott, még nem számlázott költség.",
       "noTime": "Ebben az ügyben nincs jóváhagyott, még nem számlázott idő.",
       "noVat": "ÁFA nélkül",
+      "notReadyDescription": "Most elmentheti piszkozatként, és kiállíthatja, amint ez be van állítva.",
+      "notReadyTitle": "Még nem állítható ki",
       "nothingToBill": "Még nincs mit számlázni. Hagyja jóvá az ügy időbejegyzéseit vagy költségeit, hogy kiszámlázhassa őket.",
       "openInvoice": "Számla megnyitása",
       "otherCurrency": "{count, plural, one {# tétel} other {# tétel}} {currency} helyett más pénznemben van rögzítve, ezek külön számlára várnak.",
@@ -2966,6 +2968,8 @@
       "invitationLimitReached": "Ez a szervezet elérte a meghívók korlátját. Először vonjon vissza egy függőben lévő meghívót.",
       "invitationOtherRecipient": "Ezt a meghívót egy másik e-mail-címre küldték.",
       "invitationRoleNotAllowed": "Ezzel a szerepkörrel nem hívhat meg senkit. Válasszon másik szerepkört.",
+      "invoiceNumberSeriesMissing": "Állítson be alapértelmezett számsorozatot a számlákhoz a szervezeti beállítások Számsorozatok részében, majd állítsa ki a számlát.",
+      "invoiceSellerProfileMissing": "Hozzon létre eladói profilt a szervezeti beállítások Számlázási profilok részében, majd állítsa ki a számlát.",
       "legalSourceEntityLimitReached": "Ez az ügy elérte az elemek korlátját, ezért a dokumentum nem hozható létre.",
       "legalSourceFilePropertyMissing": "Ebből az ügyből hiányzik egy fájltulajdonság, ezért a dokumentum nem hozható létre.",
       "matterContactCapacityExceeded": "Ez az ügy több kapcsolatot tartalmaz, mint amennyi megjeleníthető. A többi kapcsolat megjelenítéséhez szüntesse meg néhány látható kapcsolat ügyhöz rendelését.",
@@ -5463,7 +5467,7 @@
         "workspace_member": "ügy tagja"
       },
       "billingDrafts": {
-        "description": "Készítsen munkaleírásokat a kiválasztott tevékenységekből és az iroda vagy az ügyfél tudásfájljaiból. Minden felhasználó külön hozzájárulást ad. A vázlatok engedélyezése előtt csatolja az iroda irányelveit.",
+        "description": "Készítsen munkaleírásokat a kiválasztott tevékenységekből és az iroda vagy az ügyfél tudásfájljaiból. Minden felhasználó külön hozzájárulást ad. Az iroda irányelveinek csatolása után a vázlatokat ezek alapján ellenőrzi a rendszer.",
         "firm": "Irodai irányelvek",
         "ledes": "Elektronikus számlázás (LEDES)",
         "title": "AI számlázási vázlatok"
@@ -6232,7 +6236,7 @@
     "useAsMyLookupFormatDefault": "Beállítás saját alapértelmezettként",
     "useTemplate": "Sablon használata",
     "useTemplateHint": "Töltse ki a mezőket, majd töltse le a dokumentumot, vagy mentse egy ügyiratba.",
-    "usedTimes": "{count} alkalommal használva",
+    "usedTimes": "{count, plural, one {# alkalommal} other {# alkalommal}} használva",
     "validationErrors": "Kérjük, javítsa ki a kiemelt hibákat",
     "validationKrsFormat": "Adjon meg egy tízjegyű KRS-számot",
     "validationMaxLength": "Legfeljebb {max} karakter",
@@ -6407,6 +6411,10 @@
     "deleteWorkspaceConfirmDescription": "Biztosan törölni szeretné ezt az ügyet? Ez a művelet nem vonható vissza.",
     "deletedItem": "Törölve: {name}",
     "deletingWorkspace": "Ügy törlése folyamatban",
+    "documentSwitcher": {
+      "searchPlaceholder": "Dokumentum keresése…",
+      "trigger": "Dokumentum váltása"
+    },
     "documentsCount": "{count, plural, one {# dokumentum} other {# dokumentum}}",
     "dropToUploadFiles": "Húzza ide a fájlokat a feltöltéshez",
     "duplicateMatter": "Ügy másolása",
@@ -7047,7 +7055,7 @@
         "addAnother": "Másik oszlop hozzáadása",
         "createFailed": "Nem sikerült létrehozni az oszlopokat",
         "createMany": "{count} oszlop létrehozása",
-        "createdMany": "{count} oszlop létrehozva",
+        "createdMany": "{count, plural, one {# oszlop létrehozva} other {# oszlop létrehozva}}",
         "createdOne": "Oszlop létrehozva",
         "promptPlaceholder": "Mit nyerjen ki ez az oszlop? A / és a @ használatához pontosítsa az oszlop párbeszédpaneljén.",
         "title": "Oszlopok hozzáadása"

@@ -569,7 +569,7 @@ if (!databaseUrl || !runPostgresTests) {
           const memberId = Bun.randomUUIDv7();
           const workspaceId = createSafeId<"workspace">();
           const taskId = createSafeId<"entity">();
-          const contactId = createSafeId<"contact">();
+          let contactId = createSafeId<"contact">();
           const contactWrite =
             kind === "contact-create" || kind === "contact-update";
           const recordAuditEvent = createBackgroundAuditRecorder({
@@ -707,14 +707,13 @@ if (!databaseUrl || !runPostgresTests) {
                 );
               }
               if (kind === "contact-create") {
-                return await Result.gen(() =>
+                const result = await Result.gen(() =>
                   createContactHandler({
                     safeDb,
                     organizationId,
                     userId: actorUserId,
                     recordAuditEvent,
                     body: {
-                      id: contactId,
                       type: "person",
                       displayName: "Assignment contact",
                       originatingAttorneyId: leaverUserId,
@@ -722,6 +721,10 @@ if (!databaseUrl || !runPostgresTests) {
                     },
                   }),
                 );
+                if (Result.isOk(result)) {
+                  contactId = result.value.id;
+                }
+                return result;
               }
               return await Result.gen(() =>
                 updateContactHandler({

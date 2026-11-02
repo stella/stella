@@ -65,7 +65,6 @@ if (!runPostgresTests || databaseUrl === undefined) {
               taxIdScheme: "none",
               rows: [
                 {
-                  id: createSafeId<"contact">(),
                   type: "person",
                   displayName,
                   external: { source: "address-book", id: "contact-1" },

@@ -658,6 +658,8 @@
       "noExpenses": "No approved, unbilled expenses on this matter.",
       "noTime": "No approved, unbilled time on this matter.",
       "noVat": "No VAT",
+      "notReadyDescription": "You can save a draft now and issue it once this is set up.",
+      "notReadyTitle": "Not ready to issue",
       "nothingToBill": "Nothing to invoice yet. Approve time entries or expenses on this matter to bill them.",
       "openInvoice": "Open invoice",
       "otherCurrency": "{count, plural, one {# item is} other {# items are}} recorded in another currency than {currency} and stay unbilled for a separate invoice.",
@@ -2966,6 +2968,8 @@
       "invitationLimitReached": "This organization has reached its invitation limit. Cancel a pending invitation first.",
       "invitationOtherRecipient": "This invitation was sent to a different email address.",
       "invitationRoleNotAllowed": "You cannot invite someone with this role. Choose another role.",
+      "invoiceNumberSeriesMissing": "Set up a default invoice number series under Number series in organization settings, then issue the invoice.",
+      "invoiceSellerProfileMissing": "Add a seller profile under Billing profiles in organization settings, then issue the invoice.",
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.",
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.",
       "matterContactCapacityExceeded": "This matter has more contacts than can be displayed. Remove visible contact links to reveal the remaining contacts.",
@@ -5463,7 +5467,7 @@
         "workspace_member": "matter member"
       },
       "billingDrafts": {
-        "description": "Draft billing narratives from selected activity and firm or client knowledge files. Each user also gives consent. Attach firm guidelines before enabling drafts.",
+        "description": "Draft billing narratives from selected activity and firm or client knowledge files. Each user also gives consent. Drafts are checked against the guidelines once firm guidelines are attached.",
         "firm": "Firm guidelines",
         "ledes": "Electronic billing (LEDES)",
         "title": "AI billing drafts"
@@ -6407,6 +6411,10 @@
     "deleteWorkspaceConfirmDescription": "Are you sure you want to delete this matter? This action cannot be undone.",
     "deletedItem": "Deleted: {name}",
     "deletingWorkspace": "Deleting matter",
+    "documentSwitcher": {
+      "searchPlaceholder": "Find a document…",
+      "trigger": "Switch document"
+    },
     "documentsCount": "{count, plural, one {# document} other {# documents}}",
     "dropToUploadFiles": "Drop to upload files",
     "duplicateMatter": "Duplicate matter",
@@ -7047,7 +7055,7 @@
         "addAnother": "Add another column",
         "createFailed": "Couldn't create columns",
         "createMany": "Create {count} columns",
-        "createdMany": "Created {count} columns",
+        "createdMany": "{count, plural, one {Created # column} other {Created # columns}}",
         "createdOne": "Column created",
         "promptPlaceholder": "What should this column extract? Refine in the column dialog to use / and @.",
         "title": "Add columns"

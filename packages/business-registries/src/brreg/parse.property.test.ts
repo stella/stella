@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -71,7 +71,8 @@ const entity = fc
 test(
   "entity and search preserve identifiers, names and physical address precedence",
   () => {
-    fc.assert(
+    assertProperty(
+      "entity and search preserve identifiers, names and physical address precedence",
       fc.property(
         entity,
         registryExtras,
@@ -118,7 +119,7 @@ test(
           }
         },
       ),
-      propertyConfig({ seed: propertySeed(), numRuns: 80 }),
+      { seed: propertySeed(), numRuns: 80 },
     );
   },
   propertyTestTimeout(10_000),
@@ -127,7 +128,8 @@ test(
 test(
   "address atoms remain available even with sparse address lines",
   () => {
-    fc.assert(
+    assertProperty(
+      "address atoms remain available even with sparse address lines",
       fc.property(address, registryExtras, (raw, extras) => {
         const enriched = { extraFields: extras, ...raw };
         const parsed = expectRegistryOutcome(() => parseAddress(enriched));
@@ -140,7 +142,7 @@ test(
         expect(parsed.country).toBe(raw.land ?? null);
         expectNullableString(parsed.textAddress);
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 80 }),
+      { seed: propertySeed(), numRuns: 80 },
     );
   },
   propertyTestTimeout(10_000),
@@ -149,7 +151,8 @@ test(
 test(
   "lookup and search response fields accept domain values or registry errors",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "lookup and search response fields accept domain values or registry errors",
       fc.asyncProperty(entity, async (raw) => {
         const baseline = await expectRegistryResponse(raw, async () =>
           lookupByOrgnr("923609016", {
@@ -220,7 +223,7 @@ test(
           },
         );
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 5 }),
+      { seed: propertySeed(), numRuns: 5 },
     );
   },
   propertyTestTimeout(10_000),
