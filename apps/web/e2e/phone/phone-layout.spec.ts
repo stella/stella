@@ -2,6 +2,7 @@ import type { APIRequestContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import * as v from "valibot";
 
 import { apiPut } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
@@ -18,6 +19,7 @@ import {
   type SmokeRouteDef,
   type SmokeWorld,
 } from "../helpers/smoke-route-defs";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import { createTestWorkspace } from "../helpers/workspace";
 
 // Walks the route smoke table on the narrowest current iPhone (see
@@ -48,14 +50,16 @@ test.describe("pages fit a phone", () => {
       type: E2E_CLEANUP_TARGET_TYPE.WORKSPACE,
       id: workspace.id,
     });
-    const contactId = randomUUID();
-    await apiPut(apiRequest, "/contacts", {
-      id: contactId,
-      type: "person",
-      displayName: `Phone Layout ${contactId.slice(0, 8)}`,
-      firstName: "Phone",
-      lastName: "Layout",
-    });
+    // The API mints the contact's id, as route-smoke's contacts get theirs.
+    const { id: contactId } = v.parse(
+      v.object({ id: v.string() }),
+      await apiPut(apiRequest, "/contacts", {
+        type: "person",
+        displayName: `Phone Layout ${randomUUID().slice(0, 8)}`,
+        firstName: "Phone",
+        lastName: "Layout",
+      }),
+    );
     await registerDeferredE2eCleanup(testInfo.project.outputDir, {
       type: E2E_CLEANUP_TARGET_TYPE.CONTACT,
       id: contactId,
@@ -97,7 +101,7 @@ test.describe("pages fit a phone", () => {
         await page.goto(def.path(world), { waitUntil: "domcontentloaded" });
         await expect(page).not.toHaveURL(/\/auth(?:\/|$)/u);
         await expect(page.locator("main").first()).toBeVisible({
-          timeout: 30_000,
+          timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
         });
         await network.waitForQuiet({
           idleMs: NETWORK_QUIET_MS,

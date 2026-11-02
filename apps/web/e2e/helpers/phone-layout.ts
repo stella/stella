@@ -218,7 +218,9 @@ const collectPhoneLayoutProblems = (): string[] => {
       if (rect.width <= 1 || rect.height <= 1) {
         return [];
       }
-      if (element.closest("[aria-hidden='true'],[inert]") !== null) {
+      // A closed disclosure keeps its content as `hidden="until-found"`,
+      // which the browser does not render until find-in-page opens it.
+      if (element.closest("[aria-hidden='true'],[inert],[hidden]") !== null) {
         return [];
       }
       // Inherited visibility hides a whole region (for example a closed menu).
@@ -509,5 +511,20 @@ const collectPhoneLayoutProblems = (): string[] => {
   ];
 };
 
-export const findPhoneLayoutProblems = async (page: Page): Promise<string[]> =>
-  await page.evaluate(collectPhoneLayoutProblems);
+export const findPhoneLayoutProblems = async (
+  page: Page,
+): Promise<string[]> => {
+  // A sheet or panel still sliding in is not its final layout: measure once
+  // every finite animation has finished. Spinners and other endless loops
+  // never finish and are left to run.
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every(
+        (animation) =>
+          animation.playState !== "running" ||
+          animation.effect?.getComputedTiming().iterations === Infinity,
+      ),
+  );
+  return await page.evaluate(collectPhoneLayoutProblems);
+};
