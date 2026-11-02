@@ -38,9 +38,7 @@ pub enum Classification {
     activity_code: String,
   },
   #[serde(rename = "activity_group")]
-  Group {
-    activity_group: EntryGroup,
-  },
+  Group { activity_group: EntryGroup },
 }
 
 /// The contract's bound on a UTBMS code.

@@ -133,7 +133,7 @@ export const draftFailureKind = (cause: unknown): DraftFailureKind => {
 
 /** A note a guided draft raises against the firm's billing guidelines, with
  * the file and section it cites; `split` when splitting the entry fixes it. */
-export type GuidelineFlag = {
+type GuidelineFlag = {
   text: string;
   fileName: string;
   section: string;
