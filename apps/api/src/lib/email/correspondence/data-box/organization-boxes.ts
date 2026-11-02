@@ -6,6 +6,7 @@ import {
   ORGANIZATION_DATA_BOX_LIMIT,
   type UpdateOrganizationDataBoxesResponse,
 } from "@stll/api-contract/data-box";
+import { classifyFailure } from "@stll/errors";
 
 import type { Transaction } from "@/api/db/root";
 import { organizationSettings } from "@/api/db/schema";
@@ -150,15 +151,20 @@ export const organizationDataBoxesChangeResult = (
         }),
       );
     case "busy":
+      // The aggregate lock waits within its own budget; running out of it
+      // means another save holds the lock, which the caller retries.
       return Result.err(
-        new HandlerError({
-          status: 503,
-          code: "service_unavailable",
-          message:
-            "The organization's data boxes are being changed; retry shortly",
-          retryable: true,
-          retryAfterMs: DATA_BOX_RETRY_AFTER_MS,
-        }),
+        classifyFailure(
+          new HandlerError({
+            status: 503,
+            code: "service_unavailable",
+            message:
+              "The organization's data boxes are being changed; retry shortly",
+            retryable: true,
+            retryAfterMs: DATA_BOX_RETRY_AFTER_MS,
+          }),
+          "pg_lock_timeout_budgeted",
+        ),
       );
     default:
       saved satisfies never;
