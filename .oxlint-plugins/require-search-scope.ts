@@ -34,8 +34,8 @@ const DRIZZLE_SQL_IMPORTS = [
   { importedName: "sql", module: "drizzle-orm" },
 ] as const satisfies readonly ApprovedImport[];
 
-const CHEERIO_LOAD_IMPORTS = [
-  { importedName: "load", module: "cheerio" },
+const HTML_LOAD_IMPORTS = [
+  { importedName: "load", module: "@stll/html" },
 ] as const satisfies readonly ApprovedImport[];
 
 const ROOT_DB_IMPORTS = [
@@ -2960,7 +2960,7 @@ export default eslintCompatPlugin({
           const factoryCallee = resolveConstInitializer(factory.callee);
           return (
             isIdentifier(factoryCallee) &&
-            isApprovedImport(factoryCallee, CHEERIO_LOAD_IMPORTS)
+            isApprovedImport(factoryCallee, HTML_LOAD_IMPORTS)
           );
         };
 
