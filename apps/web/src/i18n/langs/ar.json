@@ -820,12 +820,14 @@
       "effectiveFrom": "ساري من",
       "effectiveRateRequired": "لا يوجد سعر سارٍ لهذا الملف القانوني وهذا الشخص وهذا التاريخ. أضف سعرًا أو سجّل الوقت كغير قابل للفوترة.",
       "effectiveTo": "ساري حتى",
+      "firstTableIsDefault": "أول جدول أسعار في الملف القانوني هو الجدول الافتراضي.",
       "hourlyRate": "السعر بالساعة",
       "logNonBillable": "تسجيل كغير قابل للفوترة",
       "noRateEntries": "لا توجد إدخالات أسعار بعد",
       "noRateFound": "لم يُضبط أي سعر",
       "noRateTables": "لا توجد جداول أسعار بعد",
       "ongoing": "مستمر",
+      "onlyDefaultApplies": "تُطبَّق الأسعار من الجدول الافتراضي للملف القانوني فقط.",
       "override": "تجاوز",
       "perHour": "/ساعة",
       "rateCount": "{count, plural, zero {لا أسعار} one {سعر واحد} two {سعران} few {# أسعار} many {# سعرًا} other {# سعر}}",
@@ -6428,7 +6430,8 @@
       "errored": "حدث خطأ",
       "formatNotSupported": "التنسيق غير مدعوم",
       "selectAValue": "اختر قيمة",
-      "selectValues": "اختر القيم"
+      "selectValues": "اختر القيم",
+      "wholeNumberOnly": "أدخل عددًا صحيحًا"
     },
     "files": {
       "addFilePropertyToUpload": "أضف خاصية ملف لرفع الملفات",

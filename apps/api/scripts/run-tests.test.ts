@@ -16,6 +16,9 @@ import {
   waitForFileContent,
 } from "@stll/property-testing/external-state";
 
+import { encodePlanFileList } from "../../../scripts/plan-output-codec";
+import { API_TEST_FILES_ENCODED_ENV } from "./test-file-shards";
+
 const apiRoot = path.resolve(import.meta.dirname, "..");
 
 test("the API runner starts children only through its process owner", () => {
@@ -91,7 +94,9 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
             ...process.env,
             CI: "true",
             API_TEST_ARTIFACT_DIR: path.join(directory, "diagnostics"),
-            API_TEST_FILES: "src/blocked.db.test.ts",
+            [API_TEST_FILES_ENCODED_ENV]: encodePlanFileList([
+              "src/blocked.db.test.ts",
+            ]),
             API_TEST_SHARD: "",
             API_TEST_DURATIONS_FILE: "",
             API_TEST_DURATIONS_HASH: "",
