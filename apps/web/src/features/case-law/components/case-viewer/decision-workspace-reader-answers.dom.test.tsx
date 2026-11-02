@@ -336,7 +336,12 @@ const fakeReaderServer = (initialAnswers: ReaderAnswer[] = [answer]) => {
         return Response.json({ message: "Not found" }, { status: 404 });
       }
       if (path.endsWith("/workspaces/navigation")) {
-        return Response.json({ items: [], nextCursor: null, workspaces: [] });
+        return Response.json({
+          items: [],
+          nextCursor: null,
+          workspaces: [],
+          features: { timeBilling: false },
+        });
       }
       if (path.endsWith("/organization-settings/ai-availability")) {
         return Response.json(aiAvailableResponse());
