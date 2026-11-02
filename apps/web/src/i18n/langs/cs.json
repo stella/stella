@@ -5464,7 +5464,7 @@
         "workspace_member": "člen spisu"
       },
       "billingDrafts": {
-        "description": "Navrhujte popisy práce z vybrané aktivity a znalostních souborů kanceláře nebo klienta. Každý uživatel také uděluje souhlas. Před zapnutím návrhů připojte pravidla kanceláře.",
+        "description": "Navrhujte popisy práce z vybrané aktivity a znalostních souborů kanceláře nebo klienta. Každý uživatel také uděluje souhlas. Po připojení pravidel kanceláře se návrhy kontrolují podle nich.",
         "firm": "Pravidla kanceláře",
         "ledes": "Elektronická fakturace (LEDES)",
         "title": "AI návrhy výkazů práce"
@@ -6408,6 +6408,10 @@
     "deleteWorkspaceConfirmDescription": "Opravdu chcete smazat tento spis? Tuto akci nelze vrátit.",
     "deletedItem": "Smazáno: {name}",
     "deletingWorkspace": "Mazání spisu",
+    "documentSwitcher": {
+      "searchPlaceholder": "Najít dokument…",
+      "trigger": "Přepnout dokument"
+    },
     "documentsCount": "{count, plural, one {# dokument} few {# dokumenty} other {# dokumentů}}",
     "dropToUploadFiles": "Přetáhněte soubory pro nahrání",
     "duplicateMatter": "Duplikovat spis",
