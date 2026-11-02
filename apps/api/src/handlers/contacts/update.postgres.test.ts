@@ -17,6 +17,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import updateContact from "./update";
 
@@ -126,9 +127,7 @@ if (!databaseUrl || !runPostgresTests) {
         });
       } finally {
         if (organizationInserted) {
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
         }
         if (userInserted) {
           await db.delete(user).where(eq(user.id, userId));
@@ -243,9 +242,7 @@ if (!databaseUrl || !runPostgresTests) {
         });
       } finally {
         if (organizationInserted) {
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
         }
         if (userInserted) {
           await db.delete(user).where(eq(user.id, userId));

@@ -11,6 +11,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { documentSourceSchema } from "@/api/lib/document-source";
 import { importDocumentSource } from "@/api/lib/uploads/import-origin";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -103,7 +104,7 @@ test("an imported document keeps its original dates and author", async () => {
   // The original modification date is provenance, not the version's clock.
   expect(version?.createdAt).not.toBe(version?.importOrigin?.modifiedAt);
 
-  await db.delete(organization).where(eq(organization.id, organizationId));
+  await deleteOrganizationsForTest(db, [organizationId]);
 });
 
 test("an import without dates or author keeps nulls, not guesses", () => {
