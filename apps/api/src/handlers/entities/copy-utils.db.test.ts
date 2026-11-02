@@ -29,7 +29,7 @@ import type {
 import {
   copyEntities,
   ENTITY_SNAPSHOT_COLUMNS,
-  EVERY_LIVE_VERSION_SELECT,
+  EVERY_VERSION_SELECT,
 } from "./copy-utils";
 import type {
   WritableEntitySnapshot,
@@ -150,6 +150,8 @@ const version = ({
   collaborationContributorUserIds: null,
   detectedLanguage: null,
   createdAt,
+  deletedAt: null,
+  deletedBy: null,
   fields: versionFields,
 });
 
@@ -579,7 +581,7 @@ test("a move requires a complete live version snapshot before writing target row
       const sourceSnapshot = await tx.query.entities.findMany({
         where: { id: { eq: document.entityId } },
         columns: ENTITY_SNAPSHOT_COLUMNS,
-        with: EVERY_LIVE_VERSION_SELECT,
+        with: EVERY_VERSION_SELECT,
         limit: 1,
       });
       return await copyEntities({
@@ -661,7 +663,7 @@ test("a move carries every version with its frozen stamp and verification code",
               sourceSnapshot: await tx.query.entities.findMany({
                 where: { id: { eq: document.entityId } },
                 columns: ENTITY_SNAPSHOT_COLUMNS,
-                with: EVERY_LIVE_VERSION_SELECT,
+                with: EVERY_VERSION_SELECT,
                 limit: 1,
               }),
             },
