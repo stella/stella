@@ -109,10 +109,9 @@ export default eslintCompatPlugin({
             if (node.parent.type !== "ObjectExpression") {
               return;
             }
-            const name =
-              node.computed === true
-                ? staticStringValue(node.key)
-                : getPropertyName(node.key);
+            const name = node.computed
+              ? staticStringValue(node.key)
+              : getPropertyName(node.key);
             if (name !== null && HANDLER_PROPS.has(name)) {
               context.report({
                 node,
