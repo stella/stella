@@ -1,5 +1,13 @@
 # @stll/ui
 
+## 0.64.0
+
+### Minor Changes
+
+- Add a searchable court-tier filter and a touch-size button variant. Preserve control labels inside fields and minimum touch targets across font sizes.
+
+- Add `MiddleTruncate` (`@stll/ui/middle-truncate`): one line of text that, when it does not fit, keeps its end and cuts its middle after a whole character, with the ellipsis flush against both sides. The tail starts on a word when one lies within reach of the cut, cuts never split a grapheme, and the cut follows the text direction.
+
 ## 0.63.0
 
 ### Minor Changes

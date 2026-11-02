@@ -1,5 +1,19 @@
 # @stll/cli
 
+## 6.6.0
+
+### Minor Changes
+
+- Contact create and import no longer accept a contact `id`; the server mints each contact's id and returns it.
+
+### Patch Changes
+
+- `entities.files.list` takes a `search` text that keeps only documents whose file name or name contains it, ignoring case and accents.
+
+- The `matters.update` capability accepts `billingNarrativeLanguage`, the BCP-47 language a matter's billing narratives are written in, or null to clear it.
+- Updated dependencies []:
+  - @stll/agent-input@0.4.0
+
 ## 6.5.1
 
 ### Patch Changes

@@ -511,7 +511,7 @@
       "fix": "maintenance",
       "behaviour": "Tool input under a union of arrays reads its items against the members' item schemas as alternatives, so a null one member declares is kept.",
       "status": "active",
-      "file": "src/lib/json-schema/null-optionals.ts",
+      "file": "../../packages/agent-input/src/null-optionals.ts",
       "search": "      itemSchemas.length === 1 ? itemSchemas[0] : { anyOf: itemSchemas };",
       "replace": "      itemSchemas[0];",
       "scenario": {
@@ -525,7 +525,7 @@
       "fix": "maintenance",
       "behaviour": "Tool input under a union reads its placeholders against the branches whose shape takes the value, so a branch the value cannot fit does not keep a null.",
       "status": "active",
-      "file": "src/lib/json-schema/null-optionals.ts",
+      "file": "../../packages/agent-input/src/null-optionals.ts",
       "search": "  const matched = fitting.length > 0 ? fitting : matching;",
       "replace": "  const matched = matching;",
       "scenario": {
@@ -539,8 +539,8 @@
       "fix": "maintenance",
       "behaviour": "A union branch whose object constant the tool input does not equal is not one it fits, so it keeps no null.",
       "status": "active",
-      "file": "src/lib/json-schema/null-optionals.ts",
-      "search": "    return isDeepStrictEqual(schema[\"const\"], value);",
+      "file": "../../packages/agent-input/src/null-optionals.ts",
+      "search": "    return sameJsonValue(schema[\"const\"], value);",
       "replace": "    return typeof value === \"object\" || schema[\"const\"] === value;",
       "scenario": {
         "file": "src/lib/json-schema/null-optionals.test.ts",
@@ -553,7 +553,7 @@
       "fix": "maintenance",
       "behaviour": "A closed union branch with patternProperties refuses a field no pattern names, so it keeps no null.",
       "status": "active",
-      "file": "src/lib/json-schema/null-optionals.ts",
+      "file": "../../packages/agent-input/src/null-optionals.ts",
       "search": "  if (matched) {",
       "replace": "  if (matched || isRecord(patternProperties)) {",
       "scenario": {
@@ -567,7 +567,7 @@
       "fix": "maintenance",
       "behaviour": "Only union array members that take the whole array lend their item schemas to reading its placeholders.",
       "status": "active",
-      "file": "src/lib/json-schema/null-optionals.ts",
+      "file": "../../packages/agent-input/src/null-optionals.ts",
       "search": "  const fitting = members.filter((member) => shapeTakes(member, value));",
       "replace": "  const fitting = members;",
       "scenario": {

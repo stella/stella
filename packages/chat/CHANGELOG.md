@@ -1,5 +1,12 @@
 # @stll/chat
 
+## 0.3.4
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/ui@0.64.0
+
 ## 0.3.3
 
 ### Patch Changes

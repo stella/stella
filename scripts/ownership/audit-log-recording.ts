@@ -25,6 +25,11 @@ export default {
         path: "apps/api/src/lib/db/service-client-audit.ts",
         reason: "Records transactional operator lifecycle events.",
       },
+      {
+        path: "apps/api/src/lib/db/organization-creation.ts",
+        reason:
+          "Records organization creation and evaluation grant account events in the insert transaction; the owner connection module imports it, so it stays environment-free.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;
