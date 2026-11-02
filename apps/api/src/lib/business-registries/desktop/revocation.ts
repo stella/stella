@@ -7,9 +7,13 @@ import { rootDb } from "@/api/db/root";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
+import {
+  DESKTOP_REGISTRY_KEY_CONFIG,
+  parseDesktopRegistryMetadata,
+} from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { releaseRevokedRunners } from "@/api/lib/desktop-runner/store";
 
 type RevokeDesktopRegistryCredentialOptions = {
   keyId: string;
@@ -49,10 +53,19 @@ export const revokeDesktopRegistryCredential = async ({
           desktopRegistryKeyOrganizationScope(organizationId),
         ),
       )
-      .returning({ id: apikey.id });
-    if (revoked.length === 0) {
+      .returning({ id: apikey.id, metadata: apikey.metadata });
+    const [key] = revoked;
+    if (key === undefined) {
       return;
     }
+    const metadata = parseDesktopRegistryMetadata(key.metadata);
+    // A key whose metadata no longer parses ends every runner of the account
+    // in this organization, so no socket outlives the key that opened it.
+    await releaseRevokedRunners(tx, {
+      userId,
+      organizationId,
+      ...(metadata.success ? { deviceJkt: metadata.output.deviceJkt } : {}),
+    });
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,
