@@ -500,7 +500,7 @@
     "aiDraftFailed": "stella AI tento popis nenavrhla.",
     "aiDraftEarlierEntries": "{count, plural, one {Nadväzuje na # skorší záznam} few {Nadväzuje na # skoršie záznamy} many {Nadväzuje na # skoršieho záznamu} other {Nadväzuje na # skorších záznamov}}",
     "aiDraftLabel": "AI",
-    "aiDraftDisclosure": "Návrhy AI sú odporúčania, ktoré stella vytvára z kontrolovaného záznamu, vašich skorších záznamov k veci a fakturačných pravidiel kancelárie, ak ich pridala. Každý záznam pred vytvorením skontrolujte.",
+    "aiDraftDisclosure": "Návrhy AI sú odporúčania, ktoré stella vytvára z kontrolovaného záznamu, vašich skorších záznamov v spise a fakturačných pravidiel kancelárie, ak ich pridala. Každý záznam pred vytvorením skontrolujte.",
     "billingDraftsTitle": "Návrhy stella AI",
     "billingDraftsGranted": "stella AI navrhuje popisy vašich časových záznamov z podrobností, ktoré každý záznam zobrazuje.",
     "billingDraftsRevoked": "stella AI navrhuje popisy až potom, ako ju povolíte pri časovom zázname.",

@@ -1055,7 +1055,6 @@ const BillingDraftConsentSettings = () => {
           onClick={() => {
             void setConsent("revoked");
           }}
-          size="sm"
           variant="outline"
         >
           {t("billingDraftsWithdraw")}

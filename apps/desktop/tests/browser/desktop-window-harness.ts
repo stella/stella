@@ -174,6 +174,16 @@ const openWindow = async (
       dictation_get_snapshot: () => ({ available: false }),
       is_activity_enabled: () => data.activity !== null,
       activity_get_settings: () => data.activity,
+      // Consent given, so Settings lays out its stella AI drafting rows too.
+      billing_draft_get_settings: () => ({
+        scopeKey: '["org_fixture","user_fixture"]',
+        settings: {
+          revision: "revision-1",
+          effectiveMode: "plain",
+          consent: "granted",
+          preference: null,
+        },
+      }),
     }),
   });
   await page.goto(path);

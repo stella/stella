@@ -95,6 +95,7 @@ describe("staging state", () => {
       '"on"',
       '{"unknown":"on"}',
       '{"corpus_index":"pending"}',
+      '{"corpus_reads":"off"}',
       '{"rollout":"off"}',
       '{"corpus_index":null}',
       '{"rollout":3}',

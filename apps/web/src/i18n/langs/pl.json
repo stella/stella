@@ -1456,10 +1456,12 @@
           "click": "Kliknij",
           "fill": "Wprowadź tekst",
           "open": "Otwórz witrynę",
+          "openNewTab": "Otwórz witrynę w nowej karcie",
           "pressKey": "Naciśnij klawisz",
           "select": "Wybierz opcję",
           "snapshot": "Odczytaj stronę",
-          "snapshotContinue": "Czytaj stronę dalej"
+          "snapshotContinue": "Czytaj stronę dalej",
+          "switchTab": "Przełącz na kartę"
         },
         "askAgain": "Pytaj ponownie",
         "autoApproveReads": "Automatycznie zatwierdzaj odczyt stron",
