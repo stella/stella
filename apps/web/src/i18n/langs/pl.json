@@ -5453,6 +5453,12 @@
         "workspace_contact": "kontakt w sprawie",
         "workspace_member": "członek sprawy"
       },
+      "billingDrafts": {
+        "description": "Twórz opisy pracy na podstawie wybranych aktywności i plików wiedzy kancelarii lub klienta. Każdy użytkownik wyraża również zgodę. Przed włączeniem projektów dołącz wytyczne kancelarii.",
+        "firm": "Wytyczne kancelarii",
+        "ledes": "Fakturowanie elektroniczne (LEDES)",
+        "title": "Projekty rozliczeń z AI"
+      },
       "documentProcessing": {
         "description": "Automatycznie rozpoznawaj tekst w zeskanowanych plikach PDF, aby można było przeszukiwać ich zawartość.",
         "title": "Rozpoznawanie tekstu dokumentów",

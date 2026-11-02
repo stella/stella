@@ -264,6 +264,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     nativeRuleId("menu"),
     "a labelled group inside Menu; native menus are the menu rule's",
   ),
+  "middle-truncate": noNative(
+    "a truncated name; plain text cut at its end is the other rule's",
+  ),
   "number-input": native("NumberInput from @stll/ui/number-input", {
     roles: ["spinbutton"],
     inputTypes: ["number"],

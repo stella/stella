@@ -5453,6 +5453,12 @@
         "workspace_contact": "contact du dossier",
         "workspace_member": "membre du dossier"
       },
+      "billingDrafts": {
+        "description": "Rédigez les descriptions à partir des activités sélectionnées et des fichiers de connaissances du cabinet ou du client. Chaque utilisateur donne aussi son consentement. Joignez les directives du cabinet avant d’activer les brouillons.",
+        "firm": "Directives du cabinet",
+        "ledes": "Facturation électronique (LEDES)",
+        "title": "Brouillons de facturation par IA"
+      },
       "documentProcessing": {
         "description": "Reconnaissez automatiquement le texte des PDF numérisés afin de pouvoir rechercher leur contenu.",
         "title": "Reconnaissance de texte des documents",

@@ -150,6 +150,7 @@
       "react-native": "./src/components/loader.native.tsx",
       "default": "./src/components/loader.tsx"
     },
+    "./middle-truncate": "./src/components/middle-truncate.tsx",
     "./skeleton": "./src/components/skeleton.tsx",
     "./status-mark": "./src/components/status-mark.tsx",
     "./swap-text": "./src/components/swap-text.tsx",
@@ -315,6 +316,7 @@
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "bun-types": "catalog:",
+    "fast-check": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "tailwindcss": "catalog:",
