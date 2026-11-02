@@ -1101,7 +1101,6 @@ const handleSaveContactTool: TypedMcpToolHandler<
         userId: context.userId,
         recordAuditEvent: context.recordAuditEvent,
         body: {
-          id: createSafeId<"contact">(),
           type,
           displayName,
           ...projectContactCreateFields(input),
