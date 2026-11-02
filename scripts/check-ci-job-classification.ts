@@ -405,7 +405,9 @@ const usageError = () =>
     message:
       "usage: bun scripts/check-ci-job-classification.ts [--check|--write|--pre-push] [ROOT] [--base REF] [--group N:SHA,...] [--json]",
   });
-const parsePositional = (args: string[]): Omit<CliOptions, "mode"> => {
+const parsePositional = (
+  args: string[],
+): Omit<CliOptions, "mode" | "group" | "json"> => {
   const [first, second, third, ...rest] = args;
   if (rest.length > 0) {
     throw usageError();
