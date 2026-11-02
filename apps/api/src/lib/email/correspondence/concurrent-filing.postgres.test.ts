@@ -23,6 +23,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -254,9 +255,7 @@ if (!databaseUrl || !runPostgresTests) {
           await adminDb.execute(
             sql`DROP FUNCTION IF EXISTS ${sql.identifier(functionName)}()`,
           );
-          await adminDb
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(adminDb, [organizationId]);
           for (const userId of userIds) {
             await adminDb.delete(user).where(eq(user.id, userId));
           }

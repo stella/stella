@@ -28,6 +28,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -170,9 +171,7 @@ const seedMatter = async (
     })),
   );
   const cleanUp = async () => {
-    await adminDb
-      .delete(organization)
-      .where(eq(organization.id, fixture.organizationId));
+    await deleteOrganizationsForTest(adminDb, [fixture.organizationId]);
     await adminDb.delete(user).where(eq(user.id, fixture.userId));
   };
   return { adminDb, fixture, sources, cleanUp };

@@ -41,6 +41,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -133,7 +134,7 @@ if (!databaseUrl || !runPostgresTests) {
       ids.userA1,
     );
     gated.cleanUp(async () => {
-      await testDb.delete(organization).where(eq(organization.id, ids.orgA));
+      await deleteOrganizationsForTest(testDb, [ids.orgA]);
       for (const id of [ids.userA1, ids.userAdmin]) {
         await testDb.delete(user).where(eq(user.id, id));
       }

@@ -33,6 +33,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -74,7 +75,7 @@ if (!databaseUrl || !enabled) {
       },
     });
     gated.cleanUp(async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       for (const id of [userId, assigneeId]) {
         await db.delete(user).where(eq(user.id, id));
       }

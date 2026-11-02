@@ -25,6 +25,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -103,7 +104,7 @@ if (!databaseUrl || !enabled) {
     });
 
     gated.cleanUp(async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(eq(user.id, userId));
     });
 
