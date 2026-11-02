@@ -620,6 +620,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/collation/src/index.ts",
     "packages/portable-path/src/index.ts",
     "packages/scripts/src/generated-artifact-format.ts",
+    "packages/scripts/src/syntax-tree.ts",
     "scripts/generated-artifacts.ts",
   ],
   selfhost: [
