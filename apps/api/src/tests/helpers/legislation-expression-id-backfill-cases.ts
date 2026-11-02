@@ -25,8 +25,8 @@ import { planCorpusDocumentWrite } from "@/api/lib/legal-search/corpus-storage";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
-  SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "@/api/lib/scheduler/backfill-config";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { runJob } from "@/api/lib/scheduler/runner";
@@ -491,7 +491,7 @@ export const registerExpressionBackfillCases = ({
         name: SCHEDULER_BACKFILL_IDS.expressionIds,
         cursor: documentId(15),
         batch: {
-          ...initialBatchState(SCHEDULER_BACKFILL_CONFIG),
+          ...initialBatchState(schedulerBackfillConfig()),
           size: 1,
           sleepMs: 10_000,
         },

@@ -13,6 +13,7 @@
  */
 
 import { STATUTE_ACTS } from "@stll/api-contract/statute-acts";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
 import { priorWindowed, succession } from "./provision-citation-profile";
 import type {
@@ -984,7 +985,7 @@ export const CZ_PROFILE = {
   maxActGapChars: 60,
 
   anchor: {
-    join: "-",
+    join: E_SBIRKA_ANCHORS.segmentSeparator,
     render: {
       section: (value) => `par_${value}`,
       article: (value) => `cl_${value}`,
