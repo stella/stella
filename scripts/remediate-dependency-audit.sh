@@ -20,7 +20,10 @@ bun --no-env-file scripts/dependency-audit.ts --prepare-remediation
 bun --no-env-file scripts/dependency-audit.ts --prune-baseline
 # The writers serialize plain JSON; the repository formatter owns the layout
 # the format check enforces on every pull request.
-mapfile -t written < <(git diff --name-only -- scripts/dependency-audit-baseline.json ':(glob)**/package.json')
+written=()
+while IFS= read -r file; do
+  written+=("$file")
+done < <(git diff --name-only -- scripts/dependency-audit-baseline.json ':(glob)**/package.json')
 if (( ${#written[@]} > 0 )); then
   bun fmt "${written[@]}"
 fi
