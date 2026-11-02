@@ -591,6 +591,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/visual-preview-scope.ts",
   ],
   "ci-checks-rest/Test public document fetch": [
+    "packages/property-testing/src/external-state.ts",
     "scripts/fetch-public-documents.test.ts",
   ],
   "ci-checks-rest/Test migration identity logic": [

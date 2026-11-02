@@ -34,6 +34,14 @@
     "composerPlaceholder": "Küsi stellalt",
     "send": "Saada",
     "stop": "Peata",
+    "dictate": "Dikteeri",
+    "dictationCancel": "Tühista dikteerimine",
+    "dictationFinish": "Lõpeta dikteerimine",
+    "dictationListening": "Kuulan… {elapsed} / {limit}",
+    "dictationTranscribing": "Transkribeerin…",
+    "dictationDenied": "Dikteerimiseks on vaja mikrofoni. Luba see stellale seadetes.",
+    "dictationFailed": "Salvestist ei õnnestunud transkribeerida. Proovi uuesti.",
+    "dictationSilent": "Kõnet ei kuuldud.",
     "sendFailed": "Sõnumit ei õnnestunud saata. Proovige uuesti.",
     "answerWorking": "Töötan…",
     "answerStopped": "Peatatud.",
@@ -222,9 +230,7 @@
     "share": "Jaga"
   },
   "more": {
-    "soon": "Tulemas peagi",
-    "timers": "Taimerid",
-    "voiceInput": "Häälsisestus"
+    "timers": "Taimerid"
   },
   "writes": {
     "consentNeeded": "Et rakendusest muudatusi teha, vajab stella teie luba. Selle andmiseks logige uuesti sisse.",

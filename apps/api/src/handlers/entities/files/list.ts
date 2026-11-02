@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
@@ -17,6 +17,7 @@ import {
   entityFileListCursorCondition,
   entityListTimestampCursorExpr,
 } from "@/api/lib/entities/list-cursor";
+import { findTermMatches } from "@/api/lib/entity-filters";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -33,6 +34,16 @@ const listFilesQuerySchema = v.object({
     ),
   ),
   cursor: v.optional(paginationCursorSchema()),
+  search: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(LIMITS.searchQueryMaxLength),
+      v.description(
+        "Keep only documents whose file name or name contains this text, " +
+          "ignoring case and accents. Blank lists every document.",
+      ),
+    ),
+  ),
 });
 type ListFilesQuery = v.InferOutput<typeof listFilesQuerySchema>;
 
@@ -52,6 +63,16 @@ const listFilesHandler = async function* ({
   );
   const cursor = decodeEntityFileListCursor(query.cursor);
   const cursorCondition = entityFileListCursorCondition(cursor);
+  const search = query.search?.trim() ?? "";
+  // Literal containment through `search_fold`, the comparison a table find
+  // makes, so a typed `%` or `_` matches itself.
+  const searchCondition =
+    search === ""
+      ? undefined
+      : or(
+          findTermMatches(sql`${fields.content}->>'fileName'`, search),
+          findTermMatches(sql`${entities.name}`, search),
+        );
   const rows = yield* Result.await(
     safeDb((tx) =>
       tx
@@ -77,6 +98,7 @@ const listFilesHandler = async function* ({
             eq(entities.workspaceId, workspaceId),
             eq(entities.kind, "document"),
             ...(cursorCondition ? [cursorCondition] : []),
+            ...(searchCondition ? [searchCondition] : []),
           ),
         )
         .orderBy(asc(entities.createdAt), asc(entities.id), asc(fields.id))
@@ -134,7 +156,8 @@ const config = {
   description:
     "List every document in a matter that has an uploaded file, oldest first " +
     "with cursor pagination, each with its entity id, name, parent folder, " +
-    "file field id, file name, and media type. Documents without a file, " +
+    "file field id, file name, and media type. search narrows the list to " +
+    "documents whose file name or name contains the text. Documents without a file, " +
     "and folders and tasks, are left out; use entities.list for the full " +
     "table with column values.",
   permissions: { workspace: ["read"] },

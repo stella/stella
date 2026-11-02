@@ -54,7 +54,7 @@ const built = async (
 
 const project = async (sourceRaw: string) =>
   plKisRetention.type === "checked"
-    ? await plKisRetention.project(sourceRaw)
+    ? await plKisRetention.project(sourceRaw, { sourceRawObjects: {} })
     : panic("pl-kis is a checked source");
 
 // The adapter's tests capture one document per included category, except the
