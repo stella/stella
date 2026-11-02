@@ -1,4 +1,4 @@
-import { panic, Result, TaggedError } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 
 import type { Verdict } from "@stll/db-load-gate/health";
@@ -27,10 +27,6 @@ export const BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK =
 
 const DEFAULT_PAGE_ROWS = 1000;
 
-/** Another runner owns the job: the final checkpoint must not commit. */
-class ParsedInputStateBackfillLeaseLost extends TaggedError(
-  "ParsedInputStateBackfillLeaseLost",
-)<{ message: string }> {}
 const CONTINUATION_DELAY_MS = 1000;
 
 type BackfillOptions = {
@@ -84,6 +80,8 @@ export const createCaseLawParsedInputStateBackfill =
       reporting: "changes",
       statementTimeoutPolicy: "fail",
     });
+    // Set inside the step, so read through the object, not a narrowed local.
+    const retirement = { leaseLost: false };
     const settled = await Result.tryPromise({
       try: async () => {
         try {
@@ -117,10 +115,10 @@ export const createCaseLawParsedInputStateBackfill =
                 )
                 .returning({ id: schedulerJobs.id });
               if (retired.length === 0) {
-                throw new ParsedInputStateBackfillLeaseLost({
-                  message:
-                    "Parsed input state backfill lost its scheduler lease before retiring",
-                });
+                // Another runner owns the job now: completion stays unrecorded
+                // and the walk keeps its cursor for the lease holder.
+                retirement.leaseLost = true;
+                return { cursor, done: false, value: 0 };
               }
               return { cursor: null, done: true, value: 0 };
             }
@@ -163,20 +161,19 @@ export const createCaseLawParsedInputStateBackfill =
         );
         return Result.ok();
       }
-      if (settled.error instanceof ParsedInputStateBackfillLeaseLost) {
-        // The rolled-back step left the cursor and job for the lease holder.
-        logger.info(
-          "scheduler.case_law_parsed_input_state_backfill_lease_lost",
-          {},
-        );
-        return Result.ok();
-      }
       return Result.err(
         new SchedulerTaskFailure({
           message: "Case-law parsed input state backfill failed",
           cause: settled.error,
         }),
       );
+    }
+    if (retirement.leaseLost) {
+      logger.info(
+        "scheduler.case_law_parsed_input_state_backfill_lease_lost",
+        {},
+      );
+      return Result.ok();
     }
     logger.info("scheduler.case_law_parsed_input_state_backfilled", {
       "parsedInputState.updated": settled.value.value,
