@@ -52,6 +52,8 @@
     "scripts/check-ci-event-policy.test.ts",
     "scripts/check-ci-event-policy.ts",
     "scripts/check-ci-job-classification.ts",
+    "scripts/check-ci-job-names.test.ts",
+    "scripts/check-ci-job-names.ts",
     "scripts/check-ci-network-steps.test.ts",
     "scripts/check-ci-network-steps.ts",
     "scripts/check-ci-runner-tools.test.ts",

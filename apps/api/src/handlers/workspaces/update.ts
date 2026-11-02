@@ -25,7 +25,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  defaultVarcharSchema,
+  displayNameSchema,
   resourceIdSchema,
   userIdSchema,
 } from "@/api/lib/custom-schema";
@@ -39,7 +39,7 @@ import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repai
 
 const updateWorkspaceBodySchema = v.object({
   billingNarrativeLanguage: v.optional(narrativeLanguageSchema),
-  name: v.optional(defaultVarcharSchema),
+  name: v.optional(displayNameSchema()),
   clientId: v.optional(resourceIdSchema("contact")),
   expectedClientId: v.optional(v.nullable(resourceIdSchema("contact"))),
   reference: v.optional(v.pipe(v.string(), v.maxLength(64), v.minLength(1))),

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
-import { load } from "cheerio";
 import * as v from "valibot";
 
+import { load } from "@stll/html";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 

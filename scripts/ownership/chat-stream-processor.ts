@@ -14,6 +14,12 @@ export default {
     kind: "import",
     specifiers: ["@tanstack/ai"],
     names: ["StreamProcessor"],
-    allowed: [],
+    allowed: [
+      {
+        path: "packages/agent-engine/src/harness/stream-chunks.test.ts",
+        reason:
+          "Folds local harness chunks and cloud translator chunks for the same turn to prove they persist the same message; it never stores one.",
+      },
+    ],
   },
 } as const satisfies OwnershipEntry;
