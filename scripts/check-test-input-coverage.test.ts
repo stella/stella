@@ -197,12 +197,22 @@ describe("target classification", () => {
 
   test("dotenv fixture names do not become source reads when local env exists", () => {
     const names = [".env", ".env.local", ".env.test", ".env.production"];
+    // Directory listings are cached per path, so the env files exist in a
+    // root of their own before the first lookup, whatever order tests run in.
+    const envRoot = createRoot({
+      files: Object.fromEntries(names.map((name) => [name, "LOCAL_FIXTURE=1"])),
+      tasks: {},
+    });
+    const classifyInEnvRoot = (candidate: string) =>
+      classifyTarget({
+        candidate: { fromGlob: false, path: candidate },
+        packageDir: "apps/alpha",
+        root: envRoot,
+        testDir: "apps/alpha/src",
+      });
     for (const name of names) {
-      write(root, name, "LOCAL_FIXTURE=1");
-    }
-    for (const name of names) {
-      expect(classify(name).type).toBe("absent");
-      expect(classify(`../../../${name}`)).toEqual({
+      expect(classifyInEnvRoot(name).type).toBe("absent");
+      expect(classifyInEnvRoot(`../../../${name}`)).toEqual({
         target: name,
         type: "repository",
       });
