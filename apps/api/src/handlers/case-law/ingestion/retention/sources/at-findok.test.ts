@@ -47,7 +47,7 @@ const project = async (sourceRaw: string) => {
   if (atFindokRetention.type !== "checked") {
     throw new Error("Findok decisions are checked");
   }
-  return await atFindokRetention.project(sourceRaw);
+  return await atFindokRetention.project(sourceRaw, { sourceRawObjects: {} });
 };
 
 const expectRetained = async (decision: IngestionResult) => {

@@ -5453,6 +5453,12 @@
         "workspace_contact": "toimiku kontakt",
         "workspace_member": "toimiku liige"
       },
+      "billingDrafts": {
+        "description": "Koostage töö kirjeldused valitud tegevustest ning büroo või kliendi teadmiste failidest. Iga kasutaja annab ka oma nõusoleku. Kui büroo juhised on lisatud, kontrollitakse mustandeid nende alusel.",
+        "firm": "Büroo juhised",
+        "ledes": "Elektrooniline arveldamine (LEDES)",
+        "title": "Tehisintellekti arveldusmustandid"
+      },
       "documentProcessing": {
         "description": "Tuvastage skannitud PDF-ides tekst automaatselt, et nende sisu oleks otsitav.",
         "title": "Dokumenditeksti tuvastamine",
@@ -6392,6 +6398,10 @@
     "deleteWorkspaceConfirmDescription": "Kas olete kindel, et soovite selle toimiku kustutada? Seda toimingut ei saa tagasi võtta.",
     "deletedItem": "Kustutatud: {name}",
     "deletingWorkspace": "Toimiku kustutamine",
+    "documentSwitcher": {
+      "searchPlaceholder": "Otsi dokumenti…",
+      "trigger": "Vaheta dokumenti"
+    },
     "documentsCount": "{count, plural, one {# dokument} other {# dokumenti}}",
     "dropToUploadFiles": "Lohistage failid üleslaadimiseks siia",
     "duplicateMatter": "Dubleeri toimik",

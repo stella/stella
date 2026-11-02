@@ -5453,6 +5453,12 @@
         "workspace_contact": "contato do caso",
         "workspace_member": "membro do caso"
       },
+      "billingDrafts": {
+        "description": "Redija descrições com base nas atividades selecionadas e nos arquivos de conhecimento do escritório ou do cliente. Cada usuário também dá seu consentimento. Depois que as diretrizes do escritório forem anexadas, os rascunhos são verificados com base nelas.",
+        "firm": "Diretrizes do escritório",
+        "ledes": "Faturamento eletrônico (LEDES)",
+        "title": "Rascunhos de faturamento com IA"
+      },
       "documentProcessing": {
         "description": "Reconheça automaticamente texto em PDFs digitalizados para que seu conteúdo possa ser pesquisado.",
         "title": "Reconhecimento de texto de documentos",
@@ -6392,6 +6398,10 @@
     "deleteWorkspaceConfirmDescription": "Tem certeza de que deseja excluir este caso? Esta ação não pode ser desfeita.",
     "deletedItem": "Excluído: {name}",
     "deletingWorkspace": "Excluindo caso",
+    "documentSwitcher": {
+      "searchPlaceholder": "Encontrar um documento…",
+      "trigger": "Trocar de documento"
+    },
     "documentsCount": "{count, plural, one {# documento} many {# documentos} other {# documentos}}",
     "dropToUploadFiles": "Solte para fazer upload de arquivos",
     "duplicateMatter": "Duplicar caso",
