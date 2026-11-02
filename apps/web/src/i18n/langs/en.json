@@ -1455,10 +1455,12 @@
           "click": "Click",
           "fill": "Enter text",
           "open": "Open website",
+          "openNewTab": "Open website in a new tab",
           "pressKey": "Press key",
           "select": "Select option",
           "snapshot": "Read page",
-          "snapshotContinue": "Continue reading page"
+          "snapshotContinue": "Continue reading page",
+          "switchTab": "Switch to tab"
         },
         "askAgain": "Ask again",
         "autoApproveReads": "Auto-approve page reads",
