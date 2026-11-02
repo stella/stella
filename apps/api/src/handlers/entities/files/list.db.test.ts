@@ -179,13 +179,13 @@ test("a blank search lists every file in the matter", async () => {
 test("a search pages by cursor over its matches", async () => {
   const first = await listFileNames({ search: "smlouva", limit: 1 });
   expect(first.fileNames).toEqual(["Kupní smlouva.docx"]);
-  if (first.nextCursor === null) {
-    return panic("The first page of two matches has no next cursor");
-  }
+  const cursor =
+    first.nextCursor ??
+    panic("The first page of two matches has no next cursor");
   const second = await listFileNames({
     search: "smlouva",
     limit: 1,
-    cursor: first.nextCursor,
+    cursor,
   });
   expect(second).toEqual({
     fileNames: ["Smlouva o dílo.docx"],
