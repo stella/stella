@@ -14,6 +14,7 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
 import {
   lockCaseLawProjectionRepairIdentifiers,
   lockCaseLawProjectionRepairRows,
@@ -548,34 +549,45 @@ const setCanonicalProjectionEpoch = async (
   update: CanonicalProjectionEpochUpdate,
 ): Promise<void> => {
   switch (update.family) {
-    case "case_law":
+    case "case_law": {
       if (update.epochs.length === 0) {
         return;
       }
+      const write = replayWrite(caseLawDecisions, {
+        projectionEpoch: sqlCaseFragment({
+          branches: update.epochs.map(
+            ({ id, epoch }) =>
+              sql`WHEN ${caseLawDecisions.id} = ${id} THEN ${epoch.toString()}::bigint`,
+          ),
+          fallback: sql`${caseLawDecisions.projectionEpoch}`,
+        }),
+      });
       await tx
         .update(caseLawDecisions)
-        .set({
-          projectionEpoch: sqlCaseFragment({
-            branches: update.epochs.map(
-              ({ id, epoch }) =>
-                sql`WHEN ${caseLawDecisions.id} = ${id} THEN ${epoch.toString()}::bigint`,
-            ),
-            fallback: sql`${caseLawDecisions.projectionEpoch}`,
-          }),
-        })
+        .set(write.set)
         .where(
-          inArray(
-            caseLawDecisions.id,
-            update.epochs.map(({ id }) => id),
+          and(
+            write.setWhere,
+            inArray(
+              caseLawDecisions.id,
+              update.epochs.map(({ id }) => id),
+            ),
           ),
         );
       return;
-    case "legislation":
+    }
+    case "legislation": {
+      const write = replayWrite(legislationDocuments, {
+        projectionEpoch: update.epoch,
+      });
       await tx
         .update(legislationDocuments)
-        .set({ projectionEpoch: update.epoch })
-        .where(eq(legislationDocuments.id, update.entityId));
+        .set(write.set)
+        .where(
+          and(write.setWhere, eq(legislationDocuments.id, update.entityId)),
+        );
       return;
+    }
     default:
       update satisfies never;
       return panic(`Unhandled projection epoch update: ${String(update)}`);
@@ -838,7 +850,7 @@ export const buildCorpusIndexProjectionDesiredStateValues = ({
   desiredIndexId: descriptor.action === "upsert" ? descriptor.indexId : null,
 });
 
-const writeDesiredStates = async (
+export const writeDesiredStates = async (
   tx: Transaction,
   values: (typeof corpusIndexProjectionStates.$inferInsert)[],
 ): Promise<void> => {
@@ -865,22 +877,30 @@ const writeDesiredStates = async (
         corpusIndexProjectionStates.generation,
         corpusIndexProjectionStates.entityId,
       ],
-      set: {
-        desiredAction: sql`excluded.desired_action`,
-        desiredEpoch: sql`excluded.desired_epoch`,
-        desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.desiredAt} ELSE clock_timestamp() END`,
-        desiredFingerprint: sql`excluded.desired_fingerprint`,
-        desiredIndexId: sql`excluded.desired_index_id`,
-        workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
-        retryNotBefore: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.retryNotBefore} ELSE NULL END`,
-        failureAttempts: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.failureAttempts} ELSE 0 END`,
-        appendMode: sql<
-          "batchable" | "single"
-        >`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.appendMode} ELSE 'batchable' END`,
-        lastFailureKind: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureKind} ELSE NULL END`,
-        lastFailureMessage: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureMessage} ELSE NULL END`,
-        updatedAt: sql<Date>`clock_timestamp()`,
-      },
+      ...replayWrite(
+        corpusIndexProjectionStates,
+        {
+          desiredAction: sql`excluded.desired_action`,
+          desiredEpoch: sql`excluded.desired_epoch`,
+          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.desiredAt} ELSE clock_timestamp() END`,
+          desiredFingerprint: sql`excluded.desired_fingerprint`,
+          desiredIndexId: sql`excluded.desired_index_id`,
+          workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
+          retryNotBefore: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.retryNotBefore} ELSE NULL END`,
+          failureAttempts: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.failureAttempts} ELSE 0 END`,
+          appendMode: sql<
+            "batchable" | "single"
+          >`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.appendMode} ELSE 'batchable' END`,
+          lastFailureKind: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureKind} ELSE NULL END`,
+          lastFailureMessage: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureMessage} ELSE NULL END`,
+        },
+        {
+          modifiedAt: {
+            column: corpusIndexProjectionStates.updatedAt,
+            value: sql`clock_timestamp()`,
+          },
+        },
+      ),
     });
 };
 

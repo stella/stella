@@ -1,3 +1,4 @@
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 /**
  * Crawl-coverage ledger.
  *
@@ -12,12 +13,11 @@
  * describes the latest attempt.
  */
 
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCoverageSlices } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
 import type { SliceCoverage } from "@/api/lib/legal-search/ingestion-types";
 
 export type RecordSliceCoverageInput = {
@@ -31,6 +31,13 @@ export const recordSliceCoverage = async (
 ): Promise<void> => {
   await scopedDb(async (tx) => {
     // audit: skip — crawl bookkeeping, not a user action
+    const write = replayWrite(caseLawCoverageSlices, {
+      reported: coverage.reported,
+      collected: coverage.collected,
+      checkedAt: sql`now()`,
+      // A slice that lists again is no longer failed, whatever it was.
+      walkError: null,
+    });
     await tx
       .insert(caseLawCoverageSlices)
       .values({
@@ -42,13 +49,7 @@ export const recordSliceCoverage = async (
       })
       .onConflictDoUpdate({
         target: [caseLawCoverageSlices.sourceId, caseLawCoverageSlices.slice],
-        set: {
-          reported: coverage.reported,
-          collected: coverage.collected,
-          checkedAt: sql`now()`,
-          // A slice that lists again is no longer failed, whatever it was.
-          walkError: null,
-        },
+        ...write,
       });
   });
 };
@@ -75,14 +76,20 @@ export const touchSliceCoverages = async (
   }
   await scopedDb(async (tx) => {
     // audit: skip — crawl bookkeeping, not a user action
+    const write = replayWrite(caseLawCoverageSlices, {
+      checkedAt: sql`now()`,
+    });
     await tx
       .update(caseLawCoverageSlices)
-      .set({ checkedAt: sql`now()` })
+      .set(write.set)
       .where(
         and(
-          eq(caseLawCoverageSlices.sourceId, sourceId),
-          inArray(caseLawCoverageSlices.slice, [...slices]),
-          isNull(caseLawCoverageSlices.walkError),
+          write.setWhere,
+          and(
+            eq(caseLawCoverageSlices.sourceId, sourceId),
+            inArray(caseLawCoverageSlices.slice, [...slices]),
+            isNull(caseLawCoverageSlices.walkError),
+          ),
         ),
       );
   });
@@ -111,6 +118,10 @@ export const recordSliceWalkFailure = async (
 ): Promise<void> => {
   await scopedDb(async (tx) => {
     // audit: skip — crawl bookkeeping, not a user action
+    const write = replayWrite(caseLawCoverageSlices, {
+      walkError,
+      checkedAt: sql`now()`,
+    });
     await tx
       .insert(caseLawCoverageSlices)
       .values({
@@ -123,7 +134,7 @@ export const recordSliceWalkFailure = async (
       })
       .onConflictDoUpdate({
         target: [caseLawCoverageSlices.sourceId, caseLawCoverageSlices.slice],
-        set: { walkError, checkedAt: sql`now()` },
+        ...write,
       });
   });
 };

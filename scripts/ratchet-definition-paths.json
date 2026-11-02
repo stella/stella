@@ -2,6 +2,7 @@
   ".oxlint-plugins/api-client-chain.ts",
   ".oxlint-plugins/database-access.ts",
   ".oxlint-plugins/module-id.ts",
+  ".oxlint-plugins/utils.ts",
   "apps/api/src/lib/db/status-tables.gen.ts",
   "apps/api/src/lib/errors/graded-handler-codes.ts",
   "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",

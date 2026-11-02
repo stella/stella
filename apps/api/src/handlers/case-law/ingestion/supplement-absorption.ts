@@ -51,6 +51,7 @@ import {
   metadataWithDecisionAbsorption,
   readDecisionAbsorption,
 } from "@/api/lib/case-law/decision-absorption";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
 import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
@@ -162,18 +163,30 @@ export const rehomeSupplementRaw = async ({
   const movePointer = async (to: string | null): Promise<void> => {
     await scopedDb(async (tx) => {
       // audit: skip — storage-layout maintenance; the supplement is unchanged
-      await tx
-        .update(caseLawDecisionSupplements)
-        .set({
+      const write = replayWrite(
+        caseLawDecisionSupplements,
+        {
           sourceRawS3Key: to,
           sourceRawContentType: to === null ? null : read.pointer?.contentType,
-          updatedAt: new Date(),
-        })
+        },
+        {
+          modifiedAt: {
+            column: caseLawDecisionSupplements.updatedAt,
+            value: new Date(),
+          },
+        },
+      );
+      await tx
+        .update(caseLawDecisionSupplements)
+        .set(write.set)
         .where(
           and(
-            eq(caseLawDecisionSupplements.sourceId, sourceId),
-            eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
-            eq(caseLawDecisionSupplements.sourceRawS3Key, from),
+            write.setWhere,
+            and(
+              eq(caseLawDecisionSupplements.sourceId, sourceId),
+              eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
+              eq(caseLawDecisionSupplements.sourceRawS3Key, from),
+            ),
           ),
         );
     });
@@ -391,26 +404,26 @@ export const absorbStandaloneSupplementRow = async ({
       .where(eq(caseLawDecisionIdentifiers.decisionId, row.id));
     await replaceDecisionJudges(tx, { decisionId: row.id, judges: [] });
     // audit: skip — background case-law ingestion; public case-law data
-    await tx
-      .update(caseLawDecisions)
-      .set({
+    const write = replayWrite(
+      caseLawDecisions,
+      {
         citationKey: null,
         docketFamilyKey: null,
-        // Should the supplement lose its judgment, the write that makes this
-        // row a decision again carries the same publisher hash; without one
-        // stored, the refresh check cannot skip it.
         sourceHash: null,
         sourceObservationOrder: observationOrder,
-        // Its prefix was deleted above; the payload is the judgment's now.
         sourceRawS3Key: null,
         sourceRawContentType: null,
         metadata: metadataWithDecisionAbsorption(
           metadataMarkedListingOnly(caseLawDecisions.metadata),
           { decisionId: judgmentId, kind, sourceDocumentId },
         ),
-        updatedAt: new Date(),
-      })
-      .where(eq(caseLawDecisions.id, row.id));
+      },
+      { modifiedAt: { column: caseLawDecisions.updatedAt, value: new Date() } },
+    );
+    await tx
+      .update(caseLawDecisions)
+      .set(write.set)
+      .where(and(write.setWhere, eq(caseLawDecisions.id, row.id)));
     // Leaving the docket is what can make the judgment its only holder:
     // citations that gave up on the key as ambiguous are asked again.
     if (locked.citationKey !== null) {

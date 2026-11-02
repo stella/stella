@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  replayPlanners,
+  replayPlanValues,
+} from "@stll/scripts/src/replay-plan-values";
+import {
   type Node,
   parseSource,
   type TSType,
@@ -180,6 +184,7 @@ const inspect = (file: string, text: string) => {
         !INPUT_COLUMNS.has(propertyName(member.key, member.computed) ?? ""),
     ) ?? false;
   const tables = new Set(["caseLawDecisions"]);
+  const planners = replayPlanners(source.program);
   const functions = new Map<string, Node>();
   const mutations = new Set<string>();
   walk(source.program, (node, ancestors) => {
@@ -210,7 +215,7 @@ const inspect = (file: string, text: string) => {
       ) {
         const member = ancestors.at(-1);
         const call = ancestors.at(-2);
-        const payload =
+        const setPayload =
           member?.type === "MemberExpression" &&
           !member.computed &&
           member.property.type === "Identifier" &&
@@ -218,6 +223,11 @@ const inspect = (file: string, text: string) => {
           call?.type === "CallExpression"
             ? call.arguments.at(0)
             : undefined;
+        // A replay plan's SET writes the values the plan was given.
+        const payload =
+          setPayload === undefined
+            ? undefined
+            : (replayPlanValues(setPayload, ancestors, planners) ?? setPayload);
         if (
           method === "insert" ||
           isCanonicalPayload(
@@ -331,6 +341,39 @@ describe("decision write extension ownership", () => {
       "const redactCaseLawDecision = async (tx) => { await tx.update(caseLawDecisions).set({ redactedAt: now }); };";
     expect(problems("handlers/case-law/erasure.ts", planted)).toEqual([
       "handlers/case-law/erasure.ts:redactCaseLawDecision: extension is unreachable",
+    ]);
+  });
+
+  test("a replay plan's SET is judged by the values the plan was given", () => {
+    const planted = (
+      values: string,
+    ) => `import { replayWrite } from "@/api/lib/case-law/replay-write";
+const replayed = async (tx) => {
+  const write = replayWrite(caseLawDecisions, ${values});
+  await tx.update(caseLawDecisions).set(write.set).where(write.setWhere);
+};`;
+    expect(
+      problems(
+        "handlers/case-law/new-writer.ts",
+        planted("{ fulltext: text }"),
+      ),
+    ).toEqual([
+      "handlers/case-law/new-writer.ts:replayed: unregistered mutation",
+    ]);
+    expect(
+      problems(
+        "handlers/case-law/new-writer.ts",
+        planted("{ projectionEpoch: epoch }"),
+      ),
+    ).toEqual([]);
+    // A `set` that is not a replay plan's stays an input write.
+    expect(
+      problems(
+        "handlers/case-law/new-writer.ts",
+        "const opaque = async (tx) => { const write = build(); await tx.update(caseLawDecisions).set(write.set); };",
+      ),
+    ).toEqual([
+      "handlers/case-law/new-writer.ts:opaque: unregistered mutation",
     ]);
   });
 

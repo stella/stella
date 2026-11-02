@@ -1976,6 +1976,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
+    "./.oxlint-plugins/no-unguarded-case-law-replay-write.ts",
     "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
@@ -4713,6 +4714,15 @@ const config = defineConfig({
     },
     {
       files: [
+        ".oxlint-plugins/__fixtures__/no-unguarded-case-law-replay-write.fixture.ts",
+      ],
+      rules: {
+        "no-unguarded-case-law-replay-write/no-unguarded-case-law-replay-write":
+          "error",
+      },
+    },
+    {
+      files: [
         ".oxlint-plugins/__fixtures__/no-direct-ingestion-checkpoint-write.fixture.ts",
       ],
       rules: {
@@ -5609,6 +5619,14 @@ const config = defineConfig({
       excludeFiles: ["apps/api/src/lib/search/**/*.test.ts"],
       rules: {
         "require-search-scope/require-search-scope": "error",
+      },
+    },
+    {
+      files: ["**/*.{ts,tsx,mts,cts}"],
+      excludeFiles: ["**/*.test.{ts,tsx,mts,cts}"],
+      rules: {
+        "no-unguarded-case-law-replay-write/no-unguarded-case-law-replay-write":
+          "error",
       },
     },
     {

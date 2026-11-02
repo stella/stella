@@ -40,6 +40,7 @@ import {
   billingCodes,
   caseLawDecisionIdentifiers,
   caseLawReplayBatches,
+  caseLawSources,
   contacts,
   corpusIndexProjectionStates,
   entities,
@@ -3085,6 +3086,20 @@ export const lockCaseLawRemovalSource = async ({
     sql`SELECT id FROM case_law_sources WHERE id = ${sourceId} FOR UPDATE`,
   );
 };
+
+/** Lock the accepted source predicate before distinguishing a replay no-op from a lost fence. */
+export const lockCaseLawReplaySource = async ({
+  tx,
+  where,
+}: {
+  tx: Pick<Transaction, "select">;
+  where: SQL;
+}) =>
+  await tx
+    .select({ id: caseLawSources.id })
+    .from(caseLawSources)
+    .where(where)
+    .for("update");
 
 type LockBillingCodeOptions = {
   id: SafeId<"billingCode">;

@@ -43,6 +43,10 @@ import {
 } from "@/api/db/shared-pool-timeouts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
+import {
+  replayWrite,
+  replayWriteOutcome,
+} from "@/api/lib/case-law/replay-write";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   permitsLifecycleMove,
@@ -435,6 +439,14 @@ const recordCompletionProgressTx = async (
       status === "review-required" ||
       status === "publisher-gone" ||
       status === "too-large");
+  const write = replayWrite(euCompletionControls, {
+    cursor: receipt.decisionId,
+    completedRows: sql`${euCompletionControls.completedRows} + ${Number(applied)}`,
+    healthyRows: sql`${euCompletionControls.healthyRows} + ${Number(healthy && publisherSuccess)}`,
+    batch: healthy || applied ? initialBatchState() : undefined,
+    ticksWithoutProgress: healthy || applied ? 0 : undefined,
+    lastCompletedAt: applied ? new Date(now()) : undefined,
+  });
   await tx
     .insert(euCompletionControls)
     .values({
@@ -447,21 +459,7 @@ const recordCompletionProgressTx = async (
     })
     .onConflictDoUpdate({
       target: euCompletionControls.key,
-      set: {
-        cursor: receipt.decisionId,
-        completedRows: sql`${euCompletionControls.completedRows} + ${Number(applied)}`,
-        healthyRows: sql`${euCompletionControls.healthyRows} + ${Number(healthy && publisherSuccess)}`,
-        ...(healthy
-          ? { batch: initialBatchState(), ticksWithoutProgress: 0 }
-          : {}),
-        ...(applied
-          ? {
-              ticksWithoutProgress: 0,
-              batch: initialBatchState(),
-              lastCompletedAt: new Date(now()),
-            }
-          : {}),
-      },
+      ...write,
     });
 };
 
@@ -489,12 +487,13 @@ const retireCompletedReceiptsTx = async (
           : sql`${euCompletionReceipts.status} <> 'applied'`,
       ),
     );
+  const write = replayWrite(euCompletionReceipts, {
+    supersededAt: sql`(SELECT newer.completed_at FROM eu_completion_receipts newer WHERE newer.id = ${receipt.id} LIMIT 1)`,
+  });
   await tx
     .update(euCompletionReceipts)
-    .set({
-      supersededAt: sql`(SELECT newer.completed_at FROM eu_completion_receipts newer WHERE newer.id = ${receipt.id} LIMIT 1)`,
-    })
-    .where(inArray(euCompletionReceipts.id, older));
+    .set(write.set)
+    .where(and(write.setWhere, inArray(euCompletionReceipts.id, older)));
 };
 
 type PublisherHoldOptions = {
@@ -529,6 +528,7 @@ const holdPublisherRefusalTx = async (
     ),
     holdCount: batch.holdCount + 1,
   };
+  const write = replayWrite(euCompletionControls, { batch: held });
   await tx
     .insert(euCompletionControls)
     .values({
@@ -538,7 +538,7 @@ const holdPublisherRefusalTx = async (
     })
     .onConflictDoUpdate({
       target: euCompletionControls.key,
-      set: { batch: held },
+      ...write,
     });
 };
 
@@ -714,16 +714,25 @@ const createWriteMarkerOperations = ({ now }: StoreContext) => {
         "Completion canonical write requires its persisted hash and parser stamp",
       );
     }
-    await tx
-      .update(euCompletionReceipts)
-      .set({
+    const write = replayWrite(
+      euCompletionReceipts,
+      {
         writtenAt: new Date(now()),
         writtenSourceHash: row.sourceHash,
         writtenObservationOrder: row.sourceObservationOrder,
         writtenParserVersion: row.parserVersion,
-        updatedAt: new Date(now()),
-      })
-      .where(eq(euCompletionReceipts.id, id));
+      },
+      {
+        modifiedAt: {
+          column: euCompletionReceipts.updatedAt,
+          value: new Date(now()),
+        },
+      },
+    );
+    await tx
+      .update(euCompletionReceipts)
+      .set(write.set)
+      .where(and(write.setWhere, eq(euCompletionReceipts.id, id)));
   };
   return { assertApprovalTx, assertFetchedTx, markWrittenTx };
 };
@@ -1120,16 +1129,17 @@ const readmitSettledMirrorsTx = async (
       ),
       sql`, `,
     );
+    const write = replayWrite(euCompletionReceipts, {
+      claimedSourceHash: sql`claim.source_hash`,
+      claimedObservationOrder: sql`claim.observation_order`,
+    });
     await tx
       .update(euCompletionReceipts)
-      .set({
-        claimedSourceHash: sql`claim.source_hash`,
-        claimedObservationOrder: sql`claim.observation_order`,
-      })
+      .set(write.set)
       .from(
         sql`(VALUES ${claims}) AS claim(id, source_hash, observation_order)`,
       )
-      .where(eq(euCompletionReceipts.id, sql`claim.id`));
+      .where(and(write.setWhere, eq(euCompletionReceipts.id, sql`claim.id`)));
   }
   const rows =
     repaired.length === 0
@@ -1259,23 +1269,36 @@ const createReservationOperations = ({ transaction, now }: StoreContext) => {
                 })),
               )
               .returning();
+      const nextCursor =
+        page.at(-1)?.id ?? panic("Completion page unexpectedly empty");
+      const write = replayWrite(
+        databaseBackfillStates,
+        { cursor: nextCursor },
+        {
+          modifiedAt: {
+            column: databaseBackfillStates.updatedAt,
+            value: new Date(now()),
+          },
+        },
+      );
       const advanced = await tx
         .update(databaseBackfillStates)
-        .set({
-          cursor:
-            page.at(-1)?.id ?? panic("Completion page unexpectedly empty"),
-          updatedAt: new Date(now()),
-        })
+        .set(write.set)
         .where(
           and(
-            eq(databaseBackfillStates.name, name),
-            state.cursor === null
-              ? isNull(databaseBackfillStates.cursor)
-              : eq(databaseBackfillStates.cursor, state.cursor),
+            write.setWhere,
+            and(
+              eq(databaseBackfillStates.name, name),
+              state.cursor === null
+                ? isNull(databaseBackfillStates.cursor)
+                : eq(databaseBackfillStates.cursor, state.cursor),
+            ),
           ),
         )
         .returning();
-      if (advanced.length !== 1) {
+      // The row is locked above, so only an equal cursor (a wrapped first
+      // page ending where the checkpoint already stands) writes nothing.
+      if (advanced.length !== 1 && nextCursor !== state.cursor) {
         panic("Completion checkpoint CAS failed under lock");
       }
       if (readmitted.length > 0) {
@@ -1491,6 +1514,10 @@ const createFailureOperations = (
           updatedAt: new Date(now()),
         },
       });
+      const write = replayWrite(euCompletionControls, {
+        cursor: receipt.decisionId,
+        batch: held,
+      });
       await tx
         .insert(euCompletionControls)
         .values({
@@ -1501,7 +1528,7 @@ const createFailureOperations = (
         })
         .onConflictDoUpdate({
           target: euCompletionControls.key,
-          set: { cursor: receipt.decisionId, batch: held },
+          ...write,
         });
       if (exhausted) {
         await retireCompletedReceiptsTx(tx, {
@@ -1529,6 +1556,9 @@ const createRetentionOperations = ({ transaction, now }: StoreContext) => {
     ) {
       panic("Completion request budget requires a UTC hour boundary");
     }
+    const write = replayWrite(euCompletionRequestHours, {
+      requests: sql`${euCompletionRequestHours.requests} + 1`,
+    });
     return await transaction(
       async (tx) =>
         (
@@ -1537,8 +1567,12 @@ const createRetentionOperations = ({ transaction, now }: StoreContext) => {
             .values({ hour: value, requests: 1 })
             .onConflictDoUpdate({
               target: euCompletionRequestHours.hour,
-              set: { requests: sql`${euCompletionRequestHours.requests} + 1` },
-              setWhere: sql`${euCompletionRequestHours.requests} < ${EU_COMPLETION_REQUESTS_PER_HOUR}`,
+              set: write.set,
+              setWhere:
+                and(
+                  write.setWhere,
+                  sql`${euCompletionRequestHours.requests} < ${EU_COMPLETION_REQUESTS_PER_HOUR}`,
+                ) ?? panic("Completion request budget requires its predicate"),
             })
             .returning()
         ).length === 1,
@@ -1775,12 +1809,13 @@ const createGateOperations = ({ transaction, cleanup }: StoreContext) => {
     });
   const savePreflightGateState = async (batch: BatchState) =>
     await cleanup(async (tx) => {
+      const write = replayWrite(euCompletionControls, { batch });
       await tx
         .insert(euCompletionControls)
         .values({ key: GLOBAL_CONTROL, batch })
         .onConflictDoUpdate({
           target: euCompletionControls.key,
-          set: { batch },
+          ...write,
         });
     });
   const recordTick = async ({
@@ -1807,29 +1842,49 @@ const createGateOperations = ({ transaction, cleanup }: StoreContext) => {
       const shouldProgress = mode === "apply" && !intentionallyHeld;
       // Only verified settlement increments completedRows; caller metrics cannot
       // manufacture healthy evidence for systemic-failure isolation.
-      const row = (
-        await tx
-          .insert(euCompletionControls)
-          .values({
-            key: sourceControl(sourceId),
-            sourceId,
-            ticksWithoutProgress: madeProgress || !shouldProgress ? 0 : 1,
-          })
-          .onConflictDoUpdate({
-            target: euCompletionControls.key,
-            set: {
-              ticksWithoutProgress:
-                madeProgress || mode === "dry-run"
-                  ? 0
-                  : sql`${euCompletionControls.ticksWithoutProgress} + ${Number(shouldProgress)}`,
-            },
-          })
-          .returning({
-            ticksWithoutProgress: euCompletionControls.ticksWithoutProgress,
-            lastCompletedAt: euCompletionControls.lastCompletedAt,
-          })
-      ).at(0);
-      return row ?? panic("Completion progress insert returned no row");
+      const write = replayWrite(euCompletionControls, {
+        ticksWithoutProgress:
+          madeProgress || mode === "dry-run"
+            ? 0
+            : sql`${euCompletionControls.ticksWithoutProgress} + ${Number(shouldProgress)}`,
+      });
+      const projection = {
+        ticksWithoutProgress: euCompletionControls.ticksWithoutProgress,
+        lastCompletedAt: euCompletionControls.lastCompletedAt,
+      };
+      const written = await tx
+        .insert(euCompletionControls)
+        .values({
+          key: sourceControl(sourceId),
+          sourceId,
+          ticksWithoutProgress: madeProgress || !shouldProgress ? 0 : 1,
+        })
+        .onConflictDoUpdate({
+          target: euCompletionControls.key,
+          ...write,
+        })
+        .returning(projection);
+      const matched =
+        written.length === 0
+          ? await tx
+              .select(projection)
+              .from(euCompletionControls)
+              .where(eq(euCompletionControls.key, sourceControl(sourceId)))
+          : written;
+      const outcome = replayWriteOutcome(written, matched);
+      switch (outcome.status) {
+        case "written":
+        case "unchanged":
+          return (
+            outcome.row.at(0) ??
+            panic("Completion progress has no accepted row")
+          );
+        case "ownership-lost":
+          return panic("Completion progress upsert lost its locked row");
+        default:
+          outcome satisfies never;
+          return panic("Unhandled completion progress write outcome");
+      }
     });
   const readSweepCursor = async (
     scope: Pick<

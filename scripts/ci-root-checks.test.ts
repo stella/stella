@@ -337,6 +337,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/schema-introspection.test.ts",
     "scripts/schema-introspection.ts",
     "scripts/source-globs.ts",
+    "scripts/status-write-shapes.ts",
   ],
   "ci-checks-rest/Design token docs": [
     "scripts/design-tokens-doc.ts",
