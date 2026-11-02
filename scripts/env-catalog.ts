@@ -62,6 +62,8 @@ type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
   ...Object.keys(rateLimitBudgetEnvSchema),
+  "APNS_KEY_ID",
+  "APNS_TEAM_ID",
   "EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL",
   "EMAIL_EVENTS_QUEUE_URL",
   "EMAIL_EVENTS_TOPIC_ARN",
@@ -645,6 +647,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Bearer credential used by the collaboration service for snapshot load and store requests.",
   OPERATOR_API_TOKEN:
     "Deployment-owned bearer credential for operator HTTP access. Unset disables access; use at least 32 characters.",
+  APNS_KEY_ID:
+    "Key ID of the APNs .p8 signing key for mobile push. Set with APNS_TEAM_ID and APNS_PRIVATE_KEY; unset turns mobile push off.",
+  APNS_TEAM_ID:
+    "Apple Developer team ID that owns the APNs signing key and the mobile app.",
+  APNS_PRIVATE_KEY:
+    "The APNs .p8 signing key as PEM (newlines may be escaped as \\n). Alerts carry no content, but the key can send them to any device of the team's apps.",
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_CLIENT_ADDRESS_HEADER:
@@ -1036,6 +1044,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_COLLAB_REDIS_URL: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
   OPERATOR_API_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  APNS_KEY_ID: ENV_CREDENTIAL_KIND.notCredential,
+  APNS_TEAM_ID: ENV_CREDENTIAL_KIND.notCredential,
+  APNS_PRIVATE_KEY: ENV_CREDENTIAL_KIND.credential,
   STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
@@ -1375,6 +1386,7 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_DESKTOP_VIEW_PORT",
   "STELLA_ENABLE_DEBUG_CLIPBOARD_PERSISTENCE",
   "STELLA_GENERATED_STORE",
+  "STELLA_MARKETING_CAPTURE",
   "STELLA_OPEN_CLIPBOARD_ON_LAUNCH",
   "STELLA_PGLITE_SNAPSHOT_CACHE_DIR",
   "STELLA_SEED_EMAIL_WORKSPACE_ID",
@@ -1491,6 +1503,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_VERIFY",
   "QUERY_PERF_CHANGED_PATHS",
   "QUERY_PERF_SCOPE_UNKNOWN",
+  // CI migration planning hands the schema import check its changed-paths file.
+  "CHANGED_PATHS",
   // CI playground planning passes the selected and complete spec sets to the
   // shard planner, together with the desktop scope decision.
   "UI_PLAYGROUND_CHANGED_PATHS",
@@ -1661,6 +1675,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "JOURNEY_REGISTRY_TIMEOUT_MS",
   "JOURNEY_RELEASES_API_URL",
   "JOURNEY_RETRY_PAUSE_SECONDS",
+  "JOURNEY_SEARCH_SLOT",
   "JOURNEY_SIGN_IN",
   "JOURNEY_SMOKE_SESSION_URL",
   "JOURNEY_TIMEOUT_SECONDS",
@@ -1709,6 +1724,8 @@ export const TOOLING_ENV_KEYS = new Set([
   // Historical package builds use current tooling against a separate source root.
   "PACK_SOURCE_ROOT",
   "PGLITE_TEST_SNAPSHOT",
+  // pr-lint passes the pull request description to the log-line guard.
+  "PR_BODY",
   "PR_HEAD_SHA",
   "PR_TITLE",
   // ci-plan: the pull request is armed (auto-merge or the merge-armed label).
@@ -1888,6 +1905,11 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_ADVISORIES_REMAIN",
   "TEST_STALE",
   "TEST_PIN_REWRITE",
+  "TEST_RESOLVER_ERROR",
+  // Test-only: dependency remediation fixture states.
+  "TEST_QUARANTINED",
+  "TEST_RESOLVER_ERROR",
+  "TEST_UPSTREAM_BLOCKED",
   "WXT_STELLA_ORIGINS",
 ]);
 
@@ -1905,6 +1927,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "AWS_REGION",
   "AWS_SECRET_ACCESS_KEY",
   "AWS_SESSION_TOKEN",
+  "CARGO_CFG_TARGET_ARCH",
+  "CARGO_CFG_TARGET_OS",
   "CARGO_MANIFEST_DIR",
   "CARGO_PKG_VERSION",
   "CI",

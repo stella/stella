@@ -19,7 +19,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -276,7 +276,7 @@ const READER_TEXTS = {
       language="cs"
       masthead={null}
       provisionCitationCounts={new Map()}
-      statuteLists={E_SBIRKA_LIST_SCHEME}
+      statuteAnchors={E_SBIRKA_ANCHORS}
       statuteTitle="Zákon"
       versionCount={1}
       versionValidFrom={null}

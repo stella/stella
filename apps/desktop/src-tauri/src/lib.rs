@@ -4,6 +4,7 @@ mod activity;
 mod activity_calls;
 mod activity_commands;
 mod activity_details;
+mod activity_settings;
 mod activity_store;
 mod activity_window;
 mod app_lifecycle;
@@ -31,6 +32,15 @@ mod desktop_telemetry;
 mod device_preference;
 mod device_proof;
 mod diagnostics;
+mod dictation;
+#[cfg(dictation)]
+mod dictation_audio;
+#[cfg(dictation)]
+mod dictation_engine;
+#[cfg(dictation)]
+mod dictation_input;
+#[cfg(dictation)]
+mod dictation_worker;
 #[cfg(test)]
 mod e2e;
 mod feature_access;
@@ -94,6 +104,18 @@ use tokio::sync::Mutex;
 pub fn run_codex_token_helper() -> Option<i32> {
   let args = std::env::args_os().collect::<Vec<_>>();
   codex_managed_token_broker::run_token_helper(&args)
+}
+
+/// Runs the speech worker when the process was started as one, and returns
+/// its exit code; `None` for an ordinary launch.
+pub fn run_dictation_worker() -> Option<i32> {
+  #[cfg(dictation)]
+  {
+    let args = std::env::args_os().collect::<Vec<_>>();
+    dictation_worker::run_if_requested(&args)
+  }
+  #[cfg(not(dictation))]
+  None
 }
 
 pub fn run() {
@@ -160,6 +182,7 @@ pub fn run() {
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
     .manage(clipboard_window::ClipboardEditorSessions::default())
     .manage(clipboard_window::ClipboardStartupTrace::default())
+    .manage(dictation::DictationState::load())
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),
     ))
@@ -254,6 +277,9 @@ pub fn run() {
                 let snapshot = manager.lock().await.get_snapshot();
                 tray::refresh(&app, &snapshot);
               });
+            }
+            feature_gate::DesktopFeature::Dictation => {
+              dictation::apply_feature_gate(app, enabled);
             }
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);
@@ -546,20 +572,48 @@ pub fn run() {
 /// renders the window at this size (`tests/desktop-window-sizes.ts`).
 const SETTINGS_WINDOW_WIDTH: f64 = 480.0;
 const SETTINGS_WINDOW_HEIGHT: f64 = 460.0;
+pub(crate) const SETTINGS_WINDOW_LABEL: &str = "main";
 
-pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
+/// A Settings window tab native code opens; the ids are `PREFERENCES_TABS`
+/// in `src/mainview/App.tsx`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PreferencesTab {
+  General,
+  Activity,
+  About,
+}
+
+impl PreferencesTab {
+  #[cfg(test)]
+  const ALL: [Self; 3] = [Self::General, Self::Activity, Self::About];
+
+  const fn id(self) -> &'static str {
+    match self {
+      Self::General => "general",
+      Self::Activity => "activity",
+      Self::About => "about",
+    }
+  }
+}
+
+pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab) {
   // Accessory apps must explicitly activate to bring windows to front.
   #[cfg(target_os = "macos")]
   let _ = handle.show();
 
-  if let Some(window) = handle.get_webview_window("main") {
+  let tab = tab.id();
+  if let Some(window) = handle.get_webview_window(SETTINGS_WINDOW_LABEL) {
     let _ = window.show();
     let _ = window.set_focus();
-    let _ = handle.emit_to("main", "activate-tab", serde_json::json!({ "tab": tab }));
+    let _ = handle.emit_to(
+      SETTINGS_WINDOW_LABEL,
+      "activate-tab",
+      serde_json::json!({ "tab": tab }),
+    );
     return;
   }
 
-  let builder = crate::app_window::builder(handle, "main", "index.html")
+  let builder = crate::app_window::builder(handle, SETTINGS_WINDOW_LABEL, "index.html")
     .title("stella desktop")
     .inner_size(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT)
     .resizable(false);
@@ -586,15 +640,40 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
       });
       // Emit tab activation after a short delay to let the webview load
       let handle = handle.clone();
-      let tab = tab.to_string();
       tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        let _ =
-          handle.emit_to("main", "activate-tab", serde_json::json!({ "tab": tab }));
+        let _ = handle.emit_to(
+          SETTINGS_WINDOW_LABEL,
+          "activate-tab",
+          serde_json::json!({ "tab": tab }),
+        );
       });
     }
     Err(e) => {
       tracing::error!(error = %e, "failed to create settings window");
+    }
+  }
+}
+
+#[cfg(test)]
+mod preferences_tab_tests {
+  use super::PreferencesTab;
+
+  #[test]
+  fn native_tabs_are_tabs_the_settings_window_declares() {
+    let source = include_str!("../../src/mainview/App.tsx");
+    let (_, declaration) = source
+      .split_once("const PREFERENCES_TABS = [")
+      .expect("App.tsx declares PREFERENCES_TABS");
+    let (declaration, _) = declaration
+      .split_once(']')
+      .expect("PREFERENCES_TABS is one array literal");
+    for tab in PreferencesTab::ALL {
+      assert!(
+        declaration.contains(&format!("\"{}\"", tab.id())),
+        "{} is not a Settings window tab",
+        tab.id()
+      );
     }
   }
 }

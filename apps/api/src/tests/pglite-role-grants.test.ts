@@ -36,6 +36,77 @@ import type {
  */
 
 const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
+const API_SRC_DIR = nodePath.resolve(import.meta.dir, "..");
+
+const INGESTION_ROLE_HELPER_IMPORT =
+  /import\s*\{[^}]*\bcreateIngestionRoleScopedDb\b[^}]*\}\s*from\s*["']@\/api\/tests\/pglite-test-db["']/su;
+const PIPELINE_ENTRYPOINT =
+  /\b(?:runIngestionPipeline|acquireCaseLawSourceIngestionLease)\s*\(/u;
+
+/**
+ * Existing suites outside this change's PGlite pipeline set. This list may
+ * only shrink: the guard rejects entries that stop calling an entrypoint or
+ * start using the shared role helper.
+ */
+const INGESTION_ROLE_HELPER_EXEMPTIONS = {
+  "handlers/case-law/ingestion/background-replay-store.postgres.test.ts":
+    "Postgres replay-store fixture owns its transaction boundary",
+  "handlers/case-law/ingestion/background-replay.postgres.test.ts":
+    "Postgres replay fixture owns its transaction boundary",
+  "handlers/case-law/ingestion/pipeline-canonical.test.ts":
+    "in-memory transaction double has no Drizzle PGlite handle",
+  "handlers/case-law/ingestion/pipeline-unread-items.db.test.ts":
+    "inline ingestion role from PR 7679; moves to the helper with its owner",
+  "handlers/case-law/ingestion/pipeline.test.ts":
+    "unit transaction doubles have no Drizzle PGlite handle",
+  "handlers/case-law/ingestion/primary-reference.db.test.ts":
+    "primary-reference fixture belongs to a separate suite owner",
+  "handlers/case-law/ingestion/reconciliation-listing-revisions.postgres.test.ts":
+    "Postgres reconciliation fixture owns its transaction boundary",
+  "handlers/case-law/ingestion/replay-apply.db.test.ts":
+    "replay-apply fixture belongs to a separate suite owner",
+  "handlers/case-law/ingestion/source-total-maintenance.db.test.ts":
+    "Postgres fixture uses production createIngestionDb",
+  "handlers/case-law/ingestion/supplement-fold.db.test.ts":
+    "supplement-fold fixture belongs to a separate suite owner",
+  "lib/legal-search/deferred-document-source-ownership.db.test.ts":
+    "Postgres ownership fixture owns its transaction boundary",
+  "scripts/eu-completion-tick.postgres.test.ts":
+    "Postgres script fixture uses production createIngestionDb",
+  "scripts/eu-ecj-formex-refresh.postgres.test.ts":
+    "Postgres script fixture uses production createIngestionDb",
+} as const;
+
+test("pipeline suites use the ingestion-role ScopedDb helper", async () => {
+  const glob = new Bun.Glob("**/*.test.ts");
+  const callers = new Map<string, string>();
+  for await (const path of glob.scan({ cwd: API_SRC_DIR })) {
+    const source = await Bun.file(nodePath.join(API_SRC_DIR, path)).text();
+    if (PIPELINE_ENTRYPOINT.test(source)) {
+      callers.set(path, source);
+    }
+  }
+
+  const missingHelper = [...callers]
+    .filter(
+      ([path, source]) =>
+        !INGESTION_ROLE_HELPER_IMPORT.test(source) &&
+        !(path in INGESTION_ROLE_HELPER_EXEMPTIONS),
+    )
+    .map(([path]) => path)
+    .toSorted();
+  const staleExemptions = Object.keys(INGESTION_ROLE_HELPER_EXEMPTIONS)
+    .filter((path) => {
+      const source = callers.get(path);
+      return source === undefined || INGESTION_ROLE_HELPER_IMPORT.test(source);
+    })
+    .toSorted();
+
+  expect({ missingHelper, staleExemptions }).toEqual({
+    missingHelper: [],
+    staleExemptions: [],
+  });
+});
 
 /**
  * Roles whose table privileges this pair check leaves to another one.
