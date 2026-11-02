@@ -15,13 +15,16 @@ test("unused-key checks combine every repeated source directory", async () => {
         await mkdir(sourceDirectory);
       }),
     );
+    const english = {
+      app: "Application action",
+      rationale: "Model rationale",
+    };
     await Promise.all([
+      writeFile(path.join(locales, "en.json"), JSON.stringify(english)),
+      // Every catalog carries a source lock; this one matches its English.
       writeFile(
-        path.join(locales, "en.json"),
-        JSON.stringify({
-          app: "Application action",
-          rationale: "Model rationale",
-        }),
+        path.join(directory, "i18n-source-lock.json"),
+        JSON.stringify(english),
       ),
       writeFile(path.join(app, "view.ts"), 'const action = "app";'),
       writeFile(
