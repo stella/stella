@@ -193,7 +193,7 @@ for (const provider of TANSTACK_AI_PROVIDERS) {
         // Any request the provider adapter sent that got no response, a
         // refusal included, is the provider's outage once the adapter
         // boundary names it; the bare socket failure keeps its own grade.
-        const atBoundary =
+        const atBoundary: Pick<FailureCase["expected"], "kind" | "grade"> =
           entry.origin === "transport"
             ? { kind: "provider_unavailable", grade: "transient" }
             : entry.expected;
