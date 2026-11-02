@@ -10,6 +10,7 @@ import {
   oauthClient,
   oauthClientResource,
   organization,
+  user,
 } from "@/api/db/auth-schema";
 import {
   changeServiceOAuthClient,
@@ -33,6 +34,7 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { seedReadyOrganizationAuditExport } from "@/api/tests/helpers/organization-audit-export";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
 import {
@@ -153,9 +155,29 @@ describe("confidential service OAuth lifecycle", () => {
 
   test("organization deletion removes the whole service credential", async () => {
     const { clientId, organizationId } = await fixture();
-    await rootDb.transaction(
-      async (tx) => await completeOrganizationDeletion({ organizationId, tx }),
+    const ownerId = mintAuthProviderId<"user">();
+    await rootDb.insert(user).values({
+      id: ownerId,
+      name: "Synthetic owner",
+      email: `${ownerId}@example.test`,
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await seedReadyOrganizationAuditExport({
+      db: await initAgentAuthTestDb(),
+      userId: ownerId,
+      organizationId,
+    });
+    const deletion = await rootDb.transaction(
+      async (tx) =>
+        await completeOrganizationDeletion({
+          deletedBy: ownerId,
+          organizationId,
+          tx,
+        }),
     );
+    expect(deletion.type).toBe("deleted");
     for (const table of [
       oauthClient,
       oauthClientResource,

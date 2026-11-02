@@ -882,7 +882,7 @@ export const writeDesiredStates = async (
         {
           desiredAction: sql`excluded.desired_action`,
           desiredEpoch: sql`excluded.desired_epoch`,
-          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.desiredAt} ELSE clock_timestamp() END`,
+          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.desiredAt} ELSE statement_timestamp() END`,
           desiredFingerprint: sql`excluded.desired_fingerprint`,
           desiredIndexId: sql`excluded.desired_index_id`,
           workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
@@ -897,7 +897,7 @@ export const writeDesiredStates = async (
         {
           modifiedAt: {
             column: corpusIndexProjectionStates.updatedAt,
-            value: sql`clock_timestamp()`,
+            value: sql`statement_timestamp()`,
           },
         },
       ),
