@@ -8,7 +8,7 @@ import {
 } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 
-import { organization } from "@/api/db/auth-schema";
+import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS,
@@ -25,6 +25,8 @@ import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { runHostedCustomerErasures } from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { hasRenewingHostedSubscription } from "@/api/lib/usage/renewing-hosted-subscription";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { seedReadyOrganizationAuditExport } from "@/api/tests/helpers/organization-audit-export";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -324,6 +326,9 @@ describe("hosted customer erasure task", () => {
   });
 });
 
+// The owner who deletes every seeded organization, holding its audit archive.
+const ownerId = mintAuthProviderId<"user">();
+
 const seedOrganization = async (hosted: boolean) => {
   const organizationId = toSafeId<"organization">(`org_${Bun.randomUUIDv7()}`);
   await db.insert(organization).values({
@@ -331,6 +336,22 @@ const seedOrganization = async (hosted: boolean) => {
     name: "Erasure test",
     slug: organizationId,
     createdAt: NOW,
+  });
+  await db
+    .insert(user)
+    .values({
+      id: ownerId,
+      name: "Erasure owner",
+      email: `${ownerId}@example.test`,
+      emailVerified: true,
+      createdAt: NOW,
+      updatedAt: NOW,
+    })
+    .onConflictDoNothing();
+  await seedReadyOrganizationAuditExport({
+    db,
+    userId: ownerId,
+    organizationId,
   });
   if (hosted) {
     const usagePolicyId = createSafeId<"usagePolicy">();
@@ -364,20 +385,19 @@ describe("organization deletion erasure intent", () => {
       externalCustomerRef: `stella_org_${replayId}`,
     });
 
-    await db.transaction(async (tx) => {
-      await completeOrganizationDeletion({
-        organizationId: hostedId,
-        tx: asTestRaw<Transaction>(tx),
-      });
-      await completeOrganizationDeletion({
-        organizationId: neutralId,
-        tx: asTestRaw<Transaction>(tx),
-      });
-      await completeOrganizationDeletion({
-        organizationId: replayId,
-        tx: asTestRaw<Transaction>(tx),
-      });
-    });
+    // One transaction per deletion, as the endpoint runs it: each takes its
+    // audit archive's lock before its organization's.
+    for (const organizationId of [hostedId, neutralId, replayId]) {
+      const deletion = await db.transaction(
+        async (tx) =>
+          await completeOrganizationDeletion({
+            deletedBy: ownerId,
+            organizationId,
+            tx: asTestRaw<Transaction>(tx),
+          }),
+      );
+      expect(deletion.type).toBe("deleted");
+    }
 
     const rows = await db.select().from(hostedCustomerErasures);
     expect(
@@ -419,6 +439,7 @@ describe("organization deletion erasure intent", () => {
     const rollbackError = await db
       .transaction(async (tx) => {
         await completeOrganizationDeletion({
+          deletedBy: ownerId,
           organizationId: rollbackId,
           tx: asTestRaw<Transaction>(tx),
         });
@@ -440,8 +461,16 @@ describe("organization deletion erasure intent", () => {
           ),
         ),
     ).toEqual([]);
-    await db.execute(
-      sql`DELETE FROM organization WHERE id IN (${renewingId}, ${rollbackId})`,
-    );
+    // An organization leaves only through its deletion.
+    for (const organizationId of [renewingId, rollbackId]) {
+      await db.transaction(
+        async (tx) =>
+          await completeOrganizationDeletion({
+            deletedBy: ownerId,
+            organizationId,
+            tx: asTestRaw<Transaction>(tx),
+          }),
+      );
+    }
   });
 });

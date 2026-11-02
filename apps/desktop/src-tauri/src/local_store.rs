@@ -5,6 +5,11 @@
 //! JSON envelopes written atomically with owner-only permissions, and a key
 //! that is never re-minted while encrypted data still depends on it.
 
+#![allow(
+  clippy::disallowed_methods,
+  reason = "local_store owns local file creation"
+)]
+
 use aes_gcm::{
   Aes256Gcm, Nonce,
   aead::{Aead, Generate, KeyInit, Payload},
@@ -18,6 +23,8 @@ use std::{
 
 use crate::keychain::{self, LocalDataKey, LocalDataKeyLookup};
 use crate::logging::log_json_error;
+
+pub(crate) mod token_broker;
 
 const ENVELOPE_VERSION: u8 = 1;
 const NONCE_BYTES: usize = 12;
@@ -177,7 +184,7 @@ impl EncryptedJsonFile {
   pub fn persist<T: Serialize>(&self, value: &T) -> Result<(), String> {
     let label = self.label;
     if let Some(parent) = self.path.parent() {
-      create_dirs_with_private_mode(parent)
+      create_private_dir(parent)
         .map_err(|error| format!("{label} store directory failed: {error}"))?;
     }
     let plaintext = serde_json::to_vec(value)
@@ -205,26 +212,145 @@ impl EncryptedJsonFile {
   }
 }
 
-fn create_dirs_with_private_mode(directory: &Path) -> std::io::Result<()> {
-  let mut builder = fs::DirBuilder::new();
-  builder.recursive(true);
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::DirBuilderExt;
-    builder.mode(0o700);
-  }
-  builder.create(directory)
+#[cfg(unix)]
+#[path = "local_store/unix.rs"]
+mod platform;
+#[cfg(windows)]
+#[path = "local_store/windows.rs"]
+mod platform;
+
+#[derive(Clone, Copy)]
+pub enum OpenMode {
+  Read,
+  CreateNew,
+  Append,
+  #[cfg(windows)]
+  AppendExisting,
+  Lock,
 }
 
-/// Creates `directory` (and its parents) readable by the owner only.
 pub fn create_private_dir(directory: &Path) -> std::io::Result<()> {
-  create_dirs_with_private_mode(directory)?;
+  platform::create_directory(directory)
+}
+
+pub(crate) fn create_private_dir_new(path: &Path) -> std::io::Result<()> {
+  platform::create_directory_new(path)
+}
+
+#[cfg(test)]
+pub(crate) fn write_test_fixture(
+  path: impl AsRef<Path>,
+  bytes: impl AsRef<[u8]>,
+) -> Result<(), String> {
+  write_private_atomic(path.as_ref(), bytes.as_ref())
+}
+
+pub fn open_private(mode: OpenMode, path: &Path) -> std::io::Result<fs::File> {
   #[cfg(unix)]
   {
-    use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(directory, fs::Permissions::from_mode(0o700))?;
+    open_private_with(mode, path, restrict_private_file)
   }
-  Ok(())
+  #[cfg(windows)]
+  {
+    platform::Parent::at(path)?.open(mode)
+  }
+}
+
+#[cfg(unix)]
+fn open_private_with(
+  mode: OpenMode,
+  path: &Path,
+  restrict: impl FnOnce(&fs::File) -> std::io::Result<()>,
+) -> std::io::Result<fs::File> {
+  let file = platform::Parent::at(path)?.open(mode)?;
+  restrict(&file)?;
+  Ok(file)
+}
+
+#[cfg(unix)]
+fn restrict_private_file(file: &fs::File) -> std::io::Result<()> {
+  rustix::fs::fchmod(file, rustix::fs::Mode::from_raw_mode(0o600)).map_err(Into::into)
+}
+
+pub(crate) fn create_harness_file(
+  path: &Path,
+  executable: bool,
+) -> std::io::Result<fs::File> {
+  let file = open_private(OpenMode::CreateNew, path)?;
+  #[cfg(unix)]
+  if executable {
+    rustix::fs::fchmod(&file, rustix::fs::Mode::from_raw_mode(0o700))?;
+  }
+  #[cfg(not(unix))]
+  let _ = executable;
+  Ok(file)
+}
+
+pub(crate) fn publish_harness_directory(
+  source: &Path,
+  destination: &Path,
+) -> std::io::Result<()> {
+  platform::Parent::at(source)?.rename_directory_to(&platform::Parent::at(destination)?)
+}
+
+pub fn rename_private(source: &Path, destination: &Path) -> std::io::Result<()> {
+  platform::Parent::at(source)?.rename_to(&platform::Parent::at(destination)?)
+}
+
+pub fn link_private(source: &Path, destination: &Path) -> std::io::Result<()> {
+  platform::Parent::at(source)?.link_to(&platform::Parent::at(destination)?)
+}
+
+// Dependency-managed writes are enumerated in docs/local-file-creation.md.
+pub fn enable_autostart(app: &tauri::AppHandle) -> Result<(), String> {
+  use tauri_plugin_autostart::ManagerExt;
+  app
+    .autolaunch()
+    .enable()
+    .map_err(|error| format!("autostart enable failed: {error}"))
+}
+
+pub fn disable_autostart(app: &tauri::AppHandle) -> Result<(), String> {
+  use tauri_plugin_autostart::ManagerExt;
+  app
+    .autolaunch()
+    .disable()
+    .map_err(|error| format!("autostart disable failed: {error}"))
+}
+
+pub fn install_update(
+  update: &tauri_plugin_updater::Update,
+  package: &[u8],
+) -> Result<(), String> {
+  update.install(package).map_err(|error| error.to_string())
+}
+
+// Repository code generation writes a fixed source artifact, outside application data.
+#[cfg(test)]
+pub(crate) fn write_generated_rpc_bindings(bindings: &str) -> std::io::Result<()> {
+  fs::write(
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+      .join("../../../packages/api-contract/src/desktop-rpc.gen.ts"),
+    bindings,
+  )
+}
+
+#[cfg(all(test, unix))]
+pub(crate) fn local_file_creation_child(test_name: &str) -> bool {
+  if std::env::var_os("STELLA_LOCAL_FILE_CHILD").is_some() {
+    return false;
+  }
+  // `/bin/sh` exists on every Unix host; the crate forbids the unsafe
+  // `pre_exec` hook that would set the child's umask in-process.
+  let result = std::process::Command::new("/bin/sh")
+    .args(["-c", "umask 0; exec \"$0\" \"$@\""])
+    .arg(std::env::current_exe().unwrap())
+    .args(["--exact", test_name, "--nocapture"])
+    .env("STELLA_LOCAL_FILE_CHILD", "1")
+    .status()
+    .unwrap();
+  assert!(result.success(), "local file child failed: {result}");
+  true
 }
 
 /// Replaces `path` with `bytes` through a uniquely named sibling, so a reader
@@ -241,34 +367,28 @@ fn write_private_atomic_with(
   bytes: &[u8],
   sync: impl Fn(&fs::File) -> std::io::Result<()>,
 ) -> Result<(), String> {
-  let temp_path = path.with_extension(format!(
+  let destination = platform::Parent::at(path).map_err(|error| error.to_string())?;
+  let temporary_name = path.with_extension(format!(
     "{}.{}.tmp",
     std::process::id(),
     uuid::Uuid::new_v4()
   ));
-  let mut options = fs::OpenOptions::new();
-  options.write(true).create_new(true);
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::OpenOptionsExt;
-    options.mode(0o600);
-  }
-  let mut temporary = options
-    .open(&temp_path)
+  let temporary = destination
+    .sibling(
+      temporary_name
+        .file_name()
+        .ok_or("invalid temporary file name")?
+        .to_os_string(),
+    )
     .map_err(|error| error.to_string())?;
-  let written = temporary.write_all(bytes).and_then(|()| sync(&temporary));
-  drop(temporary);
-  if let Err(error) = written {
-    return match fs::remove_file(&temp_path) {
-      Ok(()) => Err(error.to_string()),
-      Err(cleanup) if cleanup.kind() == std::io::ErrorKind::NotFound => {
-        Err(error.to_string())
-      }
-      Err(cleanup) => Err(format!("{error}; temporary file cleanup failed: {cleanup}")),
-    };
-  }
-  if let Err(error) = fs::rename(&temp_path, path) {
-    return match fs::remove_file(&temp_path) {
+  let mut file = temporary
+    .open(OpenMode::CreateNew)
+    .map_err(|error| error.to_string())?;
+  let written = file.write_all(bytes).and_then(|()| sync(&file));
+  drop(file);
+  let replaced = written.and_then(|()| temporary.rename_to_with(&destination, &sync));
+  if let Err(error) = replaced {
+    return match temporary.remove() {
       Ok(()) => Err(format!("replace failed: {error}")),
       Err(cleanup) if cleanup.kind() == std::io::ErrorKind::NotFound => {
         Err(format!("replace failed: {error}"))
@@ -278,32 +398,6 @@ fn write_private_atomic_with(
       )),
     };
   }
-  sync_parent(path, &sync).map_err(|error| format!("directory sync failed: {error}"))
-}
-
-/// Makes a rename inside `path`'s directory durable. Windows has no handle
-/// for a directory sync; its rename is already written through.
-#[cfg(unix)]
-fn sync_parent(
-  path: &Path,
-  sync: &impl Fn(&fs::File) -> std::io::Result<()>,
-) -> std::io::Result<()> {
-  let parent = match path.parent() {
-    Some(parent) if !parent.as_os_str().is_empty() => parent,
-    _ => Path::new("."),
-  };
-  sync(&fs::File::open(parent)?)
-}
-
-#[cfg(not(unix))]
-#[allow(
-  clippy::unnecessary_wraps,
-  reason = "the Unix directory sync's signature"
-)]
-fn sync_parent(
-  _path: &Path,
-  _sync: &impl Fn(&fs::File) -> std::io::Result<()>,
-) -> std::io::Result<()> {
   Ok(())
 }
 
@@ -377,6 +471,155 @@ pub fn debug_build_is_memory_only(_env: &str) -> bool {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[cfg(unix)]
+  fn assert_link_error(error: std::io::Error) {
+    assert!(
+      matches!(error.raw_os_error(), Some(code) if
+      code == rustix::io::Errno::LOOP.raw_os_error()
+      || code == rustix::io::Errno::NOTDIR.raw_os_error()),
+      "unexpected local file error: {error}"
+    );
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn local_file_creation_rejects_linked_entries() {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let root = unique_path().parent().unwrap().to_path_buf();
+    create_private_dir(&root).unwrap();
+    let outside = root.join("outside");
+    create_private_dir(&outside).unwrap();
+    let sentinel = outside.join("sentinel");
+    fs::write(&sentinel, b"original").unwrap();
+    fs::set_permissions(&sentinel, fs::Permissions::from_mode(0o666)).unwrap();
+    let leaf = root.join("leaf");
+    symlink(&sentinel, &leaf).unwrap();
+    assert_link_error(open_private(OpenMode::Append, &leaf).unwrap_err());
+    assert!(write_private_atomic(&leaf, b"replacement").is_err());
+    let source = root.join("source");
+    write_private_atomic(&source, b"value").unwrap();
+    assert_link_error(rename_private(&source, &leaf).unwrap_err());
+    assert_link_error(link_private(&source, &leaf).unwrap_err());
+    let directory_link = root.join("directory");
+    symlink(&outside, &directory_link).unwrap();
+    assert_link_error(create_private_dir(&directory_link).unwrap_err());
+    assert_link_error(
+      publish_harness_directory(&directory_link, &root.join("published")).unwrap_err(),
+    );
+    assert!(write_private_atomic(&directory_link.join("file"), b"value").is_err());
+    let middle = root.join("middle");
+    create_private_dir(&middle).unwrap();
+    symlink(&outside, middle.join("link")).unwrap();
+    assert_link_error(create_private_dir(&middle.join("link/nested")).unwrap_err());
+    assert_link_error(
+      open_private(OpenMode::Append, &middle.join("link/sentinel")).unwrap_err(),
+    );
+    assert_eq!(fs::read(&sentinel).unwrap(), b"original");
+    assert_eq!(
+      fs::metadata(&sentinel).unwrap().permissions().mode() & 0o777,
+      0o666
+    );
+    assert!(!outside.join("nested").exists());
+    assert!(!outside.join("file").exists());
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn harness_directories_are_created_once_and_published_whole() {
+    let root = unique_path().parent().unwrap().to_path_buf();
+    create_private_dir(&root).unwrap();
+    let staged = root.join("staged");
+    create_private_dir_new(&staged).unwrap();
+    assert_eq!(
+      create_private_dir_new(&staged).unwrap_err().kind(),
+      std::io::ErrorKind::AlreadyExists
+    );
+    write_private_atomic(&staged.join("record"), b"complete").unwrap();
+    let published = root.join("published");
+    publish_harness_directory(&staged, &published).unwrap();
+    assert!(!staged.exists());
+    assert_eq!(fs::read(published.join("record")).unwrap(), b"complete");
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn local_file_creation_keeps_the_open_directory() {
+    use std::os::unix::fs::symlink;
+    let root = unique_path().parent().unwrap().to_path_buf();
+    let original = root.join("original");
+    let moved = root.join("moved");
+    let outside = root.join("outside");
+    create_private_dir(&original).unwrap();
+    create_private_dir(&outside).unwrap();
+    let parent = platform::Parent::at(&original.join("file")).unwrap();
+    fs::rename(&original, &moved).unwrap();
+    symlink(&outside, &original).unwrap();
+    parent
+      .open(OpenMode::CreateNew)
+      .unwrap()
+      .write_all(b"value")
+      .unwrap();
+    assert_eq!(fs::read(moved.join("file")).unwrap(), b"value");
+    assert!(!outside.join("file").exists());
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn local_file_creation_uses_one_contract() {
+    use std::os::unix::fs::PermissionsExt;
+    if local_file_creation_child(
+      "local_store::tests::local_file_creation_uses_one_contract",
+    ) {
+      return;
+    }
+    let path = unique_path();
+    create_private_dir(path.parent().unwrap()).unwrap();
+    let file = open_private_with(OpenMode::CreateNew, &path, |file| {
+      assert_eq!(file.metadata()?.permissions().mode() & 0o777, 0o600);
+      restrict_private_file(file)
+    })
+    .unwrap();
+    drop(file);
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o666)).unwrap();
+    let reopened = open_private(OpenMode::Read, &path).unwrap();
+    assert_eq!(
+      reopened.metadata().unwrap().permissions().mode() & 0o777,
+      0o600
+    );
+    let error = open_private_with(OpenMode::Read, &path, |_| {
+      Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+    })
+    .unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+    fs::set_permissions(path.parent().unwrap(), fs::Permissions::from_mode(0o777))
+      .unwrap();
+    create_private_dir(path.parent().unwrap()).unwrap();
+    assert_eq!(
+      fs::metadata(path.parent().unwrap())
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o777,
+      0o700
+    );
+    write_private_atomic(&path, b"first").unwrap();
+    write_private_atomic(&path, b"second").unwrap();
+    assert_eq!(fs::read(&path).unwrap(), b"second");
+    assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
+    let directory_target = path.parent().unwrap().join("directory");
+    create_private_dir(&directory_target).unwrap();
+    assert!(
+      write_private_atomic(&directory_target, b"value")
+        .unwrap_err()
+        .contains("replace failed")
+    );
+    assert!(directory_target.is_dir());
+    assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 2);
+    fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
 
   /// A store path in its own fresh directory, so `persist` restricts that
   /// directory rather than the shared temp directory.

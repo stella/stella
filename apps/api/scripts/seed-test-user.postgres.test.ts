@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { user } from "@/api/db/auth-schema";
 import { featureEnrolments } from "@/api/db/schema";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { ensureOrganizationExists, ensureTestUsers } from "./seed-test-user";
 
@@ -52,9 +53,7 @@ describe.skipIf(!runPostgresTests)("test user seed (postgres)", () => {
       expect(await readEnrolments()).toEqual(enrolled);
     } finally {
       await db.transaction(async (tx) => {
-        await tx
-          .delete(organization)
-          .where(inArray(organization.id, organizationIds));
+        await deleteOrganizationsForTest(tx, organizationIds);
       });
     }
   });
