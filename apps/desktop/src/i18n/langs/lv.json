@@ -500,7 +500,7 @@
     "aiDraftFailed": "stella AI nevarēja sagatavot šo aprakstu.",
     "aiDraftEarlierEntries": "{count, plural, zero {Seko # agrākiem ierakstiem} one {Seko # agrākam ierakstam} other {Seko # agrākiem ierakstiem}}",
     "aiDraftLabel": "MI",
-    "aiDraftDisclosure": "MI melnraksti ir ieteikumi, ko stella izveido no pārskatāmā ieraksta, jūsu agrākajiem ierakstiem lietā un, ja birojs tās ir pievienojis, tā norēķinu vadlīnijām. Pirms izveides pārskatiet katru ierakstu.",
+    "aiDraftDisclosure": "AI melnraksti ir ieteikumi, ko stella izveido no pārskatāmā ieraksta, jūsu agrākajiem ierakstiem lietā un, ja jūsu organizācija tās ir pievienojusi, tās norēķinu vadlīnijām. Pirms izveides pārskatiet katru ierakstu.",
     "billingDraftsTitle": "stella AI melnraksti",
     "billingDraftsGranted": "stella AI sagatavo jūsu laika ierakstu aprakstus no detaļām, ko rāda katrs ieraksts.",
     "billingDraftsRevoked": "stella AI sagatavo aprakstus tikai pēc tam, kad to atļaujat pie laika ieraksta.",

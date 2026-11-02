@@ -94,7 +94,7 @@
     "selectedRun": "Käivita tehisintellekti veerud {count, plural, one {# real} other {# real}}"
   },
   "aiDisclosure": {
-    "billingDrafts": "TI kavandid on soovitused, mille stella loob ülevaadatavast kandest, teie varasematest kannetest selles asjas ja büroo arveldusjuhistest, kui büroo on need lisanud. Vaadake iga kanne enne loomist üle.",
+    "billingDrafts": "AI kavandid on soovitused, mille stella loob ülevaadatavast kandest, teie varasematest kannetest selles toimikus ja teie organisatsiooni arveldusjuhistest, kui need on lisatud. Vaadake iga kanne enne loomist üle.",
     "caseLaw": "Kohtulahendite AI-kokkuvõtted, -märkmed ja -analüüsid koostab stella; kohtud ei ole neid heaks kiitnud ja need ei kajasta kohtute endi arutluskäiku. Need on abivahendid õigusala spetsialistidele ning määravaks allikaks jääb lahendi tekst."
   },
   "appearance": {
@@ -1456,10 +1456,12 @@
           "click": "Klõpsa",
           "fill": "Sisesta tekst",
           "open": "Ava veebisait",
+          "openNewTab": "Ava veebisait uuel vahekaardil",
           "pressKey": "Vajuta klahvi",
           "select": "Vali suvand",
           "snapshot": "Loe lehte",
-          "snapshotContinue": "Jätka lehe lugemist"
+          "snapshotContinue": "Jätka lehe lugemist",
+          "switchTab": "Lülitu vahekaardile"
         },
         "askAgain": "Küsi uuesti",
         "autoApproveReads": "Kinnita lehtede lugemine automaatselt",

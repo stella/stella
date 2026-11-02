@@ -500,7 +500,7 @@
     "aiDraftFailed": "A stella AI nem tudott leírást javasolni.",
     "aiDraftEarlierEntries": "{count, plural, one {# korábbi bejegyzést követ} other {# korábbi bejegyzést követ}}",
     "aiDraftLabel": "MI",
-    "aiDraftDisclosure": "Az MI-javaslatok olyan ajánlások, amelyeket a stella az ellenőrzött bejegyzésből, az ügyben korábban rögzített bejegyzéseiből és – ha az iroda hozzáadta őket – a számlázási irányelvekből készít. Létrehozás előtt ellenőrizzen minden bejegyzést.",
+    "aiDraftDisclosure": "Az AI-javaslatok olyan ajánlások, amelyeket a stella az ellenőrzött bejegyzésből, az ügyben korábban rögzített bejegyzéseiből és – ha a szervezete hozzáadta őket – a számlázási irányelvekből készít. Létrehozás előtt ellenőrizzen minden bejegyzést.",
     "billingDraftsTitle": "stella AI javaslatok",
     "billingDraftsGranted": "A stella AI az időbejegyzései leírását az egyes bejegyzésekben látható részletek alapján javasolja.",
     "billingDraftsRevoked": "A stella AI csak akkor javasol leírást, ha egy időbejegyzésnél engedélyezi.",
