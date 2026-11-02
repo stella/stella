@@ -14,6 +14,10 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
+import {
+  invoicePaymentState,
+  paidAmountOf,
+} from "@/api/lib/billing/invoice-payment-amounts";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -216,6 +220,15 @@ export const createInvoicePdfExport = (
                   }),
                 },
                 totals: amounts.totals,
+                // The document's own gross, not the stored total: a legacy
+                // invoice (no stored lines) prints entries its stored total
+                // may not count, and the payment it asks for must match.
+                settlement: invoicePaymentState({
+                  documentType: loaded.invoice.documentType,
+                  status: loaded.invoice.status,
+                  totalAmount: amounts.totals.grossAmountMinor,
+                  paidAmount: paidAmountOf(loaded.invoice.payments),
+                }),
               },
             }),
           catch: invoiceRenderError,
