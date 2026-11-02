@@ -62,7 +62,7 @@ export const CI_MARKDOWN_READER_INPUTS = [
   ".ai/shared/modules/*.md",
 ];
 export const CI_MARKDOWN_READER_COMMAND =
-  "bun --preload ./scripts/offline-network-preload.ts scripts/check-instruction-enforcement.ts --check";
+  "bun scripts/check-instruction-enforcement.ts --check";
 
 // --- Parsing ----------------------------------------------------------------
 
