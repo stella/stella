@@ -34,7 +34,7 @@ preserves any prerelease label.
 2. Open `chrome://extensions`, enable Developer mode, and choose **Load unpacked**.
 3. Select `apps/extension/.output/chrome-mv3` (or `chrome-mv3-dev`).
 4. Open a stella app tab, then open the extension popup.
-5. Choose **Allow all websites**, then **Connect current stella tab**.
+5. Choose **Allow website access and connect**, or **Connect stella**.
 6. Refresh the stella tab once after installing a new extension build.
 
 ## Trust boundary
@@ -55,7 +55,15 @@ Only development builds (`dev`, `build:dev`) and the Playwright build also
 trust `http://localhost` and `http://127.0.0.1`; `build` checks that the
 release manifest grants nothing on loopback or plain HTTP.
 
-The popup binds one explicit tab and exact origin as the active controller.
+Connecting from the popup on a stella tab makes that tab's exact origin the
+active controller: every stella tab on that origin, open now or later, uses
+the one connection, and no other origin can. It lasts until the user
+disconnects or removes website access, connects stella on another origin,
+the last stella tab on the origin closes, or the browser restarts. The
+extension remembers each stella tab by the document that last messaged it and
+sends connection changes only to that document, so a tab that navigated away
+never hears them. Commands from several stella tabs run one at a time against
+the one controlled tab.
 Website access is optional, HTTPS only, and requested in a user gesture
 together with two optional permissions, and browser commands refuse to run
 without all three:
@@ -66,7 +74,7 @@ without all three:
   page-opened tab stays confined and a download is traced to its frame.
 
 `activeTab` lets the popup read the URL of the stella tab it was opened on
-when pairing.
+when connecting.
 
 Chat reads the controlled tab. That tab is either one stella opened through
 `open`, or a tab the user already has open: open the popup on that page and

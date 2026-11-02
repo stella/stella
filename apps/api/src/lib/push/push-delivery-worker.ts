@@ -24,7 +24,10 @@ import type {
 } from "@/api/lib/push/apns-client";
 import { readApnsCredentials } from "@/api/lib/push/apns-config";
 import { createApnsProviderToken } from "@/api/lib/push/apns-provider-token";
-import { PUSH_DELIVERY_QUEUE_NAME } from "@/api/lib/push/push-delivery-queue";
+import {
+  PUSH_DELIVERY_QUEUE_NAME,
+  pushTokenHash,
+} from "@/api/lib/push/push-delivery-queue";
 import type { PushDeliveryJobData } from "@/api/lib/push/push-delivery-queue";
 import {
   listDeliverableDevices,
@@ -100,8 +103,8 @@ export type PushDeliveryResult =
     }
   | {
       status: "sent";
-      /** Tokens reached by this attempt or an earlier one. */
-      deliveredTokens: string[];
+      /** Hashes of the tokens reached by this attempt or an earlier one. */
+      deliveredTokenHashes: string[];
       /** Devices APNs called dead, now removed. */
       removed: number;
       /** Devices worth another attempt. */
@@ -143,13 +146,13 @@ export const deliverPushNotification = async (
   if (!isMobilePushKind(visible.notification.kind)) {
     return { status: "skipped", reason: "not_pushed" };
   }
-  const alreadyDelivered = new Set(data.deliveredTokens);
+  const alreadyDelivered = new Set(data.deliveredTokenHashes);
   const listed = await deps.listDevices(recipient);
   if (listed.type === "overflow") {
     return { status: "skipped", reason: "too_many_devices" };
   }
   const devices = listed.rows.filter(
-    (device) => !alreadyDelivered.has(device.token),
+    (device) => !alreadyDelivered.has(pushTokenHash(device.token)),
   );
   if (devices.length === 0) {
     return { status: "skipped", reason: "no_devices" };
@@ -178,11 +181,11 @@ export const deliverPushNotification = async (
   const removed = await deps.removeDevices(recipient, gone);
   return {
     status: "sent",
-    deliveredTokens: [
+    deliveredTokenHashes: [
       ...alreadyDelivered,
       ...outcomes
         .filter(({ outcome }) => outcome.type === "delivered")
-        .map(({ device }) => device.token),
+        .map(({ device }) => pushTokenHash(device.token)),
     ],
     removed,
     retryable: outcomes.filter(({ outcome }) => outcome.type === "retry")
@@ -323,7 +326,7 @@ export const initPushDeliveryWorker = ({ db }: BullMqWorkerContext) => {
         // reaches only the devices still owed it.
         await job.updateData({
           ...job.data,
-          deliveredTokens: result.deliveredTokens,
+          deliveredTokenHashes: result.deliveredTokenHashes,
         });
         throw new PushDeliveryRetryError({
           message: "Some devices could not be reached yet",

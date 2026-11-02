@@ -5,7 +5,10 @@ import {
 import type { ChatMessageEditErrorCode } from "@stll/api-contract";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
-import { hasRunningToolCallInLatestAssistantMessage } from "@/components/chat/chat-ui-tools";
+import {
+  getAwaitedAssistantMessageId,
+  hasRunningToolCallInLatestAssistantMessage,
+} from "@/components/chat/chat-ui-tools";
 import type { ChatStopState } from "@/features/chat/chat-runtime";
 import type { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { chatRefusal } from "@/lib/errors/api";
@@ -198,7 +201,10 @@ export const canRetryChatRequest = (error: Error | undefined): boolean =>
   chatRefusal(error)?.code !== CHAT_CONTINUATION_REJECTED_ERROR_CODE &&
   !isChatMessageEditRefusal(error);
 
-/** Retry regenerates the latest answer, once no turn runs. */
+/**
+ * Retry regenerates the latest answer, once no turn runs. A turn waiting on an
+ * approval or a question is still owned by that decision, not finished.
+ */
 export const canRetryAssistantMessage = ({
   error,
   isGenerating,
@@ -206,7 +212,8 @@ export const canRetryAssistantMessage = ({
 }: AssistantMessageActionState & { error: Error | undefined }): boolean =>
   canRetryChatRequest(error) &&
   !isGenerating &&
-  isLatestAssistantMessage(message);
+  isLatestAssistantMessage(message) &&
+  getAwaitedAssistantMessageId(message.messages) !== message.messageId;
 
 /**
  * Forking reads persisted history, so it is offered on every settled answer

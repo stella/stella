@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The root workspace declares drizzle-kit (catalog version) for scripts/check-migration-schema.ts, which generates the schema snapshot; apps/api already depends on it."
+}

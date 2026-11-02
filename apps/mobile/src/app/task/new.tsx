@@ -83,9 +83,12 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
       ? null
       : { load: listMatterMembers({ fetch, matterId: id, source }) };
   const [members, setMembers] = useState(() => membersOf(matterId));
-  const [chosen, setChosen] = useState<ReadonlySet<string>>(
-    () => new Set([source.session().userId]),
-  );
+  const [chosen, setChosen] = useState<ReadonlySet<string>>(() => {
+    // Signed out meanwhile: no one is preselected, and adding fails as
+    // signed out.
+    const session = source.session();
+    return new Set(session === undefined ? [] : [session.userId]);
+  });
   const [failure, setFailure] = useState<WriteFailure | null>(null);
   const [adding, startAdding] = useTransition();
   const [matters] = useState(async () => {

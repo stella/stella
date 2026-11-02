@@ -24,7 +24,23 @@ test("reports imported, local, and namespace aliases", async () => {
         "await leases.acquireCaseLawSourceIngestionLease(options);",
       ].join("\n"),
     ),
-  ).toEqual([5, 6, 7]);
+  ).toEqual([1, 2, 5, 6, 7]);
+});
+
+test("reports the acquisition taken in as a value, under any name", async () => {
+  expect(
+    await lint(
+      [
+        'import { acquireCaseLawSourceIngestionLease } from "./case-law-source-ingestion-lease";',
+        "await waitFor({ acquire: acquireCaseLawSourceIngestionLease });",
+        'const { acquireCaseLawSourceIngestionLease: claim } = await import("./case-law-source-ingestion-lease");',
+        'const leases = await import("./case-law-source-ingestion-lease");',
+        'await waitFor({ acquire: leases["acquireCaseLawSourceIngestionLease"] });',
+        'export { acquireCaseLawSourceIngestionLease } from "./case-law-source-ingestion-lease";',
+        "await withCaseLawSourceIngestionLease(options, work);",
+      ].join("\n"),
+    ),
+  ).toEqual([1, 3, 5, 6]);
 });
 
 test("accepts aliases inside the lease owner", async () => {

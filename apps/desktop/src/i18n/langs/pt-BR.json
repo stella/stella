@@ -484,7 +484,7 @@
     "evidenceTitles": "Títulos",
     "evidenceApps": "Apps",
     "rangeEmpty": "Nada foi registrado neste intervalo.",
-    "calendarHint": "Abra uma sugestão tracejada para revisá-la ou arraste na coluna Atividade para preparar um lançamento de qualquer intervalo.",
+    "calendarHint": "Abra uma sugestão tracejada para revisá-la ou arraste na coluna Lançamentos de horas para preparar um lançamento de qualquer intervalo.",
     "narrativeAiPrompt": "Escrever a descrição com stella AI? Só os títulos de janela desta sugestão são enviados; eles não são armazenados.",
     "narrativeAiNo": "Não",
     "narrativeAiApprove": "Aprovar",
@@ -494,6 +494,22 @@
     "narrativeAiFailed": "stella AI não conseguiu escrever a descrição. O modelo foi mantido.",
     "narrativeAssistAlways": "Escrever descrições com stella AI sem perguntar",
     "narrativeAssistDescription": "Só os títulos de janela de uma sugestão são enviados; eles não são armazenados."
+  },
+  "dictation": {
+    "title": "Ditado",
+    "description": "Segure {shortcut} e fale. O texto aparece no aplicativo que você está usando. A fala é transcrita neste computador e não é armazenada.",
+    "modelNeeded": "O modelo de voz é executado neste computador.",
+    "download": "Baixar ({size} MB)",
+    "downloading": "Baixando o modelo de voz: {percent}%",
+    "downloadFailed": "Não foi possível baixar o modelo de voz.",
+    "modelAttribution": "Speech model: Parakeet Ultra by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF by handy-computer. CC BY 4.0.",
+    "shortcutTaken": "Outro aplicativo está usando {shortcut}.",
+    "failure": {
+      "accessibility": "Permita o acesso à Acessibilidade para que a stella possa digitar em outros aplicativos.",
+      "microphone": "A stella não consegue ouvir seu microfone. Verifique o acesso ao microfone nos Ajustes do Sistema.",
+      "modelMissing": "Baixe primeiro o modelo de voz.",
+      "transcription": "A transcrição falhou. Tente novamente."
+    }
   },
   "shortcut": {
     "title": "Atalho da área de transferência",
@@ -614,7 +630,6 @@
     "guideAllowed": "O stella desktop tem permissão",
     "never": {
       "screenRecording": "Gravação de tela",
-      "microphone": "Microfone",
       "camera": "Câmera",
       "keystrokes": "Pressionamentos de teclas",
       "fullDiskAccess": "Acesso total ao disco",

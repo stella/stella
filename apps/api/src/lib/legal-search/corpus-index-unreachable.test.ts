@@ -33,6 +33,9 @@ import {
   testAppliedProjectionsFor,
   testRevisionsFor,
 } from "@/api/tests/helpers/corpus-projection-revisions";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 /**
  * Where "the search index is unavailable" is decided: at the client, from
@@ -50,16 +53,18 @@ const originalFetch = globalThis.fetch;
 const originalSearchEndpoint = envBase.CORPUS_INDEX_Q09_SEARCH_ENDPOINT;
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   Object.assign(envBase, {
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT: originalSearchEndpoint,
   });
 });
 
 const stubFetch = (answer: () => Promise<Response>) => {
-  globalThis.fetch = Object.assign(answer, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(answer, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 };
 
 const failureWithCode = (message: string, code: string): Error =>
@@ -279,23 +284,26 @@ const SCAN_TRANSPORTS: readonly CorpusIndexScanTransport[] = [
  * aborts, so only a deadline ends the wait.
  */
 const stubSlowEngine = () => {
-  globalThis.fetch = Object.assign(
-    async (
-      _input: Parameters<typeof fetch>[0],
-      init?: Parameters<typeof fetch>[1],
-    ): Promise<Response> => {
-      const signal = init?.signal ?? panic("Search requires a timeout signal");
-      const answer = Promise.withResolvers<Response>();
-      signal.addEventListener(
-        "abort",
-        () => {
-          answer.reject(signal.reason);
-        },
-        { once: true },
-      );
-      return await answer.promise;
-    },
-    { preconnect: originalFetch.preconnect },
+  testFetchState.set(
+    Object.assign(
+      async (
+        _input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ): Promise<Response> => {
+        const signal =
+          init?.signal ?? panic("Search requires a timeout signal");
+        const answer = Promise.withResolvers<Response>();
+        signal.addEventListener(
+          "abort",
+          () => {
+            answer.reject(signal.reason);
+          },
+          { once: true },
+        );
+        return await answer.promise;
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
   );
 };
 

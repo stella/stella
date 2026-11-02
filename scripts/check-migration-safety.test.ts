@@ -778,6 +778,19 @@ describe("check-migration-safety", () => {
   });
 
   describe("destructive rules", () => {
+    it("requires a reviewed acknowledgement for every constraint drop", () => {
+      for (const existence of ["", "IF EXISTS "]) {
+        const statement = `ALTER TABLE "documents" DROP CONSTRAINT ${existence}"documents_status_check";`;
+        expectFinding(runChecker(statement), "drop-constraint");
+        expectClean(
+          runChecker(`
+            -- stella-migration-safety: reviewed drop-constraint - expanded replacement commits atomically; rollback restores the existing check
+            ${statement}
+          `),
+        );
+      }
+    });
+
     it("flags enum value renames, unlogged tables, and disabled triggers", () => {
       expectFinding(
         runChecker(

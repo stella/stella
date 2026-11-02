@@ -69,6 +69,7 @@ export type CapabilityCatalogEntry = {
   confirmation?: "required";
   idempotency?: { type: "replay" };
   scope: string;
+  accountScope?: string;
   additionalScopes?: readonly string[];
   /** API-owned finite transport deadline for this generated capability command. */
   requestTimeoutMs?: number;

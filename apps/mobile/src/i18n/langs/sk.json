@@ -165,7 +165,16 @@
     "preview": "Otvoriť náhľad",
     "previewDescription": "Tento súbor sa otvorí v systémovom náhľade.",
     "unrendered": "Tento dokument sa tu nedá zobraziť, systémový náhľad ho však možno otvorí.",
-    "details": "Podrobnosti"
+    "details": "Podrobnosti",
+    "zoomOut": "Oddialiť",
+    "zoomIn": "Priblížiť",
+    "zoomFit": "Prispôsobiť šírke",
+    "fit": "Šírka",
+    "appearance": {
+      "system": "Vzhľad: automaticky",
+      "light": "Vzhľad: svetlý",
+      "dark": "Vzhľad: tmavý"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -193,7 +202,8 @@
     "server": "Server",
     "signOut": "Odhlásiť sa",
     "deleteAccount": "Odstrániť účet",
-    "deleteAccountHint": "Otvorí váš účet na webe, kde ho môžete odstrániť aj so všetkým, čo je vaše."
+    "deleteAccountHint": "Otvorí váš účet na webe, kde ho môžete odstrániť aj so všetkým, čo je vaše.",
+    "signOutFailed": "Odhlásenie sa nepodarilo dokončiť. Skúste to znova."
   },
   "header": {
     "search": "Hľadať"
@@ -293,6 +303,29 @@
   "palette": {
     "placeholder": "Hľadajte spisy a konverzácie alebo spustite príkaz",
     "noResults": "Nič nezodpovedá „{query}“"
+  },
+  "search": {
+    "placeholder": "Hľadať v stella",
+    "clear": "Vymazať hľadanie",
+    "cancel": "Zrušiť",
+    "recent": "Nedávne hľadania",
+    "clearRecent": "Vymazať",
+    "hint": "Hľadajte v spisoch, dokumentoch, úlohách, konverzáciách a judikatúre.",
+    "filters": "Filtre",
+    "noResultsTitle": "Žiadne výsledky",
+    "noResults": "Nič nezodpovedá „{query}“. Skúste iné slová alebo odstráňte filter.",
+    "loadFailed": "Hľadanie sa nepodarilo vykonať.",
+    "retry": "Skúsiť znova",
+    "type": {
+      "document": "Dokumenty",
+      "matter": "Spisy",
+      "task": "Úlohy",
+      "caseLaw": "Judikatúra",
+      "chat": "Konverzácie",
+      "folder": "Priečinky",
+      "message": "E-maily",
+      "link": "Odkazy"
+    }
   },
   "pane": {
     "showList": "Zobraziť zoznam",

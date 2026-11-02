@@ -110,6 +110,7 @@ const documentDependencies: CreateEntityFromBufferDependencies = {
 };
 
 const resetDependencies: ReviewResetDependencies = {
+  flushWorkspaceSearchRepairs: async () => ({ failed: 0, repaired: 0 }),
   seed: { documents: documentDependencies },
   workspaceDeletion: { enqueueCleanup: async () => {} },
 };

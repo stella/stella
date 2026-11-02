@@ -24,6 +24,8 @@ import type {
   ActivitySuggestion,
   EvidenceRow,
 } from "./activity-calendar-logic";
+import type { ActivityDaySnapshot } from "./activity-types";
+import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { MatterPicker } from "./MatterPicker";
 
 /** The editable fields of one suggestion. `written` counts stella AI
@@ -51,6 +53,7 @@ type ActivitySuggestionCardProps = {
   candidates: readonly DesktopTimeEntryMatterCandidate[];
   editable: boolean;
   timeLabel: string;
+  sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
   assist: NarrativeAssistView;
   onAssist: (choice: AssistChoice) => void;
   onEdit: (change: Partial<SuggestionEdit>) => void;
@@ -96,6 +99,7 @@ export const ActivitySuggestionCard = ({
   candidates,
   editable,
   timeLabel,
+  sourceAppVisuals,
   assist,
   onAssist,
   onEdit,
@@ -264,7 +268,7 @@ export const ActivitySuggestionCard = ({
           <ShortcutHint label={shortcutLabel(ACCEPT_KEYS)} />
         </Button>
       </div>
-      <Evidence suggestion={suggestion} />
+      <Evidence suggestion={suggestion} sourceAppVisuals={sourceAppVisuals} />
     </section>
   );
 };
@@ -370,7 +374,13 @@ const WriteWithAiButton = ({ onClick }: { onClick: () => void }) => {
   );
 };
 
-const Evidence = ({ suggestion }: { suggestion: ActivitySuggestion }) => {
+const Evidence = ({
+  suggestion,
+  sourceAppVisuals,
+}: {
+  suggestion: ActivitySuggestion;
+  sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
+}) => {
   const t = useTranslations("activity");
   const titles = titleRows(suggestion);
   const apps = appRows(suggestion);
@@ -386,10 +396,10 @@ const Evidence = ({ suggestion }: { suggestion: ActivitySuggestion }) => {
         <TabsTab value="apps">{t("evidenceApps")}</TabsTab>
       </TabsList>
       <TabsPanel value="titles">
-        <EvidenceRows rows={titles} />
+        <EvidenceRows rows={titles} sourceAppVisuals={sourceAppVisuals} />
       </TabsPanel>
       <TabsPanel value="apps">
-        <EvidenceRows rows={apps} />
+        <EvidenceRows rows={apps} sourceAppVisuals={sourceAppVisuals} />
       </TabsPanel>
     </Tabs>
   );
@@ -397,14 +407,24 @@ const Evidence = ({ suggestion }: { suggestion: ActivitySuggestion }) => {
 
 const EVIDENCE_ROW_LIMIT = 8;
 
-const EvidenceRows = ({ rows }: { rows: readonly EvidenceRow[] }) => {
+const EvidenceRows = ({
+  rows,
+  sourceAppVisuals,
+}: {
+  rows: readonly EvidenceRow[];
+  sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
+}) => {
   const t = useTranslations("activity");
   const format = useFormatter();
   return (
     <ul className="flex flex-col gap-1.5 pt-2 text-xs">
       {rows.slice(0, EVIDENCE_ROW_LIMIT).map((row) => (
         <li className="flex flex-col gap-1" key={row.id}>
-          <div className="flex min-w-0 items-baseline gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <ActivitySourceIcon
+              appIdentifier={row.appIdentifier}
+              sourceAppVisuals={sourceAppVisuals}
+            />
             <bdi className="min-w-0 flex-1 truncate">{row.label}</bdi>
             <span className="text-muted-foreground shrink-0 tabular-nums">
               {t("durationMinutes", {

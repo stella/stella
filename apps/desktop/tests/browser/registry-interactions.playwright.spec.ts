@@ -315,6 +315,7 @@ const installNativeBoundary = async (
           welcomeStatus: "completed",
         }),
         get_state: () => settingsSnapshot,
+        dictation_get_snapshot: () => ({ available: false }),
         shortcut_get_snapshot: () => ({
           defaultKeys: { code: "KeyV", modifiers: ["shift", "super"] },
           keys: { code: "KeyV", modifiers: ["shift", "super"] },

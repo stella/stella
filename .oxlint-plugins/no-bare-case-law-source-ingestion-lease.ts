@@ -4,9 +4,11 @@ import type { Ranged } from "@oxlint/plugins";
 import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import {
   filenameForContext,
+  getPropertyName,
   isFileIn,
   isIdentifier,
   resolveImportedExpressionForEnforcement,
+  staticStringValue,
 } from "./utils.ts";
 
 const OWNER =
@@ -56,12 +58,49 @@ export const createCaseLawSourceIngestionLeasePlugin = (
               return !isFileIn(context, [OWNER]);
             },
             // Any member named like the acquisition, whatever object holds
-            // it: a namespace import, or a module loaded on demand.
+            // it: a namespace import, or a module loaded on demand, spelled
+            // as a name or as a string key.
             MemberExpression(node) {
+              const name = node.computed
+                ? staticStringValue(node.property)
+                : isIdentifier(node.property)
+                  ? node.property.name
+                  : null;
+              if (name === ACQUIRE && enforces(node)) {
+                context.report({ node, messageId: "bareAcquisition" });
+              }
+            },
+            // Taking the acquisition into a module at all, under any name:
+            // a function in hand can be passed on as a value
+            // (`{ acquire: acquireCaseLawSourceIngestionLease }`) and called
+            // where no call names it.
+            ImportSpecifier(node) {
+              const imported =
+                node.imported.type === "Identifier"
+                  ? node.imported.name
+                  : node.imported.value;
+              if (imported === ACQUIRE && enforces(node)) {
+                context.report({ node, messageId: "bareAcquisition" });
+              }
+            },
+            ExportSpecifier(node) {
+              const local =
+                node.local.type === "Identifier"
+                  ? node.local.name
+                  : node.local.value;
+              if (local === ACQUIRE && enforces(node)) {
+                context.report({ node, messageId: "bareAcquisition" });
+              }
+            },
+            // `const { acquireCaseLawSourceIngestionLease: claim } = await
+            // import(...)`, or from a namespace.
+            Property(node) {
+              const key = node.computed
+                ? staticStringValue(node.key)
+                : getPropertyName(node.key);
               if (
-                !node.computed &&
-                isIdentifier(node.property) &&
-                node.property.name === ACQUIRE &&
+                node.parent.type === "ObjectPattern" &&
+                key === ACQUIRE &&
                 enforces(node)
               ) {
                 context.report({ node, messageId: "bareAcquisition" });

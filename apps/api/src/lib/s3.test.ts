@@ -22,6 +22,9 @@ import { isExpiredCredentialsError } from "@/api/lib/s3/credential-guard";
 import { credentialsFromEnvValues } from "@/api/lib/s3/credentials";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const jsonResponse = (body: unknown): Response =>
   new Response(JSON.stringify(body), { status: 200 });
@@ -51,7 +54,7 @@ describe("readCorpusS3BytesBounded", () => {
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test("reports a declared transfer overrun as a terminal budget error", async () => {
@@ -61,9 +64,11 @@ describe("readCorpusS3BytesBounded", () => {
           headers: { "content-length": "8" },
         }),
       );
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
 
     const rejection = await readCorpusS3BytesBounded({
       key: "legal-corpus/oversized.zst",
@@ -758,13 +763,15 @@ describe("readCorpusS3Range", () => {
       init?: RequestInit,
     ) => Promise<Response>,
   ) => {
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
   };
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     seenRangeHeaders.length = 0;
   });
 
@@ -944,7 +951,7 @@ describe("readCorpusS3Range over the fake store", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     fake.stop();
   });
 
@@ -1012,9 +1019,11 @@ describe("readCorpusS3Range over the fake store", () => {
       headers.delete("range");
       return await originalFetch(input, { ...init, headers });
     };
-    globalThis.fetch = Object.assign(withoutRange, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(withoutRange, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
 
     const rejection: unknown = await readCorpusS3Range({
       key,
@@ -1037,7 +1046,7 @@ describe("readS3ArrayBuffer", () => {
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test("installs a deadline when the caller supplies no signal", async () => {
@@ -1049,9 +1058,11 @@ describe("readS3ArrayBuffer", () => {
       requestSignal = init?.signal;
       return await Promise.resolve(new Response(new Uint8Array([1, 2, 3])));
     };
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
 
     const bytes = new Uint8Array(await readS3ArrayBuffer("documents/test"));
 
@@ -1070,15 +1081,17 @@ describe("presigned reads and expired credentials", () => {
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   const installFetch = (
     stub: (input: string | URL | Request) => Promise<Response>,
   ) => {
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
   };
 
   const expiredTokenResponse = (): Response =>

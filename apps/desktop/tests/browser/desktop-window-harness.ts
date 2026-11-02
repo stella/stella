@@ -171,6 +171,7 @@ const openWindow = async (
       },
       set_desktop_language: () => null,
       shortcut_get_snapshot: () => data.shortcut,
+      dictation_get_snapshot: () => ({ available: false }),
       is_activity_enabled: () => data.activity !== null,
       activity_get_settings: () => data.activity,
     }),

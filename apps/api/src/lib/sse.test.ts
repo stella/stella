@@ -18,8 +18,15 @@ import {
 
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { resetFailureObservationsForTesting } from "@/api/lib/observability/failure-shadow";
+import {
+  resetLogSinkForTesting,
+  setLogSinkForTesting,
+} from "@/api/lib/observability/logger";
 import type {
+  announceMcpToolProjectionChange as AnnounceMcpToolProjectionChange,
   broadcast as Broadcast,
+  registerMcpToolProjectionDelivery as RegisterMcpToolProjectionDelivery,
   revokeWorkspaceSseAccess as RevokeWorkspaceSseAccess,
   SseSessionLivenessReader,
   startSse as StartSse,
@@ -28,6 +35,7 @@ import type {
 } from "@/api/lib/sse";
 import {
   createSseBroadcastPublisher,
+  INSTANCE_ID,
   SSEBroadcastError,
   type SseBroadcastPublisher,
 } from "@/api/lib/sse-broadcast";
@@ -40,8 +48,15 @@ beforeEach(async () => {
   const clientsBeforeImport = createdClients.length;
   const redisClientCallsBeforeImport = createRedisClientMock.mock.calls.length;
   const intervalCallsBeforeImport = setIntervalSpy.mock.calls.length;
-  ({ broadcast, revokeWorkspaceSseAccess, startSse, stopSse, subscribe } =
-    await import("@/api/lib/sse"));
+  ({
+    announceMcpToolProjectionChange,
+    broadcast,
+    registerMcpToolProjectionDelivery,
+    revokeWorkspaceSseAccess,
+    startSse,
+    stopSse,
+    subscribe,
+  } = await import("@/api/lib/sse"));
   clientsCreatedDuringImport = createdClients.length - clientsBeforeImport;
   redisClientsCreatedDuringImport =
     createRedisClientMock.mock.calls.length - redisClientCallsBeforeImport;
@@ -157,7 +172,9 @@ const createRedisClientMock = mock(() => makeFakeRedisClient());
 let setIntervalSpy: Mock<typeof globalThis.setInterval>;
 let clearIntervalSpy: Mock<typeof globalThis.clearInterval>;
 
+let announceMcpToolProjectionChange: typeof AnnounceMcpToolProjectionChange;
 let broadcast: typeof Broadcast;
+let registerMcpToolProjectionDelivery: typeof RegisterMcpToolProjectionDelivery;
 let revokeWorkspaceSseAccess: typeof RevokeWorkspaceSseAccess;
 let startSse: typeof StartSse;
 let stopSse: typeof StopSse;
@@ -324,6 +341,126 @@ const LIFECYCLE_INTERVALS_MS = [20_000, LIMITS.sseCredentialRecheckMs].toSorted(
  *  An omitted delay is 0, as the timer itself reads it. */
 const startedIntervals = () =>
   setIntervalSpy.mock.calls.map(([, ms]) => ms ?? 0).toSorted(ascending);
+
+describe("MCP tool projection changes", () => {
+  test("a change from another replica reaches this replica and its own echo does not", async () => {
+    createdClients.length = 0;
+    const delivered: unknown[] = [];
+    registerMcpToolProjectionDelivery((change) => {
+      delivered.push(change);
+    });
+    startTestSse();
+    await settlePendingWork();
+    try {
+      const deliver = createdClients[0]?.messageHandler;
+      expect(deliver).toBeFunction();
+      deliver?.(
+        JSON.stringify({
+          id: "org_1",
+          originInstanceId: "api:another-replica",
+          scope: "mcp-tool-projection",
+          userId: "user_1",
+        }),
+      );
+      deliver?.(
+        JSON.stringify({
+          id: "org_1",
+          originInstanceId: INSTANCE_ID,
+          scope: "mcp-tool-projection",
+        }),
+      );
+      expect(delivered).toEqual([
+        { organizationId: "org_1", userId: "user_1" },
+      ]);
+    } finally {
+      stopSse();
+      await settlePendingWork();
+    }
+  });
+
+  /**
+   * Announces one change through a publisher whose first `failures` publishes
+   * fail, recording the backoff each retry asked for and each failure the
+   * announcement reported.
+   */
+  const announceThroughFailingPublisher = async (failures: number) => {
+    let failuresRemaining = failures;
+    const published: unknown[] = [];
+    const delays: number[] = [];
+    const publishMcpToolProjectionChange = mock(async (change: unknown) => {
+      if (failuresRemaining > 0) {
+        failuresRemaining -= 1;
+        throw new Error("redis unavailable");
+      }
+      published.push(change);
+    });
+    createdClients.length = 0;
+    startSse(
+      {
+        sessions: holdAllSessions,
+        user: authorizeAllUserConnections,
+        workspace: authorizeAllWorkspaceConnections,
+      },
+      {
+        createClient: createRedisClientMock,
+        publisher: { ...testPublisher, publishMcpToolProjectionChange },
+        retryWait: async (delayMs) => {
+          delays.push(delayMs);
+          await Promise.resolve();
+        },
+      },
+    );
+    await settlePendingWork();
+    const reported: { phase: unknown; step: unknown }[] = [];
+    setLogSinkForTesting(({ attributes, message }) => {
+      if (message === "sse.mcp_tool_projection_publish_failed") {
+        reported.push({
+          phase: attributes?.["phase"],
+          step: attributes?.["step"],
+        });
+      }
+    });
+    try {
+      await announceMcpToolProjectionChange({ organizationId, userId });
+    } finally {
+      resetLogSinkForTesting();
+      resetFailureObservationsForTesting();
+      stopSse();
+      await settlePendingWork();
+    }
+    return {
+      attempts: publishMcpToolProjectionChange.mock.calls.length,
+      delays,
+      published,
+      reported,
+    };
+  };
+
+  test("a failed cross-replica announcement is retried with backoff until it lands", async () => {
+    const { attempts, delays, published, reported } =
+      await announceThroughFailingPublisher(2);
+    expect(attempts).toBe(3);
+    expect(delays).toEqual([250, 500]);
+    expect(published).toEqual([{ organizationId, userId }]);
+    expect(reported).toEqual([
+      { phase: "retrying", step: "attempt_1_of_3" },
+      { phase: "retrying", step: "attempt_2_of_3" },
+    ]);
+  });
+
+  test("an announcement that keeps failing stops after its last attempt and never rejects", async () => {
+    const { attempts, delays, published, reported } =
+      await announceThroughFailingPublisher(Number.POSITIVE_INFINITY);
+    expect(attempts).toBe(3);
+    expect(delays).toEqual([250, 500]);
+    expect(published).toEqual([]);
+    expect(reported).toEqual([
+      { phase: "retrying", step: "attempt_1_of_3" },
+      { phase: "retrying", step: "attempt_2_of_3" },
+      { phase: "abandoned", step: "attempt_3_of_3" },
+    ]);
+  });
+});
 
 describe("startSse / stopSse lifecycle", () => {
   test("startSse starts the keep-alive and credential sweep timers and connects the Redis subscriber", async () => {

@@ -77,8 +77,11 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+const testFetchState = createTestFetch();
 
 /**
  * A search whose index cannot be reached answers every agent the same way:
@@ -107,20 +110,22 @@ const originalPublicLaw = env.FEATURE_PUBLIC_LAW;
 
 beforeEach(() => {
   // The index is gone: every request to it is refused before an answer.
-  globalThis.fetch = Object.assign(
-    async () =>
-      await Promise.reject(
-        Object.assign(new Error("Unable to connect"), {
-          code: "ConnectionRefused",
-        }),
-      ),
-    { preconnect: originalFetch.preconnect },
+  testFetchState.set(
+    Object.assign(
+      async () =>
+        await Promise.reject(
+          Object.assign(new Error("Unable to connect"), {
+            code: "ConnectionRefused",
+          }),
+        ),
+      { preconnect: originalFetch.preconnect },
+    ),
   );
   env.FEATURE_PUBLIC_LAW = true;
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   env.FEATURE_PUBLIC_LAW = originalPublicLaw;
 });
 
@@ -300,12 +305,16 @@ describe("search_index_unavailable", () => {
     const requested: string[] = [];
     const contextWithoutServingGeneration = (): AuthorizedMcpRequestContext => {
       requested.length = 0;
-      globalThis.fetch = Object.assign(
-        async (input: string | URL | Request) => {
-          requested.push(input instanceof Request ? input.url : String(input));
-          return await Promise.resolve(Response.json({}, { status: 500 }));
-        },
-        { preconnect: originalFetch.preconnect },
+      testFetchState.set(
+        Object.assign(
+          async (input: string | URL | Request) => {
+            requested.push(
+              input instanceof Request ? input.url : String(input),
+            );
+            return await Promise.resolve(Response.json({}, { status: 500 }));
+          },
+          { preconnect: originalFetch.preconnect },
+        ),
       );
       const context = createContext();
       return {
@@ -474,23 +483,26 @@ describe("search_index_unavailable", () => {
  * aborts, so only a deadline ends the wait.
  */
 const installSlowEngine = (): void => {
-  globalThis.fetch = Object.assign(
-    async (
-      _input: Parameters<typeof fetch>[0],
-      init?: Parameters<typeof fetch>[1],
-    ): Promise<Response> => {
-      const signal = init?.signal ?? panic("Search requires a timeout signal");
-      const answer = Promise.withResolvers<Response>();
-      signal.addEventListener(
-        "abort",
-        () => {
-          answer.reject(signal.reason);
-        },
-        { once: true },
-      );
-      return await answer.promise;
-    },
-    { preconnect: originalFetch.preconnect },
+  testFetchState.set(
+    Object.assign(
+      async (
+        _input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ): Promise<Response> => {
+        const signal =
+          init?.signal ?? panic("Search requires a timeout signal");
+        const answer = Promise.withResolvers<Response>();
+        signal.addEventListener(
+          "abort",
+          () => {
+            answer.reject(signal.reason);
+          },
+          { once: true },
+        );
+        return await answer.promise;
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
   );
 };
 

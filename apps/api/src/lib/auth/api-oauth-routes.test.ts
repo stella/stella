@@ -62,8 +62,8 @@ describe("the routes an API access token opens", () => {
         deriveCapabilityId({ file: handler, exportName }),
       );
       if (uncataloged !== undefined) {
-        // A realtime handler has no capability to carry a scope; it must
-        // be internal for exactly the reason its entry gives.
+        // An uncataloged handler has no capability to carry a scope; it
+        // must be internal for exactly the reason its entry gives.
         expect(capability).toBeUndefined();
         expect(endpoint.mcp).toEqual({ type: "internal", reason: uncataloged });
         return;
