@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { getAnalytics } from "@/lib/analytics/provider";
 import {
   definePersistedState,
   readPersistedState,
@@ -35,11 +36,19 @@ export const rememberTimeBillingAccess = (
   organizationId: string,
   enabled: boolean,
 ): void => {
-  writePersistedState(
+  const written = writePersistedState(
     timeBillingAccessState,
     { organizationId },
     { organizationId, enabled },
-  ).unwrapOr(undefined);
+  );
+  // The decision itself still stands; only the next reload's first paint
+  // loses its hint, so the failure is reported rather than raised.
+  if (written.isErr()) {
+    getAnalytics().captureError(written.error, {
+      fingerprintKey: "rememberTimeBillingAccess:write",
+      scope: { type: "handler", handlerId: "rememberTimeBillingAccess:write" },
+    });
+  }
 };
 
 export const rememberedTimeBillingAccess = (organizationId: string): boolean =>

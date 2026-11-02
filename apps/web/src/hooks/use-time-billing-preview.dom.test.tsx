@@ -33,6 +33,7 @@ const { GlobalTimer } = await import("@/features/time-timers/global-timer");
 const {
   isTimeBillingPreviewEnabled,
   isTimeBillingRouteEnabled,
+  useTimeBillingChromeEnabled,
   useTimeBillingPreviewEnabled,
 } = await import("@/hooks/use-time-billing-preview");
 const { browserStorage } = await import("@/lib/account/browser-storage");
@@ -141,9 +142,18 @@ const newQueryClient = () => {
 
 const OfferProbe = () =>
   React.createElement(
-    "output",
-    { "data-testid": "offer" },
-    String(useTimeBillingPreviewEnabled()),
+    React.Fragment,
+    null,
+    React.createElement(
+      "output",
+      { "data-testid": "offer" },
+      String(useTimeBillingChromeEnabled()),
+    ),
+    React.createElement(
+      "output",
+      { "data-testid": "requests" },
+      String(useTimeBillingPreviewEnabled()),
+    ),
   );
 
 const BetaPage = BetaRoute.options.component;
@@ -207,6 +217,13 @@ describe("time billing while the server decision is on its way", () => {
     neverAnswers();
     const view = renderShell(newQueryClient());
     expect(view.getByTestId("offer").textContent).toBe("true");
+  });
+
+  test("requests wait for the server even when a grant is remembered", () => {
+    rememberTimeBillingAccess(CALLER.organizationId, true);
+    neverAnswers();
+    const view = renderShell(newQueryClient());
+    expect(view.getByTestId("requests").textContent).toBe("false");
   });
 
   test("a caller who was refused stays refused", () => {

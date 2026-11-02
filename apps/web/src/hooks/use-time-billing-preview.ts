@@ -56,10 +56,21 @@ export const useTimeBillingDecision = (): boolean | null => {
 };
 
 /**
- * What the chrome shows. Until the server answers, a reload keeps what it last
- * said, so a caller who has time billing does not see it drop out and return.
+ * The server's decision as a yes or no: false until it answers. Anything that
+ * sends a request or admits a route reads this one.
  */
-export const useTimeBillingPreviewEnabled = (): boolean => {
+export const useTimeBillingPreviewEnabled = (): boolean =>
+  useTimeBillingDecision() === true;
+
+export const useTimeBillingRouteEnabled = useTimeBillingPreviewEnabled;
+
+/**
+ * What the chrome shows (navigation entries, the timer's place, commands).
+ * Until the server answers, a reload keeps what it last said, so a caller who
+ * has time billing does not see it drop out and return. Never gate a request
+ * on it: a revoked grant would still send one before the answer arrives.
+ */
+export const useTimeBillingChromeEnabled = (): boolean => {
   const user = useAuthenticatedUser();
   const decision = useTimeBillingDecision();
   const remembered = useSyncExternalStore(
@@ -71,5 +82,3 @@ export const useTimeBillingPreviewEnabled = (): boolean => {
   );
   return decision ?? remembered;
 };
-
-export const useTimeBillingRouteEnabled = useTimeBillingPreviewEnabled;
