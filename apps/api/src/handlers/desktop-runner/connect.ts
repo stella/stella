@@ -1,3 +1,4 @@
+import { desktopRunnerUnavailable } from "@/api/lib/desktop-runner/gateway";
 import { upgradeDesktopRunner } from "@/api/lib/desktop-runner/runtime";
 import { defineEndpoint } from "@/api/lib/endpoints";
 
@@ -9,8 +10,9 @@ import { defineEndpoint } from "@/api/lib/endpoints";
  */
 export default defineEndpoint.public({}, async ({ request, server }) => {
   if (server === null) {
-    return new Response("Desktop runners need a server socket", {
-      status: 503,
+    return desktopRunnerUnavailable({
+      reason: "The request has no server socket to upgrade",
+      body: "Desktop runners need a server socket",
     });
   }
   return (

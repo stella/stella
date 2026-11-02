@@ -13,6 +13,7 @@ import {
   authorizeRunnerWith,
   createDesktopRunnerGateway,
   type DesktopRunnerGateway,
+  desktopRunnerUnavailable,
 } from "@/api/lib/desktop-runner/gateway";
 import { createRedisClient } from "@/api/lib/redis-client";
 import { mintAgentRunToken } from "@/api/mcp/agent-run-token";
@@ -61,5 +62,8 @@ export const upgradeDesktopRunner = async (
   server: HttpServer,
 ): Promise<Response | null> =>
   gateway === null
-    ? new Response("Desktop runners are not served here", { status: 503 })
+    ? desktopRunnerUnavailable({
+        reason: "This task does not serve runner sockets",
+        body: "Desktop runners are not served here",
+      })
     : await gateway.upgrade(request, server);

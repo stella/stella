@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -36,11 +36,44 @@ import {
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { observedResponse } from "@/api/lib/observability/server-error-answer";
 
 const LEASE_SWEEP_SINK = failureSink({
   event: "desktop_runner.lease_sweep_failed",
   expected: [],
 });
+
+const UPGRADE_REFUSED_SINK = failureSink({
+  event: "desktop_runner.upgrade_refused",
+  expected: [],
+});
+
+/** This task takes no runner socket: it has none to serve, or it is draining. */
+class DesktopRunnerUnavailable extends TaggedError("DesktopRunnerUnavailable")<{
+  message: string;
+}> {}
+
+/**
+ * The one 503 a runner upgrade answers when this task cannot take the socket;
+ * its reason is observed as the cause of the answer.
+ */
+export const desktopRunnerUnavailable = ({
+  reason,
+  body,
+  headers,
+}: {
+  reason: string;
+  body: string;
+  headers?: Record<string, string> | undefined;
+}): Response =>
+  observedResponse(
+    {
+      sink: UPGRADE_REFUSED_SINK,
+      cause: new DesktopRunnerUnavailable({ message: reason }),
+    },
+    body,
+    { status: 503, ...(headers === undefined ? {} : { headers }) },
+  );
 
 /** Who an authenticated upgrade request belongs to. */
 type DesktopRunnerCaller = {
@@ -98,6 +131,24 @@ const SWEEP_DELIVERY_BATCH = 500;
 const DRAINING_RETRY_AFTER_S = 5;
 
 const desktopIdSchema = v.pipe(v.string(), v.uuid());
+
+/**
+ * The answer to an upgrade whose credential did not authorize. An
+ * unavailable credential store answers 503, so the cause is observed.
+ */
+const callerRefusal = (error: HandlerError<401 | 403 | 503>): Response =>
+  observedResponse(
+    { sink: UPGRADE_REFUSED_SINK, cause: error },
+    JSON.stringify(
+      error.code === undefined
+        ? { message: error.message }
+        : { message: error.message, code: error.code },
+    ),
+    {
+      status: error.status,
+      headers: { "content-type": "application/json;charset=utf-8" },
+    },
+  );
 
 const refusal = (status: number, message: string, code?: string) =>
   Response.json(code === undefined ? { message } : { message, code }, {
@@ -258,8 +309,9 @@ export const createDesktopRunnerGateway = (
     server: HttpServer,
   ): Promise<Response | null> => {
     if (draining) {
-      return new Response("Reconnect to another server", {
-        status: 503,
+      return desktopRunnerUnavailable({
+        reason: "The task is draining its runner sockets",
+        body: "Reconnect to another server",
         headers: { "retry-after": String(DRAINING_RETRY_AFTER_S) },
       });
     }
@@ -275,11 +327,7 @@ export const createDesktopRunnerGateway = (
     }
     const caller = await options.authorize(request);
     if (caller.isErr()) {
-      return refusal(
-        caller.error.status,
-        caller.error.message,
-        caller.error.code,
-      );
+      return callerRefusal(caller.error);
     }
     if (!(await context.isRunnerEnabled(caller.value))) {
       return refusal(
