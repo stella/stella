@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
 import {
@@ -20,6 +20,7 @@ import {
 } from "@/api/lib/search/projection-repair-queue";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
@@ -282,8 +283,7 @@ describe.skipIf(!enabled)("contact search under forced row security", () => {
           },
         ]);
       } finally {
-        await db.delete(organization).where(eq(organization.id, organizationA));
-        await db.delete(organization).where(eq(organization.id, organizationB));
+        await deleteOrganizationsForTest(db, [organizationA, organizationB]);
       }
     });
   });

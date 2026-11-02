@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { contacts } from "@/api/db/schema";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
@@ -25,6 +25,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
@@ -47,9 +48,7 @@ const userIds = new Set<string>();
 afterAll(async () => {
   await server.stop();
   if (organizationIds.size > 0) {
-    await rootDb
-      .delete(organization)
-      .where(inArray(organization.id, [...organizationIds]));
+    await deleteOrganizationsForTest(rootDb, [...organizationIds]);
   }
   if (userIds.size > 0) {
     await rootDb.delete(user).where(inArray(user.id, [...userIds]));

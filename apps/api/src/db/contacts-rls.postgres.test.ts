@@ -8,6 +8,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
@@ -146,12 +147,7 @@ describe.skipIf(!enabled)(
             await tx.delete(contacts).where(eq(contacts.id, contactA));
           });
         } finally {
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationA));
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationB));
+          await deleteOrganizationsForTest(db, [organizationA, organizationB]);
         }
       });
     });

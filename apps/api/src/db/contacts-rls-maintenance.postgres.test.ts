@@ -10,6 +10,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 import { createContactVatIdRepair } from "./contact-vat-id-repair";
@@ -152,9 +153,7 @@ describe.skipIf(!enabled)("contacts RLS maintenance (postgres)", () => {
           ),
         );
       } finally {
-        await db
-          .delete(organization)
-          .where(inArray(organization.id, organizations));
+        await deleteOrganizationsForTest(db, organizations);
         // Leave the shared table with its validated check.
         await client.unsafe(
           'ALTER TABLE public.contacts DROP CONSTRAINT IF EXISTS "contacts_vat_id_check"',

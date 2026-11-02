@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -16,6 +16,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -91,9 +92,7 @@ describe.skipIf(!enabled)("owner organization scope (postgres)", () => {
           { id: otherContactId },
         ]);
       } finally {
-        await db
-          .delete(organization)
-          .where(inArray(organization.id, [firmId, otherFirmId]));
+        await deleteOrganizationsForTest(db, [firmId, otherFirmId]);
       }
     });
   });
