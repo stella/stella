@@ -1,5 +1,3 @@
-// parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
-// parser-output-unchanged: completion batches use the shared owner with identical items and cursor boundaries; parsed content is unchanged.
 import { panic, Result } from "better-result";
 // parser-output-unchanged: Retry exhaustion holds the cursor; successful pages produce unchanged parsed decisions.
 /**
@@ -20,6 +18,10 @@ import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
+// parser-output-unchanged: completion batches use the shared owner with identical items and cursor boundaries; parsed content is unchanged.
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
 import type {
   DecisionSupplement,
   IngestionItem,
@@ -852,6 +854,7 @@ export const createPagePaginatedFetch = <TResponse>(
             });
             return Result.ok({
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.FAILED,
               nextCursor: encode(pageStartOffset + opts.pageSize),
             });
           }
@@ -1050,6 +1053,7 @@ export const createPagePaginatedFetch = <TResponse>(
               }),
           ...(supplements.length === 0 ? {} : { supplements }),
           ...(unreadItems.length === 0 ? {} : { unreadItems }),
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor,
           sourceUrl: url,
         });

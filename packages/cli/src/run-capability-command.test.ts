@@ -1083,3 +1083,192 @@ describe("runCapabilityCommand: output contract", () => {
     expect(tty.stderrText()).toBe("");
   });
 });
+
+describe("bulk ID command execution", () => {
+  const idsSpec = (property = "ids"): CapabilityLeafSpec =>
+    capSpec({
+      capabilityId: "contacts.bulk.delete",
+      access: "write",
+      flags: [
+        {
+          flag: property === "ids" ? "--ids" : "--claim-ids",
+          prop: `body.${property}`,
+          part: "body",
+          partPath: property,
+          kind: "string-array",
+          required: true,
+          repeatable: true,
+        },
+      ],
+      inputSchema: {
+        type: "object",
+        properties: {
+          body: {
+            type: "object",
+            properties: { [property]: { type: "array", maxItems: 2 } },
+          },
+        },
+      },
+    });
+
+  test("comma-separated IDs chunk at the schema maximum and produce one JSON result", async () => {
+    const server = startServer({ kind: "echo" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    try {
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { ids: [" a,b,a, c,d,e "], json: true, yes: true },
+        spec: idsSpec(),
+      });
+      expect(server.calls.map((call) => call.args)).toEqual([
+        {
+          capability: "contacts.bulk.delete",
+          input: { body: { ids: ["a", "b"] } },
+          confirm: true,
+        },
+        {
+          capability: "contacts.bulk.delete",
+          input: { body: { ids: ["c", "d"] } },
+          confirm: true,
+        },
+        {
+          capability: "contacts.bulk.delete",
+          input: { body: { ids: ["e"] } },
+          confirm: true,
+        },
+      ]);
+      expect(JSON.parse(tty.stdoutText())).toEqual({
+        chunks: server.calls.map((call) => ({
+          status: "ok",
+          result: { received: call.args },
+        })),
+      });
+      expect(tty.exitCode() ?? 0).toBe(0);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("the IDs alias reaches a domain-named ID collection without changing other body fields", async () => {
+    const server = startServer({ kind: "echo" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    try {
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: {
+          ids: ["claim-a,claim-b,claim-c"],
+          input: JSON.stringify({ body: { runId: "run" } }),
+          json: true,
+        },
+        spec: {
+          ...idsSpec("claimIds"),
+          capabilityId: "lists.verifications.claim-reviews.bulk.create",
+        },
+      });
+      expect(server.calls.map((call) => call.args["input"])).toEqual([
+        { body: { claimIds: ["claim-a", "claim-b"], runId: "run" } },
+        { body: { claimIds: ["claim-c"], runId: "run" } },
+      ]);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("an omitted IDs alias preserves the canonical flag and conflicting aliases are rejected", async () => {
+    const server = startServer({ kind: "echo" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    try {
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { ids: [], claimIds: ["canonical"], json: true },
+        spec: idsSpec("claimIds"),
+      });
+      expect(server.calls.map((call) => call.args["input"])).toEqual([
+        { body: { claimIds: ["canonical"] } },
+      ]);
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { ids: ["alias"], claimIds: ["canonical"], json: true },
+        spec: idsSpec("claimIds"),
+      });
+      expect(server.calls.length).toBe(1);
+      expect(tty.exitCode()).toBe(EXIT_CODES.validation);
+      expect(tty.stderrText()).toContain("Use either --ids or --claim-ids");
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("failed chunks remain visible and make the command exit nonzero", async () => {
+    const server = startServer({
+      kind: "error",
+      error: { code: "validation_error", message: "Rejected chunk" },
+    });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    try {
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { ids: ["a,b,c"], json: true },
+        spec: idsSpec(),
+      });
+      expect(server.calls.length).toBe(2);
+      expect(JSON.parse(tty.stdoutText())).toEqual({
+        chunks: [
+          {
+            status: "error",
+            error: {
+              error: { code: "validation_error", message: "Rejected chunk" },
+            },
+          },
+          {
+            status: "error",
+            error: {
+              error: { code: "validation_error", message: "Rejected chunk" },
+            },
+          },
+        ],
+      });
+      expect(tty.exitCode()).toBe(EXIT_CODES.server);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("a bulk dry run validates every chunk without executing its operation", async () => {
+    const server = startServer({ kind: "echo" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    try {
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { ids: ["a,b,c"], dryRun: true, json: true },
+        spec: idsSpec(),
+      });
+      expect(server.calls.length).toBe(2);
+      expect(
+        server.calls.every((call) => call.args["validate_only"] === true),
+      ).toBe(true);
+    } finally {
+      server.stop();
+    }
+  });
+});

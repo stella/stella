@@ -22,14 +22,18 @@ const CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX =
   "case_law_ingestion_failures_source_record_uidx";
 const CHAT_MESSAGES_ID_THREAD_UIDX = "chat_messages_id_thread_uidx";
 const CHAT_TURNS_ORG_RUN_ID_UIDX = "chat_turns_org_run_id_uidx";
+const CONTACTS_ORG_EXTERNAL_UIDX = "contacts_org_external_uidx";
 const CONTACTS_ORG_ID_UNIQUE = "contacts_org_id_unique";
+const CORRESPONDENCE_ORG_EXTERNAL_UIDX = "correspondence_org_external_uidx";
 const CORRESPONDENCE_WS_SOURCE_ENTITY_UIDX =
   "correspondence_ws_source_entity_uidx";
 const ENTITY_VERSIONS_ENTITY_NUMBER_UIDX = "entity_versions_entity_number_uidx";
 const ENTITY_VERSIONS_ID_ENTITY_WS_UIDX = "entity_versions_id_entity_ws_uidx";
+const EXPENSES_ORG_EXTERNAL_UIDX = "expenses_org_external_uidx";
 const INVOICES_CLIENT_NUMBER_UIDX = "invoices_client_number_uidx";
 const INVOICES_ID_ORG_UNIQUE = "invoices_id_org_unique";
 const INVOICES_ID_WORKSPACE_UNIQUE = "invoices_id_workspace_unique";
+const INVOICES_ORG_EXTERNAL_UIDX = "invoices_org_external_uidx";
 const LEGAL_LISTS_SAMPLE_WORKSPACE_UIDX = "legal_lists_sample_workspace_uidx";
 const LEGAL_READER_ANSWER_MESSAGES_ANSWER_SEQUENCE_IDX =
   "legal_reader_answer_messages_answer_sequence_idx";
@@ -47,12 +51,14 @@ const SESSION_PRIOR_TOKEN_HASH_IDX = "session_priorTokenHash_idx";
 const TEMPLATES_ORG_PACK_TEMPLATE_UIDX = "templates_org_pack_template_uidx";
 const TIME_ENTRIES_ONE_ACTIVE_TIMER_PER_USER_IDX =
   "time_entries_one_active_timer_per_user_idx";
+const TIME_ENTRIES_ORG_EXTERNAL_UIDX = "time_entries_org_external_uidx";
 const TIME_TIMERS_LEGACY_ENTRY_UIDX = "time_timers_legacy_entry_uidx";
 const USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX =
   "usage_events_org_idempotency_key_uidx";
 const WORKSPACE_VIEWS_CORRESPONDENCE_UIDX =
   "workspace_views_correspondence_uidx";
 const WORKSPACES_ID_ORG_UNQ = "workspaces_id_org_unq";
+const WORKSPACES_ORG_EXTERNAL_UIDX = "workspaces_org_external_uidx";
 export const EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES = {
   ACCOUNT_PROVIDER_ACCOUNT_ID_UIDX,
   CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
@@ -82,13 +88,17 @@ export const ONLINE_UNIQUE_INDEX_NAMES = {
   CASE_LAW_INGESTION_FAILURES_SOURCE_RECORD_UIDX,
   CHAT_MESSAGES_ID_THREAD_UIDX,
   CHAT_TURNS_ORG_RUN_ID_UIDX,
+  CONTACTS_ORG_EXTERNAL_UIDX,
   CONTACTS_ORG_ID_UNIQUE,
+  CORRESPONDENCE_ORG_EXTERNAL_UIDX,
   CORRESPONDENCE_WS_SOURCE_ENTITY_UIDX,
   ENTITY_VERSIONS_ENTITY_NUMBER_UIDX,
   ENTITY_VERSIONS_ID_ENTITY_WS_UIDX,
+  EXPENSES_ORG_EXTERNAL_UIDX,
   INVOICES_CLIENT_NUMBER_UIDX,
   INVOICES_ID_ORG_UNIQUE,
   INVOICES_ID_WORKSPACE_UNIQUE,
+  INVOICES_ORG_EXTERNAL_UIDX,
   LEGAL_LISTS_SAMPLE_WORKSPACE_UIDX,
   LEGAL_READER_ANSWER_MESSAGES_ANSWER_SEQUENCE_IDX,
   LEGISLATION_DOCUMENTS_LEGACY_CURRENT_LANG_IDX,
@@ -99,10 +109,12 @@ export const ONLINE_UNIQUE_INDEX_NAMES = {
   SESSION_PRIOR_TOKEN_HASH_IDX,
   TEMPLATES_ORG_PACK_TEMPLATE_UIDX,
   TIME_ENTRIES_ONE_ACTIVE_TIMER_PER_USER_IDX,
+  TIME_ENTRIES_ORG_EXTERNAL_UIDX,
   TIME_TIMERS_LEGACY_ENTRY_UIDX,
   USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX,
   WORKSPACE_VIEWS_CORRESPONDENCE_UIDX,
   WORKSPACES_ID_ORG_UNQ,
+  WORKSPACES_ORG_EXTERNAL_UIDX,
 } as const;
 // END GENERATED ONLINE UNIQUE INDEX NAMES
 
@@ -146,6 +158,71 @@ export const CLIENT_INVOICE_UNIQUE_INDEXES = [
   INVOICE_TENANT_UNIQUE_INDEX,
   INVOICES_CLIENT_NUMBER_INDEX,
 ] as const;
+
+export const IMPORT_PROVENANCE_UNIQUE_INDEXES = [
+  {
+    introducedBy: "20261031001825_import_provenance",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "contacts_org_external_uidx" ON public."contacts" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.contacts USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "contacts_org_external_uidx",
+    tableName: "contacts",
+  },
+  {
+    introducedBy: "20261031001825_import_provenance",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "workspaces_org_external_uidx" ON public."workspaces" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.workspaces USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "workspaces_org_external_uidx",
+    tableName: "workspaces",
+  },
+  {
+    introducedBy: "20261031001825_import_provenance",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "time_entries_org_external_uidx" ON public."time_entries" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.time_entries USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "time_entries_org_external_uidx",
+    tableName: "time_entries",
+  },
+  {
+    introducedBy: "20261031001825_import_provenance",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "expenses_org_external_uidx" ON public."expenses" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.expenses USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "expenses_org_external_uidx",
+    tableName: "expenses",
+  },
+  {
+    introducedBy: "20261031001825_import_provenance",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "invoices_org_external_uidx" ON public."invoices" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.invoices USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "invoices_org_external_uidx",
+    tableName: "invoices",
+  },
+  {
+    introducedBy: "20261031001825_import_provenance",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "correspondence_org_external_uidx" ON public."correspondence" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.correspondence USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "correspondence_org_external_uidx",
+    tableName: "correspondence",
+  },
+] as const satisfies readonly (OnlineIndexDeclaration & {
+  introducedBy: OnlineStepIntroduction;
+})[];
 
 export const LEGISLATION_UNIQUE_INDEXES = [
   {
@@ -374,6 +451,7 @@ export const ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS: readonly (Omit<
 > & { introducedBy: OnlineStepIntroduction })[] = [
   ...EXECUTABLE_ONLINE_UNIQUE_INDEXES,
   ...CLIENT_INVOICE_UNIQUE_INDEXES,
+  ...IMPORT_PROVENANCE_UNIQUE_INDEXES,
   ...LEGISLATION_UNIQUE_INDEXES,
   ...REWRITTEN_MIGRATION_INDEXES.filter(({ isUnique }) => isUnique),
 ];

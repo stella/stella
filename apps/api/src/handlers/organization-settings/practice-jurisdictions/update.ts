@@ -6,10 +6,12 @@ import {
   normalizePracticeJurisdictions,
   upsertPracticeJurisdictions,
 } from "@/api/handlers/organization-settings/practice-jurisdictions";
+import { detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { publishMcpToolProjectionChange } from "@/api/mcp/tool-freshness";
 
 const practiceJurisdictionSchema = v.object({
   countryCode: v.pipe(
@@ -87,6 +89,12 @@ const updatePracticeJurisdictions = createSafeRootHandler(
     identifyOrganizationJurisdictions(
       session.activeOrganizationId,
       practiceJurisdictions,
+    );
+    detached(
+      publishMcpToolProjectionChange({
+        organizationId: session.activeOrganizationId,
+      }),
+      "mcp.practice-jurisdiction-tool-projection",
     );
 
     return Result.ok({ practiceJurisdictions });

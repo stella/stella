@@ -64,15 +64,19 @@ import { parsePlNsaDecision } from "@/api/handlers/case-law/ingestion/parsers/pl
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import {
   decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
   toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PL_NSA_METADATA_URL_SCHEMA } from "./pl-nsa.metadata-urls";
+
+const testFetchState = createTestFetch();
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 const ROWS_JSON = new URL("pl-nsa-rows.json", FIXTURES_DIR);
@@ -649,8 +653,32 @@ describe("the cursor", () => {
     const crawler = createPlNsaCrawler({ snapshot, source: counted });
     const parked = `${snapshot.revision}:2:0`;
     const page = (await crawler.fetchPage(parked)).unwrap();
-    expect(page).toEqual({ decisions: [], nextCursor: parked });
+    // Nothing was asked, so the page says so and the run is no sync.
+    expect(page).toEqual({
+      decisions: [],
+      nextCursor: parked,
+      publisherRequest: PUBLISHER_REQUEST.NONE,
+    });
     expect(local).not.toHaveBeenCalled();
+  });
+
+  test("local shard and cached window pages report no publisher answer", async () => {
+    const counted = { ...source };
+    const local = spyOn(counted, "local");
+    const crawler = createPlNsaCrawler({
+      snapshot,
+      source: counted,
+      pageRows: 1,
+      windowRows: 2,
+    });
+    const first = (await crawler.fetchPage(null)).unwrap();
+    expect(first.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
+    const second = (await crawler.fetchPage(first.nextCursor)).unwrap();
+    expect(second.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
+    expect(local).toHaveBeenCalledTimes(1);
+    const third = (await crawler.fetchPage(second.nextCursor)).unwrap();
+    expect(third.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
+    expect(local).toHaveBeenCalledTimes(2);
   });
 
   test("resumes mid-shard where it stopped, across the shard boundary", async () => {
@@ -1193,7 +1221,6 @@ describe("the document is checked against the dataset's own text", () => {
 });
 
 describe("shard download failures", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
   const bytes = new Uint8Array(Bun.file(ROWS_PARQUET).size);
 
@@ -1216,8 +1243,8 @@ describe("shard download failures", () => {
   ): { requests: string[] } => {
     const requests: string[] = [];
     let issued = 0;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = requestUrlOf(input);
         expect(url).toMatch(/^https:\/\/[^/]*(huggingface\.co|hf\.co)\//u);
         const range = new Headers(init?.headers).get("range") ?? "";
@@ -1242,7 +1269,7 @@ describe("shard download failures", () => {
         return await Promise.resolve(
           new Response(bytes.slice(start, (end ?? 0) + 1), { status: 206 }),
         );
-      },
+      }),
     );
     return { requests };
   };
@@ -1256,7 +1283,7 @@ describe("shard download failures", () => {
     };
   });
   afterEach(async () => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
     await rm(directory, { recursive: true, force: true });
   });
@@ -1273,8 +1300,10 @@ describe("shard download failures", () => {
     const crawler = createPlNsaCrawler({ snapshot, source });
     const page = (await crawler.fetchPage(null)).unwrap();
     expect(page.decisions).toHaveLength(28);
+    expect(page.publisherRequest).toBe(PUBLISHER_REQUEST.ANSWERED);
     const before = requests.length;
-    (await source.local(shardOf(sha256()))).unwrap();
+    const cached = (await source.local(shardOf(sha256()))).unwrap();
+    expect(cached.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
     expect(requests.length).toBe(before);
   });
 

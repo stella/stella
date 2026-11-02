@@ -3,7 +3,7 @@ import { decodeHTMLStrict } from "entities";
 import fc from "fast-check";
 import path from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
@@ -125,7 +125,8 @@ describe("markupResidueIn", () => {
       .stringMatching(/^[a-zA-Z]{2,12}$/u)
       .filter((name) => decodeHTMLStrict(`&${name};`) === `&${name};`);
 
-    fc.assert(
+    assertProperty(
+      "unknown entity-shaped names stay ordinary text",
       fc.property(unknownNames, (name) => {
         const token = `&${name};`;
         expect(token).toMatch(/^&[a-zA-Z]{2,12};$/u);
@@ -133,7 +134,7 @@ describe("markupResidueIn", () => {
           markupResidueIn(`literal ${token} remains text`),
         ).toBeUndefined();
       }),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 });

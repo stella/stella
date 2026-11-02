@@ -1,5 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
@@ -12,10 +12,21 @@ import { apiRoutes } from "@/api/api-routes";
 import { env } from "@/api/env";
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { clientInvoicesRoute } from "@/api/handlers/client-invoices/routes";
+import {
+  createDesktopBillingDraftSettingsReadEndpoint,
+  createDesktopBillingDraftSettingsUpdateEndpoint,
+  readBillingDraftSettings,
+  updateBillingDraftSettings,
+} from "@/api/handlers/desktop-time-entries/billing-draft-settings";
+import billingDrafts, {
+  createDesktopBillingDraftEndpoint,
+} from "@/api/handlers/desktop-time-entries/billing-drafts";
+import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { listsRoute } from "@/api/handlers/lists/routes";
 import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
+import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
 import { savedTimeNarrativesRoute } from "@/api/handlers/saved-time-narratives/routes";
 import { sellerProfilesRoute } from "@/api/handlers/seller-profiles/routes";
@@ -23,6 +34,7 @@ import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-que
 import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
 import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
+import { timeEntryReportRoute } from "@/api/handlers/time-entries/report/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
@@ -36,7 +48,10 @@ import {
   featureAccessGateFeature,
 } from "@/api/lib/auth/feature-access/route";
 import { toSafeId } from "@/api/lib/branded-types";
-import { deploymentFeatureGateFlag } from "@/api/lib/deployment-feature-route";
+import {
+  deploymentFeatureGateExceptionFlag,
+  deploymentFeatureGateFlag,
+} from "@/api/lib/deployment-feature-route";
 import { defineEndpoint } from "@/api/lib/endpoints";
 import {
   createFeatureAccessSnapshot,
@@ -44,6 +59,7 @@ import {
 } from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   featureOmittedCapabilityIds,
@@ -56,6 +72,11 @@ import { FEATURE_DISABLED_MESSAGE } from "@/api/mcp/tool-utils";
 import { getMcpToolDefinition, handleMcpToolCall } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { createDesktopBillingDraftRequest } from "@/api/tests/helpers/desktop-billing-draft";
+import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
 import {
   createTestHandlerContext,
   NO_AUDIT,
@@ -120,7 +141,11 @@ const TIME_BILLING_ROUTES: Readonly<Record<string, readonly RouteEntry[]>> = {
   clientInvoicesRoute,
   memberTimeTargetsRoute,
   myTimeEntriesRoute,
+  timeEntryReportRoute,
   numberSeriesRoute,
+  organizationBillingDraftsRoute: organizationSettingsRoute.filter(({ path }) =>
+    path.startsWith("/organization-settings/billing-drafts"),
+  ),
   ratesRoute,
   savedTimeNarrativesRoute,
   sellerProfilesRoute,
@@ -129,6 +154,33 @@ const TIME_BILLING_ROUTES: Readonly<Record<string, readonly RouteEntry[]>> = {
   timeTimersRoute,
   vatRateRoute,
 };
+
+const NATIVE_TIME_BILLING_ROUTES = [
+  {
+    method: "GET",
+    path: "/v1/desktop/billing-drafts/settings",
+    definition: readBillingDraftSettings,
+    body: undefined,
+  },
+  {
+    method: "POST",
+    path: "/v1/desktop/billing-drafts",
+    definition: billingDrafts,
+    body: createDesktopBillingDraftRequest({ matterId: PATH_ID }),
+  },
+] as const;
+
+/** Mounted without the deployment flag, so a consent withdrawal always
+ * reaches the server; every other change still needs the feature. */
+const CONSENT_SETTINGS_ROUTE = {
+  method: "PUT",
+  path: "/v1/desktop/billing-drafts/settings",
+  definition: updateBillingDraftSettings,
+} as const;
+const FEATURE_SETTINGS_CHANGES = [
+  { type: "grant_consent", revision: null },
+  { type: "set_preference", revision: null, preference: "Shorter" },
+] as const;
 
 /**
  * Runs `run` as a deployed (strict) process with the flag set, restoring both
@@ -236,12 +288,53 @@ describe("time billing admission census", () => {
     // A group's paths lack the mount prefix; its definitions are the same
     // objects the served table carries.
     const censusDefinitions = new Set(
-      census.map(({ definition }) => definition),
+      [...census, ...NATIVE_TIME_BILLING_ROUTES].map(
+        ({ definition }) => definition,
+      ),
     );
     expect(
       flagged.filter(({ definition }) => !censusDefinitions.has(definition)),
     ).toEqual([]);
-    expect(flagged).toHaveLength(census.length);
+    expect(flagged).toHaveLength(
+      census.length + NATIVE_TIME_BILLING_ROUTES.length,
+    );
+    for (const entry of NATIVE_TIME_BILLING_ROUTES) {
+      expect(
+        desktopTimeEntriesRoute.filter(
+          ({ method, path, definition }) =>
+            method === entry.method &&
+            path === entry.path &&
+            definition === entry.definition,
+        ),
+      ).toHaveLength(1);
+    }
+    const consentRoutes = desktopTimeEntriesRoute.filter(
+      ({ method, path, definition }) =>
+        method === CONSENT_SETTINGS_ROUTE.method &&
+        path === CONSENT_SETTINGS_ROUTE.path &&
+        definition === CONSENT_SETTINGS_ROUTE.definition,
+    );
+    expect(consentRoutes).toHaveLength(1);
+    expect(
+      consentRoutes.flatMap(({ middleware }) =>
+        middleware.flatMap((stage) => deploymentFeatureGateFlag(stage) ?? []),
+      ),
+    ).toEqual([]);
+    expect(
+      consentRoutes.flatMap(({ middleware }) =>
+        middleware.flatMap(
+          (stage) => deploymentFeatureGateExceptionFlag(stage) ?? [],
+        ),
+      ),
+    ).toEqual([FLAG]);
+    for (const entry of organizationSettingsRoute.filter(({ path }) =>
+      path.startsWith("/organization-settings/billing-drafts"),
+    )) {
+      expect(entry.definition.config["featureAccess"]).toEqual({
+        featureId: FEATURE_ID,
+        type: "required",
+      });
+    }
     expect(census.filter((entry) => !hasTimeBillingGates(entry))).toEqual([]);
 
     for (const directory of FEATURE_REGISTRY[FEATURE_ID].ownership
@@ -407,6 +500,211 @@ describe("time billing over REST", () => {
       }
     },
   );
+});
+
+describe("native time billing admission", () => {
+  test("native routes keep their missing-credential 401 protocol behind the deployment flag", async () => {
+    for (const enabled of [false, true]) {
+      await withTimeBilling(enabled, async () => {
+        await using server = serveRoutes(desktopTimeEntriesRoute);
+        for (const entry of NATIVE_TIME_BILLING_ROUTES) {
+          const response = await server.fetch(
+            new Request(`http://localhost${entry.path}`, {
+              method: entry.method,
+              ...(entry.body === undefined
+                ? {}
+                : {
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify(entry.body),
+                  }),
+            }),
+          );
+          expect(response.status).not.toBe(422);
+          expect({
+            method: entry.method,
+            path: entry.path,
+            status: response.status,
+          }).toEqual({
+            method: entry.method,
+            path: entry.path,
+            status: enabled ? 401 : 404,
+          });
+        }
+        // A withdrawal asks for the linked credential whatever the flag says;
+        // with the flag off anything else, malformed or not, is absent.
+        // With the flag on the route answers as it always does; only its
+        // absence is asserted there for a body it cannot read.
+        for (const [body, readable, disabledStatus] of [
+          [JSON.stringify({ type: "withdraw_consent" }), true, 401],
+          [
+            JSON.stringify({ type: "grant_consent", revision: null }),
+            true,
+            404,
+          ],
+          [
+            JSON.stringify({
+              type: "set_preference",
+              revision: null,
+              preference: "Shorter",
+            }),
+            true,
+            404,
+          ],
+          [
+            JSON.stringify({ type: "withdraw_consent", extra: true }),
+            false,
+            404,
+          ],
+          // A withdrawal padded past the gate's bound is not read while off.
+          [
+            `${JSON.stringify({ type: "withdraw_consent" })}${" ".repeat(64)}`,
+            true,
+            404,
+          ],
+          ["{not json", false, 404],
+          ["", false, 404],
+        ] as const) {
+          const response = await server.fetch(
+            new Request(`http://localhost${CONSENT_SETTINGS_ROUTE.path}`, {
+              method: CONSENT_SETTINGS_ROUTE.method,
+              headers: { "content-type": "application/json" },
+              body,
+            }),
+          );
+          if (enabled && !readable) {
+            expect({ body, status: response.status }).not.toEqual({
+              body,
+              status: 404,
+            });
+            continue;
+          }
+          expect({ enabled, body, status: response.status }).toEqual({
+            enabled,
+            body,
+            status: enabled ? 401 : disabledStatus,
+          });
+        }
+      });
+    }
+  });
+
+  test("all native billing endpoints deny unenrolled credentials before database or model work", async () => {
+    await withTimeBilling(true, async () => {
+      for (const missing of ["time-billing", "activity-timeline"] as const) {
+        let databaseCalls = 0;
+        let authorized = 0;
+        const authorizeAccount = async (request: Request) => {
+          authorized += 1;
+          const device = await createDesktopDeviceSigner();
+          return Result.ok({
+            organizationId: toSafeId<"organization">(ORGANIZATION_ID),
+            userId: toSafeId<"user">(USER_ID),
+            keyId: "linked-desktop",
+            memberRole: sessionMemberRole("member"),
+            scopedDb: async () => {
+              databaseCalls += 1;
+              return panic("Denied native request reached the database");
+            },
+            consumedProof: await claimFixtureDeviceProof({
+              request: await device.signRequest({
+                request,
+                credential: "time-billing-admission",
+              }),
+              deviceJkt: device.deviceJkt,
+              keyId: "linked-desktop",
+              credential: "time-billing-admission",
+            }),
+            featureAccessSnapshot: createFeatureAccessSnapshot({
+              userId: USER_ID,
+              organizationId: ORGANIZATION_ID,
+              decisions: new Map(
+                ["time-billing", "activity-timeline"].map((featureId) => [
+                  featureId,
+                  decideFeatureAccess({
+                    registry: FEATURE_REGISTRY,
+                    featureId,
+                    userId: USER_ID,
+                    organizationId: ORGANIZATION_ID,
+                    membership: true,
+                    user: { email: "member@example.test", emailVerified: true },
+                    deploymentEnabled: true,
+                    grants:
+                      missing === "activity-timeline"
+                        ? {}
+                        : {
+                            "activity-timeline": [
+                              {
+                                type: "member",
+                                organizationId: ORGANIZATION_ID,
+                                email: "member@example.test",
+                              },
+                            ],
+                          },
+                    enrolments:
+                      missing === "time-billing"
+                        ? []
+                        : [
+                            {
+                              userId: USER_ID,
+                              organizationId: ORGANIZATION_ID,
+                              featureId: "time-billing",
+                            },
+                          ],
+                  }),
+                ]),
+              ),
+            }),
+          });
+        };
+        const endpoints = [
+          createDesktopBillingDraftSettingsReadEndpoint(authorizeAccount),
+          createDesktopBillingDraftEndpoint({ authorizeAccount }),
+        ];
+        const cases = [
+          ...NATIVE_TIME_BILLING_ROUTES.map((entry, index) => ({
+            ...entry,
+            endpoint:
+              endpoints.at(index) ?? panic("Native case lost its endpoint"),
+          })),
+          ...FEATURE_SETTINGS_CHANGES.map((body) => ({
+            ...CONSENT_SETTINGS_ROUTE,
+            body,
+            endpoint:
+              createDesktopBillingDraftSettingsUpdateEndpoint(authorizeAccount),
+          })),
+        ];
+        for (const entry of cases) {
+          await using server = serveRoutes([
+            {
+              method: entry.method,
+              path: entry.path,
+              middleware: [],
+              definition: entry.endpoint,
+            },
+          ]);
+          const response = await server.fetch(
+            new Request(`http://localhost${entry.path}`, {
+              method: entry.method,
+              ...(entry.body === undefined
+                ? {}
+                : {
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify(entry.body),
+                  }),
+            }),
+          );
+          expect(response.status).not.toBe(422);
+          expect({
+            missing,
+            path: entry.path,
+            status: response.status,
+          }).toEqual({ missing, path: entry.path, status: 403 });
+        }
+        expect(authorized).toBe(cases.length);
+        expect(databaseCalls).toBe(0);
+      }
+    });
+  });
 });
 
 describe("time billing on agent surfaces", () => {

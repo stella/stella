@@ -13,9 +13,14 @@ import {
   AUDIT_RESOURCE_TYPE,
 } from "@/api/lib/audit-log.constants";
 import type { AuditAction } from "@/api/lib/audit-log.constants";
+import { NARRATIVE_LANGUAGE_MAX_LENGTH } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import { SANCTIONS_CONTACT_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 
+import {
+  importProvenanceColumns,
+  importProvenanceConstraints,
+} from "../import-provenance-columns";
 import {
   centsColumn,
   isNotNull,
@@ -46,6 +51,8 @@ import type {
   SchedulerPayload,
   SchedulerSchedule,
 } from "./common";
+
+export const TIME_BILLING_FORMATS = ["categories", "ledes"] as const;
 
 export const contacts = p.pgTable(
   "contacts",
@@ -87,6 +94,10 @@ export const contacts = p.pgTable(
     metadata: jsonb().$type<ContactPersistedMetadata | null>(),
     color: p.varchar({ length: 32 }),
 
+    timeBillingFormat: p
+      .text("time_billing_format", { enum: TIME_BILLING_FORMATS })
+      .notNull()
+      .default("categories"),
     // Billing fields
     registrationNumber: p.varchar("registration_number", {
       length: 64,
@@ -111,6 +122,9 @@ export const contacts = p.pgTable(
       .text("responsible_attorney_id")
       .references(() => user.id, { onDelete: "set null" }),
 
+    /** Import provenance: external_source, external_id, external_change_key, imported_at. */
+    ...importProvenanceColumns(),
+
     createdBy: p
       .text("created_by")
       .references(() => user.id, { onDelete: "set null" }),
@@ -122,6 +136,13 @@ export const contacts = p.pgTable(
   },
   (table) => [
     p.check(
+      "contacts_time_billing_format_check",
+      sql`${table.timeBillingFormat} IN (${sql.join(
+        TIME_BILLING_FORMATS.map((format) => sql`${format}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
       "contacts_invoice_language_check",
       sql`${table.invoiceLanguage} IS NULL OR ${table.invoiceLanguage} IN (${sql.join(
         INVOICE_LANGUAGES.map((value) => sql`${value}`),
@@ -129,6 +150,7 @@ export const contacts = p.pgTable(
       )})`,
     ),
     p.unique("contacts_org_id_unique").on(table.organizationId, table.id),
+    ...importProvenanceConstraints("contacts", table),
     p.index("contacts_organization_id_idx").on(table.organizationId),
     p.index("contacts_org_type_idx").on(table.organizationId, table.type),
     p
@@ -186,12 +208,19 @@ export type ContactType = (typeof contacts.type)["enumValues"][number];
 export type ContactImportReceiptResult = {
   results: (
     | { index: number; status: "created"; contactId: SafeId<"contact"> }
+    /** The row's external ref matched a contact an earlier import created. */
+    | {
+        index: number;
+        status: "updated" | "unchanged";
+        contactId: SafeId<"contact">;
+      }
     | {
         index: number;
         status: "skipped";
         reason:
           | "contacts_limit_reached"
           | "duplicate_contact_id"
+          | "duplicate_external_ref"
           | "duplicate_tax_id"
           | "in_file_duplicate"
           | "invalid_row"
@@ -326,6 +355,8 @@ export const workspaces = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Import provenance: external_source, external_id, external_change_key, imported_at. */
+    ...importProvenanceColumns(),
     name: p.varchar({ length: 256 }).notNull(),
     reference: p.varchar({ length: 64 }).notNull(),
     // Nullable: a null client_id encodes a personal matter (visible
@@ -342,6 +373,9 @@ export const workspaces = p.pgTable(
     leadUserId: p
       .text("lead_user_id")
       .references(() => user.id, { onDelete: "set null" }),
+    billingNarrativeLanguage: p.varchar("billing_narrative_language", {
+      length: NARRATIVE_LANGUAGE_MAX_LENGTH,
+    }),
     billingReference: p.varchar("billing_reference", {
       length: 128,
     }),
@@ -355,6 +389,7 @@ export const workspaces = p.pgTable(
   },
   (table) => [
     p.index("workspaces_organization_id_idx").on(table.organizationId),
+    ...importProvenanceConstraints("workspaces", table),
     p
       .unique("workspaces_org_reference_uidx")
       .on(table.organizationId, table.reference),
@@ -727,6 +762,9 @@ export const accountAuditLogs = p.pgTable.withRLS(
         sql`, `,
       )})`,
     ),
+    p
+      .index("account_audit_logs_user_event_idx")
+      .on(table.userId, table.eventType),
     p
       .index("account_audit_logs_user_created_id_idx")
       .on(table.userId, table.createdAt, table.id),

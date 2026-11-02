@@ -517,6 +517,7 @@
     "Test promoted release resolution": [
       "@stll/collation",
       "scripts/resolve-promoted-release*",
+      "scripts/offline-check-startup.ts",
       "scripts/promoted-release-policy.ts",
       "scripts/offline-network-preload.ts",
       "apps/landing/src/data/changelog-release-dates.json",
@@ -604,7 +605,11 @@
       ".changeset/**",
       ".github/workflows/autofix.yml"
     ],
-    "Test type-aware autofix": [".github/workflows/autofix.yml", "scripts/**"],
+    "Test type-aware autofix": [
+      ".github/workflows/autofix.yml",
+      "packages/scripts/src/syntax-tree.ts",
+      "scripts/**"
+    ],
     "Test local workflow verification": [".github/workflows/**", "scripts/**"],
     "Typecheck cache contract": [
       ".github/workflows/ci.yml",
@@ -778,6 +783,11 @@
     "Processed-field backlog guard": ["@stll/api"],
     "GitHub API command ownership": ["**"],
     "Tracked file sizes": ["**"],
+    "CI job names": [
+      ".github/workflows/ci.yml",
+      "scripts/check-ci-job-names.test.ts",
+      "scripts/check-ci-job-names.ts"
+    ],
     "CI network step retries and timeouts": ["**"],
     "Sparse checkout script dependencies": [
       ".github/workflows/**",

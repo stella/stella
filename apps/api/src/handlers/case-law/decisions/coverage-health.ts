@@ -2,6 +2,8 @@ import { panic } from "better-result";
 
 import { DAY_IN_MS } from "@stll/time";
 
+import type { AdapterEdition } from "@/api/lib/legal-search/adapter-manifest";
+
 /**
  * How current a source is, and how complete it is, as named states.
  *
@@ -22,6 +24,11 @@ export const CASE_LAW_COVERAGE_HEALTH = {
   STALLED: "stalled",
   /** The source is switched off; nothing is expected to arrive. */
   DISABLED: "disabled",
+  /**
+   * The source reads one fixed publisher release; nothing newer can arrive,
+   * so its currency is the release's date, never the last run.
+   */
+  SNAPSHOT: "snapshot",
   /** The source has never recorded a sync, so there is nothing to judge. */
   UNKNOWN: "unknown",
 } as const;
@@ -54,6 +61,8 @@ export const COVERAGE_REPORTED_TOTAL_FRESH_WITHIN_MS = 30 * DAY_IN_MS;
 type SourceHealthRead = {
   /** `case_law_sources.enabled`. */
   enabled: boolean;
+  /** What the adapter's manifest declares it reads. */
+  edition: AdapterEdition;
   /** `case_law_sources.last_sync_at`; null before the first run. */
   lastSyncAt: Date | null;
   /** The instant the windows are measured back from. */
@@ -61,12 +70,22 @@ type SourceHealthRead = {
 };
 
 export const caseLawSourceHealth = ({
+  edition,
   enabled,
   lastSyncAt,
   now,
 }: SourceHealthRead): CaseLawCoverageHealth => {
   if (!enabled) {
     return CASE_LAW_COVERAGE_HEALTH.DISABLED;
+  }
+  switch (edition.type) {
+    case "snapshot":
+      return CASE_LAW_COVERAGE_HEALTH.SNAPSHOT;
+    case "live":
+      break;
+    default:
+      edition satisfies never;
+      return panic("Unhandled adapter edition");
   }
   if (lastSyncAt === null) {
     return CASE_LAW_COVERAGE_HEALTH.UNKNOWN;
@@ -89,15 +108,19 @@ export const caseLawSourceHealth = ({
  *
  * `disabled` sits below `current` on purpose: a source switched off is a
  * decision someone took, not a fault, so it must not outrank a working
- * sibling. A country whose every source is switched off is reported `disabled` by the
+ * sibling. `snapshot` sits just below `current`: a fixed release is no fault,
+ * so a country that also follows a live publisher reads as that publisher
+ * does, and only a country holding nothing but releases reads `snapshot`. A
+ * country whose every source is switched off is reported `disabled` by the
  * rule below rather than by this ranking.
  */
 const HEALTH_SEVERITY = {
   disabled: 0,
-  current: 1,
-  unknown: 2,
-  delayed: 3,
-  stalled: 4,
+  snapshot: 1,
+  current: 2,
+  unknown: 3,
+  delayed: 4,
+  stalled: 5,
 } as const satisfies Record<CaseLawCoverageHealth, number>;
 
 /**

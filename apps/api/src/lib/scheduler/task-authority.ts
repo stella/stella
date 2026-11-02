@@ -121,9 +121,9 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-raw-storage.ts",
     "Public legal corpus storage reconciliation.",
   ),
-  "caseLaw.refreshBrowseFacets": platform(
-    "case-law-browse-facet-refresh.ts",
-    "Public legal corpus aggregates.",
+  "caseLaw.foldPopulationCounts": platform(
+    "case-law-population-fold.ts",
+    "Folds public legal corpus population deltas under the load governor.",
   ),
   "caseLaw.refreshSitemapShards": platform(
     "case-law-sitemap-shard-refresh.ts",
@@ -169,7 +169,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
   ),
   "documentProcessing.dispatchNativeExtraction": platform(
     "document-processing-native-extraction.ts",
-    "Hands queued native extraction runs to their queue.",
+    "Hands queued native extraction runs to their queue and extracts small ones through the run's own lease, as the worker does.",
   ),
   "documentProcessing.recoverDeadlineScouts": platform(
     "document-deadline-scout-recovery.ts",

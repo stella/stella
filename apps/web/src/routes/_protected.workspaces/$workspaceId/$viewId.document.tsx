@@ -599,7 +599,35 @@ function RouteComponent() {
   }
 
   return (
+    <DocumentRoute
+      entityId={entityId}
+      initialFieldId={initialFieldId}
+      viewId={viewId}
+      workspaceId={workspaceId}
+    />
+  );
+}
+
+function DocumentRoute({
+  entityId,
+  initialFieldId,
+  viewId,
+  workspaceId,
+}: {
+  entityId: string;
+  initialFieldId: string;
+  viewId: string;
+  workspaceId: string;
+}) {
+  const editorPdfSignFlow = usePdfSignFlow({
+    entityId,
+    fieldId: initialFieldId,
+    workspaceId,
+  });
+
+  return (
     <RouteComponentInner
+      editorPdfSignFlow={editorPdfSignFlow}
       entityId={entityId}
       initialFieldId={initialFieldId}
       key={initialFieldId}
@@ -610,11 +638,13 @@ function RouteComponent() {
 }
 
 function RouteComponentInner({
+  editorPdfSignFlow,
   workspaceId,
   viewId,
   entityId,
   initialFieldId,
 }: {
+  editorPdfSignFlow: ReturnType<typeof usePdfSignFlow>;
   workspaceId: string;
   viewId: string;
   entityId: string;
@@ -869,7 +899,6 @@ function RouteComponentInner({
   const isDocxFile = activeMimeType === DOCX_MIME;
   // Signing from the page editor outlives it: saving first replaces the
   // version, which remounts the editor, and the signing must go on.
-  const editorPdfSignFlow = usePdfSignFlow();
   const pdfSignTarget = resolvePdfSignTarget({
     canUpdateEntity,
     entityId,
@@ -957,6 +986,7 @@ function RouteComponentInner({
 
   useExternalSyncEffect(() => {
     if (
+      isPDFPageOrganizerOpen ||
       latestFileFieldForProperty === undefined ||
       latestFileFieldForProperty.id === fieldId
     ) {
@@ -996,7 +1026,7 @@ function RouteComponentInner({
       }),
       "document.navigate",
     );
-  }, [fieldId, latestFileFieldForProperty, navigate]);
+  }, [fieldId, isPDFPageOrganizerOpen, latestFileFieldForProperty, navigate]);
 
   return (
     <div className="bg-secondary relative flex h-full max-h-[calc(100dvh-3rem)] flex-1 overflow-hidden">

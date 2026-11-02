@@ -12,7 +12,7 @@ import {
   type EuCompletionReport,
   EuCompletionStop,
 } from "@/api/handlers/case-law/ingestion/eu-completion";
-import { REPLAY_HEALTH_CONFIG } from "@/api/handlers/case-law/ingestion/replay-enrolment";
+import { replayHealthConfig } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { classifyReplayFailure } from "@/api/handlers/case-law/ingestion/replay-failure";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -189,7 +189,7 @@ const loadRuntime = async () => {
     { createEuCompletionStore },
     { runEuCompletionTick },
     { createEuCompletionRunner },
-    { acquireCaseLawSourceIngestionLease },
+    { holdCaseLawSourceIngestionLease },
   ] = await Promise.all([
     import("@/api/db/long-running-connection"),
     import("@/api/db/backfill-runtime"),
@@ -208,7 +208,7 @@ const loadRuntime = async () => {
     createEuCompletionStore,
     runEuCompletionTick,
     createEuCompletionRunner,
-    acquireCaseLawSourceIngestionLease,
+    holdCaseLawSourceIngestionLease,
     caseLawSources,
   };
 };
@@ -255,6 +255,8 @@ const createCompletionFence = async ({
   });
   let slotHeld = false;
   let lease: CaseLawSourceIngestionLease | null = null;
+  let finishLease: (() => void) | null = null;
+  let leaseRun: Promise<unknown> | null = null;
   return {
     getLease: () => lease,
     fence: async () => {
@@ -293,26 +295,42 @@ const createCompletionFence = async ({
     },
     acquireDocument: async () => {
       signal.throwIfAborted();
-      lease ??= await runtime.acquireCaseLawSourceIngestionLease({
+      if (lease !== null) {
+        return;
+      }
+      const held = await runtime.holdCaseLawSourceIngestionLease({
         scopedDb: handles.ingestionDb,
         sourceId,
         releaseDb: cleanup.ingestionDb,
       });
-      if (lease === null) {
+      if (held === null) {
         throw new EuCompletionStop({
           message: "Completion source lease is held",
           reason: "held",
         });
       }
+      lease = held.lease;
+      finishLease = () => {
+        leaseRun = held.release();
+      };
     },
     releaseDocument: async () => {
-      const acquired = lease;
-      lease = null;
-      await acquired?.release();
+      // A failed release still ends this document's lease; the next document
+      // acquires a fresh one instead of reusing a released handle.
+      try {
+        finishLease?.();
+        await leaseRun;
+      } finally {
+        lease = null;
+        finishLease = null;
+        leaseRun = null;
+      }
     },
     close: async () => {
       try {
-        await lease?.release();
+        finishLease?.();
+        await leaseRun;
+        lease = null;
       } finally {
         await slot.close();
       }
@@ -342,7 +360,7 @@ const runCompletionSession = async (
     db: handles.rootDb,
     tableName: "case_law_decisions",
     clock: now,
-    config: { ...REPLAY_HEALTH_CONFIG, ...fixture.healthConfig },
+    config: { ...replayHealthConfig(), ...fixture.healthConfig },
   });
   const preflight = createReplayPreflightGate({
     readVerdict: async () =>
