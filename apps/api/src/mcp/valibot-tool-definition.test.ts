@@ -11,9 +11,10 @@ import {
 import { blockSchema } from "@stll/legal-ast/document-ast";
 import { propertyConfig } from "@stll/property-testing";
 
+import { nullAsAbsent } from "@/api/mcp/input-schemas";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
-import { nullAsAbsent, toolDataResult } from "@/api/mcp/tool-utils";
+import { toolDataResult } from "@/api/mcp/tool-utils";
 import {
   defineChatProjectionMcpToolOutput,
   defineMcpToolOutput,

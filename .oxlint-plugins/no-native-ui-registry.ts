@@ -160,6 +160,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     "a Button with clipboard feedback; its markup is the button rule's",
   ),
   "court-badge": noNative("a domain badge for a court"),
+  "court-filter": noNative(
+    "a court picker composed from shared fields and controls",
+  ),
   "data-table": owned(
     nativeRuleId("table"),
     "native table markup is reported by the table rule",
@@ -202,6 +205,7 @@ export const NO_NATIVE_UI_REGISTRY = {
     nativeRuleId("label"),
     "Field pairs a Label with a control; the native label is the label rule's",
   ),
+  "field-trigger": notComponent("shared field trigger style tokens"),
   "file-input": owned(FILE_INPUT_RULE, "native file inputs are reported there"),
   "file-picker": notComponent(
     "an imperative file chooser; native file inputs are no-raw-file-input's",

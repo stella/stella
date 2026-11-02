@@ -163,6 +163,7 @@
     "./statute-anchor-schemes": "./src/statute-anchor-schemes.ts",
     "./statute-query-intent": "./src/statute-query-intent.ts",
     "./desktop-presence": "./src/desktop-presence.ts",
+    "./mcp-app-failure": "./src/mcp-app-failure.ts",
     "./desktop-runner": "./src/desktop-runner.ts",
     "./agent-harness": "./src/agent-harness.ts",
     "./document-ocr-availability": "./src/document-ocr-availability.ts",

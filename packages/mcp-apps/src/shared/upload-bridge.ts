@@ -22,11 +22,13 @@ type ConnectUploadAppOptions = {
   app: App;
   onContext: (context: ReturnType<App["getHostContext"]>) => void;
   onError: (message: string) => void;
+  onConnected?: (() => void) | undefined;
 };
 export const connectUploadApp = async ({
   app,
   onContext,
   onError,
+  onConnected,
 }: ConnectUploadAppOptions) => {
   const connected = await Result.tryPromise(async () => await app.connect());
   if (Result.isError(connected)) {
@@ -34,6 +36,7 @@ export const connectUploadApp = async ({
     return;
   }
   onContext(app.getHostContext());
+  onConnected?.();
 };
 
 export const createUploadSubscriptions = () => {

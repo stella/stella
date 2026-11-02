@@ -19,6 +19,7 @@ test("document upload requires a resolved target and announces upload errors", (
       uploads += 1;
     },
     connect: async () => undefined,
+    mountViewport: () => undefined,
   } satisfies ReturnType<typeof createDocumentUploadRuntime>;
   snapshot = {
     file: null,

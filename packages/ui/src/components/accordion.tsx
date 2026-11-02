@@ -29,7 +29,7 @@ const AccordionItem = ({
 type AccordionSize = "default" | "sm" | "compact";
 
 const TRIGGER_SIZE_CLASS_NAME = {
-  compact: "py-2 text-xs",
+  compact: "py-1.5 text-xs",
   default: "py-4 text-sm",
   sm: "min-h-11 items-center py-2 text-sm",
 } as const satisfies Record<AccordionSize, string>;
