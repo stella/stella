@@ -1,5 +1,5 @@
 {
   "kind": "priority",
-  "qualifier": "Publication to TestFlight follows a manual dispatch from main.",
+  "qualifier": "Publication to TestFlight from main, dispatched by hand or, for preview, by the release plan after a merge.",
   "reviewedDigest": "428877c03d9171a168da9d3f2be1c53078613d078ef42cd21b4772d7e79bdbb1"
 }

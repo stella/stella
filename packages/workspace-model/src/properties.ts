@@ -225,7 +225,7 @@ export const resolveWorkspacePropertyOptionGroups = <
       last.options.push(option);
       continue;
     }
-    if (last?.group !== null && last?.group !== undefined) {
+    if (last !== undefined && last.group !== null) {
       closed.add(last.group.id);
     }
     if (group !== null && group !== undefined && closed.has(group.id)) {

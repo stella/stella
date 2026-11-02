@@ -80,6 +80,8 @@ export const PG_ERROR = {
   LOCK_NOT_AVAILABLE: "55P03",
   /** A statement was cancelled: `statement_timeout` expired, or an operator said so. */
   QUERY_CANCELED: "57014",
+  /** The server ended the session: the transaction outlived `transaction_timeout`. */
+  TRANSACTION_TIMEOUT: "25P04",
   FOREIGN_KEY_VIOLATION: "23503",
   SERIALIZATION_FAILURE: "40001",
   UNIQUE_VIOLATION: "23505",

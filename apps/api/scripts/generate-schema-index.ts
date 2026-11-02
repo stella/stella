@@ -439,15 +439,74 @@ type TableDefinition = {
   foreignKeys: Set<string>;
 };
 
+type ColumnObject = (
+  argument: CallExpression["arguments"][number] | undefined,
+) => ObjectExpression | undefined;
+
+/** Zero-argument arrow functions that return a column object, by name. */
+const findColumnFactories = (
+  parsed: ParsedSource,
+): Map<string, ObjectExpression> => {
+  const columnFactories = new Map<string, ObjectExpression>();
+  for (const statement of parsed.program.body) {
+    const declaration =
+      statement.type === "ExportNamedDeclaration"
+        ? statement.declaration
+        : statement;
+    if (declaration?.type !== "VariableDeclaration") {
+      continue;
+    }
+    for (const { id, init } of declaration.declarations) {
+      if (
+        id.type !== "Identifier" ||
+        init?.type !== "ArrowFunctionExpression" ||
+        init.params.length !== 0
+      ) {
+        continue;
+      }
+      let body: Node = init.body;
+      while (body.type === "ParenthesizedExpression") {
+        body = body.expression;
+      }
+      if (body.type === "ObjectExpression") {
+        columnFactories.set(id.name, body);
+      }
+    }
+  }
+  return columnFactories;
+};
+
+/** A column object written inline or returned by a local column factory. */
+const columnObjectReader = (parsed: ParsedSource): ColumnObject => {
+  const columnFactories = findColumnFactories(parsed);
+  return (argument) => {
+    if (argument === undefined) {
+      return undefined;
+    }
+    if (argument.type === "ObjectExpression") {
+      return argument;
+    }
+    if (
+      argument.type === "CallExpression" &&
+      argument.arguments.length === 0 &&
+      argument.callee.type === "Identifier"
+    ) {
+      return columnFactories.get(argument.callee.name);
+    }
+    return undefined;
+  };
+};
+
 /** Each exported table's column object and constraint-declared foreign keys. */
 const tableDefinitions = (
   declarations: readonly { initializer: Expression; name: string }[],
+  columnObject: ColumnObject,
 ): Map<string, TableDefinition> => {
   const definitions = new Map<string, TableDefinition>();
   for (const declaration of declarations) {
     const call = findTableCall(declaration.initializer);
-    const columnsArgument = call?.arguments.at(1);
-    if (call !== null && columnsArgument?.type === "ObjectExpression") {
+    const columnsArgument = columnObject(call?.arguments.at(1));
+    if (call !== null && columnsArgument !== undefined) {
       definitions.set(declaration.name, {
         columns: columnsArgument,
         foreignKeys: tableForeignKeyColumns(call),
@@ -483,13 +542,14 @@ export const indexSchemaSource = ({
         : [],
     );
   });
-  const tableColumns = tableDefinitions(declarations);
+  const columnObject = columnObjectReader(parsed);
+  const tableColumns = tableDefinitions(declarations, columnObject);
   for (const declaration of declarations) {
     const tableCall = findTableCall(declaration.initializer);
     const viewCall = findViewCall(declaration.initializer);
     const call = tableCall ?? viewCall;
     const sqlName = stringText(call?.arguments.at(0));
-    const ownColumnsArgument = tableCall?.arguments.at(1);
+    const ownColumnsArgument = columnObject(call?.arguments.at(1));
     const viewSource =
       viewCall === null ? null : findViewSource(declaration.initializer);
     const tableDefinition =
