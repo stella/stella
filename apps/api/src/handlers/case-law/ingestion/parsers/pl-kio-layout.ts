@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-kio] the shared paragraph helpers keep the same default markers and calculations; only the named argument shape changes for this caller.
 /**
  * The procurement database's document pages, read back as the decision set
  * them.
@@ -736,7 +737,7 @@ const joinOf = (
   if (opensPoint(previous, line)) {
     return LINE_JOINS.PARAGRAPH;
   }
-  const full = ranOutOfRoom(previous, line, rightEdge);
+  const full = ranOutOfRoom({ previous, line, rightEdge });
   const runsOn = continuesSentence(previous, line, rightEdge);
   if (full && runsOn) {
     return LINE_JOINS.JOIN;
@@ -744,7 +745,7 @@ const joinOf = (
   const indented =
     line.x - previous.x >= INDENT_THRESHOLD_PT &&
     !POINT_MARKER.test(previous.text);
-  if (opensBlockParagraph(previous, line, indented, rightEdge)) {
+  if (opensBlockParagraph({ previous, line, indented, rightEdge })) {
     return LINE_JOINS.PARAGRAPH;
   }
   return full || runsOn ? LINE_JOINS.JOIN : LINE_JOINS.LINE;

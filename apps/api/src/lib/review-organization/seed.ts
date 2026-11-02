@@ -58,20 +58,17 @@ import type {
 } from "@/api/lib/workflow/playbook-positions";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
-const contactBody = (
+const sampleContactId = (
   organizationId: SafeId<"organization">,
-  contact: SampleContact,
-) => {
-  const id = reviewSampleId<"contact">(
-    organizationId,
-    `contact:${contact.key}`,
-  );
+  contactKey: string,
+) => reviewSampleId<"contact">(organizationId, `contact:${contactKey}`);
+
+const contactBody = (contact: SampleContact) => {
   const email = [
     { type: "work" as const, address: contact.email, isPrimary: true },
   ];
   if (contact.type === "organization") {
     return {
-      id,
       type: contact.type,
       organizationName: contact.organizationName,
       displayName: contact.organizationName,
@@ -81,7 +78,6 @@ const contactBody = (
     };
   }
   return {
-    id,
     type: contact.type,
     firstName: contact.firstName,
     lastName: contact.lastName,
@@ -95,9 +91,10 @@ const seedContacts = async (
   actor: ReviewSeedActor,
   counts: ReviewSeedCounts,
 ): Promise<Result<void, ReviewSeedError>> => {
-  const bodies = SAMPLE_CONTACTS.map((contact) =>
-    contactBody(actor.organizationId, contact),
-  );
+  const samples = SAMPLE_CONTACTS.map((contact) => ({
+    id: sampleContactId(actor.organizationId, contact.key),
+    body: contactBody(contact),
+  }));
   const existing = await actor.safeDb((tx) =>
     tx
       .select({ id: contacts.id })
@@ -107,20 +104,20 @@ const seedContacts = async (
           eq(contacts.organizationId, actor.organizationId),
           inArray(
             contacts.id,
-            bodies.map((body) => body.id),
+            samples.map(({ id }) => id),
           ),
         ),
       )
-      .limit(bodies.length),
+      .limit(samples.length),
   );
   if (Result.isError(existing)) {
     return Result.err(seedError("contacts", existing.error));
   }
   const existingIds = new Set(existing.value.map(({ id }) => id));
   return await inOrder(
-    bodies,
-    async (body) => {
-      if (existingIds.has(body.id)) {
+    samples,
+    async ({ id, body }) => {
+      if (existingIds.has(id)) {
         counts.contacts.existing += 1;
         return Result.ok(undefined);
       }
@@ -130,6 +127,7 @@ const seedContacts = async (
           organizationId: actor.organizationId,
           userId: actor.userId,
           recordAuditEvent: actor.recorderFor(null),
+          contactId: id,
           body,
         }),
       );
@@ -336,10 +334,7 @@ const seedMatters = async (
               id: workspaceId,
               name: matter.name,
               filePropertyName: "File",
-              clientId: reviewSampleId<"contact">(
-                actor.organizationId,
-                `contact:${matter.clientKey}`,
-              ),
+              clientId: sampleContactId(actor.organizationId, matter.clientKey),
             },
           }),
         );
