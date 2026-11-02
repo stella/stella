@@ -4,7 +4,7 @@ import {
   isLegacyRequest,
   McpServer,
 } from "@modelcontextprotocol/server";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, jest, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -25,6 +25,7 @@ import {
   type CanaryFetcher,
   createDeploymentFetcher,
   createJsonRpcRequest,
+  describeToolLatencyOverBudget,
   evaluateAuthorizationMetadata,
   evaluateAuthorize,
   evaluateCredentialExpiry,
@@ -36,6 +37,7 @@ import {
   evaluateToolCall,
   evaluateToolsList,
   evaluateUnauthenticated,
+  judgeToolCallProbe,
   LOOPBACK_REDIRECTS,
   runAuthenticatedStreamProbe,
   runDesktopProbe,
@@ -45,6 +47,7 @@ import {
   runStagingCredentialJourneys,
   summarize,
   THIRD_PARTY_FETCHES_SKIP_REASON,
+  TOOL_CALL_PROBES,
 } from "./mcp-canary";
 
 const REVIEW_BASE_URL = "https://api.example";
@@ -59,6 +62,16 @@ const REVIEW_REQUIRED_TOOLS = [
   "save_task",
   "delete_task",
 ] as const;
+
+afterEach(() => {
+  jest.useRealTimers();
+});
+
+const flushMicrotasks = async () => {
+  for (let index = 0; index < 32; index += 1) {
+    await Promise.resolve();
+  }
+};
 
 type ReviewFailure = {
   step: string;
@@ -425,6 +438,53 @@ const reviewFetcher = (
 };
 
 describe("restricted review-account journey", () => {
+  test("cleans up a successful write whose latency exceeds its budget", async () => {
+    const observed: { url: string; headers: Headers; body: string }[] = [];
+    const fetcher = reviewFetcher({ observed });
+    let elapsedMs = 0;
+    const clock = spyOn(performance, "now").mockImplementation(() => elapsedMs);
+    try {
+      const results = await runReviewAccountJourney(
+        {
+          baseUrl: REVIEW_BASE_URL,
+          configuredBaseUrl: REVIEW_BASE_URL,
+          frontendUrl: REVIEW_FRONTEND_URL,
+          password: REVIEW_PASSWORD,
+          mode: "full",
+        },
+        async (input, init) => {
+          const body = await readFakeRequestBody(
+            init.body,
+            input instanceof Request ? input : undefined,
+          );
+          const response = await fetcher(input, init);
+          if (body.includes('"name":"save_task"')) {
+            elapsedMs += 3000;
+          }
+          return response;
+        },
+      );
+      expect(elapsedMs).toBe(3000);
+      expect(
+        results.find(({ name }) => name === "restricted account: write"),
+      ).toMatchObject({
+        status: "failed",
+        detail: expect.stringContaining(
+          "save_task answered in 3000 ms, over its 2000 ms latency budget",
+        ),
+      });
+      expect(
+        observed.filter(({ body }) => body.includes('"name":"delete_task"')),
+      ).toHaveLength(1);
+      expect(results.at(-1)).toMatchObject({
+        name: "restricted account: cleanup",
+        status: "passed",
+      });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   test.each(["frontend", "api"] as const)(
     "completes OAuth across configured origins with the token endpoint on %s",
     async (tokenOrigin) => {
@@ -1472,6 +1532,89 @@ describe("authorization server probes", () => {
   });
 });
 
+describe("tool latency budgets", () => {
+  const answered = evaluateToolCall(
+    {
+      status: 200,
+      body: {
+        jsonrpc: "2.0",
+        result: { content: [{ type: "text", text: "ok" }] },
+      },
+    },
+    {
+      name: "POST /mcp (search_legislation)",
+      answered: "read-only legislation search returned content",
+    },
+  );
+
+  test("fails a correct answer that ran over its tool's budget", () => {
+    expect(
+      judgeToolCallProbe(answered, {
+        toolName: "search_legislation",
+        elapsedMs: 10_512.4,
+      }),
+    ).toEqual({
+      name: "POST /mcp (search_legislation)",
+      status: "failed",
+      detail:
+        "search_legislation answered in 10512 ms, over its 8000 ms latency budget",
+    });
+  });
+
+  test("passes a correct answer within budget and says how long it took", () => {
+    expect(
+      judgeToolCallProbe(answered, {
+        toolName: "search_legislation",
+        elapsedMs: 1480,
+      }),
+    ).toEqual({
+      name: "POST /mcp (search_legislation)",
+      status: "passed",
+      detail: "read-only legislation search returned content in 1480 ms",
+    });
+  });
+
+  test("keeps both causes when a wrong answer was also slow", () => {
+    const wrong = evaluateToolCall({ status: 502, body: null });
+    expect(
+      judgeToolCallProbe(wrong, {
+        toolName: "search_case_law",
+        elapsedMs: 9000,
+      }).detail,
+    ).toBe(
+      `${wrong.detail}; search_case_law answered in 9000 ms, over its 8000 ms latency budget`,
+    );
+  });
+
+  test("judges an ordinary read by the default budget", () => {
+    expect(
+      describeToolLatencyOverBudget({
+        toolName: "list_tasks",
+        elapsedMs: 2000,
+      }),
+    ).toBeUndefined();
+    expect(
+      describeToolLatencyOverBudget({
+        toolName: "case_law_coverage",
+        elapsedMs: 3134,
+      }),
+    ).toBe(
+      "case_law_coverage answered in 3134 ms, over its 2000 ms latency budget",
+    );
+  });
+
+  test("times every probed tool, including the slow-prone corpus reads", () => {
+    expect(TOOL_CALL_PROBES.map(({ toolName }) => toolName)).toEqual([
+      "search_case_law",
+      "search_legislation",
+      "case_law_coverage",
+    ]);
+    expect(AUTHENTICATED_PROBES.map(({ name }) => name)).toEqual(
+      expect.arrayContaining(TOOL_CALL_PROBES.map(({ name }) => name)),
+    );
+  });
+});
+
 describe("OAuth client journeys", () => {
   const fakeOAuth = () => {
     const requests: { url: URL; init: Parameters<CanaryFetcher>[1] }[] = [];
@@ -1701,6 +1844,62 @@ describe("OAuth client journeys", () => {
           url.searchParams.get("client_id") === unreachableClient,
       ),
     ).toHaveLength(0);
+  });
+
+  test("bounds a stalled client metadata body by the probe timeout", async () => {
+    jest.useFakeTimers();
+    const { fetcher: baseFetcher } = fakeOAuth();
+    const stalledClient = CANARY_CLIENT_IDS[0];
+    // The idle deadline is armed right before the body read; the stalled body
+    // reports that read so the clock moves only once the deadline exists.
+    const bodyReadStarted = Promise.withResolvers<undefined>();
+    const fetcher: CanaryFetcher = async (input, init) => {
+      const url = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      );
+      if (url.href === stalledClient) {
+        return new Response(
+          new ReadableStream<Uint8Array>(
+            {
+              pull: async () => {
+                bodyReadStarted.resolve(undefined);
+                await new Promise<never>(() => {});
+              },
+            },
+            { highWaterMark: 0 },
+          ),
+        );
+      }
+      return await baseFetcher(input, init);
+    };
+
+    const result = runOAuthJourneys(
+      {
+        baseUrl: "https://api.example",
+        frontendUrl: "https://app.example",
+        mode: "frequent",
+      },
+      fetcher,
+    );
+    await bodyReadStarted.promise;
+    jest.advanceTimersByTime(19_999);
+    await flushMicrotasks();
+    let settled = false;
+    void result.then(() => {
+      settled = true;
+      return undefined;
+    });
+    await flushMicrotasks();
+    expect(settled).toBe(false);
+    // Only the probe deadline is left on the fake clock: once it fires, the
+    // rest of the journey settles on microtasks alone, however many it takes.
+    jest.advanceTimersByTime(1);
+
+    expect(await result).toContainEqual({
+      name: `client metadata ${stalledClient}`,
+      status: "upstream",
+      detail: "client metadata unavailable upstream (unreachable)",
+    });
   });
 
   test("stops a client's authorize variants after its first failure", async () => {
@@ -2224,10 +2423,32 @@ describe("staging credential journeys", () => {
 
   test("runs MCP and desktop probes with short-lived credentials, then revokes the MCP key", async () => {
     const { requests, fetcher } = createStagingDeployment();
+    let activeRequests = 0;
+    let peakRequests = 0;
+    const serialFetcher: CanaryFetcher = async (input, init) => {
+      activeRequests += 1;
+      peakRequests = Math.max(peakRequests, activeRequests);
+      await Promise.resolve();
+      try {
+        return await fetcher(input, init);
+      } finally {
+        activeRequests -= 1;
+      }
+    };
     const results = await runStagingCredentialJourneys(
       { baseUrl: "https://api.example", smokeSecret: "smoke-secret" },
-      fetcher,
+      serialFetcher,
     );
+    expect(peakRequests).toBe(1);
+    const coverage = requests.find(({ body }) =>
+      body.includes('"name":"case_law_coverage"'),
+    );
+    expect(JSON.parse(coverage?.body ?? "{}")).toMatchObject({
+      params: { name: "case_law_coverage", arguments: {} },
+    });
+    expect(
+      Object.keys(JSON.parse(coverage?.body ?? "{}").params.arguments),
+    ).toEqual([]);
     expect(
       results
         .filter(
@@ -2457,7 +2678,7 @@ describe("deployment fetch boundary", () => {
     const response = await deploymentFetch("https://api.example/path", {
       headers: { authorization: "Bearer canary" },
       redirect: "follow",
-      timeout: { type: "idle", ms: 1000 },
+      timeout: { type: "headers", ms: 1000 },
     });
     expect(response.status).toBe(302);
     expect(captured?.redirect).toBe("manual");
@@ -2479,15 +2700,15 @@ describe("deployment fetch boundary", () => {
       fetcher,
     );
     await deploymentFetch("https://app.example/oauth/authorize", {
-      timeout: { type: "idle", ms: 1000 },
+      timeout: { type: "headers", ms: 1000 },
     });
     await deploymentFetch("https://api.example/mcp", {
-      timeout: { type: "idle", ms: 1000 },
+      timeout: { type: "headers", ms: 1000 },
     });
     expect(origins).toEqual(["https://app.example", "https://api.example"]);
     const rejection = await rejectionOf(
       deploymentFetch("https://foreign.example/path", {
-        timeout: { type: "idle", ms: 1000 },
+        timeout: { type: "headers", ms: 1000 },
       }),
     );
     expect(rejection).toMatchObject({ _tag: "CanaryTargetError" });
@@ -2505,7 +2726,7 @@ describe("deployment fetch boundary", () => {
     );
     const rejection = await rejectionOf(
       deploymentFetch("https://foreign.example/path", {
-        timeout: { type: "idle", ms: 1000 },
+        timeout: { type: "headers", ms: 1000 },
       }),
     );
     expect(rejection).toMatchObject({ _tag: "CanaryTargetError" });

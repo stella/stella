@@ -473,8 +473,8 @@ test("all waiver kinds retain their keys when unrelated lines shift their locato
     collectWaivers({
       read: (file) =>
         prefix +
-        (file === "scripts/guard-rollouts/fixture-guard.ts"
-          ? 'export default { id: "fixture-guard" };'
+        (file === "scripts/guard-rollouts/fixture-guard.json"
+          ? '{"id":"fixture-guard"}'
           : read(file)),
       docs: [doc],
       audit: [{ id: "GHSA-test", package: "pkg", expiresOn: "2026-10-03" }],
@@ -580,7 +580,13 @@ test("check consumes validated tracked files without spawning under the offline 
 
 test("check requires an explicit tracked-files input", () => {
   const checked = Bun.spawnSync(
-    ["bun", "scripts/dated-waivers.ts", "--check"],
+    [
+      "bun",
+      "--preload",
+      "./scripts/offline-network-preload.ts",
+      "scripts/dated-waivers.ts",
+      "--check",
+    ],
     {
       cwd: path.resolve(import.meta.dir, ".."),
     },
@@ -600,6 +606,8 @@ test("tracked-files input rejects absolute and parent paths", () => {
       const checked = Bun.spawnSync(
         [
           "bun",
+          "--preload",
+          "./scripts/offline-network-preload.ts",
           "scripts/dated-waivers.ts",
           "--check",
           "--tracked-files",
@@ -620,8 +628,8 @@ test("tracked-files input rejects absolute and parent paths", () => {
 test("changed-lines guard rollouts enter the dated inventory with a full-scope probe", () => {
   const entries = collectWaivers({
     read: (file) =>
-      file === "scripts/guard-rollouts/fixture-guard.ts"
-        ? 'export default { id: "fixture-guard" };'
+      file === "scripts/guard-rollouts/fixture-guard.json"
+        ? '{"id":"fixture-guard"}'
         : read(file),
     docs: [],
     audit: [],
@@ -663,7 +671,7 @@ test("changed-lines guard rollouts enter the dated inventory with a full-scope p
   expect(
     expiredWaiverFailures(entries, new Date("2026-10-20T00:00:00.000Z")),
   ).toEqual([
-    "scripts/guard-rollouts/fixture-guard.ts:1 dated waiver expired: fixture-guard",
+    "scripts/guard-rollouts/fixture-guard.json:1 dated waiver expired: fixture-guard",
   ]);
 });
 

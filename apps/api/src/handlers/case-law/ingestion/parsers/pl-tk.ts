@@ -37,6 +37,7 @@ import {
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
+import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
 import {
   type MetadataUrlDefect,
   type SafeHref,
@@ -878,7 +879,22 @@ export const readPlTkRuling = (
   const panel = panelOf($, tab, documentId);
   const text = byId($, `tekst_${documentId}`);
   const note = collapse(
-    visibleHtmlText(tab.find('div[style="margin:5px"] > span').first()),
+    visibleHtmlText(
+      tab
+        .find("div > span")
+        .filter((_, el) => {
+          const parent = $(el).parent().get(0);
+          return (
+            parent !== undefined &&
+            inlineStyleValue(parent, (property, value) =>
+              property === "margin" && value.length > 0
+                ? { value: value === "5px" }
+                : undefined,
+            )?.value === true
+          );
+        })
+        .first(),
+    ),
   );
   const word = metadataUrlOf(
     byId($, `sprawaForm:tabView:pobierzDoc${documentId}`).attr("href"),

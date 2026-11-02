@@ -78,6 +78,7 @@ import {
   useSuggestPrompt,
   useUpdateProperty,
 } from "@/lib/workspaces/mutations/properties";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 type CreatePropertyProps = {
@@ -269,20 +270,20 @@ export const CreateProperty = ({
                     <DialogTrigger
                       {...triggerProps}
                       render={
-                        <button
+                        <Button
                           aria-label={t("workspaces.properties.newColumn")}
-                          className="ring-ring focus-visible:ring-offset-background text-muted-foreground flex h-full w-full cursor-pointer items-center justify-center border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                          className="flex h-full w-full items-center justify-center"
                           data-add-property-trigger
                           data-row-expansion-ignore
                           onClick={(event) => {
                             event.currentTarget.blur();
                           }}
-                          type="button"
+                          variant="plain"
                         />
                       }
                       {...capabilityProps}
                     >
-                      <PlusIcon className="size-4" />
+                      <PlusIcon className="text-muted-foreground size-4" />
                     </DialogTrigger>
                   )}
                 </CapabilityAction>
@@ -296,15 +297,15 @@ export const CreateProperty = ({
               {(capabilityProps) => (
                 <DialogTrigger
                   render={
-                    <button
+                    <Button
                       aria-label={t("workspaces.properties.newColumn")}
-                      className="ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                      className="absolute inset-0 z-10"
                       data-add-property-trigger
                       data-row-expansion-ignore
                       onClick={(event) => {
                         event.currentTarget.blur();
                       }}
-                      type="button"
+                      variant="plain"
                     />
                   }
                   {...capabilityProps}
@@ -323,20 +324,20 @@ export const CreateProperty = ({
                     <DialogTrigger
                       {...triggerProps}
                       render={
-                        <button
+                        <Button
                           aria-label={t("workspaces.properties.newColumn")}
-                          className="group/add-column-rail ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                          className="group/add-column-rail absolute inset-0 z-10"
                           data-add-property-trigger
                           data-row-expansion-ignore
                           onClick={(event) => {
                             event.currentTarget.blur();
                           }}
-                          type="button"
+                          variant="plain"
                         >
                           <PlusIcon
                             className={ADD_COLUMN_RAIL_PLUS_CLASS_NAME}
                           />
-                        </button>
+                        </Button>
                       }
                       {...capabilityProps}
                     />
@@ -396,6 +397,7 @@ const PropertyComposerBody = ({
 }: DialogBodyProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  const displayName = usePropertyDisplayName();
   const suggestPrompt = useSuggestPrompt();
   const startWorkflow = useStartWorkflow(workspaceId);
   const submitOnce = useSingleFlight();
@@ -827,13 +829,10 @@ const PropertyComposerBody = ({
             autoPromptPending={suggestPrompt.isPending}
             contentType={contentType}
             editorReady={setEditor}
-            fileChips={effectiveSelectedFileIds.map(
-              (id) =>
-                fileProperties.find((p) => p.id === id) ?? {
-                  id,
-                  name: id,
-                },
-            )}
+            fileChips={effectiveSelectedFileIds.map((id) => {
+              const file = fileProperties.find((p) => p.id === id);
+              return { id, name: file === undefined ? id : displayName(file) };
+            })}
             onAutoPrompt={handleAutoPrompt}
             onContentTypeChange={setContentType}
             onMentionsChange={setTextareaMentions}
@@ -848,7 +847,10 @@ const PropertyComposerBody = ({
               ? {
                   addFile: (id: string) =>
                     setSelectedFileIds((prev) => [...prev, id]),
-                  availableFiles: availableFileToAdd,
+                  availableFiles: availableFileToAdd.map((file) => ({
+                    id: file.id,
+                    name: displayName(file),
+                  })),
                 }
               : {})}
             {...(propertyId !== undefined ? { propertyId } : {})}

@@ -458,9 +458,31 @@ export type BrowserExtensionResponse = v.InferOutput<
   typeof browserExtensionResponseSchema
 >;
 
-export type BrowserClientCapability = {
-  protocolVersion: typeof BROWSER_CONTROL_PROTOCOL_VERSION;
-};
+export const BROWSER_EXTENSION_STATUS = {
+  checking: "checking",
+  connected: "connected",
+  needsSiteAccess: "needs-site-access",
+  notInstalled: "not-installed",
+  notPaired: "not-paired",
+  /** The installed extension speaks an older protocol; Chrome updates it from the store. */
+  extensionOutdated: "extension-outdated",
+  /** The installed extension speaks a newer protocol than this stella tab; a reload catches up. */
+  stellaOutdated: "stella-outdated",
+  /** A computer whose browser cannot run the extension (Safari, Firefox). */
+  unsupportedBrowser: "unsupported-browser",
+  /** A phone or tablet, or a client that is not a browser at all. */
+  unsupportedDevice: "unsupported-device",
+} as const;
+
+export type BrowserExtensionStatus =
+  (typeof BROWSER_EXTENSION_STATUS)[keyof typeof BROWSER_EXTENSION_STATUS];
+
+export type BrowserExtensionCapability = {
+  [Status in BrowserExtensionStatus]: {
+    protocolVersion: number;
+    status: Status;
+  };
+}[BrowserExtensionStatus];
 
 export const isReadOnlyBrowserCommand = (
   command: BrowserControlCommand,
@@ -516,6 +538,24 @@ export const parseBrowserExtensionRequest = (input: unknown) => {
     return null;
   }
   return result.output;
+};
+
+/**
+ * Only the source and version of an extension message, for one whose full
+ * shape belongs to another protocol version: every version keeps these two
+ * fields, so an extension on either side of an upgrade is still recognised.
+ */
+const browserExtensionPeerSchema = v.object({
+  protocolVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.extension),
+});
+
+/** The protocol version an extension message names, whatever its shape. */
+export const parseBrowserExtensionPeerVersion = (
+  input: unknown,
+): number | null => {
+  const result = v.safeParse(browserExtensionPeerSchema, input);
+  return result.success ? result.output.protocolVersion : null;
 };
 
 export const parseBrowserExtensionResponse = (input: unknown) => {

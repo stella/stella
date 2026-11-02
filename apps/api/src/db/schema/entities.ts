@@ -66,6 +66,7 @@ import type {
   DocumentSource,
   EntityDeletionCleanupStatus,
   FieldContent,
+  ImportDocumentSource,
   JustificationContent,
   LinkMetadata,
   SafeId,
@@ -1203,6 +1204,8 @@ export type PendingUploadPurposeData =
   | {
       type: "entity_create";
       propertyId: SafeId<"property">;
+      /** Set when the upload imports a file from another system. */
+      importSource?: ImportDocumentSource;
       /**
        * Final object id reserved by trusted server-side writers. Persisting it
        * before S3 publication lets the bounded reconciler derive and remove a
