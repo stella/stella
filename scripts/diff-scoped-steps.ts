@@ -12,8 +12,10 @@ const STEP_BASE =
 /** A script reading a base from the environment, or defaulting to main. */
 const SCRIPT_BASE =
   /process\.env(?:\.|\[\s*["'])\w*BASE\w*|\$\{?\w*BASE_(?:REF|SHA)\b|["'`]origin\/main["'`]/u;
+// A repository script, also when a step runs it from a tooling checkout
+// (`$GITHUB_WORKSPACE/.tooling/scripts/x.sh` runs `scripts/x.sh`).
 const SCRIPT_PATH =
-  /(?:^|[\s"'])((?:scripts|apps\/[\w-]+\/scripts|packages\/[\w-]+\/src)\/[\w./-]+\.(?:ts|sh|mjs))/gu;
+  /(?:^|[\s"']|\/\.[\w-]+\/)((?:scripts|apps\/[\w-]+\/scripts|packages\/[\w-]+\/src)\/[\w./-]+\.(?:ts|sh|mjs))/gu;
 // Classification labels are prose; a word in them must not decide membership.
 const LABEL_ENV = new Set(["CI_CHECK_KIND", "CI_CHECK_CONTEXT"]);
 
@@ -168,10 +170,6 @@ export const DIFF_SCOPED_STEPS = {
     diffComplete(
       "Checks exactly the pull requests between the group's base and head.",
     ),
-  "merge-group-hold.yml:dequeue-held-pull-request#Check out trusted base scripts":
-    operational(
-      "Checks out the hold check from the pull request's base; no verdict.",
-    ),
   "merge-group-hold.yml:dequeue-held-pull-request#Restore active hold labels and remove held pull requests from the queue":
     operational(
       "Restores hold labels and dequeues the pull request the event names; no verdict on content.",
@@ -185,6 +183,14 @@ export const DIFF_SCOPED_STEPS = {
   "publish-npm.yml:pack#Verify manual package recovery source": diffComplete(
     "Checks that the recovered package source is an ancestor of main.",
   ),
+  "publish-npm.yml:release-trigger#Resolve upstream release receipt":
+    operational(
+      "Proves protected main carries the release commit before pack builds it.",
+    ),
+  "ci.yml:ci-plan#Preserve the comparison-base resolver across source checkouts":
+    operational(
+      "Stages the comparison-base resolver for a later step; it resolves no base itself.",
+    ),
   "publish-npm.yml:pack#Build and pack selected packages": operational(
     "Packs the packages selected for publication.",
   ),

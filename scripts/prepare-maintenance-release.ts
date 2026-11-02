@@ -1865,7 +1865,17 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
     }
   },
   openReleasePullRequest: (version) => {
-    const branch = `release/v${version}`;
+    // scripts/release-branch.sh owns the name the release source check accepts.
+    const branch = spawnOutput([
+      "bash",
+      "scripts/release-branch.sh",
+      version,
+    ])?.trim();
+    if (branch === undefined || branch === "") {
+      throw new MaintenanceReleaseError(
+        `Could not name the release branch for v${version}`,
+      );
+    }
     run(["git", "switch", "-c", branch]);
     run(["git", "add", "--all"]);
     run(["git", "commit", "-S", "-m", `chore: release v${version}`]);
