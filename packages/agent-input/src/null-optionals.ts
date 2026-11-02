@@ -1,7 +1,37 @@
 import { Result } from "better-result";
-import { isDeepStrictEqual } from "node:util";
 
-import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const isUnknownArray = (value: unknown): value is unknown[] =>
+  Array.isArray(value);
+
+// JSON Schema enum/const values compare JSON structure, without a Node runtime.
+const sameJsonValue = (left: unknown, right: unknown): boolean => {
+  if (Object.is(left, right)) {
+    return true;
+  }
+  if (isUnknownArray(left) && isUnknownArray(right)) {
+    return (
+      left.length === right.length &&
+      left.every((value, index) => sameJsonValue(value, right.at(index)))
+    );
+  }
+  if (
+    !isRecord(left) ||
+    !isRecord(right) ||
+    Object.getPrototypeOf(left) !== Object.getPrototypeOf(right)
+  ) {
+    return false;
+  }
+  const keys = Object.keys(left);
+  return (
+    keys.length === Object.keys(right).length &&
+    keys.every(
+      (key) =>
+        Object.hasOwn(right, key) && sameJsonValue(left[key], right[key]),
+    )
+  );
+};
 
 // The optional-null rule for agent and model input: a property the schema
 // makes optional, and does not let be null, reads a `null` as omitted. Strict
@@ -69,7 +99,7 @@ const branchCouldMatch = (
       !isRecord(property) ||
       !("const" in property) ||
       !Object.hasOwn(value, name) ||
-      property["const"] === value[name],
+      sameJsonValue(property["const"], value[name]),
   );
 };
 
@@ -120,10 +150,10 @@ const shapeTakes = (schema: unknown, value: unknown): boolean => {
   // An enum or constant applies to the whole value, an object's too.
   const enumValues = schema["enum"];
   if (isUnknownArray(enumValues)) {
-    return enumValues.some((allowed) => isDeepStrictEqual(allowed, value));
+    return enumValues.some((allowed) => sameJsonValue(allowed, value));
   }
   if ("const" in schema) {
-    return isDeepStrictEqual(schema["const"], value);
+    return sameJsonValue(schema["const"], value);
   }
   if (!typeTakes(schema["type"], value)) {
     return false;
