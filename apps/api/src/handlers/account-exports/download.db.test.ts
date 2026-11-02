@@ -12,6 +12,10 @@ import { eq, inArray } from "drizzle-orm";
 import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import {
+  ORGANIZATION_ACCESS_STATE,
+  organizationAccessStates,
+} from "@/api/db/schema";
 import { createDownloadPersonalDataExport } from "@/api/handlers/account-exports/download";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
@@ -69,6 +73,11 @@ const createFixture = async () => {
     name: "Export organization",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  // A second member needs the organization's access state on record.
+  await db.insert(organizationAccessStates).values({
+    organizationId,
+    state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
   });
   await db.insert(member).values({
     id: ownerMemberId,
