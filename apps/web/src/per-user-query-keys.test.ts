@@ -34,6 +34,7 @@ import {
 } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { notificationsOptions } from "@/lib/notification-queries";
+import { organizationAuditExportLatestOptions } from "@/lib/organization/audit-export-queries";
 import { organizationListOptions } from "@/lib/organization/queries";
 import {
   searchFacetOptions,
@@ -153,6 +154,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [accountDataExportLatestOptions(USER).queryKey],
   },
   "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
+  "organizations/audit-export/get.ts": {
+    kind: "keyed",
+    calls: ['api.organizations["audit-export"].get'],
+    files: ["lib/organization/audit-export-queries.ts"],
+    keys: () => [organizationAuditExportLatestOptions(ORG, USER).queryKey],
+  },
   "files/thumbnail.ts": { kind: "owned-id", reason: OWNED_FILE },
   "search-history/list.ts": {
     kind: "keyed",

@@ -34,6 +34,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -308,9 +309,7 @@ if (!databaseUrl || !runPostgresTests) {
             await writerDb.execute(
               sql`DROP FUNCTION IF EXISTS ${sql.identifier(functionName)}()`,
             );
-            await writerDb
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(writerDb, [organizationId]);
             await writerDb.delete(user).where(eq(user.id, userId));
             await writerDb.delete(user).where(eq(user.id, remainingOwnerId));
           }

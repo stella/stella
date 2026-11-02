@@ -8,6 +8,7 @@ import {
 import { envDocumentProcessingWorkerServerSchema } from "../apps/api/src/env-document-processing-worker-schema";
 import { euCompletionTickServerSchema } from "../apps/api/src/env-eu-completion";
 import { envOnlineIndexServerSchema } from "../apps/api/src/env-online-index";
+import { parsedInputStateBackfillServerSchema } from "../apps/api/src/env-parsed-input-state-backfill";
 import { replayTickServerSchema } from "../apps/api/src/env-replay";
 import { envApiServerSchema } from "../apps/api/src/env-schema";
 import { rateLimitBudgetEnvSchema } from "../apps/api/src/lib/rate-limit/budget-config-schema";
@@ -117,6 +118,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
   "CASE_LAW_DATABASE_POOL_MAX",
+  "CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH",
   "CASE_LAW_EU_COMPLETION_ENABLED",
   "CASE_LAW_EU_COMPLETION_KILL_SWITCH",
   "CASE_LAW_EU_COMPLETION_MODE",
@@ -351,6 +353,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum document verification starts per organization per Europe/Prague day (1–1000; default 20).",
   CASE_LAW_DERIVED_AI:
     'Model calls for case-law derived layers: "on" generates a missing decision analysis when a reader opens it and refreshes its significance from the citation graph; "off" (the default) serves stored analyses only, so local, seeded and CI stacks never reach a model by serving a decision.',
+  CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH:
+    "Stop the parsed-input-state backfill before the next database effect.",
   CASE_LAW_EU_COMPLETION_ENABLED:
     "Enable bounded EU case-law completion. Defaults to false.",
   CASE_LAW_EU_COMPLETION_KILL_SWITCH:
@@ -759,6 +763,7 @@ type EnvCatalogName =
   | keyof typeof envApiServerSchema
   | keyof typeof envCollabServerSchema
   | keyof typeof replayTickServerSchema
+  | keyof typeof parsedInputStateBackfillServerSchema
   | keyof typeof euCompletionTickServerSchema
   | keyof typeof envWebClientSchema;
 
@@ -819,6 +824,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   BETTER_AUTH_URL: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DERIVED_AI: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH:
+    ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_DISABLED_SOURCES: ENV_CREDENTIAL_KIND.notCredential,
@@ -1298,6 +1305,10 @@ const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
 export const ENV_CATALOG = [
   ...createCatalogEntries({
     owner: ENV_OWNER.apiBase,
+    schema: parsedInputStateBackfillServerSchema,
+  }),
+  ...createCatalogEntries({
+    owner: ENV_OWNER.apiBase,
     schema: euCompletionTickServerSchema,
   }),
   ...createCatalogEntries({
@@ -1336,6 +1347,7 @@ export const ENV_CATALOG = [
 ];
 
 export const API_ENV_SCHEMA = {
+  ...parsedInputStateBackfillServerSchema,
   ...euCompletionTickServerSchema,
   ...replayTickServerSchema,
   ...envBaseServerSchema,
@@ -1525,6 +1537,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "POSTGRES_IMAGE",
   "REDIS_IMAGE",
   // The merge group's base revision.
+  "BRIDGE_BASE_SHA",
   "MERGE_GROUP_BASE_SHA",
   // The scan engine drift check builds into a scratch directory and compares it.
   "SCAN_ENGINE_WASM_OUT_DIR",
@@ -1839,6 +1852,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_INSTANCE",
   "STELLA_DOCKER_KEEPER_LABEL",
   "STELLA_INFRA_OFFSET",
+  // Prevents recursive spawning of native file-mode test subprocesses.
+  "STELLA_LOCAL_FILE_CHILD",
   "STELLA_PORT_OFFSET",
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   // Development render census: verify React Refresh with isolated temporary modules.
