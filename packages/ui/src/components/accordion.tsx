@@ -99,8 +99,10 @@ const AccordionTrigger = ({
     >
       {children}
       {trailing === undefined ? null : (
+        // A long status wraps within the row instead of pushing the chevron
+        // past the trigger's edge.
         <span
-          className="text-muted-foreground ms-auto shrink-0 text-xs font-normal tabular-nums"
+          className="text-muted-foreground ms-auto min-w-0 text-end text-xs font-normal tabular-nums"
           data-slot="accordion-trigger-trailing"
         >
           {trailing}
