@@ -22,9 +22,11 @@ import {
   READER_DOCUMENT_TARGET_TYPES,
 } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderDocumentTargetType } from "@stll/api-contract/legal-reader-annotations";
-import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
-import { createReaderTextQuoteLocator } from "@stll/legal-ast/reader-text-quote";
+import {
+  createReaderTextQuoteLocator,
+  type ReaderTextPiece,
+} from "@stll/legal-ast/reader-text-quote";
 import { createSha256 } from "@stll/sha256/bun";
 
 import { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
@@ -129,7 +131,11 @@ const TARGET_REFUSAL_HINT =
   "Tell the user; they can highlight or comment on it in the reader themselves.";
 
 type TargetAccessResult =
-  | { status: "available"; loadBlocks: () => Promise<readonly Block[]> }
+  | {
+      status: "available";
+      loadBlocks: () => Promise<readonly Block[]>;
+      loadTextPieces: () => Promise<readonly ReaderTextPiece[]>;
+    }
   | { status: "refused"; result: InternalToolErrorResult };
 
 /**
@@ -163,7 +169,11 @@ const resolveTargetForAgent = async ({
   }
   switch (access.value.status) {
     case "available":
-      return { status: "available", loadBlocks: access.value.readBlocks };
+      return {
+        status: "available",
+        loadBlocks: access.value.readBlocks,
+        loadTextPieces: access.value.readTextPieces,
+      };
     case "not_found":
       return {
         status: "refused",
@@ -219,7 +229,7 @@ type ListedMark = v.InferInput<
 
 type ListedPassage = ListedMark["passages"][number];
 
-const NO_BLOCKS: readonly Block[] = [];
+const NO_PIECES: readonly ReaderTextPiece[] = [];
 
 type ListedMarks = { annotations: readonly ListedMark[] };
 
@@ -306,20 +316,19 @@ const handleListTool: TypedMcpToolHandler<
 
   // A stored anchor names a position in the text the mark was made on; a
   // re-parse since can have moved it onto other words. Each passage is
-  // placed by its quote in the text the agent reads now, or reported
+  // placed by its quote in the text the reader draws marks in now (the
+  // publisher's headnote and abstract as well as the body), or reported
   // orphaned, never handed back at a position that names other words.
-  const blocks = await Result.tryPromise(async () =>
-    listed.value.items.length === 0 ? NO_BLOCKS : await target.loadBlocks(),
+  const pieces = await Result.tryPromise(async () =>
+    listed.value.items.length === 0 ? NO_PIECES : await target.loadTextPieces(),
   );
-  if (Result.isError(blocks)) {
+  if (Result.isError(pieces)) {
     return internalFailureResult(
-      blocks.error,
+      pieces.error,
       "mcp.handleListTool.blocks_error",
     );
   }
-  const locate = createReaderTextQuoteLocator(
-    blocks.value.flatMap(readerAnchorPiecesOf),
-  );
+  const locate = createReaderTextQuoteLocator(pieces.value);
   const passageOf = (
     row: (typeof listed.value.items)[number],
   ): ListedPassage => {

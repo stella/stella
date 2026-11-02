@@ -21,6 +21,7 @@ import {
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
 import type { ReaderTextQuoteSelector } from "@stll/legal-ast/reader-text-quote";
@@ -314,6 +315,10 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
           await Promise.resolve({
             status: "available" as const,
             readBlocks: async () => await Promise.resolve(ANNOTATION_BLOCKS),
+            readTextPieces: async () =>
+              await Promise.resolve(
+                ANNOTATION_BLOCKS.flatMap(readerAnchorPiecesOf),
+              ),
           }),
         searchConsolidatedLegislation: searchConsolidatedLegislationMock,
         getLawTextBlock: getLawTextBlockMock,

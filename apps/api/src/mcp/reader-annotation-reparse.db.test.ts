@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -144,6 +145,8 @@ const requestContext = (
         await Promise.resolve({
           status: "available" as const,
           readBlocks: async () => await Promise.resolve(blocks),
+          readTextPieces: async () =>
+            await Promise.resolve(blocks.flatMap(readerAnchorPiecesOf)),
         }),
     },
   });

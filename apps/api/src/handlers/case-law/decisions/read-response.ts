@@ -6,6 +6,7 @@ import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-r
 import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import {
+  type ReadDecisionTextFields,
   TEXT_ABSENCE_REASONS,
   TEXT_FIELD_TYPE,
   type TextField,
@@ -336,6 +337,20 @@ const projectTextField = (field: TextField): TextField => {
   }
 };
 
+/**
+ * The publisher text fields as the reader receives them. The reader draws
+ * marks in these words, so whatever places a stored mark for an agent
+ * reads the same projection.
+ */
+export const readerTextFields = (
+  fields: ReadDecisionTextFields,
+): ReadDecisionTextFields => ({
+  abstract: projectTextField(fields.abstract),
+  headnote: projectTextField(fields.headnote),
+  legalSentence: projectTextField(fields.legalSentence),
+  summary: projectTextField(fields.summary),
+});
+
 const projectMetadata = (metadata: Record<string, unknown>) => {
   let remaining = METADATA_NODES;
   const project = (value: unknown, depth: number): unknown => {
@@ -468,12 +483,7 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
         .map((tag) => truncateTextBytes(tag, SOURCE_LANGUAGE_TAG_BYTES)) ??
       null,
     headnote: projectTextField(decision.headnote),
-    textFields: {
-      abstract: projectTextField(decision.textFields.abstract),
-      headnote: projectTextField(decision.textFields.headnote),
-      legalSentence: projectTextField(decision.textFields.legalSentence),
-      summary: projectTextField(decision.textFields.summary),
-    },
+    textFields: readerTextFields(decision.textFields),
     source: {
       ...decision.source,
       name: truncateTextBytes(decision.source.name, 256 * 4),
