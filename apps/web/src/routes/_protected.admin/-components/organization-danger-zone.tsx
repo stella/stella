@@ -66,7 +66,11 @@ export const OrganizationDangerZone = ({
   useQueryViewError(auditExportView, "OrganizationDangerZone:auditArchive");
   const auditArchive =
     auditExportView.type === "items" ? auditExportView.items : null;
+  // A failed refresh leaves the last archive on screen, but its coverage is
+  // no longer confirmed, so deletion waits for a successful read.
   const auditArchiveCurrent =
+    auditExportView.type === "items" &&
+    auditExportView.refetchError === undefined &&
     auditArchive?.status === "ready" &&
     auditArchive.coversCurrentTrail &&
     auditArchive.downloaded;
@@ -197,11 +201,7 @@ export const OrganizationDangerZone = ({
                   {t("admin.leaveOrganization")}
                 </Button>
               </div>
-              {isOwner &&
-                (auditExportView.type === "pending" ||
-                  auditExportView.type === "error") && (
-                  <QueryViewFeedback view={auditExportView} />
-                )}
+              {isOwner && <QueryViewFeedback view={auditExportView} />}
               {isOwner &&
                 (auditExportView.type === "empty" ||
                   auditExportView.type === "items") && (

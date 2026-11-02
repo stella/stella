@@ -27,6 +27,10 @@ export const organizationAuditExportLatestOptions = (
       unwrapApiResponse(
         await api.organizations["audit-export"].get({ fetch: { signal } }),
       ).latest,
+    // Deletion depends on this state, and another session can replace a
+    // failed, expired or outgrown archive: returning to the page rereads it
+    // however recently it was fetched.
+    refetchOnWindowFocus: "always",
     refetchInterval: (query) => {
       const status = query.state.data;
       if (status?.status === "requested" || status?.status === "processing") {

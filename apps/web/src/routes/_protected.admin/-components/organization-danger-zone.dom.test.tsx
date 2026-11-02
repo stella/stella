@@ -8,7 +8,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000/admin/general" });
 const originalFetch = globalThis.fetch;
 const { cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
-const { QueryClient, QueryClientProvider } =
+const { focusManager, QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { OrganizationDangerZone } = await import("./organization-danger-zone");
@@ -48,7 +48,28 @@ const CURRENT_ARCHIVE = {
 afterEach(() => {
   cleanup();
   globalThis.fetch = originalFetch;
+  focusManager.setFocused(undefined);
 });
+
+/** Serve the latest archive read; every other request is unexpected. */
+const serveLatestArchive = (response: () => Response) => {
+  const reads: string[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      reads.push(`${request.method} ${path}`);
+      return response();
+    },
+  );
+  return reads;
+};
+
+/** The owner returns to the tab after working elsewhere. */
+const returnToPage = () => {
+  focusManager.setFocused(false);
+  focusManager.setFocused(true);
+};
 afterAll(async () => {
   await unregisterDomEnvironment();
 });
@@ -284,4 +305,42 @@ test("a ready archive the owner has not downloaded keeps deletion closed", () =>
   expect(
     screen.getByRole("button", { name: messages.admin.deleteOrganization }),
   ).toHaveProperty("disabled", true);
+});
+
+test("returning to the page rereads a failed archive another session replaced", async () => {
+  const reads = serveLatestArchive(() =>
+    Response.json({ latest: CURRENT_ARCHIVE }),
+  );
+  mount(true, undefined, { id: CURRENT_ARCHIVE.id, status: "failed" });
+  const deleteButton = () =>
+    screen.getByRole("button", { name: messages.admin.deleteOrganization });
+  expect(deleteButton()).toHaveProperty("disabled", true);
+
+  returnToPage();
+
+  await waitFor(() => expect(deleteButton()).toHaveProperty("disabled", false));
+  expect(reads).toEqual(["GET /v1/organizations/audit-export"]);
+});
+
+test("a failed archive refresh says so and keeps deletion closed", async () => {
+  const reads = serveLatestArchive(() =>
+    Response.json(
+      { code: "internal_error", message: "Unavailable" },
+      { status: 500, statusText: "Internal Server Error" },
+    ),
+  );
+  mount();
+  const deleteButton = () =>
+    screen.getByRole("button", { name: messages.admin.deleteOrganization });
+  expect(deleteButton()).toHaveProperty("disabled", false);
+
+  returnToPage();
+
+  await waitFor(() =>
+    expect(screen.getByRole("alert").textContent).toContain(
+      messages.common.somethingWentWrong,
+    ),
+  );
+  expect(deleteButton()).toHaveProperty("disabled", true);
+  expect(reads).toEqual(["GET /v1/organizations/audit-export"]);
 });
