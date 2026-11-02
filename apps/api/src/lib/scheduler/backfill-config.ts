@@ -1,17 +1,25 @@
-import type { backfillHeartbeat } from "@stll/db-load-gate/health";
-import { defaultConfig } from "@stll/db-load-gate/health";
+import type {
+  backfillHeartbeat,
+  HealthConfig,
+} from "@stll/db-load-gate/health";
 
 import type { BackfillRunStatus } from "../../db/backfill-runtime";
+import { loadGateHealthConfig } from "../../env-online-index";
 
-export const SCHEDULER_BACKFILL_CONFIG = {
-  ...defaultConfig,
-  hardFloor: 65,
-  resumeFloor: 75,
-  startFloor: 80,
-};
+/** Scheduler backfills start, yield and resume on stricter floors than the shared gate. */
+export const schedulerBackfillConfig = (
+  health: HealthConfig = loadGateHealthConfig(),
+) =>
+  ({
+    ...health,
+    hardFloor: 65,
+    resumeFloor: 75,
+    startFloor: 80,
+  }) satisfies HealthConfig;
 
 export const SCHEDULER_BACKFILL_IDS = {
   coverage: "caseLaw.refreshCoverage.fiveMinute",
+  populationCounts: "caseLaw.foldPopulationCounts.minutely",
   decisionIdentifiers: "caseLaw.reconcileDecisionIdentifiers.minutely",
   provisionState: "caseLaw.backfillProvisionState.minutely",
   expressionIds: "legislation.backfillExpressionIds.fiveMinute",

@@ -53,6 +53,9 @@ import {
   testRevisionOf,
   testRevisionsFor,
 } from "@/api/tests/helpers/corpus-projection-revisions";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 // Pins the corpus-index HTTP request contract. The engine defaults search
 // hits to document-id order unless `sort_by` is sent, and the rank-based
@@ -130,13 +133,15 @@ beforeEach(() => {
       responseBodyForUrl === null ? responseBody : responseBodyForUrl(url);
     return new Response(JSON.stringify(body), { status: responseStatus });
   };
-  globalThis.fetch = Object.assign(stub, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   Object.assign(envBase, {
     CORPUS_INDEX_Q09_ENDPOINT: originalQ09Endpoint,
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT: originalQ09SearchEndpoint,
@@ -768,9 +773,11 @@ test.each(["scan", "highlight"] as const)(
         });
       });
     };
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
     const page = readSortedPage(RELEVANCE_ORDER, controller.signal);
     const failure = page.catch((error: unknown) => error);
     const transportSignal = await entered.promise;
@@ -2027,9 +2034,11 @@ const rejectFetchWith = (reason: unknown): void => {
   const stub = async (): Promise<Response> => {
     throw reason;
   };
-  globalThis.fetch = Object.assign(stub, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 };
 
 test("ingest names the request and its budget when the transport fails", async () => {
@@ -2067,9 +2076,11 @@ test("a search aborts within the remaining shared-request budget", async () => {
       );
     });
   };
-  globalThis.fetch = Object.assign(stub, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
   const result = await getCorpusIndexClient("q09").search({
     observer: "unobserved",
     indexId: "case_law_v8_cs_sk",
@@ -2099,9 +2110,11 @@ test("a search inside a tool call gives up at the tool's budget, not its own", a
       );
     });
   };
-  globalThis.fetch = Object.assign(stub, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
   const startedAt = performance.now();
   const result = await runWithinRequestLatencyBudget(
     { label: "search_legislation", budgetMs: 40 },
@@ -2141,9 +2154,11 @@ test.each(["search", "scoredSearch", "aggregate", "scopedAggregate"] as const)(
         });
       });
     };
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
     const client = getCorpusIndexClient("q09");
     const input = {
       observer: "unobserved" as const,
@@ -2208,9 +2223,11 @@ test.each(["search", "scoredSearch"] as const)(
         });
       });
     };
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
     const client = getCorpusIndexClient("q09");
     const input = {
       observer: "unobserved" as const,
@@ -2260,9 +2277,11 @@ test.each([undefined, "jurisdiction:CZE"])(
         });
       });
     };
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
     const result = await getCorpusIndexClient("q09").aggregate({
       observer: "unobserved",
       indexId: "case_law_v8_cs_sk",
@@ -2302,9 +2321,11 @@ test("each request reports its own budget, not a shared one", async () => {
 test("an unreadable success body names the request too", async () => {
   const stub = async (): Promise<Response> =>
     new Response("not json", { status: 200 });
-  globalThis.fetch = Object.assign(stub, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 
   const result = await getCorpusIndexClient("q09").search({
     observer: "unobserved",
@@ -2336,9 +2357,11 @@ test("a body that stalls past the budget is a timeout, not an unreadable body", 
       }),
       { status: 200 },
     );
-  globalThis.fetch = Object.assign(stub, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 
   const result = await getCorpusIndexClient("q09").search({
     observer: "unobserved",

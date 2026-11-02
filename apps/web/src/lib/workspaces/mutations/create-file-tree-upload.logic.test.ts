@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { UPLOAD_DOCUMENT_MAX_BYTES } from "@stll/api-contract/limits";
+
 import {
   buildDroppedFolderUploadPlan,
   folderReservableFiles,
@@ -71,28 +73,38 @@ describe("dropped folder upload planning", () => {
     ).toBe(true);
   });
 
-  test("an empty file stays out of the folder reservation and keeps the others' keys", () => {
-    const first = new File(["first"], "first.txt");
-    const empty = new File([], "empty.txt");
-    const last = new File(["x"], "last.txt");
+  test.each([
+    { name: "An empty file", refused: new File([], "refused.txt") },
+    {
+      name: "An oversize file",
+      refused: Object.defineProperty(new File(["x"], "refused.txt"), "size", {
+        value: UPLOAD_DOCUMENT_MAX_BYTES + 1,
+      }),
+    },
+  ])(
+    "$name stays out of the folder reservation and keeps the others' keys",
+    ({ refused }) => {
+      const first = new File(["first"], "first.txt");
+      const last = new File(["x"], "last.txt");
 
-    const plan = buildDroppedFolderUploadPlan({
-      directoryPaths: [],
-      files: [
-        { file: first, pathSegments: ["docs", "first.txt"] },
-        { file: empty, pathSegments: ["docs", "empty.txt"] },
-        { file: last, pathSegments: ["last.txt"] },
-      ],
-    });
+      const plan = buildDroppedFolderUploadPlan({
+        directoryPaths: [],
+        files: [
+          { file: first, pathSegments: ["docs", "first.txt"] },
+          { file: refused, pathSegments: ["docs", "refused.txt"] },
+          { file: last, pathSegments: ["last.txt"] },
+        ],
+      });
 
-    expect(
-      folderReservableFiles(plan).map(({ key, placement }) => ({
-        key,
-        file: placement.file,
-      })),
-    ).toEqual([
-      { key: "0", file: first },
-      { key: "2", file: last },
-    ]);
-  });
+      expect(
+        folderReservableFiles(plan).map(({ key, placement }) => ({
+          key,
+          file: placement.file,
+        })),
+      ).toEqual([
+        { key: "0", file: first },
+        { key: "2", file: last },
+      ]);
+    },
+  );
 });

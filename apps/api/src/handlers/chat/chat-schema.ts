@@ -217,7 +217,7 @@ export const resolveBrowserExtensionCapability = (
 ): BrowserExtensionCapability =>
   browserExtension ?? {
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-    status: BROWSER_EXTENSION_STATUS.unsupportedBrowser,
+    status: BROWSER_EXTENSION_STATUS.unsupportedDevice,
   };
 
 export const activeSkillSchema = activeContextSchema({

@@ -1,6 +1,8 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { Block } from "./document-ast.js";
+import { section15LetterBPoint1Blocks } from "./fixtures/sk-595-2003-section-15.js";
 import {
   blocksNestedUnder,
   enclosingHeadingAnchor,
@@ -9,6 +11,12 @@ import {
   provisionHeadingChain,
   provisionPreviewBlocks,
 } from "./provision-preview.js";
+import {
+  E_SBIRKA_ANCHORS,
+  SLOV_LEX_ANCHORS,
+  US_CODE_ANCHORS,
+} from "./statute-anchor-scheme.js";
+import type { StatuteAnchorScheme } from "./statute-anchor-scheme.js";
 
 const heading = (
   id: string,
@@ -31,6 +39,14 @@ const paragraph = (id: string, anchorId: string, text: string): Block => ({
   type: "paragraph",
 });
 
+const readIn = (scheme: StatuteAnchorScheme) => (blocks: readonly Block[]) => ({
+  blocks,
+  scheme,
+});
+const czech = readIn(E_SBIRKA_ANCHORS);
+const slovak = readIn(SLOV_LEX_ANCHORS);
+const us = readIn(US_CODE_ANCHORS);
+
 const blocks: Block[] = [
   heading("h1", "par_1", 2),
   paragraph("p1", "par_1-odst_1", "First paragraph"),
@@ -44,24 +60,38 @@ const blocks: Block[] = [
 describe("provisionPreviewBlocks", () => {
   test("shows only an exactly cited subdivision", () => {
     expect(
-      provisionPreviewBlocks(blocks, "par_1", "par_1-odst_1-pism_a"),
+      provisionPreviewBlocks(czech(blocks), {
+        provisionAnchorId: "par_1",
+        citedAnchorId: "par_1-odst_1-pism_a",
+      }),
     ).toEqual(blocks.slice(2, 3));
   });
 
   test("shows the provision body for a provision-level citation", () => {
-    expect(provisionPreviewBlocks(blocks, "par_1", undefined)).toEqual(
-      blocks.slice(1, 5),
-    );
+    expect(
+      provisionPreviewBlocks(czech(blocks), {
+        provisionAnchorId: "par_1",
+        citedAnchorId: undefined,
+      }),
+    ).toEqual(blocks.slice(1, 5));
   });
 
   test("keeps the body owned by a cited nested heading", () => {
-    expect(provisionPreviewBlocks(blocks, "par_1", "par_1-detail")).toEqual(
-      blocks.slice(3, 5),
-    );
+    expect(
+      provisionPreviewBlocks(czech(blocks), {
+        provisionAnchorId: "par_1",
+        citedAnchorId: "par_1-detail",
+      }),
+    ).toEqual(blocks.slice(3, 5));
   });
 
   test("has no wording for an anchor the document does not carry", () => {
-    expect(provisionPreviewBlocks(blocks, "par_9", undefined)).toBeNull();
+    expect(
+      provisionPreviewBlocks(czech(blocks), {
+        provisionAnchorId: "par_9",
+        citedAnchorId: undefined,
+      }),
+    ).toBeNull();
   });
 });
 
@@ -82,9 +112,10 @@ describe("provisionPreviewBlocks over subdivisions", () => {
   ];
 
   const idsFor = (citedAnchorId: string): string[] | null =>
-    provisionPreviewBlocks(subdivided, "par_898", citedAnchorId)?.map(
-      ({ id }) => id,
-    ) ?? null;
+    provisionPreviewBlocks(czech(subdivided), {
+      provisionAnchorId: "par_898",
+      citedAnchorId,
+    })?.map(({ id }) => id) ?? null;
 
   test("a cited paragraph keeps its letters and their points", () => {
     expect(idsFor("par_898-odst_2")).toEqual([
@@ -117,7 +148,7 @@ describe("provisionPreviewBlocks over subdivisions", () => {
 
 describe("provisionBlocks", () => {
   test("keeps the heading and every block it owns", () => {
-    expect(provisionBlocks(blocks, "par_1")).toEqual(blocks.slice(0, 5));
+    expect(provisionBlocks(czech(blocks), "par_1")).toEqual(blocks.slice(0, 5));
   });
 });
 
@@ -147,14 +178,16 @@ describe("enclosingHeadingAnchor", () => {
     paragraph("p2", "s2000e-2/a/1", "s2000e-2/a/1"),
   ];
 
-  test("reads the heading off the document, whatever the separator", () => {
-    expect(enclosingHeadingAnchor(statute, "s2000e-2/a/1")).toBe("s2000e-2");
+  test("reads the heading off the document in the publisher's grammar", () => {
+    expect(enclosingHeadingAnchor(us(statute), "s2000e-2/a/1")).toBe(
+      "s2000e-2",
+    );
     expect(
       enclosingHeadingAnchor(
-        [
+        czech([
           heading("h", "par_90", 1),
           paragraph("p", "par_90-odst_5", "par_90-odst_5"),
-        ],
+        ]),
         "par_90-odst_5",
       ),
     ).toBe("par_90");
@@ -162,7 +195,10 @@ describe("enclosingHeadingAnchor", () => {
 
   test("a prefix that is not a path step is no heading", () => {
     expect(
-      enclosingHeadingAnchor([heading("h", "par_9", 1)], "par_90-odst_5"),
+      enclosingHeadingAnchor(
+        czech([heading("h", "par_9", 1)]),
+        "par_90-odst_5",
+      ),
     ).toBeNull();
   });
 });
@@ -179,11 +215,74 @@ describe("blocksNestedUnder with a US path", () => {
     if (cited === undefined) {
       throw new Error("fixture has no blocks");
     }
-    expect(blocksNestedUnder(usPath, cited).map(({ id }) => id)).toEqual([
+    expect(blocksNestedUnder(us(usPath), cited).map(({ id }) => id)).toEqual([
       "a",
       "a1",
       "a1A",
     ]);
+  });
+
+  test("a section does not own the next section whose number it opens", () => {
+    const sections: Block[] = [
+      paragraph("e", "s2000e", "s2000e"),
+      paragraph("e2", "s2000e-2", "s2000e-2"),
+    ];
+    const cited = sections.at(0) ?? panic("fixture has no blocks");
+    expect(blocksNestedUnder(us(sections), cited)).toEqual([cited]);
+  });
+});
+
+describe("provisionPreviewBlocks over Slov-Lex subdivisions", () => {
+  // § 15 of 595/2003 Z. z.: a letter whose point holds sub-points, filed
+  // under the section as Slov-Lex stores it.
+  const section15: Block[] = [
+    heading("h", "paragraf-15", 4),
+    paragraph("b0", "paragraf-15.pismeno-a", "a) fyzickú osobu"),
+    ...section15LetterBPoint1Blocks.map(({ anchorId, id, text }) =>
+      paragraph(id, anchorId, text),
+    ),
+    paragraph("b6", "paragraf-15.pismeno-c", "c) iné"),
+  ];
+
+  const idsFor = (citedAnchorId: string): string[] | null =>
+    provisionPreviewBlocks(slovak(section15), {
+      provisionAnchorId: "paragraf-15",
+      citedAnchorId,
+    })?.map(({ id }) => id) ?? null;
+
+  test("a cited letter keeps its points and their sub-points", () => {
+    expect(idsFor("paragraf-15.pismeno-b")).toEqual([
+      "paragraf-15.pismeno-b",
+      "paragraf-15.pismeno-b.bod-1",
+      "paragraf-15.pismeno-b.bod-1.bod-1a",
+      "paragraf-15.pismeno-b.bod-1.bod-1b",
+      "paragraf-15.pismeno-b.bod-1.bod-1c",
+    ]);
+  });
+
+  test("a cited point keeps its sub-points and stops at the next letter", () => {
+    expect(idsFor("paragraf-15.pismeno-b.bod-1")).toEqual([
+      "paragraf-15.pismeno-b.bod-1",
+      "paragraf-15.pismeno-b.bod-1.bod-1a",
+      "paragraf-15.pismeno-b.bod-1.bod-1b",
+      "paragraf-15.pismeno-b.bod-1.bod-1c",
+    ]);
+  });
+
+  test("a cited sub-point is shown alone", () => {
+    expect(idsFor("paragraf-15.pismeno-b.bod-1.bod-1a")).toEqual([
+      "paragraf-15.pismeno-b.bod-1.bod-1a",
+    ]);
+  });
+
+  test("the subdivision's own heading is found in the publisher's grammar", () => {
+    expect(
+      enclosingHeadingAnchor(slovak(section15), "paragraf-15.pismeno-b.bod-1"),
+    ).toBe("paragraf-15");
+    // Read in e-Sbírka's grammar the letter continues no heading.
+    expect(
+      enclosingHeadingAnchor(czech(section15), "paragraf-15.pismeno-b.bod-1"),
+    ).toBeNull();
   });
 });
 
@@ -201,7 +300,7 @@ describe("provisionHeadingChain", () => {
 
   test("lists the enclosing headings outermost first", () => {
     expect(
-      provisionHeadingChain(nested, "par_1729")?.map(
+      provisionHeadingChain(czech(nested), "par_1729")?.map(
         ({ anchorId }) => anchorId,
       ),
     ).toEqual(["cast_4", "hlava_1", "dil_2"]);
@@ -209,13 +308,13 @@ describe("provisionHeadingChain", () => {
 
   test("stops at the heading that encloses the provision", () => {
     expect(
-      provisionHeadingChain(nested, "par_2000")?.map(
+      provisionHeadingChain(czech(nested), "par_2000")?.map(
         ({ anchorId }) => anchorId,
       ),
     ).toEqual(["cast_5"]);
   });
 
   test("has no chain for an anchor the document does not carry", () => {
-    expect(provisionHeadingChain(nested, "par_9")).toBeNull();
+    expect(provisionHeadingChain(czech(nested), "par_9")).toBeNull();
   });
 });

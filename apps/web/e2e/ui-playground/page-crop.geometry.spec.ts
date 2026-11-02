@@ -8,13 +8,13 @@ import {
 } from "../helpers/stable-geometry";
 
 const field = (page: Page, side: string) =>
-  page.locator(`input[type="number"][id$="-${side}"]`);
+  page.locator(`[role="dialog"] input[id$="-${side}"]`);
 const box = (page: Page) => page.locator("[data-crop-box]");
 
 const openFixture = async (page: Page) => {
   await page.goto("/dev?visual=page-crop", { waitUntil: "domcontentloaded" });
   await expect(box(page)).toBeVisible();
-  await page.locator('[role="dialog"] summary').click();
+  await page.locator("[data-crop-advanced]").click();
 };
 
 const readBox = async (page: Page) => {
@@ -119,7 +119,7 @@ test("renders PDF content and restores existing physical crop margins", async ({
   await page.locator('[data-crop-action="apply"]').click();
   await page.locator("[data-crop-reopen]").click();
   await expect(box(page)).toBeVisible();
-  await page.locator('[role="dialog"] summary').click();
+  await page.locator("[data-crop-advanced]").click();
   await expect(field(page, "left")).toHaveValue("25");
   expect((await readBox(page)).x).toBeCloseTo(geometry.x, 3);
 });
@@ -194,7 +194,7 @@ test("reset clears stored crops and reopening shows the full source page", async
   await expect(page.locator("[data-crop-output]")).toContainText('"crop":null');
   await page.locator("[data-crop-reopen]").click();
   await expect(box(page)).toBeVisible();
-  await page.locator('[role="dialog"] summary').click();
+  await page.locator("[data-crop-advanced]").click();
   for (const side of ["top", "right", "bottom", "left"]) {
     await expect(field(page, side)).toHaveValue("0");
   }

@@ -8,11 +8,11 @@ import {
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 import { decisionTitle } from "@stll/decision-reader/decision-title";
+import { READER_BREADCRUMB_CLEARANCE } from "@stll/decision-reader/reader-landing";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { INSPECTOR_PANE_MIN_WIDTH } from "@stll/ui/inspector";
 
-import { READER_BREADCRUMB_CLEARANCE } from "../../src/components/legal-reader/reader-breadcrumb-scroll";
 import { createStatuteViewTab } from "../../src/features/statutes/statute-inspector.logic";
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { E2E_API_ORIGIN } from "../helpers/api";
@@ -23,6 +23,7 @@ import {
 } from "../helpers/docked-chat-legal-fixtures";
 import { dockedChatLegalPayloads } from "../helpers/docked-chat-legal-payloads";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 const headings = [
   { title: "Část druhá", level: 1 },
@@ -338,7 +339,7 @@ for (const view of views) {
     const inspector = page.locator('[data-slot="inspector-dock-pane"]');
     await expect(
       inspector.locator(`[data-anchor="${view.anchors.active}"]`),
-    ).toBeAttached({ timeout: 30_000 });
+    ).toBeAttached({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
     for (const surface of ["inspector", "main"] as const) {
       const root = surface === "inspector" ? inspector : page.locator("body");
       if (surface === "main" && view.kind !== "statute") {
@@ -481,6 +482,26 @@ for (const view of views) {
       expect(
         Math.max(...geometry.centers) - Math.min(...geometry.centers),
       ).toBeLessThanOrEqual(1);
+      if (surface === "main") {
+        // The main reader's bar has room for the whole trail, so a crumb cut
+        // here means the width it was given is not the width it needs.
+        await expect
+          .poll(async () =>
+            breadcrumb.evaluate((navigation) =>
+              [...navigation.querySelectorAll("ol button bdi")].flatMap(
+                (text) =>
+                  text.scrollWidth > text.clientWidth ? [text.textContent] : [],
+              ),
+            ),
+          )
+          .toEqual([]);
+        // Only levels on the bar count: the trail keeps its middle in the menu.
+        for (const title of ["Část druhá", "Díl 1"]) {
+          await expect(
+            breadcrumb.locator("ol button", { hasText: title }),
+          ).toBeVisible();
+        }
+      }
       await current.click();
       await expect(
         page.locator(

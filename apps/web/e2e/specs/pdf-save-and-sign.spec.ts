@@ -8,6 +8,10 @@ import {
 } from "../helpers/scenario-diagnostics";
 import { expect, test } from "../helpers/test";
 import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+} from "../helpers/wait-budgets";
+import {
   createTestWorkspace,
   deleteTestWorkspace,
   type TestWorkspace,
@@ -169,7 +173,7 @@ test.describe("PDF save and sign on the document route", () => {
       .poll(
         async () =>
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
-        { timeout: 10_000 },
+        { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS },
       )
       .toBe(200);
     await page.goto(
@@ -177,10 +181,10 @@ test.describe("PDF save and sign on the document route", () => {
       { waitUntil: "domcontentloaded" },
     );
     await expect(page.locator("[data-text-layer]").first()).toBeVisible({
-      timeout: 45_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
     });
     await expect(viewerSignControl(page)).toBeVisible({
-      timeout: 45_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
     });
     return { originalFieldId: uploaded.fieldId };
   };
@@ -249,7 +253,7 @@ test.describe("PDF save and sign on the document route", () => {
     await expect(page).not.toHaveURL(
       new RegExp(`field=${originalFieldId}(?:&|$)`, "u"),
     );
-    await page.getByRole("button", { name: "Version history" }).click();
+    await page.getByRole("tab", { name: "Version history" }).click();
     await expect(
       page.getByRole("button", { name: /v2\s+Current/u }),
     ).toBeVisible();
@@ -273,7 +277,7 @@ test.describe("PDF save and sign on the document route", () => {
     await placeAndConfirm(page);
     await expect.poll(() => handoffs.routes.length).toBe(1);
 
-    await page.getByRole("button", { name: "Version history" }).click();
+    await page.getByRole("tab", { name: "Version history" }).click();
     await page.getByRole("button", { name: "v1" }).click();
     await expect(page).toHaveURL(
       new RegExp(`field=${originalFieldId}(?:&|$)`, "u"),
