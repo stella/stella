@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 
@@ -74,7 +74,8 @@ describe("collapsing candidates by language group", () => {
   });
 
   test("every group is represented exactly once, by its first candidate", () => {
-    fc.assert(
+    assertProperty(
+      "every group is represented exactly once, by its first candidate",
       fc.property(collapseInput, ({ candidates, groups }) => {
         const { representatives } = collapseByLanguageGroup(
           candidates,
@@ -101,12 +102,13 @@ describe("collapsing candidates by language group", () => {
         );
         expect(seenGroups).toEqual(inputGroups);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("ungrouped candidates and representatives keep their order and scores", () => {
-    fc.assert(
+    assertProperty(
+      "ungrouped candidates and representatives keep their order and scores",
       fc.property(collapseInput, ({ candidates, groups }) => {
         const { representatives } = collapseByLanguageGroup(
           candidates,
@@ -125,12 +127,13 @@ describe("collapsing candidates by language group", () => {
           }
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("folded candidates partition the input against the representatives", () => {
-    fc.assert(
+    assertProperty(
+      "folded candidates partition the input against the representatives",
       fc.property(collapseInput, ({ candidates, groups }) => {
         const { foldedInto, representatives } = collapseByLanguageGroup(
           candidates,
@@ -149,7 +152,7 @@ describe("collapsing candidates by language group", () => {
           ).toBe(true);
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 

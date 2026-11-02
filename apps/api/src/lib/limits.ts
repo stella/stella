@@ -25,6 +25,7 @@ import {
   SEARCH_HISTORY_TITLE_MAX_LENGTH,
   SEARCH_QUERY_MAX_LENGTH,
   TIME_ENTRIES_APPROVAL_BATCH_MAX,
+  UPLOAD_DOCUMENT_MAX_BYTES,
 } from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
@@ -270,10 +271,19 @@ export const LIMITS = {
   oauthConnectionsPageSizeMax: 100,
   /** Default/max page sizes for the MCP `list_matters`-style list tools. */
   mcpListPageSizeDefault: 25,
+  mcpListPageSizeMin: 1,
   mcpListPageSizeMax: 100,
   /** Default/max page sizes for the MCP search tools. */
   mcpSearchPageSizeDefault: 10,
   mcpSearchPageSizeMax: 20,
+  /** Smallest page an MCP list or search tool takes. */
+  mcpPageSizeMin: 1,
+  /** Shortest value a required MCP text or list input takes: not empty. */
+  mcpNonEmptyMin: 1,
+  /** Characters of a language code an MCP filter takes (`cs`, `pt-BR`). */
+  mcpLanguageCodeMaxChars: 8,
+  /** Characters of an ISO calendar date an MCP filter takes (YYYY-MM-DD). */
+  mcpIsoDateMaxChars: 10,
   /** Default page size for the OpenAI-compatible MCP search tool. */
   mcpCompatSearchPageSizeDefault: 8,
   /**
@@ -371,6 +381,9 @@ export const LIMITS = {
    *  version, read whole when the reader opens the document. */
   readerAnnotationsPageSizeDefault: 100,
   readerAnnotationsPageSizeMax: 100,
+  /** Mark rows a downloaded copy of a matter document's PDF carries, read in
+   *  one query; far above what readers leave on one document. */
+  markedPdfMarkRowsMax: 10_000,
   decisionReaderPageMaxChars: READER_PAGE_MAX_CHARS,
   decisionReaderPageContentChars: 50_000,
   decisionReaderOpenTextChars: 8000,
@@ -429,6 +442,20 @@ export const LIMITS = {
    * provision cited more widely is checked candidate by candidate instead.
    */
   caseLawProvisionIdSetMax: 5000,
+  /**
+   * Physical citation links one provision scope read examines before it
+   * calls the provision broad. Larger than the id-set bound, so links of other
+   * countries, levels or unpublished decisions do not make a narrow citing
+   * set broad, and still a fixed read.
+   */
+  caseLawProvisionScopeLinkScanMax: 20_000,
+  /** Physical citation rows examined by one correlated provision probe. */
+  caseLawProvisionLinkProbeMax: 128,
+  /**
+   * Rank-index rows a broad provision-list request examines, counted before
+   * the request's own filters.
+   */
+  caseLawProvisionCandidateBudget: 5000,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
   /** Maximum visible text returned by any global-search preview response. */
@@ -531,6 +558,14 @@ export const LIMITS = {
   extractionTimeoutMs: 30_000,
   /** Hard timeout for durable background document extraction. */
   documentProcessingExtractionTimeoutMs: 2 * 60_000,
+  /**
+   * Largest file the API process extracts itself. Parsing runs in a subprocess
+   * but the bytes pass through this process, so the bound protects its memory;
+   * larger files wait for the scheduled batch worker.
+   */
+  documentProcessingInlineMaxBytes: 5 * 1024 * 1024,
+  /** Runs one inline extraction tick takes, one after another. */
+  documentProcessingInlineBatchSize: 5,
   /** Wall-clock ceiling for one document-processing object-storage read. */
   documentProcessingObjectReadTimeoutMs: 30_000,
   /** Wall-clock ceiling (ms) for the live DOCX-to-Markdown read path in
@@ -547,6 +582,7 @@ export const LIMITS = {
   clauseImportBatchLimit: 200,
   templateFillsRetentionDays: 365,
   caseLawMatterLinksPerWorkspace: 1000,
+  legislationMatterLinksPerWorkspace: 1000,
   /** An empty coverage country reads as unset: all jurisdictions. */
   caseLawCoverageCountryMinLength: 1,
   /**
@@ -609,6 +645,12 @@ export const LIMITS = {
    * their pages; past a handful the merged page stops being one question.
    */
   caseLawSearchQueriesMax: 5,
+  /** Characters of one court name a case-law search filter takes. */
+  caseLawCourtNameMaxChars: 512,
+  /** Courts one case-law search may filter by at once. */
+  caseLawCourtsFilterMax: 16,
+  /** Characters of a publisher category or decision type filter value. */
+  caseLawFilterValueMaxChars: 128,
   /** Decisions one batch read may ask for. */
   caseLawDecisionBatchMax: 20,
   /**
@@ -735,6 +777,10 @@ export const LIMITS = {
    * legislation tools and the compat id vocabulary) reads it from here.
    */
   legislationEliMaxChars: 512,
+  /** Characters of a publisher provision anchor (`par_1729-odst_2-pism_a`). */
+  legislationAnchorMaxChars: 256,
+  /** Characters of the shortest consolidation language code (`cs`). */
+  legislationLanguageMinChars: 2,
   /**
    * Characters of one provision's text. A provision is a section, not a
    * statute, so this sits far below the document text window: a batch read
@@ -903,7 +949,7 @@ export const LIMITS = {
 
 export const FILE_SIZE_LIMIT_BYTES = {
   /** General document uploads (entities, templates). */
-  document: 50 * 1024 * 1024,
+  document: UPLOAD_DOCUMENT_MAX_BYTES,
   /** Structured data imports (clause JSON, contact sheets). */
   dataImport: 10 * 1024 * 1024,
   /** Agent skill packs (`SKILL.md` or a ZIP folder). */

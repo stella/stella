@@ -6,13 +6,11 @@ import type {
   RequestSecretOutput,
 } from "@stll/api-contract/chat-secret";
 
-import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import type {
   RequestSecretDecision,
   SecretTargetResolution,
 } from "@/components/chat/chat-approval-context";
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
-import { RequestSecretCard } from "@/components/chat/request-secret-card";
 import messages from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -24,6 +22,12 @@ const { cleanup, fireEvent, render, screen } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
+// The card's checkboxes take their accessible names in layout effects, which
+// Base UI disables when it loads before a DOM exists: import after register.
+const { ChatApprovalContext } =
+  await import("@/components/chat/chat-approval-context");
+const { RequestSecretCard } =
+  await import("@/components/chat/request-secret-card");
 
 type RequestSecretPart = Extract<
   RegisteredChatUIToolCallPart,

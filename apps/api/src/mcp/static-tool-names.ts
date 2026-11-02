@@ -75,6 +75,7 @@ export const MCP_STATIC_TOOL_NAMES = [
   "add_matter_member",
   "remove_matter_member",
   "update_organization_settings",
+  "create_organization",
   "prepare_feedback",
   "submit_feedback",
   "list_capabilities",

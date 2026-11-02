@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   canonicalJson,
@@ -105,7 +105,8 @@ describe("compareStableVersions", () => {
   });
 
   test("is antisymmetric and consistent with segment-wise numeric order", () => {
-    fc.assert(
+    assertProperty(
+      "is antisymmetric and consistent with segment-wise numeric order",
       fc.property(stableVersion, stableVersion, (a, b) => {
         const forward = Math.sign(compareStableVersions(a, b));
         const backward = Math.sign(compareStableVersions(b, a));
@@ -122,7 +123,7 @@ describe("compareStableVersions", () => {
         }
         expect(forward).toBe(expected);
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -170,7 +171,8 @@ describe("classifyCliRelease", () => {
   });
 
   test("a pending changeset dominates every version relation", () => {
-    fc.assert(
+    assertProperty(
+      "a pending changeset dominates every version relation",
       fc.property(
         stableVersion,
         fc.array(fc.string({ minLength: 1 }), { minLength: 1 }),
@@ -180,12 +182,13 @@ describe("classifyCliRelease", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 
   test("without pending changesets, coupled means strictly newer than npm", () => {
-    fc.assert(
+    assertProperty(
+      "without pending changesets, coupled means strictly newer than npm",
       fc.property(stableVersion, (cliVersion) => {
         const status = classify(cliVersion).status;
         const order = compareStableVersions(cliVersion, published.latest);
@@ -197,7 +200,7 @@ describe("classifyCliRelease", () => {
           expect(status).toBe("behind-npm");
         }
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -309,12 +312,13 @@ describe("canonicalJson", () => {
       fc.oneof(fc.integer(), fc.string(), fc.array(fc.integer())),
       { maxKeys: 6 },
     );
-    fc.assert(
+    assertProperty(
+      "is invariant under key reordering",
       fc.property(record, (value) => {
         const reversed = Object.fromEntries(Object.entries(value).toReversed());
         expect(canonicalJson(reversed)).toBe(canonicalJson(value));
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });

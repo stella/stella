@@ -8,7 +8,8 @@
 
 Define how Stella retains and deletes data to comply with
 data-protection obligations and honour user deletion requests.
-When data is deleted, it is actually deleted: Stella does not
+When data is deleted, it is actually deleted: apart from the
+document version tombstones described below, Stella does not
 use soft deletes.
 
 ## Scope
@@ -21,10 +22,14 @@ views, and associated metadata.
 
 <!-- evidence: retention-hard-delete -->
 
-1. **Hard deletes only.** The schema contains no `deletedAt`,
-   `isDeleted`, or soft-delete columns. When a user or
-   administrator deletes a resource, the corresponding rows
-   and objects are permanently removed.
+1. **Hard deletes only.** When a user or administrator deletes
+   a resource, the corresponding rows and objects are
+   permanently removed. The one tombstone is a document
+   version (`entity_versions.deleted_at`): deleting a single
+   version hides it from every read while its row and objects
+   stay with the document, including when the document moves
+   to another matter. Deleting the document removes all of its
+   versions and their objects.
 
 2. **Cascade by design.** Foreign key constraints in the modular
    database schema (`apps/api/src/db/schema/`) enforce
@@ -122,12 +127,16 @@ Handler: `apps/api/src/handlers/templates/delete.ts`
 | Application logs                    | Per hosting provider retention policy                        |
 
 Stella does not impose minimum retention periods on user
-content. Deletion is immediate and irreversible upon request.
+content. Deletion is immediate and irreversible upon request,
+except for a single document version: deleting one sets its
+`deletedAt` and keeps its row and objects with the document.
+Deleting the document removes all of its versions.
 
 ## Enforcement
 
 - Hard-delete behaviour is enforced by the absence of
-  soft-delete columns in the schema.
+  soft-delete columns in the schema, apart from
+  `entity_versions.deleted_at`, the document version tombstone.
 - Cascade and restrict FK constraints are defined in
   `apps/api/src/db/schema/` and enforced by PostgreSQL.
 - Entity, workspace, and organization deletion records durable cleanup work in

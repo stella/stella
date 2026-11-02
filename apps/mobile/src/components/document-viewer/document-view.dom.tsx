@@ -4,9 +4,10 @@ import { useEffect, useEffectEvent, useState } from "react";
 
 import type { DOMProps } from "expo/dom";
 
-import { UI_COLORS } from "@/ui-theme.gen";
+import { useDomAppearance } from "@/components/dom-theme";
+import type { DomAppearance } from "@/components/dom-theme";
 
-import { chunksOf, decodeChunkInto } from "./chunks";
+import { chunksOf, decodeChunkInto, encodeChunk } from "./chunks";
 import { DocxPages } from "./docx-pages";
 import { PdfPages } from "./pdf-pages";
 
@@ -20,8 +21,25 @@ type DocumentViewProps = {
    * The app's appearance. folio and the PDF pages read stella's colour
    * tokens and its `dark` class, as on the web.
    */
-  appearance: "light" | "dark";
+  appearance: DomAppearance;
+  /** The pages' width as a factor of the screen's fit (see ./zoom.ts). */
+  zoom: number;
+  /** Room under the document's end, in CSS pixels, for the app's bar. */
+  clearance: number;
   readChunk: (offset: number, length: number) => Promise<string>;
+  /** The app holds the Word document's edit lock (see `DocxPages`). */
+  editable: boolean;
+  /** Changes to ask for the edits now, to finish editing. */
+  saveRequest: number;
+  /** A tap into the read-only text of a Word document. */
+  onEditRequest: () => void;
+  /**
+   * One slice of a save, base64, sent before `onEditSaved`. Across the
+   * bridge the call answers asynchronously, so each slice is awaited.
+   */
+  writeEdit: (offset: number, base64: string) => Promise<void> | void;
+  /** A save is complete: its size, or null when nothing changed. */
+  onEditSaved: (size: number | null, final: boolean) => Promise<void>;
   /**
    * The first page is on screen. The app's handlers only set state, so the
    * DOM side does not wait on the bridge's reply.
@@ -45,30 +63,6 @@ const allowZoom = () => {
 };
 
 /**
- * Declares stella's colour tokens, light on `:root` and dark under `.dark`,
- * as the web's theme does: folio's canvas, pages and chrome read them, and
- * without them every surface falls back to the same white.
- */
-let tokensDeclared = false;
-
-const declareThemeTokens = () => {
-  if (tokensDeclared) {
-    return;
-  }
-  tokensDeclared = true;
-  const variables = (colors: Record<string, string>) =>
-    Object.entries(colors)
-      .map(
-        ([name, value]) =>
-          `--${name.replaceAll(/[A-Z]/gu, (letter) => `-${letter.toLowerCase()}`)}:${value};`,
-      )
-      .join("");
-  const style = document.createElement("style");
-  style.textContent = `:root{${variables(UI_COLORS.light)}color-scheme:light;}.dark{${variables(UI_COLORS.dark)}color-scheme:dark;}`;
-  document.head.append(style);
-};
-
-/**
  * The canvas around the pages, as folio draws its own: the muted tint over
  * the background, so a white page stands apart in light and a dark one in
  * dark.
@@ -85,7 +79,14 @@ const DocumentView = ({
   size,
   locale,
   appearance,
+  zoom,
+  clearance,
   readChunk,
+  editable,
+  saveRequest,
+  onEditRequest,
+  writeEdit,
+  onEditSaved,
   onReady,
   onFailed,
 }: DocumentViewProps) => {
@@ -98,10 +99,7 @@ const DocumentView = ({
     onFailed(String(error));
   });
 
-  useEffect(() => {
-    declareThemeTokens();
-    document.documentElement.classList.toggle("dark", appearance === "dark");
-  }, [appearance]);
+  useDomAppearance(appearance);
 
   useEffect(() => {
     allowZoom();
@@ -138,6 +136,18 @@ const DocumentView = ({
   const failed = (message: string) => {
     onFailed(message);
   };
+  // A save goes back to the app as the file came: in slices, then its end.
+  const saved = async (edited: Uint8Array | null, final: boolean) => {
+    if (edited !== null) {
+      for (const [offset, length] of chunksOf(edited.length)) {
+        await writeEdit(
+          offset,
+          encodeChunk(edited.subarray(offset, offset + length)),
+        );
+      }
+    }
+    await onEditSaved(edited === null ? null : edited.length, final);
+  };
 
   let pages = null;
   if (bytes !== null) {
@@ -145,17 +155,29 @@ const DocumentView = ({
       kind === "pdf" ? (
         <PdfPages
           bytes={bytes}
+          clearance={clearance}
           invert={appearance === "dark"}
           onFailed={failed}
           onReady={ready}
+          zoom={zoom}
         />
       ) : (
-        <DocxPages
-          bytes={bytes}
-          locale={locale}
-          onFailed={failed}
-          onReady={ready}
-        />
+        // folio scrolls within its own box, so the box ends above the bar.
+        <div style={{ height: `calc(100vh - ${String(clearance)}px)` }}>
+          <DocxPages
+            bytes={bytes}
+            editable={editable}
+            locale={locale}
+            onEditRequest={() => {
+              onEditRequest();
+            }}
+            onFailed={failed}
+            onReady={ready}
+            onSaved={saved}
+            saveRequest={saveRequest}
+            zoom={zoom}
+          />
+        </div>
       );
   }
 

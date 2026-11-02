@@ -86,6 +86,8 @@ type WorkspaceTableProps<TRow extends TableRowData> = {
    * ordinal of its page, so page three does not count from one again.
    */
   firstRowNumber?: number;
+  getRowSelectionLabel?: ((row: TRow) => string) | undefined;
+  selectAllLabel?: string | undefined;
   /** Everything that depends on what a row is; see `TableRowHost`. */
   rowHost: TableRowHost<TRow>;
   contentMode: TableContentMode;
@@ -140,6 +142,8 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   fillHeight = true,
   emptyState,
   firstRowNumber = 1,
+  getRowSelectionLabel,
+  selectAllLabel,
   outerScrollRef,
 }: WorkspaceTableProps<TRow>) => {
   const inlineFlow = outerScrollRef !== undefined;
@@ -637,6 +641,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
                       index={index}
                       key={header.id}
                       onToggleSelectAll={handleToggleSelectAll}
+                      selectAllLabel={selectAllLabel}
                       selectAllState={selectAllState}
                     />
                   ),
@@ -655,6 +660,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
                     headerTrigger={addColumnHeaderTrigger}
                     index={columnMetadata.addPropertyColumnIndex - 1}
                     onToggleSelectAll={handleToggleSelectAll}
+                    selectAllLabel={selectAllLabel}
                     selectAllState={selectAllState}
                   />
                 )}
@@ -698,6 +704,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
                     renderColumns,
                     row,
                     rowLabel: rowLabels[index] ?? "",
+                    selectionLabel: getRowSelectionLabel?.(row.original),
                     table,
                   })}
                 </Fragment>

@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: legacy wrappers nested by deferred capture produce the same metadata as their original raw shape; existing raw shapes are unchanged.
 // parser-output-unchanged: Deferred document raw storage is declared without changing metadata or document parsing.
@@ -91,11 +92,13 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
   STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
   storedSourceSurface,
 } from "@/api/lib/legal-search/ingestion-types";
 import type {
@@ -1656,6 +1659,7 @@ const collectFrontierPage = async (
   if (day === null) {
     return Result.ok({
       decisions: [],
+      publisherRequest: PUBLISHER_REQUEST.NONE,
       nextCursor: encodeFrontierCursor({
         verifiedThrough: frontier.verifiedThrough,
         page: 0,
@@ -1726,6 +1730,7 @@ const collectFrontierPage = async (
     decisions,
     itemBuildFailures: { type: "item_build_failed", count: failed },
     ...(unreadItems.length === 0 ? {} : { unreadItems }),
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor:
       nextPage * PAGE_SIZE < total
         ? encodeFrontierCursor({
@@ -2119,10 +2124,14 @@ const reparseStoredRaw = async (
     return readObject;
   }
   const bytes = readObject.value;
-  // A row stored before document objects were captured, or whose document
-  // was never fetched, replays from its stored listing and detail alone.
   if (bytes === null) {
-    return metadata;
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+      detail:
+        "Stored PDF capture is required to apply the current document parser; refresh the PDF capture explicitly",
+    };
   }
   const { result } = metadata;
   const parsed = await parsePendingDocument(
@@ -2143,11 +2152,11 @@ const reparseStoredRaw = async (
     };
   }
   const document = parsed.value;
-  if (document === undefined) {
+  if (document === undefined || document.documentAst.blocks.length === 0) {
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
-      detail: "Stored PDF parsed without document text",
+      detail: "Stored PDF parsed without document layout",
     };
   }
   return {

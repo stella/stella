@@ -10,9 +10,9 @@ import {
   readCredentialFile,
   removeCredential,
   setDefaultOrg,
-  writeCredentialFile,
+  updateCredentialFile,
 } from "./credential-store.js";
-import type { StoredCredential } from "./credential-store.js";
+import type { CredentialFile, StoredCredential } from "./credential-store.js";
 import { CredentialNotFoundError } from "./errors.js";
 import type { CliAuthError } from "./errors.js";
 import { decodeAccessTokenClaims } from "./jwt.js";
@@ -90,12 +90,11 @@ export const whoami = async (
   });
 };
 
-export const logout = async (
-  configDir: string,
+const removeSelectedCredential = (
+  file: CredentialFile,
   serverUrl: string,
   orgHint: string | undefined,
-): Promise<Result<{ orgId: string }, CliAuthError>> => {
-  const file = await readCredentialFile(configDir);
+): Result<{ orgId: string; file: CredentialFile }, CliAuthError> => {
   const allForServer = listCredentialsForServer(file, serverUrl);
 
   if (allForServer.length === 0) {
@@ -123,19 +122,17 @@ export const logout = async (
     );
   }
 
-  await writeCredentialFile(
-    configDir,
-    removeCredential(file, serverUrl, target.orgId),
-  );
-  return Result.ok({ orgId: target.orgId });
+  return Result.ok({
+    orgId: target.orgId,
+    file: removeCredential(file, serverUrl, target.orgId),
+  });
 };
 
-export const switchOrg = async (
-  configDir: string,
+const selectDefaultOrg = (
+  file: CredentialFile,
   serverUrl: string,
   orgHint: string,
-): Promise<Result<{ orgId: string }, CliAuthError>> => {
-  const file = await readCredentialFile(configDir);
+): Result<{ orgId: string; file: CredentialFile }, CliAuthError> => {
   const target = findCredentialByOrgHint(file, serverUrl, orgHint);
 
   if (!target) {
@@ -150,9 +147,48 @@ export const switchOrg = async (
     );
   }
 
-  await writeCredentialFile(
-    configDir,
-    setDefaultOrg(file, serverUrl, target.orgId),
+  return Result.ok({
+    orgId: target.orgId,
+    file: setDefaultOrg(file, serverUrl, target.orgId),
+  });
+};
+
+type CredentialSelection = Result<
+  { orgId: string; file: CredentialFile },
+  CliAuthError
+>;
+
+const selectedCredentialUpdate = (selection: CredentialSelection) => {
+  if (selection.isErr()) {
+    return { status: "unchanged", value: selection } as const;
+  }
+  return {
+    status: "updated",
+    file: selection.value.file,
+    value: Result.ok({ orgId: selection.value.orgId }),
+  } as const;
+};
+
+export const logout = async (
+  configDir: string,
+  serverUrl: string,
+  orgHint: string | undefined,
+): Promise<Result<{ orgId: string }, CliAuthError>> => {
+  const updated = await updateCredentialFile(configDir, (file) =>
+    selectedCredentialUpdate(
+      removeSelectedCredential(file, serverUrl, orgHint),
+    ),
   );
-  return Result.ok({ orgId: target.orgId });
+  return updated.isErr() ? updated : updated.value;
+};
+
+export const switchOrg = async (
+  configDir: string,
+  serverUrl: string,
+  orgHint: string,
+): Promise<Result<{ orgId: string }, CliAuthError>> => {
+  const updated = await updateCredentialFile(configDir, (file) =>
+    selectedCredentialUpdate(selectDefaultOrg(file, serverUrl, orgHint)),
+  );
+  return updated.isErr() ? updated : updated.value;
 };

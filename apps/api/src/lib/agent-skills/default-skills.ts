@@ -1,3 +1,5 @@
+import { STARTER_SKILLS } from "@stll/skills/starter-skills";
+
 import type { Transaction } from "@/api/db/root";
 import { agentSkills } from "@/api/db/schema";
 import { hashSkillContent } from "@/api/lib/agent-skills/content-hash";
@@ -9,40 +11,9 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 
-// Slash-command skills every member starts with, as private skills of their
-// own in the organization they join.
-const DEFAULT_SKILLS = [
-  {
-    name: "Summarise a document",
-    description: "Get a structured summary of the key terms",
-    command: "summarize",
-    body: "Summarise this document. Cover parties, key obligations, dates, financial terms, and any termination or liability provisions.",
-  },
-  {
-    name: "Find risks",
-    description: "Spot legal risks and ambiguous clauses",
-    command: "risks",
-    body: "Review this document for legal risks, missing protections, and ambiguous clauses. Cite the specific clause for each finding.",
-  },
-  {
-    name: "Compare versions",
-    description: "List every material change between two versions",
-    command: "compare",
-    body: "Compare two versions of this document and list every material change with its location.",
-  },
-  {
-    name: "Draft a response",
-    description: "Draft a professional reply to a letter",
-    command: "draft",
-    body: "Draft a measured response to this letter. Keep the tone professional, address each point raised, and flag any open questions for me to confirm.",
-  },
-] as const;
-
-const defaultSkillSlug = (command: string) => `${command}-default`;
-
 /** The body each starter skill is seeded with, by its slug. */
 export const DEFAULT_SKILL_BODY_BY_SLUG: ReadonlyMap<string, string> = new Map(
-  DEFAULT_SKILLS.map(({ body, command }) => [defaultSkillSlug(command), body]),
+  STARTER_SKILLS.map(({ body, slug }) => [slug, body]),
 );
 
 const DEFAULT_SKILL_SEED_SOURCE = "membership-created";
@@ -64,13 +35,13 @@ export const seedDefaultSkills = async ({
   tx,
   userId,
 }: SeedDefaultSkillsOptions): Promise<void> => {
-  const rows = DEFAULT_SKILLS.map((skill) => ({
+  const rows = STARTER_SKILLS.map((skill) => ({
     id: createSafeId<"agentSkill">(),
     organizationId,
     userId,
     scope: "private" as const,
     origin: "default" as const,
-    slug: defaultSkillSlug(skill.command),
+    slug: skill.slug,
     name: skill.name,
     description: skill.description,
     metadata: {},
