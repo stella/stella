@@ -17,10 +17,12 @@
 # silent breakage between desktop and web releases.
 set -euo pipefail
 
+retry="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/retry.sh"
+
 if [[ "${GITHUB_EVENT_NAME:-}" == "merge_group" ]]; then
   base_ref="${BRIDGE_BASE_SHA:?BRIDGE_BASE_SHA must be github.event.merge_group.base_sha}"
   if ! git cat-file -e "$base_ref^{commit}" 2>/dev/null; then
-    git fetch --no-tags origin "$base_ref"
+    bash "$retry" git fetch --no-tags origin "$base_ref"
   fi
 else
   base="${GITHUB_BASE_REF:-main}"
