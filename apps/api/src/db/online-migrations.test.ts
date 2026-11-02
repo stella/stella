@@ -2334,6 +2334,12 @@ const createHarness = ({
         },
         query: async (query: string, params: readonly unknown[] = []) => {
           statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
+          // Maintenance admission: the population owner is not installed.
+          if (
+            query.includes("to_regclass('public.case_law_population_deltas')")
+          ) {
+            return [{ installed: false }];
+          }
           if (query.includes("FROM drizzle.__drizzle_migrations")) {
             return [{ name: newestAppliedMigration }];
           }
@@ -2377,6 +2383,10 @@ const createHarness = ({
           // The contact VAT ID repair's movable-contact probe: none left, so
           // its completion holds and the phase skips it.
           if (query.startsWith('SELECT 1 FROM public."contacts"')) {
+            return [];
+          }
+          // The source config repair's probe: no legacy string config left.
+          if (query.startsWith("SELECT 1 FROM public.case_law_sources")) {
             return [];
           }
           if (query.startsWith("SELECT 1 FROM public.chat_run_log_entries")) {
@@ -2442,6 +2452,10 @@ const createHarness = ({
           // walk is on its last range.
           if (query.includes("corpus_index_projection_intents")) {
             return [];
+          }
+          // The population seed's completion: already seeded.
+          if (query.includes("case_law_population_seed_state")) {
+            return [{ phase: "complete" }];
           }
           // The OAuth-policy repair's completion census: a complete policy.
           // Checked before the table branch below, because the census names

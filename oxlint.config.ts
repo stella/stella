@@ -464,8 +464,15 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-section-sign-glyph.fixture.tsx", [
     "no-section-sign-glyph/no-section-sign-glyph",
   ]),
+  fixtureRuleOverride("no-style-substring-match.fixture.ts", [
+    "no-style-substring-match/no-style-substring-match",
+  ]),
   fixtureRuleOverride("no-inert-autofocus.fixture.tsx", [
     "no-inert-autofocus/no-inert-autofocus",
+  ]),
+  fixtureRuleOverride("no-optional-chain-null-compare.fixture.ts", [
+    "no-optional-chain-null-compare/no-optional-chain-null-compare",
+    "no-optional-chain-null-compare/no-optional-chain-absent-match",
   ]),
   fixtureRuleOverride("no-constructed-fetch-object.fixture.ts", [
     "no-constructed-fetch-object/no-constructed-fetch-object",
@@ -480,6 +487,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-person-select.fixture.tsx", [
     "no-person-select/no-person-select",
   ]),
+  fixtureRuleOverride("searchable-long-select.fixture.tsx", [
+    "searchable-long-select/searchable-long-select",
+  ]),
   fixtureRuleOverride("no-ad-hoc-chat-link.fixture.tsx", [
     "no-ad-hoc-chat-link/no-ad-hoc-chat-link",
   ]),
@@ -491,6 +501,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-justified-reader-text.fixture.tsx", [
     "no-justified-reader-text/no-justified-reader-text",
+  ]),
+  fixtureRuleOverride("no-raw-reader-scroll.fixture.ts", [
+    "no-raw-reader-scroll/no-raw-reader-scroll",
   ]),
   fixtureRuleOverride("no-sm-breakpoint-in-desktop.fixture.tsx", [
     "no-sm-breakpoint-in-desktop/no-sm-breakpoint-in-desktop",
@@ -560,6 +573,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-global-testing-library-screen",
     "bun-test-hygiene/no-unmanaged-database-client",
     "bun-test-hygiene/no-forced-database-drop",
+    "bun-test-hygiene/require-fetch-after-all",
     "bun-test-hygiene/no-wait-for-under-fake-timers",
     "bun-test-hygiene/require-module-mock-reset",
   ]),
@@ -608,6 +622,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("require-fetch-timeout.fixture.ts", [
     "require-fetch-timeout/require-fetch-timeout",
+  ]),
+  fixtureRuleOverride("no-fetch-response-body-replacement.fixture.ts", [
+    "no-fetch-response-body-replacement/no-fetch-response-body-replacement",
   ]),
   fixtureRuleOverride("require-bounded-request-schema.fixture.ts", [
     "require-bounded-request-schema/require-bounded-request-schema",
@@ -1630,6 +1647,7 @@ const config = defineConfig({
     ],
     "no-nanoid/no-nanoid": "error",
     "no-section-sign-glyph/no-section-sign-glyph": "error",
+    "no-style-substring-match/no-style-substring-match": "error",
     "no-inert-autofocus/no-inert-autofocus": "error",
     "no-hand-built-date-range-filter/no-hand-built-date-range-filter": "error",
     "confine-server-reads/confine-server-reads": "error",
@@ -1889,7 +1907,9 @@ const config = defineConfig({
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
+    "./.oxlint-plugins/no-style-substring-match.ts",
     "./.oxlint-plugins/no-inert-autofocus.ts",
+    "./.oxlint-plugins/no-optional-chain-null-compare.ts",
     "./.oxlint-plugins/no-constructed-fetch-object.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
@@ -1904,6 +1924,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
     "./.oxlint-plugins/no-person-select.ts",
+    "./.oxlint-plugins/searchable-long-select.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
@@ -1955,6 +1976,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
+    "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
     "./.oxlint-plugins/no-raw-parser-html.ts",
@@ -1981,6 +2003,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-api-error-check.ts",
     "./.oxlint-plugins/require-function-replacer.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
+    "./.oxlint-plugins/no-fetch-response-body-replacement.ts",
     "./.oxlint-plugins/require-file-transport-disposition.ts",
     "./.oxlint-plugins/require-escape-like.ts",
     "./.oxlint-plugins/sql-perf.ts",
@@ -2055,8 +2078,10 @@ const config = defineConfig({
     "./.oxlint-plugins/no-dropped-fake-timers.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
+    "./.oxlint-plugins/no-global-fetch-replacement.ts",
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
+    "./.oxlint-plugins/inspector-header-title.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
     "./.oxlint-plugins/no-hover-only-reveal.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
@@ -2069,6 +2094,7 @@ const config = defineConfig({
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/semantic-controls.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
+    "./.oxlint-plugins/no-button-whitespace-normal.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
     "./.oxlint-plugins/no-decorative-heading-accent.ts",
@@ -2076,6 +2102,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/no-auto-hyphenation-in-reader.ts",
     "./.oxlint-plugins/no-justified-reader-text.ts",
+    "./.oxlint-plugins/no-raw-reader-scroll.ts",
     "./.oxlint-plugins/no-sm-breakpoint-in-desktop.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
@@ -2414,6 +2441,7 @@ const config = defineConfig({
         "bun-test-hygiene/no-identical-title": "error",
         "bun-test-hygiene/no-promise-matchers": "error",
         "bun-test-hygiene/no-forced-database-drop": "error",
+        "bun-test-hygiene/require-fetch-after-all": "error",
         "bun-test-hygiene/no-wait-for-under-fake-timers": "error",
         "bun-test-hygiene/require-module-mock-reset": "error",
         "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
@@ -2931,14 +2959,6 @@ const config = defineConfig({
       rules: { "no-bare-error/no-bare-error": "off" },
     },
     {
-      // Test-only adapter helper consumed exclusively from
-      // `**/*.test.ts`. Not part of any production code path.
-      files: [
-        "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
-      ],
-      rules: { "no-bare-error/no-bare-error": "off" },
-    },
-    {
       // This helper serializes its boundary into the page before modules load,
       // so it cannot import `panic()` there.
       files: ["apps/desktop/tests/browser/tauri-ipc.ts"],
@@ -2972,8 +2992,8 @@ const config = defineConfig({
         "apps/api/src/db/schema.ts",
         "apps/api/src/db/auth-schema.ts",
         "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
-        "apps/api/src/lib/markdown/html-to-markdown.ts",
         "apps/web/src/components/workspaces/create-property.tsx",
+        "packages/chat/src/html-to-markdown.ts",
       ],
       rules: { "require-unicode-regexp": "off" },
     },
@@ -3026,6 +3046,12 @@ const config = defineConfig({
                 path: "packages/ui/src/components/accordion.tsx",
                 reason:
                   "Accordion panel is a disclosure: it opens from zero to the height it owns.",
+                utilities: ["transition-[height]"],
+              },
+              {
+                path: "packages/ui/src/components/collapsible.tsx",
+                reason:
+                  "Collapsible panel is a disclosure: it opens from zero to the height it owns, with the accordion's timing.",
                 utilities: ["transition-[height]"],
               },
               {
@@ -3096,7 +3122,10 @@ const config = defineConfig({
       // The desktop shell runs in the system WebView of its minimum macOS
       // version, which predates `Array#toSorted` and `Array#toReversed`; sort
       // or reverse a fresh array there (apps/desktop/tests/webview-baseline).
-      files: ["apps/desktop/src/**/*.{ts,tsx}"],
+      files: [
+        "apps/desktop/src/**/*.{ts,tsx}",
+        "packages/ui/src/calendar/day-calendar.logic.ts",
+      ],
       rules: {
         "unicorn/no-array-sort": "off",
         "unicorn/no-array-reverse": "off",
@@ -3713,6 +3742,16 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        "apps/web/src/components/inspector/**/*.tsx",
+        "apps/web/src/**/*{inspector,side-panel}*.tsx",
+        ".oxlint-plugins/__fixtures__/inspector-header-title.fixture.tsx",
+      ],
+      rules: {
+        "inspector-header-title/inspector-header-title": "error",
+      },
+    },
+    {
       // Icon-only actions need visible hover/focus affordance for sighted users;
       // aria-label alone is not discoverable. Decorative icons are ignored.
       files: [
@@ -3763,6 +3802,18 @@ const config = defineConfig({
       ],
       rules: {
         "no-disabled-tooltip-trigger/no-disabled-tooltip-trigger": "error",
+      },
+    },
+    {
+      // Button's size variants set fixed heights; wrapped labels can overflow
+      // the row and overlap the next one. The wrap layout owns its height.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-button-whitespace-normal.fixture.tsx",
+      ],
+      rules: {
+        "no-button-whitespace-normal/no-button-whitespace-normal": "error",
       },
     },
     {
@@ -3854,6 +3905,16 @@ const config = defineConfig({
       ],
       rules: {
         "no-person-select/no-person-select": "error",
+      },
+    },
+    {
+      // Long option lists need typing-based search through the shared combobox.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/searchable-long-select.fixture.tsx",
+      ],
+      rules: {
+        "searchable-long-select/searchable-long-select": "error",
       },
     },
     {
@@ -3966,6 +4027,25 @@ const config = defineConfig({
       excludeFiles: ["**/*.test.tsx"],
       rules: {
         "no-justified-reader-text/no-justified-reader-text": "error",
+      },
+    },
+    {
+      // A reader's controls bar floats over the top of its text: a jump lands
+      // below it through `scrollReaderToBlock`, the rule's one owner.
+      files: [
+        "packages/decision-reader/src/**/*.{ts,tsx}",
+        "apps/web/src/components/legal-reader/**/*.{ts,tsx}",
+        "apps/web/src/features/case-law/**/*.{ts,tsx}",
+        "apps/web/src/features/statutes/**/*.{ts,tsx}",
+        "apps/web/src/routes/law/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-reader-scroll.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.{ts,tsx}",
+        "packages/decision-reader/src/reader-landing.ts",
+      ],
+      rules: {
+        "no-raw-reader-scroll/no-raw-reader-scroll": "error",
       },
     },
     {
@@ -4442,6 +4522,22 @@ const config = defineConfig({
       },
     },
     {
+      // Product sources are clean; tests and scripts follow the dated
+      // changed-lines rollout in scripts/guard-rollouts.
+      files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/test-support/**",
+        "**/tests/**",
+        "**/e2e/**",
+      ],
+      rules: {
+        "no-optional-chain-null-compare/no-optional-chain-null-compare":
+          "error",
+      },
+    },
+    {
       // On React Native the global Response and Request are the whatwg-fetch
       // polyfill, which reads a stream body as "[object ReadableStream]".
       // Tests stub fetch with real responses and stay out of scope.
@@ -4614,6 +4710,15 @@ const config = defineConfig({
       ],
       rules: {
         "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
+          "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-bare-case-law-source-ingestion-lease.fixture.ts",
+      ],
+      rules: {
+        "no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease":
           "error",
       },
     },
@@ -5180,6 +5285,8 @@ const config = defineConfig({
       files: ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
       rules: {
         "require-fetch-timeout/require-fetch-timeout": "error",
+        "no-fetch-response-body-replacement/no-fetch-response-body-replacement":
+          "error",
         "require-escape-like/require-escape-like": "error",
       },
     },
@@ -5506,6 +5613,14 @@ const config = defineConfig({
       excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
         "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
+          "error",
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts"],
+      rules: {
+        "no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease":
           "error",
       },
     },
@@ -6328,6 +6443,23 @@ const config = defineConfig({
       rules: {
         "no-direct-test-state/no-direct-test-state": "error",
         "no-shared-checkout-mutation/no-shared-checkout-mutation": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/**/*.{test,spec}.{ts,tsx,js,jsx}",
+        "apps/api/**/__tests__/**/*.{ts,tsx,js,jsx}",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/src/mcp/__fixtures__/external-source/replay.ts",
+        ".oxlint-plugins/__fixtures__/no-global-fetch-replacement.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/tests/helpers/test-fetch.ts",
+        // The process-wide guard that restores fetch after every test.
+        "apps/api/src/tests/fetch-global-guard.ts",
+      ],
+      rules: {
+        "no-global-fetch-replacement/no-global-fetch-replacement": "error",
       },
     },
     {

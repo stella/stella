@@ -213,6 +213,15 @@ const printVersionNudge = ({
   }
 };
 
+/** A local `batch --dry-run` validates offline: it resolves no server or credential. */
+const resolveLaunchPreamble = async (
+  serverFlag: ReturnType<typeof preparseServerFlag>,
+  localBatchValidation: boolean,
+) =>
+  localBatchValidation
+    ? { configDir: defaultConfigDir(), serverUrl: undefined, token: undefined }
+    : await resolvePreamble(serverFlag);
+
 const main = async (): Promise<void> => {
   const argv = process.argv.slice(2);
   const isAuthLogin = argv.at(0) === "auth" && argv.at(1) === "login";
@@ -220,6 +229,8 @@ const main = async (): Promise<void> => {
   // server registry, so they must not pay the `tools/list` round-trip; only a
   // command that consumes the command tree triggers the pre-dispatch refresh.
   const needsRegistry = commandNeedsRegistry(argv);
+  const localBatchValidation =
+    argv.at(0) === "batch" && argv.includes("--dry-run");
   // A named slice of the env (read through `env.ts`) so the cache module never
   // touches the full `ProcessEnv` (whose index signature would not narrow to
   // `CacheEnv`).
@@ -229,7 +240,10 @@ const main = async (): Promise<void> => {
   // dispatches, so an argv scan is what makes the flag work on every command
   // rather than only on the ones that resolve a server themselves.
   const serverFlag = preparseServerFlag(argv);
-  const { configDir, serverUrl, token } = await resolvePreamble(serverFlag);
+  const { configDir, serverUrl, token } = await resolveLaunchPreamble(
+    serverFlag,
+    localBatchValidation,
+  );
   if (process.exitCode !== undefined && process.exitCode !== 0) {
     return;
   }
@@ -294,12 +308,14 @@ const main = async (): Promise<void> => {
 
   // Only this invocation's validated response can project caller commands.
   // Disk supplies deployment metadata; resolution itself performs no network.
-  const { tree, drift } = await resolveCommandTree({
-    serverOrigin: serverUrl,
-    env: cacheEnv,
-    ...(currentRegistry === undefined ? {} : { registry: currentRegistry }),
-    ...(featureAccess === undefined ? {} : { featureAccess }),
-  });
+  const { tree, drift } = localBatchValidation
+    ? { tree: generatedRouteMap, drift: undefined }
+    : await resolveCommandTree({
+        serverOrigin: serverUrl,
+        env: cacheEnv,
+        ...(currentRegistry === undefined ? {} : { registry: currentRegistry }),
+        ...(featureAccess === undefined ? {} : { featureAccess }),
+      });
   if (drift !== undefined) {
     // The one place the drift is reported, so "once per process" is structural
     // rather than a latch. Always stderr: a `--json` caller pipes stdout into a

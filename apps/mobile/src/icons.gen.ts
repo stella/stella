@@ -43,6 +43,9 @@ export { BookOpenIcon as CaseLawIcon } from "lucide-react-native";
 // Starting a new AI chat: a chat bubble with a plus, the same glyph on every
 // new-chat button, menu item and rail action.
 export { MessageSquarePlusIcon as NewChatIcon } from "lucide-react-native";
+// stella operating the user's own browser through the extension: a browser
+// window, kept apart from the globe of web search and page fetches.
+export { AppWindowMacIcon as BrowserControlIcon } from "lucide-react-native";
 // Commenting on a document passage: a quoted bubble, so it never reads as
 // starting a new AI chat.
 export { MessageSquareQuoteIcon as AddCommentIcon } from "lucide-react-native";

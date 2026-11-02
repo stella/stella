@@ -69,29 +69,32 @@ export const compactMeta = (
     })
     .join(" · ");
 
+const MIME_TYPE_LABELS: ReadonlyMap<string, string> = new Map([
+  ["application/msword", "DOC"],
+  ["application/pdf", "PDF"],
+  ["application/vnd.ms-excel", "XLS"],
+  ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "XLSX"],
+  [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "DOCX",
+  ],
+  ["application/x-msdownload", "EXE"],
+  ["image/jpeg", "JPEG"],
+  ["image/svg+xml", "SVG"],
+  ["message/rfc822", "EML"],
+  ["text/markdown", "Markdown"],
+  ["text/plain", "TXT"],
+]);
+
+/** File-format names read the same in every locale, so none is translated. */
 export const formatMimeTypeLabel = (mimeType: string): string => {
-  if (mimeType === "application/pdf") {
-    return "PDF";
+  const known = MIME_TYPE_LABELS.get(mimeType);
+  if (known !== undefined) {
+    return known;
   }
-  if (
-    mimeType ===
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-  ) {
-    return "DOCX";
-  }
-  if (
-    mimeType ===
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-  ) {
-    return "XLSX";
-  }
-  if (mimeType.startsWith("image/")) {
-    return mimeType.replace("image/", "").toUpperCase();
-  }
-  if (mimeType.startsWith("text/")) {
-    return mimeType.replace("text/", "").toUpperCase();
-  }
-  return mimeType;
+  const subtype = mimeType.split("/").at(-1) ?? mimeType;
+  const [format = subtype] = subtype.split("+");
+  return format.replace(/^(?:vnd\.|x-)/u, "").toUpperCase();
 };
 
 export const isoToDateInputValue = (iso: string): string => iso.slice(0, 10);

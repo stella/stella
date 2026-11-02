@@ -1228,9 +1228,9 @@ describe("desktop release workflows", () => {
       const strategy = isRecord(build["strategy"]) ? build["strategy"] : {};
       const matrix = isRecord(strategy["matrix"]) ? strategy["matrix"] : {};
       const legs = Array.isArray(matrix["include"]) ? matrix["include"] : [];
-      expect(
-        legs.map((leg) => (isRecord(leg) ? leg["os"] : undefined)),
-      ).toEqual(Object.keys(worstInstallMinutes));
+      expect([
+        ...new Set(legs.map((leg) => (isRecord(leg) ? leg["os"] : undefined))),
+      ]).toEqual(Object.keys(worstInstallMinutes));
       for (const leg of legs) {
         const os = isRecord(leg) ? String(leg["os"]) : "";
         const deadline = isRecord(leg) ? leg["install_timeout_minutes"] : 0;

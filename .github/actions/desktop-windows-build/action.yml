@@ -61,6 +61,19 @@ runs:
         AZURE_CERT_PROFILE: ${{ inputs.azure-profile }}
       run: bun "${{ inputs.script-path }}" configure-windows "${{ inputs.dry-run == 'true' && 'dry-run' || 'release' }}" apps/desktop/src-tauri/tauri.conf.json
 
+    # ggml's ARM CPU backend builds with clang-cl, which needs Ninja. Visual
+    # Studio ships one; it is just not on the PATH.
+    - name: Put Ninja on the PATH for the ARM64 speech engine
+      if: inputs.target == 'aarch64-pc-windows-msvc'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        $vs = & $vswhere -latest -products '*' -property installationPath
+        $ninja = Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja'
+        if (-not (Test-Path (Join-Path $ninja 'ninja.exe'))) { throw "ninja.exe not found under $vs" }
+        Add-Content $env:GITHUB_PATH $ninja
+
     - name: Build Windows desktop artifacts
       shell: bash
       working-directory: apps/desktop

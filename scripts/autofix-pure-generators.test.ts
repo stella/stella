@@ -25,6 +25,8 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  // Emits export lines from committed entry filenames; values stay in their owners.
+  "online-migration-entries": "scripts/generate-online-migration-entries.ts",
   "db-registry-entries": "scripts/db-registry-entries.ts",
   // Reads canonical source-entry JSON; Git staging never changes the literal maps.
   "parser-registry": "scripts/generate-parser-registry.ts",
@@ -114,6 +116,8 @@ const EXCLUDED_AUTOFIX = {
     "Device descriptors are refreshed explicitly from the installed SDK",
   "ci-job-classification-digests":
     "Protected workflow metadata is refreshed outside pull-request autofix",
+  "merge-group-parser":
+    "Workflow script blocks are refreshed outside pull-request autofix",
   "failure-tags": "Generated census is excluded by the current owner policy",
   "migration-lock-baseline": "Migration lock decisions require human review",
   "model-catalog-inputs": "Fetches upstream model catalogs",
