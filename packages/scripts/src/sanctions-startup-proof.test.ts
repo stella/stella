@@ -126,7 +126,8 @@ test("bounds a search body that never completes, even when the transport ignores
   );
 
   await readingBody.promise;
-  expect(budgets).toEqual([50, 50]);
+  // The started poll, the search request and its body each get the budget.
+  expect(budgets).toEqual([50, 50, 50]);
   instant = 50;
   const deadline = new DOMException("Proof deadline reached", "TimeoutError");
   controller.abort(deadline);

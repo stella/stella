@@ -118,7 +118,7 @@ export const proveSanctionsStartup = async ({
         new TextDecoder().decode(
           await readBodyWithIdleDeadline(response.value, {
             idleMs: pollTimeoutMs,
-            signal: AbortSignal.timeout(Math.max(1, remaining())),
+            signal: deadlineSignal(Math.max(1, remaining())),
           }),
         ),
       ),
