@@ -231,6 +231,10 @@ export const aggregateFences = () => {
       mode: "update",
     },
     contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
+    billingDraftSettings: {
+      aggregate: "billingDraftSettings",
+      id: { organizationId },
+    },
     fileComparisonCapacity: {
       aggregate: "fileComparisonCapacity",
       id: { organizationId },

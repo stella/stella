@@ -306,6 +306,8 @@ jobs:
             scripts/publish-package-selection.ts
             scripts/publish-packages.ts
             scripts/generate-npm-release-jobs.ts
+            scripts/offline-check-startup.ts
+            packages/scripts/src/offline-check-startup.ts
             scripts/prepare-publish.ts
             scripts/publish-manifest.ts
             scripts/publish-declarations.ts

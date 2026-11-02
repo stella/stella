@@ -101,6 +101,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { inlineStyleIsItalic } from "@/api/lib/legal-search/document-builders/inline-style";
 import {
   defineSourceAdapter,
   EMPTY_AST,
@@ -656,7 +657,16 @@ export const parsePlTkListingPage = (
       const caseNumber = collapse(
         visibleHtmlText(cell.find(".sygnatura").first()),
       );
-      const subjectNode = cell.find('span[style*="italic"]');
+      // Only the outermost italic span: a nested span inherits the italic, and
+      // reading both would repeat the subject.
+      const subjectNode = cell.find("span").filter(
+        (_, el) =>
+          inlineStyleIsItalic(el) &&
+          !$(el)
+            .parentsUntil(cell, "span")
+            .toArray()
+            .some((ancestor) => inlineStyleIsItalic(ancestor)),
+      );
       const subject = collapse(visibleHtmlText(subjectNode));
       const lineNode = cell.clone();
       lineNode.find("a, span").remove();
