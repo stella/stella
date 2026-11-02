@@ -1,13 +1,10 @@
 import { createElement } from "react";
 
-import { Result } from "better-result";
-
-import { copyToClipboard } from "@stll/clipboard";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { createDetached, type DetachedOperand } from "@stll/errors";
 import { stellaToast } from "@stll/ui/toast";
 
-import { ProviderDiagnosticToast } from "@/components/provider-diagnostic-content";
+import { ProviderSetupGuidanceNotice } from "@/components/provider-diagnostic-content";
 import { getTranslator } from "@/i18n/translator";
 import { notifyStepUp } from "@/lib/account/mcp-step-up";
 import { telemetryErrorType } from "@/lib/analytics/error-diagnostics";
@@ -23,6 +20,7 @@ import {
 } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
+import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
 import { notifySessionExpired } from "@/lib/errors/session-expired";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
@@ -220,28 +218,18 @@ export const notifyUserError = <Cause>(
     }
     return false;
   }
-  const diagnostic = providerDiagnosticFromThrown(error);
+  // A provider refusal adds its setup fix; its own wording stays out of sight.
+  const setupCode = providerDiagnosticFromThrown(error)?.code ?? null;
   const toast = {
     ...options,
-    title:
-      diagnostic === undefined
-        ? title
-        : createElement(ProviderDiagnosticToast, {
-            diagnostic,
-            onCopy: async () => {
-              const copied = await copyToClipboard(
-                `${diagnostic.provider}: ${diagnostic.message}`,
-              );
-              if (Result.isError(copied)) {
-                notifyUserError(
-                  copied.error,
-                  getTranslator()("errors.actionFailed"),
-                );
-                return false;
-              }
-              return true;
-            },
+    ...(providerSetupGuidance(setupCode ?? undefined) === null
+      ? {}
+      : {
+          description: createElement(ProviderSetupGuidanceNotice, {
+            code: setupCode,
           }),
+        }),
+    title,
     type: "error",
   } as const;
   if (toastId !== undefined) {
