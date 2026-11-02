@@ -1,5 +1,12 @@
 {
   "ci-checks-rest": {
+    "Action commit pins": [
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/ci-checks/**",
+      "scripts/check-action-commit-pins.ts",
+      "scripts/check-action-commit-pins.test.ts"
+    ],
     "Resolve static check receipts": ["**"],
     "Run repository checks": ["**"],
     "Record static check receipts": ["**"],

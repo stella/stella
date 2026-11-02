@@ -44,10 +44,11 @@ import type {
   RouteNode,
   ToolAnnotation,
 } from "./route-types.js";
+import { runtimeAssetUrl } from "./runtime-asset-url.js";
 
-const SNAPSHOT_URL = new URL(
-  "generated/registry-snapshot.json",
-  import.meta.url,
+const SNAPSHOT_URL = runtimeAssetUrl(
+  new URL("generated/registry-snapshot.json", import.meta.url),
+  "registry-snapshot.json",
 );
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -315,6 +316,7 @@ export const refreshRegistryCache = async ({
   force = false,
   ttlSeconds = DEFAULT_TTL_SECONDS,
   currentVersion = CLI_VERSION,
+  updateCommand,
   fetchRaw,
   bakedListings,
 }: {
@@ -325,6 +327,7 @@ export const refreshRegistryCache = async ({
   force?: boolean;
   ttlSeconds?: number;
   currentVersion?: string;
+  updateCommand?: string;
   fetchRaw?: FetchRaw;
   bakedListings?: readonly RegistryToolListing[];
 }): Promise<RefreshOutcome> => {
@@ -383,6 +386,7 @@ export const refreshRegistryCache = async ({
 
   const nudge = buildVersionNudge({
     current: currentVersion,
+    updateCommand,
     latest: raw.value.cliLatest,
     minimum: raw.value.cliMinimum,
     lastNudged: existing?.lastNudgedVersion,
@@ -408,6 +412,7 @@ export const refreshRegistryCache = async ({
       : { featureOmittedCapabilities: raw.value.featureOmittedCapabilities }),
   };
   const file: RegistryCacheFile = {
+    compatibility: existing?.compatibility,
     version: CACHE_SCHEMA_VERSION,
     serverOrigin,
     fetchedAt: Temporal.Instant.fromEpochMilliseconds(now).toString({

@@ -17,6 +17,7 @@ const LOCAL_COMMAND_ROUTES: ReadonlySet<string> = new Set([
   "tools",
   "upload",
   "update",
+  "doctor",
 ]);
 
 /**
@@ -31,4 +32,12 @@ export const commandNeedsRegistry = (argv: readonly string[]): boolean => {
     return false;
   }
   return !LOCAL_COMMAND_ROUTES.has(first);
+};
+
+/** Startup flags end at the parser's positional-argument terminator. */
+export const argumentsBeforeTerminator = (
+  argv: readonly string[],
+): readonly string[] => {
+  const terminator = argv.indexOf("--");
+  return terminator === -1 ? argv : argv.slice(0, terminator);
 };

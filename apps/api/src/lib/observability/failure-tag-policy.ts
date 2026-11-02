@@ -10,6 +10,9 @@ import type { FailureTag } from "@/api/lib/observability/failure-tags.gen";
  * The generated census contains no policy, so a new tag requires a decision.
  */
 export const TAGGED_FAILURE_REASON = {
+  DoctorError: "tagged_failure",
+  InstallChannelError: "tagged_failure",
+  NativeUpdateError: "tagged_failure",
   AnalysisInputVersionChangedError: "conflict",
   AIColumnInputRequiredError: "tagged_failure",
   AIGenerationCancelledError: "tagged_failure",

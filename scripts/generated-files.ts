@@ -1530,6 +1530,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/src/capability-catalog-data.ts",
       "packages/cli/src/write-generated-file.ts",
       "packages/cli/src/capability-catalog-load.ts",
+      "packages/cli/src/runtime-asset-url.ts",
       "packages/cli/src/generate-capability-tree.ts",
       "packages/cli/src/generate-route-map.ts",
       "packages/cli/src/annotations.ts",

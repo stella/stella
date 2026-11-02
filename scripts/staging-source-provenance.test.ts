@@ -161,6 +161,95 @@ const steps = (scope: Record<string, unknown>) => {
 const document = (file: string) =>
   record(Bun.YAML.parse(readFileSync(path.join(ROOT, file), "utf-8")));
 
+describe("provenance subject validation", () => {
+  test("subject validation runs first and receives inputs only through its environment", () => {
+    const first = steps(
+      record(document(".github/actions/provenance/action.yml")["runs"]),
+    ).at(0);
+    if (!first) {
+      throw new TypeError("Provenance subject validation must exist");
+    }
+    expect(first["name"]).toBe("Validate provenance subject");
+    expect(first["if"]).toBeUndefined();
+    expect(first["continue-on-error"]).toBeUndefined();
+    expect(first["shell"]).toBe("bash");
+    expect(first["env"]).toEqual({
+      SUBJECT_PATH: `\${{ inputs.subject-path }}`,
+      SUBJECT_NAME: `\${{ inputs.subject-name }}`,
+      SUBJECT_DIGEST: `\${{ inputs.subject-digest }}`,
+    });
+    expect(typeof first["run"]).toBe("string");
+    expect(first["run"]).not.toContain("${{");
+  });
+
+  test("only a file path alone or a complete image identity can be attested", () => {
+    const validation = steps(
+      record(document(".github/actions/provenance/action.yml")["runs"]),
+    ).at(0);
+    if (!validation || typeof validation["run"] !== "string") {
+      throw new TypeError("Provenance subject validation script must exist");
+    }
+    const cases = [
+      { path: "", name: "", digest: "", accepted: false },
+      { path: "dist/release.zip", name: "", digest: "", accepted: true },
+      { path: "", name: "ghcr.io/stella/image", digest: "", accepted: false },
+      { path: "", name: "", digest: "sha256:1234", accepted: false },
+      {
+        path: "",
+        name: "ghcr.io/stella/image",
+        digest: "sha256:1234",
+        accepted: true,
+      },
+      {
+        path: "dist/release.zip",
+        name: "ghcr.io/stella/image",
+        digest: "",
+        accepted: false,
+      },
+      {
+        path: "dist/release.zip",
+        name: "",
+        digest: "sha256:1234",
+        accepted: false,
+      },
+      {
+        path: "dist/release.zip",
+        name: "ghcr.io/stella/image",
+        digest: "sha256:1234",
+        accepted: false,
+      },
+    ];
+    expect(cases).toHaveLength(8);
+    expect(
+      new Set(
+        cases.map(({ path: subjectPath, name, digest }) =>
+          [subjectPath, name, digest].map((value) => value !== "").join(","),
+        ),
+      ).size,
+    ).toBe(8);
+    for (const subject of cases) {
+      const executed = run({
+        cwd: ROOT,
+        command: ["bash", "-e", "-o", "pipefail", "-c", validation["run"]],
+        env: {
+          SUBJECT_PATH: subject.path,
+          SUBJECT_NAME: subject.name,
+          SUBJECT_DIGEST: subject.digest,
+        },
+      });
+      const label = JSON.stringify(subject);
+      if (subject.accepted) {
+        expect(executed.exitCode, label).toBe(0);
+      } else {
+        expect(executed.exitCode, label).not.toBe(0);
+        expect(executed.stderr, label).toContain("subject-path");
+        expect(executed.stderr, label).toContain("subject-name");
+        expect(executed.stderr, label).toContain("subject-digest");
+      }
+    }
+  });
+});
+
 describe("staging source selection", () => {
   test("the tip and every older first-parent source share the fresh main anchor", async () => {
     await withRepository(({ checkout, tip }) => {
@@ -606,7 +695,14 @@ describe("staging image source bindings", () => {
       const inputs = record(attestation["with"]);
       expect(inputs["subject-name"]).toBe(`\${{ inputs.subject-name }}`);
       expect(inputs["subject-digest"]).toBe(`\${{ inputs.subject-digest }}`);
-      expect(inputs["push-to-registry"]).toBe(true);
+      expect(inputs["push-to-registry"]).toBe(
+        inputs["predicate-type"] === undefined
+          ? `\${{ inputs.subject-path == '' }}`
+          : true,
+      );
+      if (inputs["predicate-type"] === undefined) {
+        expect(inputs["subject-path"]).toBe(`\${{ inputs.subject-path }}`);
+      }
     }
     const generated = actionSteps.find(
       (step) =>

@@ -6,7 +6,9 @@ import { DESKTOP_WINDOWS_DRY_RUN_INPUTS } from "./ci-plan-scope";
 import {
   configureWindowsSigning,
   desktopArtifacts,
+  locateWindowsSignTool,
   resignWindowsArtifacts,
+  signWindowsArtifacts,
   stampCargoPackageVersion,
   stampDesktopRelease,
 } from "./desktop-release-step";
@@ -235,9 +237,11 @@ test("the Windows build action receives its release script path explicitly", () 
   expect(commands).toEqual([
     "    description: Path to desktop-release-step.ts",
   ]);
-  expect(action.match(/bun "\$\{\{ inputs\.script-path \}\}"/gu)?.length).toBe(
-    2,
-  );
+  const invocations = [...action.matchAll(/^\s+run: bun "([^"]+)"/gmu)];
+  expect(invocations.length).toBeGreaterThan(0);
+  for (const invocation of invocations) {
+    expect(invocation.at(1)).toBe(githubExpression("inputs.script-path"));
+  }
   expect(action).not.toMatch(
     /bun (?:\.\.\/)*scripts\/desktop-release-step\.ts/u,
   );
@@ -448,4 +452,354 @@ test("artifact discovery is recursive, stable, and rejects unrelated files", () 
     path.join(bundle, "nsis/Stella-windows.exe"),
   ]);
   expect(desktopArtifacts(path.join(bundle, "missing"))).toEqual([]);
+});
+
+test("Windows signing finds the newest installed SDK numerically", () => {
+  const programFiles = temporary();
+  const sdk = path.join(programFiles, "Windows Kits", "10", "bin");
+  for (const version of ["10.0.9.0", "10.0.10.0"]) {
+    mkdirSync(path.join(sdk, version, "x64"), { recursive: true });
+    writeFileSync(path.join(sdk, version, "x64/signtool.exe"), "fixture");
+  }
+  mkdirSync(path.join(sdk, "10.0.11.0"));
+  expect(locateWindowsSignTool(programFiles)).toBe(
+    path.join(sdk, "10.0.10.0", "x64/signtool.exe"),
+  );
+});
+
+test("Windows signing refuses an SDK without signtool", () => {
+  const programFiles = temporary();
+  mkdirSync(path.join(programFiles, "Windows Kits", "10", "bin"), {
+    recursive: true,
+  });
+  expect(() => locateWindowsSignTool(programFiles)).toThrow(
+    "signtool.exe not found",
+  );
+});
+
+const signingEnv = {
+  AZURE_TENANT_ID: "fixture-tenant",
+  AZURE_CLIENT_ID: "fixture-client",
+  AZURE_CLIENT_SECRET: "fixture-credential",
+  AZURE_ENDPOINT: "https://signing.example",
+  AZURE_CODE_SIGNING_ACCOUNT: "fixture-account",
+  AZURE_CERT_PROFILE: "fixture-profile",
+  SIGNTOOL_PATH: "fixture-signtool",
+};
+
+test("desktop and standalone executables use the same trusted signing arguments", () => {
+  const directory = temporary();
+  mkdirSync(path.join(directory, "nsis"), { recursive: true });
+  const native = path.join(directory, "stella-windows-x64.exe");
+  const desktop = path.join(directory, "nsis/Stella-setup.exe");
+  writeFileSync(native, "native");
+  writeFileSync(desktop, "desktop");
+  writeFileSync(path.join(directory, "installer.exe.zip"), "archive");
+  const commands: string[][] = [];
+  signWindowsArtifacts({
+    directory,
+    env: signingEnv,
+    run: (command) => {
+      commands.push(command);
+      return 0;
+    },
+  });
+  expect(commands).toEqual(
+    [desktop, native]
+      .toSorted()
+      .map((file) => [
+        "trusted-signing-cli",
+        "-e",
+        signingEnv.AZURE_ENDPOINT,
+        "-a",
+        signingEnv.AZURE_CODE_SIGNING_ACCOUNT,
+        "-c",
+        signingEnv.AZURE_CERT_PROFILE,
+        file,
+      ]),
+  );
+  expect(commands.flat()).not.toContain(signingEnv.AZURE_CLIENT_SECRET);
+});
+
+test("Windows signing fails before dispatch without credentials and stops on signer failure", () => {
+  const directory = temporary();
+  mkdirSync(directory);
+  writeFileSync(path.join(directory, "stella.exe"), "fixture");
+  let calls = 0;
+  const run = () => {
+    calls += 1;
+    return 1;
+  };
+  expect(() =>
+    signWindowsArtifacts({
+      directory,
+      env: { ...signingEnv, AZURE_CLIENT_SECRET: "" },
+      run,
+    }),
+  ).toThrow("Missing AZURE_CLIENT_SECRET");
+  expect(calls).toBe(0);
+  expect(() =>
+    signWindowsArtifacts({ directory, env: signingEnv, run }),
+  ).toThrow("Windows executable signing failed");
+  expect(calls).toBe(1);
+});
+
+test("release signing actions keep Azure credentials out of third-party action steps", () => {
+  const nativeSource = readFileSync(
+    new URL("../.github/workflows/publish-npm.yml", import.meta.url),
+    "utf-8",
+  );
+  const desktopSource = readFileSync(
+    new URL(
+      "../.github/actions/desktop-windows-build/action.yml",
+      import.meta.url,
+    ),
+    "utf-8",
+  );
+  for (const source of [nativeSource, desktopSource]) {
+    expect(source).not.toContain("azure/trusted-signing-action@");
+    if (source === desktopSource) {
+      expect(source).toContain(" sign-windows ");
+    } else {
+      expect(source).toContain(
+        "& trusted-signing-cli -e $env:AZURE_ENDPOINT -a $env:AZURE_CODE_SIGNING_ACCOUNT -c $env:AZURE_CERT_PROFILE $executable.FullName",
+      );
+    }
+    const document: unknown = Bun.YAML.parse(source);
+    if (!record(document)) {
+      throw new TypeError("Expected signing workflow mapping");
+    }
+    const groups = record(document["jobs"])
+      ? Object.values(document["jobs"])
+      : [document["runs"]];
+    for (const group of groups) {
+      if (!record(group) || !Array.isArray(group["steps"])) {
+        continue;
+      }
+      for (const step of group["steps"]) {
+        if (
+          !record(step) ||
+          typeof step["uses"] !== "string" ||
+          step["uses"].startsWith("./")
+        ) {
+          continue;
+        }
+        expect(JSON.stringify(step["with"] ?? {})).not.toMatch(/AZURE_/u);
+        const inheritedEnv = record(group["env"]) ? group["env"] : {};
+        const stepEnv = record(step["env"]) ? step["env"] : {};
+        for (const [name, value] of Object.entries({
+          ...inheritedEnv,
+          ...stepEnv,
+        })) {
+          if (name.startsWith("AZURE_")) {
+            expect(value).toBe("");
+          }
+          expect(String(value)).not.toMatch(/secrets\.AZURE_/u);
+        }
+        if (
+          step["uses"].startsWith("baptiste0928/cargo-install@") &&
+          !record(document["jobs"])
+        ) {
+          expect(step["env"]).toMatchObject({
+            AZURE_TENANT_ID: "",
+            AZURE_CLIENT_ID: "",
+            AZURE_CLIENT_SECRET: "",
+          });
+        }
+      }
+    }
+  }
+});
+
+const expectWindowsSignatureChecks = (script: string): void => {
+  expect(script).toContain('$ErrorActionPreference = "Stop"');
+  expect(script).toContain("-Filter *.exe -File -Recurse -ErrorAction Stop");
+  expect(script).toMatch(/if \(\$executables\.Count -eq 0\)\s*\{\s*throw/u);
+  expect(script).toContain("foreach ($executable in $executables)");
+  expect(script).toContain(
+    "Get-AuthenticodeSignature -LiteralPath $executable.FullName -ErrorAction Stop",
+  );
+  expect(script).toMatch(
+    /if \(\$signature\.Status -ne "Valid"\)\s*\{\s*throw/u,
+  );
+  expect(script).toMatch(
+    /if \(\$null -eq \$signature\.TimeStamperCertificate\)\s*\{\s*throw/u,
+  );
+};
+
+const readNativeReleaseJobs = (): Record<string, unknown> => {
+  const source = readFileSync(
+    new URL("../.github/workflows/publish-npm.yml", import.meta.url),
+    "utf-8",
+  );
+  const workflow: unknown = Bun.YAML.parse(source);
+  if (!record(workflow) || !record(workflow["jobs"])) {
+    throw new TypeError("Expected native CLI release workflow jobs");
+  }
+  return workflow["jobs"];
+};
+
+test("desktop executables pass signature and timestamp verification before updater signing", () => {
+  const source = readFileSync(
+    new URL(
+      "../.github/actions/desktop-windows-build/action.yml",
+      import.meta.url,
+    ),
+    "utf-8",
+  );
+  const action: unknown = Bun.YAML.parse(source);
+  if (!record(action) || !record(action["runs"])) {
+    throw new TypeError("Expected Windows build composite action");
+  }
+  const steps = action["runs"]["steps"];
+  if (!Array.isArray(steps)) {
+    throw new TypeError("Expected Windows build steps");
+  }
+  const signIndex = steps.findIndex(
+    (step) =>
+      record(step) &&
+      typeof step["run"] === "string" &&
+      step["run"].includes(" sign-windows "),
+  );
+  const verifyIndex = steps.findIndex(
+    (step) =>
+      record(step) &&
+      step["name"] === "Verify Windows signatures and timestamps",
+  );
+  const updaterIndex = steps.findIndex(
+    (step) =>
+      record(step) &&
+      typeof step["run"] === "string" &&
+      step["run"].includes(" resign "),
+  );
+  expect(signIndex).toBeGreaterThanOrEqual(0);
+  expect(verifyIndex).toBeGreaterThan(signIndex);
+  expect(updaterIndex).toBeGreaterThan(verifyIndex);
+  const verify = steps.at(verifyIndex);
+  if (!record(verify) || typeof verify["run"] !== "string") {
+    throw new TypeError("Expected signature verification script");
+  }
+  expect(verify["shell"]).toBe("pwsh");
+  expect(verify["if"]).toBe("inputs.dry-run != 'true'");
+  expect(verify["env"]).toMatchObject({
+    AZURE_TENANT_ID: "",
+    AZURE_CLIENT_ID: "",
+    AZURE_CLIENT_SECRET: "",
+    TAURI_SIGNING_PRIVATE_KEY: "",
+    TAURI_SIGNING_PRIVATE_KEY_PASSWORD: "",
+  });
+  expectWindowsSignatureChecks(verify["run"]);
+});
+
+test("native executables pass signature and timestamp verification before artifact upload", () => {
+  const signJob = readNativeReleaseJobs()["cli-native-sign"];
+  if (!record(signJob) || !Array.isArray(signJob["steps"])) {
+    throw new TypeError("Expected native CLI signing steps");
+  }
+  const steps = signJob["steps"];
+  const signIndex = steps.findIndex(
+    (step) =>
+      record(step) &&
+      step["name"] === "Sign Windows CLI with desktop signing mechanism",
+  );
+  const verifyIndex = steps.findIndex(
+    (step) =>
+      record(step) &&
+      step["name"] === "Verify Windows signatures and timestamps",
+  );
+  const uploadIndex = steps.findIndex(
+    (step) => record(step) && step["name"] === "Upload verified standalone CLI",
+  );
+  expect(signIndex).toBeGreaterThanOrEqual(0);
+  expect(verifyIndex).toBeGreaterThan(signIndex);
+  expect(uploadIndex).toBeGreaterThan(verifyIndex);
+  const verify = steps.at(verifyIndex);
+  if (!record(verify) || typeof verify["run"] !== "string") {
+    throw new TypeError(
+      "Expected native Windows signature verification script",
+    );
+  }
+  expect(verify["shell"]).toBe("bash");
+  expect(verify["if"]).toBe("matrix.platform == 'windows-x64'");
+  expect(verify["run"]).toContain("pwsh -NoProfile -NonInteractive -Command -");
+  expect(verify["env"]).toEqual({ SIGNED_ARTIFACT_DIRECTORY: "native-cli" });
+  expectWindowsSignatureChecks(verify["run"]);
+});
+
+test("native compilation and signing run in separate jobs without source execution near signing keys", () => {
+  const jobs = readNativeReleaseJobs();
+  const build = jobs["cli-native-build"];
+  const sign = jobs["cli-native-sign"];
+  if (!record(build) || !record(sign) || !Array.isArray(sign["steps"])) {
+    throw new TypeError("Expected separate native build and signing jobs");
+  }
+  expect(JSON.stringify(build)).not.toMatch(/secrets\./u);
+  expect(build["permissions"]).toEqual({ contents: "read" });
+  expect(sign["needs"]).toBe("cli-native-build");
+  expect(sign["permissions"]).toEqual({});
+  expect(sign["env"]).toBeUndefined();
+  for (const step of sign["steps"]) {
+    if (!record(step)) {
+      throw new TypeError("Expected native signing step mapping");
+    }
+    if (typeof step["uses"] === "string") {
+      expect(step["uses"]).not.toMatch(
+        /(?:actions\/checkout|setup-bun|^\.\/)/u,
+      );
+    }
+    if (typeof step["run"] === "string") {
+      expect(step["run"]).not.toMatch(/\bbun\s|codegen|(?:^|[\s"'])scripts\//u);
+    }
+  }
+});
+
+test("native release provenance covers final binaries and checksums before publication", () => {
+  const upload = readNativeReleaseJobs()["cli-native-upload"];
+  if (!record(upload) || !Array.isArray(upload["steps"])) {
+    throw new TypeError("Expected native release upload job");
+  }
+  expect(upload["needs"]).toEqual(["pack", "release-cli", "cli-native-sign"]);
+  expect(upload["permissions"]).toEqual({
+    actions: "read",
+    contents: "write",
+    "id-token": "write",
+    attestations: "write",
+  });
+  const steps = upload["steps"];
+  const hashIndex = steps.findIndex(
+    (step) =>
+      record(step) &&
+      typeof step["run"] === "string" &&
+      step["run"].includes(`sha256sum "\${assets[@]}" > checksums.txt`),
+  );
+  const attestIndex = steps.findIndex(
+    (step) =>
+      record(step) &&
+      typeof step["uses"] === "string" &&
+      step["uses"] === "./.github/actions/provenance",
+  );
+  const publishIndex = steps.findIndex(
+    (step) =>
+      record(step) &&
+      typeof step["run"] === "string" &&
+      step["run"].includes(
+        'bash scripts/upload-release-assets.sh "$GITHUB_REPOSITORY" "$CLI_RELEASE_REF" native-cli/*',
+      ),
+  );
+  expect(hashIndex).toBeGreaterThanOrEqual(0);
+  expect(attestIndex).toBeGreaterThan(hashIndex);
+  expect(publishIndex).toBeGreaterThan(attestIndex);
+  const attestation = steps.at(attestIndex);
+  if (!record(attestation) || !record(attestation["with"])) {
+    throw new TypeError("Expected release provenance subjects");
+  }
+  expect(attestation["uses"]).toBe("./.github/actions/provenance");
+  expect(attestation["with"]["subject-path"]).toBe("native-cli/*");
+  const hashes = steps.at(hashIndex);
+  if (!record(hashes) || typeof hashes["run"] !== "string") {
+    throw new TypeError("Expected release checksum creation");
+  }
+  expect(hashes["run"]).toContain(
+    "assets=(stella-darwin-arm64 stella-darwin-x64 stella-linux-x64 stella-linux-arm64 stella-windows-x64.exe)",
+  );
 });

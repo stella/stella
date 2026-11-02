@@ -1,4 +1,5 @@
 import {
+  appendFileSync,
   existsSync,
   readdirSync,
   readFileSync,
@@ -128,6 +129,102 @@ export const configureWindowsSigning = (
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 };
 
+// Resolve an installed SDK instead of the signing CLI's obsolete fallback path.
+export const locateWindowsSignTool = (programFiles: string): string => {
+  const sdkDirectory = path.join(programFiles, "Windows Kits", "10", "bin");
+  const candidates = readdirSync(sdkDirectory, { withFileTypes: true })
+    .filter(
+      (entry) => entry.isDirectory() && /^10\.\d+\.\d+\.\d+$/u.test(entry.name),
+    )
+    .map((entry) => entry.name)
+    .toSorted((left, right) => {
+      const leftParts = left.split(".").map(Number);
+      const rightParts = right.split(".").map(Number);
+      for (let index = 0; index < leftParts.length; index += 1) {
+        const difference =
+          (rightParts.at(index) ?? 0) - (leftParts.at(index) ?? 0);
+        if (difference !== 0) {
+          return difference;
+        }
+      }
+      return 0;
+    });
+  for (const sdk of candidates) {
+    const candidate = path.join(sdkDirectory, sdk, "x64", "signtool.exe");
+    if (existsSync(candidate) && statSync(candidate).isFile()) {
+      if (/[\r\n]/u.test(candidate)) {
+        throw new DesktopReleaseStepError(
+          "Unexpected newline in signtool path",
+        );
+      }
+      return candidate;
+    }
+  }
+  throw new DesktopReleaseStepError(
+    "signtool.exe not found under Windows Kits 10 bin",
+  );
+};
+
+type SignWindowsArtifactsOptions = {
+  directory: string;
+  env: NodeJS.ProcessEnv;
+  run: (command: string[]) => number;
+};
+
+export const signWindowsArtifacts = ({
+  directory,
+  env,
+  run,
+}: SignWindowsArtifactsOptions): void => {
+  const endpoint = required(env["AZURE_ENDPOINT"], "AZURE_ENDPOINT");
+  const account = required(
+    env["AZURE_CODE_SIGNING_ACCOUNT"],
+    "AZURE_CODE_SIGNING_ACCOUNT",
+  );
+  const profile = required(env["AZURE_CERT_PROFILE"], "AZURE_CERT_PROFILE");
+  for (const name of [
+    "AZURE_TENANT_ID",
+    "AZURE_CLIENT_ID",
+    "AZURE_CLIENT_SECRET",
+    "SIGNTOOL_PATH",
+  ]) {
+    required(env[name], name);
+  }
+  const executables: string[] = [];
+  const visit = (folder: string): void => {
+    for (const entry of readdirSync(folder, { withFileTypes: true })) {
+      const candidate = path.join(folder, entry.name);
+      if (entry.isDirectory()) {
+        visit(candidate);
+      } else if (entry.isFile() && entry.name.endsWith(".exe")) {
+        executables.push(candidate);
+      }
+    }
+  };
+  visit(directory);
+  if (executables.length === 0) {
+    throw new DesktopReleaseStepError(
+      "No Windows executables found for signing",
+    );
+  }
+  for (const executable of executables.toSorted()) {
+    if (
+      run([
+        "trusted-signing-cli",
+        "-e",
+        endpoint,
+        "-a",
+        account,
+        "-c",
+        profile,
+        executable,
+      ]) !== 0
+    ) {
+      throw new DesktopReleaseStepError("Windows executable signing failed");
+    }
+  }
+};
+
 type SignerRun = { cwd: string; file: string; appVersion: string };
 type CommandRunner = (signing: SignerRun) => void;
 
@@ -225,7 +322,12 @@ const runTauriSigner: CommandRunner = ({ cwd, file, appVersion }) => {
 };
 
 type DesktopReleaseCommand =
-  "stamp" | "configure-windows" | "resign" | "upload";
+  | "stamp"
+  | "configure-windows"
+  | "locate-windows-signing"
+  | "sign-windows"
+  | "resign"
+  | "upload";
 
 const isDesktopReleaseCommand = (
   command: string,
@@ -233,6 +335,8 @@ const isDesktopReleaseCommand = (
   switch (command) {
     case "stamp":
     case "configure-windows":
+    case "locate-windows-signing":
+    case "sign-windows":
     case "resign":
     case "upload":
       return true;
@@ -264,6 +368,29 @@ if (import.meta.main) {
         required(args.at(0), "mode"),
         process.env,
       );
+      break;
+    case "locate-windows-signing": {
+      const signTool = locateWindowsSignTool(
+        required(process.env["ProgramFiles(x86)"], "ProgramFiles(x86)"),
+      );
+      appendFileSync(
+        required(process.env["GITHUB_OUTPUT"], "GITHUB_OUTPUT"),
+        `path=${signTool}\n`,
+      );
+      break;
+    }
+    case "sign-windows":
+      signWindowsArtifacts({
+        directory: required(args.at(0), "executable directory"),
+        env: process.env,
+        run: (signingCommand) =>
+          Bun.spawnSync(signingCommand, {
+            env: process.env,
+            stdout: "inherit",
+            stderr: "inherit",
+            timeout: 120_000,
+          }).exitCode,
+      });
       break;
     case "resign":
       resignWindowsArtifacts({

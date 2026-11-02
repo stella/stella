@@ -896,6 +896,8 @@
       "dependsOn": ["transit", "codegen:runtime"],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/landing/public/install.sh",
+        "$TURBO_ROOT$/apps/landing/public/install.ps1",
         "$TURBO_ROOT$/packages/api-contract/src/mcp-tool-name.ts"
       ]
     },
