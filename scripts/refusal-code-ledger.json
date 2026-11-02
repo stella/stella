@@ -965,6 +965,16 @@
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
   },
   {
+    "id": "require-refusal-code::apps/api/src/handlers/desktop-time-entries/batch.ts::classificationRefusal::status 400",
+    "count": 1,
+    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
+  },
+  {
+    "id": "require-refusal-code::apps/api/src/handlers/desktop-time-entries/batch.ts::classificationRefusal::status 409",
+    "count": 1,
+    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
+  },
+  {
     "id": "require-refusal-code::apps/api/src/handlers/desktop-time-entries/batch.ts::createDesktopTimeEntryBatchEndpoint::status 404",
     "count": 1,
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
