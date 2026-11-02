@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { ValiError } from "valibot";
 
 import { BackfillHeldError } from "@stll/db-load-gate/backfill-pass";
 import { initialBatchState } from "@stll/db-load-gate/health";
@@ -13,7 +14,10 @@ import { Temporal } from "@stll/time";
 
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
-import { loadGateHealthConfig } from "@/api/env-online-index";
+import {
+  loadGateHealthConfig,
+  readOnlineIndexConfig,
+} from "@/api/env-online-index";
 import { schedulerBackfillConfig } from "@/api/lib/scheduler/backfill-config";
 import { caseLawCoverageRefreshConfig } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -117,3 +121,12 @@ test.each(runtimeConfigs)(
     expect(await runOneBatch(config, OUTSIDE_DEFAULT_BUSY_WINDOW)).toBe("ran");
   },
 );
+
+test("an invalid online-index setting leaves the health config readable", () => {
+  const environment = {
+    DB_LOAD_GATE_BUSY_WINDOWS: "[]",
+    ONLINE_INDEX_PARALLEL_WORKERS: "9",
+  };
+  expect(loadGateHealthConfig(environment).busyWindows).toEqual([]);
+  expect(() => readOnlineIndexConfig(environment)).toThrow(ValiError);
+});

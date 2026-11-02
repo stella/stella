@@ -15,8 +15,9 @@ const integer = (fallback: number, minimum = 1) =>
     String(fallback),
   );
 
-/** Online index runner settings, cataloged with the API environment. */
-export const envOnlineIndexServerSchema = {
+// The load-gate settings every runtime health config reads; parsed on their
+// own so an invalid online-index setting cannot fail a backfill gate.
+const loadGateHealthSchema = {
   DB_LOAD_GATE_START_FLOOR: integer(defaultConfig.startFloor, 0),
   DB_LOAD_GATE_HARD_FLOOR: integer(defaultConfig.hardFloor, 0),
   DB_LOAD_GATE_MAX_STALENESS_MS: integer(defaultConfig.maxStalenessMs),
@@ -37,6 +38,11 @@ export const envOnlineIndexServerSchema = {
     ),
     JSON.stringify(defaultConfig.busyWindows),
   ),
+};
+
+/** Online index settings, cataloged with the API environment. */
+export const envOnlineIndexServerSchema = {
+  ...loadGateHealthSchema,
   ONLINE_INDEX_POLL_MS: integer(30_000),
   ONLINE_INDEX_CLIENT_CHECK_MS: integer(1000),
   ONLINE_INDEX_RETRY_MS: integer(defaultConfig.holdBackoffMs),
@@ -58,6 +64,7 @@ export const envOnlineIndexServerSchema = {
 };
 
 const schema = v.object(envOnlineIndexServerSchema);
+const healthSchema = v.object(loadGateHealthSchema);
 
 export type OnlineIndexConfig = {
   health: HealthConfig;
@@ -77,10 +84,10 @@ export type OnlineIndexConfig = {
   maintenanceWorkMemMb: number;
 };
 
-export const readOnlineIndexConfig = (
-  environment: Record<string, string | undefined> = process.env,
-): OnlineIndexConfig => {
-  const env = v.parse(schema, environment);
+const readLoadGateHealth = (
+  environment: Record<string, string | undefined>,
+): HealthConfig => {
+  const env = v.parse(healthSchema, environment);
   const health = {
     ...defaultConfig,
     startFloor: env.DB_LOAD_GATE_START_FLOOR,
@@ -92,8 +99,15 @@ export const readOnlineIndexConfig = (
     busyWindows: env.DB_LOAD_GATE_BUSY_WINDOWS,
   };
   validateConfig(health);
+  return health;
+};
+
+export const readOnlineIndexConfig = (
+  environment: Record<string, string | undefined> = process.env,
+): OnlineIndexConfig => {
+  const env = v.parse(schema, environment);
   return {
-    health,
+    health: readLoadGateHealth(environment),
     pollMs: env.ONLINE_INDEX_POLL_MS,
     clientConnectionCheckMs: env.ONLINE_INDEX_CLIENT_CHECK_MS,
     retryMs: env.ONLINE_INDEX_RETRY_MS,
@@ -118,8 +132,8 @@ export const loadGateHealthConfig = (
   environment?: Record<string, string | undefined>,
 ): HealthConfig => {
   if (environment !== undefined) {
-    return readOnlineIndexConfig(environment).health;
+    return readLoadGateHealth(environment);
   }
-  processLoadGateHealth.config ??= readOnlineIndexConfig().health;
+  processLoadGateHealth.config ??= readLoadGateHealth(process.env);
   return processLoadGateHealth.config;
 };
