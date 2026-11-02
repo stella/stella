@@ -1455,10 +1455,12 @@
           "click": "Clicar",
           "fill": "Inserir texto",
           "open": "Abrir site",
+          "openNewTab": "Abrir site em nova aba",
           "pressKey": "Pressionar tecla",
           "select": "Selecionar opção",
           "snapshot": "Ler página",
-          "snapshotContinue": "Continuar lendo a página"
+          "snapshotContinue": "Continuar lendo a página",
+          "switchTab": "Mudar para a aba"
         },
         "askAgain": "Perguntar novamente",
         "autoApproveReads": "Aprovar automaticamente a leitura de páginas",
@@ -1496,7 +1498,11 @@
       "connected": "Extensão conectada",
       "description": "A stella pode abrir e ler sites para você em outra aba quando você pedir.",
       "install": "Instalar extensão",
-      "installDescription": "Com a extensão stella, a stella pode abrir e ler sites para você em outra aba quando você pedir. Instale pela Chrome Web Store."
+      "installDescription": "Com a extensão stella, a stella pode abrir e ler sites para você em outra aba quando você pedir. Instale pela Chrome Web Store.",
+      "reload": "Recarregar esta aba",
+      "reloadDescription": "Sua extensão stella é mais recente que esta aba. Recarregue a aba para continuar usando.",
+      "updating": "Atualização da extensão pendente",
+      "updatingDescription": "Sua extensão stella está em uma versão anterior. O Chrome a atualiza automaticamente, em geral em poucas horas; depois disso, a stella poderá voltar a abrir e ler sites para você."
     },
     "cancelQueuedMessage": "Cancelar mensagem na fila",
     "caseLawGreeting": "Pergunte sobre esta decisão; o texto completo está disponível aqui.",
@@ -5447,6 +5453,12 @@
         "workspace_contact": "contato do caso",
         "workspace_member": "membro do caso"
       },
+      "billingDrafts": {
+        "description": "Redija descrições com base nas atividades selecionadas e nos arquivos de conhecimento do escritório ou do cliente. Cada usuário também dá seu consentimento. Depois que as diretrizes do escritório forem anexadas, os rascunhos são verificados com base nelas.",
+        "firm": "Diretrizes do escritório",
+        "ledes": "Faturamento eletrônico (LEDES)",
+        "title": "Rascunhos de faturamento com IA"
+      },
       "documentProcessing": {
         "description": "Reconheça automaticamente texto em PDFs digitalizados para que seu conteúdo possa ser pesquisado.",
         "title": "Reconhecimento de texto de documentos",
@@ -6387,6 +6399,10 @@
     "deleteWorkspaceConfirmDescription": "Tem certeza de que deseja excluir este caso? Esta ação não pode ser desfeita.",
     "deletedItem": "Excluído: {name}",
     "deletingWorkspace": "Excluindo caso",
+    "documentSwitcher": {
+      "searchPlaceholder": "Encontrar um documento…",
+      "trigger": "Trocar de documento"
+    },
     "documentsCount": "{count, plural, one {# documento} many {# documentos} other {# documentos}}",
     "dropToUploadFiles": "Solte para fazer upload de arquivos",
     "duplicateMatter": "Duplicar caso",

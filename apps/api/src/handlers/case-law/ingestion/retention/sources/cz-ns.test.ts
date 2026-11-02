@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
@@ -15,9 +15,12 @@ import {
 } from "@/api/lib/legal-search/parsers/validate-ast";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { czNsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { czNsRetention } from "./cz-ns";
+
+const fetchFixture = createTestFetch();
 
 const UNID = "0123456789abcdef0123456789abcdef";
 
@@ -47,17 +50,19 @@ const builtFrom = async (pages: {
   detail: string;
   print: string | null;
 }): Promise<IngestionResult> => {
-  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    const url = input instanceof Request ? input.url : String(input);
-    if (!url.includes("/WebPrint/")) {
-      return await Promise.resolve(new Response(pages.detail));
-    }
-    return await Promise.resolve(
-      pages.print === null
-        ? new Response("", { status: 404 })
-        : new Response(pages.print),
-    );
-  });
+  fetchFixture.set(
+    asFetchMock(async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (!url.includes("/WebPrint/")) {
+        return await Promise.resolve(new Response(pages.detail));
+      }
+      return await Promise.resolve(
+        pages.print === null
+          ? new Response("", { status: 404 })
+          : new Response(pages.print),
+      );
+    }),
+  );
   const built = await buildCzNsDecision({
     unid: UNID,
     caseNumber: "1 Cdo 1/2026",
@@ -71,11 +76,6 @@ const builtFrom = async (pages: {
 const MINIMAL_PRINT_PAGE = "<html><body><p>Rozhodnutí soudu.</p></body></html>";
 
 describe("cz-ns retention against the print page the court served", () => {
-  const originalFetch = globalThis.fetch;
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
   test("the enrolled synthetic decision keeps its text", async () => {
     const result = await retentionOf(await czNsFixture().buildDecision());
     expect(result.stats.missingWords).toEqual([]);
