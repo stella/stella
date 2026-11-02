@@ -632,7 +632,7 @@ const scriptedAdapter = (turns: ScriptedTurn[]) => {
 };
 
 const chatRunTypes = async (stream: AsyncIterable<PublicStreamChunk>) => {
-  const types: string[] = [];
+  const types: PublicStreamChunk["type"][] = [];
   for await (const chunk of stream) {
     types.push(chunk.type);
   }

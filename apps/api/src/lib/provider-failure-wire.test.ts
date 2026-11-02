@@ -24,7 +24,10 @@ import {
   PROVIDER_CALL_FAILURE_REASON,
   ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
-import { createProviderCallError } from "@/api/lib/errors/provider-call-failure";
+import {
+  createProviderCallError,
+  markProviderAdapterError,
+} from "@/api/lib/errors/provider-call-failure";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
@@ -94,9 +97,14 @@ const evidenceFor = (
       const cause = Object.assign(new Error(envelope.cause.message), {
         code: envelope.cause.code,
       });
-      return Object.assign(new Error(envelope.message, { cause }), {
-        name: envelope.name,
-      });
+      // The SDK raised it, so the model factory marked it as the adapter's
+      // (`withProviderFailureOrigin`): only then is a socket failure the
+      // provider's.
+      return markProviderAdapterError(
+        Object.assign(new Error(envelope.message, { cause }), {
+          name: envelope.name,
+        }),
+      );
     }
     case "plain-error":
     case "run-error": {
@@ -182,10 +190,17 @@ for (const provider of TANSTACK_AI_PROVIDERS) {
         expect(classifyAIError(evidence)).toBe(entry.expected.kind);
         expect(providerStatusCode(evidence)).toBe(entry.expected.status);
         const error = createProviderCallError({ model, evidence, status: 502 });
-        expect(classifyAIError(error)).toBe(entry.expected.kind);
+        // Any request the provider adapter sent that got no response, a
+        // refusal included, is the provider's outage once the adapter
+        // boundary names it; the bare socket failure keeps its own grade.
+        const atBoundary =
+          entry.origin === "transport"
+            ? { kind: "provider_unavailable", grade: "transient" }
+            : entry.expected;
+        expect(classifyAIError(error)).toBe(atBoundary.kind);
         expect(error.providerStatus ?? null).toBe(entry.expected.status);
         expect(gradeFailure(readEvidence(error), sink).grade).toBe(
-          entry.expected.grade,
+          atBoundary.grade,
         );
       });
     }

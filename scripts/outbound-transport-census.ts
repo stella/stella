@@ -474,6 +474,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Creates configured Anthropic, Bedrock, Gemini, Mistral, and OpenAI adapters.",
     transports: [
+      "module:@anthropic-ai/sdk",
       "module:@google/genai",
       "module:@smithy/fetch-http-handler",
       "module:@tanstack/ai-anthropic",
@@ -481,6 +482,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
       "module:@tanstack/ai-gemini",
       "module:@tanstack/ai-mistral",
       "module:@tanstack/ai-openai",
+      "module:openai",
     ],
   },
   {
