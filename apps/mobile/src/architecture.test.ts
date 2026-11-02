@@ -129,6 +129,20 @@ describe("the app's builds", () => {
     },
   );
 
+  // iOS opens an app only in a language its bundle declares, so every
+  // interface language the app ships must be declared, and nothing else.
+  test.each(configs)(
+    "$variant declares every interface language to iOS",
+    ({ config }) => {
+      expect(
+        [
+          ...((config.ios?.infoPlist?.["CFBundleLocalizations"] as string[]) ??
+            []),
+        ].sort(),
+      ).toEqual([...UI_LOCALES].sort());
+    },
+  );
+
   test("a signed release leaves out the Live Activity extension it cannot sign yet", () => {
     const signed = appConfigFor({
       buildNumber: 7,
