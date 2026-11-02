@@ -9,10 +9,14 @@
 import { panic } from "better-result";
 import { timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
-import type { ServerResponse } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { sha256Base64Url } from "../sha256.js";
-import { CLIENT_NAME, LOOPBACK_REDIRECT_PATH } from "./constants.js";
+import {
+  CLIENT_NAME,
+  LOOPBACK_REDIRECT_PATH,
+  SIGN_IN_COMPLETION_TIMEOUT_MS,
+} from "./constants.js";
 import { LoopbackCallbackError, LoopbackTimeoutError } from "./errors.js";
 
 export type LoopbackCallback =
@@ -24,12 +28,30 @@ export type LoopbackCallback =
       readonly state?: string;
     };
 
+/**
+ * What the CLI reports once it has used a verified code: the browser waiting
+ * on the redirect is answered with this, never with success before it.
+ */
+export type SignInOutcome =
+  | { readonly kind: "signed_in" }
+  | { readonly kind: "failed"; readonly step: "exchange" | "save" };
+
 export type LoopbackListener = {
   readonly port: number;
   readonly redirectUri: string;
   readonly waitForCallback: (
     timeoutMs: number,
   ) => Promise<LoopbackCallback | LoopbackTimeoutError>;
+  /**
+   * Answers the browser held on the verified redirect with `outcome`, then
+   * closes the listener. Only the first call answers; it resolves once the
+   * page is handed to the socket (or the browser is already gone).
+   */
+  readonly finish: (outcome: SignInOutcome) => Promise<void>;
+  /**
+   * Stops listening. A browser still held on the redirect is told the sign-in
+   * was not confirmed.
+   */
   readonly close: () => void;
 };
 
@@ -41,19 +63,61 @@ type VerifiedCallback = {
   readonly organizationName: string | null;
 };
 
-// Only a verified callback carries query text onto the page; the failure
+/**
+ * Why the failure page is shown. `redirect`: the redirect itself carried an
+ * error or did not match this sign-in. `exchange` / `save`: the CLI could not
+ * redeem the code or store the credential. `unconfirmed`: the CLI reported no
+ * outcome within the completion bound.
+ */
+type FailureReason = "redirect" | "exchange" | "save" | "unconfirmed";
+
+// Only a verified callback carries query text onto the page; every failure
 // page renders fixed text.
 type CallbackPageOptions =
   | { readonly status: "success"; readonly callback: VerifiedCallback }
-  | { readonly status: "failure" };
+  | { readonly status: "failure"; readonly reason: FailureReason };
+
+const RETRY = `Return to your terminal for details, then run stella auth login to try again.`;
+
+const failureText = (
+  reason: FailureReason,
+): { readonly title: string; readonly message: string } => {
+  switch (reason) {
+    case "redirect":
+      return {
+        message: `Return to your terminal for details, then try signing in to ${CLIENT_NAME} again.`,
+        title: "Sign-in failed",
+      };
+    case "exchange":
+      return {
+        message: `${CLIENT_NAME} could not finish signing in. ${RETRY}`,
+        title: "Sign-in failed",
+      };
+    case "save":
+      return {
+        message: `${CLIENT_NAME} could not save your sign-in on this computer. ${RETRY}`,
+        title: "Sign-in not saved",
+      };
+    case "unconfirmed":
+      return {
+        message: `${CLIENT_NAME} did not confirm the sign-in in time. Return to your terminal; if it is not signed in, run stella auth login to try again.`,
+        title: "Sign-in not confirmed",
+      };
+    default:
+      reason satisfies never;
+      return panic("Unhandled sign-in failure reason");
+  }
+};
 
 const renderCallbackPage = (page: CallbackPageOptions) => {
   const ok = page.status === "success";
   const organizationName = ok ? page.callback.organizationName : null;
-  const title = ok ? "Signed in to stella" : "Sign-in failed";
-  const message = ok
-    ? `Return to your terminal to continue with ${CLIENT_NAME}.`
-    : `Return to your terminal for details, then try signing in to ${CLIENT_NAME} again.`;
+  const { title, message } = ok
+    ? {
+        message: `Return to your terminal to continue with ${CLIENT_NAME}.`,
+        title: "Signed in to stella",
+      }
+    : failureText(page.reason);
   const statusColor = ok ? "#18181b" : "#b91c1c";
 
   const styles = `
@@ -187,12 +251,30 @@ const renderCallbackPage = (page: CallbackPageOptions) => {
   };
 };
 
+/**
+ * Sends the page and calls `onSent` once it is handed to the socket, or at once
+ * when the browser has already gone, so a caller can close the server without
+ * cutting the page off.
+ */
 const sendCallbackPage = (
   response: ServerResponse,
-  statusCode: 200 | 400,
+  statusCode: 200 | 400 | 500 | 504,
   page: CallbackPageOptions,
-  onSent?: () => void,
+  onSent: () => void = () => undefined,
 ) => {
+  if (response.destroyed || response.writableEnded) {
+    onSent();
+    return;
+  }
+  let sent = false;
+  const settle = () => {
+    if (!sent) {
+      sent = true;
+      onSent();
+    }
+  };
+  // `close` also fires when the browser drops the connection mid-send.
+  response.once("close", settle);
   const { html, contentSecurityPolicy } = renderCallbackPage(page);
   response.writeHead(statusCode, {
     "Content-Type": "text/html; charset=utf-8",
@@ -201,7 +283,7 @@ const sendCallbackPage = (
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
   });
-  response.end(html, onSent);
+  response.end(html, settle);
 };
 
 const raceWithTimeout = async (
@@ -267,6 +349,56 @@ const readSuccessCallback = (
 type LoopbackListenerOptions = {
   /** The `state` sent in the authorize request this listener answers. */
   readonly expectedState: string;
+  /**
+   * How long a verified redirect is held open for the CLI's outcome before the
+   * browser is told the sign-in was not confirmed.
+   */
+  readonly completionTimeoutMs?: number;
+};
+
+/** The browser request kept open until the CLI reports how sign-in ended. */
+type HeldRedirect = {
+  readonly response: ServerResponse;
+  readonly callback: VerifiedCallback;
+  readonly timer: ReturnType<typeof setTimeout>;
+};
+
+type BrowserAnswer = SignInOutcome | { readonly kind: "unconfirmed" };
+
+const sendAnswer = (
+  held: HeldRedirect,
+  answer: BrowserAnswer,
+  onSent: () => void,
+) => {
+  switch (answer.kind) {
+    case "signed_in":
+      sendCallbackPage(
+        held.response,
+        200,
+        { callback: held.callback, status: "success" },
+        onSent,
+      );
+      return;
+    case "failed":
+      sendCallbackPage(
+        held.response,
+        500,
+        { reason: answer.step, status: "failure" },
+        onSent,
+      );
+      return;
+    case "unconfirmed":
+      sendCallbackPage(
+        held.response,
+        504,
+        { reason: "unconfirmed", status: "failure" },
+        onSent,
+      );
+      return;
+    default:
+      answer satisfies never;
+      panic("Unhandled sign-in answer");
+  }
 };
 
 /**
@@ -274,16 +406,60 @@ type LoopbackListenerOptions = {
  * (sandboxed/offline environments) so callers can fall back to the manual
  * paste flow instead of crashing. Async because `node:http`'s `listen` reports
  * its OS-assigned port on the `listening` event, not synchronously.
+ *
+ * The listener accepts one redirect. A verified one is handed to the CLI and
+ * its browser request stays open until `finish` reports the outcome (or the
+ * completion bound passes), so the browser never reads "Signed in" before the
+ * credential is saved.
  */
 export const startLoopbackListener = async ({
   expectedState,
+  completionTimeoutMs = SIGN_IN_COMPLETION_TIMEOUT_MS,
 }: LoopbackListenerOptions): Promise<LoopbackListener | undefined> => {
   let deliver: ((callback: LoopbackCallback) => void) | undefined;
   const received = new Promise<LoopbackCallback>((resolve) => {
     deliver = resolve;
   });
 
-  const server = createServer((request, response) => {
+  const server = createServer();
+  // Set by the first redirect this sign-in acts on; every later one is refused.
+  let accepted = false;
+  let held: HeldRedirect | undefined;
+  let answered: Promise<void> | undefined;
+  let closed = false;
+
+  // The CLI just needs the port freed and no more callbacks delivered;
+  // `closeAllConnections` drops any lingering keep-alive socket so the event
+  // loop can exit, then `close` stops accepting new connections.
+  const shutDown = () => {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    server.closeAllConnections();
+    server.close();
+  };
+
+  // The first answer wins: a late `finish` after the completion bound, or a
+  // `close` after `finish`, waits for that answer instead of sending another.
+  const answerBrowser = (answer: BrowserAnswer) => {
+    answered ??= new Promise<void>((resolve) => {
+      const done = () => {
+        shutDown();
+        resolve();
+      };
+      const current = held;
+      held = undefined;
+      if (!current) {
+        done();
+        return;
+      }
+      clearTimeout(current.timer);
+      sendAnswer(current, answer, done);
+    });
+  };
+
+  server.on("request", (request: IncomingMessage, response: ServerResponse) => {
     // `request.url` is the path+query only; rebuild a full URL against the
     // fixed loopback host to parse the query string.
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
@@ -293,38 +469,67 @@ export const startLoopbackListener = async ({
       return;
     }
 
+    if (accepted || closed) {
+      sendCallbackPage(response, 400, {
+        reason: "redirect",
+        status: "failure",
+      });
+      return;
+    }
+
     const error = url.searchParams.get("error");
     if (error) {
+      accepted = true;
       const errorDescription = url.searchParams.get("error_description");
       const state = url.searchParams.get("state");
-      sendCallbackPage(response, 200, { status: "failure" }, () => {
-        deliver?.({
-          error,
-          kind: "error",
-          ...(errorDescription ? { errorDescription } : {}),
-          ...(state ? { state } : {}),
-        });
-      });
+      sendCallbackPage(
+        response,
+        200,
+        { reason: "redirect", status: "failure" },
+        () => {
+          deliver?.({
+            error,
+            kind: "error",
+            ...(errorDescription ? { errorDescription } : {}),
+            ...(state ? { state } : {}),
+          });
+        },
+      );
       return;
     }
 
     const callback = readSuccessCallback(url, expectedState);
     switch (callback.kind) {
       case "incomplete":
-        sendCallbackPage(response, 400, { status: "failure" });
-        return;
-      case "state_mismatch":
-        sendCallbackPage(response, 400, { status: "failure" }, () => {
-          deliver?.({ error: "invalid_state", kind: "error" });
+        sendCallbackPage(response, 400, {
+          reason: "redirect",
+          status: "failure",
         });
         return;
+      case "state_mismatch":
+        accepted = true;
+        sendCallbackPage(
+          response,
+          400,
+          { reason: "redirect", status: "failure" },
+          () => {
+            deliver?.({ error: "invalid_state", kind: "error" });
+          },
+        );
+        return;
       case "verified":
-        sendCallbackPage(response, 200, { status: "success", callback }, () => {
-          deliver?.({
-            code: callback.code,
-            kind: "success",
-            state: callback.state,
-          });
+        accepted = true;
+        held = {
+          callback,
+          response,
+          timer: setTimeout(() => {
+            answerBrowser({ kind: "unconfirmed" });
+          }, completionTimeoutMs),
+        };
+        deliver?.({
+          code: callback.code,
+          kind: "success",
+          state: callback.state,
         });
         return;
       default:
@@ -354,12 +559,12 @@ export const startLoopbackListener = async ({
   }
 
   return {
-    // The CLI just needs the port freed and no more callbacks delivered;
-    // `closeAllConnections` drops any lingering keep-alive socket so the
-    // event loop can exit, then `close` stops accepting new connections.
     close: () => {
-      server.closeAllConnections();
-      server.close();
+      answerBrowser({ kind: "unconfirmed" });
+    },
+    finish: async (outcome) => {
+      answerBrowser(outcome);
+      await answered;
     },
     port: listenerPort,
     redirectUri: `http://127.0.0.1:${listenerPort}${LOOPBACK_REDIRECT_PATH}`,

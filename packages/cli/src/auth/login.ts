@@ -26,7 +26,7 @@ import {
   startLoopbackListener,
   toLoopbackCallbackError,
 } from "./loopback-listener.js";
-import type { LoopbackCallback } from "./loopback-listener.js";
+import type { LoopbackCallback, SignInOutcome } from "./loopback-listener.js";
 import { parseManualCallbackInput } from "./manual-callback.js";
 import { discoverAuthorizationServerMetadata } from "./oauth-metadata.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
@@ -148,7 +148,14 @@ const isLoopbackCallback = (
 type AuthorizationCode = {
   readonly code: string;
   readonly redirectUri: string;
+  /**
+   * Tells the browser that delivered the code how sign-in ended. Only the
+   * loopback redirect has a browser waiting; a pasted code has none.
+   */
+  readonly answerBrowser: (outcome: SignInOutcome) => Promise<void>;
 };
+
+const noBrowserWaiting = (): Promise<void> => Promise.resolve();
 
 const awaitManualCode = async (
   io: Io,
@@ -167,7 +174,11 @@ const awaitManualCode = async (
     );
   }
 
-  return Result.ok({ code: parsed.value.code, redirectUri });
+  return Result.ok({
+    answerBrowser: noBrowserWaiting,
+    code: parsed.value.code,
+    redirectUri,
+  });
 };
 
 /**
@@ -220,9 +231,9 @@ const awaitAuthorizationCode = async (
   }
 
   const result = await listener.waitForCallback(LOGIN_TIMEOUT_MS);
-  listener.close();
 
   if (!isLoopbackCallback(result)) {
+    listener.close();
     // Timed out waiting locally: the browser most likely isn't reachable
     // from this machine (SSH/remote dev/agent sandbox). Fall back to manual.
     io.print(
@@ -232,17 +243,84 @@ const awaitAuthorizationCode = async (
   }
 
   if (result.kind === "error") {
+    listener.close();
     return Result.err(toLoopbackCallbackError(result));
   }
 
   if (result.state !== expectedState) {
+    listener.close();
     return Result.err(
       toLoopbackCallbackError({ error: "invalid_state", kind: "error" }),
     );
   }
 
-  return Result.ok({ code: result.code, redirectUri });
+  // The listener stays open: the browser waits on the redirect until `login`
+  // reports whether the code was exchanged and the credential saved.
+  return Result.ok({
+    answerBrowser: listener.finish,
+    code: result.code,
+    redirectUri,
+  });
 };
+
+/** Redeems the code and builds the credential `persistLogin` stores. */
+const redeemForCredential = async (input: {
+  readonly authorization: AuthorizationCode;
+  readonly clientId: string;
+  readonly codeVerifier: string;
+  readonly metadata: AuthorizationServerMetadata;
+  readonly orgHint: string | undefined;
+  readonly scopes: readonly string[];
+  readonly serverUrl: string;
+}): Promise<Result<StoredCredential, CliAuthError>> =>
+  await Result.gen(async function* redeemGen() {
+    const { serverUrl } = input;
+    const token = yield* Result.await(
+      redeemAuthorizationCode({
+        clientId: input.clientId,
+        code: input.authorization.code,
+        codeVerifier: input.codeVerifier,
+        metadata: input.metadata,
+        redirectUri: input.authorization.redirectUri,
+        resource: getMcpResourceUrl(serverUrl),
+      }),
+    );
+
+    const claims = decodeAccessTokenClaims(token.access_token);
+    if (!claims?.org_id) {
+      return Result.err(
+        new MissingOrgClaimError({
+          message:
+            "The access token has no org_id claim, so the CLI cannot tell which organization was granted. Re-run `stella auth login` and make sure an organization is active when you reach the consent screen.",
+          serverUrl,
+        }),
+      );
+    }
+
+    // The access token carries no email or name, so account identity comes
+    // from the `id_token` the token endpoint returns alongside it.
+    const identity = token.id_token
+      ? decodeIdTokenClaims(token.id_token)
+      : undefined;
+
+    const now = Temporal.Now.instant().epochMilliseconds;
+    const credential: StoredCredential = {
+      accessToken: token.access_token,
+      clientId: input.clientId,
+      createdAt: now,
+      ...(identity?.email ? { email: identity.email } : {}),
+      expiresAt: now + token.expires_in * 1000,
+      ...(identity?.name ? { name: identity.name } : {}),
+      orgId: claims.org_id,
+      ...(input.orgHint ? { orgLabel: input.orgHint } : {}),
+      refreshToken: token.refresh_token,
+      scope: token.scope ?? input.scopes.join(" "),
+      serverUrl,
+      tokenType: token.token_type,
+      updatedAt: now,
+    };
+    return Result.ok(credential);
+  });
 
 // Sequential steps with different Ok types chained via `Result.gen` +
 // `yield* Result.await(...)` (see AGENTS.md's Error Handling conventions):
@@ -298,64 +376,41 @@ export const login = async (
       state,
     });
 
-    const callback = yield* Result.await(
+    const authorization = yield* Result.await(
       awaitAuthorizationCode(io, authorizeUrl, redirectUri, listener, state),
     );
 
-    const token = yield* Result.await(
-      redeemAuthorizationCode({
-        clientId,
-        code: callback.code,
-        codeVerifier,
-        metadata,
-        redirectUri: callback.redirectUri,
-        resource: getMcpResourceUrl(serverUrl),
-      }),
-    );
-
-    const claims = decodeAccessTokenClaims(token.access_token);
-    if (!claims?.org_id) {
-      return Result.err(
-        new MissingOrgClaimError({
-          message:
-            "The access token has no org_id claim, so the CLI cannot tell which organization was granted. Re-run `stella auth login` and make sure an organization is active when you reach the consent screen.",
-          serverUrl,
-        }),
-      );
+    const credential = await redeemForCredential({
+      authorization,
+      clientId,
+      codeVerifier,
+      metadata,
+      orgHint: options.orgHint,
+      scopes,
+      serverUrl,
+    });
+    if (Result.isError(credential)) {
+      await authorization.answerBrowser({ kind: "failed", step: "exchange" });
+      return Result.err(credential.error);
     }
 
-    // The access token carries no email or name, so account identity comes
-    // from the `id_token` the token endpoint returns alongside it.
-    const identity = token.id_token
-      ? decodeIdTokenClaims(token.id_token)
-      : undefined;
+    const saved = await persistLogin({
+      configDir: options.configDir,
+      credential: credential.value,
+    });
+    if (Result.isError(saved)) {
+      await authorization.answerBrowser({ kind: "failed", step: "save" });
+      return Result.err(saved.error);
+    }
 
-    const now = Temporal.Now.instant().epochMilliseconds;
-    const credential: StoredCredential = {
-      accessToken: token.access_token,
-      clientId,
-      createdAt: now,
-      ...(identity?.email ? { email: identity.email } : {}),
-      expiresAt: now + token.expires_in * 1000,
-      ...(identity?.name ? { name: identity.name } : {}),
-      orgId: claims.org_id,
-      ...(options.orgHint ? { orgLabel: options.orgHint } : {}),
-      refreshToken: token.refresh_token,
-      scope: token.scope ?? scopes.join(" "),
-      serverUrl,
-      tokenType: token.token_type,
-      updatedAt: now,
-    };
-
-    yield* Result.await(
-      persistLogin({ configDir: options.configDir, credential }),
-    );
+    // Only now, with the credential on disk, may the browser say "Signed in".
+    await authorization.answerBrowser({ kind: "signed_in" });
 
     return Result.ok({
-      expiresAt: credential.expiresAt,
-      grantedScopes: credential.scope,
-      hasRefreshToken: Boolean(credential.refreshToken),
-      orgId: credential.orgId,
+      expiresAt: credential.value.expiresAt,
+      grantedScopes: credential.value.scope,
+      hasRefreshToken: Boolean(credential.value.refreshToken),
+      orgId: credential.value.orgId,
       serverUrl,
     });
   });
