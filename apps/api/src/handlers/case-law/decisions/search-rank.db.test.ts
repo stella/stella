@@ -38,10 +38,13 @@ import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { LIMITS } from "@/api/lib/limits";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import {
   createTestPglite,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
+
+const testFetchState = createTestFetch();
 
 const GENERATION = "case_law_v5";
 const FINGERPRINT = "a".repeat(64);
@@ -217,7 +220,7 @@ afterAll(async () => {
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 test("only recurrent decisions consume the carried group budget", async () => {
@@ -361,9 +364,11 @@ test.each(
         { status: 200 },
       );
     };
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
 
     const seen: string[] = [];
     let cursor: SearchCursor | null = null;
