@@ -37,6 +37,37 @@ const connectionOver = (client: PgliteClient): OnlineMigrationConnection => ({
 
 type ContactRow = { id: string; tax_id: string | null; vat_id: string | null };
 
+const MIGRATION_PATH = new URL(
+  "../../drizzle/20261101232100_contact_vat_id_check/migration.sql",
+  import.meta.url,
+);
+
+/**
+ * The database as the deploy finds it: contacts written before the check,
+ * then the migration that adds it NOT VALID.
+ */
+const removeCheck = async (client: PgliteClient) => {
+  await client.query(
+    'ALTER TABLE contacts DROP CONSTRAINT IF EXISTS "contacts_vat_id_check"',
+  );
+};
+
+const applyCheckMigration = async (client: PgliteClient) => {
+  for (const statement of (await Bun.file(MIGRATION_PATH).text())
+    .split("--> statement-breakpoint")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)) {
+    await client.query(statement);
+  }
+};
+
+const checkValidated = async (client: PgliteClient) =>
+  (
+    await client.query<{ validated: boolean }>(
+      "SELECT convalidated AS validated FROM pg_constraint WHERE conname = 'contacts_vat_id_check'",
+    )
+  ).rows.at(0)?.validated;
+
 const readContacts = async (client: PgliteClient): Promise<ContactRow[]> =>
   (
     await client.query<ContactRow>(
@@ -78,6 +109,7 @@ test("moves every EU VAT number from tax_id to vat_id without losing a row or a 
     `INSERT INTO organization (id, name, slug, created_at)
      VALUES ('org-vat-repair', 'Firm', 'firm-vat-repair', now())`,
   );
+  await removeCheck(client);
   for (const taxId of MOVABLE) {
     await insertContact(client, { taxId, vatId: null });
   }
@@ -91,6 +123,8 @@ test("moves every EU VAT number from tax_id to vat_id without losing a row or a 
        FROM generate_series(1, $1::int) AS n`,
     [BULK],
   );
+  await applyCheckMigration(client);
+  expect(await checkValidated(client)).toBe(false);
   const before = await readContacts(client);
 
   expect((await REPAIR.readCompletion(connection)).type).toBe("incomplete");
@@ -98,6 +132,7 @@ test("moves every EU VAT number from tax_id to vat_id without losing a row or a 
     await REPAIR.repair(connection, createUngatedTableGateForTests(connection)),
   ).toEqual({ type: "complete" });
   expect((await REPAIR.readCompletion(connection)).type).toBe("complete");
+  expect(await checkValidated(client)).toBe(true);
 
   const after = await readContacts(client);
   expect(after).toHaveLength(before.length);
@@ -128,7 +163,14 @@ test("moves every EU VAT number from tax_id to vat_id without losing a row or a 
   ).toEqual({ type: "complete" });
   expect(await readContacts(client)).toEqual(after);
 
-  // A movable row written after a completed pass never blocks a deploy.
-  await insertContact(client, { taxId: "DE298765432", vatId: null });
-  expect((await REPAIR.readCompletion(connection)).type).toBe("pending");
+  // The validated check refuses a new EU VAT number in tax_id without a
+  // vat_id, so completion stays a catalog fact.
+  expect(
+    await insertContact(client, { taxId: "DE298765432", vatId: null }).then(
+      () => "stored",
+      () => "refused",
+    ),
+  ).toBe("refused");
+  await insertContact(client, { taxId: "DE298765432", vatId: "DE298765432" });
+  expect((await REPAIR.readCompletion(connection)).type).toBe("complete");
 }, 120_000);

@@ -6,6 +6,7 @@ export { default as constraints_case_law_identifier_retry_constraints } from "./
 export { default as constraints_case_law_parsed_source_constraint } from "./online-migration-entries/constraints-case-law-parsed-source-constraint";
 export { default as constraints_chat_content_v3_constraints } from "./online-migration-entries/constraints-chat-content-v3-constraints";
 export { default as constraints_client_invoice_constraints } from "./online-migration-entries/constraints-client-invoice-constraints";
+export { default as constraints_contact_vat_id_constraints } from "./online-migration-entries/constraints-contact-vat-id-constraints";
 export { default as constraints_corpus_projection_cleanup_stall_constraints } from "./online-migration-entries/constraints-corpus-projection-cleanup-stall-constraints";
 export { default as constraints_corpus_projection_delete_receipt_constraints } from "./online-migration-entries/constraints-corpus-projection-delete-receipt-constraints";
 export { default as constraints_decision_date_ceiling_constraints } from "./online-migration-entries/constraints-decision-date-ceiling-constraints";

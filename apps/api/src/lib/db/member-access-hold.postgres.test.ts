@@ -8,7 +8,6 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
-  contacts,
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
   workspaceMembers,
@@ -29,6 +28,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -93,12 +93,14 @@ const seedAdminClientMatter = async (
 ) => {
   const seeded = await seedMember(db);
   const clientId = createSafeId<"contact">();
-  await db.insert(contacts).values({
-    id: clientId,
-    organizationId: seeded.organizationId,
-    type: "person",
-    displayName: "Matter lock client",
-  });
+  await insertOwnerContacts(db, [
+    {
+      id: clientId,
+      organizationId: seeded.organizationId,
+      type: "person",
+      displayName: "Matter lock client",
+    },
+  ]);
   await db
     .update(member)
     .set({ role: "admin" })

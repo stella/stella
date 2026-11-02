@@ -28,6 +28,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/entity-feature-coverage",
   "@/api/db/entity-feature-gate-metadata",
   "@/api/db/entity-feature-policies",
+  "@/api/db/eu-vat-id-format",
   "@/api/db/json-utils",
   "@/api/db/indicator-query",
   "@/api/db/long-running-connection",

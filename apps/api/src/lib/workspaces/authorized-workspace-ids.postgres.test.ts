@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
+import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -19,6 +19,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -57,12 +58,14 @@ describe.skipIf(!runPostgresTests)(
             role: "member",
             createdAt: new Date(),
           });
-          await db.insert(contacts).values({
-            id: clientId,
-            organizationId,
-            type: "person",
-            displayName: "Authorized matters client",
-          });
+          await insertOwnerContacts(db, [
+            {
+              id: clientId,
+              organizationId,
+              type: "person",
+              displayName: "Authorized matters client",
+            },
+          ]);
           await db.insert(workspaces).values([
             {
               id: assignedId,

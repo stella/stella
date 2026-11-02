@@ -16,6 +16,7 @@ import readVocabulary from "@/api/handlers/workspaces/vocabulary/get";
 import { HttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -26,6 +27,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 type SeedVocabularyOptions = { db: GatedTestDb; size: number };
 
@@ -64,7 +66,7 @@ export const seedMatterVocabulary = async ({
     role: "member",
     createdAt: new Date(),
   });
-  await db.insert(contacts).values([
+  await insertOwnerContacts(db, [
     {
       id: clientId,
       organizationId,
@@ -199,7 +201,12 @@ export const seedMatterVocabulary = async ({
     cleanup: async () => {
       for (const id of [organizationId, otherOrganizationId]) {
         await db.delete(workspaces).where(eq(workspaces.organizationId, id));
-        await db.delete(contacts).where(eq(contacts.organizationId, id));
+        await withOwnerOrganizationScope(
+          db,
+          id,
+          async (tx) =>
+            await tx.delete(contacts).where(eq(contacts.organizationId, id)),
+        );
         await db.delete(organization).where(eq(organization.id, id));
       }
       await db.delete(user).where(eq(user.id, userId));

@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/member-assignment-offboarding.ts",
+  "delta": 1,
+  "reason": "Contacts admit the owner connection inside one organization per scope, so clearing a departing member's contact attorney references runs one organization-scoped savepoint per organization. The loop is bounded by the member's own organization memberships: one organization on removal, the account's memberships on account deletion."
+}

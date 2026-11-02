@@ -7,11 +7,12 @@ import { waitForExternalState } from "@stll/property-testing/external-state";
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { contacts, sanctionsContactMarks } from "@/api/db/schema";
+import { sanctionsContactMarks } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { drainSanctionsContactMarks } from "@/api/lib/lists/sanctions/monitoring-drain";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -57,7 +58,7 @@ if (!databaseUrl || !runPostgresTests) {
           slug: `monitoring-claim-${lockedContactId}`,
           createdAt: now,
         });
-        await lockerDb.insert(contacts).values([
+        await insertOwnerContacts(lockerDb, [
           {
             id: lockedContactId,
             organizationId,

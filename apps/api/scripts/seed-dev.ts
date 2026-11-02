@@ -39,6 +39,7 @@ import { printError } from "@stll/errors";
 import { timeEntryAmount } from "@stll/money";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
+import type { Transaction } from "@/api/db/root";
 import {
   billingCodes,
   chatMessages,
@@ -85,6 +86,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { DEFAULT_DOCUMENT_TYPES } from "@/api/lib/document-types/defaults";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import { parsedEmailToText, parseEmail } from "@/api/lib/files/email-to-html";
@@ -5075,6 +5077,10 @@ export async function seed(organizationId?: string, userId?: string) {
   let USER_ID = userId ?? DEFAULT_USER_ID;
   let resolvedSeedUserIds: readonly string[] | undefined;
   const toWs = (id: WorkspaceId) => id;
+  // Contacts admit the owner connection inside one organization only.
+  const organizationTransaction = async <T>(
+    fn: (tx: Transaction) => Promise<T>,
+  ): Promise<T> => await withOwnerOrganizationScope(db, ORG_ID, fn);
 
   const ensureSeedUsers = async () => {
     if (ORG_ID === DEFAULT_ORG_ID && USER_ID === DEFAULT_USER_ID) {
@@ -5236,13 +5242,13 @@ export async function seed(organizationId?: string, userId?: string) {
             ),
       );
     }
-    await db.transaction(
+    await organizationTransaction(
       async (tx) =>
         await tx
           .delete(workspaces)
           .where(sql`${workspaces.clientId} IN ${allSeedContactIds}`),
     );
-    await db.transaction(
+    await organizationTransaction(
       async (tx) =>
         await tx
           .delete(contacts)
@@ -5269,7 +5275,7 @@ export async function seed(organizationId?: string, userId?: string) {
     // 1. Contacts (original orgs + people)
     const coreContacts = [...orgContacts, ...personContacts];
     for (const c of coreContacts) {
-      await db.transaction(
+      await organizationTransaction(
         async (tx) =>
           await tx
             .insert(contacts)
@@ -5313,7 +5319,7 @@ export async function seed(organizationId?: string, userId?: string) {
     }
     // 1b. Additional org contacts for overview stress-testing
     for (const c of moreOrgContacts) {
-      await db.transaction(
+      await organizationTransaction(
         async (tx) =>
           await tx
             .insert(contacts)

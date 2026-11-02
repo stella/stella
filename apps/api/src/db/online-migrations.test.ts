@@ -2380,10 +2380,16 @@ const createHarness = ({
           if (query.startsWith("SELECT set_config(")) {
             return [];
           }
-          // The contact VAT ID repair's movable-contact probe: none left, so
-          // its completion holds and the phase skips it.
-          if (query.startsWith('SELECT 1 FROM public."contacts"')) {
-            return [];
+          // The contact VAT ID repair walks organizations before it validates
+          // its check; a fresh database has none, so it validates at once.
+          if (
+            query.startsWith(
+              "SELECT id::text AS organization_id FROM public.organization",
+            )
+          ) {
+            return emptyRepairTables
+              ? []
+              : [{ organization_id: "online-migration-organization" }];
           }
           // The source config repair's probe: no legacy string config left.
           if (query.startsWith("SELECT 1 FROM public.case_law_sources")) {

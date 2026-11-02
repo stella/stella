@@ -3622,6 +3622,16 @@
   {
     "schema": "public",
     "table": "contacts",
+    "policy": "contacts_owner_organization_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "((CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('contacts'::regclass)::oid))) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))",
+    "withCheck": "((CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('contacts'::regclass)::oid))) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))"
+  },
+  {
+    "schema": "public",
+    "table": "contacts",
     "policy": "organization_delete",
     "command": "DELETE",
     "roles": ["stella"],

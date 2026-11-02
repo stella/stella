@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts } from "@/api/db/schema";
@@ -59,13 +59,18 @@ if (!databaseUrl || !runPostgresTests) {
           role: "owner",
           createdAt: new Date(),
         });
-        await db.insert(contacts).values({
-          id: contactId,
-          organizationId,
-          type: "person",
-          displayName: "Billing",
-          currency: "USD",
-          defaultHourlyRate: cents(15_050),
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+          );
+          await tx.insert(contacts).values({
+            id: contactId,
+            organizationId,
+            type: "person",
+            displayName: "Billing",
+            currency: "USD",
+            defaultHourlyRate: cents(15_050),
+          });
         });
         const update = async (currency: string) =>
           await updateContact.handler(
@@ -88,32 +93,53 @@ if (!databaseUrl || !runPostgresTests) {
             }),
           );
         const read = async () =>
-          (
-            await db
-              .select({
-                currency: contacts.currency,
-                rate: contacts.defaultHourlyRate,
-              })
-              .from(contacts)
-              .where(eq(contacts.id, contactId))
-          ).at(0);
+          await db.transaction(async (tx) => {
+            await tx.execute(
+              sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+            );
+            return (
+              await tx
+                .select({
+                  currency: contacts.currency,
+                  rate: contacts.defaultHourlyRate,
+                })
+                .from(contacts)
+                .where(eq(contacts.id, contactId))
+            ).at(0);
+          });
         expect(await update("JPY")).toEqual({ id: contactId });
         expect(await read()).toEqual({ currency: "JPY", rate: cents(151) });
         expect(await update("KWD")).toEqual({ id: contactId });
         expect(await read()).toEqual({ currency: "KWD", rate: cents(151_000) });
-        await db
-          .update(contacts)
-          .set({ currency: "JPY", defaultHourlyRate: cents(9_007_199_254_740) })
-          .where(eq(contacts.id, contactId));
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+          );
+          await tx
+            .update(contacts)
+            .set({
+              currency: "JPY",
+              defaultHourlyRate: cents(9_007_199_254_740),
+            })
+            .where(eq(contacts.id, contactId));
+        });
         expect(await update("KWD")).toEqual({ id: contactId });
         expect(await read()).toEqual({
           currency: "KWD",
           rate: cents(9_007_199_254_740_000),
         });
-        await db
-          .update(contacts)
-          .set({ currency: "JPY", defaultHourlyRate: cents(9_007_199_254_741) })
-          .where(eq(contacts.id, contactId));
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+          );
+          await tx
+            .update(contacts)
+            .set({
+              currency: "JPY",
+              defaultHourlyRate: cents(9_007_199_254_741),
+            })
+            .where(eq(contacts.id, contactId));
+        });
         expect(await update("KWD")).toEqual({
           code: 400,
           response: {
@@ -166,11 +192,16 @@ if (!databaseUrl || !runPostgresTests) {
           role: "owner",
           createdAt: new Date(),
         });
-        await db.insert(contacts).values({
-          id: contactId,
-          organizationId,
-          type: "organization",
-          displayName: "Šťastný a Ďuriš s. r. o.",
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+          );
+          await tx.insert(contacts).values({
+            id: contactId,
+            organizationId,
+            type: "organization",
+            displayName: "Šťastný a Ďuriš s. r. o.",
+          });
         });
         const update = async (
           body: Parameters<typeof updateContact.handler>[0]["body"],
@@ -195,17 +226,22 @@ if (!databaseUrl || !runPostgresTests) {
             }),
           );
         const read = async () =>
-          (
-            await db
-              .select({
-                taxId: contacts.taxId,
-                vatId: contacts.vatId,
-                vatPayer: contacts.vatPayer,
-                invoiceLanguage: contacts.invoiceLanguage,
-              })
-              .from(contacts)
-              .where(eq(contacts.id, contactId))
-          ).at(0);
+          await db.transaction(async (tx) => {
+            await tx.execute(
+              sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+            );
+            return (
+              await tx
+                .select({
+                  taxId: contacts.taxId,
+                  vatId: contacts.vatId,
+                  vatPayer: contacts.vatPayer,
+                  invoiceLanguage: contacts.invoiceLanguage,
+                })
+                .from(contacts)
+                .where(eq(contacts.id, contactId))
+            ).at(0);
+          });
         expect(
           await update({
             taxId: "2020123456",

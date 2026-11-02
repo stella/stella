@@ -14,6 +14,7 @@ import { createRootOrganizationBackgroundDb } from "@/api/lib/root-scoped-db";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -66,7 +67,8 @@ const withFixture = async (
           name: "Protected matter row",
         })),
       );
-      await db.insert(contacts).values(
+      await insertOwnerContacts(
+        db,
         rows.map(({ organizationId, contactId }) => ({
           id: contactId,
           organizationId,
