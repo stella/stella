@@ -304,3 +304,158 @@ export const normalizeCompatibilityDeclarations = (
   transformed.dispose();
   return printed;
 };
+
+const GENERIC_TYPE_PROBE = "__api_generic_probe_";
+
+/** A name the comparison declares for itself, never part of the public API. */
+export const isGenericTypeProbeName = (name: string): boolean =>
+  name.startsWith(GENERIC_TYPE_PROBE);
+
+type GenericTypeDeclaration = (
+  ts.InterfaceDeclaration | ts.ClassDeclaration | ts.TypeAliasDeclaration
+) & {
+  name: ts.Identifier;
+  typeParameters: ts.NodeArray<ts.TypeParameterDeclaration>;
+};
+
+export const isGenericTypeDeclaration = (
+  node: ts.Node,
+): node is GenericTypeDeclaration =>
+  (ts.isInterfaceDeclaration(node) ||
+    ts.isClassDeclaration(node) ||
+    ts.isTypeAliasDeclaration(node)) &&
+  node.name !== undefined &&
+  (node.typeParameters?.length ?? 0) > 0;
+
+/**
+ * The probe declared beside a generic type, found among the statements of
+ * the block that declares it: the probe's result names the type.
+ */
+export const genericTypeProbe = (
+  declaration: GenericTypeDeclaration,
+): ts.FunctionTypeNode | undefined => {
+  const block = declaration.parent;
+  if (!ts.isSourceFile(block) && !ts.isModuleBlock(block)) {
+    return undefined;
+  }
+  for (const statement of block.statements) {
+    if (
+      ts.isTypeAliasDeclaration(statement) &&
+      isGenericTypeProbeName(statement.name.text) &&
+      ts.isFunctionTypeNode(statement.type) &&
+      ts.isTypeReferenceNode(statement.type.type) &&
+      ts.isIdentifier(statement.type.type.typeName) &&
+      statement.type.type.typeName.text === declaration.name.text
+    ) {
+      return statement.type;
+    }
+  }
+  return undefined;
+};
+
+/**
+ * Each declaration tree has its own type parameters, so a generic type is
+ * never assignable to its unchanged self: `T` before is not `T` after. Beside
+ * every generic type this declares, in the same scope, a generic function
+ * `<T extends C = D, ...>(p0: T, ...) => Name<T, ...>`. TypeScript relates two
+ * generic signatures by unifying their type parameters position by position
+ * through the parameters, so comparing the before and after probes compares
+ * the two declarations with shared type parameters: an unchanged shape
+ * passes, while a changed member, constraint or parameter count does not.
+ */
+export const withGenericTypeProbes = (
+  contents: string,
+  /** The declaration's path in the report; keeps probe names unique per file. */
+  file = "api.d.ts",
+): string => {
+  const source = ts.createSourceFile(
+    "api.d.ts",
+    contents,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const tag = file.replaceAll(/[^\p{L}\p{N}_$]/gu, "_");
+  let count = 0;
+  const probe = (declaration: GenericTypeDeclaration): ts.Statement => {
+    const parameters = declaration.typeParameters.map((parameter) =>
+      ts.factory.createTypeParameterDeclaration(
+        undefined,
+        parameter.name,
+        parameter.constraint,
+        parameter.default,
+      ),
+    );
+    const probeName = `${GENERIC_TYPE_PROBE}${tag}_${count}`;
+    count += 1;
+    return ts.factory.createTypeAliasDeclaration(
+      undefined,
+      probeName,
+      undefined,
+      ts.factory.createFunctionTypeNode(
+        parameters,
+        declaration.typeParameters.map((parameter, position) =>
+          ts.factory.createParameterDeclaration(
+            undefined,
+            undefined,
+            `p${position}`,
+            undefined,
+            ts.factory.createTypeReferenceNode(parameter.name),
+          ),
+        ),
+        ts.factory.createTypeReferenceNode(
+          declaration.name,
+          declaration.typeParameters.map((parameter) =>
+            ts.factory.createTypeReferenceNode(parameter.name),
+          ),
+        ),
+      ),
+    );
+  };
+  const withProbes = (statements: readonly ts.Statement[]): ts.Statement[] => {
+    // Merged declarations of one name in one block share their type
+    // parameters, so one probe per name and block covers them.
+    const probed = new Set<string>();
+    return statements.flatMap((statement) => {
+      if (ts.isModuleDeclaration(statement)) {
+        return [moduleWithProbes(statement)];
+      }
+      if (
+        !isGenericTypeDeclaration(statement) ||
+        probed.has(statement.name.text)
+      ) {
+        return [statement];
+      }
+      probed.add(statement.name.text);
+      return [statement, probe(statement)];
+    });
+  };
+  const moduleWithProbes = (
+    declaration: ts.ModuleDeclaration,
+  ): ts.ModuleDeclaration => {
+    const { body } = declaration;
+    const update = (nextBody: ts.ModuleBody): ts.ModuleDeclaration =>
+      ts.factory.updateModuleDeclaration(
+        declaration,
+        declaration.modifiers,
+        declaration.name,
+        nextBody,
+      );
+    if (body !== undefined && ts.isModuleBlock(body)) {
+      return update(
+        ts.factory.updateModuleBlock(body, withProbes(body.statements)),
+      );
+    }
+    // `namespace a.b {}` nests the declaration of `b` as the body of `a`.
+    if (body !== undefined && ts.isModuleDeclaration(body)) {
+      return update(moduleWithProbes(body));
+    }
+    return declaration;
+  };
+  const printed = ts
+    .createPrinter({ removeComments: true })
+    .printFile(
+      ts.factory.updateSourceFile(source, withProbes(source.statements)),
+    );
+  return count === 0 ? contents : printed;
+};

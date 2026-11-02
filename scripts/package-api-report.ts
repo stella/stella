@@ -11,7 +11,13 @@ import { repoRelativePath } from "@stll/portable-path";
 
 import { parseChangesetEntry, parseChangesetReleases } from "./changeset-entry";
 import { assertOfflineCheckPreload } from "./offline-check-startup";
-import { normalizeCompatibilityDeclarations } from "./package-api-compatibility";
+import {
+  genericTypeProbe,
+  isGenericTypeDeclaration,
+  isGenericTypeProbeName,
+  normalizeCompatibilityDeclarations,
+  withGenericTypeProbes,
+} from "./package-api-compatibility";
 import { hasRuntimeExport } from "./package-api-export-space";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
@@ -217,6 +223,11 @@ const assertResolvableDeclarations = (
   }
 };
 
+// A declaration file without explicit exports exports every declaration,
+// including the generic type probes the comparison adds.
+const publicExports = (symbols: readonly ts.Symbol[]): ts.Symbol[] =>
+  symbols.filter(({ name }) => !isGenericTypeProbeName(name));
+
 const exportedSymbols = (program: ts.Program, file: string): ts.Symbol[] => {
   const source = program.getSourceFile(file);
   if (source === undefined) {
@@ -227,9 +238,9 @@ const exportedSymbols = (program: ts.Program, file: string): ts.Symbol[] => {
   if (module === undefined) {
     return fail(`Public entrypoint is not a module: ${file}`);
   }
-  return checker
-    .getExportsOfModule(module)
-    .toSorted((a, b) => compareCodeUnit(a.name, b.name));
+  return publicExports(checker.getExportsOfModule(module)).toSorted((a, b) =>
+    compareCodeUnit(a.name, b.name),
+  );
 };
 
 const unalias = (checker: ts.TypeChecker, symbol: ts.Symbol): ts.Symbol =>
@@ -631,12 +642,16 @@ const narrowedTypeMembers = (
   return breaks;
 };
 
+/** A declaration in the compared trees, not one from a dependency or lib. */
+const isComparedDeclaration = (declaration: ts.Declaration): boolean =>
+  /[\\/]__api_(?:before|after)__[\\/]/u.test(
+    declaration.getSourceFile().fileName,
+  );
+
 /** A type the compared declarations declare, not one from a dependency or lib. */
 const isPackageDeclaredType = (type: ts.Type): boolean =>
-  (type.aliasSymbol ?? type.getSymbol())?.declarations?.some((declaration) =>
-    /[\\/]__api_(?:before|after)__[\\/]/u.test(
-      declaration.getSourceFile().fileName,
-    ),
+  (type.aliasSymbol ?? type.getSymbol())?.declarations?.some(
+    isComparedDeclaration,
   ) ?? false;
 
 /**
@@ -684,6 +699,40 @@ type SignatureComparisonOptions = {
   label: string;
 };
 
+const mutuallyAssignable = (
+  checker: ts.TypeChecker,
+  oldType: ts.Type,
+  nextType: ts.Type,
+): boolean =>
+  checker.isTypeAssignableTo(oldType, nextType) &&
+  checker.isTypeAssignableTo(nextType, oldType);
+
+/**
+ * A generic type the package declares is compared through the probe declared
+ * beside it (see `withGenericTypeProbes`): the before and after declarations
+ * then share their type parameters, position by position. A re-exported
+ * dependency type has no probe; it is one declaration on both sides.
+ */
+const genericTypeComparison = (
+  checker: ts.TypeChecker,
+  symbol: ts.Symbol,
+  label: string,
+): { count: number; probe: ts.Type | undefined } | undefined => {
+  const declaration = symbol.declarations?.find(isGenericTypeDeclaration);
+  if (declaration === undefined) {
+    return undefined;
+  }
+  const count = declaration.typeParameters.length;
+  if (!isComparedDeclaration(declaration)) {
+    return { count, probe: undefined };
+  }
+  const probe = genericTypeProbe(declaration);
+  if (probe === undefined) {
+    return fail(`${label}: generic type has no comparison probe`);
+  }
+  return { count, probe: checker.getTypeFromTypeNode(probe) };
+};
+
 const incompatibleSymbolSignatures = ({
   checker,
   old,
@@ -709,9 +758,14 @@ const incompatibleSymbolSignatures = ({
   if (hasSymbolFlag(old, ts.SymbolFlags.Type)) {
     const oldType = checker.getDeclaredTypeOfSymbol(old);
     const nextType = checker.getDeclaredTypeOfSymbol(next);
-    if (
-      !checker.isTypeAssignableTo(oldType, nextType) ||
-      !checker.isTypeAssignableTo(nextType, oldType)
+    const oldGeneric = genericTypeComparison(checker, old, label);
+    const nextGeneric = genericTypeComparison(checker, next, label);
+    if ((oldGeneric?.count ?? 0) !== (nextGeneric?.count ?? 0)) {
+      breaks.push(`${label}: changed type parameter count`);
+    } else if (
+      oldGeneric?.probe !== undefined && nextGeneric?.probe !== undefined
+        ? !mutuallyAssignable(checker, oldGeneric.probe, nextGeneric.probe)
+        : !mutuallyAssignable(checker, oldType, nextType)
     ) {
       breaks.push(`${label}: incompatible type signature`);
     } else {
@@ -753,7 +807,10 @@ export const breakingApiChanges = ({
         virtualFile(side, file),
         file.endsWith(".json")
           ? contents
-          : normalizeCompatibilityDeclarations(contents, file),
+          : withGenericTypeProbes(
+              normalizeCompatibilityDeclarations(contents, file),
+              file,
+            ),
       );
     }
   }
@@ -872,8 +929,8 @@ export const breakingApiChanges = ({
           comparedTargets.add(next);
           compared.set(old, comparedTargets);
           pending.push({
-            oldSymbols: checker.getExportsOfModule(old),
-            newSymbols: checker.getExportsOfModule(next),
+            oldSymbols: publicExports(checker.getExportsOfModule(old)),
+            newSymbols: publicExports(checker.getExportsOfModule(next)),
             prefix: `${label}.`,
           });
         }

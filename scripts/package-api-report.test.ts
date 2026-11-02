@@ -548,3 +548,103 @@ test("a base API that no longer type-checks needs a breaking release instead of 
     breakingApiChanges({ before: after, after: before, packageDir }),
   ).toThrow("missing-dependency");
 });
+
+const GENERIC_BASE = [
+  "export type Input = string | number;",
+  "export const convert = (input: Input): string => String(input);",
+  "export interface Box<T extends object, D = string> { value: T; label?: D; map<U extends object>(next: (value: T) => U): Box<U, D> }",
+  "export type Cents<C extends string> = { readonly currency: C; amount: number };",
+  "export type Handlers<T> = { [K in keyof T]: (value: T[K]) => void };",
+  "export class Store<S> { constructor(state: S); read(): S; protected write(state: S): void }",
+  "export namespace shapes { export interface Node<T> { item: T; children: Node<T>[] } }",
+].join("\n");
+
+const genericBreaks = (root: string, model: string): string[] => {
+  const packageDir = path.join(root, "packages/fixture");
+  replace(root, "src/model.ts", `${GENERIC_BASE}\n`);
+  const before = generateApiReport(packageDir);
+  replace(root, "src/model.ts", `${model}\n`);
+  return breakingApiChanges({
+    before,
+    after: generateApiReport(packageDir),
+    packageDir,
+  }).map(({ message }) => message);
+};
+
+test("an unchanged generic type is compatible with its own previous declaration", async () => {
+  const root = await fixture();
+  // A new export makes the reports differ, so every generic is compared.
+  expect(
+    genericBreaks(root, `${GENERIC_BASE}\nexport type Added<T> = T[];`),
+  ).toEqual([]);
+  // Renaming a type parameter or adding an optional member changes no contract.
+  expect(
+    genericBreaks(
+      root,
+      GENERIC_BASE.replace(
+        "export type Cents<C extends string> = { readonly currency: C; amount: number };",
+        "export type Cents<Code extends string> = { readonly currency: Code; amount: number; note?: string };",
+      ),
+    ),
+  ).toEqual([]);
+});
+
+test.each([
+  [
+    "a removed optional member",
+    ["label?: D; ", ""],
+    "./model#Box: removed member label",
+  ],
+  [
+    "a removed required member",
+    ["{ value: T; label?: D;", "{ label?: D;"],
+    "./model#Box: incompatible type signature",
+  ],
+  [
+    "an added required member",
+    ["amount: number }", "amount: number; scale: number }"],
+    "./model#Cents: incompatible type signature",
+  ],
+  [
+    "a narrowed member",
+    ["(value: T[K]) => void", "(value: T[K] & string) => void"],
+    "./model#Handlers: incompatible type signature",
+  ],
+  [
+    "a changed type parameter count",
+    ["class Store<S> {", "class Store<S, E = never> {"],
+    "./model#Store: changed type parameter count",
+  ],
+  [
+    "a narrowed constraint",
+    ["Cents<C extends string>", "Cents<C extends 'EUR' | 'CZK'>"],
+    "./model#Cents: incompatible type signature",
+  ],
+  [
+    "a widened constraint",
+    ["Box<T extends object, D = string>", "Box<T, D = string>"],
+    "./model#Box: incompatible type signature",
+  ],
+  [
+    "a changed class method",
+    ["read(): S;", "read(): S | undefined;"],
+    "./model#Store: incompatible type signature",
+  ],
+  [
+    "a removed member of a namespaced generic",
+    ["item: T; children", "children"],
+    "./model#shapes.Node: incompatible type signature",
+  ],
+])(
+  "a generic type with %s is a breaking change",
+  async (_, [from, to], expected) => {
+    const root = await fixture();
+    expect(GENERIC_BASE).toContain(from);
+    expect(
+      genericBreaks(
+        root,
+        GENERIC_BASE.replace(from, () => to),
+      ),
+    ).toContain(expected);
+  },
+);
