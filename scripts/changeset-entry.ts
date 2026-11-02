@@ -1,6 +1,3 @@
-import { parseChangesetFile } from "@changesets/parse";
-import { Result } from "better-result";
-
 const CHANGESET_FRONTMATTER_FENCE = "---";
 
 class ChangesetEntryError extends Error {
@@ -38,14 +35,14 @@ const changesetPackageName = (line: string): string | null => {
 const parseChangesetFrontmatter = (entry: string) => {
   const lines = entry.split("\n");
   if (lines.at(0)?.trim() !== CHANGESET_FRONTMATTER_FENCE) {
-    return { names: [], hasFrontmatter: false, summary: "" };
+    return { names: [], frontmatter: undefined, summary: "" };
   }
   const names: string[] = [];
   for (const [index, line] of lines.slice(1).entries()) {
     if (line.trim() === CHANGESET_FRONTMATTER_FENCE) {
       return {
         names,
-        hasFrontmatter: true,
+        frontmatter: lines.slice(1, index + 1).join("\n"),
         summary: lines
           .slice(index + 2)
           .join("\n")
@@ -71,26 +68,64 @@ export const parseChangesetEntry = (
 
 type ChangesetRelease = { name: string; type: "major" | "minor" | "patch" };
 
+const CHANGESET_BUMPS = ["major", "minor", "patch", "none"] as const;
+
+const isChangesetBump = (
+  value: unknown,
+): value is (typeof CHANGESET_BUMPS)[number] =>
+  CHANGESET_BUMPS.some((bump) => bump === value);
+
+const unreadableChangeset = (reason: string): never => {
+  throw new ChangesetEntryError(
+    `Changesets cannot read a pending changeset: ${reason}`,
+  );
+};
+
+const parseFrontmatterYaml = (frontmatter: string): unknown => {
+  try {
+    return Bun.YAML.parse(frontmatter);
+  } catch (error) {
+    return unreadableChangeset(
+      `invalid YAML in frontmatter (${error instanceof Error ? error.message : String(error)})`,
+    );
+  }
+};
+
 /**
- * The releases exactly as Changesets reads them at release time: the entry
- * goes through Changesets' own parser, so quoting, comments and block scalars
- * mean what they mean to `changeset version`. An entry that parser rejects
- * (invalid YAML, a non-mapping, an unknown bump) fails the check instead of
- * reading as no release; a `none` bump authorizes nothing.
+ * The releases as Changesets reads them at release time: the frontmatter is
+ * parsed as YAML 1.2, as `@changesets/parse` does, so quoting, comments and
+ * block scalars mean what they mean to `changeset version`, and the same
+ * entries are refused (invalid YAML, a non-mapping, an empty package name, a
+ * bump other than major, minor, patch or none). A refused entry fails the
+ * check instead of reading as no release; a `none` bump authorizes nothing.
+ * Install-free CI steps import this module, so it uses Bun's built-in YAML
+ * reader rather than the Changesets package.
  */
 export const parseChangesetReleases = (
   entry: string,
 ): readonly ChangesetRelease[] => {
-  if (!parseChangesetFrontmatter(entry).hasFrontmatter) {
+  const { frontmatter } = parseChangesetFrontmatter(entry);
+  if (frontmatter === undefined) {
     return [];
   }
-  const parsed = Result.try(() => parseChangesetFile(entry));
-  if (parsed.isErr()) {
-    throw new ChangesetEntryError(
-      `Changesets cannot read a pending changeset: ${parsed.error.message}`,
+  const parsed = parseFrontmatterYaml(frontmatter);
+  if (parsed === null || parsed === undefined) {
+    return [];
+  }
+  if (typeof parsed !== "object" || Array.isArray(parsed)) {
+    return unreadableChangeset(
+      "frontmatter must map package names to version types",
     );
   }
-  return parsed.value.releases.flatMap(({ name, type }) =>
-    type === "none" ? [] : [{ name, type }],
-  );
+  return Object.entries(parsed).flatMap(([name, type]) => {
+    if (name.trim().length === 0) {
+      return unreadableChangeset("empty package name in frontmatter");
+    }
+    if (!isChangesetBump(type)) {
+      return unreadableChangeset(
+        `invalid version type ${JSON.stringify(type)} for package "${name}"`,
+      );
+    }
+    return type === "none" ? [] : [{ name, type }];
+  });
 };
