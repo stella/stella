@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 // parser-output-unchanged: AST validation reuses the unmodified parsed document; diagnostics and stored parser output remain unchanged.
 /**
@@ -26,11 +27,12 @@
  */
 
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
-import { isComment, isTag, isText } from "domhandler";
-import type { AnyNode } from "domhandler";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import { isComment, isTag, isText } from "@stll/html/nodes";
+import type { AnyNode } from "@stll/html/nodes";
 import { labelledHeading } from "@stll/legal-ast/case-law-heading";
 import { closedQuotationParagraphStarts } from "@stll/legal-ast/closed-quotation-paragraphs";
 import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
@@ -52,7 +54,10 @@ import type {
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
+import {
+  inlineStyleDeclaresProperty,
+  inlineStyleValue,
+} from "@/api/lib/legal-search/document-builders/inline-style";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import {
   collapseLetterSpacing,
@@ -100,7 +105,7 @@ type ParseNssDecisionOutput = {
 export const parseNssDecisionHtml = (
   input: ParseNssDecisionInput,
 ): ParseNssDecisionOutput => {
-  const $ = cheerio.load(input.html);
+  const $ = load(input.html);
   const chunks = extractChunks($);
   const blocks = courtParagraphNumbers(
     withAttestedLetterSpacing(classifyChunks(chunks)),
@@ -580,9 +585,13 @@ const styledBlockChunk = (
     plainText,
     centered: styleCentres($el.get(0)),
     bold: mostlyBold($el.get(0), plainText),
-    letterSpacing:
-      style.includes("letter-spacing") ||
-      $el.find("span[style*='letter-spacing']").length > 0,
+    letterSpacing: $el
+      .find("span")
+      .addBack()
+      .toArray()
+      .some(
+        (el) => isTag(el) && inlineStyleDeclaresProperty(el, "letter-spacing"),
+      ),
     fontSize: parseFontSize(style),
     paragraphLayout: paragraphLayoutOf($el.get(0)),
     kind: "paragraph",
@@ -603,7 +612,10 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
 
   // Skip the first-page header div (Aspose artifact)
   const body = $("body");
-  body.find("div[style*='-aw-headerfooter-type']").remove();
+  body
+    .find("div")
+    .filter((_, el) => inlineStyleDeclaresProperty(el, "-aw-headerfooter-type"))
+    .remove();
 
   const blockSelector =
     "p, ol, ul, table, div, blockquote, h1, h2, h3, h4, h5, h6";

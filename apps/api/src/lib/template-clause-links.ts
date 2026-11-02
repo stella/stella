@@ -14,7 +14,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
-import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 
@@ -23,7 +23,7 @@ import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 export const linkClauseBodySchema = v.object({
   clauseId: resourceIdSchema("clause"),
   variantId: v.optional(resourceIdSchema("clauseVariant")),
-  slotName: v.optional(v.pipe(v.string(), v.maxLength(128))),
+  slotName: v.optional(displayNameSchema({ maxLength: 128, allowEmpty: true })),
 });
 
 type LinkClauseBody = v.InferOutput<typeof linkClauseBodySchema>;

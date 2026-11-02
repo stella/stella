@@ -7,7 +7,7 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   absentTextField,
@@ -36,7 +36,8 @@ const unknownEntries = fc.uniqueArray(
 );
 
 test("versioned writes and future sidecars read the same text states", () => {
-  fc.assert(
+  assertProperty(
+    "versioned writes and future sidecars read the same text states",
     fc.property(
       fields,
       unknownEntries,
@@ -78,7 +79,7 @@ test("versioned writes and future sidecars read the same text states", () => {
         expect(readDecisionTextMetadata(future).textFields).toEqual(textFields);
       },
     ),
-    propertyConfig({ numRuns: 200 }),
+    { numRuns: 200 },
   );
 });
 

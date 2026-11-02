@@ -77,6 +77,8 @@ const runTimedSearch = async (
   let clock = 0;
   let databaseReads = 0;
   let rankings = 0;
+  /** Every id each candidate-row read asked for, in order. */
+  const candidateRowReads: string[][] = [];
   const records: Parameters<
     NonNullable<
       NonNullable<Parameters<typeof searchLegislationHandler>[3]>["emitStage"]
@@ -166,27 +168,30 @@ const runTimedSearch = async (
           reach: "reached",
         };
       },
-      readCandidateRows: (async (_tx, { ids }) => ({
-        rows: ids.map((id) => ({
-          id,
-          sourceId: timingSourceId,
-          eli: timingHit.eli,
-          slug: timingHit.slug,
-          title: timingHit.title,
-          country: timingHit.country,
-          language: timingHit.language,
-          documentType: timingHit.documentType,
-          statusValue: timingHit.status,
-          effectiveDate: timingHit.effectiveDate,
-          versionValidFrom: timingHit.versionValidFrom,
-          versionValidTo: timingHit.versionValidTo,
-          sourceUrl: timingHit.sourceUrl,
-          citationAuthority: 0,
-          canRecur: false,
-          appliedRevision: null,
-        })),
-        dispositions: [],
-      })) satisfies typeof readLegislationCandidateRows,
+      readCandidateRows: (async (_tx, { ids }) => {
+        candidateRowReads.push([...ids]);
+        return {
+          rows: ids.map((id) => ({
+            id,
+            sourceId: timingSourceId,
+            eli: timingHit.eli,
+            slug: timingHit.slug,
+            title: timingHit.title,
+            country: timingHit.country,
+            language: timingHit.language,
+            documentType: timingHit.documentType,
+            statusValue: timingHit.status,
+            effectiveDate: timingHit.effectiveDate,
+            versionValidFrom: timingHit.versionValidFrom,
+            versionValidTo: timingHit.versionValidTo,
+            sourceUrl: timingHit.sourceUrl,
+            citationAuthority: 0,
+            canRecur: false,
+            appliedRevision: null,
+          })),
+          dispositions: [],
+        };
+      }) satisfies typeof readLegislationCandidateRows,
       readNamedWorks: async () => [],
     },
     projectHit: (hit) => {
@@ -211,8 +216,15 @@ const runTimedSearch = async (
     "unobserved",
     dependencies,
   );
-  return { operation, records };
+  return { operation, records, candidateRowReads };
 };
+
+test("a later scan round reads only the candidates earlier rounds did not", async () => {
+  const { operation, candidateRowReads } = await runTimedSearch();
+  await operation;
+  // Both rounds rank the same three candidates; only the first reads them.
+  expect(candidateRowReads).toEqual([[...timingCandidateIds]]);
+});
 
 test.each([
   [undefined, false],

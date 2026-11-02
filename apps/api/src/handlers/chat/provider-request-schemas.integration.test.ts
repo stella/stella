@@ -16,7 +16,7 @@ import {
   MCP_CHAT_TOOL_POLICY_KINDS,
 } from "@stll/api-contract";
 import type { ChatToolPolicyKind } from "@stll/api-contract";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -98,7 +98,7 @@ import {
   wireOrgAIConfig,
   wireSideModel,
 } from "@/api/tests/helpers/provider-wire-contract";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type {
   ProviderWireReplay,
   ReplayedRequest,
@@ -362,6 +362,16 @@ let previousMockAI: typeof env.USE_MOCK_AI;
 let previousBedrockEndpoint: string | undefined;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({
+    passThroughOrigins: [fakeS3.endpoint],
+    profile,
+  }),
+});
+
 beforeAll(
   async () =>
     await profile.measure("fixture", async () => {
@@ -378,17 +388,12 @@ beforeAll(
       process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
         "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
       fakeS3 = startFakeS3();
-      replay = installProviderWireReplay({
-        passThroughOrigins: [fakeS3.endpoint],
-        profile,
-      });
     }),
 );
 
 afterAll(async () => {
   try {
     await profile.measure("close", async () => {
-      replay.restore();
       fakeS3.stop();
       env.USE_MOCK_AI = previousMockAI;
       if (previousBedrockEndpoint === undefined) {
@@ -1238,25 +1243,28 @@ describe(`chat requests: ${String(combinations.included.length)} combinations th
       propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
     );
 
-    test(
-      `${provider}: a turn with any user text holds to the provider's rules`,
-      async () => {
-        await fc.assert(
-          fc.asyncProperty(
-            fc
-              .string({ minLength: 1, maxLength: 400, unit: "grapheme" })
-              .filter((text) => text.trim() !== ""),
-            async (text) => {
-              expect(
-                await turnViolations({ provider, slot: "recorded" }, text),
-              ).toEqual([]);
-            },
-          ),
-          propertyConfig({ numRuns: 2 }),
-        );
-      },
-      propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
-    );
+    describe(provider, () => {
+      test(
+        "a turn with any user text holds to the provider's rules",
+        async () => {
+          await assertProperty(
+            "a turn with any user text holds to the provider's rules",
+            fc.asyncProperty(
+              fc
+                .string({ minLength: 1, maxLength: 400, unit: "grapheme" })
+                .filter((text) => text.trim() !== ""),
+              async (text) => {
+                expect(
+                  await turnViolations({ provider, slot: "recorded" }, text),
+                ).toEqual([]);
+              },
+            ),
+            { numRuns: 2 },
+          );
+        },
+        propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
+      );
+    });
   }
 
   // The inventory is the paths the all-pairs run sends, by target provider.

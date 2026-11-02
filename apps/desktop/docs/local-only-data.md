@@ -173,23 +173,29 @@ same account-owned recording state. A local icon dot appears only while
 recording; activity events and a thirty-second refresh keep the menu current.
 Tray source is covered by the local-only network and fixed-code guards.
 
-## stella AI descriptions
+## stella AI drafts
 
-The titles of a suggestion, meaning its window titles and recorded document
-names exactly as its card's Titles tab lists them, leave the device only when
-the user approves a stella AI description for it, once or always, and they are
-not stored. A
-slim prompt above the narrative asks before anything is sent; No keeps the
-local template and sends nothing, and after three declines in a row the prompt
-folds into a button. Always approve persists `narrativeAssist: "always"` in
-the account's activity settings, which the Settings window's Activity tab can
-switch back to asking. Approval never blocks accepting the template.
+A suggestion leaves the device for a stella AI draft only after the user has
+consented on the server, from a card's prompt; consent is asked once and
+withdrawn in the Settings window's Activity tab. Without consent, or where the
+firm has drafting off, the card keeps its local template and sends nothing.
+With consent, a card with a matter is drafted as it opens and on Draft again;
+text the user typed meanwhile wins over the draft, and the draft never blocks
+accepting the template.
 
-`activity_generate_narrative` takes the activity caller proof and the same
-linked-account binding as draft creation. It sends at most 40 titles, each cut
-to the API contract's length, the reader's language and the chosen matter's
-name, nothing else, and reads back one narrative that the user can still edit.
-Titles are never logged; any failure keeps the template with a quiet note.
+A drafting request carries one entry: its matter, date, time zone, duration
+rounded to six minutes and app names, plus the document names and window
+titles its card shows, and those only while titles are recorded. Each name is
+cut to the API contract's length and their number bounded.
+`billing_draft_commands` takes the activity caller proof and the same
+linked-account binding as draft creation; `billing_draft_settings` reads,
+grants and withdraws consent from the activity window or Settings and answers
+with the linked account it belongs to, so a window never applies an answer for
+another account. `billing_draft_submit` sends only those fields and the
+server's settings changes, refuses unknown fields, and reads back the draft and
+the user's own earlier entries it followed. A withdrawal applies in the window
+at once and is sent again until the server confirms it. Drafts, titles and
+earlier entries are never logged.
 
 ## Confirmed draft time entries
 

@@ -121,6 +121,8 @@ export const DIFF_SCOPED_STEPS = {
   ),
   "autofix.yml:regenerate-derived-files#Prune stale baseline entries":
     operational("Rewrites baselines on the fix branch; no verdict."),
+  "autofix.yml:regenerate-derived-files#Raise stale bridge version":
+    operational("Bumps the bridge version on the fix branch; CI enforces it."),
   "autofix.yml:regenerate-derived-files#Restrict autofix changes": diffComplete(
     "Limits the fix to the paths the change touched.",
   ),
@@ -320,7 +322,7 @@ export const DIFF_SCOPED_STEPS = {
     "Repeats the changed tests to catch flakes; the full suites run separately.",
   ),
   "ci.yml:ci-browser#Check UI browser test scope": expands(
-    "Pull requests use the planner's specs; the merge queue covers every package and app the browser legs load.",
+    "Pull requests use the specs their legs carry; the merge queue covers every package and app the browser legs load.",
   ),
   "ci.yml:ci-browser#Check extension browser test scope": gap(
     "dependents",

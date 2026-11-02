@@ -18,7 +18,7 @@
 import { panic } from "better-result";
 import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
-import { member, organization, session, user } from "@/api/db/auth-schema";
+import { member, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -27,14 +27,19 @@ import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
 import { acceptProfessionalUse } from "@/api/lib/auth/professional-use";
 import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { insertOrganizationWithEvaluation } from "@/api/lib/db/organization-creation";
 import { readBounded } from "@/api/lib/db/read-bounded";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { logger } from "@/api/lib/observability/logger";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import type { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
-import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
+import {
+  newOrganizationEvaluation,
+  recordNewOrganizationAccessState,
+} from "@/api/lib/usage/organization-access-state";
 import { runtimeMode } from "@/api/runtime-mode";
 
 const SMOKE_PRINCIPAL = {
@@ -120,16 +125,19 @@ const ensureSmokePrincipal = async (
   });
   if (!existingOrg) {
     // A direct insert skips the organization plugin's creation hook, so the
-    // access state a real new organization gets is recorded here.
-    await rootDb.transaction(async (tx) => {
-      await tx.insert(organization).values({
-        ...org,
-        createdAt: now,
+    // evaluation grant, account audit and access state a real new
+    // organization gets are recorded here.
+    const organizationId = brandPersistedOrganizationId(org.id);
+    await withAggregateTransaction(rootDb, async (tx) => {
+      const created = await insertOrganizationWithEvaluation(tx, {
+        userId: brandPersistedUserId(smokeUser.id),
+        evaluation: newOrganizationEvaluation(),
+        organization: { ...org, id: organizationId, createdAt: now },
       });
-      await recordNewOrganizationAccessState(tx, {
-        organizationId: brandPersistedOrganizationId(org.id),
-        now,
-      });
+      if (created.isErr()) {
+        abortTransaction(created.error);
+      }
+      await recordNewOrganizationAccessState(tx, { organizationId, now });
     });
   }
 

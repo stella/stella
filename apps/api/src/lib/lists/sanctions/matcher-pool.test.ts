@@ -11,6 +11,7 @@ import {
 } from "@stll/sanctions";
 import type { ParsedList } from "@stll/sanctions";
 
+import { detached } from "@/api/lib/analytics/capture";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -1072,6 +1073,7 @@ test("direct core users retain retirement reporting through their default report
     reportFailure: (report) => {
       reports.push(report);
     },
+    detach: detached,
   });
   expect(await pool.run(async () => "completed")).toEqual({
     status: "completed",

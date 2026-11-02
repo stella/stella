@@ -34,6 +34,14 @@
     "composerPlaceholder": "Zapytaj stellę",
     "send": "Wyślij",
     "stop": "Zatrzymaj",
+    "dictate": "Dyktuj",
+    "dictationCancel": "Anuluj dyktowanie",
+    "dictationFinish": "Zakończ dyktowanie",
+    "dictationListening": "Słucham… {elapsed} z {limit}",
+    "dictationTranscribing": "Transkrypcja…",
+    "dictationDenied": "Dyktowanie wymaga mikrofonu. Zezwól na nie dla stella w Ustawieniach.",
+    "dictationFailed": "Nie udało się przepisać nagrania. Spróbuj ponownie.",
+    "dictationSilent": "Nie usłyszano mowy.",
     "sendFailed": "Nie udało się wysłać wiadomości. Spróbuj ponownie.",
     "answerWorking": "Pracuję…",
     "answerStopped": "Zatrzymano.",
@@ -174,6 +182,17 @@
       "system": "Wygląd: automatyczny",
       "light": "Wygląd: jasny",
       "dark": "Wygląd: ciemny"
+    },
+    "edit": {
+      "saved": "Zapisano",
+      "saving": "Zapisywanie…",
+      "notSaved": "Jeszcze nie zapisano",
+      "done": "Gotowe",
+      "openFailed": "Tego dokumentu nie można teraz edytować",
+      "takenOver": "Ktoś inny edytuje teraz ten dokument. Zmiany od ostatniego zapisu nie zostały zachowane.",
+      "finishFailed": "Zmiany są zapisane, ale nie powstała z nich jeszcze nowa wersja. Stuknij ponownie Gotowe albo wyjdź: następna edycja będzie je kontynuować.",
+      "stay": "Zostań",
+      "leave": "Wyjdź"
     }
   },
   "signIn": {
@@ -222,9 +241,7 @@
     "share": "Udostępnij"
   },
   "more": {
-    "soon": "Wkrótce",
-    "timers": "Stopery",
-    "voiceInput": "Wprowadzanie głosowe"
+    "timers": "Stopery"
   },
   "writes": {
     "consentNeeded": "Aby wprowadzać zmiany z aplikacji, stella potrzebuje Twojej zgody. Zaloguj się ponownie, aby jej udzielić.",

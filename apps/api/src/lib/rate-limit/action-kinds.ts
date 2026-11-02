@@ -41,6 +41,7 @@ const MODEL_BACKGROUND = {
 } as const satisfies ActionKindDefinition;
 
 export const ACTION_KINDS = {
+  "billing.activity-drafts": MODEL_ACTION,
   "dictation.transcribe": MODEL_ACTION,
   "chat.send": MODEL_ACTION,
   "chat.generate-thread-title": MODEL_ACTION,
@@ -65,7 +66,6 @@ export const ACTION_KINDS = {
   "skills.generate-draft": MODEL_ACTION,
   "skills.propose-from-comments": MODEL_ACTION,
   "time-entries.polish-narrative": MODEL_ACTION,
-  "desktop-time-entries.narrative": MODEL_ACTION,
   "entities.suggest-placements": MODEL_ACTION,
   "versions.summarize": MODEL_ACTION,
   "properties.suggest-prompt": MODEL_ACTION,
