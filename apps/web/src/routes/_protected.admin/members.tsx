@@ -33,7 +33,6 @@ import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { roleOptions } from "@/lib/auth-queries";
-import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   useCancelInvitation,
   useInviteMember,
@@ -287,9 +286,6 @@ function Members() {
                   title: t("success.invitationResent"),
                   type: "success",
                 });
-              },
-              onError: (error) => {
-                notifyUserError(error, t("errors.actionFailed"));
               },
             },
           )

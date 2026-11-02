@@ -949,7 +949,14 @@ test("reader breadcrumb uses translated Arabic chrome and isolates source titles
   ).toBeTruthy();
 });
 
-test("reader breadcrumb gives outer levels to the menu before the current title, and keeps every level reachable", async () => {
+/**
+ * Stands in for layout, which happy-dom does not do: the trail's width and
+ * each crumb's measured width, handed to the trail as its resize observer
+ * would. Install before mounting; `restore` puts the real observer back.
+ */
+const fakeTrailLayout = (
+  measured: (part: "label" | "full", anchorId: string) => number,
+) => {
   const originalObserver = globalThis.ResizeObserver;
   const callbacks: (() => void)[] = [];
   globalThis.ResizeObserver = class {
@@ -959,15 +966,6 @@ test("reader breadcrumb gives outer levels to the menu before the current title,
     observe() {}
     unobserve() {}
     disconnect() {}
-  };
-  const current = path.at(-1) ?? panic("The fixture needs a current heading");
-  // Outer levels are labels alone (84px); the current heading is "§ 5"
-  // (28px) and, with its title, 160px. Each crumb adds 16px of padding.
-  const measured = (part: "label" | "full", anchorId: string) => {
-    if (anchorId !== current.anchorId) {
-      return 84;
-    }
-    return part === "label" ? 28 : 160;
   };
   const resizeTo = async (width: number) => {
     const navigation = screen.getByRole("navigation");
@@ -992,8 +990,28 @@ test("reader breadcrumb gives outer levels to the menu before the current title,
       }
     });
   };
-  const currentCrumb = () =>
-    screen.getByRole("button", { name: /Contents: § 5/u });
+  return {
+    resizeTo,
+    restore: () => {
+      globalThis.ResizeObserver = originalObserver;
+    },
+  };
+};
+
+const currentCrumb = () =>
+  screen.getByRole("button", { name: /Contents: § 5/u });
+
+test("reader breadcrumb gives outer levels to the menu before the current title, and keeps every level reachable", async () => {
+  const current = path.at(-1) ?? panic("The fixture needs a current heading");
+  // Outer levels are labels alone (100px); the current heading is "§ 5"
+  // (44px) and, with its title, 176px. The measurer is the crumb's own button,
+  // so these widths hold its padding.
+  const { resizeTo, restore } = fakeTrailLayout((part, anchorId) => {
+    if (anchorId !== current.anchorId) {
+      return 100;
+    }
+    return part === "label" ? 44 : 176;
+  });
   try {
     mount(() => {});
     const navigation = screen.getByRole("navigation");
@@ -1032,7 +1050,9 @@ test("reader breadcrumb gives outer levels to the menu before the current title,
     await act(async () =>
       fireEvent.keyDown(
         screen.getByRole("dialog", { name: messages.common.showMore }),
-        { key: "Escape" },
+        {
+          key: "Escape",
+        },
       ),
     );
 
@@ -1050,7 +1070,49 @@ test("reader breadcrumb gives outer levels to the menu before the current title,
     );
   } finally {
     cleanup();
-    globalThis.ResizeObserver = originalObserver;
+    restore();
+  }
+});
+
+test("once the menu leaves the bar, the contents control stays a full touch target and reaches every level", async () => {
+  const current = path.at(-1) ?? panic("The fixture needs a current heading");
+  // "§ 5" alone (36px, padding included) is narrower than a touch target.
+  const { resizeTo, restore } = fakeTrailLayout((part, anchorId) => {
+    if (anchorId !== current.anchorId) {
+      return 100;
+    }
+    return part === "label" ? 36 : 176;
+  });
+  try {
+    mount(() => {});
+    const navigation = screen.getByRole("navigation");
+    // Too narrow for the menu beside the current label, then narrower than
+    // the label itself, which the bar clips rather than shrink the control.
+    for (const width of [60, 30]) {
+      await resizeTo(width);
+      expect(
+        screen.queryByRole("button", { name: messages.common.showMore }),
+      ).toBeNull();
+      expect(screen.queryByRole("button", { name: "Díl 1" })).toBeNull();
+      // The control stands alone, with no separator before it.
+      const entries = navigation.querySelectorAll("ol > li");
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.firstElementChild).toBe(currentCrumb());
+      expect(currentCrumb().style.width).toBe("44px");
+    }
+
+    await act(async () => fireEvent.click(currentCrumb()));
+    const contents = screen.getByRole("dialog", {
+      name: messages.statutes.outline,
+    });
+    expect(
+      [...contents.querySelectorAll<HTMLElement>("[data-contents-anchor]")].map(
+        (row) => row.dataset["contentsAnchor"],
+      ),
+    ).toEqual(path.map(({ anchorId }) => anchorId));
+  } finally {
+    cleanup();
+    restore();
   }
 });
 

@@ -9,6 +9,8 @@ import { drizzle } from "drizzle-orm/pglite";
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
@@ -23,6 +25,7 @@ import {
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
 } from "@/api/lib/public-law-relations";
 import { readPgliteTestSnapshotPath } from "@/api/tests/env";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createSchemaPglite,
   installPgliteAccountAuditRls,
@@ -32,6 +35,7 @@ import {
   installPgliteCaseLawCoverageSummary,
   installPgliteCaseLawObservationFence,
   installPgliteCaseLawParsedSourceInvalidation,
+  installPgliteCaseLawPopulationCounts,
   installPgliteCaseLawSitemapChanges,
   installPgliteChatMessageRevisionsRls,
   installPgliteChatRunLogRls,
@@ -272,6 +276,19 @@ export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
 ] as const;
 
 /**
+ * Build the transaction boundary used by case-law ingestion tests. Fixture
+ * setup and assertions keep using the owner handle; only pipeline callbacks
+ * assume the deployment's least-privileged ingestion role.
+ */
+export const createIngestionRoleScopedDb =
+  (database: AnyDrizzle): ScopedDb =>
+  async <T>(callback: (tx: Transaction) => Promise<T>): Promise<T> =>
+    await database.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+      return await callback(asTestRaw<Transaction>(tx));
+    });
+
+/**
  * Execute a read callback under the same role used by the external public-law
  * database. Writes in the surrounding test setup stay on the owner handle;
  * this role change is local to the callback's transaction.
@@ -322,20 +339,16 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  * harness mirrors the migrations, so it leaves them ungranted too.
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
-  new Set([
-    "case_law_decisions.docket_family_key",
-    ...[DOCTRINE_COLUMN_GRANTS_BY_RELATION, CENSUS_COLUMN_GRANTS_BY_RELATION]
+  new Set(
+    [DOCTRINE_COLUMN_GRANTS_BY_RELATION, CENSUS_COLUMN_GRANTS_BY_RELATION]
       .flatMap(publicLawColumnPairs)
       .map(({ relation, column }) => `${relation}.${column}`),
-  ]);
+  );
 
 const decisionColumnNames = new Set(
   Object.values(getColumns(schema.caseLawDecisions)).map(({ name }) => name),
 );
-const decisionRelationNames = new Set<string>([
-  getTableName(schema.caseLawDecisions),
-  ...CASE_LAW_DECISION_VIEWS,
-]);
+const decisionRelationNames = new Set<string>(CASE_LAW_DECISION_VIEWS);
 
 const grantedPublicLawColumns = (
   relation: string,
@@ -858,6 +871,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCaseLawObservationFence(db);
   await installPgliteCaseLawParsedSourceInvalidation(db);
   await installPgliteCaseLawSitemapChanges(db);
+  await installPgliteCaseLawPopulationCounts(db);
   await installPglitePdfSigningTokenScopes(db);
   await installPgliteDesktopPresenceRls(db);
   await installPgliteChatTurnRunIdLookup(db);

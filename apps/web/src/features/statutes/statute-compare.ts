@@ -13,6 +13,7 @@ import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import { resolveDocumentHeadingAnchor } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionPreviewBlocks } from "@stll/legal-ast/provision-preview";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
 import { paragraphFromPreview } from "@stll/legal-ast/statute-list";
 import type { PreviewBlock } from "@stll/legal-ast/statute-list";
 
@@ -552,6 +553,8 @@ type ProvisionCompareSideOptions = {
   blocks: readonly Block[] | null;
   /** The provision heading's anchor. */
   provision: string;
+  /** The statute publisher's anchor grammar, which its subdivisions nest in. */
+  scheme: StatuteAnchorScheme;
 };
 
 /** A provision read's answer: its own heading and the blocks it owns. */
@@ -586,12 +589,17 @@ export const provisionWordingSide = ({
 export const provisionCompareSide = ({
   blocks,
   provision,
+  scheme,
 }: ProvisionCompareSideOptions): CompareSideState => {
   if (blocks === null) {
     return { type: "unstructured" };
   }
-  const heading = resolveDocumentHeadingAnchor(blocks, provision);
-  const owned = provisionPreviewBlocks(blocks, provision, undefined);
+  const statute = { blocks, scheme };
+  const heading = resolveDocumentHeadingAnchor(statute, provision);
+  const owned = provisionPreviewBlocks(statute, {
+    provisionAnchorId: provision,
+    citedAnchorId: undefined,
+  });
 
   if (heading === null || owned === null) {
     return { type: "absent" };

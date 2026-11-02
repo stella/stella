@@ -65,6 +65,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_decisions.analysis",
   "case_law_decisions.metadata",
   "case_law_judges.external_refs",
+  // Corpus population buckets: kind/value pairs derived from public decisions.
+  "case_law_population_projections.buckets",
   "case_law_polarity_rules.surface_forms",
   "case_law_provision_extractions.unresolved_counts",
   "case_law_reconciliation_items.payload",
@@ -280,6 +282,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "bilingual_translation_runs.requested_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "case_law_matter_links.linked_by":
+    "Retained attribution or request history; this column grants no matter membership.",
+  "legislation_matter_links.linked_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "case_law_research_columns.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
@@ -509,6 +513,8 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "billing_draft_user_settings.user_id":
+    "Organization-wide consent and preferences remain for the person's other matters; organization removal deletes them.",
   "request_idempotency_receipts.user_id":
     "Organization-owned request coordination: retain through the bounded replay window so retries in other matters remain single-execution. Replay still passes the route's current authorization; organization removal clears the rows and account deletion cascades.",
   "request_idempotency_receipts.response_body":

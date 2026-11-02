@@ -7,6 +7,7 @@ export const DESKTOP_FEATURE_ACCESS_PATH =
 
 export const DESKTOP_FEATURE_IDS = [
   "activity-timeline",
+  "desktop-dictation",
   "local-agents",
 ] as const;
 

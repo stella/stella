@@ -209,7 +209,10 @@ export const ChatTabPanel = ({
   const [composerFocused, setComposerFocused] = useState(false);
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const contextLabel = useChatContextLabel(tab, activeOrganizationId);
+  const composerPlaceholder = useChatComposerPlaceholder(
+    tab,
+    activeOrganizationId,
+  );
 
   const {
     markChatStarted,
@@ -371,7 +374,7 @@ export const ChatTabPanel = ({
   // drafts persist across tab close/open.
   const editorController = useChatEditor({
     followupAnalytics: { surface: "inspector-chat" },
-    placeholder: t("chat.contextPlaceholder", { context: contextLabel }),
+    placeholder: composerPlaceholder,
     suggestedFollowupPrompt,
     threadRef,
   });
@@ -759,7 +762,7 @@ export const ChatTabPanel = ({
             editorController={editorController}
             emptyPlaceholder={
               <PromptBarPlaceholderContent>
-                {t("chat.contextPlaceholder", { context: contextLabel })}
+                {composerPlaceholder}
               </PromptBarPlaceholderContent>
             }
             followupChips={
@@ -835,7 +838,11 @@ const useBoundLegalDocumentLabel = (tab: ChatTab): string | undefined => {
   });
 };
 
-const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
+/** The composer's placeholder: what the chat is about, when something names it. */
+const useChatComposerPlaceholder = (
+  tab: ChatTab,
+  activeOrganizationId: string,
+) => {
   const t = useTranslations();
   const skillLabel = useSkillLabel();
   const { id: userId } = useAuthenticatedUser();
@@ -846,7 +853,7 @@ const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
     }),
   );
   const dataView = queryView(dataQuery);
-  useQueryViewError(dataView, "useChatContextLabel:query");
+  useQueryViewError(dataView, "useChatComposerPlaceholder:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   const workspaces = data?.workspaces ?? [];
@@ -854,14 +861,16 @@ const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
     .map((id) => workspaces.find((workspace) => workspace.id === id)?.name)
     .filter((name): name is string => name !== undefined);
 
-  return chatContextLabel({
+  const context = chatContextLabel({
     activeSkillName:
       tab.activeSkill === undefined ? undefined : skillLabel(tab.activeSkill),
     boundDocumentLabel,
     matterNames,
-    newChatLabel: t("chat.newChat"),
     tabLabel: tab.label,
   });
+  return context === undefined
+    ? t("chat.placeholder")
+    : t("chat.contextPlaceholder", { context });
 };
 
 type ChatEmptyStateProps = {
@@ -998,14 +1007,12 @@ const ChatTabPanelChrome = ({
  * in once data arrives.
  */
 const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
-  const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const contextLabel = useChatContextLabel(tab, activeOrganizationId);
-  return (
-    <PromptBarPending>
-      {t("chat.contextPlaceholder", { context: contextLabel })}
-    </PromptBarPending>
+  const composerPlaceholder = useChatComposerPlaceholder(
+    tab,
+    activeOrganizationId,
   );
+  return <PromptBarPending>{composerPlaceholder}</PromptBarPending>;
 };
 
 /**

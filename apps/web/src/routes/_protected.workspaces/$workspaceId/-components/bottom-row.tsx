@@ -66,7 +66,7 @@ export const BottomRow = ({
               position: "sticky",
             }}
           >
-            {t("workspaces.newDocument")}
+            {t("workspaces.uploadDocuments")}
           </WorkspaceGridCell>
           <WorkspaceGridCell
             aria-hidden="true"

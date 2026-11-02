@@ -16,7 +16,10 @@ import {
 } from "@stll/ui/icons";
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
 
 /**
  * iOS Privacy-Nutritional-Label-style detail panel. Replaces the stack
@@ -43,6 +46,10 @@ export const CatalogueDetailPreview = ({
   const t = useTranslations();
   const isFirstParty = entry.author === "stella";
   const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
+  const descriptionKey = nativeToolDescriptionKey({
+    slug: entry.slug,
+    kind: entry.kind,
+  });
 
   return (
     <div className="flex h-full max-h-full w-full items-stretch justify-center overflow-hidden">
@@ -85,7 +92,7 @@ export const CatalogueDetailPreview = ({
         <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
           <Section title={t("onboarding.catalogueDetailAbout")}>
             <p className="text-foreground text-sm leading-relaxed">
-              {entry.description}
+              {descriptionKey ? t(descriptionKey) : entry.description}
             </p>
           </Section>
 

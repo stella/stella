@@ -16,9 +16,14 @@ import { resetReportedErrorsForTests } from "@/lib/analytics/reported-error";
 import { BoundedSet } from "@/lib/bounded-set";
 import type { DetachedOperationId } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import { APIError, isCancellation } from "@/lib/errors/api";
+import {
+  APIError,
+  apiFieldIssueMessage,
+  isCancellation,
+} from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
+import { notifySessionExpired } from "@/lib/errors/session-expired";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 type UserErrorToastOptions = Omit<
@@ -175,6 +180,12 @@ export const notifyUserError = <Cause>(
   if (notifyStepUp(error)) {
     return false;
   }
+  if (notifySessionExpired(error)) {
+    if (toastId !== undefined) {
+      stellaToast.close(toastId);
+    }
+    return false;
+  }
   // The stable refusal id coalesces the API client's observer and local error
   // handlers; raw fetch and SDK errors also need to emit the same notice here.
   const refusal = actionAdmissionOutcome(error);
@@ -239,6 +250,25 @@ export const notifyUserError = <Cause>(
   }
   stellaToast.add(toast);
   return true;
+};
+
+/**
+ * One failure, one message: the issue a rejected request names on `field`, for
+ * the form to show beside it, or a toast when the failure names no such issue
+ * or the form closed while the request was running.
+ */
+export const fieldIssueOrToast = (
+  error: unknown,
+  field: string,
+  fallback: string,
+  isFormOpen: () => boolean = () => true,
+): string | undefined => {
+  const issue = apiFieldIssueMessage(error, field);
+  if (issue === undefined || !isFormOpen()) {
+    notifyUserError(error, fallback);
+    return undefined;
+  }
+  return issue;
 };
 
 const SERVER_ERROR_THRESHOLD = 500;

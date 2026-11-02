@@ -226,6 +226,48 @@ pub fn refresh(app: &AppHandle, snapshot: &AppSnapshot) {
   }
 }
 
+/// Shows a short mark beside the status icon, or removes it.
+#[cfg_attr(
+  not(dictation),
+  allow(dead_code, reason = "only builds with the speech engine drive these")
+)]
+pub fn set_status_mark(app: &AppHandle, mark: Option<&'static str>) {
+  let handle = app.clone();
+  if app
+    .run_on_main_thread(move || {
+      #[cfg(target_os = "macos")]
+      let main_thread =
+        TrayMainThread::new().expect("tray work must run on the main thread");
+      #[cfg(not(target_os = "macos"))]
+      let main_thread = TrayMainThread;
+      set_status_mark_on_main_thread(&handle, mark, &main_thread);
+    })
+    .is_err()
+  {
+    tracing::warn!("tray mark skipped: the event loop is gone");
+  }
+}
+
+#[cfg_attr(
+  not(dictation),
+  allow(dead_code, reason = "only builds with the speech engine drive these")
+)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the tray owner: the main-thread proof keeps every native handle local"
+)]
+fn set_status_mark_on_main_thread(
+  app: &AppHandle,
+  mark: Option<&'static str>,
+  _main_thread: &TrayMainThread,
+) {
+  if let Some(tray) = app.tray_by_id("main")
+    && tray.set_title(mark).is_err()
+  {
+    tracing::warn!("tray mark failed");
+  }
+}
+
 /// The status icon and its owning screen in one logical coordinate space;
 /// `None` when there is no icon or the OS cannot place it (an icon in
 /// Windows' hidden overflow area). The handle is read and dropped on the

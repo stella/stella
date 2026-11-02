@@ -11,6 +11,7 @@ import {
 } from "../helpers/deferred-cleanup";
 import { createUploadedDocumentRoute } from "../helpers/document";
 import { test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS } from "../helpers/wait-budgets";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
 import { WORKSPACE_REPLAY_ENV } from "./env";
 import {
@@ -195,7 +196,7 @@ test("deterministically explores the synthetic matter workspace", async ({
       async () => await apiStatus(page.request, `/workspaces/${workspace.id}`),
       {
         message: "browser context can read the synthetic matter",
-        timeout: 10_000,
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
       },
     )
     .toBe(200);

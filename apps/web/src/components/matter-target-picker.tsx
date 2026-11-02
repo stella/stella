@@ -6,6 +6,7 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import { DialogFormState } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
@@ -47,7 +48,6 @@ import {
 } from "@/components/matter-target-picker.logic";
 import type { MatterTarget } from "@/components/matter-target-picker.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -300,21 +300,20 @@ const FolderDragDropRow = ({
     source === undefined ? null : (
       <Menu onOpenChange={setIsMoveMenuOpen}>
         <MenuTrigger
-          aria-label={t("workspaces.copyToMatter.moveFolder")}
           disabled={!handleEnabled}
           render={
-            <button
+            <Button
+              aria-label={t("workspaces.copyToMatter.moveFolder")}
               className={cn(
-                "border-border/70 bg-background text-muted-foreground ms-auto flex size-6 shrink-0 touch-none items-center justify-center rounded border shadow-sm",
-                handleEnabled
-                  ? "hover:text-foreground cursor-grab active:cursor-grabbing"
-                  : "cursor-not-allowed opacity-50",
+                "ms-auto shrink-0 touch-none",
+                handleEnabled && "cursor-grab active:cursor-grabbing",
               )}
               ref={dragHandleRef}
-              type="button"
+              size="icon-xs"
+              tooltip={t("workspaces.copyToMatter.dragFolder")}
+              variant="outline"
             />
           }
-          tooltip={t("workspaces.copyToMatter.dragFolder")}
         >
           <GripVerticalIcon className="size-3.5" />
         </MenuTrigger>
@@ -355,19 +354,24 @@ const FolderSelectionButton = ({
   selected,
   onSelect,
 }: FolderSelectionButtonProps) => (
-  <button
-    className={cn(
-      "hover:bg-accent flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-start text-sm",
-      selected && "bg-accent",
-    )}
+  <Button
+    className="min-w-0 flex-1"
+    focusRing="inside"
     onClick={onSelect}
-    type="button"
+    variant="plain"
   >
-    <EntityKindIcon className="size-4 shrink-0" kind="folder" />
-    <BidiText as="span" className="truncate">
-      {name}
-    </BidiText>
-  </button>
+    <span
+      className={cn(
+        "hover:bg-accent flex w-full min-w-0 items-center gap-1 rounded px-2 py-1 text-sm",
+        selected && "bg-accent",
+      )}
+    >
+      <EntityKindIcon className="size-4 shrink-0" kind="folder" />
+      <BidiText as="span" className="truncate">
+        {name}
+      </BidiText>
+    </span>
+  </Button>
 );
 
 /**
@@ -501,12 +505,11 @@ export const MatterTargetPicker = ({
               return visibleMatters.map((workspace) => {
                 const isSelected = value?.workspaceId === workspace.id;
                 return (
-                  <button
-                    className={cn(
-                      "hover:bg-accent flex w-full items-center gap-2 rounded px-2 py-1.5 text-start text-sm",
-                      isSelected && "bg-accent",
-                    )}
+                  <Button
+                    className="block w-full"
+                    focusRing="inside"
                     key={workspace.id}
+                    variant="plain"
                     onClick={() => {
                       if (value?.workspaceId === workspace.id) {
                         onChange(selectExistingMatterTarget(value, null));
@@ -518,24 +521,30 @@ export const MatterTargetPicker = ({
                         parentId: null,
                       });
                     }}
-                    type="button"
                   >
-                    <MatterIcon
-                      className="size-4 shrink-0"
-                      matter={{ id: workspace.id, color: workspace.color }}
-                    />
-                    <BidiText as="span" className="min-w-0 flex-1 truncate">
-                      {workspace.name}
-                    </BidiText>
-                    {workspace.client?.displayName !== undefined && (
-                      <BidiText
-                        as="span"
-                        className="text-muted-foreground max-w-32 shrink-0 truncate text-xs"
-                      >
-                        {workspace.client.displayName}
+                    <span
+                      className={cn(
+                        "hover:bg-accent flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm",
+                        isSelected && "bg-accent",
+                      )}
+                    >
+                      <MatterIcon
+                        className="size-4 shrink-0"
+                        matter={{ id: workspace.id, color: workspace.color }}
+                      />
+                      <BidiText as="span" className="min-w-0 flex-1 truncate">
+                        {workspace.name}
                       </BidiText>
-                    )}
-                  </button>
+                      {workspace.client?.displayName !== undefined && (
+                        <BidiText
+                          as="span"
+                          className="text-muted-foreground max-w-32 shrink-0 truncate text-xs"
+                        >
+                          {workspace.client.displayName}
+                        </BidiText>
+                      )}
+                    </span>
+                  </Button>
                 );
               });
             })()}
@@ -785,7 +794,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
           className="flex items-center gap-1"
           style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
         >
-          <span className="w-4" />
+          <span className="w-5 shrink-0 sm:w-4" />
           {newFolderDraft}
         </div>
       );
@@ -810,7 +819,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
             className="flex items-center gap-1"
             style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
           >
-            <span className="w-4" />
+            <span className="w-5 shrink-0 sm:w-4" />
             <FolderSelectionButton
               name={pendingFolder.name}
               onSelect={() =>
@@ -818,40 +827,32 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
               }
               selected={pendingFolder.selection.type === "pending"}
             />
-            <Tooltip
-              content={t("common.edit")}
-              render={
-                <button
-                  aria-label={t("common.edit")}
-                  className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded"
-                  onClick={() => {
-                    draftCancelledRef.current = false;
-                    setFolderDraft({
-                      type: "edit",
-                      name: pendingFolder.name,
-                    });
-                  }}
-                  type="button"
-                />
-              }
+            <Button
+              aria-label={t("common.edit")}
+              className="shrink-0"
+              onClick={() => {
+                draftCancelledRef.current = false;
+                setFolderDraft({
+                  type: "edit",
+                  name: pendingFolder.name,
+                });
+              }}
+              size="icon-xs"
+              variant="muted"
             >
               <PencilIcon className="size-3.5" />
-            </Tooltip>
-            <Tooltip
-              content={t("common.remove")}
-              render={
-                <button
-                  aria-label={t("common.remove")}
-                  className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded"
-                  onClick={() =>
-                    onChange(discardPendingMatterFolder(pendingFolder))
-                  }
-                  type="button"
-                />
+            </Button>
+            <Button
+              aria-label={t("common.remove")}
+              className="shrink-0"
+              onClick={() =>
+                onChange(discardPendingMatterFolder(pendingFolder))
               }
+              size="icon-xs"
+              variant="muted"
             >
               <XIcon className="size-3.5" />
-            </Tooltip>
+            </Button>
             {dragHandle}
           </div>
         )}
@@ -861,18 +862,21 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
 
   const newFolderButton =
     canCreate && folderDraft === null && pendingFolder === null ? (
-      <button
-        className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm"
+      <Button
+        className="block w-full"
+        focusRing="inside"
         onClick={() => {
           draftCancelledRef.current = false;
           setFolderDraft({ type: "create", name: "" });
           expandFolderPath(value.parentId);
         }}
-        type="button"
+        variant="plain"
       >
-        <FolderPlusIcon className="size-4 shrink-0" />
-        <span className="truncate">{t("workspaces.newFolder")}</span>
-      </button>
+        <span className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded px-2 py-1 text-sm">
+          <FolderPlusIcon className="size-4 shrink-0" />
+          <span className="truncate">{t("workspaces.newFolder")}</span>
+        </span>
+      </Button>
     ) : null;
 
   const renderFolder = (folder: WorkspaceFolder, depth: number) => {
@@ -911,28 +915,19 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
               style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
             >
               {hasChildren ? (
-                <Tooltip
-                  content={
+                <Button
+                  aria-expanded={isExpanded}
+                  aria-label={
                     isExpanded
                       ? t("workspaces.importOrganizer.collapseFolder")
                       : t("workspaces.importOrganizer.expandFolder")
                   }
-                  render={
-                    <button
-                      className="hover:bg-muted rounded p-0.5"
-                      aria-expanded={isExpanded}
-                      aria-label={
-                        isExpanded
-                          ? t("workspaces.importOrganizer.collapseFolder")
-                          : t("workspaces.importOrganizer.expandFolder")
-                      }
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleExpand(folder.entityId);
-                      }}
-                      type="button"
-                    />
-                  }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleExpand(folder.entityId);
+                  }}
+                  size="icon-2xs"
+                  variant="ghost"
                 >
                   <DirectionalIcon
                     className={cn(
@@ -942,9 +937,9 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
                     flip={!isExpanded}
                     icon={ChevronRightIcon}
                   />
-                </Tooltip>
+                </Button>
               ) : (
-                <span className="w-4" />
+                <span className="w-5 shrink-0 sm:w-4" />
               )}
               <FolderSelectionButton
                 name={folder.name}
@@ -995,19 +990,24 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
           }
         >
           {({ isDropTarget }) => (
-            <button
-              className={cn(
-                "hover:bg-accent flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm",
-                selectedExistingParentId === null && "bg-accent",
-                isDropTarget && "bg-primary/8 ring-primary/40 ring-1",
-              )}
+            <Button
+              className="block w-full"
+              focusRing="inside"
               onClick={() => onChange(selectExistingMatterTarget(value, null))}
-              type="button"
+              variant="plain"
             >
-              <span className="text-muted-foreground">
-                {t("workspaces.copyToMatter.rootFolder")}
+              <span
+                className={cn(
+                  "hover:bg-accent flex w-full items-center gap-1 rounded px-2 py-1 text-sm",
+                  selectedExistingParentId === null && "bg-accent",
+                  isDropTarget && "bg-primary/8 ring-primary/40 ring-1",
+                )}
+              >
+                <span className="text-muted-foreground">
+                  {t("workspaces.copyToMatter.rootFolder")}
+                </span>
               </span>
-            </button>
+            </Button>
           )}
         </FolderDragDropRow>
         {rootFolders.map((folder) => renderFolder(folder, 0))}

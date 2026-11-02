@@ -75,8 +75,8 @@
   "allowWebsiteAccess": {
     "message": "Permitir acesso a sites"
   },
-  "connectTab": {
-    "message": "Conectar esta guia da stella"
+  "connectStella": {
+    "message": "Conectar o stella"
   },
   "adoptTab": {
     "message": "Usar esta guia com a stella"
@@ -97,9 +97,9 @@
     "message": "Verificando a conexão…"
   },
   "statusConnectedElsewhere": {
-    "message": "Outra aba do stella está conectada"
+    "message": "O stella está conectado em outro endereço"
   },
-  "connectTabInstead": {
-    "message": "Conectar esta aba do stella no lugar dela"
+  "connectStellaInstead": {
+    "message": "Conectar o stella aqui no lugar"
   }
 }
