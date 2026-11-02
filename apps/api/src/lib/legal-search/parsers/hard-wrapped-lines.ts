@@ -658,14 +658,15 @@ export const readPdfLineJoins = (lines: readonly (PdfPrintedLine | null)[]) => {
   return lines.map((line, index) => {
     const above = index > 0 ? lines.at(index - 1) : null;
     if (above === undefined || above === null || line === null) {
+      // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
       paragraph =
-        line?.layout === undefined
-          ? null
-          : {
+        line?.layout !== undefined
+          ? {
               type: "first-line",
               pageIndex: line.layout.pageIndex,
               firstX: line.layout.x,
-            };
+            }
+          : null;
       return LINE_JOIN.BREAK;
     }
     const previousLayout = above.layout;
