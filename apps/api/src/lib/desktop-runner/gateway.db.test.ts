@@ -15,6 +15,7 @@ import {
 
 import { user } from "@/api/db/auth-schema";
 import {
+  desktopRunnerCommands,
   desktopRunnerEvents,
   desktopRunnerRuns,
   desktopRunners,
@@ -59,7 +60,10 @@ import type {
   MintRunToken,
   RunnerTimers,
 } from "@/api/lib/desktop-runner/session";
-import type { DesktopRunnerDb } from "@/api/lib/desktop-runner/store";
+import {
+  type DesktopRunnerDb,
+  readNewestQueuedCommands,
+} from "@/api/lib/desktop-runner/store";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -424,7 +428,12 @@ const helloFrame = (activeRuns: { runId: string; lastSeq: number }[] = []) => ({
 const insertRunner = async (
   values: Pick<
     typeof desktopRunners.$inferInsert,
-    "userId" | "organizationId" | "desktopId" | "deviceJkt" | "connection"
+    | "userId"
+    | "organizationId"
+    | "desktopId"
+    | "deviceJkt"
+    | "keyId"
+    | "connection"
   >,
 ) => {
   await db.insert(desktopRunners).values({
@@ -1031,6 +1040,7 @@ describe("runner identity", () => {
         ...account,
         desktopId,
         deviceJkt: credentials.b.deviceJkt,
+        keyId: credentials.b.keyId,
         connection: "connected",
       });
     }
@@ -1095,6 +1105,63 @@ describe("credential revocation", () => {
     });
     // Nothing reached the socket after its welcome: no run, no token.
     expect(desktop.received.map(({ type }) => type)).toEqual(["welcome"]);
+  });
+
+  test("revoking one credential leaves the runner another credential opened on the same device key connected", async () => {
+    const fresh = await createRlsDesktopCredentials(db, ids);
+    const sibling = await fresh.mint(ids.orgA, fresh.a.device);
+    expect(sibling.deviceJkt).toBe(fresh.a.deviceJkt);
+    const beating = await startInstance(
+      "api-heartbeat-sibling",
+      sharedDoorbell,
+      {
+        timing: { pingIntervalMs: 50 },
+      },
+    );
+    const [revokedId, keptId] = [Bun.randomUUIDv7(), Bun.randomUUIDv7()];
+    const revokedDesktop = await openDesktop(
+      beating,
+      revokedId,
+      await upgradeRequest(beating, revokedId, fresh.a),
+    );
+    await revokedDesktop.hello();
+    const keptDesktop = await openDesktop(
+      beating,
+      keptId,
+      await upgradeRequest(beating, keptId, sibling),
+    );
+    await keptDesktop.hello();
+    await revokeDesktopRegistryCredential({
+      keyId: fresh.a.keyId,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      recordAuditEvent: async () => await Promise.resolve(),
+      // SAFETY: PGlite and Bun SQL expose the same Drizzle transaction API.
+      db: asTestRaw<
+        NonNullable<Parameters<typeof revokeDesktopRegistryCredential>[0]["db"]>
+      >(db),
+    });
+    expect(await revokedDesktop.closed).toEqual({
+      code: DESKTOP_RUNNER_CLOSE.credentialRevoked.code,
+      reason: DESKTOP_RUNNER_CLOSE.credentialRevoked.reason,
+    });
+    // Only the revoked credential's runner was released; the other
+    // credential's runner is still connected and still routed to.
+    const connections = new Map(
+      (await runnerRows(owner.userId, owner.organizationId)).map(
+        ({ desktopId, connection }) => [desktopId, connection],
+      ),
+    );
+    expect([connections.get(revokedId), connections.get(keptId)]).toEqual([
+      "disconnected",
+      "connected",
+    ]);
+    const runId = await assignRun(keptId);
+    await keptDesktop.receive("run.start", ofRun(runId));
+    expect((await control.startRun(startInput(revokedId))).unwrap()).toEqual({
+      type: "no_computer",
+    });
+    await keptDesktop.close();
   });
 });
 
@@ -1394,6 +1461,70 @@ describe("sweep delivery", () => {
     for (const desktop of [...idle, busy]) {
       await desktop.close();
     }
+  });
+
+  test("a sweep delivers a command whose ring was lost however long ago it was queued", async () => {
+    const sweeping = await startInstance("api-sweep-old", sharedDoorbell);
+    const { runId, desktop } = await acceptedRun(sweeping);
+    const silent = createDesktopRunnerControl({
+      db: gatewayDb,
+      doorbell: {
+        ring: () => undefined,
+        listen: async () =>
+          await Promise.resolve(async () => await Promise.resolve()),
+      },
+      now,
+      timing: TIMING,
+    });
+    const inputId = Bun.randomUUIDv7();
+    expect(
+      (
+        await silent.sendInput({
+          owner,
+          runId,
+          inputId,
+          message: { role: "user", content: "Still there?" },
+        })
+      ).unwrap(),
+    ).toEqual({ type: "queued" });
+    // Queued long before any sweep window, as after sweeps that failed.
+    await db
+      .update(desktopRunnerCommands)
+      .set({ createdAt: new Date(Date.now() - 24 * 60 * 60_000) })
+      .where(eq(desktopRunnerCommands.runId, runId));
+    await sweeping.gateway.sweep();
+    expect(
+      (
+        await desktop.receive(
+          "run.input",
+          (message) =>
+            message.type === "run.input" && message.inputId === inputId,
+        )
+      ).inputId,
+    ).toBe(inputId);
+    // Once sent, the next sweep finds nothing left to read for the socket.
+    directReads.count = 0;
+    await sweeping.gateway.sweep();
+    expect(directReads.count).toBe(1);
+    await desktop.close();
+  });
+
+  test("sockets beyond one page are read on the following pages", async () => {
+    const paging = await startInstance("api-sweep-pages", sharedDoorbell);
+    const earlier = await acceptedRun(paging);
+    const later = await acceptedRun(paging);
+    const page = async (afterSessionId: string | null) =>
+      await readNewestQueuedCommands(gatewayDb, {
+        instanceId: "api-sweep-pages",
+        afterSessionId,
+        limit: 1,
+      });
+    const [one] = await page(null);
+    const [two] = await page(one?.sessionId ?? panic("no first page"));
+    expect(await page(two?.sessionId ?? panic("no second page"))).toEqual([]);
+    expect(one?.sessionId).not.toBe(two?.sessionId);
+    await earlier.desktop.close();
+    await later.desktop.close();
   });
 });
 

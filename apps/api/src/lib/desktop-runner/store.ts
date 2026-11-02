@@ -8,6 +8,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  max,
   or,
   type SQL,
   sql,
@@ -32,6 +33,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  withAggregateLock,
   withAggregateTransaction,
   withSkipLockedBatch,
 } from "@/api/lib/db/aggregate-lock";
@@ -239,6 +241,13 @@ export const claimRunnerSession = async (
       .where(runnerKey(binding))
       .limit(1);
     if (existing === undefined) {
+      // Admissions of one account are serialized from the count through the
+      // insert, so concurrent new installations never pass the cap together.
+      await withAggregateLock({
+        aggregate: "desktopRunnerCapacity",
+        id: { organizationId: binding.organizationId, userId: binding.userId },
+        tx,
+      });
       const registered = await countRunners(tx, binding);
       if (registered >= limits.maxRunnersPerAccount) {
         await evictIdleRunners(
@@ -252,6 +261,7 @@ export const claimRunnerSession = async (
       }
     }
     const values = {
+      keyId: binding.keyId,
       sessionId,
       instanceId,
       connection: "connected" as const,
@@ -382,22 +392,30 @@ type RunnerReleaseTransaction = {
   };
 };
 
-type RevokedRunnerScope = {
-  readonly userId: SafeId<"user">;
-  /** Absent: every organization the account belongs to. */
-  readonly organizationId?: SafeId<"organization">;
-  /** Absent: every device key of the account. */
-  readonly deviceJkt?: string;
-};
+type RevokedRunnerScope =
+  /** Access ended for the account, in one organization or in every one. */
+  | {
+      readonly userId: SafeId<"user">;
+      readonly organizationId?: SafeId<"organization">;
+      readonly keyId?: never;
+    }
+  /** One credential was revoked: only the runners it opened. */
+  | {
+      readonly userId: SafeId<"user">;
+      readonly organizationId: SafeId<"organization">;
+      readonly keyId: string;
+    };
 
 /**
  * A credential was revoked: its runners stop taking runs at once, and each
  * open socket closes at its next heartbeat, which re-checks the credential.
  * Runs stay bound to the runner and end through their leases and expiry.
+ * Runners another credential opened stay connected, even on the same device
+ * key.
  */
 export const releaseRevokedRunners = async (
   tx: RunnerReleaseTransaction,
-  { userId, organizationId, deviceJkt }: RevokedRunnerScope,
+  { userId, organizationId, keyId }: RevokedRunnerScope,
 ) => {
   // audit: skip - the revocation that calls this records its own audit event
   await tx
@@ -409,7 +427,7 @@ export const releaseRevokedRunners = async (
         organizationId === undefined
           ? undefined
           : eq(runner.organizationId, organizationId),
-        deviceJkt === undefined ? undefined : eq(runner.deviceJkt, deviceJkt),
+        keyId === undefined ? undefined : eq(runner.keyId, keyId),
       ),
     );
 };
@@ -1026,24 +1044,35 @@ export const readPendingCommands = async (
   };
 };
 
-type SessionsWithCommandsOptions = {
+type QueuedCommandsOptions = {
   instanceId: string;
-  /** How far back, on the database's clock, a queued command still counts. */
-  windowMs: number;
+  /** Resume after this socket, so successive sweeps page across every one. */
+  afterSessionId: string | null;
   limit: number;
 };
 
+type QueuedCommands = {
+  readonly sessionId: string;
+  /** The newest command queued for the socket's open runs. */
+  readonly newestCommandId: number;
+};
+
 /**
- * The sockets this API task holds whose open runs had a command queued within
- * the window: the ones a lost doorbell ring may have left waiting.
+ * The connected sockets this API task holds whose open runs have commands,
+ * each with its newest command, in socket order after `afterSessionId`. A
+ * socket that has not sent through that command is one a lost doorbell ring
+ * left waiting, however long ago the command was queued.
  */
-export const readSessionsWithQueuedCommands = async (
+export const readNewestQueuedCommands = async (
   db: Pick<DesktopRunnerDb, "select">,
-  { instanceId, windowMs, limit }: SessionsWithCommandsOptions,
-): Promise<string[]> =>
+  { instanceId, afterSessionId, limit }: QueuedCommandsOptions,
+): Promise<QueuedCommands[]> =>
   (
     await db
-      .select({ sessionId: runner.sessionId })
+      .select({
+        sessionId: runner.sessionId,
+        newestCommandId: max(desktopRunnerCommands.id),
+      })
       .from(runner)
       .innerJoin(
         runs,
@@ -1063,12 +1092,20 @@ export const readSessionsWithQueuedCommands = async (
           eq(runner.instanceId, instanceId),
           eq(runner.connection, "connected"),
           inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
-          sql`${desktopRunnerCommands.createdAt} >= now() - ${windowMs}::double precision * interval '1 millisecond'`,
+          afterSessionId === null
+            ? undefined
+            : gt(runner.sessionId, afterSessionId),
         ),
       )
       .groupBy(runner.sessionId)
+      .orderBy(asc(runner.sessionId))
       .limit(limit)
-  ).map(({ sessionId }) => sessionId);
+  ).map(({ sessionId, newestCommandId }) => ({
+    sessionId,
+    // The inner join gives every group at least one command.
+    newestCommandId:
+      newestCommandId ?? panic("A queued socket group has no command"),
+  }));
 
 type ReadyRunnersOptions = {
   userId: SafeId<"user">;

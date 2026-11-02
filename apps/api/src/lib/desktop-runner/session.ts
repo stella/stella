@@ -706,6 +706,8 @@ export type RunnerSession = {
   readonly socketSession: ApiSocketSession;
   /** Read this socket's queue now; resolves once what was read is sent. */
   readonly deliver: () => Promise<void>;
+  /** The newest queued command this socket has sent. */
+  readonly deliveredThrough: () => number;
   /** Ask the desktop to reconnect after `afterMs` and close. */
   readonly drain: (afterMs: number) => void;
 };
@@ -798,6 +800,7 @@ export const createRunnerSession = ({
     sessionId,
     socketSession,
     deliver: async () => await deliver(state),
+    deliveredThrough: () => state.deliveredThrough,
     drain: (afterMs) => drain(state, afterMs),
   };
 };

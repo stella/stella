@@ -10,6 +10,7 @@ CREATE TABLE "desktop_runners" (
   "organization_id" varchar(128) NOT NULL,
   "desktop_id" uuid NOT NULL,
   "device_jkt" text NOT NULL,
+  "key_id" text NOT NULL,
   "session_id" uuid NOT NULL,
   "instance_id" text NOT NULL,
   "connection" text NOT NULL,

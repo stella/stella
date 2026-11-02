@@ -62,6 +62,12 @@ export const desktopRunners = p.pgTable.withRLS(
     desktopId: p.uuid("desktop_id").notNull(),
     /** RFC 7638 thumbprint of the device key that signed the socket's proof. */
     deviceJkt: p.text("device_jkt").notNull(),
+    /**
+     * The credential that opened the latest socket. Revoking a credential
+     * disconnects only the runners it opened; another credential on the same
+     * device key keeps its own.
+     */
+    keyId: p.text("key_id").notNull(),
     /** The latest socket; an older socket of the same desktop closes itself. */
     sessionId: p.uuid("session_id").notNull(),
     /** API task holding `session_id`, the target of its doorbell. */

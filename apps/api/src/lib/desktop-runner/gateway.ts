@@ -31,7 +31,7 @@ import {
   expireAbandonedRuns,
   expireRunLeases,
   pruneEndedRuns,
-  readSessionsWithQueuedCommands,
+  readNewestQueuedCommands,
 } from "@/api/lib/desktop-runner/store";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -92,10 +92,8 @@ export type DesktopRunnerGatewayOptions = {
 
 /** Leases expired per sweep, so one sweep stays one short transaction. */
 const EXPIRY_BATCH = 100;
-/** Sockets a sweep delivers to, at most; a ring reaches the rest. */
+/** Sockets a sweep reads, at most; the next sweep continues after them. */
 const SWEEP_DELIVERY_BATCH = 500;
-/** Beyond two sweep intervals, so a command queued between sweeps is seen twice. */
-const SWEEP_WINDOW_MARGIN_MS = 5000;
 /** How long a draining task asks a refused desktop to wait before retrying. */
 const DRAINING_RETRY_AFTER_S = 5;
 
@@ -151,6 +149,8 @@ export const createDesktopRunnerGateway = (
   };
   let draining = false;
   let sweepTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The last socket the previous sweep read; `null` starts from the first. */
+  let sweepAfterSessionId: string | null = null;
   let stopListening: (() => Promise<void>) | null = null;
 
   const context = {
@@ -205,13 +205,15 @@ export const createDesktopRunnerGateway = (
       // Retention catches up on the next sweep.
       observeFailure(pruned.error, { sink: LEASE_SWEEP_SINK });
     }
-    // Only sockets with commands queued in the window, one after another:
-    // a sweep catches lost rings without touching every idle socket.
+    // Only sockets that have not sent their newest command, one after
+    // another: a sweep catches lost rings, however old, without reading the
+    // queue of every idle socket. Pages continue across sweeps, so every
+    // socket is reached even when more than a page have commands.
     const queued = await Result.tryPromise(
       async () =>
-        await readSessionsWithQueuedCommands(options.db, {
+        await readNewestQueuedCommands(options.db, {
           instanceId: options.instanceId,
-          windowMs: 2 * timing.sweepIntervalMs + SWEEP_WINDOW_MARGIN_MS,
+          afterSessionId: sweepAfterSessionId,
           limit: SWEEP_DELIVERY_BATCH,
         }),
     );
@@ -219,9 +221,19 @@ export const createDesktopRunnerGateway = (
       observeFailure(queued.error, { sink: LEASE_SWEEP_SINK });
       return;
     }
+    sweepAfterSessionId =
+      queued.value.length < SWEEP_DELIVERY_BATCH
+        ? null
+        : (queued.value.at(-1)?.sessionId ?? null);
     // One socket after another, so deliveries never burst.
-    for (const sessionId of queued.value) {
-      await sessions.get(sessionId)?.deliver();
+    for (const { sessionId, newestCommandId } of queued.value) {
+      const session = sessions.get(sessionId);
+      if (
+        session !== undefined &&
+        session.deliveredThrough() < newestCommandId
+      ) {
+        await session.deliver();
+      }
     }
   };
 

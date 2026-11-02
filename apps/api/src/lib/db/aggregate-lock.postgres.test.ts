@@ -197,6 +197,12 @@ const advisoryAcquisitions = () => {
         id: { organizationId },
         tx,
       }),
+    desktopRunnerCapacity: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "desktopRunnerCapacity",
+        id: { organizationId, userId },
+        tx,
+      }),
     fileComparisonCapacity: async (tx: AggregateAcquireTransaction) =>
       await withAggregateLock({
         aggregate: "fileComparisonCapacity",
