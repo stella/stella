@@ -24,6 +24,7 @@ import {
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import { createTestClock, waitFor } from "@stll/test-kit";
 
 import { env } from "@/api/env";
 import {
@@ -272,7 +273,10 @@ describe("handleMcpHttpRequest", () => {
       lines.push(line);
     });
     authenticateMcpRequestMock.mockImplementation(async () => {
-      await Bun.sleep(5);
+      let polls = 0;
+      await waitFor(async () => ((polls += 1) >= 2 ? true : undefined), {
+        description: "the authentication phase delay",
+      });
       return Result.ok({
         organizationId: "org_1",
         scopes: ["stella:read"],
@@ -284,7 +288,10 @@ describe("handleMcpHttpRequest", () => {
       userId: "user_1",
     });
     listMcpToolsMock.mockImplementation(async () => {
-      await Bun.sleep(toolProjectionDelayMs);
+      let polls = 0;
+      await waitFor(async () => ((polls += 1) >= 11 ? true : undefined), {
+        description: "the tool projection phase delay",
+      });
       return [];
     });
 
@@ -1534,7 +1541,11 @@ describe("handleMcpHttpRequest", () => {
       firstRead.then(({ done }) =>
         done ? ("ended" as const) : ("open" as const),
       ),
-      Bun.sleep(20).then(() => "open" as const),
+      // A clock advance drains an event-loop turn, so an immediate close
+      // reaches firstRead before the pending-stream observation wins.
+      createTestClock()
+        .advance(0)
+        .then(() => "open" as const),
     ]);
     expect(initialState).toBe("open");
 

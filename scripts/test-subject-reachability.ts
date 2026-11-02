@@ -69,6 +69,9 @@ export const parseReachabilityBaseline = (
 };
 
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
+// Lint fixtures deliberately contain rule violations; their owning tests execute them.
+const isReachabilityTest = (file: string): boolean =>
+  TEST_FILE.test(file) && !file.startsWith(".oxlint-plugins/__fixtures__/");
 const TEST_SUPPORT =
   /(?:^|\/)(?:__tests__|test|tests|fixtures?|mocks?|test-utils?)(?:\/|[.-])/u;
 const SOURCE_FILE = /\.[cm]?[jt]sx?$/u;
@@ -95,10 +98,7 @@ const trackedTests = (repoRoot: string): string[] => {
   if (result.exitCode !== 0) {
     return panic(`Could not enumerate tests: ${result.stderr.toString()}`);
   }
-  return result.stdout
-    .toString()
-    .split("\0")
-    .filter((file) => TEST_FILE.test(file));
+  return result.stdout.toString().split("\0").filter(isReachabilityTest);
 };
 
 const exportTarget = (entry: unknown): string | undefined => {
@@ -918,9 +918,10 @@ export const analyzeTestSubjectReachability = async ({
   files = trackedTests(repoRoot),
   siblingSource,
 }: AnalyzeOptions): Promise<ReachabilityFinding[]> => {
+  const testFiles = files.filter(isReachabilityTest);
   const findings: ReachabilityFinding[] = [];
   const opened = await createProgram({
-    rootNames: files.map((file) => path.join(repoRoot, file)),
+    rootNames: testFiles.map((file) => path.join(repoRoot, file)),
     compilerOptions: {
       allowJs: true,
       jsx: "preserve",
@@ -937,7 +938,7 @@ export const analyzeTestSubjectReachability = async ({
     const sourceFor =
       siblingSource ??
       (async (filename: string) => await program.getSourceFile(filename));
-    for (const file of files) {
+    for (const file of testFiles) {
       const absolute = path.join(repoRoot, file);
       const source =
         (await program.getSourceFile(absolute)) ??

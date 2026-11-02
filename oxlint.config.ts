@@ -88,7 +88,10 @@ const PUBLIC_SSR_AMBIENT_STATE_MESSAGE =
 const IDLE_SCHEDULER_MESSAGE =
   "Use scheduleIdle from '@/lib/platform/schedule-idle': Safari does not support requestIdleCallback; the shared scheduler provides a cancellable timeout fallback.";
 const idleCallbackGlobals = ["requestIdleCallback", "cancelIdleCallback"].map(
-  (name) => ({ name, message: IDLE_SCHEDULER_MESSAGE }),
+  (name) => ({
+    name,
+    message: IDLE_SCHEDULER_MESSAGE,
+  }),
 );
 const idleCallbackProperties = idleCallbackGlobals.map(({ name, message }) => ({
   property: name,
@@ -2079,6 +2082,9 @@ const config = defineConfig({
     "./.oxlint-plugins/no-dropped-fake-timers.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
+    "./.oxlint-plugins/no-ambient-time-in-tests.ts",
+    "./.oxlint-plugins/no-real-timers-in-tests.ts",
+    "./.oxlint-plugins/no-wallclock-assertions-in-tests.ts",
     "./.oxlint-plugins/no-global-fetch-replacement.ts",
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
@@ -6444,6 +6450,10 @@ const config = defineConfig({
       ],
       rules: {
         "no-direct-test-state/no-direct-test-state": "error",
+        "no-ambient-time-in-tests/no-ambient-time-in-tests": "error",
+        "no-real-timers-in-tests/no-real-timers-in-tests": "error",
+        "no-wallclock-assertions-in-tests/no-wallclock-assertions-in-tests":
+          "error",
         "no-shared-checkout-mutation/no-shared-checkout-mutation": "error",
       },
     },

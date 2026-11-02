@@ -65,6 +65,7 @@ import type { AstNode } from "./utils.ts";
 //
 // Allowed — Drizzle comparison calls:
 //   lt(runs.claimedAt, new Date(Date.now() - STALE_MS))  // fresh clock read
+//   lt(runs.claimedAt, new Date(testClock.now() - STALE_MS))
 //   lt(runs.claimedAt, new Date(Temporal.Now.instant().epochMilliseconds - STALE_MS))
 //   lte(jobs.nextRunAt, now)          // `const now = new Date()` in this file
 //   lte(sources.leaseExpiresAt, sql`now()`)              // compared in-DB
@@ -340,6 +341,14 @@ const TEMPORAL_MODULES = new Set(["@stll/time", "temporal-polyfill/full"]);
 
 type ClockReadPredicate = (node: unknown) => boolean;
 
+// How a cutoff may be read and shifted. `isDurationName` answers whether an
+// identifier names a fixed duration (`STALE_MS`); a bare name could equally
+// hold a stored timestamp (`cursorMillis`), so only a resolved constant counts.
+type ClockPredicates = {
+  isClockRead: ClockReadPredicate;
+  isDurationName: (node: AstNode) => boolean;
+};
+
 const isDateNowCall = (node: unknown): boolean => {
   if (!isAstNode(node) || node.type !== "CallExpression") {
     return false;
@@ -356,24 +365,28 @@ const isDateNowCall = (node: unknown): boolean => {
   );
 };
 
-const isClockAdjustment = (node: unknown): boolean =>
+const isClockAdjustment = (
+  node: unknown,
+  isDurationName: ClockPredicates["isDurationName"],
+): boolean =>
   isAstNode(node) &&
   (node.type === "Literal" ||
-    node.type === "Identifier" ||
-    (node.type === "UnaryExpression" && isClockAdjustment(node.argument)) ||
+    (node.type === "Identifier" && isDurationName(node)) ||
+    (node.type === "UnaryExpression" &&
+      isClockAdjustment(node.argument, isDurationName)) ||
     (node.type === "BinaryExpression" &&
       (node.operator === "+" ||
         node.operator === "-" ||
         node.operator === "*" ||
         node.operator === "/") &&
-      isClockAdjustment(node.left) &&
-      isClockAdjustment(node.right)));
+      isClockAdjustment(node.left, isDurationName) &&
+      isClockAdjustment(node.right, isDurationName)));
 
 const isClockArithmetic = (
   node: unknown,
-  isClockRead: ClockReadPredicate,
+  predicates: ClockPredicates,
 ): boolean => {
-  if (isClockRead(node)) {
+  if (predicates.isClockRead(node)) {
     return true;
   }
   if (!isAstNode(node) || node.type !== "BinaryExpression") {
@@ -389,9 +402,10 @@ const isClockArithmetic = (
     return false;
   }
   return (
-    (isClockArithmetic(node.left, isClockRead) &&
-      isClockAdjustment(node.right)) ||
-    (isClockAdjustment(node.left) && isClockArithmetic(node.right, isClockRead))
+    (isClockArithmetic(node.left, predicates) &&
+      isClockAdjustment(node.right, predicates.isDurationName)) ||
+    (isClockAdjustment(node.left, predicates.isDurationName) &&
+      isClockArithmetic(node.right, predicates))
   );
 };
 
@@ -400,9 +414,9 @@ const isClockArithmetic = (
 // `cursor.createdAt ?? new Date()` and re-open the truncation bug.
 const isFreshClockRead = (
   node: unknown,
-  isClockRead: ClockReadPredicate,
+  predicates: ClockPredicates,
 ): boolean => {
-  if (isClockRead(node)) {
+  if (predicates.isClockRead(node)) {
     return true;
   }
   if (!isAstNode(node) || node.type !== "NewExpression") {
@@ -417,7 +431,7 @@ const isFreshClockRead = (
   return (
     node.arguments.length === 0 ||
     (node.arguments.length === 1 &&
-      isClockArithmetic(node.arguments[0], isClockRead))
+      isClockArithmetic(node.arguments[0], predicates))
   );
 };
 
@@ -454,7 +468,8 @@ export default eslintCompatPlugin({
             "timestampCasToken / timestampMatchesCasToken, resolve the " +
             "boundary in-database by id, or cast the operand `::timestamptz`. " +
             "A cutoff read straight from the clock (new Date(), Date.now(), " +
-            "or imported Temporal.Now.instant().epochMilliseconds) " +
+            "a createTestClock instance's now(), or imported " +
+            "Temporal.Now.instant().epochMilliseconds) " +
             "is exempt; anything else that is sound needs a disable comment " +
             "saying why.",
         },
@@ -508,6 +523,67 @@ export default eslintCompatPlugin({
           });
         };
 
+        const isImportedCreateTestClock = (node: unknown): boolean => {
+          if (!isAstNode(node) || node.type !== "Identifier") {
+            return false;
+          }
+          const variable = resolveInScope(node);
+          if (variable === null) {
+            return false;
+          }
+          return variable.defs.some(
+            (definition) =>
+              definition.type === "ImportBinding" &&
+              isAstNode(definition.node) &&
+              definition.node.type === "ImportSpecifier" &&
+              isAstNode(definition.node.imported) &&
+              ((definition.node.imported.type === "Identifier" &&
+                definition.node.imported.name === "createTestClock") ||
+                (definition.node.imported.type === "Literal" &&
+                  definition.node.imported.value === "createTestClock")) &&
+              isAstNode(definition.parent) &&
+              definition.parent.type === "ImportDeclaration" &&
+              isAstNode(definition.parent.source) &&
+              definition.parent.source.value === "@stll/test-kit",
+          );
+        };
+
+        const isTestClockBinding = (node: unknown): boolean => {
+          if (!isAstNode(node) || node.type !== "Identifier") {
+            return false;
+          }
+          const variable = resolveInScope(node);
+          if (variable === null) {
+            return false;
+          }
+          return variable.defs.some((definition) => {
+            if (
+              definition.type !== "Variable" ||
+              !isAstNode(definition.node) ||
+              definition.node.type !== "VariableDeclarator" ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "VariableDeclaration" ||
+              definition.parent.kind !== "const" ||
+              !isAstNode(definition.node.init) ||
+              definition.node.init.type !== "CallExpression"
+            ) {
+              return false;
+            }
+            return isImportedCreateTestClock(definition.node.init.callee);
+          });
+        };
+
+        const isTestClockNowCall = (node: unknown): boolean =>
+          isAstNode(node) &&
+          node.type === "CallExpression" &&
+          Array.isArray(node.arguments) &&
+          node.arguments.length === 0 &&
+          isAstNode(node.callee) &&
+          node.callee.type === "MemberExpression" &&
+          node.callee.computed !== true &&
+          isIdentifierNamed(node.callee.property, "now") &&
+          isTestClockBinding(node.callee.object);
+
         const isNamedMember = (node: unknown, name: string): boolean =>
           isAstNode(node) &&
           node.type === "MemberExpression" &&
@@ -538,10 +614,58 @@ export default eslintCompatPlugin({
         };
 
         const isRecognizedClockRead = (node: unknown): boolean =>
-          isDateNowCall(node) || isTemporalNowEpochMilliseconds(node);
+          isDateNowCall(node) ||
+          isTestClockNowCall(node) ||
+          isTemporalNowEpochMilliseconds(node);
+
+        // A fixed duration: a `const` in this file whose initializer is
+        // itself literal duration arithmetic, or a named duration constant
+        // imported from `@stll/time`. Anything else may be a stored value.
+        const isDurationName = (
+          node: AstNode,
+          seen: ReadonlySet<AstNode> = new Set(),
+        ): boolean => {
+          if (seen.has(node)) {
+            return false;
+          }
+          const variable = resolveInScope(node);
+          if (variable === null) {
+            return false;
+          }
+          const visited = new Set([...seen, node]);
+          return variable.defs.some((definition) => {
+            if (
+              definition.type === "ImportBinding" &&
+              isAstNode(definition.node) &&
+              definition.node.type === "ImportSpecifier" &&
+              isAstNode(definition.parent) &&
+              definition.parent.type === "ImportDeclaration" &&
+              isAstNode(definition.parent.source) &&
+              definition.parent.source.value === "@stll/time"
+            ) {
+              return isIdentifierNamed(definition.node.imported, "DAY_IN_MS");
+            }
+            return (
+              definition.type === "Variable" &&
+              isAstNode(definition.node) &&
+              definition.node.type === "VariableDeclarator" &&
+              isAstNode(definition.parent) &&
+              definition.parent.type === "VariableDeclaration" &&
+              definition.parent.kind === "const" &&
+              isClockAdjustment(definition.node.init, (name) =>
+                isDurationName(name, visited),
+              )
+            );
+          });
+        };
+
+        const clockPredicates: ClockPredicates = {
+          isClockRead: isRecognizedClockRead,
+          isDurationName: (node) => isDurationName(node),
+        };
 
         const isFreshClockOperand = (node: unknown): boolean =>
-          isFreshClockRead(node, isRecognizedClockRead);
+          isFreshClockRead(node, clockPredicates);
 
         const isPgTableCall = (node: unknown): boolean =>
           isAstNode(node) &&
