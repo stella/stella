@@ -820,12 +820,14 @@
       "effectiveFrom": "Gültig ab",
       "effectiveRateRequired": "Für diese Akte, diese Person und dieses Datum ist kein gültiger Stundensatz hinterlegt. Fügen Sie einen Stundensatz hinzu oder erfassen Sie die Zeit als nicht abrechenbar.",
       "effectiveTo": "Gültig bis",
+      "firstTableIsDefault": "Die erste Tariftabelle der Akte ist ihre Standardtabelle.",
       "hourlyRate": "Stundensatz",
       "logNonBillable": "Als nicht abrechenbar erfassen",
       "noRateEntries": "Noch keine Tarifeinträge",
       "noRateFound": "Kein Tarif konfiguriert",
       "noRateTables": "Noch keine Tariftabellen",
       "ongoing": "Laufend",
+      "onlyDefaultApplies": "Tarife gelten nur aus der Standardtabelle der Akte.",
       "override": "Überschreiben",
       "perHour": "/Std.",
       "rateCount": "{count, plural, one {# Tarif} other {# Tarife}}",
@@ -1320,7 +1322,7 @@
   },
   "catalogue": {
     "addCustom": "Eigenes hinzufügen",
-    "addCustomMcp": "MCP-Server hinzufügen",
+    "addCustomMcp": "Integration hinzufügen",
     "addCustomSkill": "Skill hinzufügen",
     "by": "Von {author}",
     "configuration": "Konfiguration",
@@ -1331,7 +1333,7 @@
     "detailAuthMethod": "Authentifizierung",
     "empty": "Keine Einträge entsprechen dem aktuellen Filter.",
     "filter": {
-      "mcps": "MCP-Server",
+      "mcps": "Integrationen",
       "nativeTools": "Integrierte Tools",
       "skills": "Skills"
     },
@@ -2484,7 +2486,7 @@
     "scopeChat": "Ihre Chats und Nachrichten lesen und verwalten",
     "scopeContactsWrite": "Kontakte in Ihrer gesamten Organisation erstellen, bearbeiten und löschen",
     "scopeDocumentsWrite": "Ihre Dokumente erstellen, bearbeiten und löschen",
-    "scopeExternalMcps": "Ihre verbundenen externen Tools verwenden",
+    "scopeExternalMcps": "Ihre verbundenen Integrationen verwenden",
     "scopeFeedback": "Produktfeedback an die stella-Betreuer senden",
     "scopeKnowledgeWrite": "Ihre Klauseln erstellen, bearbeiten und löschen und Playbooks ausführen",
     "scopeLawRead": "Öffentliche Rechtsvorschriften und Rechtsprechung lesen",
@@ -2510,7 +2512,7 @@
     "summaryChat": "Chats",
     "summaryContactsWrite": "Kontakte",
     "summaryDocumentsWrite": "Dokumente",
-    "summaryExternalMcps": "verbundene externe Tools",
+    "summaryExternalMcps": "verbundene Integrationen",
     "summaryKnowledgeWrite": "Klauseln und Playbooks",
     "summaryLawRead": "öffentliche Rechtsvorschriften und Rechtsprechung",
     "summaryLineChange": "<group>Erstellen und bearbeiten:</group> {items}",
@@ -2539,8 +2541,8 @@
     "attorneys": {
       "none": "Nicht zugewiesen",
       "originating": "Hauptkontakt",
-      "responsible": "Verantwortlicher Anwalt",
-      "title": "Anwälte"
+      "responsible": "Verantwortliche Person",
+      "title": "Verantwortliche für die Beziehung"
     },
     "billing": {
       "addBankAccount": "Bankkonto hinzufügen",
@@ -3455,7 +3457,7 @@
     "redoShortcut": "Wiederholen (Strg+Y)",
     "rejectChange": "Änderung ablehnen",
     "removeLink": "Link entfernen",
-    "renderErrorDescription": "Beim Rendern dieser Komponente ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut oder wenden Sie sich an den Support, falls das Problem weiterhin besteht.",
+    "renderErrorDescription": "Dieser Teil des Dokuments konnte nicht angezeigt werden. Laden Sie die Seite neu und geben Sie uns Bescheid, falls das erneut passiert.",
     "saveCheckpointFailedDescription": "Die DOCX-Datei wurde lokal erstellt, aber stella konnte den Speicherpunkt nicht hochladen. Lassen Sie den Editor geöffnet und versuchen Sie erneut zu speichern.",
     "saveCheckpointFailedTitle": "Speicherstand konnte nicht hochgeladen werden",
     "saveEditorUnavailableDescription": "Der Editor ist noch nicht bereit. Warten Sie, bis das Dokument vollständig geladen ist, und versuchen Sie dann erneut zu speichern.",
@@ -4156,7 +4158,7 @@
     "mcp": {
       "addAndConnect": "Hinzufügen und verbinden",
       "addServer": "Server hinzufügen",
-      "addServerCardTitle": "Neuen MCP-Server hinzufügen",
+      "addServerCardTitle": "Neue Integration hinzufügen",
       "auth": {
         "bearer": "Bearer-Token",
         "none": "Keine Authentifizierung",
@@ -4419,7 +4421,7 @@
         "title": "Vorlagen"
       },
       "tools": {
-        "description": "Verbinden Sie stella mit öffentlichen Registern und anderen Quellen",
+        "description": "Skills, Integrationen und stets verfügbare Tools, die die KI im Chat nutzen kann",
         "title": "Tools"
       },
       "workflows": {
@@ -4453,7 +4455,7 @@
       },
       "commandConflict": "Ein Skill mit diesem / Befehl existiert bereits",
       "commandHelp": "Geben Sie den Befehl im Chat ein, um diesen Skill auszuführen.",
-      "commandLabel": "Schrägstrich-Befehl (optional)",
+      "commandLabel": "Chat-Befehl (optional)",
       "commandPlaceholder": "z. B. zusammenfassen",
       "errors": {
         "commandInvalid": "Verwenden Sie nur Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche"
@@ -4600,7 +4602,7 @@
     "chat": "Chat",
     "contacts": "Kontakte",
     "inbox": "Posteingang",
-    "knowledge": "Wissen",
+    "knowledge": "Analytik",
     "myTodos": "Meine Aufgaben",
     "pinned": "Angeheftet",
     "recentMatters": "Zuletzt verwendete Akten",
@@ -5744,7 +5746,7 @@
       "previewIntroduction": "Diese Vereinbarung wird zwischen Example Labs Ltd. (die „Gesellschaft“) und dem auf der Unterschriftsseite genannten Investor (der „Investor“) geschlossen.",
       "previewLevel1": "Investition",
       "previewLevel1Second": "Zusicherungen der Gesellschaft",
-      "previewLevel1Third": "Allgemeines",
+      "previewLevel1Third": "Allgemeine Bestimmungen",
       "previewLevel2": "Eigenkapitalfinanzierung",
       "previewLevel2Second": "Liquiditätsereignis",
       "previewLevel3": "Umwandlungspreis",
@@ -5834,14 +5836,14 @@
     "dueDate": "Fälligkeitsdatum",
     "hardDeadline": "Verbindliche Frist",
     "hardDeadlineOverdue": "Verbindliche Frist überschritten",
-    "linkEntity": "Eintrag verknüpfen",
-    "linkedEntities": "Verknüpfte Einträge",
+    "linkEntity": "Element verknüpfen",
+    "linkedEntities": "Verknüpfte Elemente",
     "myTasksTitle": "Meine Aufgaben",
     "myWorkTitle": "Meine Arbeit",
     "newTask": "Neue Aufgabe",
     "noActivity": "Noch keine Aktivität",
     "noAssignees": "Keine Mitwirkenden",
-    "noLinks": "Keine verknüpften Einträge",
+    "noLinks": "Keine verknüpften Elemente",
     "noSubtasks": "Keine Unteraufgaben",
     "noTasksAssigned": "Keine Aufgaben zugewiesen",
     "noWorkInQueue": "Keine Arbeit in dieser Warteschlange",
@@ -6429,7 +6431,8 @@
       "errored": "Fehler",
       "formatNotSupported": "Format nicht unterstützt",
       "selectAValue": "Wert auswählen",
-      "selectValues": "Werte auswählen"
+      "selectValues": "Werte auswählen",
+      "wholeNumberOnly": "Ganze Zahl eingeben"
     },
     "files": {
       "addFilePropertyToUpload": "Fügen Sie eine Dateieigenschaft zum Hochladen hinzu",
@@ -6723,7 +6726,7 @@
     "matterInfo": "Akteninformationen",
     "mattersCount": "{count, plural, one {# Akte} other {# Akten}}",
     "members": {
-      "addMember": "Mitglied hinzufügen",
+      "addMember": "Zur Akte hinzufügen",
       "addMemberDescription": "Ein Teammitglied zu dieser Akte hinzufügen",
       "alreadyMember": "Benutzer ist bereits Mitglied",
       "alreadyOnMatter": "Bereits in dieser Akte",
@@ -6918,7 +6921,7 @@
       },
       "backToPeek": "Zurück zur Vorschau",
       "entitySidebar": "Dokumentdetails",
-      "evidence": "Beweismittel",
+      "evidence": "Begründung",
       "incorrectPassword": "Falsches Passwort. Bitte versuchen Sie es erneut.",
       "nextPage": "Nächste Seite",
       "pageEditor": {

@@ -820,12 +820,14 @@
       "effectiveFrom": "Applicable à partir du",
       "effectiveRateRequired": "Aucun taux applicable n’est défini pour ce dossier, cette personne et cette date. Ajoutez un taux ou enregistrez ce temps comme non facturable.",
       "effectiveTo": "Applicable jusqu'au",
+      "firstTableIsDefault": "Le premier barème du dossier est son barème par défaut.",
       "hourlyRate": "Taux horaire",
       "logNonBillable": "Enregistrer comme non facturable",
       "noRateEntries": "Aucune entrée tarifaire",
       "noRateFound": "Aucun tarif configuré",
       "noRateTables": "Aucun barème",
       "ongoing": "En cours",
+      "onlyDefaultApplies": "Seuls les tarifs du barème par défaut du dossier s'appliquent.",
       "override": "Remplacer",
       "perHour": "/h",
       "rateCount": "{count, plural, one {# tarif} other {# tarifs} many {# tarifs}}",
@@ -1320,7 +1322,7 @@
   },
   "catalogue": {
     "addCustom": "Ajouter personnalisé",
-    "addCustomMcp": "Ajouter un serveur MCP",
+    "addCustomMcp": "Ajouter une intégration",
     "addCustomSkill": "Ajouter une compétence",
     "by": "Par {author}",
     "configuration": "Configuration",
@@ -1331,7 +1333,7 @@
     "detailAuthMethod": "Authentification",
     "empty": "Aucune entrée ne correspond au filtre actuel.",
     "filter": {
-      "mcps": "Serveurs MCP",
+      "mcps": "Intégrations",
       "nativeTools": "Outils intégrés",
       "skills": "Compétences"
     },
@@ -2484,7 +2486,7 @@
     "scopeChat": "Lire et gérer vos conversations et vos messages",
     "scopeContactsWrite": "Créer, modifier et supprimer des contacts dans toute votre organisation",
     "scopeDocumentsWrite": "Créer, modifier et supprimer vos documents",
-    "scopeExternalMcps": "Utiliser vos outils externes connectés",
+    "scopeExternalMcps": "Utiliser vos intégrations connectées",
     "scopeFeedback": "Envoyer des retours produit aux mainteneurs de stella",
     "scopeKnowledgeWrite": "Créer, modifier et supprimer vos clauses, et exécuter des playbooks",
     "scopeLawRead": "Lire les textes législatifs publics et la jurisprudence",
@@ -2510,7 +2512,7 @@
     "summaryChat": "conversations",
     "summaryContactsWrite": "les contacts",
     "summaryDocumentsWrite": "les documents",
-    "summaryExternalMcps": "outils externes connectés",
+    "summaryExternalMcps": "intégrations connectées",
     "summaryKnowledgeWrite": "clauses et playbooks",
     "summaryLawRead": "textes législatifs publics et jurisprudence",
     "summaryLineChange": "<group>Créer et modifier :</group> {items}",
@@ -2539,8 +2541,8 @@
     "attorneys": {
       "none": "Non attribué",
       "originating": "Contact principal",
-      "responsible": "Avocat responsable",
-      "title": "Avocats"
+      "responsible": "Personne responsable",
+      "title": "Responsables de la relation"
     },
     "billing": {
       "addBankAccount": "Ajouter un compte bancaire",
@@ -3455,7 +3457,7 @@
     "redoShortcut": "Rétablir (Ctrl+Y)",
     "rejectChange": "Rejeter la modification",
     "removeLink": "Supprimer le lien",
-    "renderErrorDescription": "Une erreur s'est produite lors du rendu de ce composant. Réessayez ou contactez le support si le problème persiste.",
+    "renderErrorDescription": "Impossible d’afficher cette partie du document. Rechargez la page et, si le problème se reproduit, prévenez-nous.",
     "saveCheckpointFailedDescription": "Le DOCX a été créé localement, mais stella n’a pas pu téléverser le point de sauvegarde. Laissez l’éditeur ouvert et réessayez d’enregistrer.",
     "saveCheckpointFailedTitle": "Impossible de téléverser la sauvegarde",
     "saveEditorUnavailableDescription": "L’éditeur n’est pas encore prêt. Attendez la fin du chargement du document, puis réessayez d’enregistrer.",
@@ -4156,7 +4158,7 @@
     "mcp": {
       "addAndConnect": "Ajouter et connecter",
       "addServer": "Ajouter un serveur",
-      "addServerCardTitle": "Ajouter un nouveau serveur MCP",
+      "addServerCardTitle": "Ajouter une nouvelle intégration",
       "auth": {
         "bearer": "Jeton Bearer",
         "none": "Sans authentification",
@@ -4453,7 +4455,7 @@
       },
       "commandConflict": "Une compétence avec cette commande / existe déjà",
       "commandHelp": "Saisissez-la dans une conversation pour exécuter cette compétence.",
-      "commandLabel": "Commande slash (facultatif)",
+      "commandLabel": "Commande de conversation (facultatif)",
       "commandPlaceholder": "p. ex. résumer",
       "errors": {
         "commandInvalid": "Utilisez uniquement des lettres minuscules, des chiffres, des traits d'union et des tirets bas"
@@ -4600,7 +4602,7 @@
     "chat": "Conversation",
     "contacts": "Contacts",
     "inbox": "Boîte de réception",
-    "knowledge": "Connaissances",
+    "knowledge": "Intelligence",
     "myTodos": "Mes tâches",
     "pinned": "Épinglés",
     "recentMatters": "Dossiers récents",
@@ -6429,7 +6431,8 @@
       "errored": "Erreur",
       "formatNotSupported": "Format non pris en charge",
       "selectAValue": "Sélectionner une valeur",
-      "selectValues": "Sélectionner des valeurs"
+      "selectValues": "Sélectionner des valeurs",
+      "wholeNumberOnly": "Saisir un nombre entier"
     },
     "files": {
       "addFilePropertyToUpload": "Ajoutez une propriété de fichier pour importer des fichiers",
@@ -6723,7 +6726,7 @@
     "matterInfo": "Informations sur le dossier",
     "mattersCount": "{count, plural, one {# dossier} other {# dossiers} many {# dossiers}}",
     "members": {
-      "addMember": "Ajouter un membre",
+      "addMember": "Ajouter au dossier",
       "addMemberDescription": "Ajouter un membre de l'équipe à ce dossier",
       "alreadyMember": "L'utilisateur est déjà membre",
       "alreadyOnMatter": "Déjà dans ce dossier",
@@ -6918,7 +6921,7 @@
       },
       "backToPeek": "Revenir à l'aperçu",
       "entitySidebar": "Détails du document",
-      "evidence": "Pièce à conviction",
+      "evidence": "Justification",
       "incorrectPassword": "Mot de passe incorrect. Veuillez réessayer.",
       "nextPage": "Page suivante",
       "pageEditor": {
