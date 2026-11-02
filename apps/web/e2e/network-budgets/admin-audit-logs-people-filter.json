@@ -1,0 +1,12 @@
+{
+  "route": "/admin/audit-logs",
+  "reason": "The activity log's person filter lists the organization's members, read once from the full organization alongside the log page.",
+  "budget": {
+    "depth": 0,
+    "depthMethod": "round-barrier-v1",
+    "requests": ["GET /api/auth/organization/get-full-organization"],
+    "requestCounts": {
+      "GET /api/auth/organization/get-full-organization": 1
+    }
+  }
+}
