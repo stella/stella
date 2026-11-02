@@ -158,9 +158,17 @@ const hasGuardedPredicate = (
   );
 };
 
+// Block comments are not SQL: `/* batch */ UPDATE ...` still starts with
+// UPDATE. Line comments stay: the static text joins fragments, so a `--` can
+// no longer be told from the statement after it.
+const withoutSqlComments = (text: string) =>
+  text.replaceAll(/\/\*[\s\S]*?\*\//gu, " ");
+
 const rawWriteCandidate = (text: string | null) =>
   text !== null &&
-  /(?:^|[;()])\s*UPDATE\b|ON\s+CONFLICT[\s\S]*DO\s+UPDATE/iu.test(text);
+  /(?:^|[;()])\s*UPDATE\b|ON\s+CONFLICT[\s\S]*DO\s+UPDATE/iu.test(
+    withoutSqlComments(text),
+  );
 
 const containsRawMutation = (
   context: ReplayContext,
@@ -188,6 +196,26 @@ const containsRawMutation = (
   );
 };
 
+const statementBranches = (value: unknown): unknown[] => {
+  const expression = unwrapExpression(value);
+  if (!isAstNode(expression)) {
+    return [value];
+  }
+  if (expression.type === "ConditionalExpression") {
+    return [
+      ...statementBranches(expression.consequent),
+      ...statementBranches(expression.alternate),
+    ];
+  }
+  if (expression.type === "LogicalExpression") {
+    return [
+      ...statementBranches(expression.left),
+      ...statementBranches(expression.right),
+    ];
+  }
+  return [value];
+};
+
 const handleRawWrite = (
   context: ReplayContext,
   node: AstNode,
@@ -196,7 +224,13 @@ const handleRawWrite = (
   const argument = Array.isArray(node.arguments)
     ? node.arguments.at(0)
     : undefined;
-  if (rawWriteCandidate(rawText(context, rawQuery(context, argument)))) {
+  // A conditional can hide its UPDATE branch below the top level, so each
+  // branch the statement may take is checked on its own.
+  if (
+    statementBranches(argument).some((branch) =>
+      rawWriteCandidate(rawText(context, rawQuery(context, branch))),
+    )
+  ) {
     report(node);
   }
 };

@@ -3,8 +3,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  replayPlanModifiedColumn,
   replayPlanners,
   replayPlanValues,
+  UNKNOWN_MODIFIED_COLUMN,
 } from "@stll/scripts/src/replay-plan-values";
 import {
   type Node,
@@ -228,8 +230,16 @@ const inspect = (file: string, text: string) => {
           setPayload === undefined
             ? undefined
             : (replayPlanValues(setPayload, ancestors, planners) ?? setPayload);
+        // A plan's `modifiedAt` option adds its column to the same SET.
+        const modifiedColumn =
+          setPayload === undefined
+            ? null
+            : replayPlanModifiedColumn(setPayload, ancestors, planners);
         if (
           method === "insert" ||
+          (modifiedColumn !== null &&
+            (modifiedColumn === UNKNOWN_MODIFIED_COLUMN ||
+              INPUT_COLUMNS.has(modifiedColumn))) ||
           isCanonicalPayload(
             payload,
             enclosingName(node, ancestors),

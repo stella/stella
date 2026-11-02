@@ -85,6 +85,19 @@ describe.serial("replay writer classifications", () => {
             if (!isAstNode(node)) {
               return;
             }
+            // A test inside a skipped or todo suite never runs, so it proves
+            // nothing.
+            if (
+              node.type === "CallExpression" &&
+              isAstNode(node.callee) &&
+              node.callee.type === "MemberExpression" &&
+              isAstNode(node.callee.object) &&
+              node.callee.object.type === "Identifier" &&
+              node.callee.object.name === "describe" &&
+              ["skip", "todo"].includes(getPropertyName(node.callee) ?? "")
+            ) {
+              return;
+            }
             if (
               node.type === "CallExpression" &&
               isAstNode(node.callee) &&

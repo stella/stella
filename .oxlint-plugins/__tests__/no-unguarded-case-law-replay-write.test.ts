@@ -158,6 +158,14 @@ describe.serial(RULE, () => {
         'import {replayRawWrite} from "@/api/lib/case-law/replay-write"; import {sql} from "drizzle-orm";\nawait replayRawWrite({table:rows,values:{value},predicate:sql`true`,operation:{kind:"update"},ctes:[{name:"x",query:sql.raw("UPDATE rows SET value=1")}]}).execute({kind:"drizzle",connection:tx});',
         [2],
       ],
+      [
+        'import { sql } from "drizzle-orm";\nawait tx.execute(sql.raw("/* replay batch */ UPDATE rows SET value = 1"));',
+        [2],
+      ],
+      [
+        'import { sql } from "drizzle-orm";\nawait tx.execute(useUpdate ? sql.raw("UPDATE rows SET value = 1") : sql.raw("SELECT 1"));',
+        [2],
+      ],
     ];
     expect(
       await Promise.all(cases.map(async ([source]) => await lint(source))),
