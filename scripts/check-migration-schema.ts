@@ -203,6 +203,53 @@ const linkBaseDependencies = (headRoot: string, baseRoot: string) => {
   }
 };
 
+const DEPENDENCY_LOCKFILE = "bun.lock";
+
+const readLockfile = (root: string) => {
+  const lockfile = path.join(root, DEPENDENCY_LOCKFILE);
+  return existsSync(lockfile) ? readFileSync(lockfile, "utf-8") : null;
+};
+
+const installBaseDependencies = (baseRoot: string) => {
+  const result = Bun.spawnSync(
+    [
+      "bash",
+      path.join(import.meta.dir, "retry.sh"),
+      "bun",
+      "install",
+      "--frozen-lockfile",
+      "--ignore-scripts",
+    ],
+    {
+      cwd: baseRoot,
+      // .npmrc reads NPM_TOKEN; the base install never needs a real token.
+      env: { ...process.env, NPM_TOKEN: "" },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  if (result.exitCode !== 0) {
+    panic(
+      `Cannot install the baseline dependencies:\n${result.stdout.toString()}${result.stderr.toString()}`,
+    );
+  }
+};
+
+/**
+ * The base tree resolves its imports against the dependencies the base
+ * declares. A lockfile equal to the head's describes the same install, so the
+ * head's third-party packages are linked; any other base installs its own, so
+ * a branch that adds, removes or moves a dependency never judges the base
+ * schema with the branch's packages.
+ */
+const prepareBaseDependencies = (headRoot: string, baseRoot: string) => {
+  if (readLockfile(baseRoot) === readLockfile(headRoot)) {
+    linkBaseDependencies(headRoot, baseRoot);
+    return;
+  }
+  installBaseDependencies(baseRoot);
+};
+
 export const checkMigrationRequirement = async (
   root: string,
   baseRef: string,
@@ -240,7 +287,7 @@ export const checkMigrationRequirement = async (
   const baseRoot = mkdtempSync(path.join(tmpdir(), "migration-schema-base-"));
   try {
     runGit(root, ["worktree", "add", "--detach", baseRoot, mergeBase]);
-    linkBaseDependencies(root, baseRoot);
+    prepareBaseDependencies(root, baseRoot);
     const [baseSnapshot, headSnapshot] = await Promise.all([
       generateSchemaSnapshot(baseRoot),
       generateSchemaSnapshot(root),

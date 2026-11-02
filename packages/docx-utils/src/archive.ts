@@ -180,7 +180,7 @@ const loadDocxResult = async (
         isCompressionRatioExempt: (path) => !isMarkup(path),
       });
       for (const entry of zip.entries()) {
-        // oxlint-disable-next-line no-await-in-loop -- one entry in memory at a time
+        // One entry in memory at a time.
         await entry.bytes();
       }
       return zip;

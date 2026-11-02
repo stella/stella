@@ -23,7 +23,7 @@ const table = (
 ) => `import { pgTable, ${type} } from "drizzle-orm/pg-core";
 export const items = pgTable("items", { value: ${type}("value") });
 `;
-const createFixture = () => {
+const createFixture = ({ linkModules = true } = {}) => {
   const root = mkdtempSync(path.join(tmpdir(), "migration-guard-"));
   fixtures.push(root);
   mkdirSync(path.join(root, "apps/api/src/db/schema"), { recursive: true });
@@ -53,14 +53,16 @@ const createFixture = () => {
   git("add", ".");
   git("commit", "-m", "base");
   git("tag", "base");
-  const sourceModules = path.resolve(import.meta.dir, "../node_modules");
-  const fixtureModules = path.join(root, "node_modules");
-  mkdirSync(fixtureModules);
-  for (const entry of readdirSync(sourceModules)) {
-    symlinkSync(
-      path.join(sourceModules, entry),
-      path.join(fixtureModules, entry),
-    );
+  if (linkModules) {
+    const sourceModules = path.resolve(import.meta.dir, "../node_modules");
+    const fixtureModules = path.join(root, "node_modules");
+    mkdirSync(fixtureModules);
+    for (const entry of readdirSync(sourceModules)) {
+      symlinkSync(
+        path.join(sourceModules, entry),
+        path.join(fixtureModules, entry),
+      );
+    }
   }
   return { root, git };
 };
@@ -249,6 +251,56 @@ test("a workspace helper change is resolved independently in each tree", () => {
   git("add", ".");
   git("commit", "-m", "change schema helper");
   expect(runGuard(root).exitCode).toBe(1);
+});
+
+test("a base whose dependencies differ from the branch's builds with its own install", () => {
+  // Only local packages, so both installs run offline.
+  const { root, git } = createFixture({ linkModules: false });
+  const install = () => {
+    const result = Bun.spawnSync(["bun", "install"], {
+      cwd: root,
+      env: HERMETIC_GIT_ENV,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+  };
+  const dependency = path.join(root, "vendor/legacy-name");
+  mkdirSync(dependency, { recursive: true });
+  writeFileSync(
+    path.join(dependency, "package.json"),
+    '{"name":"legacy-name","version":"1.0.0","type":"module","exports":"./index.js"}\n',
+  );
+  writeFileSync(
+    path.join(dependency, "index.js"),
+    'export const name = "items";\n',
+  );
+  writeFileSync(
+    path.join(root, "package.json"),
+    '{"private":true,"workspaces":["packages/*"],"dependencies":{"legacy-name":"file:./vendor/legacy-name"}}\n',
+  );
+  writeFileSync(
+    path.join(root, "apps/api/src/db/schema/one.ts"),
+    'import { name } from "legacy-name";\nexport const label = name;\n',
+  );
+  install();
+  git("add", ".");
+  git("commit", "-m", "read a name from a dependency");
+  git("tag", "-f", "base");
+  // The branch drops the dependency, so its install no longer has it.
+  writeFileSync(
+    path.join(root, "package.json"),
+    '{"private":true,"workspaces":["packages/*"]}\n',
+  );
+  writeFileSync(
+    path.join(root, "apps/api/src/db/schema/one.ts"),
+    'export const label = "items";\n',
+  );
+  install();
+  git("add", ".");
+  git("commit", "-m", "drop the dependency");
+  const result = runGuard(root);
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
 });
 
 test("a failed worktree add preserves its error and removes the temporary directory", () => {
