@@ -6432,7 +6432,8 @@
       "errored": "Fehler",
       "formatNotSupported": "Format nicht unterstützt",
       "selectAValue": "Wert auswählen",
-      "selectValues": "Werte auswählen"
+      "selectValues": "Werte auswählen",
+      "wholeNumberOnly": "Ganze Zahl eingeben"
     },
     "files": {
       "addFilePropertyToUpload": "Fügen Sie eine Dateieigenschaft zum Hochladen hinzu",

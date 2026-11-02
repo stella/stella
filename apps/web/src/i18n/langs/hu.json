@@ -6432,7 +6432,8 @@
       "errored": "Hiba",
       "formatNotSupported": "Formátum nem támogatott",
       "selectAValue": "Válasszon értéket",
-      "selectValues": "Válasszon értékeket"
+      "selectValues": "Válasszon értékeket",
+      "wholeNumberOnly": "Adjon meg egy egész számot"
     },
     "files": {
       "addFilePropertyToUpload": "Adjon hozzá fájltulajdonságot a fájlok feltöltéséhez",

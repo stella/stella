@@ -6432,7 +6432,8 @@
       "errored": "حدث خطأ",
       "formatNotSupported": "التنسيق غير مدعوم",
       "selectAValue": "اختر قيمة",
-      "selectValues": "اختر القيم"
+      "selectValues": "اختر القيم",
+      "wholeNumberOnly": "أدخل عددًا صحيحًا"
     },
     "files": {
       "addFilePropertyToUpload": "أضف خاصية ملف لرفع الملفات",

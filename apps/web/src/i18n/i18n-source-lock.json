@@ -5431,6 +5431,7 @@
   "workspaces.fields.formatNotSupported": "Format not supported",
   "workspaces.fields.selectAValue": "Select a value",
   "workspaces.fields.selectValues": "Select values",
+  "workspaces.fields.wholeNumberOnly": "Enter a whole number",
   "workspaces.files.addFilePropertyToUpload": "Add a file property to upload files",
   "workspaces.files.attachedTemplateUpload.confirm": "Remove link and upload",
   "workspaces.files.attachedTemplateUpload.description": "{count, plural, one {This file contains a link to a Word template outside the document.} other {These files contain links to Word templates outside the documents.}} stella blocks unchanged uploads because Word can load content or macros through these links.",

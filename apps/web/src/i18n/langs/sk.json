@@ -6432,7 +6432,8 @@
       "errored": "Chyba",
       "formatNotSupported": "Formát nie je podporovaný",
       "selectAValue": "Vyberte hodnotu",
-      "selectValues": "Vyberte hodnoty"
+      "selectValues": "Vyberte hodnoty",
+      "wholeNumberOnly": "Zadajte celé číslo"
     },
     "files": {
       "addFilePropertyToUpload": "Pridajte vlastnosť typu súbor na nahrávanie súborov",
