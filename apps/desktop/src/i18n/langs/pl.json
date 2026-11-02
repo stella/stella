@@ -506,7 +506,10 @@
     "billingDraftsRevoked": "stella AI proponuje opisy dopiero po Twojej zgodzie przy wpisie czasu.",
     "billingDraftsWithdraw": "Wycofaj zgodę",
     "billingDraftsWithdrawPending": "stella AI jest wyłączona na tym komputerze. Wycofanie zgody zostanie wysłane do stelli, gdy tylko będzie dostępna.",
-    "billingDraftsUnavailable": "Nie można teraz wczytać ustawień propozycji stella AI."
+    "billingDraftsUnavailable": "Nie można teraz wczytać ustawień propozycji stella AI.",
+    "aiDraftCodes": "Zadanie {task} · Czynność {activity}",
+    "aiDraftFlags": "Uwagi do zasad rozliczeń",
+    "aiDraftFlagSource": "{file}, {section}"
   },
   "dictation": {
     "title": "Dyktowanie",

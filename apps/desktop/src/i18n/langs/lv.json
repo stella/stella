@@ -506,7 +506,10 @@
     "billingDraftsRevoked": "stella AI sagatavo aprakstus tikai pēc tam, kad to atļaujat pie laika ieraksta.",
     "billingDraftsWithdraw": "Atsaukt piekrišanu",
     "billingDraftsWithdrawPending": "stella AI šajā datorā ir izslēgts. Atsaukums tiks nosūtīts stellai, tiklīdz tā būs sasniedzama.",
-    "billingDraftsUnavailable": "stella AI melnrakstu iestatījumus pašlaik nevar ielādēt."
+    "billingDraftsUnavailable": "stella AI melnrakstu iestatījumus pašlaik nevar ielādēt.",
+    "aiDraftCodes": "Uzdevums {task} · Darbība {activity}",
+    "aiDraftFlags": "Piezīmes par norēķinu vadlīnijām",
+    "aiDraftFlagSource": "{file}, {section}"
   },
   "dictation": {
     "title": "Diktēšana",

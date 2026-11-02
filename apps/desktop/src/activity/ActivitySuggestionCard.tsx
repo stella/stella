@@ -6,6 +6,7 @@ import { useFormatter, useLocale, useTranslations } from "use-intl";
 import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "@stll/api-contract/desktop-time-entries";
 import type {
   DesktopMatter,
+  DesktopTimeEntryClassification,
   DesktopTimeEntryMatterCandidate,
 } from "@stll/api-contract/desktop-time-entries";
 import { AiLabel } from "@stll/ui/ai-label";
@@ -44,6 +45,8 @@ export type SuggestionEdit = {
   matter: DesktopMatter | null;
   narrative: string;
   written: number;
+  /** What a guided draft classified the entry as, for the chosen matter. */
+  classification: DesktopTimeEntryClassification | null;
 };
 
 /** What the stella AI strip above the narrative shows. `hidden` when the
@@ -66,6 +69,8 @@ type ActivitySuggestionCardProps = {
   assist: DraftAssistView;
   /** The user's earlier entries the current draft followed. */
   earlierEntries: CardDraft["earlierEntries"];
+  /** The current guided draft's notes against the billing guidelines. */
+  flags: CardDraft["flags"];
   onDraft: () => void;
   onAllow: () => void;
   onEdit: (change: Partial<SuggestionEdit>) => void;
@@ -114,6 +119,7 @@ export const ActivitySuggestionCard = ({
   sourceAppVisuals,
   assist,
   earlierEntries,
+  flags,
   onDraft,
   onAllow,
   onEdit,
@@ -226,7 +232,9 @@ export const ActivitySuggestionCard = ({
           candidates={candidates}
           disabled={!editable}
           label={edit.matter?.name ?? t("chooseMatter")}
-          onChoose={(matter) => onEdit({ matter })}
+          // Codes follow the matter's billing format, so a new matter
+          // drops them until it is drafted again.
+          onChoose={(matter) => onEdit({ matter, classification: null })}
         />
       </div>
       <DraftAssistStrip
@@ -248,6 +256,8 @@ export const ActivitySuggestionCard = ({
         rows={2}
         value={edit.narrative}
       />
+      <DraftClassification classification={edit.classification} />
+      <GuidelineFlags flags={flags} />
       <EarlierEntries entries={earlierEntries} />
       <div className="flex flex-wrap items-center gap-2">
         <Label className="gap-2 text-xs">
@@ -412,6 +422,59 @@ const DraftButton = ({
     {label}
   </Button>
 );
+
+/** The UTBMS codes a guided draft gave an entry billed in LEDES. */
+const DraftClassification = ({
+  classification,
+}: {
+  classification: DesktopTimeEntryClassification | null;
+}) => {
+  const t = useTranslations("activity");
+  if (classification?.type !== "ledes") {
+    return null;
+  }
+  return (
+    <p className="text-muted-foreground text-xs tabular-nums">
+      {t("aiDraftCodes", {
+        task: classification.taskCode,
+        activity: classification.activityCode,
+      })}
+    </p>
+  );
+};
+
+/** What a guided draft noted against the firm's billing guidelines, each
+ * with the file and section it cites. */
+const GuidelineFlags = ({ flags }: { flags: CardDraft["flags"] }) => {
+  const t = useTranslations("activity");
+  if (flags.length === 0) {
+    return null;
+  }
+  return (
+    <section
+      aria-label={t("aiDraftFlags")}
+      className="flex flex-col gap-1.5 text-xs"
+    >
+      <span className="font-medium">{t("aiDraftFlags")}</span>
+      <ul className="flex flex-col gap-1.5">
+        {flags.map((flag) => (
+          <li
+            className="flex flex-col gap-0.5"
+            key={`${flag.fileName}\n${flag.section}\n${flag.text}`}
+          >
+            <bdi className="text-pretty">{flag.text}</bdi>
+            <span className="text-muted-foreground">
+              {t("aiDraftFlagSource", {
+                file: flag.fileName,
+                section: flag.section,
+              })}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+};
 
 /** The user's own earlier entries the draft followed, so its wording can be
  * checked against them. */

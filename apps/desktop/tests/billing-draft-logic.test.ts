@@ -173,10 +173,12 @@ describe("a card's draft", () => {
     ).toEqual({
       narrative: "Reviewed the break clause of the lease.",
       earlierEntries: [earlier("00000000-0000-4000-8000-0000000000a1")],
+      classification: null,
+      flags: [],
     });
   });
 
-  test("a guided draft fills the description too", () => {
+  test("a guided draft adds its codes and its notes against the guidelines, each with the file and section it cites", () => {
     expect(
       cardDraftFrom({
         result: {
@@ -190,18 +192,40 @@ describe("a card's draft", () => {
                 taskCode: "L120",
                 activityCode: "A104",
               },
-              flags: [],
+              flags: [
+                {
+                  text: "Block billing: list each task separately.",
+                  ruleRef: {
+                    fileId: "guideline-1",
+                    fileName: "Outside counsel guidelines.pdf",
+                    section: "4.2",
+                  },
+                },
+              ],
               matchedEarlierEntryIds: [],
               operations: [],
             },
           ],
-          checkedGuidelines: [],
+          checkedGuidelines: [
+            {
+              fileId: "guideline-1",
+              fileName: "Outside counsel guidelines.pdf",
+            },
+          ],
         },
         earlierEntries: [],
       }),
     ).toEqual({
       narrative: "Analysed the termination provisions.",
       earlierEntries: [],
+      classification: { type: "ledes", taskCode: "L120", activityCode: "A104" },
+      flags: [
+        {
+          text: "Block billing: list each task separately.",
+          fileName: "Outside counsel guidelines.pdf",
+          section: "4.2",
+        },
+      ],
     });
   });
 
