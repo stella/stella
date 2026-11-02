@@ -12,7 +12,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
@@ -216,15 +216,29 @@ if (!databaseUrl || !runPostgresTests) {
               outcome.type === "ok" ? outcome.filerAdded : null,
             ),
           ).toEqual([true, true]);
-          const records = await adminDb
-            .select({ id: correspondence.id })
-            .from(correspondence)
-            .where(eq(correspondence.workspaceId, workspaceId));
+          // Correspondence rows are row-secured: read them as a filer of the
+          // matter, the way the application does.
+          const [reader] = writers;
+          const readerId = userIds[0];
+          if (reader === undefined || readerId === undefined) {
+            throw new Error("Missing reader");
+          }
+          const { records, filers } = await createScopedDb(
+            markRlsDatabase(reader.db),
+            [workspaceId],
+            organizationId,
+            readerId,
+          )(async (tx) => ({
+            records: await tx
+              .select({ id: correspondence.id })
+              .from(correspondence)
+              .where(eq(correspondence.workspaceId, workspaceId)),
+            filers: await tx
+              .select({ userId: correspondenceFilers.filedByUserId })
+              .from(correspondenceFilers)
+              .where(eq(correspondenceFilers.workspaceId, workspaceId)),
+          }));
           expect(records.map(({ id }) => String(id))).toEqual([String(ids[0])]);
-          const filers = await adminDb
-            .select({ userId: correspondenceFilers.filedByUserId })
-            .from(correspondenceFilers)
-            .where(eq(correspondenceFilers.workspaceId, workspaceId));
           expect(filers.map(({ userId }) => userId).toSorted()).toEqual(
             userIds.toSorted(),
           );
