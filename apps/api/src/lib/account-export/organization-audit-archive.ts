@@ -30,7 +30,7 @@ import { putTemporaryS3ObjectWithSignal } from "@/api/lib/s3";
 const ORGANIZATION_AUDIT_ARCHIVE_PAGE_SIZE = 500;
 
 /** The archive's table of audit rows, in the admin export's columns. */
-export const ORGANIZATION_AUDIT_ARCHIVE_TABLE = "audit-logs.csv";
+const ORGANIZATION_AUDIT_ARCHIVE_TABLE = "audit-logs.csv";
 
 type BuildOrganizationAuditArchiveOptions = {
   db: AccountExportDataDb;

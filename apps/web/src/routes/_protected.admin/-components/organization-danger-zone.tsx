@@ -13,6 +13,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -75,8 +76,12 @@ export const OrganizationDangerZone = ({
         queryKey: auditExportOptions.queryKey,
       });
     },
+    // Organization deletion is a signed-in owner's decision in the web app,
+    // so the archive request has no automation capability.
     mutationFn: async () =>
-      unwrapApiResponse(await api.organizations["audit-export"].post()),
+      await invokeAppOnlyWrite("organizations.audit-export.create", async () =>
+        unwrapApiResponse(await api.organizations["audit-export"].post()),
+      ),
     onSuccess: async (status) => {
       queryClient.setQueryData(auditExportOptions.queryKey, status);
       await queryClient.invalidateQueries({

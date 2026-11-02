@@ -56,7 +56,7 @@ export type AccountExportBuild =
   | { kind: "account" }
   | { kind: "organization_audit"; coverage: OrganizationAuditCoverage };
 
-export const accountExportSubject = (
+const accountExportSubject = (
   row: Pick<AccountExportRow, "kind" | "organizationId">,
 ): AccountExportSubject => {
   switch (row.kind) {

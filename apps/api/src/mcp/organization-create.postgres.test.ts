@@ -5,7 +5,7 @@ import * as v from "valibot";
 
 import { ORGANIZATION_CREATE_SCOPE } from "@stll/api-contract/organization-create";
 
-import { member, organization, user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { organizationCreationRequests } from "@/api/db/schema";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
@@ -14,6 +14,7 @@ import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const createdSchema = v.object({
@@ -127,7 +128,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           .where(eq(organizationCreationRequests.userId, userId)),
       ).toEqual([{ organizationId: first.organizationId }]);
       // Account audit rows retain the actor in the disposable database.
-      await rootDb.delete(organization).where(eq(organization.name, args.name));
+      await deleteOrganizationsForTest(rootDb, [first.organizationId]);
     });
   },
 );

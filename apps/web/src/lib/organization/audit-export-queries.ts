@@ -11,7 +11,7 @@ const AUDIT_EXPORT_POLL_INTERVAL_MS = 2000;
 const AUDIT_EXPORT_DOWNLOAD_POLL_INTERVAL_MS = 3000;
 const AUDIT_EXPORT_READY_REFRESH_MAX_INTERVAL_MS = 60_000;
 
-export const organizationAuditExportKeys = {
+const organizationAuditExportKeys = {
   latest: (organizationId: string, userId: string) =>
     ["organizations", organizationId, "audit-export", userId] as const,
 };
