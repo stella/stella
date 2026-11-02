@@ -204,6 +204,12 @@ test("the selection action receives only selected decision ids and Clear empties
     view.queryByRole("button", { name: "Run AI columns for 1 row" }),
   ).toBeNull();
   expect(onRun).toHaveBeenCalledTimes(1);
+
+  fireEvent.click(view.getByRole("checkbox", { name: "Select 12 C 1/2026" }));
+  fireEvent.click(
+    view.getByRole("button", { name: "Run AI columns for 1 row" }),
+  );
+  expect(onRun).toHaveBeenLastCalledWith(["decision-one"]);
 });
 
 test("a new answer on the same page keeps only the picks it still shows", async () => {
