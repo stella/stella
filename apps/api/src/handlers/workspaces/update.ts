@@ -17,7 +17,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -25,7 +25,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  defaultVarcharSchema,
+  displayNameSchema,
   resourceIdSchema,
   userIdSchema,
 } from "@/api/lib/custom-schema";
@@ -39,7 +39,7 @@ import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repai
 
 const updateWorkspaceBodySchema = v.object({
   billingNarrativeLanguage: v.optional(narrativeLanguageSchema),
-  name: v.optional(defaultVarcharSchema),
+  name: v.optional(displayNameSchema()),
   clientId: v.optional(resourceIdSchema("contact")),
   expectedClientId: v.optional(v.nullable(resourceIdSchema("contact"))),
   reference: v.optional(v.pipe(v.string(), v.maxLength(64), v.minLength(1))),
@@ -165,6 +165,21 @@ export type UpdateWorkspaceHandlerProps = {
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
   body: v.InferOutput<typeof updateWorkspaceBodySchema>;
+};
+
+/** Repairs the matter's search projection after the response, off the request. */
+const flushUpdatedWorkspaceSearch = (workspaceId: SafeId<"workspace">) => {
+  detached(
+    async () =>
+      flushWorkspaceSearchRepairs([workspaceId]).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "updateWorkspaceHandler.flushWorkspaceSearchRepairs",
+          ),
+        ),
+      ),
+    "workspaces-update.flush-workspace-search-repairs",
+  );
 };
 
 // Shared matter-update logic reused by the HTTP handler and the
@@ -377,11 +392,7 @@ export const updateWorkspaceHandler = async function* ({
     );
   }
 
-  flushWorkspaceSearchRepairs([workspaceId]).catch(
-    createErrorCapture(
-      handlerErrorContext("updateWorkspaceHandler.flushWorkspaceSearchRepairs"),
-    ),
-  );
+  flushUpdatedWorkspaceSearch(workspaceId);
 
   return Result.ok({});
 };

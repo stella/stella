@@ -38,10 +38,14 @@ export const SYSTEM_AUDIT_MODULES = {
     "system:registration-retention",
   "apps/api/src/lib/hosted-usage-provider/webhook-retention.ts":
     "system:usage-webhook-retention",
+  "apps/api/src/lib/scheduler/tasks/hosted-customer-erasure.ts":
+    "system:hosted-customer-erasure",
   "apps/api/src/lib/uploads/file-comparison/sweep.ts":
     "system:file-comparison-sweep",
   "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts":
     "system:corpus-index-job-detail-backfill",
+  "apps/api/src/lib/scheduler/tasks/case-law-parsed-input-state-backfill.ts":
+    "system:case-law-parsed-input-state-backfill",
   "apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.ts":
     "system:legislation-expression-id-backfill",
   "apps/api/src/lib/scheduler/tasks/system-audit-retention.ts":

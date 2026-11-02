@@ -6,6 +6,7 @@ import * as v from "valibot";
 import {
   DESKTOP_ACTIVITY_REVIEW_LIMIT,
   DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+  type DesktopTimeEntryBatch,
   desktopTimeEntryBatchResponseSchema,
 } from "@stll/api-contract/desktop-time-entries";
 import { createTestState } from "@stll/test-state";
@@ -103,7 +104,64 @@ test("batch fingerprint follows reviewed field values rather than JSON key order
   );
 });
 
-const createBatchHarness = (existingEntries = 0) => {
+test("a classification is part of the fingerprint, in any key order, and an entry without one hashes as before", () => {
+  const entry = BODY.entries.at(0) ?? panic("Missing fixture entry");
+  const withCodes = (
+    classification: DesktopTimeEntryBatch["entries"][number]["classification"],
+  ) =>
+    desktopBatchFingerprint({
+      ...BODY,
+      entries: [{ ...entry, classification }],
+    });
+  expect(withCodes(undefined)).toBe(desktopBatchFingerprint(BODY));
+  expect(
+    withCodes({ type: "ledes", taskCode: "L120", activityCode: "A104" }),
+  ).not.toBe(desktopBatchFingerprint(BODY));
+  expect(
+    withCodes({ type: "ledes", taskCode: "L120", activityCode: "A104" }),
+  ).toBe(withCodes({ activityCode: "A104", taskCode: "L120", type: "ledes" }));
+  expect(
+    withCodes({ type: "ledes", taskCode: "L120", activityCode: "A104" }),
+  ).not.toBe(
+    withCodes({ type: "ledes", taskCode: "L130", activityCode: "A104" }),
+  );
+});
+
+const LEDES = {
+  type: "ledes",
+  taskCode: "L120",
+  activityCode: "A104",
+} as const;
+const CLIENT_GROUP = {
+  type: "activity_group",
+  activityGroup: "client",
+} as const;
+
+const classified = (
+  classification: DesktopTimeEntryBatch["entries"][number]["classification"],
+  idempotencyKey: string,
+): DesktopTimeEntryBatch => ({
+  idempotencyKey,
+  entries: BODY.entries.map((entry) => ({ ...entry, classification })),
+});
+
+/** How the fixture matter's client bills: no client, a client billed in
+ * categories or in LEDES, or a client the caller cannot read. */
+type ClientBilling = "none" | "categories" | "ledes" | "unreadable";
+
+const matterRow = (billing: ClientBilling) => ({
+  id: MATTER,
+  clientId: billing === "none" ? null : "00000000-0000-4000-8000-0000000000c1",
+  client:
+    billing === "none" || billing === "unreadable"
+      ? null
+      : { timeBillingFormat: billing },
+});
+
+const createBatchHarness = (
+  existingEntries = 0,
+  clientBilling: ClientBilling = "none",
+) => {
   let receipt: v.InferOutput<typeof receiptSchema> | undefined;
   let missingMatter = false;
   let rateReads = 0;
@@ -116,7 +174,8 @@ const createBatchHarness = (existingEntries = 0) => {
       execute: async (statement: SQL) => aggregateExecutionRows(statement),
       query: {
         workspaces: {
-          findMany: async () => (missingMatter ? [] : [{ id: MATTER }]),
+          findMany: async () =>
+            missingMatter ? [] : [matterRow(clientBilling)],
           findFirst: async () => ({ leadUserId: null }),
         },
         organizationSettings: { findFirst: async () => DEFAULT_TIME_POLICY },
@@ -214,7 +273,7 @@ const createBatchHarness = (existingEntries = 0) => {
         body: JSON.stringify({ idempotencyKey: BODY.idempotencyKey }),
       }),
     );
-  const send = async (body: typeof BODY) =>
+  const send = async (body: DesktopTimeEntryBatch) =>
     await server.fetch(
       new Request("http://localhost/batch", {
         method: "PUT",
@@ -449,4 +508,59 @@ test("missing bulk rates reject billable entries without individual rate reads o
   expect(response.status).toBe(400);
   expect(writes).toHaveLength(0);
   expect(rateReads()).toBe(1);
+});
+
+test("UTBMS codes reach the entry only on a matter whose client bills in LEDES", async () => {
+  await using ledes = createBatchHarness(0, "ledes");
+  expect((await ledes.send(classified(LEDES, "ledes-codes"))).status).toBe(200);
+  expect(ledes.writes).toEqual([
+    expect.objectContaining({ taskCode: "L120", activityCode: "A104" }),
+  ]);
+
+  for (const billing of ["none", "categories"] as const) {
+    await using harness = createBatchHarness(0, billing);
+    expect(
+      (await harness.send(classified(LEDES, `codes-${billing}`))).status,
+    ).toBe(400);
+    expect(harness.writes).toEqual([]);
+  }
+});
+
+test("the client activity group fits only a matter not billed in LEDES, and adds no codes", async () => {
+  for (const billing of ["none", "categories"] as const) {
+    await using harness = createBatchHarness(0, billing);
+    expect(
+      (await harness.send(classified(CLIENT_GROUP, `group-${billing}`))).status,
+    ).toBe(200);
+    expect(harness.writes).toEqual([
+      expect.objectContaining({ taskCode: null, activityCode: null }),
+    ]);
+  }
+  await using ledes = createBatchHarness(0, "ledes");
+  expect(
+    (await ledes.send(classified(CLIENT_GROUP, "group-ledes"))).status,
+  ).toBe(400);
+  await using internal = createBatchHarness(0, "categories");
+  expect(
+    (
+      await internal.send(
+        classified(
+          { type: "activity_group", activityGroup: "internal" },
+          "group-internal",
+        ),
+      )
+    ).status,
+  ).toBe(400);
+  expect([...ledes.writes, ...internal.writes]).toEqual([]);
+});
+
+test("a classified entry on a matter whose client the caller cannot read is refused, not failed", async () => {
+  await using harness = createBatchHarness(0, "unreadable");
+  expect((await harness.send(classified(LEDES, "unreadable"))).status).toBe(
+    409,
+  );
+  expect(harness.writes).toEqual([]);
+  // Without a classification the client's billing format does not matter.
+  expect((await harness.send(BODY)).status).toBe(200);
+  expect(harness.writes).toHaveLength(1);
 });

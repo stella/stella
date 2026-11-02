@@ -66,6 +66,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { EMPTY_SUMMARY } from "@/api/tests/helpers/chat-compaction-checkpoint";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -232,7 +233,7 @@ const seedFixture = async (db: GatedTestDb) => {
   const cleanUp = async () => {
     await db.delete(chatThreads).where(eq(chatThreads.id, threadId));
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     await db.delete(user).where(eq(user.id, userId));
   };
   return {
@@ -683,9 +684,7 @@ if (!databaseUrl || !runPostgres) {
           });
         } finally {
           await fixture.cleanUp();
-          await db
-            .delete(organization)
-            .where(eq(organization.id, otherOrganizationId));
+          await deleteOrganizationsForTest(db, [otherOrganizationId]);
           await db.delete(user).where(eq(user.id, historicalAuthorId));
         }
       });
