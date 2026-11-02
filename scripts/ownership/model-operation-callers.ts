@@ -4,7 +4,7 @@ export default {
   id: "model-operation-callers",
   capability: "Registering model operation entry points",
   owner: [
-    "apps/api/src/handlers/desktop-time-entries/billing-drafts.ts",
+    "apps/api/src/handlers/desktop-time-entries/drafting-model.ts",
     "apps/api/src/handlers/ai-autocomplete/stream.ts",
     "apps/api/src/handlers/case-law/analysis/generate.ts",
     "apps/api/src/handlers/case-law/analysis/significance-run.ts",
@@ -25,7 +25,6 @@ export default {
     "apps/api/src/handlers/chat/thread-title-prompt.ts",
     "apps/api/src/handlers/clauses/rewrite.ts",
     "apps/api/src/handlers/contacts/extract-procuracao.ts",
-    "apps/api/src/handlers/desktop-time-entries/narrative-model.ts",
     "apps/api/src/handlers/document-reviews/reference-positions.ts",
     "apps/api/src/handlers/entities/placements/suggest.ts",
     "apps/api/src/handlers/playbooks/derive-ask.ts",
