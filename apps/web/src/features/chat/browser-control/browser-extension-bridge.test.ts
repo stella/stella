@@ -405,6 +405,7 @@ const snapshotResult = (tabId: number, revision: string) =>
       elements: [],
       revision,
       tabId,
+      tabs: [{ active: true, tabId, url: "https://example.com/" }],
       text: "",
       textOffset: 0,
       textTotalChars: 0,

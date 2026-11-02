@@ -1455,10 +1455,12 @@
           "click": "Klicken",
           "fill": "Text eingeben",
           "open": "Website öffnen",
+          "openNewTab": "Website in neuem Tab öffnen",
           "pressKey": "Taste drücken",
           "select": "Option auswählen",
           "snapshot": "Seite lesen",
-          "snapshotContinue": "Seite weiterlesen"
+          "snapshotContinue": "Seite weiterlesen",
+          "switchTab": "Zum Tab wechseln"
         },
         "askAgain": "Wieder nachfragen",
         "autoApproveReads": "Seitenlesen automatisch genehmigen",
@@ -5451,6 +5453,12 @@
         "workspace_contact": "Kontakt der Akte",
         "workspace_member": "Mitglied der Akte"
       },
+      "billingDrafts": {
+        "description": "Abrechnungstexte aus ausgewählten Aktivitäten und Wissensdateien der Kanzlei oder des Mandanten entwerfen. Jeder Nutzer erteilt zusätzlich seine Zustimmung. Entwürfe werden anhand der Richtlinien geprüft, sobald Kanzleirichtlinien hinzugefügt sind.",
+        "firm": "Kanzleirichtlinien",
+        "ledes": "Elektronische Abrechnung (LEDES)",
+        "title": "KI-Abrechnungsentwürfe"
+      },
       "documentProcessing": {
         "description": "Erkennt Text in gescannten PDFs automatisch, damit deren Inhalt durchsuchbar ist.",
         "title": "Dokumenttexterkennung",
@@ -6390,6 +6398,10 @@
     "deleteWorkspaceConfirmDescription": "Möchten Sie diese Akte wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
     "deletedItem": "Gelöscht: {name}",
     "deletingWorkspace": "Akte wird gelöscht",
+    "documentSwitcher": {
+      "searchPlaceholder": "Dokument suchen…",
+      "trigger": "Dokument wechseln"
+    },
     "documentsCount": "{count, plural, one {# Dokument} other {# Dokumente}}",
     "dropToUploadFiles": "Dateien zum Hochladen ablegen",
     "duplicateMatter": "Akte duplizieren",
