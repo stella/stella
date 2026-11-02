@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
 import type { ParsedCorrespondence } from "@stll/api-contract/correspondence";
+import { compareCodeUnit } from "@stll/collation";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -239,9 +240,11 @@ if (!databaseUrl || !runPostgresTests) {
               .where(eq(correspondenceFilers.workspaceId, workspaceId)),
           }));
           expect(records.map(({ id }) => String(id))).toEqual([String(ids[0])]);
-          expect(filers.map(({ userId }) => userId).toSorted()).toEqual(
-            userIds.toSorted(),
-          );
+          expect(
+            filers
+              .map(({ userId }) => String(userId))
+              .toSorted(compareCodeUnit),
+          ).toEqual(userIds.map(String).toSorted(compareCodeUnit));
         } finally {
           await adminDb.execute(sql`SELECT pg_advisory_unlock_all()`);
           await Promise.allSettled(filings);
