@@ -590,54 +590,63 @@ test("an unchanged generic type is compatible with its own previous declaration"
 });
 
 test.each([
-  [
-    "a removed optional member",
-    ["label?: D; ", ""],
-    "./model#Box: removed member label",
-  ],
-  [
-    "a removed required member",
-    ["{ value: T; label?: D;", "{ label?: D;"],
-    "./model#Box: incompatible type signature",
-  ],
-  [
-    "an added required member",
-    ["amount: number }", "amount: number; scale: number }"],
-    "./model#Cents: incompatible type signature",
-  ],
-  [
-    "a narrowed member",
-    ["(value: T[K]) => void", "(value: T[K] & string) => void"],
-    "./model#Handlers: incompatible type signature",
-  ],
-  [
-    "a changed type parameter count",
-    ["class Store<S> {", "class Store<S, E = never> {"],
-    "./model#Store: changed type parameter count",
-  ],
-  [
-    "a narrowed constraint",
-    ["Cents<C extends string>", "Cents<C extends 'EUR' | 'CZK'>"],
-    "./model#Cents: incompatible type signature",
-  ],
-  [
-    "a widened constraint",
-    ["Box<T extends object, D = string>", "Box<T, D = string>"],
-    "./model#Box: incompatible type signature",
-  ],
-  [
-    "a changed class method",
-    ["read(): S;", "read(): S | undefined;"],
-    "./model#Store: incompatible type signature",
-  ],
-  [
-    "a removed member of a namespaced generic",
-    ["item: T; children", "children"],
-    "./model#shapes.Node: incompatible type signature",
-  ],
+  {
+    change: "a removed optional member",
+    from: "label?: D; ",
+    to: "",
+    expected: "./model#Box: removed member label",
+  },
+  {
+    change: "a removed required member",
+    from: "{ value: T; label?: D;",
+    to: "{ label?: D;",
+    expected: "./model#Box: incompatible type signature",
+  },
+  {
+    change: "an added required member",
+    from: "amount: number }",
+    to: "amount: number; scale: number }",
+    expected: "./model#Cents: incompatible type signature",
+  },
+  {
+    change: "a narrowed member",
+    from: "(value: T[K]) => void",
+    to: "(value: T[K] & string) => void",
+    expected: "./model#Handlers: incompatible type signature",
+  },
+  {
+    change: "a changed type parameter count",
+    from: "class Store<S> {",
+    to: "class Store<S, E = never> {",
+    expected: "./model#Store: changed type parameter count",
+  },
+  {
+    change: "a narrowed constraint",
+    from: "Cents<C extends string>",
+    to: "Cents<C extends 'EUR' | 'CZK'>",
+    expected: "./model#Cents: incompatible type signature",
+  },
+  {
+    change: "a widened constraint",
+    from: "Box<T extends object, D = string>",
+    to: "Box<T, D = string>",
+    expected: "./model#Box: incompatible type signature",
+  },
+  {
+    change: "a changed class method",
+    from: "read(): S;",
+    to: "read(): S | undefined;",
+    expected: "./model#Store: incompatible type signature",
+  },
+  {
+    change: "a removed member of a namespaced generic",
+    from: "item: T; children",
+    to: "children",
+    expected: "./model#shapes.Node: incompatible type signature",
+  },
 ])(
-  "a generic type with %s is a breaking change",
-  async (_, [from, to], expected) => {
+  "a generic type with $change is a breaking change",
+  async ({ from, to, expected }) => {
     const root = await fixture();
     expect(GENERIC_BASE).toContain(from);
     expect(

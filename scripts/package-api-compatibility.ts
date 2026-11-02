@@ -376,86 +376,77 @@ export const withGenericTypeProbes = (
     ts.ScriptKind.TS,
   );
   const tag = file.replaceAll(/[^\p{L}\p{N}_$]/gu, "_");
-  let count = 0;
-  const probe = (declaration: GenericTypeDeclaration): ts.Statement => {
-    const parameters = declaration.typeParameters.map((parameter) =>
-      ts.factory.createTypeParameterDeclaration(
+  const printer = ts.createPrinter({ removeComments: true });
+  const probes: { end: number; text: string }[] = [];
+  const probe = (declaration: GenericTypeDeclaration): string =>
+    printer.printNode(
+      ts.EmitHint.Unspecified,
+      ts.factory.createTypeAliasDeclaration(
         undefined,
-        parameter.name,
-        parameter.constraint,
-        parameter.default,
-      ),
-    );
-    const probeName = `${GENERIC_TYPE_PROBE}${tag}_${count}`;
-    count += 1;
-    return ts.factory.createTypeAliasDeclaration(
-      undefined,
-      probeName,
-      undefined,
-      ts.factory.createFunctionTypeNode(
-        parameters,
-        declaration.typeParameters.map((parameter, position) =>
-          ts.factory.createParameterDeclaration(
-            undefined,
-            undefined,
-            `p${position}`,
-            undefined,
-            ts.factory.createTypeReferenceNode(parameter.name),
-          ),
-        ),
-        ts.factory.createTypeReferenceNode(
-          declaration.name,
+        `${GENERIC_TYPE_PROBE}${tag}_${probes.length}`,
+        undefined,
+        ts.factory.createFunctionTypeNode(
           declaration.typeParameters.map((parameter) =>
-            ts.factory.createTypeReferenceNode(parameter.name),
+            ts.factory.createTypeParameterDeclaration(
+              undefined,
+              parameter.name,
+              parameter.constraint,
+              parameter.default,
+            ),
+          ),
+          declaration.typeParameters.map((parameter, position) =>
+            ts.factory.createParameterDeclaration(
+              undefined,
+              undefined,
+              `p${position}`,
+              undefined,
+              ts.factory.createTypeReferenceNode(parameter.name),
+            ),
+          ),
+          ts.factory.createTypeReferenceNode(
+            declaration.name,
+            declaration.typeParameters.map((parameter) =>
+              ts.factory.createTypeReferenceNode(parameter.name),
+            ),
           ),
         ),
       ),
+      source,
     );
-  };
-  const withProbes = (statements: readonly ts.Statement[]): ts.Statement[] => {
+  const visitBlock = (statements: readonly ts.Statement[]): void => {
     // Merged declarations of one name in one block share their type
     // parameters, so one probe per name and block covers them.
     const probed = new Set<string>();
-    return statements.flatMap((statement) => {
+    for (const statement of statements) {
       if (ts.isModuleDeclaration(statement)) {
-        return [moduleWithProbes(statement)];
-      }
-      if (
-        !isGenericTypeDeclaration(statement) ||
-        probed.has(statement.name.text)
+        visitModule(statement);
+      } else if (
+        isGenericTypeDeclaration(statement) &&
+        !probed.has(statement.name.text)
       ) {
-        return [statement];
+        probed.add(statement.name.text);
+        probes.push({ end: statement.end, text: probe(statement) });
       }
-      probed.add(statement.name.text);
-      return [statement, probe(statement)];
-    });
+    }
   };
-  const moduleWithProbes = (
-    declaration: ts.ModuleDeclaration,
-  ): ts.ModuleDeclaration => {
+  const visitModule = (declaration: ts.ModuleDeclaration): void => {
     const { body } = declaration;
-    const update = (nextBody: ts.ModuleBody): ts.ModuleDeclaration =>
-      ts.factory.updateModuleDeclaration(
-        declaration,
-        declaration.modifiers,
-        declaration.name,
-        nextBody,
-      );
-    if (body !== undefined && ts.isModuleBlock(body)) {
-      return update(
-        ts.factory.updateModuleBlock(body, withProbes(body.statements)),
-      );
+    if (body === undefined) {
+      return;
     }
-    // `namespace a.b {}` nests the declaration of `b` as the body of `a`.
-    if (body !== undefined && ts.isModuleDeclaration(body)) {
-      return update(moduleWithProbes(body));
+    if (ts.isModuleBlock(body)) {
+      visitBlock(body.statements);
+    } else if (ts.isModuleDeclaration(body)) {
+      // `namespace a.b {}` nests the declaration of `b` as the body of `a`.
+      visitModule(body);
     }
-    return declaration;
   };
-  const printed = ts
-    .createPrinter({ removeComments: true })
-    .printFile(
-      ts.factory.updateSourceFile(source, withProbes(source.statements)),
-    );
-  return count === 0 ? contents : printed;
+  visitBlock(source.statements);
+  // Each probe follows its declaration in the same block, so it resolves
+  // every name in the type parameter list exactly as the declaration does.
+  let probed = contents;
+  for (const { end, text } of probes.toReversed()) {
+    probed = `${probed.slice(0, end)}\n${text}${probed.slice(end)}`;
+  }
+  return probed;
 };
