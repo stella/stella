@@ -207,7 +207,7 @@
     "onnxruntime-node": "1.30.0",
     "parse5": "catalog:",
     "parse5-htmlparser2-tree-adapter": "catalog:",
-    "pkijs": "3.4.1",
+    "pkijs": "3.4.2",
     "postal-mime": "4.0.11",
     "prosemirror-commands": "catalog:",
     "prosemirror-dropcursor": "catalog:",

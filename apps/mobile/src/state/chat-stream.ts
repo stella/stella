@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 
+import { SignedOutError } from "@/connection/errors";
 import { fetchWithTimeout } from "@/connection/http";
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
@@ -321,7 +322,16 @@ const readChatStream = async ({
   readonly signal: AbortSignal;
   readonly source: AccessTokenSource;
 }): Promise<Result<StreamEnd, StreamBreak>> => {
-  const url = `${source.session().serverUrl}${path}`;
+  const session = source.session();
+  if (session === undefined) {
+    return Result.err({
+      lastEventId,
+      error: new SignedOutError({
+        message: "The session is no longer current",
+      }),
+    });
+  }
+  const url = `${session.serverUrl}${path}`;
   // Kept outside the request so a stream that breaks part way still reports
   // the last event it delivered.
   let lastId = lastEventId;
@@ -542,7 +552,13 @@ export const cancelChatTurn = async ({
   readonly threadId: string;
   readonly turnId: string;
 }): Promise<Result<void, ApiError>> => {
-  const url = `${source.session().serverUrl}${turnPath(threadId, turnId)}/cancel`;
+  const session = source.session();
+  if (session === undefined) {
+    return Result.err(
+      new SignedOutError({ message: "The session is no longer current" }),
+    );
+  }
+  const url = `${session.serverUrl}${turnPath(threadId, turnId)}/cancel`;
   return await withAccessToken(source, async (token) => {
     const answered = await Result.tryPromise({
       try: async () =>

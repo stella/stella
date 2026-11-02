@@ -231,6 +231,57 @@ test("missing and equal bumps fail, catching merge-group version collisions", ()
   ]);
 });
 
+test("a queue entry is checked against the entry ahead of it, not the target branch", () => {
+  const main = fixture();
+  // The first entry changes A's parser and bumps A.
+  const first = fixture({
+    versions: { A: 2 },
+    parserSources: { A: "export const parseA = () => 'first';\n" },
+  });
+  // The second entry changes the helper both adapters read and bumps only B.
+  const second = fixture({
+    versions: { A: 2, B: 2 },
+    parserSources: { A: "export const parseA = () => 'first';\n" },
+    helperSource: "export const helper = () => 'second';\n",
+  });
+
+  // Against the target branch the first entry's bump hides the missing one.
+  expect(changed(main, second)).toEqual([]);
+  expect(changed(first, second)).toEqual([
+    expect.stringContaining("test-a: parser version 2 must exceed base 2"),
+  ]);
+
+  // This guard runs before dependencies are installed, so the workflow is
+  // read with plain property lookups rather than a schema library.
+  const field = (value: unknown, key: string): unknown =>
+    typeof value === "object" && value !== null
+      ? Reflect.get(value, key)
+      : undefined;
+  const workflow: unknown = Bun.YAML.parse(
+    readFileSync(
+      path.join(import.meta.dirname, "../.github/workflows/ci.yml"),
+      "utf-8",
+    ),
+  );
+  // The plan's entry base is the entry ahead in a merge group and empty
+  // elsewhere (scripts/ci-completed-depth.test.ts runs the step).
+  const previousEntryBase = [
+    "$",
+    "{{ needs.ci-plan.outputs.entry_base_sha",
+    " || needs.ci-plan.outputs.target_base_sha }}",
+  ].join("");
+  for (const job of ["pr-heavy-gate", "ci-quick-checks"]) {
+    const steps = field(field(field(workflow, "jobs"), job), "steps");
+    const list: unknown[] = Array.isArray(steps) ? steps : [];
+    const guard = list.find(
+      (step) =>
+        field(step, "name") ===
+        "parser-version-guard: Check parser version guard",
+    );
+    expect(field(field(guard, "env"), "BASE_SHA"), job).toBe(previousEntryBase);
+  }
+});
+
 test("layout, comments and types never demand a bump, but output changes do", () => {
   const base = fixture();
   const reformatted = fixture({
@@ -337,6 +388,27 @@ test("adapter case-law helpers are owned without unrelated dependency fan-out", 
     expect(changed(base, editedBumped)).toEqual([]);
   }
   head.set(logger, "export const log = () => 'changed';");
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("search-only case-law modules do not count as parser inputs", () => {
+  const searchIndex = "apps/api/src/lib/case-law/provision-search-index.ts";
+  const base = fixture({ adapters: ["A"] });
+  const head = fixture({ adapters: ["A"] });
+  for (const tree of [base, head]) {
+    const adapter = `${ADAPTERS}adapter-a.ts`;
+    tree.set(
+      adapter,
+      [
+        'import { indexName } from "@/api/lib/case-law/provision-search-index";',
+        tree.get(adapter),
+        "export const searchIndexName = indexName;",
+      ].join("\n"),
+    );
+    tree.set(searchIndex, 'export const indexName = "base";');
+  }
+  head.set(searchIndex, 'export const indexName = "changed";');
+
   expect(changed(base, head)).toEqual([]);
 });
 

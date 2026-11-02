@@ -33,6 +33,16 @@ export const composerReferenceVariants = {
 
 export const composerReferenceStates = Object.keys(composerReferenceVariants);
 
+/** Button label benches, each a narrow card that stacks its content at the
+ * start, so only the button can keep its label inside, keyed to what the
+ * label does there: cut to one line, or wrap onto several. */
+export const buttonLabelBenches = {
+  "outline-label": "cut",
+  "icon-label": "cut",
+  "popover-trigger": "cut",
+  "wrap-layout": "wrap",
+} as const;
+
 // Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
   "mcp-reconnect": { label: "MCP reconnect notice", layout: "plain" },
@@ -52,6 +62,7 @@ export const visualRegistry = {
     layout: "plain",
   },
   "chat-status": { label: "Chat status motion", layout: "plain" },
+  "button-label": { label: "Button labels", layout: "plain" },
   "chat-continuation-error": {
     label: "Chat continuation recovery",
     layout: "plain",

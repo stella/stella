@@ -198,6 +198,15 @@ const createApiBudgets = (
           .RATE_LIMIT_API_PUBLIC_SANCTIONS_SEARCH_MAX_CONCURRENT;
       },
     },
+    organizationCreate: {
+      get max() {
+        return getConfiguration().RATE_LIMIT_API_ORGANIZATION_CREATE_MAX;
+      },
+      get duration() {
+        return getConfiguration()
+          .RATE_LIMIT_API_ORGANIZATION_CREATE_DURATION_MS;
+      },
+    },
     skillSource: {
       get max() {
         return getConfiguration().RATE_LIMIT_API_SKILL_SOURCE_MAX;

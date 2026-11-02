@@ -22,11 +22,11 @@ import {
 } from "./browser-approval-mode";
 import {
   BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS,
+  browserExtensionSupport,
   executeBrowserExtensionCommand,
   getBrowserExtensionState,
   isBrowserExtensionBridgeMounted,
   mountBrowserExtensionBridge,
-  supportsBrowserExtension,
 } from "./browser-extension-bridge";
 
 const ORIGIN = "https://app.stella.test";
@@ -139,19 +139,19 @@ describe("Chromium extension support", () => {
     {
       name: "Chrome",
       browser: { userAgent: "Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36" },
-      supported: true,
+      support: "supported",
     },
     {
       name: "Chromium",
       browser: { userAgent: "Mozilla/5.0 Chromium/140.0.0.0" },
-      supported: true,
+      support: "supported",
     },
     {
       name: "Edge",
       browser: {
         userAgent: "Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0",
       },
-      supported: true,
+      support: "supported",
     },
     {
       name: "Brave brands",
@@ -159,7 +159,7 @@ describe("Chromium extension support", () => {
         userAgent: "reduced",
         userAgentData: { brands: [{ brand: "Brave" }, { brand: "Chromium" }] },
       },
-      supported: true,
+      support: "supported",
     },
     {
       name: "Google Chrome brands",
@@ -167,7 +167,7 @@ describe("Chromium extension support", () => {
         userAgent: "reduced",
         userAgentData: { brands: [{ brand: "Google Chrome" }] },
       },
-      supported: true,
+      support: "supported",
     },
     {
       name: "unknown brands override UA",
@@ -175,27 +175,54 @@ describe("Chromium extension support", () => {
         userAgent: "Chrome/140",
         userAgentData: { brands: [{ brand: "Unknown" }] },
       },
-      supported: false,
+      support: "unsupported-browser",
     },
     {
       name: "Firefox",
       browser: { userAgent: "Mozilla/5.0 Firefox/140.0" },
-      supported: false,
+      support: "unsupported-browser",
     },
     {
       name: "iOS Firefox",
       browser: { userAgent: "Mozilla/5.0 FxiOS/140.0 Safari/605.1.15" },
-      supported: false,
+      support: "unsupported-device",
     },
     {
       name: "Safari",
       browser: { userAgent: "Mozilla/5.0 Version/18.0 Safari/605.1.15" },
-      supported: false,
+      support: "unsupported-browser",
+    },
+    {
+      name: "iPad Safari asking for the desktop site",
+      browser: {
+        maxTouchPoints: 5,
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/18.0 Safari/605.1.15",
+      },
+      support: "unsupported-device",
+    },
+    {
+      name: "Mac Safari",
+      browser: {
+        maxTouchPoints: 0,
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/18.0 Safari/605.1.15",
+      },
+      support: "unsupported-browser",
+    },
+    {
+      name: "Mac Chrome",
+      browser: {
+        maxTouchPoints: 0,
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/140.0.0.0 Safari/537.36",
+      },
+      support: "supported",
     },
     {
       name: "iOS Chrome",
       browser: { userAgent: "Mozilla/5.0 (iPhone) CriOS/140.0 Safari/604.1" },
-      supported: false,
+      support: "unsupported-device",
     },
     {
       name: "iOS with Chromium brands",
@@ -203,7 +230,7 @@ describe("Chromium extension support", () => {
         userAgent: "Mozilla/5.0 (iPad) CriOS/140.0",
         userAgentData: { brands: [{ brand: "Chromium" }] },
       },
-      supported: false,
+      support: "unsupported-device",
     },
     {
       name: "Android Chrome",
@@ -211,7 +238,7 @@ describe("Chromium extension support", () => {
         userAgent:
           "Mozilla/5.0 (Linux; Android 14) Chrome/140.0.0.0 Mobile Safari/537.36",
       },
-      supported: false,
+      support: "unsupported-device",
     },
     {
       name: "mobile Chromium brands",
@@ -219,22 +246,26 @@ describe("Chromium extension support", () => {
         userAgent: "reduced",
         userAgentData: { brands: [{ brand: "Chromium" }], mobile: true },
       },
-      supported: false,
+      support: "unsupported-device",
     },
     {
       name: "unknown browser",
       browser: { userAgent: "UnknownBrowser/1.0" },
-      supported: false,
+      support: "unsupported-browser",
     },
-    { name: "missing navigator", browser: undefined, supported: false },
-  ])("$name", ({ browser, supported }) => {
-    expect(supportsBrowserExtension(browser)).toBe(supported);
+    {
+      name: "missing navigator",
+      browser: undefined,
+      support: "unsupported-device",
+    },
+  ] as const)("$name", ({ browser, support }) => {
+    expect(browserExtensionSupport(browser)).toBe(support);
     Object.defineProperty(globalThis, "navigator", {
       configurable: true,
       value: browser,
     });
     expect(getBrowserExtensionState().status).toBe(
-      supported ? "not-installed" : "unsupported-browser",
+      support === "supported" ? "not-installed" : support,
     );
   });
 });
@@ -262,6 +293,48 @@ describe("live browser extension state", () => {
     expect(getBrowserExtensionState().status).toBe("not-paired");
     jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
     expect(getBrowserExtensionState().status).toBe("not-paired");
+  });
+
+  test.each([
+    {
+      side: "an older extension waits for its update",
+      version: BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      status: "extension-outdated",
+    },
+    {
+      side: "a newer extension asks for a reload of this tab",
+      version: BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+      status: "stella-outdated",
+    },
+  ])("$side, never reads as not installed", ({ status, version }) => {
+    jest.useFakeTimers();
+    unmount = mountBrowserExtensionBridge();
+    // Another version's announcement: same source and version fields, a
+    // shape this tab's protocol does not accept.
+    deliver({
+      allSitesGranted: true,
+      protocolVersion: version,
+      requestId: "extension-ready",
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
+      type: "pong",
+    });
+    expect(getBrowserExtensionState().status).toBe(status);
+    jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
+    expect(getBrowserExtensionState().status).toBe(status);
+    // Once Chrome updated the extension, it reports on this tab's protocol.
+    report("controller-1");
+    expect(getBrowserExtensionState().status).toBe("connected");
+  });
+
+  test("a message from a stella page is not taken for an extension", () => {
+    jest.useFakeTimers();
+    unmount = mountBrowserExtensionBridge();
+    deliver({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+      source: BROWSER_EXTENSION_MESSAGE_SOURCE.web,
+    });
+    jest.advanceTimersByTime(BROWSER_EXTENSION_ANNOUNCEMENT_DEADLINE_MS);
+    expect(getBrowserExtensionState().status).toBe("not-installed");
   });
   test("covers discovery, permission, pairing, disconnect, and late installation", () => {
     jest.useFakeTimers();
@@ -332,6 +405,7 @@ const snapshotResult = (tabId: number, revision: string) =>
       elements: [],
       revision,
       tabId,
+      tabs: [{ active: true, tabId, url: "https://example.com/" }],
       text: "",
       textOffset: 0,
       textTotalChars: 0,
