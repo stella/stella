@@ -875,7 +875,7 @@ const boundMcpToolResult = async ({
 
 type AuthenticateMcpStreamOptions = {
   authenticateMcpRequest: McpServerDependencies["authenticateMcpRequest"];
-  session: McpSession;
+  session: AdmittedMcpSession;
   token: string;
   mode: McpMode;
 };
