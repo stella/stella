@@ -1496,7 +1496,11 @@
       "connected": "Extension connectée",
       "description": "À votre demande, stella peut ouvrir et lire des sites web dans un autre onglet.",
       "install": "Installer l’extension",
-      "installDescription": "L’extension stella permet d’ouvrir et de lire des sites web dans un autre onglet à votre demande. Elle s’installe depuis le Chrome Web Store."
+      "installDescription": "L’extension stella permet d’ouvrir et de lire des sites web dans un autre onglet à votre demande. Elle s’installe depuis le Chrome Web Store.",
+      "reload": "Recharger cet onglet",
+      "reloadDescription": "Votre extension stella est plus récente que cet onglet. Rechargez l’onglet pour continuer à l’utiliser.",
+      "updating": "Mise à jour de l’extension en attente",
+      "updatingDescription": "Votre extension stella est une version antérieure. Chrome la met à jour automatiquement, généralement en quelques heures ; stella pourra ensuite de nouveau ouvrir et lire des sites web pour vous."
     },
     "cancelQueuedMessage": "Annuler le message en file d’attente",
     "caseLawGreeting": "Posez vos questions sur cette décision — son texte intégral est disponible ici.",
