@@ -1456,10 +1456,12 @@
           "click": "Spustelėti",
           "fill": "Įvesti tekstą",
           "open": "Atverti svetainę",
+          "openNewTab": "Atverti svetainę naujame skirtuke",
           "pressKey": "Paspausti klavišą",
           "select": "Pasirinkti parinktį",
           "snapshot": "Perskaityti puslapį",
-          "snapshotContinue": "Tęsti puslapio skaitymą"
+          "snapshotContinue": "Tęsti puslapio skaitymą",
+          "switchTab": "Pereiti į skirtuką"
         },
         "askAgain": "Klausti dar kartą",
         "autoApproveReads": "Automatiškai patvirtinti puslapių skaitymą",

@@ -2400,10 +2400,13 @@ test("a planned release screenshot check certifies the merge group", () => {
   ).toBe(0);
 });
 
-test("path-scoped platform checks run in the merge group", () => {
+test("path-scoped platform checks run at every required depth", () => {
+  // Desktop Rust tests run at fast depth too, so no heavy-only gate holds them.
+  expect(fastRequired).toContain("desktop-rust-tests");
+  expect(heavyJobs).not.toContain("desktop-rust-tests");
+  expect(fastRequired).not.toContain("windows-scripts");
+  expect(heavyJobs).toContain("windows-scripts");
   for (const job of ["desktop-rust-tests", "windows-scripts"]) {
-    expect(fastRequired, job).not.toContain(job);
-    expect(heavyJobs, job).toContain(job);
     expect(typeof jobScopes[job], job).toBe("string");
   }
 });
@@ -2465,6 +2468,10 @@ test("desktop Rust tests select classified merge-group changes at every queue de
               "needs.ci-plan.outputs.heavy_proof": String(
                 event === EVENT.mergeGroup && runRequired === "true",
               ),
+              "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+              "needs.ci-plan.result": "success",
+              "needs.ci-plan.outputs.pr_heavy_gate_required": "true",
+              "needs.pr-heavy-gate.result": "success",
               "needs.ci-plan.outputs.trusted": "true",
               "needs.ci-plan.outputs.desktop_rust_checks_required":
                 required ?? "",
@@ -2474,11 +2481,7 @@ test("desktop Rust tests select classified merge-group changes at every queue de
           expect(
             evaluate(jobIf(ciJobs["desktop-rust-tests"]), context),
             `${event}/${file}/${queueDepth}/${runRequired}`,
-          ).toBe(
-            event === EVENT.mergeGroup &&
-              required === "true" &&
-              runRequired === "true",
-          );
+          ).toBe(required === "true" && runRequired === "true");
           const selected = job.strategy.matrix.include;
           expect(selected.map(({ os }) => os)).toEqual(["macos", "windows"]);
           expect(selected).toEqual(lintPlatforms);
@@ -4058,6 +4061,29 @@ test("PR e2e selection schedules its build and shard together", () => {
   expect(runsAtDepth(jobIf(ciJobs["e2e-production-shard"]), selected)).toBe(
     true,
   );
+  // A normal-profile PR runs its selected shards; the pilot profile leaves
+  // them to the merge group.
+  for (const [profile, runs] of [
+    ["normal-v1", true],
+    ["pilot-fast-v1", false],
+  ] as const) {
+    expect(
+      evaluate(jobIf(ciJobs["e2e-production-shard"]), {
+        values: {
+          "github.event_name": EVENT.pullRequest,
+          "inputs.pr_depth_only": false,
+          "needs.ci-plan.outputs.run_required": "true",
+          "needs.ci-plan.outputs.trusted": "true",
+          "needs.ci-plan.outputs.coverage_profile": profile,
+          "needs.ci-plan.outputs.e2e_production_required": "true",
+          "needs.web-build.result": "success",
+          "needs.heavy-web-build.result": "skipped",
+        },
+        status: { always: true, cancelled: false },
+      }),
+      profile,
+    ).toBe(runs);
+  }
 
   const values = {
     "github.event_name": EVENT.pullRequest,
@@ -5268,6 +5294,7 @@ test("only the dedicated malware gate activates Safe Chain and keeps Bun package
 test("every browser suite runs on its required matrix legs, the playground on every shard leg", () => {
   const browser = v.parse(
     v.object({
+      needs: v.array(v.string()),
       strategy: v.object({
         "fail-fast": v.literal(false),
         matrix: v.object({ include: v.string() }),
@@ -5282,6 +5309,7 @@ test("every browser suite runs on its required matrix legs, the playground on ev
     }),
     ciJobs["ci-browser"],
   );
+  expect(browser.needs).toEqual(["ci-plan", "pr-heavy-gate"]);
   expect(browser.strategy.matrix.include).toBe(
     ["$", "{{ fromJSON(needs.ci-plan.outputs.ui_playground_matrix) }}"].join(
       "",
