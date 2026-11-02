@@ -40,6 +40,10 @@ import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
 import { CASE_LAW_COVERAGE_PARTS } from "@/api/lib/case-law/coverage-parts";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
+import {
+  populationCountsFreshnessSchema,
+  populationCountsReadFreshnessSchema,
+} from "@/api/lib/case-law/population-count-freshness";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import { LIMITS } from "@/api/lib/limits";
@@ -138,6 +142,7 @@ const facet = v.object({
   count: v.number(),
 } satisfies Record<keyof FacetBucket, v.GenericSchema>);
 export const decisionFacetsResponseSchema = v.object({
+  countsFreshness: v.optional(populationCountsReadFreshnessSchema),
   country: v.pipe(v.array(facet), v.maxLength(LIMITS.caseLawFacetLimit)),
   court: v.pipe(v.array(facet), v.maxLength(LIMITS.caseLawFacetLimit)),
   year: v.pipe(v.array(facet), v.maxLength(LIMITS.caseLawYearFacetLimit)),
@@ -177,6 +182,7 @@ const courts = v.pipe(
   v.maxLength(LIMITS.caseLawFacetLimit + 1),
 );
 export const corpusStatusResponseSchema = v.object({
+  countsFreshness: v.optional(populationCountsReadFreshnessSchema),
   decisions: v.number(),
   updatedAt: date,
   health: v.enum(CASE_LAW_COVERAGE_HEALTH),
@@ -433,6 +439,8 @@ const provisionProcessingState = v.union([
 ]);
 
 const coverageSnapshotEntries = {
+  // Existing stored summaries predate the population fold metadata.
+  countsFreshness: v.optional(populationCountsFreshnessSchema),
   generatedAt: boundedString(128),
   unreadParts,
   provisionProcessing: v.pipe(

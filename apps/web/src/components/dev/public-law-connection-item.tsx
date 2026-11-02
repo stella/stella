@@ -144,14 +144,16 @@ export const PublicLawConnectionItem = () => {
       <span className="flex min-w-0 flex-col">
         <span>{view.label}</span>
         {detail !== undefined && (
+          // The whole detail shows: a menu item cannot host a tooltip
+          // (its popup would act through the item), and a connection error
+          // is worth reading in full in this developer menu.
           <span
             className={cn(
-              "line-clamp-3 max-w-64 text-xs wrap-break-word",
+              "max-w-64 text-xs wrap-break-word",
               view.tone === "destructive" || connect.isError
                 ? "text-destructive-foreground"
                 : "text-muted-foreground",
             )}
-            title={detail}
           >
             {detail}
           </span>

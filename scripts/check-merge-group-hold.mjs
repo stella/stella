@@ -5,6 +5,11 @@ import { pathToFileURL } from "node:url";
 import { parseMergeGroupEntries } from "./merge-group-entries.mjs";
 
 export const HOLD_LABEL = "hold";
+/**
+ * A repository variable that is always "1". Unreadable variables read as
+ * empty, so without it "no hold" and "no variable access" would look alike.
+ */
+export const HOLD_CONTEXT = "STELLA_PR_HOLD_CONTEXT";
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 const record = (value) =>
@@ -13,6 +18,18 @@ const record = (value) =>
 const array = (value) => Array.isArray(value);
 /** @param {unknown} value @returns {value is { name: string }} */
 const label = (value) => record(value) && typeof value["name"] === "string";
+/** @param {unknown} value @returns {value is string} */
+const sha = (value) =>
+  typeof value === "string" && /^[a-f0-9]{40}$/u.test(value);
+
+/**
+ * Whether a hold variable value releases exactly this head: `cleared @<sha>`,
+ * then optional whitespace and a status. An empty value is no hold.
+ * @param {string} value @param {string} head
+ */
+export const holdClears = (value, head) =>
+  value === "" ||
+  /^cleared @([a-fA-F0-9]{40})(?:\p{White_Space}|$)/u.exec(value)?.[1] === head;
 
 export class MergeGroupHoldError extends Error {
   /** @param {{ code: string, group: unknown, detail: string }} options */
@@ -28,12 +45,14 @@ export class MergeGroupHoldError extends Error {
 
 /**
  * @param {{ eventName: string | undefined, group: unknown,
- * repository: string | undefined, readApi: (endpoint: string) => unknown }} options
+ * repository: string | undefined, holdVariables: unknown,
+ * readApi: (endpoint: string) => unknown }} options
  */
 export const checkMergeGroupHold = ({
   eventName,
   group,
   repository,
+  holdVariables,
   readApi,
 }) => {
   if (eventName === "pull_request") return;
@@ -56,6 +75,8 @@ export const checkMergeGroupHold = ({
   ) {
     return fail("HOLD_INVALID_GROUP");
   }
+  if (!record(holdVariables) || holdVariables[HOLD_CONTEXT] !== "1")
+    return fail("HOLD_MISSING_VARIABLE_CONTEXT");
   /** @param {string} endpoint @returns {unknown} */
   const read = (endpoint) => {
     try {
@@ -76,26 +97,49 @@ export const checkMergeGroupHold = ({
     added,
     fail: () => fail("HOLD_UNMAPPABLE_GROUP"),
   });
-  const held = [];
+  const labelled = [];
+  const variables = [];
   for (const { number } of entries) {
-    // Read labels at verification time; enqueue payloads are not authoritative.
+    // Read labels and the head at verification time; enqueue payloads are not authoritative.
     const pull = read(`repos/${repository}/pulls/${number}`);
     const labels = record(pull) ? pull["labels"] : undefined;
+    const head =
+      record(pull) && record(pull["head"]) ? pull["head"]["sha"] : undefined;
     if (
       !record(pull) ||
       pull["number"] !== number ||
       !array(labels) ||
-      !labels.every(label)
+      !labels.every(label) ||
+      !sha(head)
     )
       return fail("HOLD_INVALID_PULL");
     if (labels.some(({ name }) => name.toLowerCase() === HOLD_LABEL))
-      held.push(number);
+      labelled.push(number);
+    // The variable holds on its own: a missing label (never added, removed
+    // while a restore failed) or a clearance for an earlier head never passes.
+    // Only an absent variable means "no hold"; any non-string (null included)
+    // is malformed and fails closed.
+    const key = `STELLA_PR_HOLD_${number}`;
+    const value = Object.hasOwn(holdVariables, key) ? holdVariables[key] : "";
+    if (typeof value !== "string") return fail("HOLD_INVALID_VARIABLE");
+    if (!holdClears(value, head)) variables.push(number);
   }
-  if (held.length)
+  /** @param {number[]} numbers */
+  const list = (numbers) => numbers.map((number) => `#${number}`).join(", ");
+  if (labelled.length || variables.length)
     throw new MergeGroupHoldError({
-      code: "HOLD_LABEL_PRESENT",
+      code: labelled.length ? "HOLD_LABEL_PRESENT" : "HOLD_VARIABLE_PRESENT",
       group,
-      detail: `pull requests ${held.map((number) => `#${number}`).join(", ")} carry ${HOLD_LABEL}`,
+      detail: [
+        labelled.length
+          ? `pull requests ${list(labelled)} carry ${HOLD_LABEL}`
+          : "",
+        variables.length
+          ? `pull requests ${list(variables)} are held for their current head`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("; "),
     });
 };
 
@@ -109,7 +153,7 @@ export class HeldPullRequestError extends Error {
 
 /**
  * @param {{ event: unknown, repository: string | undefined,
- * holdValue: string | undefined,
+ * holdValue: string | undefined, holdContext: string | undefined,
  * addLabel: (endpoint: string) => unknown,
  * readApi: (endpoint: string) => unknown,
  * graphql: (options: { query: string, id: string }) => unknown }} options
@@ -118,6 +162,7 @@ export const dequeueHeldPullRequest = ({
   event,
   repository,
   holdValue,
+  holdContext,
   addLabel,
   readApi,
   graphql,
@@ -149,7 +194,7 @@ export const dequeueHeldPullRequest = ({
       if (!label(applied)) return fail("HOLD_INVALID_LABEL_EVENT");
       if (applied.name.toLowerCase() !== HOLD_LABEL) return;
       if (event["action"] === "unlabeled") {
-        if (typeof holdValue !== "string")
+        if (typeof holdValue !== "string" || holdContext !== "1")
           return fail("HOLD_MISSING_VARIABLE_CONTEXT");
         if (holdValue === "") return;
       }
@@ -174,18 +219,9 @@ export const dequeueHeldPullRequest = ({
       return fail("HOLD_INVALID_PULL");
     if (event["action"] === "unlabeled") {
       const head = pull["head"];
-      if (
-        !record(head) ||
-        typeof head["sha"] !== "string" ||
-        !/^[a-f0-9]{40}$/u.test(head["sha"])
-      )
+      if (!record(head) || !sha(head["sha"]))
         return fail("HOLD_INVALID_PULL_HEAD");
-      // Match the clearance grammar: an exact head, then optional whitespace/status.
-      const clearance =
-        /^cleared @([a-fA-F0-9]{40})(?:\p{White_Space}|$)/u.exec(
-          holdValue ?? "",
-        );
-      if (clearance?.[1] === head["sha"]) return;
+      if (holdClears(holdValue ?? "", head["sha"])) return;
       const restored = addLabel(`repos/${repository}/issues/${number}/labels`);
       if (
         !array(restored) ||
@@ -268,6 +304,7 @@ if (
         event,
         repository: process.env["GITHUB_REPOSITORY"],
         holdValue: process.env["PR_HOLD_VALUE"],
+        holdContext: process.env["PR_HOLD_CONTEXT"],
         addLabel: (endpoint) =>
           api([endpoint, "--method", "POST", "-f", `labels[]=${HOLD_LABEL}`]),
         readApi: (endpoint) => api([endpoint]),
@@ -275,10 +312,18 @@ if (
           api(["graphql", "-f", `query=${query}`, "-f", `id=${id}`]),
       });
     } else {
+      /** @type {unknown} */
+      let holdVariables;
+      try {
+        holdVariables = JSON.parse(process.env["HOLD_VARS"] ?? "");
+      } catch {
+        holdVariables = undefined;
+      }
       checkMergeGroupHold({
         eventName: process.env["GITHUB_EVENT_NAME"],
         group,
         repository: process.env["GITHUB_REPOSITORY"],
+        holdVariables,
         readApi: (endpoint) => api([endpoint]),
       });
     }

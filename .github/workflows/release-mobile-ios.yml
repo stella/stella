@@ -5,9 +5,11 @@ defaults:
   run:
     shell: bash
 
-# Builds the iOS app on a hosted macOS runner and uploads it to TestFlight.
-# Manual only, from main: a person picks the build, `preview` for internal
-# testers or `production` for the store track (apps/mobile/app.config.ts).
+# Builds the iOS app on a hosted macOS runner and uploads it to TestFlight,
+# from main only: `preview` for internal testers or `production` for the
+# store track (apps/mobile/app.config.ts). Mobile Release Plan starts the
+# preview build after a merge that changes native code; production is
+# started by hand.
 #
 # Signing is explicit: the Apple Distribution certificate and each variant's
 # App Store profile were created once by hand and live in this repository's

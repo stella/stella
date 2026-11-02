@@ -51,6 +51,7 @@ import type {
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { isRecord } from "@/api/lib/type-guards";
+import { installTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
@@ -157,10 +158,9 @@ const urlOf = (input: string | URL | Request): string => {
 const stubPublisher = (
   answer: (call: Call) => Response,
 ): { calls: Call[]; restore: () => void } => {
-  const original = globalThis.fetch;
   const calls: Call[] = [];
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) => {
+  const installation = installTestFetch(
+    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
       const call = {
         url: urlOf(input),
         method: init?.method ?? "GET",
@@ -168,14 +168,9 @@ const stubPublisher = (
       };
       calls.push(call);
       return await Promise.resolve(answer(call));
-    },
+    }),
   );
-  return {
-    calls,
-    restore: () => {
-      globalThis.fetch = original;
-    },
-  };
+  return { calls, restore: installation.restore };
 };
 
 const json = (body: unknown, status = 200): Response =>
@@ -506,29 +501,31 @@ describe("every ingested category, as the service served it", () => {
       } as const satisfies StoredRawReparseInput;
       const reparse =
         plKisAdapter.reparseStoredRaw ?? panic("Missing KIS replay");
-      globalThis.fetch = asFetchMock(async () =>
-        panic("Replay must not fetch"),
-      );
-      const replay = await reparse(input);
-      expect(replay).toEqual({ type: "parsed", result: decision });
-      expect(await reparse(input)).toEqual(replay);
-      // Without its PDF object the row replays from the stored listing and
-      // detail, as it did before document objects were captured.
-      expect(
-        await reparse({
-          ...input,
-          raw: new TextEncoder().encode(decision.sourceRaw),
-        }),
-      ).toMatchObject({
-        type: "parsed",
-        result: { caseNumber: decision.caseNumber },
-      });
-      expect(
-        await reparse({ ...input, readObject: async () => Result.ok(null) }),
-      ).toMatchObject({
-        type: "parsed",
-        result: { caseNumber: decision.caseNumber },
-      });
+      const { restore } = stubPublisher(() => panic("Replay must not fetch"));
+      try {
+        const replay = await reparse(input);
+        expect(replay).toEqual({ type: "parsed", result: decision });
+        expect(await reparse(input)).toEqual(replay);
+        // Without its PDF object the row replays from the stored listing and
+        // detail, as it did before document objects were captured.
+        expect(
+          await reparse({
+            ...input,
+            raw: new TextEncoder().encode(decision.sourceRaw),
+          }),
+        ).toMatchObject({
+          type: "parsed",
+          result: { caseNumber: decision.caseNumber },
+        });
+        expect(
+          await reparse({ ...input, readObject: async () => Result.ok(null) }),
+        ).toMatchObject({
+          type: "parsed",
+          result: { caseNumber: decision.caseNumber },
+        });
+      } finally {
+        restore();
+      }
     }
   });
 

@@ -8,7 +8,7 @@ import {
   HEADING_CLASS,
 } from "@stll/decision-reader/document-ast-text";
 import type { HeadingLevel } from "@stll/legal-ast/document-ast";
-import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
 import { renderReaderFixture as renderToStaticMarkup } from "../../../../../packages/decision-reader/src/decision-text.test";
 
@@ -127,7 +127,7 @@ describe("embedded block anchors", () => {
           type: "heading",
         },
         rangesByPieceId: {},
-        statuteLists: E_SBIRKA_LIST_SCHEME,
+        statuteAnchors: E_SBIRKA_ANCHORS,
         variant: "statute",
       }),
     );

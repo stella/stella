@@ -16,6 +16,7 @@ import {
   matterActivityFilterQueryProperties,
   toMatterActivityFilters,
 } from "./matter-activity-query";
+import { activityDetailText } from "./read-overview-activity.logic";
 import { readOverviewActivityExport } from "./read-overview-activity.query";
 import type { MatterActivityItem } from "./read-overview-activity.query";
 
@@ -57,6 +58,7 @@ const matterActivityCsv = (items: readonly MatterActivityItem[]): string => {
       "Actor",
       "Actor type",
       "Action",
+      "Detail",
       "Category",
       "Target type",
       "Target",
@@ -73,6 +75,7 @@ const matterActivityCsv = (items: readonly MatterActivityItem[]): string => {
         item.performer.name ?? "",
         item.performer.type,
         item.action,
+        activityDetailText(item.detail),
         item.category,
         item.target.kind,
         item.target.name ?? "",
