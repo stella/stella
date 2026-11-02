@@ -23,7 +23,7 @@ const config = {
     "(value: string), single-select (value: string or null), multi-select " +
     "(value: array of strings), date (value: ISO YYYY-MM-DD or null), or int " +
     "(value: integer, optional currency: 3-letter ISO code). An empty value " +
-    "clears the cell; content null clears any cell, including an int.",
+    "clears the cell, as does null content.",
   permissions: FIELD_VALUE_WRITE_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: fieldRealtimeUpdates,
@@ -35,12 +35,7 @@ const config = {
     entityId: resourceIdSchema("entity", {
       description: "Document entity ID whose cell to set",
     }),
-    content: v.pipe(
-      v.nullable(upsertFieldContentSchema),
-      v.description(
-        "The value to set; 'type' must match the property. Null clears the cell.",
-      ),
-    ),
+    content: v.nullable(upsertFieldContentSchema),
   }),
 } satisfies WorkspaceHandlerConfig;
 

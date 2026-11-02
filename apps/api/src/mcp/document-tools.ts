@@ -2286,9 +2286,9 @@ const handleListPropertiesTool: TypedMcpToolHandler<
 const SET_FIELD_VALUE_TYPE_DESCRIPTION =
   "Value type; must match the property's value type";
 const SET_FIELD_VALUE_VALUE_DESCRIPTION =
-  "The value: string for text, string or null for single-select, array of " +
-  "strings for multi-select, ISO YYYY-MM-DD or null for date, integer or " +
-  "null for int. Null or empty clears the cell.";
+  "The value: string for text, string or null for single-select, string " +
+  "array for multi-select, ISO YYYY-MM-DD or null for date, integer for " +
+  "int. Null or empty clears the cell.";
 
 const setFieldValueContentSchema = v.variant("type", [
   v.strictObject({

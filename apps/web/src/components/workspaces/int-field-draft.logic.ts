@@ -1,3 +1,5 @@
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 /**
  * What committing an int cell's draft does. The comparison is against the
  * stored value, so an empty cell (`null`) and a stored 0 are different states.
@@ -10,7 +12,8 @@ export type IntFieldDraftCommit =
 // Spaces (including the no-break and narrow no-break spaces locales use as
 // thousands separators) are grouping, never part of the number.
 const GROUPING_SPACES = /[\s  ]/gu;
-const WHOLE_NUMBER = /^[+-]?\d+$/u;
+// A leading plus is the same number; the token grammar takes only a minus.
+const EXPLICIT_PLUS = /^\+(?=[0-9])/u;
 
 /**
  * Parses an int cell's draft. An empty draft clears the cell; anything that is
@@ -27,16 +30,11 @@ export const commitIntFieldDraft = (
       ? { kind: "unchanged" }
       : { kind: "save", value: null };
   }
-  if (!WHOLE_NUMBER.test(compact)) {
-    return { kind: "invalid" };
-  }
-  const value = Number(compact);
-  if (!Number.isSafeInteger(value)) {
+  const parsed = parseIntegerToken(compact.replace(EXPLICIT_PLUS, ""));
+  if (parsed.isErr()) {
     return { kind: "invalid" };
   }
   // -0 and 0 are the same stored number.
-  const normalized = value === 0 ? 0 : value;
-  return normalized === stored
-    ? { kind: "unchanged" }
-    : { kind: "save", value: normalized };
+  const value = parsed.value === 0 ? 0 : parsed.value;
+  return value === stored ? { kind: "unchanged" } : { kind: "save", value };
 };
