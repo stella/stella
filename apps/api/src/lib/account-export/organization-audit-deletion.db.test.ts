@@ -37,7 +37,10 @@ import {
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
-import { AUDIT_LOG_MATTER_WITHHELD_STATUS } from "@/api/lib/audit-log-export";
+import {
+  AUDIT_LOG_EXPORT_CSV_HEADER,
+  AUDIT_LOG_MATTER_WITHHELD_STATUS,
+} from "@/api/lib/audit-log-export";
 import { getAuth } from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -299,9 +302,7 @@ describe("organization deletion requires an audit log archive", () => {
     expect(liveRows).toBeGreaterThan(0);
     const contents = archiveText(archived.archive);
     expect(contents).toContain("audit-logs.csv");
-    expect(contents).toContain(
-      "Time,User Name,User Email,Action,Resource Type,Resource ID,Changes,Changes Status",
-    );
+    expect(contents).toContain(AUDIT_LOG_EXPORT_CSV_HEADER);
     expect(contents).toContain(`"auditRowCount":${String(liveRows)}`);
 
     // The archive is complete, but the owner has not taken it yet.

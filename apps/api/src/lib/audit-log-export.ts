@@ -20,6 +20,9 @@ import { escapeCSV } from "@/api/lib/csv";
  */
 export const AUDIT_LOG_EXPORT_CSV_HEADER = [
   "Time",
+  // The actor's ID stays readable after the member leaves the organization,
+  // when name and email no longer resolve.
+  "User ID",
   "User Name",
   "User Email",
   "Action",
@@ -130,6 +133,7 @@ export const auditLogExportCsvLine = ({
 }: AuditLogExportCsvLineOptions): string => {
   const shared = [
     escapeCSV(new Date(row.createdAt).toISOString()),
+    escapeCSV(row.userId),
     escapeCSV(actor?.name ?? ""),
     escapeCSV(actor?.email ?? ""),
     escapeCSV(row.action),
