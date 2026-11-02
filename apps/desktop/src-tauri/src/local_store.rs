@@ -5,10 +5,9 @@
 //! JSON envelopes written atomically with owner-only permissions, and a key
 //! that is never re-minted while encrypted data still depends on it.
 //!
-//! Runtime files and directory publication retain their explicit modes and kinds.
-//! Socket binding requires a handle-relative namespace: Linux uses `/proc/self/fd`;
-//! other Unix platforms fail closed with `UnsupportedPinnedOperation`. In
-//! particular macOS does not expose a directory-relative socket bind API.
+//! Harness files and staged directories are created and published through
+//! pinned parent handles. The Codex token channel's directory, socket and
+//! pipe operations are owned by [`token_broker`].
 
 #![allow(
   clippy::disallowed_methods,
@@ -28,6 +27,8 @@ use std::{
 
 use crate::keychain::{self, LocalDataKey, LocalDataKeyLookup};
 use crate::logging::log_json_error;
+
+pub(crate) mod token_broker;
 
 const ENVELOPE_VERSION: u8 = 1;
 const NONCE_BYTES: usize = 12;
@@ -234,39 +235,6 @@ pub enum OpenMode {
   Lock,
 }
 
-/// Archive modes are explicit: ordinary runtime data and executable programs
-/// retain their release semantics instead of inheriting private-store modes.
-#[derive(Clone, Copy)]
-pub enum RuntimeFileMode {
-  Data,
-  Executable,
-}
-
-#[cfg(all(unix, not(target_os = "linux")))]
-#[derive(Debug)]
-pub struct UnsupportedPinnedOperation(pub &'static str);
-
-#[cfg(all(unix, not(target_os = "linux")))]
-impl std::fmt::Display for UnsupportedPinnedOperation {
-  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(
-      formatter,
-      "pinned {} is unavailable on this platform",
-      self.0
-    )
-  }
-}
-
-#[cfg(all(unix, not(target_os = "linux")))]
-impl std::error::Error for UnsupportedPinnedOperation {}
-
-pub fn create_runtime_file(
-  path: &Path,
-  mode: RuntimeFileMode,
-) -> std::io::Result<fs::File> {
-  platform::Parent::at(path)?.create_runtime_file(mode)
-}
-
 pub fn create_private_dir_new(path: &Path) -> std::io::Result<()> {
   platform::Parent::at(path)?.create_directory_new()
 }
@@ -275,42 +243,16 @@ pub fn publish_directory(source: &Path, destination: &Path) -> std::io::Result<(
   platform::Parent::at(source)?.publish_directory(&platform::Parent::at(destination)?)
 }
 
-/// A temporary root is created exclusively beneath the pinned platform temp
-/// directory. Descendants use the same no-follow owner as persistent stores.
-#[cfg(unix)]
-pub fn create_temporary_root() -> std::io::Result<PathBuf> {
-  let path = std::env::temp_dir().join(format!(
-    "stella-{}",
-    &uuid::Uuid::new_v4().simple().to_string()[..12]
-  ));
-  create_private_dir_new(&path)?;
-  Ok(path)
-}
-
-#[cfg(unix)]
-pub fn bind_private_socket(path: &Path) -> std::io::Result<std::os::fd::OwnedFd> {
-  platform::Parent::at(path)?.bind_socket()
-}
-
-// Protocol fixtures need a real socket on platforms whose production binder
-// fails closed. The fixture never handles application data or publication.
-#[cfg(all(test, unix, not(target_os = "linux")))]
-pub(crate) fn bind_socket_fixture(
-  path: &Path,
-) -> std::io::Result<std::os::fd::OwnedFd> {
-  platform::bind_socket_fixture(path)
-}
-
-#[cfg(windows)]
-pub(crate) const BROKER_PIPE_PREFIX: &str = r"\\.\pipe\stella-token-";
-
-#[cfg(windows)]
-pub fn open_broker_pipe(endpoint: &str) -> std::io::Result<fs::File> {
-  platform::open_broker_pipe(endpoint)
-}
-
 pub fn create_private_dir(directory: &Path) -> std::io::Result<()> {
   platform::create_directory(directory)
+}
+
+#[cfg(test)]
+pub(crate) fn write_test_fixture(
+  path: impl AsRef<Path>,
+  bytes: impl AsRef<[u8]>,
+) -> Result<(), String> {
+  write_private_atomic(path.as_ref(), bytes.as_ref())
 }
 
 pub fn open_private(mode: OpenMode, path: &Path) -> std::io::Result<fs::File> {
@@ -338,6 +280,20 @@ fn open_private_with(
 #[cfg(unix)]
 fn restrict_private_file(file: &fs::File) -> std::io::Result<()> {
   rustix::fs::fchmod(file, rustix::fs::Mode::from_raw_mode(0o600)).map_err(Into::into)
+}
+
+pub(crate) fn create_harness_file(
+  path: &Path,
+  executable: bool,
+) -> std::io::Result<fs::File> {
+  let file = open_private(OpenMode::CreateNew, path)?;
+  #[cfg(unix)]
+  if executable {
+    rustix::fs::fchmod(&file, rustix::fs::Mode::from_raw_mode(0o700))?;
+  }
+  #[cfg(not(unix))]
+  let _ = executable;
+  Ok(file)
 }
 
 pub fn rename_private(source: &Path, destination: &Path) -> std::io::Result<()> {
@@ -397,16 +353,10 @@ pub(crate) fn local_file_creation_child(test_name: &str) -> bool {
   if std::env::var_os("STELLA_LOCAL_FILE_CHILD").is_some() {
     return false;
   }
-  let result = std::process::Command::new("python3")
-    .args([
-      "-c",
-      "import os, subprocess, sys
-old = os.umask(0)
-try:
- sys.exit(subprocess.call(sys.argv[1:]))
-finally:
- os.umask(old)",
-    ])
+  // `/bin/sh` exists on every Unix host; the crate forbids the unsafe
+  // `pre_exec` hook that would set the child's umask in-process.
+  let result = std::process::Command::new("/bin/sh")
+    .args(["-c", "umask 0; exec \"$0\" \"$@\""])
     .arg(std::env::current_exe().unwrap())
     .args(["--exact", test_name, "--nocapture"])
     .env("STELLA_LOCAL_FILE_CHILD", "1")
@@ -543,7 +493,7 @@ mod tests {
     let staging = root.join("staging");
     create_private_dir_new(&staging).unwrap();
     let path = staging.join("tool.exe");
-    let mut file = create_runtime_file(&path, RuntimeFileMode::Executable).unwrap();
+    let mut file = create_harness_file(&path, true).unwrap();
     file.write_all(b"runtime").unwrap();
     drop(file);
     let source = platform::Parent::at(&staging).unwrap();
@@ -561,9 +511,10 @@ mod tests {
 
   #[cfg(unix)]
   #[test]
-  fn runtime_modes_and_directory_publication_use_pinned_parents() {
+  fn harness_modes_and_directory_publication_use_pinned_parents() {
     use std::os::unix::fs::{PermissionsExt, symlink};
-    let root = create_temporary_root().unwrap();
+    let root = unique_path().parent().unwrap().to_path_buf();
+    create_private_dir(&root).unwrap();
     assert_eq!(
       fs::metadata(&root).unwrap().permissions().mode() & 0o777,
       0o700
@@ -574,11 +525,9 @@ mod tests {
       create_private_dir_new(&staging).unwrap_err().kind(),
       std::io::ErrorKind::AlreadyExists
     );
-    for (name, mode, expected) in [
-      ("tool", RuntimeFileMode::Executable, 0o755),
-      ("data", RuntimeFileMode::Data, 0o644),
-    ] {
-      let file = create_runtime_file(&staging.join(name), mode).unwrap();
+    for (name, executable, expected) in [("tool", true, 0o700), ("data", false, 0o600)]
+    {
+      let file = create_harness_file(&staging.join(name), executable).unwrap();
       assert_eq!(
         file.metadata().unwrap().permissions().mode() & 0o777,
         expected
@@ -600,72 +549,14 @@ mod tests {
         .permissions()
         .mode()
         & 0o777,
-      0o755
+      0o700
     );
     assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
-    assert!(
-      create_runtime_file(&root.join("unexpected"), RuntimeFileMode::Executable)
-        .is_err()
-    );
+    assert!(create_harness_file(&root.join("unexpected"), true).is_err());
     assert!(create_private_dir_new(&root.join("unexpected")).is_err());
     fs::remove_file(&root).unwrap();
     fs::remove_dir_all(moved).unwrap();
     fs::remove_dir(outside).unwrap();
-  }
-
-  #[cfg(unix)]
-  #[test]
-  fn runtime_files_keep_their_mode_after_parent_path_changes() {
-    use std::os::unix::fs::{PermissionsExt, symlink};
-    let root = create_temporary_root().unwrap();
-    let parent = root.join("parent");
-    let moved = root.join("moved");
-    let outside = root.join("outside");
-    create_private_dir(&parent).unwrap();
-    create_private_dir(&outside).unwrap();
-    let pinned = platform::Parent::at(&parent.join("tool")).unwrap();
-    fs::rename(&parent, &moved).unwrap();
-    symlink(&outside, &parent).unwrap();
-    let file = pinned
-      .create_runtime_file(RuntimeFileMode::Executable)
-      .unwrap();
-    assert_eq!(file.metadata().unwrap().permissions().mode() & 0o777, 0o755);
-    assert!(moved.join("tool").is_file());
-    assert_eq!(fs::read_dir(outside).unwrap().count(), 0);
-    fs::remove_dir_all(root).unwrap();
-  }
-
-  #[cfg(unix)]
-  #[tokio::test]
-  async fn socket_binding_preserves_the_private_directory_boundary() {
-    use std::os::unix::fs::symlink;
-    let root = create_temporary_root().unwrap();
-    let parent = root.join("parent");
-    let moved = root.join("moved");
-    let outside = root.join("outside");
-    create_private_dir(&parent).unwrap();
-    create_private_dir(&outside).unwrap();
-    let pinned = platform::Parent::at(&parent.join("s")).unwrap();
-    fs::rename(&parent, &moved).unwrap();
-    symlink(&outside, &parent).unwrap();
-    #[cfg(target_os = "linux")]
-    {
-      use std::os::unix::fs::{FileTypeExt, PermissionsExt};
-      let listener = pinned.bind_socket().unwrap();
-      let metadata = fs::symlink_metadata(moved.join("s")).unwrap();
-      assert!(metadata.file_type().is_socket());
-      assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
-      drop(listener);
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-      let error = pinned.bind_socket().unwrap_err();
-      assert_eq!(error.kind(), std::io::ErrorKind::Unsupported);
-      assert!(error.get_ref().unwrap().is::<UnsupportedPinnedOperation>());
-      assert!(!moved.join("s").exists());
-    }
-    assert_eq!(fs::read_dir(outside).unwrap().count(), 0);
-    fs::remove_dir_all(root).unwrap();
   }
 
   #[cfg(unix)]
@@ -700,6 +591,9 @@ mod tests {
     let directory_link = root.join("directory");
     symlink(&outside, &directory_link).unwrap();
     assert_link_error(create_private_dir(&directory_link).unwrap_err());
+    assert_link_error(
+      publish_directory(&directory_link, &root.join("published")).unwrap_err(),
+    );
     assert!(write_private_atomic(&directory_link.join("file"), b"value").is_err());
     let middle = root.join("middle");
     create_private_dir(&middle).unwrap();
@@ -715,6 +609,24 @@ mod tests {
     );
     assert!(!outside.join("nested").exists());
     assert!(!outside.join("file").exists());
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn harness_directories_are_created_once_and_published_whole() {
+    let root = unique_path().parent().unwrap().to_path_buf();
+    create_private_dir(&root).unwrap();
+    let staged = root.join("staged");
+    create_private_dir_new(&staged).unwrap();
+    assert_eq!(
+      create_private_dir_new(&staged).unwrap_err().kind(),
+      std::io::ErrorKind::AlreadyExists
+    );
+    write_private_atomic(&staged.join("record"), b"complete").unwrap();
+    let published = root.join("published");
+    publish_directory(&staged, &published).unwrap();
+    assert!(!staged.exists());
+    assert_eq!(fs::read(published.join("record")).unwrap(), b"complete");
     fs::remove_dir_all(root).unwrap();
   }
 

@@ -5,6 +5,10 @@ edition = "2024"
 description = "stella desktop — managed Office file editing for stella"
 license = "Apache-2.0"
 
+[[example]]
+name = "local_file_creation_guard"
+required-features = ["local-file-guard-probe"]
+
 [lib]
 name = "stella_desktop_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
@@ -187,6 +191,7 @@ winsafe = { version = "0.0.29", features = ["kernel", "user", "version"] }
 
 [features]
 allocation-tests = []
+local-file-guard-probe = []
 
 [dev-dependencies]
 dhat = "=0.3.3"

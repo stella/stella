@@ -65,17 +65,10 @@ fn write_atomically(path: &Path, value: &str) -> Result<(), String> {
     .ok_or_else(|| "preference path is invalid".to_string())?;
   crate::local_store::create_private_dir(parent)
     .map_err(|error| format!("preference directory failed: {error}"))?;
-  // The rename replaces whatever sits at the path in one step instead of
-  // following a link planted there after the check above.
   crate::local_store::write_private_atomic(path, value.as_bytes())
-    .map_err(|error| format!("preference write failed: {error}"))
 }
 
 #[cfg(test)]
-#[allow(
-  clippy::disallowed_methods,
-  reason = "tests construct local file fixtures"
-)]
 mod tests {
   use super::*;
 
@@ -103,7 +96,7 @@ mod tests {
   #[test]
   fn a_directory_at_the_path_is_neither_read_nor_replaced() {
     let path = temp_path("value");
-    fs::create_dir_all(&path).unwrap();
+    crate::local_store::create_private_dir(&path).unwrap();
     let preference = DevicePreference::at(path.clone());
 
     assert_eq!(preference.read(), None);

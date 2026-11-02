@@ -71,31 +71,57 @@ fn absolute_directory(path: &Path) -> io::Result<File> {
   Ok(directory)
 }
 
-fn roots() -> Vec<(PathBuf, bool)> {
-  let mut roots = Vec::new();
-  for base in [
-    dirs::data_dir(),
-    dirs::data_local_dir(),
-    dirs::cache_dir(),
-    dirs::state_dir(),
-  ]
-  .into_iter()
-  .flatten()
-  {
-    roots.push((base.join(crate::config::APP_DATA_DIR_NAME), true));
-  }
-  #[cfg(target_os = "macos")]
-  if let Some(home) = dirs::home_dir() {
-    roots.push((
-      home
-        .join("Library/Logs")
-        .join(crate::config::APP_DATA_DIR_NAME),
-      true,
-    ));
-    roots.push((home.join("Library/LaunchAgents"), false));
-  }
-  roots.push((std::env::temp_dir(), false));
-  roots
+/// A base directory local files may be created under.
+struct Root {
+  path: PathBuf,
+  /// Whether the base is the application's own, restricted to the owner.
+  restrict: bool,
+  /// The platform temporary directory test builds anchor fixtures in.
+  temporary: bool,
+}
+
+/// The platform bases, resolved once: they do not change while the app runs,
+/// and every local file operation looks one up.
+fn roots() -> &'static [Root] {
+  static ROOTS: OnceLock<Vec<Root>> = OnceLock::new();
+  ROOTS.get_or_init(|| {
+    let owned = |path: PathBuf, restrict: bool| Root {
+      path,
+      restrict,
+      temporary: false,
+    };
+    let mut roots = Vec::new();
+    for base in [
+      dirs::data_dir(),
+      dirs::data_local_dir(),
+      dirs::cache_dir(),
+      dirs::state_dir(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+      roots.push(owned(base.join(crate::config::APP_DATA_DIR_NAME), true));
+    }
+    #[cfg(target_os = "macos")]
+    if let Some(home) = dirs::home_dir() {
+      roots.push(owned(
+        home
+          .join("Library/Logs")
+          .join(crate::config::APP_DATA_DIR_NAME),
+        true,
+      ));
+      roots.push(owned(home.join("Library/LaunchAgents"), false));
+    }
+    // Test builds, the allocation harness included, keep their fixtures under
+    // the temporary directory. Production never treats it as a root.
+    #[cfg(any(test, feature = "allocation-tests"))]
+    roots.push(Root {
+      path: std::env::temp_dir(),
+      restrict: false,
+      temporary: true,
+    });
+    roots
+  })
 }
 
 // Platform-selected ancestors may be system aliases. Resolve those before
@@ -128,58 +154,53 @@ fn physical_application_root(path: &Path) -> io::Result<PathBuf> {
 }
 
 fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
-  let (root_path, restrict) = roots()
-    .into_iter()
-    .filter(|(root, _)| path.starts_with(root))
-    .max_by_key(|(root, _)| root.components().count())
+  let root = roots()
+    .iter()
+    .filter(|root| path.starts_with(&root.path))
+    .max_by_key(|root| root.path.components().count())
     .ok_or_else(invalid_path)?;
-  let temporary_anchor = root_path == std::env::temp_dir();
+  let (root_path, restrict, temporary_anchor) =
+    (&root.path, root.restrict, root.temporary);
   let relative = path
-    .strip_prefix(&root_path)
-    .map_err(|error| {
-      io::Error::new(
-        io::ErrorKind::InvalidInput,
-        format!("invalid local file path: {error}"),
-      )
-    })?
+    .strip_prefix(root_path)
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?
     .to_path_buf();
-  static ROOTS: OnceLock<Mutex<HashMap<PathBuf, Arc<File>>>> = OnceLock::new();
-  // The registry only caches opened handles, so a panic elsewhere cannot leave
-  // it inconsistent.
-  let mut opened = ROOTS
+  static OPENED: OnceLock<Mutex<HashMap<PathBuf, Arc<File>>>> = OnceLock::new();
+  let mut opened = OPENED
     .get_or_init(Mutex::default)
     .lock()
-    .unwrap_or_else(std::sync::PoisonError::into_inner);
-  if let Some(directory) = opened.get(&root_path) {
+    .map_err(|error| io::Error::other(error.to_string()))?;
+  // A root moved or deleted while the app runs leaves the cached handle on an
+  // unlinked directory; reuse it only while the path still names that inode.
+  let cached = opened.get(root_path).filter(|directory| {
+    match (directory.metadata(), std::fs::symlink_metadata(root_path)) {
+      (Ok(held), Ok(current)) => {
+        held.dev() == current.dev() && held.ino() == current.ino()
+      }
+      _ => false,
+    }
+  });
+  if let Some(directory) = cached {
     if !temporary_anchor {
       check_owner(directory)?;
     }
     if restrict {
       fs::fchmod(directory, DIRECTORY_MODE)?;
     }
-    return Ok((Arc::clone(directory), relative));
+    let directory = Arc::clone(directory);
+    drop(opened);
+    return Ok((directory, relative));
   }
-  // The temporary anchor itself is platform supplied; application roots
-  // retain no-follow traversal after resolving only their platform parent.
+  opened.remove(root_path);
+  // Only the test-only temporary anchor is resolved whole. Application roots
+  // resolve their platform parent; the root and every descendant, test
+  // fixtures included, keep no-follow traversal.
   let physical_root = if temporary_anchor {
     root_path.canonicalize()?
   } else {
-    physical_application_root(&root_path)?
+    physical_application_root(root_path)?
   };
   let directory = absolute_directory(&physical_root)?;
-  if temporary_anchor {
-    let metadata = directory.metadata()?;
-    let trusted = (metadata.uid() == rustix::process::geteuid().as_raw()
-      && metadata.mode() & 0o022 == 0)
-      || (metadata.uid() == 0
-        && (metadata.mode() & 0o022 == 0 || metadata.mode() & 0o1000 != 0));
-    if !trusted {
-      return Err(io::Error::new(
-        io::ErrorKind::PermissionDenied,
-        "temporary root is not trusted",
-      ));
-    }
-  }
   if !temporary_anchor {
     check_owner(&directory)?;
   }
@@ -187,7 +208,7 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
     fs::fchmod(&directory, DIRECTORY_MODE)?;
   }
   let directory = Arc::new(directory);
-  opened.insert(root_path, Arc::clone(&directory));
+  opened.insert(root_path.clone(), Arc::clone(&directory));
   drop(opened);
   Ok((directory, relative))
 }
@@ -239,29 +260,6 @@ impl Parent {
     })
   }
 
-  pub(super) fn create_runtime_file(
-    &self,
-    mode: super::RuntimeFileMode,
-  ) -> io::Result<File> {
-    let permissions = Mode::from_raw_mode(match mode {
-      super::RuntimeFileMode::Data => 0o644,
-      super::RuntimeFileMode::Executable => 0o755,
-    });
-    let file = File::from(fs::openat(
-      &self.directory,
-      &self.name,
-      OFlags::WRONLY
-        | OFlags::CREATE
-        | OFlags::EXCL
-        | OFlags::NOFOLLOW
-        | OFlags::CLOEXEC,
-      permissions,
-    )?);
-    check_owner(&file)?;
-    fs::fchmod(&file, permissions)?;
-    Ok(file)
-  }
-
   pub(super) fn create_directory_new(&self) -> io::Result<()> {
     fs::mkdirat(&self.directory, &self.name, DIRECTORY_MODE)?;
     let directory = child_directory(&self.directory, &self.name, false, true)?;
@@ -283,41 +281,6 @@ impl Parent {
     fs::fsync(&destination.directory)?;
     fs::fsync(&self.directory)?;
     Ok(())
-  }
-
-  #[cfg(target_os = "linux")]
-  pub(super) fn bind_socket(&self) -> io::Result<std::os::fd::OwnedFd> {
-    use std::os::fd::AsRawFd;
-    let metadata = self.directory.metadata()?;
-    check_owner(&self.directory)?;
-    if metadata.mode() & 0o777 != 0o700 {
-      return Err(io::Error::new(
-        io::ErrorKind::PermissionDenied,
-        "socket directory is not private",
-      ));
-    }
-    let path = PathBuf::from(format!("/proc/self/fd/{}", self.directory.as_raw_fd()))
-      .join(&self.name);
-    let listener = std::os::unix::net::UnixListener::bind(path)?;
-    // O_PATH can pin a socket inode without opening a connection to it. The
-    // no-follow open also refuses to chmod a replaced symbolic link's target.
-    let socket = File::from(fs::openat(
-      &self.directory,
-      &self.name,
-      OFlags::PATH | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-      Mode::empty(),
-    )?);
-    restrict_socket(&socket)?;
-    Ok(listener.into())
-  }
-
-  #[cfg(not(target_os = "linux"))]
-  pub(super) fn bind_socket(&self) -> io::Result<std::os::fd::OwnedFd> {
-    check_owner(&self.directory)?;
-    Err(io::Error::new(
-      io::ErrorKind::Unsupported,
-      super::UnsupportedPinnedOperation("Unix socket binding"),
-    ))
   }
 
   pub(super) fn open(&self, mode: OpenMode) -> io::Result<File> {
@@ -418,75 +381,9 @@ impl Parent {
   }
 }
 
-#[cfg(all(test, not(target_os = "linux")))]
-pub(super) fn bind_socket_fixture(path: &Path) -> io::Result<std::os::fd::OwnedFd> {
-  use std::os::unix::fs::PermissionsExt;
-  let listener = std::os::unix::net::UnixListener::bind(path)?;
-  std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
-  Ok(listener.into())
-}
-
-#[cfg(target_os = "linux")]
-fn restrict_socket(socket: &File) -> io::Result<()> {
-  use std::os::{fd::AsRawFd, unix::fs::FileTypeExt};
-  if !socket.metadata()?.file_type().is_socket() {
-    return Err(invalid_path());
-  }
-  check_owner(socket)?;
-  // Linux does not fchmod O_PATH descriptors. Its proc descriptor namespace
-  // follows the pinned inode, including after unlink or replacement of the name.
-  let path = PathBuf::from(format!("/proc/self/fd/{}", socket.as_raw_fd()));
-  fs::chmodat(fs::CWD, &path, FILE_MODE, AtFlags::empty()).map_err(Into::into)
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  #[cfg(target_os = "linux")]
-  #[test]
-  fn socket_permissions_follow_the_opened_inode_after_name_replacement() {
-    use std::os::unix::fs::{PermissionsExt, symlink};
-    let root = super::super::create_temporary_root().unwrap();
-    let path = root.join("s");
-    let moved = root.join("moved");
-    let outside = root.join("outside");
-    super::super::write_private_atomic(&outside, b"outside").unwrap();
-    std::fs::set_permissions(&outside, std::fs::Permissions::from_mode(0o644)).unwrap();
-    let unchanged = std::fs::metadata(&outside).unwrap().mode();
-    assert_eq!(unchanged & 0o777, 0o644);
-    let _listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let parent = Parent::at(&path).unwrap();
-    let socket = File::from(
-      fs::openat(
-        &parent.directory,
-        &parent.name,
-        OFlags::PATH | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-        Mode::empty(),
-      )
-      .unwrap(),
-    );
-    std::fs::rename(&path, &moved).unwrap();
-    symlink(&outside, &path).unwrap();
-    restrict_socket(&socket).unwrap();
-    assert_eq!(std::fs::metadata(&moved).unwrap().mode() & 0o777, 0o600);
-    assert_eq!(std::fs::metadata(&outside).unwrap().mode(), unchanged);
-    let replaced = File::from(
-      fs::openat(
-        &parent.directory,
-        &parent.name,
-        OFlags::PATH | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-        Mode::empty(),
-      )
-      .unwrap(),
-    );
-    assert_eq!(
-      restrict_socket(&replaced).unwrap_err().kind(),
-      io::ErrorKind::InvalidInput
-    );
-    std::fs::remove_dir_all(root).unwrap();
-  }
 
   #[test]
   fn platform_aliases_keep_application_roots_no_follow() {

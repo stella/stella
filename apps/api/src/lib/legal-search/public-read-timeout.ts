@@ -1,5 +1,5 @@
 import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
-import { HttpStatusResponse, status } from "@/api/http/status";
+import { HttpStatusResponse } from "@/api/http/status";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PublicLawStatementError } from "@/api/lib/legal-search/public-law-statement-error";
 import {
@@ -8,6 +8,10 @@ import {
 } from "@/api/lib/legal-search/public-read-timeout-context";
 import { findRequestBudgetExpiry } from "@/api/lib/load/request-latency-budget";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import {
+  type AnswerCause,
+  observedStatus,
+} from "@/api/lib/observability/server-error-answer";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 import { publicCorpusClassOf } from "@/api/public-corpus-policy";
@@ -60,8 +64,8 @@ export const publicReadTimeoutRefusal = (cause: unknown): HandlerError<503> =>
  * a REST client and an MCP tool read the same answer whether the refusal was
  * returned or thrown (`publicReadTimeoutError` reads both).
  */
-export const publicReadTimeoutResponse = () =>
-  status(503, {
+export const publicReadTimeoutResponse = (answer: AnswerCause) =>
+  observedStatus(answer, 503, {
     code: PUBLIC_READ_TIMEOUT_CODE,
     message: PUBLIC_READ_TIMEOUT_MESSAGE,
     hint: PUBLIC_READ_TIMEOUT_HINT,

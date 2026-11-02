@@ -45,6 +45,8 @@ use tokio::{
 };
 
 use crate::chatgpt_auth::{AGENT_NAME, AccessError, ChatGptAuth};
+#[cfg(unix)]
+use crate::local_store::token_broker::OwnedDirectory;
 
 /// The argument that starts the desktop executable as the token helper.
 pub const TOKEN_HELPER_ARGUMENT: &str = "--codex-chatgpt-token";
@@ -301,20 +303,9 @@ impl CodexManagedTokenBroker {
     if path.as_os_str().len() > UNIX_SOCKET_PATH_BYTES {
       return Err(std::io::Error::other("token broker path is too long"));
     }
-    let listener = crate::local_store::bind_private_socket(&path)?;
-    Self::start_with_socket(source, directory, listener)
-  }
-
-  #[cfg(unix)]
-  fn start_with_socket<S: TokenSource>(
-    source: Arc<S>,
-    directory: OwnedDirectory,
-    socket: std::os::fd::OwnedFd,
-  ) -> std::io::Result<Self> {
-    let listener = std::os::unix::net::UnixListener::from(socket);
+    let listener = std::os::unix::net::UnixListener::from(directory.bind_socket()?);
     listener.set_nonblocking(true)?;
     let listener = tokio::net::UnixListener::from_std(listener)?;
-    let path = directory.path.join("s");
     let endpoint = path
       .to_str()
       .ok_or_else(|| std::io::Error::other("token broker path is not UTF-8"))?
@@ -361,7 +352,7 @@ impl CodexManagedTokenBroker {
 
     let endpoint = format!(
       "{}{}",
-      crate::local_store::BROKER_PIPE_PREFIX,
+      crate::local_store::token_broker::PIPE_PREFIX,
       uuid::Uuid::new_v4()
     );
     // Remote clients are refused, only the current user may open the pipe,
@@ -421,46 +412,6 @@ impl CodexManagedTokenBroker {
     Err(std::io::Error::other(
       "no private token channel on this platform",
     ))
-  }
-}
-
-/// A `0700` directory this process created, removed (only if it is still
-/// the same directory) when dropped.
-#[cfg(unix)]
-struct OwnedDirectory {
-  path: std::path::PathBuf,
-  device: u64,
-  inode: u64,
-}
-
-#[cfg(unix)]
-impl OwnedDirectory {
-  fn create() -> std::io::Result<Self> {
-    use std::os::unix::fs::MetadataExt;
-    let path = crate::local_store::create_temporary_root()?;
-    let created = std::fs::symlink_metadata(&path)?;
-    Ok(Self {
-      path,
-      device: created.dev(),
-      inode: created.ino(),
-    })
-  }
-}
-
-#[cfg(unix)]
-impl Drop for OwnedDirectory {
-  fn drop(&mut self) {
-    use std::os::unix::fs::MetadataExt;
-    // Never remove a directory that was replaced, or anything but our socket.
-    let Ok(current) = std::fs::symlink_metadata(&self.path) else {
-      return;
-    };
-    if current.dev() != self.device || current.ino() != self.inode || !current.is_dir()
-    {
-      return;
-    }
-    let _ = std::fs::remove_file(self.path.join("s"));
-    let _ = std::fs::remove_dir(&self.path);
   }
 }
 
@@ -631,7 +582,7 @@ fn connect(endpoint: &str) -> Option<std::os::unix::net::UnixStream> {
 
 #[cfg(windows)]
 fn connect(endpoint: &str) -> Option<std::fs::File> {
-  crate::local_store::open_broker_pipe(endpoint).ok()
+  crate::local_store::token_broker::connect(endpoint)
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -671,45 +622,9 @@ mod tests {
     format!("{{\"version\":1,\"profileKey\":\"{KEY}\"}}\n")
   }
 
-  fn test_broker() -> CodexManagedTokenBroker {
-    #[cfg(target_os = "linux")]
-    {
-      CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap()
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-      // Exercise protocol and peer credentials even where production refuses
-      // path-based socket binding. This fixture is not a publication boundary.
-      let directory = OwnedDirectory::create().unwrap();
-      let listener =
-        crate::local_store::bind_socket_fixture(&directory.path.join("s")).unwrap();
-      CodexManagedTokenBroker::start_with_socket(
-        Arc::new(FixedSource),
-        directory,
-        listener,
-      )
-      .unwrap()
-    }
-  }
-
-  #[cfg(not(target_os = "linux"))]
-  #[tokio::test]
-  async fn production_socket_binding_requires_a_handle_relative_platform_api() {
-    let error = CodexManagedTokenBroker::start(Arc::new(FixedSource))
-      .err()
-      .unwrap();
-    assert_eq!(error.kind(), std::io::ErrorKind::Unsupported);
-    assert!(
-      error
-        .get_ref()
-        .unwrap()
-        .is::<crate::local_store::UnsupportedPinnedOperation>()
-    );
-  }
-
   /// A broker that answers this test process, as if it were a managed Codex.
   fn started() -> (CodexManagedTokenBroker, BrokerGrant) {
-    let broker = test_broker();
+    let broker = CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap();
     let grant = BrokerGrant::new(&broker.processes, std::process::id());
     (broker, grant)
   }
@@ -746,7 +661,7 @@ mod tests {
 
   #[tokio::test(flavor = "multi_thread")]
   async fn an_unrelated_same_user_process_is_refused() {
-    let broker = test_broker();
+    let broker = CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap();
     let mut codex = unrelated_process();
     // Only the "Codex" process tree is authorized; this test process is not
     // in it, although it runs as the same user and holds the right key.
@@ -904,7 +819,7 @@ mod tests {
 
   #[tokio::test(flavor = "multi_thread")]
   async fn a_launch_authorizes_its_codex_process_until_the_grant_ends() {
-    let broker = test_broker();
+    let broker = CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap();
     let launch = launch_for(
       Path::new("/bin/true"),
       broker.endpoint(),

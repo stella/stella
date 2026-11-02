@@ -948,7 +948,16 @@ async fn remove_tree(path: PathBuf) -> std::io::Result<()> {
 async fn publish(runtime: &Path, destination: &Path) -> std::io::Result<()> {
   let mut attempts = 0;
   loop {
-    match crate::local_store::publish_directory(runtime, destination) {
+    let published = {
+      let runtime = runtime.to_path_buf();
+      let destination = destination.to_path_buf();
+      tokio::task::spawn_blocking(move || {
+        crate::local_store::publish_directory(&runtime, &destination)
+      })
+      .await
+      .map_err(std::io::Error::other)?
+    };
+    match published {
       Err(_) if cfg!(windows) && attempts < 10 => {
         attempts += 1;
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -1660,8 +1669,8 @@ mod tests {
   fn stage(dir: &TempDir, version: &str) {
     let release = codex_dir(dir).join(version);
     crate::local_store::create_private_dir(&release.join("bin")).unwrap();
-    crate::local_store::write_private_atomic(
-      &release.join("bin").join("codex"),
+    crate::local_store::write_test_fixture(
+      release.join("bin").join("codex"),
       b"#!/bin/sh\n",
     )
     .unwrap();
@@ -1671,9 +1680,9 @@ mod tests {
       digest: ArchiveDigest::Sha256("00".repeat(32)),
       executable: "bin/codex".to_string(),
     };
-    crate::local_store::write_private_atomic(
-      &release.join(INSTALL_RECORD),
-      &serde_json::to_vec(&record).unwrap(),
+    crate::local_store::write_test_fixture(
+      release.join(INSTALL_RECORD),
+      serde_json::to_vec(&record).unwrap(),
     )
     .unwrap();
   }
@@ -1731,7 +1740,7 @@ mod tests {
       assert_eq!(install(&open(&dir, pinned.clone())).await, ready("1.0.0"));
 
       let record = codex_dir(&dir).join("1.0.0").join(INSTALL_RECORD);
-      crate::local_store::write_private_atomic(&record, b"{\"version\":").unwrap();
+      crate::local_store::write_test_fixture(record, b"{\"version\":").unwrap();
       let reopened = open(&dir, pinned.clone());
       let corrupt = failed(InstallFailure::CorruptInstall, None);
       assert_eq!(reopened.state(ManagedHarness::Codex), corrupt);
@@ -1747,8 +1756,8 @@ mod tests {
       );
       assert!(reopened.acquire(ManagedHarness::Codex).is_ok());
 
-      crate::local_store::write_private_atomic(
-        &codex_dir(&dir).join(ACTIVE_POINTER),
+      crate::local_store::write_test_fixture(
+        codex_dir(&dir).join(ACTIVE_POINTER),
         b"not json",
       )
       .unwrap();
@@ -1799,7 +1808,7 @@ mod tests {
       &harness.join(".install-left").join("runtime"),
     )
     .unwrap();
-    crate::local_store::write_private_atomic(&harness.join(".active-left.json"), b"{}")
+    crate::local_store::write_test_fixture(harness.join(".active-left.json"), b"{}")
       .unwrap();
     let installation = HarnessInstallation::open(
       dir.path().join("harness"),
@@ -1833,8 +1842,8 @@ mod tests {
     installation.remove_sign_in(ManagedHarness::Codex).unwrap();
     let home = dir.path().join("harness-home").join("codex");
     crate::local_store::create_private_dir(&home.join("sessions")).unwrap();
-    crate::local_store::write_private_atomic(&home.join("auth.json"), b"{}").unwrap();
-    crate::local_store::write_private_atomic(&home.join("config.toml"), b"").unwrap();
+    crate::local_store::write_test_fixture(home.join("auth.json"), b"{}").unwrap();
+    crate::local_store::write_test_fixture(home.join("config.toml"), b"").unwrap();
     installation.remove_sign_in(ManagedHarness::Codex).unwrap();
     assert_eq!(entries(&home), ["config.toml", "sessions"]);
   }

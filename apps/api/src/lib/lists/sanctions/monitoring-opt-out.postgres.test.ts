@@ -29,6 +29,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 import { commitSanctionsMonitoringBatch } from "./monitoring-diff";
@@ -154,9 +155,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
         await mutate(false);
         expect(await census()).toEqual(after);
       } finally {
-        await admin
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(admin, [organizationId]);
       }
     });
   }, 60_000);
@@ -385,9 +384,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               (transaction) => transaction !== undefined,
             ),
           );
-          await admin
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(admin, [organizationId]);
         }
       }
     });
@@ -747,9 +744,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             ).toBe("disabled");
           }
         } finally {
-          await admin
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(admin, [organizationId]);
           // Fixture cleanup uses the owner; ingestion deliberately has no DELETE grant.
           await admin.transaction(async (tx) => {
             await tx

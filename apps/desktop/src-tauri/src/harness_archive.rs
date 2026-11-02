@@ -4,7 +4,7 @@
 //! a release that changed shape, not against tampering: only regular files
 //! and directories at contained relative paths are accepted, with bounded
 //! entry count and size. Modes are not taken from the archive; a file is
-//! either executable (0755) or not (0644).
+//! either executable (0700) or not (0600).
 
 use std::{
   fs::File,
@@ -112,13 +112,8 @@ fn write_file(
     crate::local_store::create_private_dir(parent)
       .map_err(storage("harness directory not created"))?;
   }
-  let mode = if executable {
-    crate::local_store::RuntimeFileMode::Executable
-  } else {
-    crate::local_store::RuntimeFileMode::Data
-  };
   let mut file =
-    crate::local_store::create_runtime_file(target, mode).map_err(|error| {
+    crate::local_store::create_harness_file(target, executable).map_err(|error| {
       if error.kind() == std::io::ErrorKind::AlreadyExists {
         tracing::warn!("harness archive repeats a path");
         UnpackError::Rejected
@@ -267,7 +262,7 @@ pub(crate) mod tests {
   fn unpack_bytes(bytes: &[u8]) -> (TempDir, Result<(), UnpackError>) {
     let dir = TempDir::new();
     let archive = dir.path().join("archive.tar.gz");
-    crate::local_store::write_private_atomic(&archive, bytes).unwrap();
+    crate::local_store::write_test_fixture(&archive, bytes).unwrap();
     let destination = dir.path().join("runtime");
     crate::local_store::create_private_dir_new(&destination).unwrap();
     let (_cancel, receiver) = watch::channel(false);
@@ -304,8 +299,10 @@ pub(crate) mod tests {
           .mode()
           & 0o777
       };
-      assert_eq!(mode("bin/tool"), 0o755);
-      assert_eq!(mode("share/notes.txt"), 0o644);
+      assert_eq!(mode("bin/tool"), 0o700);
+      assert_eq!(mode("share/notes.txt"), 0o600);
+      assert_eq!(mode("bin"), 0o700);
+      assert_eq!(mode("share"), 0o700);
     }
   }
 

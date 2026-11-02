@@ -12,23 +12,6 @@ const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x02000000;
 const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x00200000;
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
 
-pub(super) fn open_broker_pipe(endpoint: &str) -> io::Result<fs::File> {
-  use std::os::windows::fs::OpenOptionsExt;
-  // The peer may identify this client, but may never impersonate it.
-  const IDENTIFY_ONLY: u32 = 0x0010_0000 | 0x0001_0000;
-  if !endpoint.starts_with(super::BROKER_PIPE_PREFIX) {
-    return Err(io::Error::new(
-      io::ErrorKind::InvalidInput,
-      "invalid broker pipe name",
-    ));
-  }
-  fs::OpenOptions::new()
-    .read(true)
-    .write(true)
-    .security_qos_flags(IDENTIFY_ONLY)
-    .open(endpoint)
-}
-
 pub(super) fn create_directory(path: &Path) -> io::Result<()> {
   if !path.is_absolute() {
     return Err(io::Error::new(
@@ -135,13 +118,6 @@ impl Parent {
         .map(fs::File::try_clone)
         .collect::<io::Result<Vec<_>>>()?,
     })
-  }
-
-  pub(super) fn create_runtime_file(
-    &self,
-    _mode: super::RuntimeFileMode,
-  ) -> io::Result<fs::File> {
-    self.open(OpenMode::CreateNew)
   }
 
   pub(super) fn create_directory_new(&self) -> io::Result<()> {
