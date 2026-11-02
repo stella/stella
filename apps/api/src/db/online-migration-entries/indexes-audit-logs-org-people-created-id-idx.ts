@@ -6,7 +6,7 @@ export default {
   type: "indexes",
   values: [
     {
-      introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
+      introducedBy: "20261102071000_audit_logs_people_index",
       createSql:
         'CREATE INDEX CONCURRENTLY "audit_logs_org_people_created_id_idx" ON public."audit_logs" USING btree ("organization_id", "created_at", "id") WHERE "performer_type" <> \'service\'',
       definitionBody:
