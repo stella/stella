@@ -22,8 +22,8 @@ import {
   setLogSinkForTesting,
 } from "@/api/lib/observability/logger";
 import {
-  getCurrentRequestId,
-  initRequestContext,
+  getRequestId,
+  openRequestContext,
   runWithRequestIdScope,
 } from "@/api/lib/observability/request-context";
 import {
@@ -165,9 +165,9 @@ for (const reason of Object.values(API_KEY_REFUSAL_REASON)) {
       records.push(record);
     });
     await runWithRequestIdScope(async () => {
-      initRequestContext(new Request("https://example.test/mcp"));
+      openRequestContext();
       const requestId =
-        getCurrentRequestId() ?? panic("Expected an initialized request id");
+        getRequestId() ?? panic("Expected an initialized request id");
       const error = await rejectionOf(
         resolveMachineApiKeyCredential(PRESENTED, dependenciesFor(reason)),
       );

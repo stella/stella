@@ -1,7 +1,7 @@
 import type { ApiKeyKind } from "@/api/lib/machine-api-key-config";
 import { MACHINE_API_KEY_START_LENGTH } from "@/api/lib/machine-api-key-config";
 import { logger } from "@/api/lib/observability/logger";
-import { getCurrentRequestId } from "@/api/lib/observability/request-context";
+import { getRequestId } from "@/api/lib/observability/request-context";
 import type { McpMode } from "@/api/mcp/constants";
 
 export const API_KEY_REFUSAL_REASON = {
@@ -45,7 +45,7 @@ export const describeApiKeyRefusal = ({
 export const logApiKeyRefusal = (
   options: Omit<ApiKeyRefusalOptions, "requestId">,
 ): void => {
-  const requestId = getCurrentRequestId();
+  const requestId = getRequestId();
   logger.warn(
     "auth.api_key_refused",
     describeApiKeyRefusal({
