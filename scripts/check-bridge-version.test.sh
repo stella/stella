@@ -74,7 +74,9 @@ reformat_version_line() {
 run_case() {
   local name="$1" expected="$2"
   local out actual
-  out=$(GITHUB_BASE_REF=main bash "$SCRIPT" 2>&1) && actual=0 || actual=$?
+  # The pull-request path must not inherit the runner's own event: the
+  # merge queue runs this test with GITHUB_EVENT_NAME=merge_group.
+  out=$(env -u GITHUB_EVENT_NAME -u BRIDGE_BASE_SHA GITHUB_BASE_REF=main bash "$SCRIPT" 2>&1) && actual=0 || actual=$?
   if [[ "$actual" == "$expected" ]]; then
     PASS=$((PASS + 1))
     printf '  ✓  %s\n' "$name"
