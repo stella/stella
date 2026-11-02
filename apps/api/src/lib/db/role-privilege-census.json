@@ -162,6 +162,8 @@
     "function:public.mark_sanctions_organization_insert():EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
     "function:public.mark_sanctions_organization_update():EXECUTE:EFFECTIVE",
     "function:public.mark_sanctions_organization_update():EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
+    "function:public.organization_delete_requires_owner():EXECUTE:EFFECTIVE",
+    "function:public.organization_delete_requires_owner():EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
     "function:public.plain_text_has_markup(value text):EXECUTE:EFFECTIVE",
     "function:public.plain_text_has_markup(value text):EXECUTE:GRANTOR:census_admin:GRANTABLE:false",
     "function:public.plain_text_metadata_has_markup(value jsonb, url_schema jsonb):EXECUTE:EFFECTIVE",
