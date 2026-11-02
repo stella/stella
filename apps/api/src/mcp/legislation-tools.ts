@@ -15,6 +15,7 @@ import {
 } from "@stll/api-contract/legislation-publication";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import { statuteActNumber } from "@stll/api-contract/statute-act-number";
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
@@ -1016,7 +1017,10 @@ const provisionItemResult = ({
       const blocks =
         blocksByDocumentId.get(String(version.id)) ??
         panic(`No block list was read for consolidation ${version.id}`);
-      const text = extractProvisionText(blocks, item.anchor);
+      const text = extractProvisionText(
+        { blocks, scheme: statuteAnchorSchemeFor(version.country) },
+        item.anchor,
+      );
       if (text === null) {
         return {
           type: "item",

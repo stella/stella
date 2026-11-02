@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import {
   afterAll,
-  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -9,7 +8,6 @@ import {
   type Mock,
   mock,
   setDefaultTimeout,
-  spyOn,
   test,
 } from "bun:test";
 import * as v from "valibot";
@@ -46,6 +44,10 @@ import {
   registerOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const routeServer = serveRoutesForTest(apiKeysRoute);
 afterAll(async () => {
@@ -175,7 +177,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  fetchSpy.mockRestore();
+  testFetchState.restore();
   await releaseAgentAuthTestDb();
 });
 
@@ -303,11 +305,10 @@ const credentialTypeOf = async (credential: string) => {
 };
 
 beforeEach(() => {
-  fetchSpy = spyOn(globalThis, "fetch").mockImplementation(serveJwks);
-});
-
-afterEach(() => {
-  mock.restore();
+  fetchSpy = Object.assign(mock(serveJwks), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(asFetchMock(fetchSpy));
 });
 
 describe("MCP request authentication and session context run a fixed query plan", () => {
