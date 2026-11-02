@@ -94,6 +94,7 @@
     "selectedRun": "Vykdyti DI stulpelius {count, plural, one {# eilutei} few {# eilutėms} many {# eilutės} other {# eilučių}}"
   },
   "aiDisclosure": {
+    "billingDrafts": "DI juodraščiai yra pasiūlymai, kuriuos stella sukuria pagal peržiūrimą įrašą, jūsų ankstesnius įrašus byloje ir, jei kontora jas pridėjo, jos atsiskaitymo gaires. Prieš kurdami peržiūrėkite kiekvieną įrašą.",
     "caseLaw": "DI parengtas teismų sprendimų santraukas, pastabas ir analizes generuoja stella; teismai jų nėra patvirtinę ir jos neatspindi pačių teismų argumentacijos. Tai pagalbinės priemonės teisės specialistams, o oficialiu ir lemiamu šaltiniu išlieka sprendimo tekstas."
   },
   "appearance": {

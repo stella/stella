@@ -94,6 +94,7 @@
     "selectedRun": "Exécuter les colonnes IA pour {count, plural, one {# ligne} other {# lignes}}"
   },
   "aiDisclosure": {
+    "billingDrafts": "Les propositions d’IA sont des suggestions que stella génère à partir de l’entrée que vous vérifiez, de vos entrées précédentes sur le dossier et, si votre cabinet les a ajoutées, de ses règles de facturation. Vérifiez chaque entrée avant de la créer.",
     "caseLaw": "Les résumés, notes et analyses de décisions de justice produits par l’IA sont générés par stella ; ils ne sont pas approuvés par les juridictions et ne reflètent pas leur propre raisonnement. Ce sont des outils d’aide destinés aux professionnels du droit ; seul le texte de la décision fait foi."
   },
   "appearance": {
