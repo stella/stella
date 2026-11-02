@@ -11,7 +11,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { cellMetadata, entities, fields } from "@/api/db/schema";
 import { currencyCodeSchema } from "@/api/db/schema-validators";
 import type { CellMetadata } from "@/api/db/schema-validators";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditAction, AuditRecorder } from "@/api/lib/audit-log";
@@ -248,6 +248,12 @@ export type WriteFieldValueProps = {
    * clears a cell whose type has no empty value (an `int`).
    */
   content: FieldWriteContent | null;
+  /**
+   * The value type the caller named, when it named one. A `null` clear that
+   * names a type must still match the property, so a request about an int
+   * cannot clear a text cell.
+   */
+  expectedType?: FieldWriteContent["type"] | undefined;
   flushSearchRepairs?: boolean;
 };
 
@@ -268,8 +274,10 @@ export const writeFieldValue = async function* ({
   entityId,
   propertyId,
   content,
+  expectedType,
   flushSearchRepairs = true,
 }: WriteFieldValueProps) {
+  const requestedType = content?.type ?? expectedType;
   if (!hasMemberPermission(authority, FIELD_VALUE_WRITE_PERMISSIONS)) {
     return Result.err(new HandlerError({ status: 403, message: "Forbidden" }));
   }
@@ -295,7 +303,7 @@ export const writeFieldValue = async function* ({
     );
   }
 
-  if (content !== null && property.content.type !== content.type) {
+  if (requestedType !== undefined && property.content.type !== requestedType) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -449,10 +457,14 @@ export const writeFieldValue = async function* ({
   }
 
   if (flushSearchRepairs) {
-    flushEntitySearchRepairs([entityId]).catch(
-      createErrorCapture(
-        handlerErrorContext("writeFieldValue.flushEntitySearchRepairs"),
-      ),
+    detached(
+      async () =>
+        flushEntitySearchRepairs([entityId]).catch(
+          createErrorCapture(
+            handlerErrorContext("writeFieldValue.flushEntitySearchRepairs"),
+          ),
+        ),
+      "write-field.flush-entity-search-repairs",
     );
   }
   return Result.ok({});

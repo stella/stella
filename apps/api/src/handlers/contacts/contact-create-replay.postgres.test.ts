@@ -14,6 +14,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import createContact from "./create";
 import type { CreateContactBody } from "./create";
@@ -104,9 +105,7 @@ describe.skipIf(!enabled)("contact create replay (postgres)", () => {
           .where(eq(contacts.organizationId, organizationId));
         expect(rows.at(0)?.total).toBe(1);
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         await db.delete(user).where(eq(user.id, userId));
       }
     });
