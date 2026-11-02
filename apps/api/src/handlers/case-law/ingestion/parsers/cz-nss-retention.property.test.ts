@@ -9,14 +9,17 @@ import {
 } from "@stll/property-testing";
 
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseNssDecisionHtml } from "./cz-nss";
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "./cz-nss";
 import { nssUnitDecisionHtml } from "./cz-nss.test-fixture";
 import {
   expectMarkerRetention,
   injectMarkupMarkers,
   markerPlan,
 } from "./marker-injection.test-helper";
+
+const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
 
 const metadata = {
   caseNumber: "property-fixture",

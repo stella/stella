@@ -16,9 +16,18 @@
   },
   "admin": {
     "ai": "AI",
+    "auditArchiveDescription": "Organisatsiooni kustutamisel kustub ka selle tegevuslogi. Eksportige esmalt tegevuslogi ja laadige arhiiv alla; see on teile saadaval ühe tunni.",
+    "auditArchiveDownloadFirst": "Enne organisatsiooni kustutamist laadige tegevuslogi arhiiv alla.",
+    "auditArchiveFailed": "Tegevuslogi arhiivi ei õnnestunud ette valmistada.",
+    "auditArchiveOutdated": "Pärast selle arhiivi loomist on tegevuslogisse lisandunud uusi kirjeid. Eksportige see enne organisatsiooni kustutamist uuesti.",
+    "auditArchiveReady": "Tegevuslogi arhiiv on valmis. Nüüd saate organisatsiooni kustutada.",
+    "auditArchiveRequest": "Ekspordi tegevuslogi",
+    "auditArchiveRequestNew": "Ekspordi tegevuslogi uuesti",
+    "auditArchiveWorking": "Tegevuslogi arhiivi ettevalmistamine…",
     "billingProfiles": "Arveldusprofiilid",
     "deleteDescription": "Kustutage see organisatsioon ja selle andmed jäädavalt. Seda toimingut ei saa tagasi võtta.",
     "deleteOrganization": "Kustuta organisatsioon",
+    "deleteRefusedAuditArchive": "Enne organisatsiooni kustutamist eksportige selle tegevuslogi.",
     "deleteRefusedSubscription": "Sellel organisatsioonil on uuenev tellimus. Tühistage see esmalt jaotises Pakett ja kasutus, seejärel kustutage organisatsioon.",
     "deleteTypeToConfirm": "Kinnitamiseks sisestage {name}.",
     "firmSetup": "Büroo seadistamine",
@@ -820,12 +829,14 @@
       "effectiveFrom": "Kehtiv alates",
       "effectiveRateRequired": "Selle toimiku, isiku ja kuupäeva jaoks pole kehtivat tunnihinda määratud. Lisage tunnihind või registreerige aeg mittearveldatavana.",
       "effectiveTo": "Kehtiv kuni",
+      "firstTableIsDefault": "Toimiku esimene määratabel on vaiketabel.",
       "hourlyRate": "Tunnimäär",
       "logNonBillable": "Registreeri mittearveldatavana",
       "noRateEntries": "Määrakandeid pole veel",
       "noRateFound": "Määr seadistamata",
       "noRateTables": "Määratabeleid pole veel",
       "ongoing": "Kestev",
+      "onlyDefaultApplies": "Kehtivad ainult toimiku vaiketabeli määrad.",
       "override": "Ülekiri",
       "perHour": "/tunnis",
       "rateCount": "{count, plural, one {# määr} other {# määra}}",
@@ -1320,7 +1331,7 @@
   },
   "catalogue": {
     "addCustom": "Lisa kohandatud",
-    "addCustomMcp": "Lisa MCP-server",
+    "addCustomMcp": "Lisa integratsioon",
     "addCustomSkill": "Lisa oskus",
     "by": "Autor: {author}",
     "configuration": "Konfiguratsioon",
@@ -1331,7 +1342,7 @@
     "detailAuthMethod": "Autentimine",
     "empty": "Praegusele filtrile ei vasta ükski kirje.",
     "filter": {
-      "mcps": "MCP serverid",
+      "mcps": "Integratsioonid",
       "nativeTools": "Sisseehitatud tööriistad",
       "skills": "Oskused"
     },
@@ -1819,8 +1830,8 @@
     "signInToChatAbout": "Logi sisse, et vestelda:",
     "skills": {
       "scope": {
-        "private": "Sinu AI oskused",
-        "team": "Tiimi AI oskused"
+        "private": "Sinu oskused",
+        "team": "Tiimi oskused"
       }
     },
     "sourceChips": {
@@ -2484,7 +2495,7 @@
     "scopeChat": "Lugeda ja hallata teie vestlusi ja sõnumeid",
     "scopeContactsWrite": "Luua, muuta ja kustutada kontakte kogu teie organisatsioonis",
     "scopeDocumentsWrite": "Luua, muuta ja kustutada teie dokumente",
-    "scopeExternalMcps": "Teie ühendatud väliste tööriistade kasutamine",
+    "scopeExternalMcps": "Teie ühendatud integratsioonide kasutamine",
     "scopeFeedback": "Tootetagasiside saatmine stella hooldajatele",
     "scopeKnowledgeWrite": "Luua, muuta ja kustutada teie klausleid ja käivitada playbooke",
     "scopeLawRead": "Lugeda avalikke õigusakte ja kohtupraktikat",
@@ -2510,7 +2521,7 @@
     "summaryChat": "vestlused",
     "summaryContactsWrite": "kontaktid",
     "summaryDocumentsWrite": "dokumendid",
-    "summaryExternalMcps": "ühendatud välised tööriistad",
+    "summaryExternalMcps": "ühendatud integratsioonid",
     "summaryKnowledgeWrite": "klauslid ja playbookid",
     "summaryLawRead": "avalikke õigusakte ja kohtupraktikat",
     "summaryLineChange": "<group>Loomine ja muutmine:</group> {items}",
@@ -2539,8 +2550,8 @@
     "attorneys": {
       "none": "Määramata",
       "originating": "Peamine kontakt",
-      "responsible": "Vastutav advokaat",
-      "title": "Advokaadid"
+      "responsible": "Vastutav isik",
+      "title": "Suhte eest vastutajad"
     },
     "billing": {
       "addBankAccount": "Lisa pangakonto",
@@ -2987,14 +2998,14 @@
     "failedToChangeViewType": "Vaate tüübi muutmine ebaõnnestus",
     "failedToCheckSlugAvailability": "Slugi saadavuse kontrollimine ebaõnnestus",
     "failedToCreateContact": "Kliendi loomine ebaõnnestus",
-    "failedToCreateEntity": "Kirje loomine ebaõnnestus",
+    "failedToCreateEntity": "Üksuse loomine ebaõnnestus",
     "failedToCreateOrganization": "Organisatsiooni loomine ebaõnnestus",
     "failedToCreateProperty": "Omaduse loomine ebaõnnestus",
     "failedToCreateView": "Vaate loomine ebaõnnestus",
     "failedToCreateWorkspace": "Toimiku loomine ebaõnnestus",
     "failedToDeclineInvitation": "Kutsest keeldumine ebaõnnestus",
     "failedToDeleteContact": "Kliendi kustutamine ebaõnnestus",
-    "failedToDeleteEntities": "Kirjete kustutamine ebaõnnestus",
+    "failedToDeleteEntities": "Üksuste kustutamine ebaõnnestus",
     "failedToDeleteProperty": "Omaduse kustutamine ebaõnnestus",
     "failedToDeleteTemplate": "Malli kustutamine ebaõnnestus",
     "failedToDeleteView": "Vaate kustutamine ebaõnnestus",
@@ -3455,7 +3466,7 @@
     "redoShortcut": "Tee uuesti (Ctrl+Y)",
     "rejectChange": "Lükka muudatus tagasi",
     "removeLink": "Eemalda link",
-    "renderErrorDescription": "Selle komponendi kuvamisel tekkis viga. Proovige uuesti või võtke ühendust toega, kui probleem püsib.",
+    "renderErrorDescription": "Selle dokumendi osa kuvamine ebaõnnestus. Laadige leht uuesti ja kui see kordub, andke meile teada.",
     "saveCheckpointFailedDescription": "DOCX loodi kohapeal, kuid stella ei saanud kontrollpunkti üles laadida. Hoia redaktor avatuna ja proovi uuesti salvestada.",
     "saveCheckpointFailedTitle": "Salvestust ei saanud üles laadida",
     "saveEditorUnavailableDescription": "Redaktor pole veel valmis. Oota, kuni dokument on laadinud, ja proovi siis uuesti salvestada.",
@@ -4156,7 +4167,7 @@
     "mcp": {
       "addAndConnect": "Lisa ja ühenda",
       "addServer": "Lisa server",
-      "addServerCardTitle": "Lisa uus MCP server",
+      "addServerCardTitle": "Lisa uus integratsioon",
       "auth": {
         "bearer": "Bearer-token",
         "none": "Autentimiseta",
@@ -4419,7 +4430,7 @@
         "title": "Mallid"
       },
       "tools": {
-        "description": "Ühenda stella avalike registritega ja muude allikatega",
+        "description": "Oskused, integratsioonid ja alati saadaolevad tööriistad, mida tehisintellekt saab vestluses kasutada",
         "title": "Tööriistad"
       },
       "workflows": {
@@ -4453,7 +4464,7 @@
       },
       "commandConflict": "Selle / käsuga oskus on juba olemas",
       "commandHelp": "Selle oskuse käivitamiseks sisestage käsk vestlusse.",
-      "commandLabel": "Kaldkriipsu käsk (valikuline)",
+      "commandLabel": "Vestluse käsk (valikuline)",
       "commandPlaceholder": "nt kokku võtta",
       "errors": {
         "commandInvalid": "Kasuta ainult väiketähti, numbreid, sidekriipse ja allkriipse"
@@ -4600,7 +4611,7 @@
     "chat": "Vestlus",
     "contacts": "Kontaktid",
     "inbox": "Postkast",
-    "knowledge": "Teadmus",
+    "knowledge": "Analüütika",
     "myTodos": "Minu ülesanded",
     "pinned": "Kinnitatud",
     "recentMatters": "Hiljutised toimikud",
@@ -5834,14 +5845,14 @@
     "dueDate": "Tähtaeg",
     "hardDeadline": "Siduv tähtaeg",
     "hardDeadlineOverdue": "Siduv tähtaeg on möödunud",
-    "linkEntity": "Seo kirje",
-    "linkedEntities": "Seotud kirjed",
+    "linkEntity": "Seo üksus",
+    "linkedEntities": "Seotud üksused",
     "myTasksTitle": "Minu ülesanded",
     "myWorkTitle": "Minu töö",
     "newTask": "Uus ülesanne",
     "noActivity": "Tegevusi veel pole",
     "noAssignees": "Kaasosalisi pole",
-    "noLinks": "Seotud kirjed puuduvad",
+    "noLinks": "Seotud üksusi pole",
     "noSubtasks": "Alamülesanded puuduvad",
     "noTasksAssigned": "Sulle pole ülesandeid määratud",
     "noWorkInQueue": "Selles järjekorras pole tööd",
@@ -6428,7 +6439,8 @@
       "errored": "Viga",
       "formatNotSupported": "Formaat ei ole toetatud",
       "selectAValue": "Valige väärtus",
-      "selectValues": "Valige väärtused"
+      "selectValues": "Valige väärtused",
+      "wholeNumberOnly": "Sisestage täisarv"
     },
     "files": {
       "addFilePropertyToUpload": "Lisage failide üleslaadimiseks failide omadus",
@@ -6494,7 +6506,7 @@
       "fileTooLarge": "Fail on suurem kui {limit, number} MB.",
       "includeReferenceNumber": "Lisa viitenumber",
       "itemLimitReached": "See toimik on jõudnud üksuste piirini.",
-      "maxEntitiesReached": "Kirjete piirarv on täis",
+      "maxEntitiesReached": "Üksuste maksimaalne arv on saavutatud",
       "ocrAlreadyProcessed": "Tekstituvastus on juba lõpetatud",
       "ocrBatchHelp": "Järjekorras olevad dokumendid töödeldakse järgmises OCR-i paketis.",
       "ocrQueueFailed": "Tekstituvastust ei õnnestunud järjekorda lisada",
@@ -6722,7 +6734,7 @@
     "matterInfo": "Toimiku andmed",
     "mattersCount": "{count, plural, one {# toimik} other {# toimikut}}",
     "members": {
-      "addMember": "Lisa liige",
+      "addMember": "Lisa toimikusse",
       "addMemberDescription": "Lisa tiimiliige sellesse toimikusse",
       "alreadyMember": "Kasutaja on juba liige",
       "alreadyOnMatter": "Juba selles toimikus",
@@ -6917,7 +6929,7 @@
       },
       "backToPeek": "Tagasi sirvimisrežiimi",
       "entitySidebar": "Dokumendi üksikasjad",
-      "evidence": "Tõend",
+      "evidence": "Põhjendus",
       "incorrectPassword": "Vale parool. Proovige uuesti.",
       "nextPage": "Järgmine leht",
       "pageEditor": {

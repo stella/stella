@@ -321,6 +321,12 @@
     "save": "Guardar",
     "search": "Buscar en el historial del portapapeles",
     "searchPlaceholder": "Buscar en el historial del portapapeles",
+    "searchOptions": "Opciones de búsqueda",
+    "searchOptionExactPhrase": "Frase exacta",
+    "searchOptionWholeWords": "Solo palabras completas",
+    "searchOptionMatchCase": "Distinguir mayúsculas y minúsculas",
+    "searchOptionMatchDiacritics": "Distinguir tildes y diacríticos",
+    "searchOptionsReset": "Restablecer opciones de búsqueda",
     "registrySearch": "Buscar en el registro mercantil",
     "registrySearchPlaceholder": "Nombre de la empresa o número de registro",
     "registryPreview": "Vista previa del registro mercantil",
@@ -524,7 +530,12 @@
     "aiSteerWriteIn": "Escribir en {language}",
     "aiSteerRemember": "Recordar para la próxima vez",
     "billingDraftsPreference": "Tu preferencia de redacción",
-    "billingDraftsForgetPreference": "Olvidar la preferencia"
+    "billingDraftsForgetPreference": "Olvidar la preferencia",
+    "aiStructureSplit": "{count, plural, one {stella AI propone dividir este registro en # parte} other {stella AI propone dividir este registro en # partes}}",
+    "aiStructureMove": "stella AI propone mover {duration} a {matter}",
+    "aiStructureCreate": "{count, plural, one {Crear # registro} other {Crear # registros}}",
+    "aiStructureMoveAccept": "Mover",
+    "aiFlagSplit": "Dividir registro"
   },
   "dictation": {
     "title": "Dictado",

@@ -35,7 +35,7 @@ import path from "node:path";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { parseGlossary } from "./glossary-gen";
-import type { Glossary } from "./glossary-gen";
+import type { Glossary, Term } from "./glossary-gen";
 import { isPlainRecord, parseNestedMessages } from "./i18n-check";
 import type { NestedMessages } from "./i18n-check";
 
@@ -113,6 +113,17 @@ const collectArgNames = (
       }
     }
   }
+};
+
+/** The interpolation variables and rich-text tags a message carries; empty when it does not parse. */
+export const findArgumentNames = (value: string): string[] => {
+  const ast = safeParse(value);
+  if (!ast) {
+    return [];
+  }
+  const names = new Set<string>();
+  collectArgNames(ast, names);
+  return [...names];
 };
 
 /**
@@ -675,6 +686,25 @@ export const findForbiddenTerms = (
   }
   return hits;
 };
+
+type FindMentionedTermsOptions = {
+  glossary: Glossary;
+  source: string;
+  key: string;
+};
+
+/** Glossary terms a message is about, by the same triggers the terminology lint uses. */
+export const findMentionedTerms = ({
+  glossary,
+  source,
+  key,
+}: FindMentionedTermsOptions): Term[] =>
+  [...glossary.verbs, ...glossary.legalConcepts, ...glossary.nouns].filter(
+    (term) =>
+      !(term.keyExempt ?? []).some((exempt) => key.includes(exempt)) &&
+      (containsWord(source, term.en, "en") ||
+        (term.keyTriggers ?? []).some((trigger) => key.includes(trigger))),
+  );
 
 /**
  * Whole messages that say something failed and nothing else. Nobody can act

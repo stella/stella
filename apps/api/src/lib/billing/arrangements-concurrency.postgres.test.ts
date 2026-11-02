@@ -21,6 +21,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -204,9 +205,7 @@ if (!databaseUrl || !runPostgres) {
         expect(invariantCalls).toBe(results.length);
         expect(results.some(({ blocked }) => blocked.length > 0)).toBe(true);
       } finally {
-        await firstDb
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(firstDb, [organizationId]);
         await firstDb.delete(user).where(eq(user.id, userId));
       }
     });

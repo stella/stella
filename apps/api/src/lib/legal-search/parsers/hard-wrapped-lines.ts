@@ -1,6 +1,13 @@
+// parser-output-unchanged: Existing typescript reflow is unchanged; the new PDF join reader is used only by sk-courts.
 import { panic } from "better-result";
 
-import { classifyLineWrap, LINE_WRAP_TYPE } from "@stll/legal-ast/line-wrap";
+import {
+  classifyLineWrap,
+  LINE_JOIN,
+  LINE_WRAP_TYPE,
+  lineJoinOf,
+  PRENOMINAL_TITLE_END_RE,
+} from "@stll/legal-ast/line-wrap";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 /**
@@ -443,4 +450,318 @@ export const reflowPrintedText = (rawLines: readonly string[]): string[] => {
   }
   paragraphs.push(reading.clean(current.join("")));
   return paragraphs;
+};
+
+const PDF_PARAGRAPH = {
+  indentHeightShare: 0.5,
+  // Sparse pages still need a bound on ordinary line spacing.
+  maxPitchHeightShare: 2,
+  minPitchObservations: 2,
+  pitchRounding: 2,
+  gapToleranceHeightShare: 0.5,
+  shortLineWidthShare: 0.75,
+  shortLineGapHeightShare: 2,
+} as const;
+
+export const PDF_LINE_KIND = {
+  BODY: "body",
+  PARAGRAPH_START: "paragraph-start",
+} as const;
+
+/** PDF geometry is in points; page coordinates restart on each page. */
+export type PdfPrintedLine = {
+  readonly kind: (typeof PDF_LINE_KIND)[keyof typeof PDF_LINE_KIND];
+  readonly text: string;
+  readonly layout?: {
+    readonly x: number;
+    readonly y: number;
+    readonly height: number;
+    readonly width: number;
+    readonly pageIndex: number;
+  };
+};
+
+/** How often each rounded line pitch occurs, and the modal one. */
+type PitchTally = {
+  pitch: number;
+  pitches: Map<number, number>;
+};
+
+type PdfPageLayout = PitchTally & {
+  left: number;
+  right: number;
+  height: number;
+  /**
+   * The pitch tally of each type size on the page. A page that sets quotes or
+   * notes in smaller type has two leadings; prose is measured against its own.
+   */
+  leadings: Map<number, PitchTally>;
+};
+
+const roundedPoints = (value: number): number =>
+  Math.round(value * PDF_PARAGRAPH.pitchRounding) / PDF_PARAGRAPH.pitchRounding;
+
+/** Count one pitch; the most frequent wins, the smaller one on a tie. */
+const tallyPitch = (tally: PitchTally, pitch: number): void => {
+  const count = (tally.pitches.get(pitch) ?? 0) + 1;
+  tally.pitches.set(pitch, count);
+  const modalCount = tally.pitches.get(tally.pitch) ?? 0;
+  if (count > modalCount || (count === modalCount && pitch < tally.pitch)) {
+    tally.pitch = pitch;
+  }
+};
+
+/** Whether a tally saw its modal pitch often enough to trust it. */
+const settledPitch = (tally: PitchTally | undefined): number | null =>
+  tally !== undefined &&
+  (tally.pitches.get(tally.pitch) ?? 0) >= PDF_PARAGRAPH.minPitchObservations
+    ? tally.pitch
+    : null;
+
+/**
+ * The ordinary step between two lines of type `height`: the leading of that
+ * type size when the page sets enough of it, else the page's own, bounded on
+ * a sparse page.
+ */
+const linePitch = (page: PdfPageLayout, height: number): number =>
+  settledPitch(page.leadings.get(roundedPoints(height))) ??
+  settledPitch(page) ??
+  Math.min(page.pitch, page.height * PDF_PARAGRAPH.maxPitchHeightShare);
+
+/** The modal line pitch tolerates extraction jitter without using a paragraph gap. */
+const pdfPageLayouts = (lines: readonly (PdfPrintedLine | null)[]) => {
+  const pages = new Map<number, PdfPageLayout>();
+  let previous: PdfPrintedLine["layout"];
+  for (const line of lines) {
+    const layout = line?.layout;
+    if (layout === undefined) {
+      previous = undefined;
+      continue;
+    }
+    const page = pages.get(layout.pageIndex) ?? {
+      left: layout.x,
+      right: layout.x + layout.width,
+      height: layout.height,
+      pitch: layout.height * PDF_PARAGRAPH.maxPitchHeightShare,
+      pitches: new Map<number, number>(),
+      leadings: new Map<number, PitchTally>(),
+    };
+    page.left = Math.min(page.left, layout.x);
+    page.right = Math.max(page.right, layout.x + layout.width);
+    page.height = Math.max(page.height, layout.height);
+    if (previous?.pageIndex === layout.pageIndex) {
+      const step = Math.abs(layout.y - previous.y);
+      const height = Math.max(layout.height, previous.height);
+      if (step >= height) {
+        const pitch = roundedPoints(step);
+        tallyPitch(page, pitch);
+        const size = roundedPoints(height);
+        const leading = page.leadings.get(size) ?? {
+          pitch,
+          pitches: new Map<number, number>(),
+        };
+        tallyPitch(leading, pitch);
+        page.leadings.set(size, leading);
+      }
+    }
+    pages.set(layout.pageIndex, page);
+    previous = layout;
+  }
+  return pages;
+};
+
+type PdfParagraphLayout =
+  | { type: "first-line"; pageIndex: number; firstX: number }
+  | {
+      type: "continuation";
+      pageIndex: number;
+      firstX: number;
+      continuationX: number;
+    };
+
+type PdfParagraphMarginsOptions = {
+  paragraph: PdfParagraphLayout;
+  layout: NonNullable<PdfPrintedLine["layout"]>;
+  tolerance: number;
+};
+
+const pdfParagraphMargins = ({
+  paragraph,
+  layout,
+  tolerance,
+}: PdfParagraphMarginsOptions) => {
+  switch (paragraph.type) {
+    case "first-line":
+      return { continuationX: paragraph.firstX, returnsToFirstLine: false };
+    case "continuation":
+      return {
+        continuationX: paragraph.continuationX,
+        returnsToFirstLine:
+          paragraph.pageIndex === layout.pageIndex &&
+          Math.abs(paragraph.firstX - paragraph.continuationX) > tolerance &&
+          Math.abs(layout.x - paragraph.firstX) <= tolerance,
+      };
+    default:
+      paragraph satisfies never;
+      return panic("Unhandled PDF paragraph layout");
+  }
+};
+
+/**
+ * PDF geometry, rather than punctuation, decides where printed paragraphs end.
+ * The right margin and ordinary line pitch come from the page's running prose;
+ * null entries isolate titles and other display lines. Without geometry the
+ * shared text classifier and sentence boundaries must decide the wrap.
+ */
+type OpensByIndentOptions = {
+  above: string;
+  line: string;
+  /** A continuation line of the current paragraph has set its margin. */
+  marginSet: boolean;
+  indented: boolean;
+  returnsToFirstLine: boolean;
+  shortFinalLine: boolean;
+};
+
+/**
+ * Whether a line's indentation opens a paragraph. Once a continuation line
+ * has set the paragraph's margin, a line indented right of it does, however
+ * full the line above; a list item's hanging lines sit on that margin and
+ * continue it. Before then indentation alone is ambiguous: the first
+ * continuation can hang right of a marker or return left from an ordinary
+ * paragraph's first-line indent, so it opens one only after a short line.
+ */
+const opensByIndent = ({
+  above,
+  line,
+  marginSet,
+  indented,
+  returnsToFirstLine,
+  shortFinalLine,
+}: OpensByIndentOptions): boolean => {
+  if (marginSet && indented) {
+    return true;
+  }
+  return (
+    shortFinalLine &&
+    !PRENOMINAL_TITLE_END_RE.test(above) &&
+    (indented || returnsToFirstLine || OPENS_SENTENCE_RE.test(line))
+  );
+};
+
+export const readPdfLineJoins = (lines: readonly (PdfPrintedLine | null)[]) => {
+  const classification = classifyLineWrap(
+    lines.map((line) => line?.text ?? null),
+  );
+  const pages = pdfPageLayouts(lines);
+  let paragraph: PdfParagraphLayout | null = null;
+  return lines.map((line, index) => {
+    const above = index > 0 ? lines.at(index - 1) : null;
+    if (above === undefined || above === null || line === null) {
+      paragraph =
+        line?.layout === undefined
+          ? null
+          : {
+              type: "first-line",
+              pageIndex: line.layout.pageIndex,
+              firstX: line.layout.x,
+            };
+      return LINE_JOIN.BREAK;
+    }
+    const previousLayout = above.layout;
+    const layout = line.layout;
+    if (previousLayout === undefined || layout === undefined) {
+      paragraph =
+        layout === undefined
+          ? null
+          : {
+              type: "first-line",
+              pageIndex: layout.pageIndex,
+              firstX: layout.x,
+            };
+      if (
+        SENTENCE_END_RE.test(above.text) &&
+        OPENS_SENTENCE_RE.test(line.text) &&
+        !PRENOMINAL_TITLE_END_RE.test(above.text)
+      ) {
+        return LINE_JOIN.BREAK;
+      }
+      return lineJoinOf(classification, above.text, line.text);
+    }
+    const page =
+      pages.get(previousLayout.pageIndex) ??
+      panic("PDF line has no page layout");
+    const height = Math.max(previousLayout.height, layout.height);
+    if (
+      paragraph === null ||
+      paragraph.pageIndex !== previousLayout.pageIndex
+    ) {
+      paragraph = {
+        type: "first-line",
+        pageIndex: previousLayout.pageIndex,
+        firstX: previousLayout.x,
+      };
+    }
+    const indentTolerance = height * PDF_PARAGRAPH.indentHeightShare;
+    const { continuationX, returnsToFirstLine } = pdfParagraphMargins({
+      paragraph,
+      layout,
+      tolerance: indentTolerance,
+    });
+    const samePage = previousLayout.pageIndex === layout.pageIndex;
+    const pitch = linePitch(page, height);
+    const paragraphGap =
+      samePage &&
+      Math.abs(layout.y - previousLayout.y) >
+        pitch + height * PDF_PARAGRAPH.gapToleranceHeightShare;
+    const indented = samePage && layout.x - continuationX > indentTolerance;
+    const shortFinalLine =
+      previousLayout.width <
+        (page.right - page.left) * PDF_PARAGRAPH.shortLineWidthShare &&
+      page.right - previousLayout.x - previousLayout.width >
+        height * PDF_PARAGRAPH.shortLineGapHeightShare;
+    if (
+      line.kind === PDF_LINE_KIND.PARAGRAPH_START ||
+      paragraphGap ||
+      opensByIndent({
+        above: above.text,
+        line: line.text,
+        marginSet: paragraph.type === "continuation",
+        indented,
+        returnsToFirstLine,
+        shortFinalLine,
+      })
+    ) {
+      paragraph = {
+        type: "first-line",
+        pageIndex: layout.pageIndex,
+        firstX: layout.x,
+      };
+      return LINE_JOIN.BREAK;
+    }
+    if (!samePage) {
+      paragraph = {
+        type: "first-line",
+        pageIndex: layout.pageIndex,
+        firstX: layout.x,
+      };
+      return LINE_JOIN.SPACE;
+    }
+    switch (paragraph.type) {
+      case "first-line":
+        paragraph = {
+          type: "continuation",
+          pageIndex: layout.pageIndex,
+          firstX: paragraph.firstX,
+          continuationX: layout.x,
+        };
+        break;
+      case "continuation":
+        break;
+      default:
+        paragraph satisfies never;
+        return panic("Unhandled PDF paragraph layout");
+    }
+    return LINE_JOIN.SPACE;
+  });
 };
