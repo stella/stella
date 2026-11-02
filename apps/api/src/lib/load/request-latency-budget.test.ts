@@ -160,7 +160,7 @@ describe("request budget expiry", () => {
         expect(requestBoundedTimeout(30_000).endsAtRequestDeadline).toBe(true);
         expect(requestBoundedTimeout(0).endsAtRequestDeadline).toBe(true);
         expect(requestBoundedTimeout(1500)).toEqual({
-          timeoutMs: 1500,
+          timeoutMs: 1500, // timeout under test
           endsAtRequestDeadline: false,
         });
         // A timeout passed down as what is left of the request keeps its

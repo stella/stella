@@ -134,7 +134,13 @@ export const findRequestBudgetExpiry = (
       return current;
     }
     visited.add(current);
-    current = current.cause;
+    const wrapper = current;
+    // A cause getter that throws ends the walk: no budget expiry is readable.
+    const cause = Result.try(() => wrapper.cause);
+    if (Result.isError(cause)) {
+      return undefined;
+    }
+    current = cause.value;
   }
   return undefined;
 };
