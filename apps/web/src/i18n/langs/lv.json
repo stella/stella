@@ -1456,10 +1456,12 @@
           "click": "Noklikšķināt",
           "fill": "Ievadīt tekstu",
           "open": "Atvērt vietni",
+          "openNewTab": "Atvērt vietni jaunā cilnē",
           "pressKey": "Nospiest taustiņu",
           "select": "Atlasīt opciju",
           "snapshot": "Lasīt lapu",
-          "snapshotContinue": "Turpināt lasīt lapu"
+          "snapshotContinue": "Turpināt lasīt lapu",
+          "switchTab": "Pārslēgties uz cilni"
         },
         "askAgain": "Jautāt vēlreiz",
         "autoApproveReads": "Automātiski apstiprināt lapu lasīšanu",

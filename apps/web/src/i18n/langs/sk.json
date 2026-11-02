@@ -1456,10 +1456,12 @@
           "click": "Kliknúť",
           "fill": "Zadať text",
           "open": "Otvoriť web",
+          "openNewTab": "Otvoriť web na novej karte",
           "pressKey": "Stlačiť kláves",
           "select": "Vybrať možnosť",
           "snapshot": "Prečítať stránku",
-          "snapshotContinue": "Pokračovať v čítaní stránky"
+          "snapshotContinue": "Pokračovať v čítaní stránky",
+          "switchTab": "Prepnúť na kartu"
         },
         "askAgain": "Znova sa pýtať",
         "autoApproveReads": "Automaticky schvaľovať čítanie stránok",

@@ -1456,10 +1456,12 @@
           "click": "Clicar",
           "fill": "Inserir texto",
           "open": "Abrir site",
+          "openNewTab": "Abrir site em nova aba",
           "pressKey": "Pressionar tecla",
           "select": "Selecionar opção",
           "snapshot": "Ler página",
-          "snapshotContinue": "Continuar lendo a página"
+          "snapshotContinue": "Continuar lendo a página",
+          "switchTab": "Mudar para a aba"
         },
         "askAgain": "Perguntar novamente",
         "autoApproveReads": "Aprovar automaticamente a leitura de páginas",
