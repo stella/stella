@@ -53,6 +53,7 @@ const decision = {
   languageAlternates: [],
   decisionDate: "2025-05-01",
   decisionType: "rozsudek",
+  decisionTypeKind: "judgment",
   sourceUrl: null,
   headnote: {
     type: TEXT_FIELD_TYPE.ABSENT,
@@ -195,7 +196,7 @@ describe("shared legal citation lookup", () => {
       },
       queryClient,
       search: { country: "CZE", q: docketWithSheet },
-      uiLocale: "cs",
+      readingLanguages: ["cs", "fr"],
     });
 
     expect(shared).toMatchObject({
@@ -217,7 +218,9 @@ describe("shared legal citation lookup", () => {
     if (commandHit === undefined) {
       throw new TypeError("The citation should produce a global search option");
     }
-    expect(navigations).toEqual([citationCommandRoute(commandHit, "cs")]);
+    expect(navigations).toEqual([
+      citationCommandRoute(commandHit, ["cs", "fr"]),
+    ]);
     expect(requests).toHaveLength(1);
   });
 
@@ -237,7 +240,7 @@ describe("shared legal citation lookup", () => {
       },
       queryClient,
       search: { country: "CZE", q: ecli },
-      uiLocale: "cs",
+      readingLanguages: ["cs", "fr"],
     });
 
     expect(shared).toMatchObject({
@@ -255,7 +258,9 @@ describe("shared legal citation lookup", () => {
     if (commandHit === undefined) {
       throw new TypeError("The citation should produce a global search option");
     }
-    expect(navigations).toEqual([citationCommandRoute(commandHit, "cs")]);
+    expect(navigations).toEqual([
+      citationCommandRoute(commandHit, ["cs", "fr"]),
+    ]);
     expect(requests).toHaveLength(1);
   });
 
@@ -287,7 +292,9 @@ describe("shared legal citation lookup", () => {
     if (commandHit === undefined) {
       throw new TypeError("The citation should produce a global search option");
     }
-    expect(navigations).toEqual([citationCommandRoute(commandHit, "cs")]);
+    expect(navigations).toEqual([
+      citationCommandRoute(commandHit, ["cs", "fr"]),
+    ]);
     expect(requests).toHaveLength(1);
   });
 

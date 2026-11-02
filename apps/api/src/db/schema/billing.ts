@@ -34,6 +34,10 @@ import {
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 
+import {
+  importProvenanceColumns,
+  importProvenanceConstraints,
+} from "../import-provenance-columns";
 import { reviewResetOwnerPolicies } from "../review-reset-policies";
 import { BILLING_ARRANGEMENT_MODES } from "./billing-arrangements";
 import {
@@ -151,6 +155,8 @@ export const timeEntries = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Import provenance: external_source, external_id, external_change_key, imported_at. */
+    ...importProvenanceColumns(),
     activityGroup: p
       .text("activity_group", { enum: TIME_ENTRY_ACTIVITY_GROUPS })
       .notNull()
@@ -212,6 +218,7 @@ export const timeEntries = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
+    ...importProvenanceConstraints("time_entries", table),
     ...entityFeaturePolicies(
       table,
       new Map([[table.workItemId, { target: "entities", kind: "context" }]]),
@@ -922,6 +929,8 @@ export const expenses = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Import provenance: external_source, external_id, external_change_key, imported_at. */
+    ...importProvenanceColumns(),
     // The matter this cost bills. A matter with expenses cannot be deleted
     // (`WORKSPACE_DELETION_RETAINED_TABLES`).
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
@@ -951,6 +960,7 @@ export const expenses = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
+    ...importProvenanceConstraints("expenses", table),
     ...entityFeaturePolicies(
       table,
       new Map([[table.matterId, { target: "entities", kind: "context" }]]),
@@ -996,6 +1006,8 @@ export const invoices = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Import provenance: external_source, external_id, external_change_key, imported_at. */
+    ...importProvenanceColumns(),
     clientId: safeUuid<"contact">("client_id").references(() => contacts.id, {
       onDelete: "no action",
     }),
@@ -1067,6 +1079,7 @@ export const invoices = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...importProvenanceConstraints("invoices", table),
     p
       .index("invoices_client_backfill_idx")
       .on(table.id)

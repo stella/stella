@@ -7,7 +7,6 @@ import { Temporal } from "temporal-polyfill/full";
 import {
   CLI_DEFAULT_RESOURCE_SCOPES,
   CLI_IDENTITY_SCOPES,
-  CLI_KNOWN_SCOPES,
   CLI_REQUIRED_SCOPES,
 } from "../auth/constants.js";
 import { login } from "../auth/login.js";
@@ -97,7 +96,6 @@ const loginCommand = buildCommand<LoginFlags, [], Context>({
     const result = await login(this.process, {
       configDir: this.configDir,
       orgHint: flags.org,
-      registrationScopes: CLI_KNOWN_SCOPES,
       requiredScopes,
       resourceScopes,
       serverFlag: flags.server,

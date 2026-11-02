@@ -88,8 +88,8 @@ test("explicit transfer policies and bounded owner fixtures pass", () => {
       file,
       `
     export const download = async () => {
-      const response = await fetchWithTimeout(url, { timeout: { type: "idle", ms: 30_000 } });
-      return new Response(response.body);
+      const response = await fetchWithTimeout(url, { timeout: { type: "headers", ms: 30_000 } });
+      return readBodyWithIdleDeadline(response, { idleMs: 30_000 });
     };
     export const request = () => fetchWithTimeout(url, {
       timeout: { type: "total", ms: 30_000 },
@@ -108,6 +108,80 @@ test("explicit transfer policies and bounded owner fixtures pass", () => {
       `
     export const readBounded = async (query, CAP) => query.limit(CAP + 1);
   `,
+    ),
+  ).toEqual([]);
+});
+
+test("headers-only fetches require an idle-bounded body reader", () => {
+  for (const consume of [
+    "response.text()",
+    "response.json()",
+    "response.arrayBuffer()",
+    "response.blob()",
+    "new Response(response.body)",
+    "response.body.getReader()",
+    "(async () => { for await (const chunk of response.body) sink(chunk); })()",
+  ]) {
+    expect(
+      findTransferReads(
+        file,
+        `import { fetchWithTimeout } from "@stll/fetch";
+        const download = async () => {
+          const response = await fetchWithTimeout(url, {
+            timeout: { type: "headers", ms: 100 },
+          });
+          return ${consume};
+        };`,
+      ).map(({ kind }) => kind),
+    ).toEqual(["headers-timeout-unbounded-body"]);
+  }
+});
+
+test("headers-only factories are checked in their consuming function", () => {
+  expect(
+    findTransferReads(
+      file,
+      `import { createFetchWithTimeout } from "@stll/fetch";
+      const download = async () => {
+        const request = createFetchWithTimeout({
+          timeout: { type: "headers", ms: 100 },
+        });
+        const response = await request(url);
+        return response.text();
+      };`,
+    ).map(({ kind }) => kind),
+  ).toEqual(["headers-timeout-unbounded-body"]);
+});
+
+test("idle-bounded readers and header-only uses without body reads pass", () => {
+  for (const reader of [
+    "readBodyWithIdleDeadline",
+    "readBodyTextWithIdleDeadline",
+    "readBodyJsonWithIdleDeadline",
+    "iterateBodyWithIdleDeadline",
+  ]) {
+    expect(
+      findTransferReads(
+        file,
+        `import { fetchWithTimeout, ${reader} } from "@stll/fetch";
+        const download = async () => {
+          const response = await fetchWithTimeout(url, {
+            timeout: { type: "headers", ms: 100 },
+          });
+          return ${reader}(response, { idleMs: 100 });
+        };`,
+      ),
+    ).toEqual([]);
+  }
+  expect(
+    findTransferReads(
+      file,
+      `const inspect = async () => {
+        const response = await fetchWithTimeout(url, {
+          timeout: { type: "headers", ms: 100 },
+        });
+        return response.status;
+      };`,
     ),
   ).toEqual([]);
 });

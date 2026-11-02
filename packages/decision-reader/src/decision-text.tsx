@@ -582,7 +582,7 @@ const buildAnchorsByPieceId = ({
       anchors.push({
         end: span.end,
         key: `decision:${span.source.id}`,
-        render: (children, { isRangeStart }): ReactElement => {
+        render: (children): ReactElement => {
           const marked = renderLinkAnnotations({
             annotations: linkAnnotations,
             children,
@@ -596,7 +596,6 @@ const buildAnchorsByPieceId = ({
             treatment: span.source.treatment,
             blockId,
             children: marked,
-            showBadge: isRangeStart,
           });
         },
         start: span.start,

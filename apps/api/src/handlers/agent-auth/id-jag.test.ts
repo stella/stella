@@ -13,6 +13,7 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import type { CryptoKey, JWK } from "jose";
 import * as v from "valibot";
 
+import { OPAQUE_ORGANIZATION_SLUG_PATTERN } from "@stll/auth-model";
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -52,8 +53,11 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 // These tests drive the ID-JAG path end to end against the same
 // better-auth instance + database the API uses at runtime. The external
@@ -113,7 +117,9 @@ beforeAll(async () => {
   issuerPrivateKey = privateKey;
   issuerKid = "test-issuer-key";
   issuerPublicJwk = { ...(await exportJWK(publicKey)), kid: issuerKid };
+});
 
+beforeEach(() => {
   // Stub only the issuer JWKS URL; everything else hits the real fetch.
   const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
     if (typeof input === "string") {
@@ -134,17 +140,17 @@ beforeAll(async () => {
     }
     return await realFetch(input, init);
   };
-  globalThis.fetch = asFetchMock(fetchStub);
+  testFetchState.set(asFetchMock(fetchStub));
 });
 
 afterAll(async () => {
   await server.stop();
-  globalThis.fetch = realFetch;
   disableFeature();
   await releaseAgentAuthTestDb();
 });
 
 afterEach(async () => {
+  testFetchState.restore();
   await rootDb
     .delete(agentTrustedIssuer)
     .where(eq(agentTrustedIssuer.issuer, ISSUER));
@@ -456,9 +462,7 @@ describe("agent-auth ID-JAG new identity (auto-provision)", () => {
         .where(eq(organization.id, delegation.organizationId))
         .limit(1)
     ).at(0);
-    expect(createdOrganization?.slug).toMatch(
-      /^agent-[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
-    );
+    expect(createdOrganization?.slug).toMatch(OPAQUE_ORGANIZATION_SLUG_PATTERN);
   });
 });
 

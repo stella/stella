@@ -3,6 +3,8 @@ import type { ProvisionUnit } from "@stll/legal-ast/provision-reference";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 
 import { inlinesToPlainText } from "./document-ast-text";
+import { blockOffset, scrollReaderToBlock } from "./reader-landing";
+import type { ReaderBlock, ReaderScroller } from "./reader-landing";
 
 /**
  * Outline over a document's own headings, for the shared rail.
@@ -314,16 +316,9 @@ const spanOf = (
  * The members of a scroll container an anchor jump needs. Narrower than
  * `HTMLElement` so the arithmetic below can be exercised without a DOM.
  */
-type ClientTop = { top: number };
-
-export type AnchorScrollContainer = {
-  querySelector: (
-    selector: string,
-  ) => { getBoundingClientRect: () => ClientTop } | null;
-  getBoundingClientRect: () => ClientTop;
-  scrollTop: number;
+export type AnchorScrollContainer = ReaderScroller & {
+  querySelector: (selector: string) => ReaderBlock | null;
   scrollHeight: number;
-  scrollTo: (options: { top: number; behavior: ScrollBehavior }) => void;
 };
 
 const offsetWithin = (
@@ -332,15 +327,7 @@ const offsetWithin = (
 ): number | null => {
   const target = container.querySelector(`#${CSS.escape(anchorId)}`);
 
-  if (target === null) {
-    return null;
-  }
-
-  return (
-    target.getBoundingClientRect().top -
-    container.getBoundingClientRect().top +
-    container.scrollTop
-  );
+  return target === null ? null : blockOffset(target, container);
 };
 
 /** Vertical position of an anchored block, as the rail's 0-100 percentage. */
@@ -371,12 +358,12 @@ export const jumpToAnchor = (
   anchorId: string,
   container: AnchorScrollContainer,
 ): void => {
-  const top = offsetWithin(anchorId, container);
+  const target = container.querySelector(`#${CSS.escape(anchorId)}`);
 
-  if (top === null) {
+  if (target === null) {
     return;
   }
 
   window.location.hash = anchorId;
-  container.scrollTo({ top, behavior: "instant" });
+  scrollReaderToBlock(target, container);
 };

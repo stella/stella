@@ -28,8 +28,8 @@ if (mode === "grandchild") {
     ],
     {
       stdin: "ignore",
-      stdout: "inherit",
-      stderr: "inherit",
+      stdout: "ignore",
+      stderr: "ignore",
     },
   );
   process.on("SIGTERM", () => {

@@ -1,4 +1,4 @@
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { View } from "react-native";
 import { useTranslations } from "use-intl";
@@ -42,8 +42,10 @@ export const WriteFailureNotice = ({
   message: string;
 }) => {
   const t = useTranslations("writes");
+  const settings = useTranslations("settings");
   const { signOut } = useSession();
   const [leaving, startLeaving] = useTransition();
+  const [signOutFailed, setSignOutFailed] = useState(false);
 
   if (failure === null) {
     return null;
@@ -67,13 +69,17 @@ export const WriteFailureNotice = ({
         loading={leaving}
         onPress={() => {
           startLeaving(async () => {
-            await signOut();
+            const outcome = await signOut();
+            setSignOutFailed(outcome.isErr());
           });
         }}
         variant="outline"
       >
         {t("signInAgain")}
       </Button>
+      {signOutFailed ? (
+        <Text variant="caption">{settings("signOutFailed")}</Text>
+      ) : null}
     </View>
   );
 };

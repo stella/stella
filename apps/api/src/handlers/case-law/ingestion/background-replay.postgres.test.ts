@@ -30,11 +30,6 @@ import {
 import { envBase } from "@/api/env-base";
 import { envDbLoadGate } from "@/api/env-db-load-gate";
 import {
-  EMPTY_AST,
-  type SourceAdapter,
-  type StoredRawReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   type BackgroundReplayBatch,
   type BackgroundReplaySource,
   type BackgroundReplayTickReport,
@@ -60,6 +55,11 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  EMPTY_AST,
+  type SourceAdapter,
+  type StoredRawReader,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   RAW_SOURCE_FAMILY,

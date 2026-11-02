@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/scheduler/tasks/document-processing-inline-extraction.ts",
+  "delta": 1,
+  "reason": "Inline extraction is sequential by design: each run holds its file in the API process's memory, so one at a time is the bound, and the batch size caps the loop."
+}

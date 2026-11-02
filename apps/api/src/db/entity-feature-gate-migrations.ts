@@ -485,6 +485,7 @@ const NAMES_GATE_OBJECT =
 const GATE_CHECK_BLOCK =
   /^DO \$check\$ BEGIN IF NOT EXISTS \(SELECT 1 FROM pg_constraint WHERE conrelid = 'public\.[a-z0-9_]+'::regclass AND conname = 'entity_feature_gate_(?:states|ready)_check'\) THEN ALTER TABLE public\."[a-z0-9_]+" ADD CONSTRAINT entity_feature_gate_(?:states_check CHECK \(entity_feature_gate IN \('pending', 'open', 'legal-lists', 'missing'\)\)|ready_check CHECK \(entity_feature_gate <> 'pending'\)) NOT VALID; END IF; END \$check\$;?$/u;
 const REVIEWED_DO_BLOCK_DIGESTS: ReadonlySet<string> = new Set([
+  "9d05bf7d24a473037ce35ddf58a1464a4159ee1aba7fce8b04361f7bf4bc18d8",
   // 20261009112500_entity_feature_row_gates: the gate role ($role$) and the
   // gated tables' ownership check ($ownership$).
   "2cc1de9651dce4678295ae32a0be83b4e543aed1d09da1770e8bbea7f3310c8b",

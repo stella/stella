@@ -1,3 +1,4 @@
+import type { ExactRequestBody } from "@stll/api-client";
 import {
   parsePolishedTimeEntryNarrativeResponse,
   parseTimeApprovalBatch,
@@ -143,27 +144,41 @@ export const fetchTimeEntrySuggestions = async ({
     timeEntryResponseParsers.suggestions,
   );
 
+type TimeEntryWrite<
+  TBody,
+  TOperation extends keyof typeof timeEntryResponseParsers,
+> = <TActual extends TBody>(
+  workspaceId: string,
+  body: ExactRequestBody<TBody, TActual>,
+) => Promise<
+  NonNullable<ReturnType<(typeof timeEntryResponseParsers)[TOperation]>>
+>;
+
 export type CreateTimeEntryBody = TimeEntryRoutes["put"]["body"];
 
-export const createTimeEntry = async (
-  workspaceId: string,
-  body: CreateTimeEntryBody,
-) =>
-  parseTimeEntryResponse(
-    await timeEntriesRoute(workspaceId).put(body),
+export const createTimeEntry: TimeEntryWrite<
+  CreateTimeEntryBody,
+  "create"
+> = async (workspaceId, body) => {
+  const requestBody: CreateTimeEntryBody = body;
+  return parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).put(requestBody),
     timeEntryResponseParsers.create,
   );
+};
 
 export type UpdateTimeEntryBody = TimeEntryRoutes["patch"]["body"];
 
-export const updateTimeEntry = async (
-  workspaceId: string,
-  body: UpdateTimeEntryBody,
-) =>
-  parseTimeEntryResponse(
-    await timeEntriesRoute(workspaceId).patch(body),
+export const updateTimeEntry: TimeEntryWrite<
+  UpdateTimeEntryBody,
+  "update"
+> = async (workspaceId, body) => {
+  const requestBody: UpdateTimeEntryBody = body;
+  return parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).patch(requestBody),
     timeEntryResponseParsers.update,
   );
+};
 
 export const deleteTimeEntry = async (workspaceId: string, id: string) =>
   parseTimeEntryResponse(
@@ -171,14 +186,18 @@ export const deleteTimeEntry = async (workspaceId: string, id: string) =>
     timeEntryResponseParsers.delete,
   );
 
-export const batchUpdateTimeEntries = async (
-  workspaceId: string,
-  body: TimeEntryRoutes["batch"]["post"]["body"],
-) =>
-  parseTimeEntryResponse(
-    await timeEntriesRoute(workspaceId).batch.post(body),
+type BatchUpdateTimeEntryBody = TimeEntryRoutes["batch"]["post"]["body"];
+
+export const batchUpdateTimeEntries: TimeEntryWrite<
+  BatchUpdateTimeEntryBody,
+  "batchUpdate"
+> = async (workspaceId, body) => {
+  const requestBody: BatchUpdateTimeEntryBody = body;
+  return parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).batch.post(requestBody),
     timeEntryResponseParsers.batchUpdate,
   );
+};
 
 export const batchDeleteTimeEntries = async (
   workspaceId: string,
@@ -189,26 +208,32 @@ export const batchDeleteTimeEntries = async (
     timeEntryResponseParsers.batchDelete,
   );
 
-export const splitTimeEntry = async (
-  workspaceId: string,
-  body: TimeEntryRoutes["split"]["post"]["body"],
-) =>
-  parseTimeEntryResponse(
-    await timeEntriesRoute(workspaceId).split.post(body),
+type SplitTimeEntryBody = TimeEntryRoutes["split"]["post"]["body"];
+
+export const splitTimeEntry: TimeEntryWrite<
+  SplitTimeEntryBody,
+  "split"
+> = async (workspaceId, body) => {
+  const requestBody: SplitTimeEntryBody = body;
+  return parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).split.post(requestBody),
     timeEntryResponseParsers.split,
   );
+};
 
 export type TimeSuggestionDecisionBody =
   TimeEntryRoutes["suggestions"]["decisions"]["post"]["body"];
 
-export const decideTimeSuggestion = async (
-  workspaceId: string,
-  body: TimeSuggestionDecisionBody,
-) =>
-  parseTimeEntryResponse(
-    await timeEntriesRoute(workspaceId).suggestions.decisions.post(body),
+export const decideTimeSuggestion: TimeEntryWrite<
+  TimeSuggestionDecisionBody,
+  "decideSuggestion"
+> = async (workspaceId, body) => {
+  const requestBody: TimeSuggestionDecisionBody = body;
+  return parseTimeEntryResponse(
+    await timeEntriesRoute(workspaceId).suggestions.decisions.post(requestBody),
     timeEntryResponseParsers.decideSuggestion,
   );
+};
 
 type PolishTimeEntryNarrativeOptions = {
   instruction: string;

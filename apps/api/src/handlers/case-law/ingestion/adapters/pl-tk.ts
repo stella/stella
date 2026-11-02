@@ -1,8 +1,14 @@
+import { panic, Result } from "better-result";
+
+import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: session-protocol rejection carries explicit failure metadata; accepted sessions and parsed records are unchanged.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 // parser-output-unchanged: [pl-tk] Case-page parsing is reused within each assembly; stored fields, HTML and AST output are unchanged.
 // parser-output-unchanged: [pl-tk] The bench builder is typed to printed names only; the judges it emits are unchanged.
-import { panic, Result } from "better-result";
+import { load } from "@stll/html";
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
  *
@@ -44,10 +50,8 @@ import { panic, Result } from "better-result";
  * are the keys a SAOS row and a row from this portal share when they describe
  * the same ruling, stored as `rulingKeys` on the rows of both.
  */
-import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
-
-import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
+import type * as cheerio from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -59,34 +63,6 @@ import { readCappedBytes } from "@stll/skills/streaming";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  PrintedDecisionJudge,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   PL_TK_RULING_FAMILY,
@@ -127,6 +103,36 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { inlineStyleIsItalic } from "@/api/lib/legal-search/document-builders/inline-style";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  PrintedDecisionJudge,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -623,7 +629,7 @@ export const parsePlTkListingPage = (
   html: string,
   stage: PlTkStage,
 ): PlTkListingPage | null => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const body = $('[id="wyszukiwanie:dataTable_data"]');
   if (body.length === 0) {
     return null;
@@ -653,7 +659,16 @@ export const parsePlTkListingPage = (
       const caseNumber = collapse(
         visibleHtmlText(cell.find(".sygnatura").first()),
       );
-      const subjectNode = cell.find('span[style*="italic"]');
+      // Only the outermost italic span: a nested span inherits the italic, and
+      // reading both would repeat the subject.
+      const subjectNode = cell.find("span").filter(
+        (_, el) =>
+          inlineStyleIsItalic(el) &&
+          !$(el)
+            .parentsUntil(cell, "span")
+            .toArray()
+            .some((ancestor) => inlineStyleIsItalic(ancestor)),
+      );
       const subject = collapse(visibleHtmlText(subjectNode));
       const lineNode = cell.clone();
       lineNode.find("a, span").remove();
@@ -1601,6 +1616,7 @@ const plTkFetchPage = async (
     return Result.ok({
       decisions: [],
       sourceUrl: firstUrl,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlTkCursor({
         stage: stageAfter(stage),
         read: { ...cursor.read, [stage]: read },
@@ -1699,6 +1715,7 @@ const plTkFetchPage = async (
           },
         }),
     sourceUrl: listed.value.url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlTkCursor({
       stage,
       read: { ...cursor.read, [stage]: read + consumed },

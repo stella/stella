@@ -22,7 +22,8 @@
     "toolUsed": "Usado: {tool}",
     "threadTitle": "Conversación",
     "threadLoadFailed": "No se pudo cargar esta conversación.",
-    "threadEmptyDescription": "Esta conversación aún no tiene mensajes.",
+    "greeting": "¿En qué le gustaría trabajar?",
+    "greetingSubtitle": "Empiece con un asunto, un documento o una pregunta sencilla.",
     "sections": {
       "today": "Hoy",
       "yesterday": "Ayer",
@@ -33,12 +34,33 @@
     "composerPlaceholder": "Pregunta a stella",
     "send": "Enviar",
     "stop": "Detener",
+    "dictate": "Dictar",
+    "dictationCancel": "Cancelar dictado",
+    "dictationFinish": "Terminar dictado",
+    "dictationListening": "Escuchando… {elapsed} de {limit}",
+    "dictationTranscribing": "Transcribiendo…",
+    "dictationDenied": "El dictado necesita el micrófono. Permítelo para stella en Ajustes.",
+    "dictationFailed": "No se pudo transcribir la grabación. Inténtalo de nuevo.",
+    "dictationSilent": "No se oyó ninguna voz.",
     "sendFailed": "No se pudo enviar el mensaje. Inténtalo de nuevo.",
     "answerWorking": "Trabajando…",
     "answerStopped": "Detenido.",
     "answerNeedsInput": "Esta respuesta necesita tu intervención. Continúala en stella en la web.",
     "answerFailed": "No se pudo completar la respuesta.",
     "composerMenu": "Abrir el menú de archivos adjuntos y herramientas",
+    "attachFile": "Adjuntar archivo",
+    "attachment": "Adjunto",
+    "fileTooLarge": "El archivo supera el límite de {maxSize}",
+    "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
+    "unsupportedFileType": "Tipo de archivo no compatible",
+    "uploadFailed": "Error al procesar el archivo",
+    "scanDocument": "Escanear un documento",
+    "removeAttachment": "Quitar {name}",
+    "attachmentReading": "Preparando…",
+    "attachmentUploading": "Subiendo…",
+    "pickFailed": "No se pudo abrir el selector de archivos. Inténtalo de nuevo.",
+    "sendFileRefused": "No se pudo enviar un archivo, así que el mensaje no se envió. Quita el archivo e inténtalo de nuevo.",
+    "sendFileNotAnonymizable": "Esta conversación está anonimizada y stella no pudo anonimizar uno de los archivos, así que no se envió nada. Quita el archivo e inténtalo de nuevo.",
     "pickTitle": "Elija una conversación",
     "pickDescription": "Elija un hilo de la lista o empiece uno nuevo con +."
   },
@@ -60,7 +82,8 @@
       "none": "Sin fecha",
       "today": "Hoy",
       "tomorrow": "Mañana",
-      "nextWeek": "En una semana"
+      "nextWeek": "En una semana",
+      "pick": "Elegir fecha"
     },
     "due": {
       "overdue": "Vencidas",
@@ -75,7 +98,14 @@
     "statusFailed": "No se pudo cambiar la tarea. Inténtelo de nuevo.",
     "pickTitle": "Elija una tarea",
     "pickDescription": "Elija una tarea de la lista para verla aquí.",
-    "openMatter": "Abrir asunto"
+    "openMatter": "Abrir asunto",
+    "assignedTo": "Asignada a",
+    "nobody": "Sin asignar",
+    "assign": "Asignar",
+    "doneAssigning": "Hecho",
+    "someone": "Alguien",
+    "membersFailed": "No se pudieron cargar los miembros del asunto.",
+    "assignFailed": "No se pudo asignar la tarea. Inténtelo de nuevo."
   },
   "matters": {
     "emptyTitle": "Aún no hay asuntos",
@@ -119,7 +149,9 @@
     },
     "add": "Añadir",
     "scanDocument": "Escanear un documento",
-    "newTask": "Nueva tarea"
+    "newTask": "Nueva tarea",
+    "uploadDocument": "Subir documento",
+    "uploadFailed": "No se pudo subir el documento. Inténtelo de nuevo."
   },
   "entity": {
     "type": "Tipo",
@@ -141,7 +173,27 @@
     "preview": "Abrir vista previa",
     "previewDescription": "Este archivo se abre en la vista previa del sistema.",
     "unrendered": "Este documento no se puede mostrar aquí, pero la vista previa del sistema quizá pueda abrirlo.",
-    "details": "Detalles"
+    "details": "Detalles",
+    "zoomOut": "Alejar",
+    "zoomIn": "Acercar",
+    "zoomFit": "Ajustar al ancho",
+    "fit": "Ancho",
+    "appearance": {
+      "system": "Apariencia: automática",
+      "light": "Apariencia: clara",
+      "dark": "Apariencia: oscura"
+    },
+    "edit": {
+      "saved": "Guardado",
+      "saving": "Guardando…",
+      "notSaved": "Aún sin guardar",
+      "done": "Listo",
+      "openFailed": "Ahora no se puede editar este documento",
+      "takenOver": "Otra persona está editando ahora este documento. Sus cambios desde el último guardado no se conservaron.",
+      "finishFailed": "Sus cambios están guardados, pero aún no se han convertido en una nueva versión. Vuelva a tocar Listo o salga: la próxima edición continuará desde ellos.",
+      "stay": "Quedarse",
+      "leave": "Salir"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -169,7 +221,8 @@
     "server": "Servidor",
     "signOut": "Cerrar sesión",
     "deleteAccount": "Eliminar cuenta",
-    "deleteAccountHint": "Abre tu cuenta en la web, donde puedes eliminarla junto con todo lo que es tuyo."
+    "deleteAccountHint": "Abre tu cuenta en la web, donde puedes eliminarla junto con todo lo que es tuyo.",
+    "signOutFailed": "No se pudo completar el cierre de sesión. Inténtalo de nuevo."
   },
   "header": {
     "search": "Buscar"
@@ -183,13 +236,12 @@
     "headnote": "Sumario",
     "textUnavailable": "No hay texto disponible para esta resolución",
     "openSource": "Abrir fuente original",
+    "openFailed": "No se pudo abrir el enlace.",
     "loadFailed": "No se pudo cargar la jurisprudencia.",
     "share": "Compartir"
   },
   "more": {
-    "soon": "Próximamente",
-    "timers": "Temporizadores",
-    "voiceInput": "Entrada de voz"
+    "timers": "Temporizadores"
   },
   "writes": {
     "consentNeeded": "Para hacer cambios desde la app, stella necesita su permiso. Vuelva a iniciar sesión para concederlo.",
@@ -268,6 +320,29 @@
   "palette": {
     "placeholder": "Busca asuntos y conversaciones, o ejecuta un comando",
     "noResults": "Nada coincide con «{query}»"
+  },
+  "search": {
+    "placeholder": "Buscar en stella",
+    "clear": "Borrar búsqueda",
+    "cancel": "Cancelar",
+    "recent": "Búsquedas recientes",
+    "clearRecent": "Borrar",
+    "hint": "Busca en asuntos, documentos, tareas, conversaciones y jurisprudencia.",
+    "filters": "Filtros",
+    "noResultsTitle": "Sin resultados",
+    "noResults": "Nada coincide con «{query}». Prueba otras palabras o quita un filtro.",
+    "loadFailed": "No se pudo realizar la búsqueda.",
+    "retry": "Reintentar",
+    "type": {
+      "document": "Documentos",
+      "matter": "Asuntos",
+      "task": "Tareas",
+      "caseLaw": "Jurisprudencia",
+      "chat": "Conversaciones",
+      "folder": "Carpetas",
+      "message": "Correos",
+      "link": "Enlaces"
+    }
   },
   "pane": {
     "showList": "Mostrar la lista",
