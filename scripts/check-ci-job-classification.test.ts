@@ -948,3 +948,64 @@ test("conflicting modes are rejected", () => {
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain("usage:");
 });
+
+const jsonRun = (root: string, ...args: string[]) => {
+  const result = run(root, "--check", ...args, "--json");
+  return { exitCode: result.exitCode, report: JSON.parse(result.stdout) };
+};
+
+test("--group checks a composed tree like its merge group, before it is queued", () => {
+  const { root, base, first, second } = compositionRepository();
+  const exact = jsonRun(root, "--base", base);
+  expect(exact.exitCode).toBe(1);
+  expect(exact.report.status).toBe("stale");
+  expect(exact.report.stale.length).toBeGreaterThan(0);
+  expect(
+    jsonRun(root, "--base", base, "--group", `41:${first},42:${second}`),
+  ).toEqual({ exitCode: 0, report: { status: "ok", privileged: [] } });
+});
+
+test("--group refuses to run when a member head is missing", () => {
+  const { root, base, first } = compositionRepository();
+  const missing = "f".repeat(40);
+  const result = jsonRun(
+    root,
+    "--base",
+    base,
+    "--group",
+    `41:${first},42:${missing}`,
+  );
+  expect(result.exitCode).toBe(2);
+  expect(result.report.status).toBe("error");
+  expect(result.report.message).toContain(`#42 ${missing}`);
+});
+
+test("--group and --json reject malformed input and other modes", () => {
+  const decisions = reviewed(BEFORE, "check");
+  const { root } = repository(
+    { workflow: BEFORE, decisions },
+    { workflow: BEFORE, decisions },
+  );
+  for (const args of [
+    ["--check", "--group", "41:abc", "--json"],
+    ["--check", "--group", "41", "--json"],
+    ["--write", "--json"],
+  ]) {
+    const result = run(root, ...args);
+    expect(result.exitCode, args.join(" ")).toBe(2);
+    expect(JSON.parse(result.stdout).status).toBe("error");
+  }
+});
+
+test("--json lists the stale candidates a refresh records without review", () => {
+  const decisions = reviewed(BEFORE, "check");
+  const { root } = repository(
+    { workflow: BEFORE, decisions },
+    { workflow: AFTER, decisions },
+    true,
+  );
+  const result = jsonRun(root);
+  expect(result.exitCode).toBe(1);
+  expect(result.report.stale).toEqual(result.report.mechanical);
+  expect(result.report.mechanical).toHaveLength(1);
+});
