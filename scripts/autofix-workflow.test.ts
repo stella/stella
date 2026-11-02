@@ -102,7 +102,10 @@ test("the bridge guard uses the merge-group base in merge queue runs", async () 
   );
   const guard = namedCiStep(workflow, "Bridge-version guard");
 
-  expect(guard["if"]).toContain("github.event_name == 'merge_group'");
+  // The root-check plan selects the guard for pull requests and merge groups;
+  // the step adds no event gate of its own.
+  expect(guard["if"]).toContain("'ci-checks-rest/Bridge-version guard'");
+  expect(guard["if"]).not.toContain("github.event_name");
   expect(guard["env"]).toMatchObject({
     BRIDGE_BASE_SHA: `\${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}`,
   });
