@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -32,6 +33,12 @@ import {
   type Target,
   trialCommand,
 } from "./flake-gate";
+import {
+  decodePlanFileList,
+  decodePostgresTestSelection,
+  encodePlanFileList,
+  encodePostgresTestSelection,
+} from "./plan-output-codec";
 
 // Markdown reads consume temporary CLI output only.
 export const CI_MARKDOWN_READER_INPUTS = [] as const;
@@ -190,7 +197,7 @@ test("diff selection repeats changed tests only and preserves package runners an
     ]);
     expect(withDb.env).toEqual({
       STELLA_RUN_POSTGRES_TESTS: "true",
-      CI_POSTGRES_TEST_SELECTION: JSON.stringify({
+      CI_POSTGRES_TEST_SELECTION_ENCODED: encodePostgresTestSelection({
         mode: "selected",
         files: ["src/db.test.ts"],
       }),
@@ -246,7 +253,12 @@ test("the real API manifest selects unit and Postgres files through their exact 
     if (isPostgres) {
       expect(
         parseGatedTestSelection(
-          target.env["CI_POSTGRES_TEST_SELECTION"],
+          JSON.stringify(
+            decodePostgresTestSelection(
+              target.env["CI_POSTGRES_TEST_SELECTION_ENCODED"] ??
+                panic("Missing encoded Postgres test selection"),
+            ),
+          ),
           discovered,
         ),
       ).toEqual({
@@ -259,7 +271,15 @@ test("the real API manifest selects unit and Postgres files through their exact 
       ).toBe(apiManifest.ciGateTestRunners["test:postgres"].gateValue);
     } else {
       expect(
-        restrictApiTestFiles(discovered, target.env["API_TEST_FILES"]),
+        restrictApiTestFiles(
+          discovered,
+          encodePlanFileList(
+            decodePlanFileList(
+              target.env["API_TEST_FILES_ENCODED"] ??
+                panic("Missing encoded API test selection"),
+            ),
+          ),
+        ),
       ).toEqual([relative]);
       expect(target.env["API_TEST_SHARD"]).toBe("");
     }

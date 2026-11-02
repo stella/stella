@@ -188,12 +188,12 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test release image CI gate": [
     "apps/api/scripts/api-test-plan.ts",
-    "apps/api/scripts/test-file-shards.ts",
     "apps/api/scripts/test-timings.ts",
     "packages/property-testing/src/pinned-seeds.ts",
     "packages/scripts/src/generated-file-inventory.ts",
     "packages/scripts/src/generated-input-identity.ts",
     "scripts/api-test-impact.ts",
+    "scripts/check-ci-event-policy.ts",
     "scripts/check-standalone-lockfiles.ts",
     "scripts/check-stll-quarantine-excludes.ts",
     "scripts/ci-affected-selection.ts",
@@ -280,7 +280,6 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test shard partition": [
     "apps/api/scripts/api-test-plan.ts",
-    "apps/api/scripts/test-file-shards.ts",
     "apps/api/scripts/test-timings.ts",
     "scripts/api-test-impact.ts",
     "scripts/ci-affected-selection.ts",
@@ -415,7 +414,6 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test changed e2e shard selection": [
     "apps/api/scripts/api-test-plan.ts",
-    "apps/api/scripts/test-file-shards.ts",
     "apps/api/scripts/test-timings.ts",
     "scripts/api-test-impact.ts",
     "scripts/ci-check-pool-registry.ts",
@@ -505,7 +503,6 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Test CI check partition": [
     "apps/api/scripts/api-test-plan.ts",
-    "apps/api/scripts/test-file-shards.ts",
     "apps/api/scripts/test-timings.ts",
     "packages/property-testing/src/pinned-seeds.ts",
     "packages/scripts/src/generated-file-inventory.ts",

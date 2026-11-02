@@ -198,7 +198,7 @@ const defaultPlan = () => ({
 const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   "api-test-durations": { hash: "", key: "" },
   "api-tests": {
-    api_test_files: "[]",
+    api_test_files_encoded: "[]",
     api_test_shards: "4",
     ci_tests_matrix: "[]",
     ci_tests_required: "true",
@@ -270,7 +270,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   "postgres-test-durations": { hash: "" },
   "postgres-test-plan": {
     postgres_selection_reason: "",
-    postgres_test_selection: "[]",
+    postgres_test_selection_encoded: "[]",
   },
   "pr-jobs-plan": { pr_depth_jobs: "[]", pr_heavy_jobs: "[]" },
   "query-perf-scope": { query_perf_required: "false" },
