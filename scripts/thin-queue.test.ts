@@ -355,6 +355,7 @@ type ExpectedPrSelectionOptions = {
 };
 const DECLARED_PR_PLAN_CHANGES = new Set([
   "ci-browser",
+  "desktop-rust-tests",
   "e2e-landing",
   "e2e-production-shard",
   "scan-engine-wasm-drift",
@@ -391,6 +392,16 @@ const expectedPrSelection = ({
     return (
       value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
       value.needs["ci-plan"].outputs["scan_engine_wasm_required"] === "true"
+    );
+  }
+  // A desktop Rust change runs its tests in its own pull request, armed or not.
+  if (job === "desktop-rust-tests") {
+    expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
+    return (
+      value.needs["ci-plan"]?.outputs["run_required"] !== "false" &&
+      value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
+      value.needs["ci-plan"].outputs["coverage_profile"] === "normal-v1" &&
+      value.needs["ci-plan"].outputs["desktop_rust_checks_required"] === "true"
     );
   }
   if (job === "web-build") {
@@ -963,6 +974,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   );
   expect([...DECLARED_PR_PLAN_CHANGES].toSorted()).toEqual([
     "ci-browser",
+    "desktop-rust-tests",
     "e2e-landing",
     "e2e-production-shard",
     "scan-engine-wasm-drift",

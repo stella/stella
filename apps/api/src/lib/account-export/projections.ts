@@ -3,6 +3,7 @@ import type {
   agentSkillRevisions,
   agentSkills,
   aiMemories,
+  billingDraftUserSettings,
   chatMessageRevisions,
   chatMessages,
   chatThreads,
@@ -69,6 +70,9 @@ type AccountExportProjectionSignatures = {
   ) => unknown;
   saved_time_narratives: (
     row: typeof savedTimeNarratives.$inferSelect,
+  ) => unknown;
+  billing_draft_user_settings: (
+    row: typeof billingDraftUserSettings.$inferSelect,
   ) => unknown;
   template_lookup_format_user_defaults: (
     row: typeof templateLookupFormatUserDefaults.$inferSelect,

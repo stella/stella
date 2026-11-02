@@ -3,24 +3,28 @@ import { afterEach, expect, test } from "bun:test";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { probeUkFclRemoval } from "./uk-fcl-removal";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
+
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 for (const status of [200, 204, 401, 403, 404, 410, 451] as const) {
   test(`document recheck classifies HTTP ${status}`, async () => {
     const urls: string[] = [];
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      urls.push(input instanceof Request ? input.url : input.toString());
-      return new Response(status === 204 ? null : "synthetic response", {
-        status,
-      });
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        urls.push(input instanceof Request ? input.url : input.toString());
+        return new Response(status === 204 ? null : "synthetic response", {
+          status,
+        });
+      }),
+    );
     const outcome = (
       await probeUkFclRemoval("ewhc/kb/2026/1", new AbortController().signal)
     ).unwrap();
@@ -45,10 +49,12 @@ for (const status of [200, 204, 401, 403, 404, 410, 451] as const) {
 
 test("an invalid publisher identity performs no request", async () => {
   let calls = 0;
-  globalThis.fetch = asFetchMock(async () => {
-    calls++;
-    return new Response("fixture");
-  });
+  testFetchState.set(
+    asFetchMock(async () => {
+      calls++;
+      return new Response("fixture");
+    }),
+  );
   expect(
     (
       await probeUkFclRemoval("../document", new AbortController().signal)
@@ -72,10 +78,12 @@ for (const response of [
 ]) {
   test(`publisher rate-limit response ${response.status} stops the source after one request`, async () => {
     let requests = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      requests++;
-      return new Response(response.body, response);
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        requests++;
+        return new Response(response.body, response);
+      }),
+    );
     const observed = await probeUkFclRemoval(
       "uksc/2024/1",
       new AbortController().signal,
