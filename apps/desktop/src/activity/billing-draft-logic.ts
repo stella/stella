@@ -125,7 +125,7 @@ export const draftFailureKind = (cause: unknown): DraftFailureKind => {
 
 /** A note a guided draft raises against the firm's billing guidelines, with
  * the file and section it cites. */
-export type GuidelineFlag = { text: string; fileName: string; section: string };
+type GuidelineFlag = { text: string; fileName: string; section: string };
 
 /** What a card shows from a review: its description, the earlier entries the
  * draft followed and, from a guided draft, the entry's classification and
