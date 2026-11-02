@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Result } from "better-result";
 import {
@@ -78,6 +78,9 @@ export const useDictation = (onText: (text: string) => void) => {
   // Set before the first await of `start`, so a second tap while the
   // permission prompt or the recorder is still opening is ignored.
   const starting = useRef(false);
+  // Which start is current: a sent message or a closed composer moves it on,
+  // so a start still opening the microphone stops before it records.
+  const attempt = useRef(0);
 
   const transcribe = async (uri: string) => {
     if (state.status !== "signed-in") {
@@ -101,9 +104,10 @@ export const useDictation = (onText: (text: string) => void) => {
   };
 
   const settle = async (status: RecordingStatus) => {
+    // A microphone that could not be handed back is reported, but the
+    // recording is still good to transcribe.
     const released = await Result.tryPromise(releaseMicrophone);
-    const usable = !status.hasError && released.isOk();
-    if (!usable) {
+    if (status.hasError || released.isErr()) {
       setNotice("failed");
     }
     const { url } = status;
@@ -111,7 +115,7 @@ export const useDictation = (onText: (text: string) => void) => {
       return;
     }
     const transcribed =
-      usable && keep.current
+      !status.hasError && keep.current
         ? await Result.tryPromise(async () => await transcribe(url))
         : Result.ok();
     // The upload reads the file, so it is deleted only once it has settled.
@@ -136,9 +140,12 @@ export const useDictation = (onText: (text: string) => void) => {
   const recorder = useAudioRecorder(DICTATION_RECORDING, onStatus);
   const { durationMillis } = useAudioRecorderState(recorder, 250);
 
-  const start = async () => {
+  const start = async (id: number) => {
     setNotice(undefined);
     const permission = await requestRecordingPermissionsAsync();
+    if (attempt.current !== id) {
+      return;
+    }
     if (!permission.granted) {
       setNotice("denied");
       return;
@@ -147,9 +154,11 @@ export const useDictation = (onText: (text: string) => void) => {
     const prepared = await Result.tryPromise(
       async () => await recorder.prepareToRecordAsync(),
     );
-    if (prepared.isErr()) {
+    if (prepared.isErr() || attempt.current !== id) {
       // No recording started, so no finished status will release it.
-      setNotice("failed");
+      if (prepared.isErr()) {
+        setNotice("failed");
+      }
       await releaseMicrophone();
       return;
     }
@@ -163,6 +172,30 @@ export const useDictation = (onText: (text: string) => void) => {
     await recorder.stop();
   };
 
+  // A composer that closes mid-dictation, as on leaving the thread, drops
+  // the recording: the recorder's own release reports no finished status, so
+  // the microphone and the file are let go here.
+  // With the composer gone, a failure here has nowhere to show; each step
+  // still runs after the one before it fails.
+  useEffect(
+    () => () => {
+      attempt.current += 1;
+      if (!recorder.isRecording) {
+        return;
+      }
+      const { uri } = recorder;
+      keep.current = false;
+      void (async () => {
+        await Result.tryPromise(async () => await recorder.stop());
+        await Result.tryPromise(releaseMicrophone);
+        if (uri !== null) {
+          discardRecording(uri);
+        }
+      })();
+    },
+    [recorder],
+  );
+
   return {
     phase,
     notice,
@@ -172,7 +205,8 @@ export const useDictation = (onText: (text: string) => void) => {
         return;
       }
       starting.current = true;
-      start()
+      attempt.current += 1;
+      start(attempt.current)
         .catch(() => {
           setPhase("idle");
           setNotice("failed");
@@ -193,8 +227,12 @@ export const useDictation = (onText: (text: string) => void) => {
         setNotice("failed");
       });
     },
-    /** Forgets the last dictation's notice, as a sent message does. */
-    dismissNotice: () => {
+    /**
+     * What a sent message does to dictation: forgets the last notice and
+     * stops a start still opening the microphone from recording.
+     */
+    settleForSend: () => {
+      attempt.current += 1;
       setNotice(undefined);
     },
   };
