@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, desc, eq, notInArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -24,9 +24,14 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
+import { populationCountsCacheVersion } from "@/api/lib/case-law/population-count-freshness";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { type BoundedReadResult, readBounded } from "@/api/lib/db/read-bounded";
 import { errorTag } from "@/api/lib/errors/utils";
+import {
+  type AdapterEdition,
+  adapterEditionOf,
+} from "@/api/lib/legal-search/adapter-manifest";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import {
@@ -47,6 +52,7 @@ import {
  * search box that points there.
  */
 export type CaseLawCorpusStatus = {
+  countsFreshness?: LegalBrowseFacets["countsFreshness"];
   /**
    * Decisions of the requested country the corpus index serves, so the number
    * beside the search box is the number a search can find. It is read from the
@@ -159,6 +165,7 @@ export const readCaseLawSourceHealthQuery = definePublicLawSharedQuery(
 );
 
 type CorpusStatusLoad = CorpusUpdatedAtRead & {
+  populationVersion?: string;
   /**
    * The facets with their failure kept: a facets read that degraded to an
    * empty set would count as a corpus of zero decisions beside a real
@@ -180,7 +187,10 @@ type CorpusStatusLoad = CorpusUpdatedAtRead & {
  * from and a cached snapshot never states a verdict its window has passed.
  */
 export type CaseLawCorpusSnapshot = Omit<CaseLawCorpusStatus, "health"> & {
-  sources: readonly Pick<CaseLawSourceHealthRow, "enabled" | "lastSyncAt">[];
+  sources: readonly (Pick<CaseLawSourceHealthRow, "enabled" | "lastSyncAt"> & {
+    /** What the source's manifest declares it reads. */
+    edition: AdapterEdition;
+  })[];
 };
 
 const corpusStatusError = (fallback: string) => (cause: unknown) =>
@@ -253,28 +263,37 @@ export const loadCaseLawCorpusSnapshot = async ({
   );
   const withheld = new Set<string>(excludedSourceIds.map(String));
   return Result.ok({
+    ...(facets.value.value.countsFreshness
+      ? { countsFreshness: facets.value.value.countsFreshness }
+      : {}),
     decisions: bucket?.count ?? 0,
     updatedAt: updatedAt.value,
-    sources: sources.value.rows
-      .filter(
-        (source) =>
-          !withheld.has(String(source.id)) &&
-          caseLawSourceJurisdiction(source.adapterKey) === country,
-      )
-      .map(({ enabled, lastSyncAt }) => ({ enabled, lastSyncAt })),
+    sources: sources.value.rows.flatMap(
+      ({ adapterKey, enabled, id, lastSyncAt }) => {
+        // A key no manifest names belongs to no jurisdiction, so the
+        // jurisdiction check already drops it; the edition read states it.
+        const edition = adapterEditionOf(adapterKey);
+        return edition === null ||
+          withheld.has(String(id)) ||
+          caseLawSourceJurisdiction(adapterKey) !== country
+          ? []
+          : [{ edition, enabled, lastSyncAt }];
+      },
+    ),
   });
 };
 
 /** The snapshot as the badge states it at `now`. */
 export const caseLawCorpusStatusAt = (
-  { decisions, updatedAt, sources }: CaseLawCorpusSnapshot,
+  { decisions, updatedAt, sources, countsFreshness }: CaseLawCorpusSnapshot,
   now: Date,
 ): CaseLawCorpusStatus => ({
+  ...(countsFreshness ? { countsFreshness } : {}),
   decisions,
   updatedAt,
   health: caseLawCountryHealth(
-    sources.map(({ enabled, lastSyncAt }) =>
-      caseLawSourceHealth({ enabled, lastSyncAt, now }),
+    sources.map(({ edition, enabled, lastSyncAt }) =>
+      caseLawSourceHealth({ edition, enabled, lastSyncAt, now }),
     ),
   ),
 });
@@ -292,17 +311,26 @@ const corpusStatus = createTtlResultCache({
   load: loadCaseLawCorpusSnapshot,
   // Source policy is an input to the answer, so a revocation changes the key
   // instead of waiting out the window; sorted because the set has no order.
-  key: ({ country, excludedSourceIds }: CorpusStatusLoad) =>
-    `${country}:${excludedSourceIds.toSorted().join(",")}`,
+  key: ({ country, excludedSourceIds, populationVersion }: CorpusStatusLoad) =>
+    `${populationVersion ?? ""}:${country}:${excludedSourceIds.toSorted().join(",")}`,
   ttlMs: STATUS_CACHE_TTL_MS,
   failureTtlMs: STATUS_CACHE_FAILURE_TTL_MS,
   maxEntries: STATUS_CACHE_MAX_ENTRIES,
 });
 
 const EMPTY_STATUS: CaseLawCorpusStatus = {
+  countsFreshness: { status: "unavailable" },
   decisions: 0,
   updatedAt: null,
   health: CASE_LAW_COVERAGE_HEALTH.UNKNOWN,
+};
+
+/** The status is a hint beside the box, not the page: degrade to "unknown". */
+const unavailableCorpusStatus = (error: unknown): CaseLawCorpusStatus => {
+  logger.warn("case_law.corpus_status.unavailable", {
+    "error.type": errorTag(error),
+  });
+  return EMPTY_STATUS;
 };
 
 export const readCaseLawCorpusStatusHandler = async (
@@ -328,16 +356,24 @@ export const readCaseLawCorpusStatusHandler = async (
   // revocation changes the key rather than waiting out the window.
   const excludedSourceIds = await readNonRedistributableCaseLawSourceIds();
   if (Result.isError(excludedSourceIds)) {
-    logger.warn("case_law.corpus_status.unavailable", {
-      "error.type": errorTag(excludedSourceIds.error),
-    });
-    return EMPTY_STATUS;
+    return unavailableCorpusStatus(excludedSourceIds.error);
   }
 
+  const facets = await readBrowseFacetsUnderPolicy({
+    country: publicCountry,
+    excludedSourceIds: excludedSourceIds.value,
+  });
+  if (Result.isError(facets)) {
+    return unavailableCorpusStatus(facets.error);
+  }
   const result = await corpusStatus({
     country: publicCountry,
     excludedSourceIds: excludedSourceIds.value,
-    readFacets: readBrowseFacetsUnderPolicy,
+    populationVersion: populationCountsCacheVersion(
+      facets.value.countsFreshness ??
+        panic("Maintained facets returned no population freshness"),
+    ),
+    readFacets: async () => await Promise.resolve(facets),
     readUpdatedAt: async (read) =>
       await caseLawDb(
         async (tx) => await readCaseLawCorpusStatusQuery(tx, read),
@@ -345,11 +381,7 @@ export const readCaseLawCorpusStatusHandler = async (
     readSources: async () => await caseLawDb(readCaseLawSourceHealthQuery),
   });
   if (Result.isError(result)) {
-    // The status is a hint beside the box, not the page: degrade to "unknown".
-    logger.warn("case_law.corpus_status.unavailable", {
-      "error.type": errorTag(result.error),
-    });
-    return EMPTY_STATUS;
+    return unavailableCorpusStatus(result.error);
   }
 
   return caseLawCorpusStatusAt(result.value, new Date());

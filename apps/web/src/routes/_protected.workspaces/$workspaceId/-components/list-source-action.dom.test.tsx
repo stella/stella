@@ -75,6 +75,8 @@ const files = [
     mimeType: DOCX_MIME,
   },
 ];
+const utcTimeZone =
+  parseTimeZoneId("UTC") ?? panic("UTC fixture must be a supported time zone");
 const settings = {
   declaredFeatureIds: ["legal-lists", "list-verification"],
   deploymentFeatures: { legalLists: true },
@@ -91,9 +93,8 @@ const settings = {
   timeEditWindowDays: 30,
   timeLockedThroughMonth: null,
   timeNarrativeRequired: false,
-  timeZone:
-    parseTimeZoneId("UTC") ??
-    panic("UTC fixture must be a supported time zone"),
+  timeZone: utcTimeZone,
+  primaryJurisdictionTimeZone: utcTimeZone,
   timeZoneSource: "organization",
 } satisfies OrganizationSettings;
 

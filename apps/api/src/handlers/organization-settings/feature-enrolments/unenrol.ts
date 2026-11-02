@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { featureEnrolments } from "@/api/db/schema";
+import { detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -12,6 +13,7 @@ import {
   FEATURE_REGISTRY,
   SELF_SERVE_FEATURE_IDS,
 } from "@/api/lib/feature-access/registry";
+import { publishMcpToolProjectionChange } from "@/api/mcp/tool-freshness";
 
 const config = {
   contract: "patch",
@@ -66,6 +68,13 @@ export default createSafeRootHandler(
           },
         });
       }),
+    );
+    detached(
+      publishMcpToolProjectionChange({
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+      }),
+      "mcp.feature-unenrolment-tool-projection",
     );
     return Result.ok({ featureId: params.featureId, enrolled: false });
   },

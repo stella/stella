@@ -79,6 +79,7 @@
     "scripts/check-marketing-content.ts",
     "scripts/check-marketing-recordings.test.ts",
     "scripts/check-marketing-recordings.ts",
+    "scripts/check-mcp-app-outputs.ts",
     "scripts/check-mcp-generated-tracking.ts",
     "scripts/check-migration-order.test.ts",
     "scripts/check-migration-order.ts",

@@ -59,6 +59,7 @@ import {
   MCP_PUBLIC_CORPUS_CLASS,
 } from "@/api/mcp/static-tool-definitions";
 import { scopeToolResultToSurface } from "@/api/mcp/surface-tool-mentions";
+import { runToolWithRealtime } from "@/api/mcp/tool-realtime";
 import type {
   InternalToolResult,
   McpToolDefinition,
@@ -67,6 +68,7 @@ import type {
   ToolScope,
 } from "@/api/mcp/tool-types";
 import {
+  caseLawSearchTimeoutResult,
   confirmationUnavailableResult,
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
@@ -648,9 +650,11 @@ const dispatchMcpToolCall = async ({
           const executionContext = requiresConfirmation
             ? bindApprovedMcpAuditContext(authorizedContext)
             : authorizedContext;
-          const response = await handler({
+          const response = await runToolWithRealtime({
             args: normalizedArgs,
             context: executionContext,
+            handler,
+            toolName,
           });
           const finalized = await finalizeToolEgress(
             {
@@ -737,6 +741,13 @@ const internalErrorResult = ({
   if (publicReadTimeoutError(error) !== null) {
     return serializeToolResult(
       internalFailureResult(error, "mcp.internalErrorResult"),
+    );
+  }
+  const timeout =
+    toolName === "search_case_law" ? caseLawSearchTimeoutResult(error) : null;
+  if (timeout !== null) {
+    return serializeToolResult(
+      scopeToolResultToSurface(timeout, { mode, context }),
     );
   }
   if (contractViolation !== undefined) {

@@ -22,6 +22,7 @@ import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-n
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+  CZ_TAKTO,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: The output is typed as a decision document AST; the emitted AST is unchanged.
@@ -32,6 +33,7 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
+import { withAttestedLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
   continuesAcrossPageBreak,
   isRunningHeaderLine,
@@ -159,8 +161,7 @@ export const parseRegionalDecision = (
   for (const { inlines, plainText } of header) {
     blockIndex += 1;
     blocks.push(
-      isDecisionTypeTitle(plainText) ||
-        compactTitle(plainText) === IN_THE_NAME_OF_THE_REPUBLIC
+      isDecisionTypeTitle(plainText)
         ? {
             id: makeBlockId(),
             anchorId: `h-${blockIndex}`,
@@ -183,15 +184,16 @@ export const parseRegionalDecision = (
 
   // ── Verdict (ruling items) ───────────────────────────
   if (verdict.length > 0) {
+    // The lead-in to the operative part is the court's sentence ending, not
+    // a section of its own.
     blockIndex += 1;
     blocks.push({
       id: makeBlockId(),
-      anchorId: `h-${blockIndex}`,
-      type: "heading",
-      level: 2,
-      role: "section-heading",
-      inlines: textInline("takto:"),
-      plainText: "takto:",
+      anchorId: `p-${blockIndex}`,
+      type: "paragraph",
+      role: "intro",
+      inlines: textInline(CZ_TAKTO),
+      plainText: CZ_TAKTO,
     });
 
     for (const { inlines, plainText } of verdict) {
@@ -245,7 +247,11 @@ export const parseRegionalDecision = (
       plainText: "Poučení:",
     });
 
-    for (const { inlines, plainText } of information) {
+    // The synthesized heading stands for a label the court printed itself.
+    for (const { inlines, plainText } of information.filter(
+      ({ plainText: text }, index) =>
+        index > 0 || !INSTRUCTION_LABEL_RE.test(text),
+    )) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -257,7 +263,7 @@ export const parseRegionalDecision = (
     }
   }
 
-  const numbered = courtParagraphNumbers(blocks, {
+  const numbered = courtParagraphNumbers(withAttestedLetterSpacing(blocks), {
     parser: "cz-regional",
     caseNumber: input.caseNumber,
     url: input.sourceUrl,
@@ -313,8 +319,6 @@ const COMPACT_DECISION_TYPE_TITLES: ReadonlySet<string> = new Set(
   DECISION_TYPE_TITLES.map(compactTitle),
 );
 
-const IN_THE_NAME_OF_THE_REPUBLIC = compactTitle("JMÉNEM REPUBLIKY");
-
 const isDecisionTypeTitle = (text: string): boolean =>
   COMPACT_DECISION_TYPE_TITLES.has(compactTitle(text));
 
@@ -350,6 +354,9 @@ const withoutPageFurniture = (
   }
   return kept;
 };
+
+/** The court's own `Poučení:` label, alone in its paragraph. */
+const INSTRUCTION_LABEL_RE = /^P\s*o\s*u\s*č\s*e\s*n\s*í\s*:?$/iu;
 
 const OPENING_QUOTE = "„";
 const SPACE_RE = /^[ \t ]$/u;

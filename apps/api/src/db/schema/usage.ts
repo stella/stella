@@ -109,6 +109,10 @@ const USAGE_EVENT_LANE_SQL_VALUES = USAGE_EVENT_LANES.map((lane) =>
   sql.raw(`'${lane}'`),
 );
 
+const USAGE_ACTION_TYPE_SQL_VALUES = USAGE_ACTION_TYPES.map((actionType) =>
+  sql.raw(`'${actionType}'`),
+);
+
 const USAGE_LANE_COUNTER_KIND_SQL_VALUES = USAGE_LANE_COUNTER_KINDS.map(
   (kind) => sql.raw(`'${kind}'`),
 );
@@ -799,6 +803,10 @@ export const usageEvents = p.pgTable(
       sql`(action_kind IS NULL) = (logical_phase_id IS NULL)`,
     ),
     p.check("usage_events_units_nonneg", sql`units_consumed >= 0`),
+    p.check(
+      "usage_events_action_type_domain",
+      sql`action_type IN (${sql.join(USAGE_ACTION_TYPE_SQL_VALUES, sql`, `)})`,
+    ),
     p.check("usage_events_period_order", sql`period_end > period_start`),
     p.check(
       "usage_events_lane_domain",

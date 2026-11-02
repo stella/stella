@@ -26,6 +26,7 @@ export const OAUTH_REGISTRATION_SCOPE_POLICY = {
   // Personal-data exports require an operator-approved client registration.
   "stella:account_export_read": "elevated",
   "stella:account_export_write": "elevated",
+  "stella:organization_create": "elevated",
   "stella:onboarding": "open",
   "stella:skills": "open",
   "stella:external_mcps": "elevated",

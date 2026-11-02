@@ -262,7 +262,7 @@ test("an unavailable flex control keeps its layout and remains explanatory", asy
   fireEvent.click(control);
   expect(
     await screen.findByRole("link", {
-      name: messages.organization.aiConfig.configure,
+      name: messages.capabilityActions.openSettings,
     }),
   ).toBeTruthy();
   fireEvent.keyDown(control, { key: "Escape" });
@@ -272,7 +272,7 @@ test("an unavailable flex control keeps its layout and remains explanatory", asy
   fireEvent.keyDown(control, { key: "Enter" });
   expect(
     await screen.findByRole("link", {
-      name: messages.organization.aiConfig.configure,
+      name: messages.capabilityActions.openSettings,
     }),
   ).toBeTruthy();
 });
@@ -453,7 +453,7 @@ for (const fixture of surfaces) {
             expect(control.classList.contains("opacity-64")).toBe(true);
             expect(
               screen.queryByRole("link", {
-                name: messages.organization.aiConfig.configure,
+                name: messages.capabilityActions.openSettings,
               }),
             ).toBeNull();
             fireEvent.click(control);
@@ -468,7 +468,7 @@ for (const fixture of surfaces) {
           }
           const settingsItems = await screen.findAllByRole(
             fixture.surface === "menu" ? "menuitem" : "link",
-            { name: messages.organization.aiConfig.configure },
+            { name: messages.capabilityActions.openSettings },
           );
           if (state.type === "unavailable") {
             expect(
@@ -498,7 +498,7 @@ for (const fixture of surfaces) {
           if (fixture.surface === "control") {
             expect(
               await screen.findByRole("link", {
-                name: messages.organization.aiConfig.configure,
+                name: messages.capabilityActions.openSettings,
               }),
             ).toBeTruthy();
           }

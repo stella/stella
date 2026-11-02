@@ -11,7 +11,10 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 
 import messages from "@/i18n/langs/en.json";
 import type { Role } from "@/lib/auth-client";
-import { inviteMemberSchema } from "@/lib/organization/role-assignment.logic";
+import {
+  defaultInviteRole,
+  inviteMemberSchema,
+} from "@/lib/organization/role-assignment.logic";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/admin/members",
@@ -167,7 +170,7 @@ describe("mounted membership role controls", () => {
         await submitInvitation();
         expect(requests.at(0)?.body).toMatchObject({
           email: "member@example.com",
-          role: assignableRoles(actorRole).at(-1),
+          role: defaultInviteRole(assignableRoles(actorRole)),
         });
       });
     }

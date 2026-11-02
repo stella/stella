@@ -9,6 +9,7 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+import { READER_BREADCRUMB_CLEARANCE } from "@stll/decision-reader/reader-landing";
 import {
   type DecisionAnalysis,
   parsePersistedDecisionAnalysis,
@@ -301,7 +302,12 @@ const installWorkspaceServer = () => {
         return Response.json(aiAvailableResponse());
       }
       if (path.endsWith("/workspaces/navigation")) {
-        return Response.json({ items: [], nextCursor: null, workspaces: [] });
+        return Response.json({
+          items: [],
+          nextCursor: null,
+          workspaces: [],
+          features: { timeBilling: false },
+        });
       }
       if (/\/chat\/threads\/[^/]+\/messages$/u.test(path)) {
         return Response.json({ message: "Not found" }, { status: 404 });
@@ -390,7 +396,10 @@ test("an inline holding reference highlights its full range and scrolls to its s
 
   fireEvent.click(view.getByRole("button", { name: "Paragraph 9–12" }));
 
-  expect(scrollTo).toHaveBeenCalledWith({ top: 87, behavior: "instant" });
+  expect(scrollTo).toHaveBeenCalledWith({
+    top: 87 - READER_BREADCRUMB_CLEARANCE,
+    behavior: "instant",
+  });
   for (const anchorId of ["p-2", "p-3", "p-4"]) {
     expect(
       view.container.querySelector<HTMLElement>(`#${anchorId}`)?.dataset[

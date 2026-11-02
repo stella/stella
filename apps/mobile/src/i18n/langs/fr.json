@@ -40,6 +40,19 @@
     "answerNeedsInput": "Cette réponse attend votre intervention. Poursuivez-la dans stella sur le web.",
     "answerFailed": "La réponse n’a pas pu être terminée.",
     "composerMenu": "Ouvrir le menu des pièces jointes et des outils",
+    "attachFile": "Joindre un fichier",
+    "attachment": "Pièce jointe",
+    "fileTooLarge": "Le fichier dépasse la limite de {maxSize}",
+    "maxAttachmentsReached": "Maximum {count} fichiers par message",
+    "unsupportedFileType": "Type de fichier non pris en charge",
+    "uploadFailed": "Échec du traitement du fichier",
+    "scanDocument": "Numériser un document",
+    "removeAttachment": "Retirer {name}",
+    "attachmentReading": "Préparation…",
+    "attachmentUploading": "Envoi…",
+    "pickFailed": "Impossible d’ouvrir le sélecteur de fichiers. Réessayez.",
+    "sendFileRefused": "Un fichier n’a pas pu être envoyé, donc le message n’a pas été envoyé. Retirez le fichier et réessayez.",
+    "sendFileNotAnonymizable": "Cette conversation est anonymisée et stella n’a pas pu anonymiser l’un des fichiers, donc rien n’a été envoyé. Retirez le fichier et réessayez.",
     "pickTitle": "Choisissez une conversation",
     "pickDescription": "Choisissez un fil dans la liste ou démarrez-en un avec +."
   },
@@ -61,7 +74,8 @@
       "none": "Sans date",
       "today": "Aujourd’hui",
       "tomorrow": "Demain",
-      "nextWeek": "Dans une semaine"
+      "nextWeek": "Dans une semaine",
+      "pick": "Choisir une date"
     },
     "due": {
       "overdue": "En retard",
@@ -76,7 +90,14 @@
     "statusFailed": "La tâche n’a pas pu être modifiée. Réessayez.",
     "pickTitle": "Choisissez une tâche",
     "pickDescription": "Choisissez une tâche dans la liste pour l’afficher ici.",
-    "openMatter": "Ouvrir le dossier"
+    "openMatter": "Ouvrir le dossier",
+    "assignedTo": "Attribuée à",
+    "nobody": "Non attribué",
+    "assign": "Attribuer",
+    "doneAssigning": "Terminé",
+    "someone": "Quelqu’un",
+    "membersFailed": "Les membres du dossier n’ont pas pu être chargés.",
+    "assignFailed": "La tâche n’a pas pu être attribuée. Réessayez."
   },
   "matters": {
     "emptyTitle": "Aucun dossier pour le moment",
@@ -120,7 +141,9 @@
     },
     "add": "Ajouter",
     "scanDocument": "Numériser un document",
-    "newTask": "Nouvelle tâche"
+    "newTask": "Nouvelle tâche",
+    "uploadDocument": "Téléverser un document",
+    "uploadFailed": "Le document n’a pas pu être importé. Réessayez."
   },
   "entity": {
     "type": "Type",
@@ -142,7 +165,16 @@
     "preview": "Ouvrir l’aperçu",
     "previewDescription": "Ce fichier s’ouvre dans l’aperçu du système.",
     "unrendered": "Ce document ne peut pas être affiché ici, mais l’aperçu du système pourra peut-être l’ouvrir.",
-    "details": "Détails"
+    "details": "Détails",
+    "zoomOut": "Zoom arrière",
+    "zoomIn": "Zoom avant",
+    "zoomFit": "Ajuster à la largeur",
+    "fit": "Largeur",
+    "appearance": {
+      "system": "Apparence : automatique",
+      "light": "Apparence : claire",
+      "dark": "Apparence : sombre"
+    }
   },
   "signIn": {
     "beta": "Bêta",
@@ -170,7 +202,8 @@
     "server": "Serveur",
     "signOut": "Se déconnecter",
     "deleteAccount": "Supprimer le compte",
-    "deleteAccountHint": "Ouvre votre compte sur le web, où vous pouvez le supprimer avec tout ce qui vous appartient."
+    "deleteAccountHint": "Ouvre votre compte sur le web, où vous pouvez le supprimer avec tout ce qui vous appartient.",
+    "signOutFailed": "La déconnexion n’a pas pu aboutir. Réessayez."
   },
   "header": {
     "search": "Rechercher"
@@ -184,6 +217,7 @@
     "headnote": "Sommaire",
     "textUnavailable": "Aucun texte n'est disponible pour cette décision",
     "openSource": "Ouvrir la source d’origine",
+    "openFailed": "Le lien n’a pas pu être ouvert.",
     "loadFailed": "Impossible de charger la jurisprudence.",
     "share": "Partager"
   },
@@ -269,6 +303,29 @@
   "palette": {
     "placeholder": "Rechercher des dossiers et des conversations, ou lancer une commande",
     "noResults": "Aucun résultat pour « {query} »"
+  },
+  "search": {
+    "placeholder": "Rechercher dans stella",
+    "clear": "Effacer la recherche",
+    "cancel": "Annuler",
+    "recent": "Recherches récentes",
+    "clearRecent": "Effacer",
+    "hint": "Recherchez dans vos dossiers, documents, tâches, conversations et la jurisprudence.",
+    "filters": "Filtres",
+    "noResultsTitle": "Aucun résultat",
+    "noResults": "Aucun résultat pour « {query} ». Essayez d’autres mots ou retirez un filtre.",
+    "loadFailed": "La recherche n’a pas pu être effectuée.",
+    "retry": "Réessayer",
+    "type": {
+      "document": "Documents",
+      "matter": "Dossiers",
+      "task": "Tâches",
+      "caseLaw": "Jurisprudence",
+      "chat": "Conversations",
+      "folder": "Classeurs",
+      "message": "E-mails",
+      "link": "Liens"
+    }
   },
   "pane": {
     "showList": "Afficher la liste",

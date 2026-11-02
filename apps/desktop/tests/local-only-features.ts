@@ -9,7 +9,7 @@ export const LOCAL_ONLY_FEATURES = [
   {
     callerType: "ClipboardCaller",
     commandOwners: [
-      { module: "src/clipboard_commands.rs", prefix: "clipboard_" },
+      { module: "src/clipboard_commands.rs", prefixes: ["clipboard_"] },
     ],
     id: "clipboard",
     /**
@@ -40,8 +40,13 @@ export const LOCAL_ONLY_FEATURES = [
   {
     callerType: "ActivityCaller",
     commandOwners: [
-      { module: "src/activity_commands.rs", prefix: "activity_" },
-      { module: "src/time_entry_commands.rs", prefix: "time_entry_" },
+      { module: "src/activity_commands.rs", prefixes: ["activity_"] },
+      // The confirmation boundary also owns the one command that sends a
+      // suggestion's approved titles out for a stella AI description.
+      {
+        module: "src/time_entry_commands.rs",
+        prefixes: ["time_entry_", "activity_generate_narrative"],
+      },
     ],
     id: "activity",
     telemetry: "fixedCodes",
@@ -54,13 +59,33 @@ export const LOCAL_ONLY_FEATURES = [
     windowModules: {
       "src-tauri/capabilities/activity.json": [
         "src/activity/ActivityApp.tsx",
-        "src/activity/ActivityDayReview.tsx",
-        "src/activity/ActivityTimeline.tsx",
+        "src/activity/ActivityCaptureDetails.tsx",
+        "src/activity/ActivityDayCalendar.tsx",
+        "src/activity/ActivitySuggestionCard.tsx",
         "src/activity/MatterPicker.tsx",
+        "src/activity/activity-calendar-logic.ts",
         "src/activity/day-review-logic.ts",
       ],
     },
     windows: ["activity"],
+  },
+  {
+    // Activity settings and deletion, also offered in the Settings window.
+    // None of these commands returns the timeline.
+    callerType: "ActivitySettingsCaller",
+    commandOwners: [
+      { module: "src/activity_settings.rs", prefixes: ["activity_"] },
+    ],
+    id: "activity_settings",
+    telemetry: "fixedCodes",
+    nativeModules: [],
+    windowModules: {
+      "src-tauri/capabilities/default.json": [
+        "src/activity/ActivitySettings.tsx",
+        "src/activity/ActivityCaptureDetails.tsx",
+      ],
+    },
+    windows: ["activity", "main"],
   },
 ] as const;
 
