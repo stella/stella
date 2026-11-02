@@ -139,6 +139,12 @@ const colourExemptions = [
   },
   {
     reason:
+      "The press kit's released swatches: published values a reader copies, " +
+      "changed only with a deliberate brand release.",
+    files: ["apps/landing/src/lib/press-kit-swatches.ts"],
+  },
+  {
+    reason:
       "Document data: a user's file, a source's markup, a sample document or " +
       "a file format's own default.",
     files: [

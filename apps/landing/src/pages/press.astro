@@ -1,6 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import LandingFooter from "../components/LandingFooter.astro";
+import { PRESS_KIT_SWATCHES } from "../lib/press-kit-swatches";
 
 const contactEmail = "jan.kubica@stll.app";
 
@@ -53,21 +54,6 @@ const logoTiles: LogoTile[] = [
     svg: "/brand/stella-symbol-white.svg",
     png: "/brand/stella-symbol-white.png",
   },
-];
-
-type Swatch = {
-  name: string;
-  description: string;
-  hex: string;
-};
-
-// The swatches published to press, kept as released rather than read from
-// @stll/brand: a press kit's values change only with a deliberate brand release.
-const swatches: Swatch[] = [
-  { name: "Soft Blue", hex: "#CFE1F9", description: "Hero washes, headers, supporting accent." },
-  { name: "Pale Blue", hex: "#E6F6FC", description: "Backgrounds, surfaces, light callouts." },
-  { name: "Blue Accent", hex: "#6B9FD0", description: "Primary accent — buttons, links, focus." },
-  { name: "Black", hex: "#000000", description: "Wordmark, primary text, highest contrast." },
 ];
 
 const gradients = [
@@ -271,7 +257,7 @@ const gradients = [
             <p class="text-xs" style="color: var(--muted-foreground)">Click a hex to copy</p>
           </div>
           <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {swatches.map((s) => (
+            {PRESS_KIT_SWATCHES.map((s) => (
               <div class="flex flex-col overflow-hidden rounded-2xl" style="border: 1px solid var(--border)">
                 <div class="h-32" style={`background: ${s.hex}`}></div>
                 <div class="flex flex-col gap-1 px-4 py-3" style="background: var(--card); border-top: 1px solid var(--border)">
