@@ -110,6 +110,7 @@ const decisions = Array.from(
         slug: null,
         decisionDate: "2026-01-01",
         decisionType: null,
+        decisionTypeKind: null,
         headline: null,
         headnote: {
           type: TEXT_FIELD_TYPE.ABSENT,

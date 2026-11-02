@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/node";
 
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 const API_BASE_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
 const WEB_BASE_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
@@ -26,7 +27,7 @@ const readClientId = (value: unknown): string => {
   return value.client_id;
 };
 
-const registerBrowserClient = async (
+const registerBrowserExtension = async (
   request: APIRequestContext,
   token: string,
 ): Promise<string> => {
@@ -57,7 +58,7 @@ test("the real OAuth authorization redirect keeps its signed query in the fragme
   });
 
   try {
-    const clientId = await registerBrowserClient(apiRequest, token);
+    const clientId = await registerBrowserExtension(apiRequest, token);
     const authorizeUrl = new URL(`${AUTH_BASE_URL}/oauth2/authorize`);
     authorizeUrl.searchParams.set("client_id", clientId);
     authorizeUrl.searchParams.set("code_challenge", challenge);
@@ -84,7 +85,7 @@ test("the real OAuth authorization redirect keeps its signed query in the fragme
     await page.goto(authorizeUrl.toString(), { waitUntil: "commit" });
     const authorizeResponse = await authorizeResponsePromise;
     await expect(page.getByRole("heading", { name: /sign in/iu })).toBeVisible({
-      timeout: 30_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
     const locationHeader = authorizeResponse.headers()["location"];
     expect(locationHeader).toBeDefined();

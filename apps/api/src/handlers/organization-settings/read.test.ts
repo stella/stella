@@ -1,6 +1,8 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { parseTimeZoneId } from "@stll/time";
 
 import { env } from "@/api/env";
 import readOrganizationSettings, {
@@ -28,6 +30,11 @@ const emptySnapshot = createFeatureAccessSnapshot({
   userId: "user_test",
   decisions: new Map(),
 });
+const TOKYO_TIME_ZONE =
+  parseTimeZoneId("Asia/Tokyo") ?? panic("Runtime does not know Asia/Tokyo");
+const PRAGUE_TIME_ZONE =
+  parseTimeZoneId("Europe/Prague") ??
+  panic("Runtime does not know Europe/Prague");
 
 // Identity resolves through the member join; the enrolment read finds no rows.
 const unenrolledSettingsDatabase = (email: string) =>
@@ -62,7 +69,7 @@ describe("projectOrganizationSettingsRow", () => {
         timeEditWindowDays: 90,
         timeLockedThroughMonth: null,
         timeNarrativeRequired: true,
-        timeZone: null,
+        timeZone: TOKYO_TIME_ZONE,
       },
       emptySnapshot,
     );
@@ -71,6 +78,8 @@ describe("projectOrganizationSettingsRow", () => {
       { countryCode: "CZ", isPrimary: true },
       { countryCode: "SK", isPrimary: false },
     ]);
+    expect(result.timeZone).toBe(TOKYO_TIME_ZONE);
+    expect(result.primaryJurisdictionTimeZone).toBe(PRAGUE_TIME_ZONE);
     expect(result.documentProcessingMode).toBe("searchable-text");
     expect(result.managedAIResidency).toBe("us");
   });

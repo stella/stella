@@ -32,3 +32,63 @@ test("accessible-disabled styling preserves activation", () => {
   expect(onClick).toHaveBeenCalledTimes(1);
   expect(onKeyDown).toHaveBeenCalledTimes(1);
 });
+
+test("a text label is one run cut to the button's width", () => {
+  const matter = "Dunaj";
+  const view = render(
+    <Button>
+      <svg aria-hidden="true" data-testid="glyph" />
+      Open {matter} matter
+    </Button>,
+  );
+
+  const button = view.getByRole("button", { name: "Open Dunaj matter" });
+  expect(button.classList.contains("max-w-full")).toBe(true);
+  const labels = button.querySelectorAll('[data-slot="button-label"]');
+  expect(labels).toHaveLength(1);
+  expect(labels[0]?.textContent).toBe("Open Dunaj matter");
+  // The glyph stays a sibling of the label, not inside it.
+  expect(view.getByTestId("glyph").parentElement).toBe(button);
+});
+
+const OpenMatter = ({ withGlyph }: { withGlyph: boolean }) => (
+  <Button>
+    Open {withGlyph && <svg aria-hidden="true" />}
+    {null} matter
+  </Button>
+);
+
+test("children that render nothing do not split a label", () => {
+  const view = render(<OpenMatter withGlyph={false} />);
+
+  const button = view.getByRole("button", { name: "Open matter" });
+  const labels = button.querySelectorAll('[data-slot="button-label"]');
+  expect(labels).toHaveLength(1);
+  expect(labels[0]?.textContent).toBe("Open  matter");
+});
+
+test("labels that wrap, sit in a sentence or lay out their own content are not cut", () => {
+  const view = render(
+    <>
+      <Button layout="wrap">Wrapping label</Button>
+      <Button size="inline">Inline label</Button>
+      <Button variant="link">Link label</Button>
+      <Button variant="plain">Plain label</Button>
+      <Button aria-label="Icon label" size="icon">
+        <svg aria-hidden="true" />
+      </Button>
+    </>,
+  );
+
+  for (const name of [
+    "Wrapping label",
+    "Inline label",
+    "Link label",
+    "Plain label",
+    "Icon label",
+  ]) {
+    const button = view.getByRole("button", { name });
+    expect(button.querySelector('[data-slot="button-label"]')).toBeNull();
+    expect(button.classList.contains("max-w-full")).toBe(true);
+  }
+});

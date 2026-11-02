@@ -1,43 +1,9 @@
 {
-  "accessOff": {
-    "message": "Juurdepääs veebisaitidele on välja lülitatud. Anna see üks kord, et stella saaks kasutada saite, kuhu oled sisse loginud."
-  },
-  "accessReady": {
-    "message": "Valmis. stella saab kasutada eraldi vahekaarti ja sinu sisselogimised jäävad alles."
-  },
   "accessUpdateFailed": {
     "message": "Chrome ei saanud veebisaitide juurdepääsu muuta."
   },
-  "adoptTab": {
-    "message": "Kasuta seda vahekaarti stellaga"
-  },
   "adoptUnsupported": {
     "message": "stellaga saab kasutada ainult avalikke HTTPS-lehti."
-  },
-  "adoptedTab": {
-    "message": "stella saab nüüd sellel vahekaardil lugeda saiti $ORIGIN$. Küsi selle kohta vestluses.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "checkingAccess": {
-    "message": "Veebisaitide juurdepääsu kontrollimine…"
-  },
-  "connectTab": {
-    "message": "Ühenda praegune stella vahekaart"
-  },
-  "controllerReady": {
-    "message": "Ühendatud: $ORIGIN$. Iga toiming vajab endiselt stellas kinnitamist.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "disconnectTab": {
-    "message": "Katkesta vahekaardi ühendus"
   },
   "downloadKept": {
     "message": "Allalaadimised, mis lõppesid, kui stella vahekaarti juhtis, ja jäeti alles: $COUNT$. Enne avamist kontrolli, kust need pärinevad.",
@@ -72,13 +38,68 @@
   "extensionName": {
     "message": "stella"
   },
-  "grantAccess": {
-    "message": "Luba kõik veebisaidid"
-  },
-  "revokeAccess": {
-    "message": "Eemalda veebisaitide juurdepääs"
-  },
   "unsupportedTab": {
     "message": "Ava stella rakenduse vahekaart ja proovi uuesti."
+  },
+  "connectionPurpose": {
+    "message": "Kui seda vestluses palute, saab stella avada ja lugeda veebisaite eraldi vahekaardil teie sisselogimistega."
+  },
+  "statusConnected": {
+    "message": "Ühendatud: $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "statusNotConnected": {
+    "message": "Pole ühendatud"
+  },
+  "statusWebsiteAccessNeeded": {
+    "message": "Vajalik on juurdepääs veebisaitidele"
+  },
+  "statusOpenStella": {
+    "message": "Ühendamiseks avage stella"
+  },
+  "statusTabHandedOver": {
+    "message": "Vahekaart anti stellale: $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "allowAndConnect": {
+    "message": "Luba juurdepääs ja ühenda"
+  },
+  "allowWebsiteAccess": {
+    "message": "Luba juurdepääs veebisaitidele"
+  },
+  "connectStella": {
+    "message": "Ühenda stella"
+  },
+  "adoptTab": {
+    "message": "Kasuta seda vahekaarti stellaga"
+  },
+  "disconnectTab": {
+    "message": "Katkesta ühendus"
+  },
+  "disconnectDescription": {
+    "message": "stella lõpetab ühendatud vahekaardi kasutamise."
+  },
+  "revokeAccess": {
+    "message": "Eemalda juurdepääs veebisaitidele"
+  },
+  "revokeDescription": {
+    "message": "Eemaldab veebisaitide avamise ja lugemise loa."
+  },
+  "checkingAccess": {
+    "message": "Ühenduse kontrollimine…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "stella on ühendatud teisel aadressil"
+  },
+  "connectStellaInstead": {
+    "message": "Ühenda stella hoopis siin"
   }
 }

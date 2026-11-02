@@ -176,6 +176,7 @@ pub async fn candidates(
   Ok(result.matters)
 }
 
+// The API contract's narrative limits (`desktop-time-entries.ts`). Its
 impl ConfirmedBatch {
   pub fn validate(&self) -> Result<(), String> {
     if self.idempotency_key.is_empty()

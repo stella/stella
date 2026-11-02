@@ -486,14 +486,12 @@ export const QuestionColumnSelectionBar = ({
     return null;
   }
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
-      <AiColumnSelectionAction
-        columns={surface.columns.length}
-        rows={scope.count}
-        disabled={surface.isRunning}
-        onRun={surface.onRunSelectedRows}
-      />
-    </div>
+    <AiColumnSelectionAction
+      columns={surface.columns.length}
+      rows={scope.count}
+      disabled={surface.isRunning}
+      onRun={surface.onRunSelectedRows}
+    />
   );
 };
 

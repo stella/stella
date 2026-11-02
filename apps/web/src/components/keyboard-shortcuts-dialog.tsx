@@ -304,12 +304,14 @@ const RebindableBinding = ({
         {formatShortcutBinding({ type: "hotkey", hotkey }, hotkeyPlatform)}
       </kbd>
       <Button
-        // Coarse pointers show the edit action at rest; mouse and keyboard
-        // users reveal it through hover or focus.
+        // Coarse pointers show the edit action at rest; mouse users reveal it
+        // on hover, keyboard users on focus-visible. Not focus-within: the
+        // dialog focuses the first row's button on open, which would pin it
+        // visible there for mouse users.
         aria-label={t("navigation.shortcutsDialog.editShortcut")}
         className={cn(
           "text-muted-foreground opacity-0 transition-opacity",
-          "group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100",
+          "group-hover:opacity-100 pointer-coarse:opacity-100",
           "focus-visible:opacity-100",
         )}
         disabled={isBusy}

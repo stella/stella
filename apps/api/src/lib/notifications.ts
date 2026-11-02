@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { newNotificationRealtimeEvent } from "@stll/api-contract";
+import { isMobilePushKind } from "@stll/api-contract/mobile-push";
 import type {
   NOTIFICATION_KIND,
   NotificationEntityType,
@@ -18,6 +19,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { LIMITS } from "@/api/lib/limits";
+import { schedulePushDeliveries } from "@/api/lib/push/push-delivery-queue";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcastToUser } from "@/api/lib/sse";
 
@@ -48,6 +50,11 @@ type TotalEntityRefMap<
 type NotificationEntityRefByKind = TotalEntityRefMap<{
   [NOTIFICATION_KIND.MENTION]: {
     entityType: "entity";
+    entityId: SafeId<"entity">;
+    workspaceId: SafeId<"workspace">;
+  };
+  [NOTIFICATION_KIND.TASK_ASSIGNED]: {
+    entityType: "task";
     entityId: SafeId<"entity">;
     workspaceId: SafeId<"workspace">;
   };
@@ -120,19 +127,28 @@ export type NotificationFanOutDb = {
 };
 
 /**
- * One recipient stream owed a content-free "your notifications changed" ping.
+ * One recipient stream owed a content-free "your notifications changed" ping,
+ * with the notifications this write filed for it.
  *
  * Handed back rather than sent from inside the write so the ping cannot
  * outrun the row it announces: a client answers each event with exactly one
  * re-read, so a ping delivered before its transaction commits buys the reader
- * a stale badge until something unrelated refetches.
+ * a stale badge until something unrelated refetches. The ids are what the
+ * recipient's devices are alerted about, once the same commit has happened.
  */
 export type NotificationPing = {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
+  /**
+   * Rows this write inserted that a phone takes (`MOBILE_PUSH_KINDS`); a
+   * replayed idempotency key adds none.
+   */
+  notificationIds: SafeId<"notification">[];
 };
 
 type NotificationInsertRow = {
+  id: SafeId<"notification">;
+  kind: NotificationKind;
   userId: string;
   organizationId: SafeId<"organization">;
 };
@@ -168,6 +184,8 @@ const insertNotifications = async (
           .values(batch)
           .onConflictDoNothing()
           .returning({
+            id: notifications.id,
+            kind: notifications.kind,
             userId: notifications.userId,
             organizationId: notifications.organizationId,
           }),
@@ -176,21 +194,25 @@ const insertNotifications = async (
   }
 
   // One ping per recipient stream. Collapsed per (user, organization) so an
-  // announcement does not emit a burst to the same tab.
-  const seen = new Set<string>();
-  const pings: NotificationPing[] = [];
+  // announcement does not emit a burst to the same tab; each stream keeps the
+  // ids it was filed.
+  const pings = new Map<string, NotificationPing>();
+  // Only the kinds a phone takes carry their ids on to push.
   for (const row of inserted) {
     const key = `${row.userId}:${row.organizationId}`;
-    if (seen.has(key)) {
-      continue;
+    const ping =
+      pings.get(key) ??
+      ({
+        userId: brandPersistedUserId(row.userId),
+        organizationId: row.organizationId,
+        notificationIds: [],
+      } satisfies NotificationPing);
+    pings.set(key, ping);
+    if (isMobilePushKind(row.kind)) {
+      ping.notificationIds.push(row.id);
     }
-    seen.add(key);
-    pings.push({
-      userId: brandPersistedUserId(row.userId),
-      organizationId: row.organizationId,
-    });
   }
-  return pings;
+  return [...pings.values()];
 };
 
 /**
@@ -252,13 +274,21 @@ export const fanOutCrossUserNotifications = async (
  * back, once the transaction they belong to has committed. The event carries
  * no payload, so a recipient's client answers it by re-reading the ordinary
  * authorized endpoint.
+ *
+ * The same moment queues an alert to each recipient's registered mobile
+ * devices, one per notification. Queueing is detached and captured: a failure
+ * there never reaches the write that filed the notification.
  */
 export const pingNotificationRecipients = (
   pings: readonly NotificationPing[],
+  schedulePush: (
+    notificationIds: readonly SafeId<"notification">[],
+  ) => void = schedulePushDeliveries,
 ): void => {
   for (const { organizationId, userId } of pings) {
     broadcastToUser(userId, organizationId, newNotificationRealtimeEvent());
   }
+  schedulePush(pings.flatMap(({ notificationIds }) => notificationIds));
 };
 
 /**

@@ -8,6 +8,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 
+import { indexedScanNodeType } from "./plan-walker";
 import {
   assertScaleProfileApplied,
   estimateHeapFetches,
@@ -256,7 +257,7 @@ test("heap-fetch estimates use the guarded relation's visibility fraction", () =
   expect(
     estimateHeapFetches(
       {
-        nodeType: "Index Only Scan",
+        nodeType: indexedScanNodeType("index-only"),
         relation: "case_law_citations",
         rows: 1000,
       },
@@ -266,7 +267,7 @@ test("heap-fetch estimates use the guarded relation's visibility fraction", () =
   expect(
     estimateHeapFetches(
       {
-        nodeType: "Index Only Scan",
+        nodeType: indexedScanNodeType("index-only"),
         relation: "case_law_decisions",
         rows: 1000,
       },
@@ -275,7 +276,11 @@ test("heap-fetch estimates use the guarded relation's visibility fraction", () =
   ).toBe(500);
   expect(
     estimateHeapFetches(
-      { nodeType: "Index Scan", relation: "case_law_decisions", rows: 1000 },
+      {
+        nodeType: indexedScanNodeType("index"),
+        relation: "case_law_decisions",
+        rows: 1000,
+      },
       SYNTHETIC_SCALE_PROFILE,
     ),
   ).toBeNull();

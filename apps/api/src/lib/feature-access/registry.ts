@@ -4,6 +4,7 @@
 // parser-output-unchanged: registering AI memory access leaves ingestion features and parsed records unchanged.
 // parser-output-unchanged: registering desktop local agent access leaves ingestion features and parsed records unchanged.
 // parser-output-unchanged: requiring time billing for the desktop activity timeline leaves parsed records unchanged.
+// parser-output-unchanged: registering desktop dictation access leaves ingestion features and parsed records unchanged.
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
@@ -110,6 +111,11 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
   // Desktop-gated like the timeline: the desktop installs and runs agent
   // CLIs only while this decision is enabled.
   "local-agents": {
+    enrolment: "invitation",
+  },
+  // Desktop-gated too: the desktop offers dictation only while this decision
+  // is enabled. Speech stays on the computer, so nothing here reaches the API.
+  "desktop-dictation": {
     enrolment: "invitation",
   },
   [GENERATED_VIEWS_FEATURE_ID]: {

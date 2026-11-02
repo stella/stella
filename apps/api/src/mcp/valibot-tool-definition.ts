@@ -9,6 +9,7 @@ import {
 
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { isUnknownArray } from "@/api/lib/type-guards";
+import type { NullAsAbsentInputSchema } from "@/api/mcp/input-schemas";
 import type {
   McpToolAnnotationReasons,
   McpToolDefinition,
@@ -16,7 +17,6 @@ import type {
   McpToolOutputContract,
   McpToolOutputSchema,
 } from "@/api/mcp/tool-types";
-import type { NullAsAbsentInputSchema } from "@/api/mcp/tool-utils";
 
 const VALIBOT_MCP_JSON_SCHEMA_CONFIG = {
   errorMode: "throw",
@@ -106,6 +106,16 @@ const annotateSchemaPath = ({
       }
     }
   }
+  if (segment === "[]") {
+    const items = schema["items"];
+    return isSchemaRecord(items)
+      ? annotateSchemaPath({
+          schema: items,
+          path: path.slice(1),
+          annotation,
+        }) || found
+      : found;
+  }
   const arraySegment = segment.endsWith("[]");
   const propertyName = arraySegment ? segment.slice(0, -2) : segment;
   const properties = schema["properties"];
@@ -113,14 +123,14 @@ const annotateSchemaPath = ({
   if (!isSchemaRecord(property)) {
     return found;
   }
-  const target = arraySegment ? property["items"] : property;
-  return isSchemaRecord(target)
-    ? annotateSchemaPath({
-        schema: target,
-        path: path.slice(1),
-        annotation,
-      }) || found
-    : found;
+  // Resolve the property before its items so nullable arrays traverse their union.
+  return (
+    annotateSchemaPath({
+      schema: property,
+      path: arraySegment ? ["[]", ...path.slice(1)] : path.slice(1),
+      annotation,
+    }) || found
+  );
 };
 
 /**
@@ -788,6 +798,28 @@ const nullableAsTypeArray = (
   return { ...siblings, ...branch, type: [type, "null"] };
 };
 
+type ValibotMcpToolInputContract = Pick<
+  ValibotMcpToolInput,
+  "inputSchema" | "inputNormalization" | "jsonSchemaProjectionWaiver"
+>;
+
+/**
+ * The JSON Schema a tool advertises for its declared input. Reading it needs
+ * only the input contract, not the tool's handler or its registry.
+ */
+export const deriveValibotMcpInputSchema = ({
+  inputSchema,
+  inputNormalization,
+  jsonSchemaProjectionWaiver,
+}: ValibotMcpToolInputContract): McpToolInputSchema =>
+  applyInputNormalizationPlan(
+    deriveMcpInputSchema(
+      inputSchema.advertisedSchema,
+      jsonSchemaProjectionWaiver,
+    ),
+    inputNormalization,
+  );
+
 /**
  * Defines a native tool from the same Valibot schema its handler parses.
  * `inputSchemaSource` retains that actual schema as internal registry metadata:
@@ -836,13 +868,13 @@ export const defineValibotMcpTool = <
         ? `${subject} can access public or external entities outside the private workspace.`
         : `${subject} is confined to the private workspace or a bounded computation.`,
     },
-    inputSchema: applyInputNormalizationPlan(
-      deriveMcpInputSchema(
-        inputSchema.advertisedSchema,
-        jsonSchemaProjectionWaiver,
-      ),
-      inputNormalization,
-    ),
+    inputSchema: deriveValibotMcpInputSchema({
+      inputSchema,
+      ...(inputNormalization === undefined ? {} : { inputNormalization }),
+      ...(jsonSchemaProjectionWaiver === undefined
+        ? {}
+        : { jsonSchemaProjectionWaiver }),
+    }),
     inputSchemaSource: inputSchema,
     inputSchemaProjectionWaiver: jsonSchemaProjectionWaiver,
   };

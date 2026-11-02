@@ -12,6 +12,7 @@ import {
 import { readChatRevisionContextChanges } from "@/api/handlers/chat/chat-revision-context";
 import {
   assertChatThreadScopeMatches,
+  chatThreadScopeMismatchError,
   resolveChatScope,
 } from "@/api/handlers/chat/chat-scope";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
@@ -294,7 +295,10 @@ const getMessages = createSafeRootHandler(
             }),
           )
         ) {
-          return { kind: "scope-mismatch" as const };
+          return {
+            kind: "scope-mismatch" as const,
+            workspaceId: thread.workspaceId ?? null,
+          };
         }
 
         // The most-recent page is loaded first; older pages are fetched on
@@ -420,10 +424,15 @@ const getMessages = createSafeRootHandler(
 
     if (reads.kind === "scope-mismatch") {
       return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Chat thread scope does not match request",
-        }),
+        yield* Result.await(
+          Result.tryPromise(
+            async () =>
+              await chatThreadScopeMismatchError({
+                workspaceId: reads.workspaceId,
+                getWorkspaceAccess,
+              }),
+          ),
+        ),
       );
     }
 

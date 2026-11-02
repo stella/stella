@@ -33,6 +33,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
@@ -40,6 +41,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { roleTranslationKeys } from "@/lib/organization/consts";
 import { useInviteMember } from "@/lib/organization/mutations";
 import {
+  defaultInviteRole,
   inviteMemberSchema,
   roleAssignmentOptions,
 } from "@/lib/organization/role-assignment.logic";
@@ -73,7 +75,7 @@ export const InviteMemberDialog = (props: InviteMemberDialogProps) => {
   const defaultRole =
     currentUserRole === undefined
       ? undefined
-      : assignableRoles(currentUserRole).at(-1);
+      : defaultInviteRole(assignableRoles(currentUserRole));
   if (currentUserRole === undefined || defaultRole === undefined) {
     return null;
   }
@@ -104,7 +106,8 @@ const InviteMemberForm = ({
 }: InviteMemberFormProps) => {
   const t = useTranslations();
   const [isOpen, setIsOpen] = useState(false);
-  const inviteMember = useInviteMember();
+  const isDialogOpen = useLatestCallback(() => isOpen);
+  const inviteMember = useInviteMember(isDialogOpen);
   const schema = useMemo(
     () => inviteMemberSchema(currentUserRole, t("validation.invalidEmail")),
     [currentUserRole, t],

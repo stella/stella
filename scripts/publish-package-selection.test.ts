@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { fail as panic } from "node:assert";
 import {
-  copyFileSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -9,10 +10,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import { loadChangesetPolicy } from "./changeset-guard";
 import { publishedPackageNames } from "./check-published-package-lists";
-import { readNpmReleaseGraph } from "./generate-npm-release-jobs";
+import {
+  NPM_RELEASE_WORKFLOW,
+  readNpmReleaseGraph,
+} from "./generate-npm-release-jobs";
 import {
   changedPathsCommand,
   expandPublishPackages,
@@ -186,9 +191,7 @@ describe("publish package selection", () => {
     expect(workflow).toContain(
       `artifact-run-id: ${String.fromCodePoint(36)}{{ inputs.artifact_run_id || '' }}`,
     );
-    expect(workflow).toContain(
-      "uses: stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
-    );
+    expect(workflow).toContain(`uses: ${NPM_RELEASE_WORKFLOW}`);
   });
 
   test("selects an explicit historical recovery package without requiring new tooling in old source", async () => {
@@ -288,18 +291,48 @@ describe("publish package selection", () => {
   test("historical source without unrelated packages supports leaf and dependency dispatches", () => {
     const root = mkdtempSync(path.join(tmpdir(), "publish-source-"));
     try {
-      const tooling = path.join(root, "tooling", "scripts");
+      const toolingRoot = path.join(root, "tooling");
+      const tooling = path.join(toolingRoot, "scripts");
       const source = path.join(root, "source");
-      mkdirSync(tooling, { recursive: true });
-      for (const script of [
-        "publish-package-selection",
-        "publish-packages",
-        "generate-npm-release-jobs",
-      ]) {
-        copyFileSync(
-          new URL(`${script}.ts`, import.meta.url),
-          path.join(tooling, `${script}.ts`),
-        );
+      const workflow = v.parse(
+        v.object({
+          jobs: v.object({
+            pack: v.object({
+              steps: v.array(
+                v.looseObject({
+                  name: v.optional(v.string()),
+                  with: v.optional(
+                    v.looseObject({
+                      "sparse-checkout": v.optional(v.string()),
+                    }),
+                  ),
+                }),
+              ),
+            }),
+          }),
+        }),
+        Bun.YAML.parse(
+          readFileSync(
+            new URL("../.github/workflows/publish-npm.yml", import.meta.url),
+            "utf-8",
+          ),
+        ),
+      );
+      const checkout = workflow.jobs.pack.steps.find(
+        (step) => step.name === "Checkout pack tooling",
+      );
+      const sparse =
+        checkout?.with?.["sparse-checkout"] ??
+        panic("Pack tooling must declare its sparse checkout");
+      for (const file of sparse
+        .split("\n")
+        .map((entry) => entry.trim())
+        .filter(Boolean)) {
+        const target = path.join(toolingRoot, file);
+        mkdirSync(path.dirname(target), { recursive: true });
+        cpSync(new URL(`../${file}`, import.meta.url), target, {
+          recursive: true,
+        });
       }
       for (const directory of [
         "cli",

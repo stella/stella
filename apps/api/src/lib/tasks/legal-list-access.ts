@@ -74,7 +74,7 @@ export const projectNativeTaskListInput = (
   const properties = { ...schema.properties };
   delete properties["list_id"];
   delete properties["list_section_id"];
-  delete properties["list_description"];
+  delete properties["description"];
   if (properties["item_type"] !== undefined) {
     properties["item_type"] = { type: "string", enum: ["task"] };
   }
@@ -86,6 +86,7 @@ export const nativeTaskInputUsesLegalLists = (args: unknown): boolean =>
   ((args["item_type"] !== undefined &&
     args["item_type"] !== null &&
     args["item_type"] !== "task") ||
-    ["list_id", "list_section_id", "list_description"].some(
+    args["description"] !== undefined ||
+    ["list_id", "list_section_id"].some(
       (field) => args[field] !== undefined && args[field] !== null,
     ));
