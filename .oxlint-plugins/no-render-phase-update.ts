@@ -141,7 +141,9 @@ const isStateHook = (context, callee) => {
 // stay apart, and a dynamic key matches nothing.
 const memberKey = (member) => {
   if (!member.computed) {
-    return isIdentifier(member.property) ? `.${member.property.name}` : null;
+    return isIdentifier(member.property)
+      ? `.${String(member.property.name)}`
+      : null;
   }
   const property = member.property;
   return property?.type === "Literal" &&

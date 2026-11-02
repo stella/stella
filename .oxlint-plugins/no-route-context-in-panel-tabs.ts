@@ -68,7 +68,6 @@ export default eslintCompatPlugin({
                   ) &&
                   options.properties.some(
                     (property) =>
-                      property.type === "Property" &&
                       getPropertyName(property.key) === "strict" &&
                       property.value.type === "Literal" &&
                       property.value.value === false,
