@@ -19,15 +19,7 @@ export default {
         reason: TEST_REASON,
       },
       {
-        path: "apps/api/src/handlers/desktop-time-entries/narrative.test.ts",
-        reason: TEST_REASON,
-      },
-      {
         path: "apps/api/src/handlers/desktop-time-entries/drafting-model.test.ts",
-        reason: TEST_REASON,
-      },
-      {
-        path: "apps/api/src/tests/helpers/ai-text-call-sites.ts",
         reason: TEST_REASON,
       },
     ],
