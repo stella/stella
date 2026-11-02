@@ -311,6 +311,7 @@ describe("Slovak payment instructions follow settlement", () => {
         },
         settlement: invoicePaymentState({
           documentType: base.invoice.documentType,
+          status: base.invoice.status,
           totalAmount: 12_345,
           paidAmount: paidAmountOf([
             {

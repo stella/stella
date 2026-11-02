@@ -30,7 +30,7 @@ import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 
 import {
   invoicePaymentAmounts,
-  payableAmount,
+  isInvoiceSettled,
 } from "./invoice-payment-amounts";
 
 export { invoicePaymentAmounts, paidAmountOf } from "./invoice-payment-amounts";
@@ -251,11 +251,11 @@ const settledStatus = (
   invoice: LockedInvoice,
   paidAmount: number,
 ): InvoiceStatus => {
-  const settled =
-    paidAmount >= payableAmount(invoice.totalAmount) &&
-    (invoice.totalAmount !== 0 ||
-      invoice.status === INVOICE_STATUS.SENT ||
-      invoice.status === INVOICE_STATUS.PAID);
+  const settled = isInvoiceSettled({
+    totalAmount: invoice.totalAmount,
+    paidAmount,
+    status: invoice.status,
+  });
   const issued =
     invoice.status === INVOICE_STATUS.FINALIZED ||
     invoice.status === INVOICE_STATUS.SENT;

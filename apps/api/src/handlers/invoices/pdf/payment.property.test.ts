@@ -36,6 +36,7 @@ test("payment sequences keep the QR equal to the nonnegative ledger balance", ()
         const check = () => {
           const settlement = invoicePaymentState({
             documentType,
+            status: "sent",
             totalAmount: total,
             paidAmount: paidAmountOf(payments),
           });

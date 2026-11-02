@@ -222,8 +222,8 @@ describe("invoice document export", () => {
         });
       },
     );
-    const exportPdf = () =>
-      handler.handler(context("own", [], settlementInvoiceId));
+    const exportPdf = async () =>
+      await handler.handler(context("own", [], settlementInvoiceId));
     const pay = async (amount: number) =>
       recordInvoicePayment.handler(
         asTestRaw<Parameters<typeof recordInvoicePayment.handler>[0]>({
@@ -269,6 +269,79 @@ describe("invoice document export", () => {
     ]);
     expect(writtenKeys).toHaveLength(4);
     expect(new Set(writtenKeys).size).toBe(4);
+  });
+
+  test("states payment from the printed total and the invoice's settled rule", async () => {
+    const { testDb, ids } = fixture;
+    const legacyInvoiceId = createSafeId<"invoice">();
+    const zeroInvoiceId = createSafeId<"invoice">();
+    settlementInvoiceIds.push(legacyInvoiceId, zeroInvoiceId);
+    // A legacy invoice (no stored net amount) whose stored total does not
+    // count its line: the document prints the line, so the payment is due.
+    await testDb.insert(invoices).values([
+      {
+        id: legacyInvoiceId,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        invoiceNumber: `INV-LEGACY-${legacyInvoiceId}`,
+        invoiceDate: "2026-09-30",
+        status: INVOICE_STATUS.FINALIZED,
+        currency: "CZK",
+        language: "cs",
+        netAmount: null,
+        vatAmount: null,
+        totalAmount: cents(0),
+      },
+      {
+        id: zeroInvoiceId,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        invoiceNumber: `INV-ZERO-${zeroInvoiceId}`,
+        invoiceDate: "2026-09-30",
+        status: INVOICE_STATUS.FINALIZED,
+        currency: "CZK",
+        language: "cs",
+        netAmount: cents(0),
+        vatAmount: cents(0),
+        totalAmount: cents(0),
+      },
+    ]);
+    await testDb.insert(invoiceLines).values({
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      invoiceId: legacyInvoiceId,
+      position: 0,
+      description: "Legacy export line",
+      quantity: "1",
+      unit: "h",
+      unitPrice: cents(100_000),
+      vatRateBps: 2100,
+      vatTreatment: "domestic_vat",
+      netAmount: cents(100_000),
+      vatAmount: cents(21_000),
+      grossAmount: cents(121_000),
+      source: INVOICE_LINE_SOURCE.MANUAL,
+    });
+    const settlements: RenderInvoicePdfOptions["settlement"][] = [];
+    const handler = createInvoicePdfExport(
+      async () => S3_OBJECT_WRITE_CERTAINTY.CONFIRMED,
+      async ({ invoice }) => {
+        settlements.push(invoice.settlement);
+        return Result.ok({
+          status: "rendered" as const,
+          pdf: new Uint8Array([37, 80, 68, 70]),
+          compileMs: 1,
+          peakRssBytes: 1,
+        });
+      },
+    );
+    await handler.handler(context("own", [], legacyInvoiceId));
+    await handler.handler(context("own", [], zeroInvoiceId));
+
+    expect(settlements).toEqual([
+      { status: "due", amountMinor: cents(121_000) },
+      { status: "not_payable" },
+    ]);
   });
 
   test("returns an expiring scoped artifact and records its download", async () => {

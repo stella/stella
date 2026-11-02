@@ -220,9 +220,13 @@ export const createInvoicePdfExport = (
                   }),
                 },
                 totals: amounts.totals,
+                // The document's own gross, not the stored total: a legacy
+                // invoice (no stored lines) prints entries its stored total
+                // may not count, and the payment it asks for must match.
                 settlement: invoicePaymentState({
                   documentType: loaded.invoice.documentType,
-                  totalAmount: loaded.invoice.totalAmount,
+                  status: loaded.invoice.status,
+                  totalAmount: amounts.totals.grossAmountMinor,
                   paidAmount: paidAmountOf(loaded.invoice.payments),
                 }),
               },

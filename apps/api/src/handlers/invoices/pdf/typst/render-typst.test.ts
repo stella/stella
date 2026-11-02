@@ -268,6 +268,7 @@ describe("payment QR as SVG", () => {
       },
       settlement: invoicePaymentState({
         documentType: "credit_note",
+        status: "finalized",
         totalAmount: -fixture.totals.grossAmountMinor,
         paidAmount: 0,
       }),
