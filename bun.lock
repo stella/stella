@@ -51,6 +51,7 @@
       "name": "@stll/api",
       "version": "0.0.0",
       "dependencies": {
+        "@anthropic-ai/sdk": "0.97.1",
         "@aws-sdk/client-cloudwatch": "^3.1152.0",
         "@aws-sdk/client-lambda": "^3.1152.0",
         "@aws-sdk/client-s3": "^3.1153.0",
@@ -165,6 +166,7 @@
         "micromark-extension-gfm": "3.0.0",
         "nodemailer": "^10.1.7",
         "onnxruntime-node": "1.30.0",
+        "openai": "6.49.0",
         "parse5": "catalog:",
         "parse5-htmlparser2-tree-adapter": "catalog:",
         "pkijs": "3.4.2",
@@ -193,7 +195,6 @@
         "yjs": "catalog:",
       },
       "devDependencies": {
-        "@anthropic-ai/sdk": "0.97.1",
         "@aws-sdk/client-bedrock-runtime": "^3.1152.0",
         "@electric-sql/pglite": "^0.5.10",
         "@modelcontextprotocol/client": "2.3.1",
@@ -213,7 +214,6 @@
         "bun-types": "catalog:",
         "drizzle-kit": "catalog:",
         "fast-check": "catalog:",
-        "openai": "6.49.0",
         "pdfjs-dist": "^6.4.299",
         "saxes": "catalog:",
         "tsrs": "catalog:",

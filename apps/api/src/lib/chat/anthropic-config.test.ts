@@ -19,13 +19,16 @@ const ANTHROPIC_ADAPTER_PACKAGE = "@tanstack/ai-anthropic";
 
 const unownedAnthropicTransport = (file: string, source: string) => {
   if (file === "lib/tanstack-ai-models.ts") {
-    const constructors = source.match(/\banthropic\s*\([^;]*\)/gu) ?? [];
+    // One client, built with the shared options and without SDK retries; no
+    // adapter factory that builds a client of its own.
+    const clients = source.match(/\bnew\s+RetryHintAnthropic\s*\([^;]*\)/gu);
     return (
-      source.match(/\bcreateAnthropicChat\b/gu)?.length !== 2 ||
-      constructors.length !== 1 ||
-      constructors.some(
+      /\bcreateAnthropicChat\s*\(/u.test(source) ||
+      clients?.length !== 1 ||
+      clients.some(
         (call) =>
-          !call.includes("anthropicClientOptions(anthropicWorkspaceId)"),
+          !call.includes("anthropicClientOptions(anthropicWorkspaceId)") ||
+          !call.includes("SDK_RETRIES_OFF"),
       )
     );
   }

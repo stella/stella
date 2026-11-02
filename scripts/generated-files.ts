@@ -1775,6 +1775,7 @@ const GENERATOR_DECLARATIONS = [
       "scripts/ownership/*.ts",
       "scripts/ownership-loader.ts",
       "scripts/ownership-types.ts",
+      "scripts/provider-client-modules.ts",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",
       "apps/**",
