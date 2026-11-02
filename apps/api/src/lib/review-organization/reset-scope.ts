@@ -331,13 +331,12 @@ export const sweepReviewOrganization = async (
     )
     .returning({ id: userFiles.id });
   removed.set("user_files", attachments.length);
-  await tx.execute(
-    sql`SELECT set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, ${organizationId}, true)`,
-  );
-  // One statement shares the catalog and workspace snapshot while saving a
-  // round trip in the reset's fixed statement budget.
+  // One statement opens the correspondence reset fence and shares the catalog
+  // and workspace snapshot, saving round trips in the reset's fixed statement
+  // budget. The fence names the organization before any delete below runs.
   const [census] = await tx
     .select({
+      correspondenceResetFence: sql<string>`pg_catalog.set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, ${organizationId}, true)`,
       workspaceIds: sql<SafeId<"workspace">[]>`ARRAY(
         SELECT ${workspaces.id}
         FROM ${workspaces}
