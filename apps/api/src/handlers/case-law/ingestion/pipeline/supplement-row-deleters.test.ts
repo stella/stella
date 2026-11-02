@@ -8,13 +8,13 @@ import { compareCodeUnit } from "@stll/collation";
 import { caseLawDecisionSupplements } from "@/api/db/schema";
 import { SUPPLEMENT_ROW_DELETERS } from "@/api/handlers/case-law/ingestion/pipeline/supplement-types";
 
-const REPO_ROOT = path.resolve(import.meta.dir, "../../../../../../..");
-/** Every TypeScript tree that can reach the database: apps, packages, scripts. */
-const SOURCES = [
-  "apps/*/src/**/*.ts",
-  "packages/*/src/**/*.ts",
-  "scripts/**/*.ts",
-];
+const API_ROOT = path.resolve(import.meta.dir, "../../../../..");
+/**
+ * Every TypeScript tree of this package. The supplement table is declared
+ * by this package's schema, and Turbo reruns this test only when this
+ * package (or a dependency) changes, so the census reads what it owns.
+ */
+const SOURCES = ["src/**/*.ts", "scripts/**/*.ts", "evals/**/*.ts"];
 
 /**
  * A delete of supplement rows: the query builder on the table (however its
@@ -34,17 +34,17 @@ test("only the erasure and takedown paths delete supplement rows", async () => {
   const deleters: string[] = [];
   const aliases: string[] = [];
   for (const pattern of SOURCES) {
-    for await (const file of new Bun.Glob(pattern).scan({ cwd: REPO_ROOT })) {
+    for await (const file of new Bun.Glob(pattern).scan({ cwd: API_ROOT })) {
       if (isTest(file) || file.includes("/node_modules/")) {
         continue;
       }
       // db-await-in-loop: not a database read; one source file at a time.
-      const text = await readFile(path.join(REPO_ROOT, file), "utf-8");
+      const text = await readFile(path.join(API_ROOT, file), "utf-8");
       if (DELETES_SUPPLEMENT_ROWS.test(text)) {
-        deleters.push(file);
+        deleters.push(`apps/api/${file}`);
       }
       if (ALIASES_SUPPLEMENT_TABLE.test(text)) {
-        aliases.push(file);
+        aliases.push(`apps/api/${file}`);
       }
     }
   }
