@@ -17,7 +17,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 /**
  * Where the crawl parked after walking the view to its end. Far enough past
@@ -62,38 +65,40 @@ type Recorded = { listings: URL[]; details: URL[] };
 const stubPublisher = (entries: number): Recorded => {
   const recorded: Recorded = { listings: [], details: [] };
 
-  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    const url = new URL(input instanceof Request ? input.url : String(input));
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
 
-    // The listing and the per-decision detail page share a path segment; only
-    // the listing carries the view's own query.
-    if (url.searchParams.has("ReadViewEntries")) {
-      recorded.listings.push(url);
+      // The listing and the per-decision detail page share a path segment; only
+      // the listing carries the view's own query.
+      if (url.searchParams.has("ReadViewEntries")) {
+        recorded.listings.push(url);
+        return await Promise.resolve(
+          new Response(
+            JSON.stringify({
+              "@toplevelentries": String(PARKED_START - 1 + entries),
+              viewentry: Array.from({ length: entries }, (_, index) =>
+                viewEntry(index),
+              ),
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          ),
+        );
+      }
+
+      recorded.details.push(url);
+      // The print page is the AST's source and is treated as enrichment; a
+      // decision built without one still costs the request that asked for it,
+      // which is what this file counts.
       return await Promise.resolve(
-        new Response(
-          JSON.stringify({
-            "@toplevelentries": String(PARKED_START - 1 + entries),
-            viewentry: Array.from({ length: entries }, (_, index) =>
-              viewEntry(index),
-            ),
-          }),
-          { headers: { "Content-Type": "application/json" } },
-        ),
+        url.pathname.includes("/WebPrint/")
+          ? new Response("", { status: 404 })
+          : new Response(detailPage("30 Cdo 3000/2026"), {
+              headers: { "Content-Type": "text/html" },
+            }),
       );
-    }
-
-    recorded.details.push(url);
-    // The print page is the AST's source and is treated as enrichment; a
-    // decision built without one still costs the request that asked for it,
-    // which is what this file counts.
-    return await Promise.resolve(
-      url.pathname.includes("/WebPrint/")
-        ? new Response("", { status: 404 })
-        : new Response(detailPage("30 Cdo 3000/2026"), {
-            headers: { "Content-Type": "text/html" },
-          }),
-    );
-  });
+    }),
+  );
 
   return recorded;
 };
@@ -111,10 +116,8 @@ const requestedCount = (listing: URL | undefined): number =>
   Number.parseInt(listing?.searchParams.get("Count") ?? "", 10);
 
 describe("the cz-ns steady-state frontier", () => {
-  const originalFetch = globalThis.fetch;
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test("a cycle the view added nothing to costs one listing", async () => {
@@ -183,7 +186,6 @@ describe("the cz-ns steady-state frontier", () => {
 });
 
 describe("the cz-ns crawl over an entry whose detail read times out", () => {
-  const originalFetch = globalThis.fetch;
   let recording: RecordingLogger;
 
   beforeEach(() => {
@@ -191,7 +193,7 @@ describe("the cz-ns crawl over an entry whose detail read times out", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     recording.restore();
   });
 
@@ -199,8 +201,8 @@ describe("the cz-ns crawl over an entry whose detail read times out", () => {
     stubPublisher(2);
     const served = globalThis.fetch;
     const timedOut = viewEntry(0)["@unid"];
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
@@ -210,7 +212,7 @@ describe("the cz-ns crawl over an entry whose detail read times out", () => {
           );
         }
         return await served(input, init);
-      },
+      }),
     );
 
     const page = await fetchPageAt(String(PARKED_START));

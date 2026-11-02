@@ -521,6 +521,8 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "billing_draft_user_settings.user_id":
+    "Organization-wide consent and preferences remain for the person's other matters; organization removal deletes them.",
   "request_idempotency_receipts.user_id":
     "Organization-owned request coordination: retain through the bounded replay window so retries in other matters remain single-execution. Replay still passes the route's current authorization; organization removal clears the rows and account deletion cascades.",
   "request_idempotency_receipts.response_body":
