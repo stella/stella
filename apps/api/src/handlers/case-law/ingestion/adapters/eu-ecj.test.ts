@@ -185,6 +185,22 @@ describe("celexToCaseNumber", () => {
     expect(celexToCaseNumber("62009FJ0100")).toBe("F-100/09");
   });
 
+  test("every document form maps to its court's register", () => {
+    // Civil Service Tribunal orders, a corrected one included.
+    expect(celexToCaseNumber("62013FO0060")).toBe("F-60/13");
+    expect(celexToCaseNumber("62014FO0049(01)")).toBe("F-49/14");
+    // General Court third-party proceedings; Court of Justice seizure
+    // orders, opinions on agreements and rulings.
+    expect(celexToCaseNumber("62019TT0012")).toBe("T-12/19");
+    expect(celexToCaseNumber("62020CS0003")).toBe("C-3/20");
+    expect(celexToCaseNumber("62019CV0001")).toBe("C-1/19");
+    expect(celexToCaseNumber("62015CX0002")).toBe("C-2/15");
+  });
+
+  test("a case number longer than the register's four digits is no CELEX", () => {
+    expect(celexToCaseNumber("62013FO00601")).toBe("62013FO00601");
+  });
+
   test("strips leading zeros from case number", () => {
     expect(celexToCaseNumber("62024CJ0007")).toBe("C-7/24");
   });

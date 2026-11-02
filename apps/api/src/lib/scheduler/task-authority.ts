@@ -85,6 +85,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "bilingual-run-reconcile.ts",
     "Hands queued runs back to their queue, whose worker resolves the requester's run actor.",
   ),
+  "caseLaw.backfillParsedInputState": platform(
+    "case-law-parsed-input-state-backfill.ts",
+    "Public legal corpus maintenance.",
+  ),
   "caseLaw.backfillProvisionState": platform(
     "case-law-provision-state-backfill.ts",
     "Public legal corpus maintenance.",
@@ -321,6 +325,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "usage.redactWebhookEvents": platform(
     "hosted-usage-webhook-retention.ts",
     "Retention redaction of provider events.",
+  ),
+  "usage.eraseHostedCustomers": platform(
+    "hosted-customer-erasure.ts",
+    "Erases provider customer records after organization deletion.",
   ),
   "workObligations.attentionScout": platform(
     "work-attention-scout.ts",

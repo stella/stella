@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import {
+  API_TEST_FILES_ENCODED_ENV,
   API_TEST_SHARD_ENV,
   parseApiTestShard as parseApiTestShardResult,
   partitionTestFiles as partitionTestFilesResult,
@@ -9,7 +10,7 @@ import {
 
 import { decodePlanFileList } from "../../../scripts/plan-output-codec";
 
-export { API_TEST_SHARD_ENV };
+export { API_TEST_FILES_ENCODED_ENV, API_TEST_SHARD_ENV };
 
 const unwrapPlanningResult = <T>(result: TestShardPlanningResult<T>): T =>
   result.status === "ok" ? result.value : panic(result.message);

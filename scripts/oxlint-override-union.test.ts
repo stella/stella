@@ -100,10 +100,18 @@ const DELIBERATE_NARROWINGS = [
       "path:@/api/db/root#rlsDb,rootDb",
       "path:@/api/lib/branded-types#toSafeId",
       "path:@stll/api-contract/safe-id#toSafeId",
+      "path:@stll/errors#createDetached",
       ...PROVIDER_ADAPTER_IMPORT_KEYS,
     ],
     reason:
       "Tests build handler context, owner-level DB handles and provider adapters directly; that is the fixture surface the production restrictions exist to keep out of handlers.",
+  },
+  {
+    rule: "no-restricted-imports",
+    scope: "apps/api/src/lib/analytics/capture.ts",
+    drops: ["path:@stll/errors#createDetached"],
+    reason:
+      "This module owns API detached work: it builds `detached` from the shared factory once, so it is the one API module that imports createDetached.",
   },
   {
     rule: "no-restricted-imports",
