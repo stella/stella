@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.10.0
+
+### Minor Changes
+
+- Add `defaultTranscriptionModelId`, the cheapest transcription model offered in a region. The `dictation transcribe` capability no longer requires a model: without one the server uses that default for the organization's region.
+
 ## 0.9.0
 
 ### Minor Changes

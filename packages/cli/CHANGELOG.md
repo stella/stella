@@ -1,5 +1,15 @@
 # @stll/cli
 
+## 6.5.1
+
+### Patch Changes
+
+- Keep provision-filtered case-law searches bounded. Exhausting the candidate budget returns a successful partial or empty page with a continuation cursor; only a statement timeout returns the retryable timeout response.
+
+- Add `defaultTranscriptionModelId`, the cheapest transcription model offered in a region. The `dictation transcribe` capability no longer requires a model: without one the server uses that default for the organization's region.
+
+- `search.results.list` searches across the matters you can open, by text and filters, with `stella:read`. Assistant chat results need `stella:chat`.
+
 ## 6.5.0
 
 ### Minor Changes

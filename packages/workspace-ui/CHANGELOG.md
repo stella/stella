@@ -1,5 +1,12 @@
 # @stll/workspace-ui
 
+## 0.15.5
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/ui@0.63.0
+
 ## 0.15.4
 
 ### Patch Changes
