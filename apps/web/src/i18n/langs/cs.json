@@ -4524,7 +4524,7 @@
         "visibilityRestored": "Sdílení obnoveno"
       },
       "orphaned": {
-        "description": "Text tohoto dokumentu se od jejich vytvoření změnil a označené pasáže se v něm už nepodařilo najít. V textu se proto nezobrazují.",
+        "description": "Text tohoto dokumentu se od jejich vytvoření změnil: označené pasáže se v něm už nepodařilo najít, nebo se v něm nyní vyskytují na více místech. V textu se proto nezobrazují.",
         "summary": "{count, plural, one {# zvýraznění nebo komentář už neodpovídá textu} few {# zvýraznění nebo komentáře už neodpovídají textu} many {# zvýraznění nebo komentáře už neodpovídá textu} other {# zvýraznění a komentářů už neodpovídá textu}}"
       },
       "removeHighlight": "Odebrat zvýraznění",

@@ -4524,7 +4524,7 @@
         "visibilityRestored": "Megosztás visszaállítva"
       },
       "orphaned": {
-        "description": "A dokumentum szövege a létrehozásuk óta frissült, és a megjelölt részeket nem sikerült újra megtalálni benne. Ezek nem jelennek meg a szövegben.",
+        "description": "A dokumentum szövege a létrehozásuk óta frissült: a megjelölt részeket nem sikerült újra megtalálni benne, vagy most több helyen is előfordulnak. Ezek nem jelennek meg a szövegben.",
         "summary": "{count, plural, one {# kiemelés vagy megjegyzés már nem illeszkedik a szöveghez} other {# kiemelés és megjegyzés már nem illeszkedik a szöveghez}}"
       },
       "removeHighlight": "Kiemelés eltávolítása",

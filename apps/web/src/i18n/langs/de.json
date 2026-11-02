@@ -4524,7 +4524,7 @@
         "visibilityRestored": "Freigabe wiederhergestellt"
       },
       "orphaned": {
-        "description": "Der Text dieses Dokuments wurde seit ihrer Erstellung aktualisiert, und die markierten Passagen ließen sich darin nicht wiederfinden. Sie werden im Text nicht angezeigt.",
+        "description": "Der Text dieses Dokuments wurde seit ihrer Erstellung aktualisiert: Die markierten Passagen ließen sich darin nicht wiederfinden oder kommen jetzt an mehreren Stellen vor. Sie werden im Text nicht angezeigt.",
         "summary": "{count, plural, one {# Markierung oder Kommentar passt nicht mehr zum Text} other {# Markierungen und Kommentare passen nicht mehr zum Text}}"
       },
       "removeHighlight": "Hervorhebung entfernen",
