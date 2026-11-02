@@ -35,9 +35,10 @@ import {
 } from "./utils.ts";
 
 const EM_DASH = "\u2014";
-const EM_DASH_ENTITY = /&(?:mdash|#8212|#x0*2014);/iu;
+const EM_DASH_ENTITY = /&(?:mdash|#0*8212|#x0*2014);/iu;
+const EM_DASH_MARK = /\u2014|&(?:mdash|#0*8212|#x0*2014);/giu;
 
-const EMPTY_CELL_MARKER = /^(?:\u2014|&mdash;|&#8212;|&#x0*2014;)$/iu;
+const EMPTY_CELL_MARKER = /^(?:\u2014|&mdash;|&#0*8212;|&#x0*2014;)$/iu;
 
 const containsEmDash = (raw: string | null | undefined): boolean =>
   raw?.includes(EM_DASH) === true;
@@ -130,7 +131,17 @@ const FUNCTION_BOUNDARIES: ReadonlySet<string> = new Set([
   "FunctionExpression",
 ]);
 
-// Text passed to `console.*` is a diagnostic for developers, not copy.
+// Parts that only build the argument a call receives: a template around the
+// text or a concatenation with it. Any other parent hands the text to code
+// that may show it.
+const ARGUMENT_PARTS: ReadonlySet<string> = new Set([
+  "TemplateLiteral",
+  "BinaryExpression",
+]);
+
+// Text passed to `console.*` is a diagnostic for developers, not copy. Only
+// text the console call itself receives is exempt: a literal handed to
+// another call first (`console.log(showToast("..."))`) is still copy.
 const isConsoleArgument = (node: ESTree.Node): boolean => {
   let current: ESTree.Node = node;
   while (current.parent !== null) {
@@ -139,12 +150,17 @@ const isConsoleArgument = (node: ESTree.Node): boolean => {
     if (FUNCTION_BOUNDARIES.has(parent.type)) {
       return false;
     }
+    if (parent.type === "CallExpression") {
+      return (
+        parent.arguments.some((argument) => argument === child) &&
+        CONSOLE_METHOD.test(getCalleeName(parent.callee) ?? "")
+      );
+    }
     if (
-      parent.type === "CallExpression" &&
-      parent.arguments.some((argument) => argument === child) &&
-      CONSOLE_METHOD.test(getCalleeName(parent.callee) ?? "")
+      !ARGUMENT_PARTS.has(parent.type) &&
+      !TRANSPARENT_WRAPPERS.has(parent.type)
     ) {
-      return true;
+      return false;
     }
     current = parent;
   }
@@ -165,23 +181,22 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        // During the changed-lines rollout a dash counts on its own line, so
+        // editing another line of a multiline string does not report it.
         const enforces = (node: { range: readonly [number, number] }) => {
-          const start = context.sourceCode.getLocFromIndex(node.range[0]).line;
-          const end = context.sourceCode.getLocFromIndex(
-            node.range[1] - 1,
-          ).line;
-          for (let line = start; line <= end; line++) {
-            if (
-              guardEnforcesLine({
-                guard: "no-em-dash-copy",
-                file: filenameForContext(context),
-                line,
-              })
-            ) {
-              return true;
-            }
-          }
-          return false;
+          const text = context.sourceCode.text.slice(
+            node.range[0],
+            node.range[1],
+          );
+          return [...text.matchAll(EM_DASH_MARK)].some((match) =>
+            guardEnforcesLine({
+              guard: "no-em-dash-copy",
+              file: filenameForContext(context),
+              line: context.sourceCode.getLocFromIndex(
+                node.range[0] + match.index,
+              ).line,
+            }),
+          );
         };
         return {
           Literal(node) {

@@ -69,9 +69,11 @@ test("skips console diagnostics but not copy logged from a variable", async () =
         'const label = "Saved — just now";',
         "console.log(label);",
         'console.error(() => "Saved — just now");',
+        'console.log(showToast("Saved — just now"));',
+        `console.info("step " + "one — two", \`\${"a — b"}\`);`,
       ].join("\n"),
     ),
-  ).toEqual([3, 5]);
+  ).toEqual([3, 5, 6]);
 });
 
 test("rejects the glyph in string and template copy", async () => {
@@ -86,6 +88,7 @@ test("rejects the glyph and its entities in JSX", async () => {
   expect(await lint("const p = <p>Draft — not sent</p>;")).toEqual([1]);
   expect(await lint("const p = <p>Draft &mdash; not sent</p>;")).toEqual([1]);
   expect(await lint("const p = <p>Draft &#8212; not sent</p>;")).toEqual([1]);
+  expect(await lint("const p = <p>Draft &#08212; not sent</p>;")).toEqual([1]);
   expect(await lint("const p = <p>Draft &#x2014; not sent</p>;")).toEqual([1]);
   expect(await lint('const p = <span title="A — B" />;')).toEqual([1]);
   expect(await lint('const p = <span title="A &mdash; B" />;')).toEqual([1]);
