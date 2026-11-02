@@ -11,6 +11,7 @@ import { scanFile } from "@/api/lib/file-scan/scan";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { mintScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
+import { admitWork, WorkRefusal } from "@/api/lib/load/work-admission";
 
 export class FileScanRejectedError extends TaggedError(
   "FileScanRejectedError",
@@ -43,20 +44,39 @@ export const scanUpload = async (
   Result<ScannedFile, FileScanRejectedError | FileScanFailedError>
 > => {
   const view = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes;
-  // Detaching the caller's aliases preserves verdict isolation without copying.
-  // Subranges and shared buffers need an exact-fit private copy instead.
-  const buffer =
-    ownership === "transfer" &&
-    view.buffer instanceof ArrayBuffer &&
-    view.byteOffset === 0 &&
-    view.byteLength === view.buffer.byteLength
-      ? view.buffer.transfer()
-      : new Uint8Array(view).buffer;
-  const scanned = await scan({
-    buffer: new Uint8Array(buffer),
-    declaredMimeType,
-    fileName,
+  const admitted = await admitWork({
+    pool: "file-scan",
+    kind: "file-scan",
+    bytes: view.byteLength,
+    run: async () => {
+      // Detaching the caller's aliases preserves verdict isolation without
+      // copying. Subranges and shared buffers need an exact-fit private copy.
+      const buffer =
+        ownership === "transfer" &&
+        view.buffer instanceof ArrayBuffer &&
+        view.byteOffset === 0 &&
+        view.byteLength === view.buffer.byteLength
+          ? view.buffer.transfer()
+          : new Uint8Array(view).buffer;
+      const scanned = await scan({
+        buffer: new Uint8Array(buffer),
+        declaredMimeType,
+        fileName,
+      });
+      return { buffer, scanned };
+    },
   });
+  if (Result.isError(admitted)) {
+    return Result.err(
+      new FileScanFailedError({
+        message: WorkRefusal.is(admitted.error)
+          ? "File security scan is busy"
+          : "File security scan failed",
+        cause: admitted.error,
+      }),
+    );
+  }
+  const { buffer, scanned } = admitted.value;
   if (Result.isError(scanned)) {
     return Result.err(
       new FileScanFailedError({

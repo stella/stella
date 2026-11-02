@@ -131,6 +131,7 @@ describe("remapFileIds", () => {
     const secondNewFileId = allocateFileObject();
     const mappings: FileMapping[] = [
       {
+        cleanupIntentIds: [],
         mimeType: sharedSourceFile.mimeType,
         newFileId: firstNewFileId,
         sourceEntityId: firstEntityId,
@@ -139,6 +140,7 @@ describe("remapFileIds", () => {
         targetKey: `${organizationId}/${workspaceId}/${firstNewFileId}.pdf`,
       },
       {
+        cleanupIntentIds: [],
         mimeType: sharedSourceFile.mimeType,
         newFileId: secondNewFileId,
         sourceEntityId: secondEntityId,
@@ -182,6 +184,7 @@ describe("remapFileIds", () => {
       ],
       [
         {
+          cleanupIntentIds: [],
           mimeType: sharedSourceFile.mimeType,
           newFileId,
           sourceEntityId: firstEntityId,

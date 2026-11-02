@@ -26,6 +26,11 @@ import {
   assertCorrespondenceAccess,
   type CorrespondenceActor,
 } from "@/api/lib/email/correspondence/access";
+import {
+  readCurrentUploadedMailSource,
+  type UploadedMailSource,
+} from "@/api/lib/email/inbound/upload-source";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeEmailBodyHtml } from "@/api/lib/files/email-to-html";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
@@ -70,15 +75,26 @@ const linkAttachments = async ({
   );
 };
 
-type CreateCorrespondenceOptions = {
+type CreateCorrespondenceCommonOptions = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   filer: CorrespondenceActor;
-  parsed: ParsedCorrespondence;
   attachments: PreparedCorrespondenceAttachment[];
   recordAuditEvent: AuditRecorder;
 };
+
+type CreateCorrespondenceOptions = CreateCorrespondenceCommonOptions &
+  (
+    | {
+        parsed: Extract<ParsedCorrespondence, { source: "delivery" }>;
+        uploadSource?: never;
+      }
+    | {
+        parsed: Extract<ParsedCorrespondence, { source: "upload" }>;
+        uploadSource: UploadedMailSource;
+      }
+  );
 
 type ValidateContentOptions = Pick<
   CreateCorrespondenceOptions,
@@ -187,6 +203,7 @@ export const createCorrespondence = async ({
   organizationId,
   filer,
   parsed,
+  uploadSource,
   attachments,
   recordAuditEvent,
 }: CreateCorrespondenceOptions) => {
@@ -196,6 +213,33 @@ export const createCorrespondence = async ({
   }
 
   const transaction = await abortableTx(safeDb, async (tx) => {
+    if (parsed.source === "upload") {
+      if (uploadSource === undefined) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "The uploaded email source is no longer current",
+          }),
+        );
+      }
+      const currentSource = await readCurrentUploadedMailSource(
+        tx,
+        uploadSource,
+      );
+      if (
+        currentSource?.uploaderId === null ||
+        currentSource?.uploaderId === undefined ||
+        filer.type !== "user" ||
+        currentSource.uploaderId !== filer.userId
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "The uploaded email source is no longer current",
+          }),
+        );
+      }
+    }
     const access = await assertCorrespondenceAccess({
       tx,
       filer,

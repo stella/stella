@@ -19,6 +19,7 @@ import {
   folioCollabRooms,
   pendingUploads,
   properties,
+  reportExports,
   styleSets,
   templates,
   templateVersions,
@@ -99,6 +100,7 @@ type Fixture = {
   pendingFinalKey: string;
   pendingTmpKey: string;
   pendingUploadId: SafeId<"pendingUpload">;
+  reportExportKey: string;
   secondMatterSourceKey: string;
   sourceKey: string;
   styleSetKeys: string[];
@@ -359,6 +361,30 @@ beforeAll(async () => {
     expiresAt: new Date(Date.now() + 60_000),
   });
 
+  const reportExportId = toSafeId<"reportExport">(uuid());
+  const reportExportKey = `exports/${organizationId}/${firstWorkspaceId}/${reportExportId}.docx`;
+  await testDb.insert(reportExports).values({
+    id: reportExportId,
+    workspaceId: firstWorkspaceId,
+    requestedBy: userId,
+    templateRef: { type: "builtin", key: "due-diligence" },
+    layout: {
+      type: "table",
+      version: 1,
+      filters: [],
+      sorts: [],
+      hiddenProperties: [],
+      calculations: [],
+      columnOrder: [],
+      columnPinning: [],
+    },
+    status: "completed",
+    mode: "download",
+    format: "docx",
+    aiNarrative: false,
+    resultS3Key: reportExportKey,
+  });
+
   // Matter two: a collaborative editing room with both of its slots.
   const collabSnapshotFileId = toSafeId<"userFile">(uuid());
   const collabDocxFileId = toSafeId<"userFile">(uuid());
@@ -577,6 +603,7 @@ beforeAll(async () => {
     pendingFinalKey: `${organizationId}/${firstWorkspaceId}/${reservedFileId}.docx`,
     pendingTmpKey: `${organizationId}/${firstWorkspaceId}/tmp/${pendingUploadId}`,
     pendingUploadId,
+    reportExportKey,
     secondMatterSourceKey: `${organizationId}/${secondWorkspaceId}/${secondMatterFileId}.docx`,
     sourceKey: `${organizationId}/${firstWorkspaceId}/${fileId}.docx`,
     styleSetKeys: [styleSetKey, supersededStyleSetKey],
@@ -653,6 +680,7 @@ const pageKeysMatchScope = ({
           fixture.globalChatAttachmentKey,
         ].includes(key)
       : key.startsWith(`${fixture.organizationId}/${workspaceId}/`) ||
+        key.startsWith(`exports/${fixture.organizationId}/${workspaceId}/`) ||
         key.startsWith("tmp/"),
   );
 
@@ -688,6 +716,7 @@ describe("organization deletion storage teardown", () => {
         fixture.pendingFinalKey,
         fixture.pendingTmpKey,
         `tmp/${fixture.pendingUploadId}`,
+        fixture.reportExportKey,
         fixture.secondMatterSourceKey,
         fixture.sourceKey,
         ...fixture.styleSetKeys,

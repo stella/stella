@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/search/projection-repair-queue.ts",
+  "delta": 2,
+  "reason": "A contact's related matters are enqueued and flushed by keyset pages: each page is read after the previous one is flushed, so repair work for a contact with many matters stays bounded per transaction and resumes from the last workspace id."
+}

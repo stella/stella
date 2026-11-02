@@ -10,6 +10,7 @@ import {
   buildExpiryAuditEvents,
   selectTransitionedExpirableSessions,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-audit";
+import { buildDesktopEditCheckpointCleanupIntents } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry-cleanup";
 import {
   type ExpiredDesktopEditSessionNotification,
   publishDesktopEditSessionExpiryNotifications,
@@ -23,6 +24,52 @@ const session = (id: string, createdBy: string) => ({
     "019e0000-0000-7000-8000-0000000org1",
   ),
   createdBy,
+});
+
+describe("buildDesktopEditCheckpointCleanupIntents", () => {
+  test("queues only checkpoints that were written", () => {
+    const now = new Date("2026-10-23T12:00:00.000Z");
+    const organizationId = toSafeId<"organization">(
+      "019e0000-0000-7000-8000-0000000org1",
+    );
+    const workspaceId = toSafeId<"workspace">(
+      "019e0000-0000-7000-8000-00000000ws01",
+    );
+    const writtenFileId = toSafeId<"userFile">(
+      "019e0000-0000-7000-8000-0000000file",
+    );
+
+    const intents = buildDesktopEditCheckpointCleanupIntents({
+      now,
+      sessions: [
+        {
+          checkpointFileId: writtenFileId,
+          checkpointSizeBytes: 12,
+          fileType: "docx",
+          organizationId,
+          workspaceId,
+        },
+        {
+          checkpointFileId: toSafeId<"userFile">(
+            "019e0000-0000-7000-8000-00000empty",
+          ),
+          checkpointSizeBytes: null,
+          fileType: "docx",
+          organizationId,
+          workspaceId,
+        },
+      ],
+    });
+
+    expect(intents).toHaveLength(1);
+    expect(intents.at(0)).toMatchObject({
+      nextAttemptAt: now,
+      objectKey: `${organizationId}/${workspaceId}/${writtenFileId}.docx`,
+      organizationId,
+      status: "orphaned",
+      workspaceId,
+    });
+  });
 });
 
 describe("buildExpiryAuditEvents", () => {

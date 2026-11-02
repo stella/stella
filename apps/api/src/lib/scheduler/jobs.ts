@@ -747,7 +747,8 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
-    description: "Delete style set packages a replacement left behind",
+    description:
+      "Delete packages recorded by style set replacements and deletions",
     id: "styleSets.reconcilePackageCleanups.fiveMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },

@@ -26,7 +26,10 @@ import {
   flushSearchRepairs,
   SEARCH_PROJECTION_REPAIR_BATCH_SIZE,
 } from "@/api/lib/search/projection-repair-queue";
-import type { SearchProjectionRepairDeps } from "@/api/lib/search/projection-repair-queue";
+import type {
+  SearchProjectionRepairClaim,
+  SearchProjectionRepairDeps,
+} from "@/api/lib/search/projection-repair-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -63,7 +66,9 @@ type RepairLog = {
 };
 
 const repairDeps = (log: RepairLog): SearchProjectionRepairDeps => {
-  const record = async (sourceId: string): Promise<void> => {
+  const record = async ({
+    sourceId,
+  }: SearchProjectionRepairClaim): Promise<void> => {
     if (log.failing.has(sourceId)) {
       throw new Error(`repair refused for ${sourceId}`);
     }
@@ -312,9 +317,9 @@ test("an edit that lands mid-repair survives the repair it raced", async () => {
     db: deps.db,
     repair: {
       ...deps.repair,
-      entity: async (sourceId) => {
+      entity: async (claim) => {
         await enqueueEntitySearchRepairs(asTx(), [document]);
-        await deps.repair.entity(sourceId);
+        await deps.repair.entity(claim);
       },
     },
   };
@@ -464,12 +469,15 @@ test("a drain rebuilds every projection kind on the connection it is handed", as
     select: relational.select.bind(relational),
     update: relational.update.bind(relational),
     transaction: async (run: (tx: unknown) => Promise<unknown>) =>
-      await relational.transaction(
-        async (tx) =>
-          await run({
-            execute: async (query: SQL) => (await tx.execute(query)).rows,
-          }),
-      ),
+      await relational.transaction(async (tx) => {
+        const handedTx = asTestRaw<Transaction>({
+          execute: async (query: SQL) => (await tx.execute(query)).rows,
+          insert: tx.insert.bind(tx),
+          query: tx.query,
+          select: tx.select.bind(tx),
+        });
+        return await run(handedTx);
+      }),
   });
   expect(
     await drainSearchProjectionRepairQueue({

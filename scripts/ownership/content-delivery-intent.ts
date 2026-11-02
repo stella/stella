@@ -25,6 +25,11 @@ export default {
         path: "apps/api/src/lib/s3-presign.ts",
         reason: "Records intent when granting a stored-content URL.",
       },
+      {
+        path: "apps/api/src/lib/files/read-file.ts",
+        reason:
+          "Records intent before returning stored content through the internal file-read boundary.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

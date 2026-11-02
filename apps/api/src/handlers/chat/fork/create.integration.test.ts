@@ -66,7 +66,7 @@ beforeEach(() => {
 // fixture deliberately does not stand up; the handler takes it as an injectable
 // boundary so the fork's own behaviour is what these tests observe.
 const indexChatThreadMock = mock(async () => await Promise.resolve());
-const forkThread = createForkThread({ indexChatThread: indexChatThreadMock });
+let forkThread = createForkThread({ indexChatThread: indexChatThreadMock });
 
 // Exercises the fork endpoint against PGlite and an in-process object store:
 // prefix selection, attachment duplication (source object AND thumbnail), the
@@ -102,10 +102,25 @@ const scopedFor = ({
     ),
   );
 
+const rootSafeDb = () =>
+  asTestRaw<SafeDb>(
+    async (run: Parameters<SafeDb>[0]) =>
+      await Result.tryPromise(
+        async () => await testDb.transaction(asTestRaw(run)),
+      ),
+  );
+
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+  forkThread = createForkThread({
+    fileUsageDb:
+      asTestRaw<NonNullable<Parameters<typeof copyOrganizationFile>[0]["db"]>>(
+        testDb,
+      ),
+    indexChatThread: indexChatThreadMock,
+  });
   safeDb = scopedFor({
     organizationId: ids.orgA,
     userId: ids.userA1,
@@ -260,7 +275,7 @@ const seedThread = async ({
 };
 
 const forkContext = ({
-  db = safeDb,
+  db = rootSafeDb(),
   newThreadId,
   organizationId,
   threadId,

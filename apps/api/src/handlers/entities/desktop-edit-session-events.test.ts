@@ -4,6 +4,8 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import { desktopEditSessionEventsHandler } from "@/api/handlers/entities/desktop-edit-session-events";
 import { toSafeId } from "@/api/lib/branded-types";
+import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
+import { broadcastSessionEvent } from "@/api/lib/sse";
 
 const authorizeDesktopEditSessionMock = mock();
 const readDesktopEditSessionEventStateMock = mock();
@@ -145,5 +147,84 @@ describe("desktop edit session events", () => {
     }
 
     await response.body?.cancel();
+  });
+
+  test("closes the stream when its token no longer refreshes", async () => {
+    const scope = createSessionScope();
+    authorizeDesktopEditSessionMock.mockResolvedValue({
+      status: "authorized",
+      value: { scopedDb: scope.scopedDb, userId: "user-1" },
+    });
+    readDesktopEditSessionEventStateMock.mockResolvedValue({
+      pendingRequest: null,
+    });
+    refreshDesktopEditSessionLivenessMock.mockResolvedValueOnce(true);
+    refreshDesktopEditSessionLivenessMock.mockResolvedValue(false);
+
+    const response = await desktopEditSessionEventsHandler(
+      {
+        headers: { authorization: `Bearer ${sessionToken}` },
+        sessionId,
+      },
+      {
+        authorizeDesktopEditSession: authorizeDesktopEditSessionMock,
+        livenessRefreshIntervalMs: 1,
+        readDesktopEditSessionEventState: readDesktopEditSessionEventStateMock,
+        refreshDesktopEditSessionLiveness:
+          refreshDesktopEditSessionLivenessMock,
+      },
+    );
+    if (!(response instanceof Response) || response.body === null) {
+      throw new Error(
+        "Expected desktop edit events to return a readable SSE response.",
+      );
+    }
+
+    const reader = response.body.getReader();
+    expect(await reader.read()).toEqual({
+      done: false,
+      value: new TextEncoder().encode(": connected\n\n"),
+    });
+    const closed = reader.read();
+    expect(await closed).toEqual({ done: true, value: undefined });
+  });
+
+  test("closes the previous bearer stream before delivering later takeover events", async () => {
+    const scope = createSessionScope();
+    authorizeDesktopEditSessionMock.mockResolvedValue({
+      status: "authorized",
+      value: { scopedDb: scope.scopedDb, userId: "user-1" },
+    });
+    readDesktopEditSessionEventStateMock.mockResolvedValue({
+      pendingRequest: null,
+    });
+
+    const response = await desktopEditSessionEventsHandlerForTest({
+      headers: { authorization: `Bearer ${sessionToken}` },
+      sessionId,
+    });
+    if (!(response instanceof Response) || response.body === null) {
+      throw new Error(
+        "Expected desktop edit events to return a readable SSE response.",
+      );
+    }
+
+    const reader = response.body.getReader();
+    expect(await reader.read()).toEqual({
+      done: false,
+      value: new TextEncoder().encode(": connected\n\n"),
+    });
+
+    closeSessionConnections(sessionId);
+    expect(await reader.read()).toEqual({ done: true, value: undefined });
+
+    broadcastSessionEvent(sessionId, {
+      type: "takeover-requested",
+      data: {
+        requestedBy: "Replacement editor",
+        requestedAt: new Date().toISOString(),
+      },
+    });
+    expect(await reader.read()).toEqual({ done: true, value: undefined });
   });
 });

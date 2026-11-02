@@ -26,6 +26,8 @@ const boundaryLeaves = new Set([
   "lib/deployment-feature-route.ts",
   "lib/api-handlers.ts",
   "lib/errors/tagged-errors.ts",
+  // Per-process work admission counts scan slots and memory; it reads no data.
+  "lib/load/work-admission.ts",
 ]);
 
 const allowedModules = new Set([

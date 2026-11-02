@@ -23,6 +23,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { generateVerificationCode } from "@/api/lib/document-reference";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import { createFileKey } from "@/api/lib/file-key";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
@@ -30,6 +31,7 @@ import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { copyObject } from "@/api/lib/s3-presign";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -37,10 +39,41 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import { createCopyToWorkspace } from "./copy";
+import type { copyFileObjects, FileMapping } from "./copy-utils";
 import { readVersionsHandler } from "./versions/list";
 
 const noAudit = async () => undefined;
+const copyFileObjectsForTest = async ({
+  copiedS3Keys,
+  organizationId,
+  sources,
+  targetWorkspaceId,
+}: Parameters<typeof copyFileObjects>[0]) => {
+  const mappings: FileMapping[] = [];
+  for (const source of sources) {
+    const newFileId = allocateFileObject();
+    const targetKey = createFileKey({
+      fileId: newFileId,
+      mimeType: source.mimeType,
+      organizationId,
+      workspaceId: targetWorkspaceId,
+    });
+    copiedS3Keys.push(targetKey);
+    const copied = await copyObject(source.sourceKey, targetKey);
+    if (Result.isError(copied)) {
+      return panic("Seeded source object copy failed", copied.error);
+    }
+    mappings.push({
+      ...source,
+      cleanupIntentIds: [],
+      newFileId,
+      targetKey,
+    });
+  }
+  return Result.ok(mappings);
+};
 const handler = createCopyToWorkspace({
+  copyFileObjects: copyFileObjectsForTest,
   enqueueDocumentProcessingRun: async () => undefined,
   enqueueEntitySearchRepairs: async () => undefined,
   enqueueImageThumbnailOrMarkFailed: async () => undefined,
@@ -579,6 +612,7 @@ test.each(cases)(
           const outcome = await f.safeDb(
             async (tx) =>
               await writeFileVersion({
+                authority: CALLER_AUTHORIZED,
                 tx,
                 organizationId: f.organizationId,
                 workspaceId: f.sourceWorkspaceId,

@@ -1,13 +1,5 @@
 [
   {
-    "id": "apps/api/src/lib/account-deletion-effect-store.ts::claimNextAccountDeletionEffectChunk",
-    "writes": {
-      "update:accountDeletionEffectChunks": 2,
-      "update:accountDeletionRequests": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
     "id": "apps/api/src/lib/account-deletion-effect-store.ts::completeAccountDeletionEffectChunk",
     "writes": {
       "update:accountDeletionEffectChunks": 1
@@ -893,7 +885,7 @@
     "reason": "Document storage step called by an audited operation; confirm the caller records the event."
   },
   {
-    "id": "apps/api/src/lib/files/organization-file-usage-reconcile.ts::reconcileAbandonedOrganizationFileReservations",
+    "id": "apps/api/src/lib/files/organization-file-usage-reconcile.ts::claimReconciliationCandidates",
     "writes": {
       "update:organizationFileObjects": 1
     },
@@ -903,7 +895,6 @@
     "id": "apps/api/src/lib/files/organization-file-usage.ts::reconcileOrganizationFileObject.try",
     "writes": {
       "insert:organizationFileObjects": 1,
-      "insert:organizationFileUsage": 1,
       "update:organizationFileObjects": 1,
       "update:organizationFileUsage": 1
     },
@@ -921,7 +912,6 @@
     "id": "apps/api/src/lib/files/organization-file-usage.ts::reserveOrganizationFileBytes.try",
     "writes": {
       "insert:organizationFileObjects": 1,
-      "insert:organizationFileUsage": 1,
       "update:organizationFileObjects": 1,
       "update:organizationFileUsage": 1
     },
@@ -930,8 +920,7 @@
   {
     "id": "apps/api/src/lib/files/organization-file-usage.ts::reserveOrganizationFilesBytesOnce.try",
     "writes": {
-      "insert:organizationFileUsage": 1,
-      "insert:organization_file_objects": 1
+      "insert:organizationFileUsage": 1
     },
     "reason": "Document storage step called by an audited operation; confirm the caller records the event."
   },
@@ -1656,16 +1645,6 @@
     "writes": {
       "insert:chat_thread_search_documents": 1,
       "update:chat_thread_search_documents": 1
-    },
-    "reason": "Search projection derived from a write that is audited at its source."
-  },
-  {
-    "id": "apps/api/src/lib/search/index-entity.ts::upsertSearchDocument",
-    "writes": {
-      "delete:search_document_preview_passages": 1,
-      "insert:search_document_preview_passages": 1,
-      "insert:search_documents": 1,
-      "update:search_documents": 1
     },
     "reason": "Search projection derived from a write that is audited at its source."
   },

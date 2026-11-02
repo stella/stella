@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
@@ -8,15 +8,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import {
-  timestampCasToken,
-  timestampMatchesCasToken,
-} from "@/api/lib/db/timestamp-cas";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
-import { getS3 } from "@/api/lib/s3";
-import { deleteQueuedStyleSetPackages } from "@/api/lib/style-set-package-cleanup-queue";
 
 const paramsSchema = v.object({ styleSetId: resourceIdSchema("styleSet") });
 const config = {
@@ -38,7 +30,7 @@ const config = {
 export default createSafeRootHandler(
   config,
   async function* ({ safeDb, session, params, recordAuditEvent }) {
-    const deleted = yield* Result.await(
+    yield* Result.await(
       abortableTx(safeDb, async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${params.styleSetId}))`,
@@ -51,8 +43,6 @@ export default createSafeRootHandler(
           columns: {
             id: true,
             name: true,
-            s3Key: true,
-            cleanupS3Key: true,
             deletedAt: true,
           },
         });
@@ -63,110 +53,32 @@ export default createSafeRootHandler(
           });
         }
 
-        const deletedAt = existing.deletedAt ?? new Date();
-        if (!existing.deletedAt) {
-          await tx
-            .update(styleSets)
-            .set({ deletedAt })
-            .where(
-              and(
-                eq(styleSets.id, params.styleSetId),
-                eq(styleSets.organizationId, session.activeOrganizationId),
-              ),
-            );
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.DELETE,
-            resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,
-            resourceId: existing.id,
-            workspaceId: null,
-            changes: {
-              deleted: { old: { name: existing.name }, new: null },
-            },
-          });
+        if (existing.deletedAt) {
+          return;
         }
-        const [deletionBoundary] = await tx
-          .select({ token: timestampCasToken(styleSets.deletedAt) })
-          .from(styleSets)
-          .where(
-            and(
-              eq(styleSets.id, params.styleSetId),
-              eq(styleSets.organizationId, session.activeOrganizationId),
-            ),
-          )
-          .limit(1);
-        if (
-          deletionBoundary?.token === null ||
-          deletionBoundary === undefined
-        ) {
-          // The soft delete and its audit row are already written here, so
-          // returning would commit a recorded deletion the handler then
-          // reports as a missing style set.
-          throw new HandlerError({
-            status: 404,
-            message: "Style set not found",
-          });
-        }
-        return {
-          deletedAtToken: deletionBoundary.token,
-          s3Keys: existing.cleanupS3Key
-            ? [existing.s3Key, existing.cleanupS3Key]
-            : [existing.s3Key],
-        };
-      }),
-    );
 
-    const deletionResult = Result.flatten(
-      await Result.tryPromise({
-        try: async () => {
-          const cleanupResults = await Promise.all([
-            deleteQueuedStyleSetPackages(params.styleSetId).then(() =>
-              Result.ok(undefined),
-            ),
-            ...deleted.s3Keys.map(async (s3Key) => {
-              if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
-                return await deleteOrganizationFileWithSignal(
-                  s3Key,
-                  AbortSignal.timeout(10_000),
-                );
-              }
-              await getS3().delete(s3Key);
-              return Result.ok(undefined);
-            }),
-          ]);
-          return Result.all(cleanupResults).mapError(
-            (cause) =>
-              new HandlerError({
-                status: 500,
-                message: "Could not delete the style set package.",
-                cause,
-              }),
-          );
-        },
-        catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Could not delete the style set package.",
-            cause,
-          }),
-      }),
-    );
-    yield* Result.await(Promise.resolve(deletionResult));
-    yield* Result.await(
-      safeDb(async (tx) => {
-        // audit: skip — storage cleanup for the already-audited style set deletion
+        // The row is the durable cleanup request: it retains the exact current
+        // and superseded package keys until the recurring cleanup confirms
+        // storage erasure, or a live row assumes ownership of a reused key,
+        // and removes the tombstone.
         await tx
-          .delete(styleSets)
+          .update(styleSets)
+          .set({ deletedAt: new Date() })
           .where(
             and(
               eq(styleSets.id, params.styleSetId),
               eq(styleSets.organizationId, session.activeOrganizationId),
-              timestampMatchesCasToken(
-                styleSets.deletedAt,
-                deleted.deletedAtToken,
-              ),
-              isNotNull(styleSets.deletedAt),
             ),
           );
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,
+          resourceId: existing.id,
+          workspaceId: null,
+          changes: {
+            deleted: { old: { name: existing.name }, new: null },
+          },
+        });
       }),
     );
     return Result.ok({});

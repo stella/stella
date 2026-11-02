@@ -353,6 +353,38 @@ describe("invoice export", () => {
     expect(events).toHaveLength(0);
   });
 
+  test("refuses delivery when matter access is removed after rendering", async () => {
+    const events: AuditEvent[] = [];
+    const writes: string[] = [];
+    const { testDb, ids } = fixture;
+    const handler = createInvoicesExport(async ({ key }) => {
+      writes.push(key);
+      await testDb
+        .delete(workspaceMembers)
+        .where(eq(workspaceMembers.id, ids.memberA1wsA1));
+      return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
+    });
+
+    try {
+      const response = await handler.handler(
+        context("own", { format: "xlsx" }, events),
+      );
+      expect(response).toMatchObject({ code: 404 });
+      expect(response).not.toHaveProperty("downloadUrl");
+      expect(writes).toHaveLength(1);
+      expect(events).toHaveLength(0);
+    } finally {
+      await testDb
+        .insert(workspaceMembers)
+        .values({
+          id: ids.memberA1wsA1,
+          workspaceId: ids.wsA1,
+          userId: ids.userA1,
+        })
+        .onConflictDoNothing();
+    }
+  });
+
   test.each(["neighbour", "other"] as const)(
     "exports nothing from the %s scope",
     async (scope) => {

@@ -32,7 +32,7 @@ import {
 } from "@/api/lib/entity-versions/insert-entity-batch";
 import { carryVerificationCodes } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
+import { copyOrganizationFilesForPublication } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { storedFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
@@ -273,6 +273,7 @@ type CopiedFieldInsert = {
 };
 
 export type FileMapping = {
+  cleanupIntentIds: SafeId<"pendingUpload">[];
   sourceKey: string;
   targetKey: string;
   newFileId: MintedFileId;
@@ -362,6 +363,7 @@ export const collectFileCopySources = ({
 const FILE_COPY_CONCURRENCY = 16;
 
 type CopyFileObjectOptions = FileCopySource & {
+  fileUsageDb?: Parameters<typeof copyOrganizationFilesForPublication>[0]["db"];
   organizationId: SafeId<"organization">;
   targetWorkspaceId: SafeId<"workspace">;
   copiedS3Keys: string[];
@@ -386,6 +388,9 @@ export const copyFileObject = async (
     organizationId: options.organizationId,
     targetWorkspaceId: options.targetWorkspaceId,
     copiedS3Keys: options.copiedS3Keys,
+    ...(options.fileUsageDb === undefined
+      ? {}
+      : { fileUsageDb: options.fileUsageDb }),
   });
   if (Result.isError(copied)) {
     return Result.err(copied.error);
@@ -398,6 +403,7 @@ export const copyFileObject = async (
 };
 
 type CopyFileObjectsOptions = {
+  fileUsageDb?: Parameters<typeof copyOrganizationFilesForPublication>[0]["db"];
   sources: FileCopySource[];
   organizationId: SafeId<"organization">;
   targetWorkspaceId: SafeId<"workspace">;
@@ -414,6 +420,7 @@ const stageAndCopyFiles = async ({
   organizationId,
   targetWorkspaceId,
   copiedS3Keys,
+  fileUsageDb,
 }: CopyFileObjectsOptions): Promise<
   Result<
     FileMapping[],
@@ -431,7 +438,10 @@ const stageAndCopyFiles = async ({
     copiedS3Keys.push(targetKey);
     return { ...source, targetKey, newFileId };
   });
-  const prepareFile = async ({ sourceKey, targetKey }: FileMapping) => {
+  const prepareFile = async ({
+    sourceKey,
+    targetKey,
+  }: Pick<FileMapping, "sourceKey" | "targetKey">) => {
     const source = isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
       ? await headObject(sourceKey)
       : Result.ok({ contentLength: 0 });
@@ -443,8 +453,6 @@ const stageAndCopyFiles = async ({
       objectKey: targetKey,
       sizeBytes: source.value.contentLength,
       source: sourceKey,
-      copy: async (checked: CheckedFileCopy<string>) =>
-        await copyObject(checked.source, checked.objectKey),
     });
   };
   const prepared: Awaited<ReturnType<typeof prepareFile>>[] = [];
@@ -455,17 +463,41 @@ const stageAndCopyFiles = async ({
   if (Result.isError(inputs)) {
     return Result.err(inputs.error);
   }
-  const copied = await copyOrganizationFiles({
-    inputs: inputs.value,
+  const copied = await copyOrganizationFilesForPublication({
+    inputs: inputs.value.map((input) => ({
+      ...input,
+      // The copy runs only inside the publication ledger's checked operation.
+      copy: async (checked: CheckedFileCopy<string>) =>
+        await copyObject(checked.source, checked.objectKey),
+      cleanupScope: {
+        type: "workspaces" as const,
+        workspaces: [{ id: targetWorkspaceId, state: "active" as const }],
+      },
+    })),
     concurrency: FILE_COPY_CONCURRENCY,
+    ...(fileUsageDb === undefined ? {} : { db: fileUsageDb }),
   });
   if (Result.isError(copied)) {
     return Result.err(copied.error);
   }
-  const completed = Result.all(copied.value);
-  return Result.isError(completed)
-    ? Result.err(completed.error)
-    : Result.ok(mappings);
+  const completed = Result.all(copied.value.copies);
+  if (Result.isError(completed)) {
+    return Result.err(completed.error);
+  }
+  const intentsByKey = new Map(
+    copied.value.publicationIntents.map(({ cleanupIntentIds, objectKey }) => [
+      objectKey,
+      cleanupIntentIds,
+    ]),
+  );
+  return Result.ok(
+    mappings.map((mapping) => ({
+      ...mapping,
+      cleanupIntentIds:
+        intentsByKey.get(mapping.targetKey) ??
+        panic("Successful file copy has no publication intent"),
+    })),
+  );
 };
 
 export const copyFileObjects = async (

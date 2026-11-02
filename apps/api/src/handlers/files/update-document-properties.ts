@@ -12,6 +12,7 @@ import { entities, entityVersions, fields } from "@/api/db/schema";
 import { status } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { writeDocumentProperties } from "@/api/lib/files/document-properties";
@@ -152,6 +153,7 @@ export const updateDocumentProperties = async ({
   // a file, so version numbering, field cloning, the audit event, derivative
   // and extraction re-queueing all stay identical to an ordinary re-upload.
   const result = await createEntityVersionFromBuffer({
+    authority: CALLER_AUTHORIZED,
     buffer: written.bytes,
     entityId: row.entityId,
     fileName: content.fileName,

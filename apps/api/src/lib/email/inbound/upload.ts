@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { CorrespondenceOriginalSignature } from "@stll/api-contract/correspondence";
 import {
@@ -8,12 +8,12 @@ import {
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
 
-import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped, type ScopedDb } from "@/api/db/safe-db";
-import { correspondenceAttachments, entities } from "@/api/db/schema";
+import { correspondenceAttachments } from "@/api/db/schema";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import { verifyOriginalSignature } from "@/api/lib/email/inbound/authentication";
 import { PARSE_DROP_REASON } from "@/api/lib/email/inbound/ingest";
@@ -22,6 +22,10 @@ import {
   type EmailFileFormat,
   parseEmailFile,
 } from "@/api/lib/email/inbound/message";
+import {
+  readCurrentUploadedMailSource,
+  type UploadedMailSource,
+} from "@/api/lib/email/inbound/upload-source";
 import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
@@ -44,7 +48,7 @@ const UNVERIFIED_SIGNATURE = {
 
 type UploadedMailSkipReason =
   | "not_email"
-  | "source_missing"
+  | "source_changed"
   | "no_uploader"
   | "correspondence_attachment"
   | (typeof PARSE_DROP_REASON)[keyof typeof PARSE_DROP_REASON]
@@ -77,12 +81,6 @@ const unavailable = (cause: unknown) =>
     cause,
   });
 
-type UploadedMailScope = {
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-  entityId: SafeId<"entity">;
-};
-
 type UploaderScope = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -91,8 +89,7 @@ type UploaderScope = {
 
 type FileUploadedMailOptions = {
   bytes: ArrayBuffer;
-  mimeType: string;
-  scope: UploadedMailScope;
+  source: UploadedMailSource;
   /** The filing job's connection; it reads only the file's uploader. */
   database: {
     transaction: <T>(work: (tx: Transaction) => Promise<T>) => Promise<T>;
@@ -108,39 +105,21 @@ const scopedDbForUploaderDefault = ({
 }: UploaderScope) =>
   createRootScopedDb({ organizationId, userId, workspaceIds: [workspaceId] });
 
-// The uploader's address is read only through their membership of the file's
-// organization; a former member reads as no uploader.
+// The uploader's address is read only through their current organization
+// membership; a former member reads as no uploader.
 const readUploader = async (
   database: FileUploadedMailOptions["database"],
-  { entityId, workspaceId, organizationId }: UploadedMailScope,
+  source: UploadedMailSource,
 ) =>
-  await database.transaction(async (tx) => {
-    const [file] = await tx
-      .select({
-        createdBy: entities.createdBy,
-        createdAt: entities.createdAt,
-        uploaderEmail: user.email,
-      })
-      .from(entities)
-      .leftJoin(
-        member,
-        and(
-          eq(member.userId, entities.createdBy),
-          eq(member.organizationId, organizationId),
-        ),
-      )
-      .leftJoin(user, and(eq(user.id, member.userId), isNull(user.deletedAt)))
-      .where(
-        and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
-      )
-      .limit(1);
-    return file ?? null;
-  });
+  await withAggregateTransaction(
+    database,
+    async (tx) => await readCurrentUploadedMailSource(tx, source),
+  );
 
 // An inbound attachment is part of its delivered record, not an upload.
 const isCorrespondenceAttachment = async (
   scopedDb: ScopedDb,
-  { entityId, workspaceId }: UploadedMailScope,
+  { entityId, workspaceId }: UploadedMailSource,
 ) =>
   await scopedDb(async (tx) => {
     const links = await tx
@@ -197,20 +176,19 @@ const skipped = (
  */
 export const fileUploadedMail = async ({
   bytes,
-  mimeType,
-  scope,
+  source,
   database,
   scopedDbForUploader = scopedDbForUploaderDefault,
   verifyOriginal = verifyOriginalSignature,
 }: FileUploadedMailOptions): Promise<
   Result<UploadedMailOutcome, UploadedMailUnavailableError>
 > => {
-  if (!isUploadedMailMimeType(mimeType)) {
+  if (!isUploadedMailMimeType(source.extractionMimeType)) {
     return skipped("not_email");
   }
-  const format = UPLOADED_MAIL_FORMATS[mimeType];
+  const format = UPLOADED_MAIL_FORMATS[source.extractionMimeType];
   const read = await Result.tryPromise({
-    try: async () => await readUploader(database, scope),
+    try: async () => await readUploader(database, source),
     catch: unavailable,
   });
   if (read.isErr()) {
@@ -218,19 +196,19 @@ export const fileUploadedMail = async ({
   }
   const file = read.value;
   if (file === null) {
-    return skipped("source_missing");
+    return skipped("source_changed");
   }
-  if (file.createdBy === null || file.uploaderEmail === null) {
+  if (file.uploaderId === null || file.uploaderEmail === null) {
     return skipped("no_uploader");
   }
-  const userId = brandPersistedUserId(file.createdBy);
+  const userId = brandPersistedUserId(file.uploaderId);
   const scopedDb = scopedDbForUploader({
-    organizationId: scope.organizationId,
-    workspaceId: scope.workspaceId,
+    organizationId: source.organizationId,
+    workspaceId: source.workspaceId,
     userId,
   });
   const attached = await Result.tryPromise({
-    try: async () => await isCorrespondenceAttachment(scopedDb, scope),
+    try: async () => await isCorrespondenceAttachment(scopedDb, source),
     catch: unavailable,
   });
   if (attached.isErr()) {
@@ -249,14 +227,15 @@ export const fileUploadedMail = async ({
   }
   const created = await createCorrespondence({
     safeDb: safeDbFromScoped(scopedDb),
-    organizationId: scope.organizationId,
-    workspaceId: scope.workspaceId,
+    organizationId: source.organizationId,
+    workspaceId: source.workspaceId,
     filer: { type: "user", userId },
+    uploadSource: source,
     parsed: correspondenceFromMessage({
       message: { ...parsed.value, from },
       provenance: {
         source: "upload",
-        sourceEntityId: scope.entityId,
+        sourceEntityId: source.entityId,
         originalSignature: await uploadedSignature({
           bytes,
           format,
@@ -268,15 +247,15 @@ export const fileUploadedMail = async ({
     }),
     attachments: [],
     recordAuditEvent: createBackgroundAuditRecorder({
-      organizationId: scope.organizationId,
-      workspaceId: scope.workspaceId,
+      organizationId: source.organizationId,
+      workspaceId: source.workspaceId,
       userId,
       execution: {
         performer: { type: "user", id: userId },
         trigger: {
           type: "system",
           source: "uploaded_mail",
-          sourceId: scope.entityId,
+          sourceId: source.entityId,
         },
       },
     }),
@@ -288,8 +267,13 @@ export const fileUploadedMail = async ({
         correspondenceId: created.id,
       });
     case "error":
-      if (HandlerError.is(created.error) && created.error.status === 403) {
-        return skipped("no_matter_access");
+      if (HandlerError.is(created.error)) {
+        if (created.error.status === 403) {
+          return skipped("no_matter_access");
+        }
+        if (created.error.status === 409) {
+          return skipped("source_changed");
+        }
       }
       return Result.err(unavailable(created.error));
     case "invalid_content":

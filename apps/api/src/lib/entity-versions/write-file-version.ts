@@ -21,6 +21,8 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import type { DocumentSource } from "@/api/lib/document-source";
+import { authorizeBufferWrite } from "@/api/lib/entities/buffer-write-authority";
+import type { BufferWriteAuthority } from "@/api/lib/entities/buffer-write-authority";
 import {
   lockDesktopEditTarget,
   lockDocxEditTarget,
@@ -124,6 +126,12 @@ type WriteFileVersionInput = {
       }
     | undefined;
   writePolicy: FileVersionWritePolicy;
+  /**
+   * Required: a delayed member action rechecks its authority here, first in
+   * the transaction, before the document and matter locks below. `afterWrite`
+   * runs after those locks and must take no authority lock.
+   */
+  authority: BufferWriteAuthority;
   afterWrite?:
     | ((
         result: Extract<WriteFileVersionResult, { status: "ok" }>,
@@ -317,8 +325,10 @@ export const writeFileVersion = async ({
   scanWarnings,
   versionMetadata,
   writePolicy,
+  authority,
   afterWrite,
 }: WriteFileVersionInput): Promise<WriteFileVersionResult> => {
+  await authorizeBufferWrite(authority, tx);
   const locksFileProperty =
     writePolicy.type === "automatic-docx-edit" ||
     writePolicy.type === "collaboration-room-publish" ||
