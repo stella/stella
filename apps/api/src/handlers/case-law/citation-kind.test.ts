@@ -811,6 +811,19 @@ describe("only the citing sentence supplies kind cues", () => {
       });
     }
   });
+
+  test("a citation the segmenter splits reads every sentence it spans", () => {
+    for (const [citationText, context] of [
+      ["sp. zn. 21 Cdo\n1234/2020", "Srov. sp. zn. 21 Cdo\n1234/2020 a dále."],
+      ["21 Cdo 1234/2020! a", "Srov. 21 Cdo 1234/2020! a dále."],
+      [" 21 Cdo 1234/2020", "Srov. první. 21 Cdo 1234/2020 dále."],
+    ] as const) {
+      expect(classifyCitationVerdict({ citationText, context })).toEqual({
+        kind: CITATION_KIND.PRECEDENT,
+        evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+      });
+    }
+  });
 });
 
 test("a statement about the case's own numbered proceedings stays procedural", () => {
