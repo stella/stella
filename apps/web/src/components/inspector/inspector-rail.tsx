@@ -14,6 +14,7 @@ import {
   entityTabGlyph,
   InspectorEntityTab,
   InspectorRailIconButton,
+  InspectorRailTab,
 } from "@stll/ui/inspector";
 import type { InspectorEntityTabInactiveIcon } from "@stll/ui/inspector";
 import { getMatterSwatch } from "@stll/ui/matter-colors";
@@ -54,7 +55,6 @@ import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
@@ -418,15 +418,7 @@ const SuggestedReviveTab = () => {
     <Tooltip
       content={label}
       render={
-        <button
-          aria-label={label}
-          className={cn(
-            "text-foreground-muted hover:bg-accent hover:text-foreground flex min-h-8 w-full items-center justify-center",
-            TOOLBAR_ROW_HEIGHT,
-          )}
-          onClick={reviveSuggestedTab}
-          type="button"
-        />
+        <InspectorRailTab aria-label={label} onClick={reviveSuggestedTab} />
       }
       side="left"
     >

@@ -167,7 +167,7 @@ test("sidebar context menus delete only the row that was right-clicked", async (
   fireEvent.contextMenu(documentRow);
   const documentMenu = await screen.findByRole("menu");
   fireEvent.click(
-    within(documentMenu).getByRole("menuitem", { name: "Delete" }),
+    within(documentMenu).getByRole("menuitem", { name: "Delete from matter…" }),
   );
   const dialog = await screen.findByRole("alertdialog");
   fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));

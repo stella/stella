@@ -36,7 +36,8 @@
     "flowRunAwaitingApproval": "Um fluxo de trabalho aguarda sua aprovação",
     "flowRunCompleted": "Um fluxo de trabalho foi concluído",
     "flowRunFailed": "Um fluxo de trabalho falhou",
-    "mention": "Você foi mencionado em um comentário"
+    "mention": "Você foi mencionado em um comentário",
+    "taskAssigned": "Uma tarefa foi atribuída a você"
   },
   "reportExportStatus": {
     "action": "Abrir a stella",

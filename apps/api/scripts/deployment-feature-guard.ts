@@ -69,8 +69,16 @@ const CATALOG_DIRECTORY = "packages/cli/capabilities";
  */
 const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
+    "/v1/organizations",
+    "Authenticated account holders can create organizations on every deployment",
+  ],
+  [
     "/v1/dictation/transcribe",
     "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
+  ],
+  [
+    "/v1/organizations/slug",
+    "Organization slug settings are available to authorized owners and admins on every deployment",
   ],
   [
     "/v1/workspaces/:workspaceId/vocabulary",
@@ -212,13 +220,19 @@ const loadMountedRoutes = async (
     }
   }
   const { apiRoutes } = await import("../src/api-routes");
-  const { deploymentFeatureGateFlag, localDevelopmentGate } =
-    await import("../src/lib/deployment-feature-route");
+  const {
+    deploymentFeatureGateExceptionFlag,
+    deploymentFeatureGateFlag,
+    localDevelopmentGate,
+  } = await import("../src/lib/deployment-feature-route");
   return apiRoutes.map((entry) => ({
     method: entry.method,
     path: entry.path,
+    // A gate with one admitted exception still stands for its flag.
     gateFlags: entry.middleware.flatMap((middleware) => {
-      const flag = deploymentFeatureGateFlag(middleware);
+      const flag =
+        deploymentFeatureGateFlag(middleware) ??
+        deploymentFeatureGateExceptionFlag(middleware);
       return flag === undefined ? [] : [flag];
     }),
     localDevelopment: entry.middleware.includes(localDevelopmentGate),

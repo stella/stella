@@ -1,6 +1,7 @@
 import type { Queue } from "bullmq";
 
 import { chunk } from "@stll/concurrency/chunk";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -25,10 +26,15 @@ export type PushDeliveryJobData = {
   notificationId: string;
   /**
    * Devices an earlier attempt already reached, so a retry after a partial
-   * failure alerts only the rest.
+   * failure alerts only the rest. Each is the SHA-256 hex of the device
+   * token ({@link pushTokenHash}): a failed job stays in the queue for a
+   * week, and a delivery address has no reason to sit there with it.
    */
-  deliveredTokens?: string[];
+  deliveredTokenHashes?: string[];
 };
+
+/** How a job names a device it already reached. */
+export const pushTokenHash = (token: string): string => sha256Hex(token);
 
 /**
  * Retries back off from fifteen seconds; five attempts span about four

@@ -1,7 +1,7 @@
 {
   "name": "@stll/fetch",
   "version": "0.1.1",
-  "description": "Fetch with a mandatory timeout (headers or idle body window), connection-failure classification, and a robots-aware polite publisher fetch",
+  "description": "Fetch with mandatory total or header timeouts, idle-bounded body reads, connection-failure classification, and a robots-aware polite publisher fetch",
   "keywords": [
     "abort",
     "fetch",
@@ -28,7 +28,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./publisher": "./src/publisher.ts"
+    "./publisher": "./src/publisher.ts",
+    "./body-reader": "./src/body-reader.ts"
   },
   "publishConfig": {
     "access": "public"

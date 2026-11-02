@@ -34,6 +34,14 @@
     "composerPlaceholder": "stella fragen",
     "send": "Senden",
     "stop": "Stoppen",
+    "dictate": "Diktieren",
+    "dictationCancel": "Diktat abbrechen",
+    "dictationFinish": "Diktat beenden",
+    "dictationListening": "Hört zu… {elapsed} von {limit}",
+    "dictationTranscribing": "Wird transkribiert…",
+    "dictationDenied": "Zum Diktieren braucht stella das Mikrofon. Erlaube es in den Einstellungen.",
+    "dictationFailed": "Die Aufnahme konnte nicht transkribiert werden. Versuche es erneut.",
+    "dictationSilent": "Es wurde keine Sprache erkannt.",
     "sendFailed": "Ihre Nachricht konnte nicht gesendet werden. Versuchen Sie es erneut.",
     "answerWorking": "Wird bearbeitet…",
     "answerStopped": "Gestoppt.",
@@ -74,7 +82,8 @@
       "none": "Kein Datum",
       "today": "Heute",
       "tomorrow": "Morgen",
-      "nextWeek": "In einer Woche"
+      "nextWeek": "In einer Woche",
+      "pick": "Datum wählen"
     },
     "due": {
       "overdue": "Überfällig",
@@ -164,7 +173,16 @@
     "preview": "Vorschau öffnen",
     "previewDescription": "Diese Datei wird in der Systemvorschau geöffnet.",
     "unrendered": "Dieses Dokument kann hier nicht angezeigt werden, die Systemvorschau kann es aber eventuell öffnen.",
-    "details": "Details"
+    "details": "Details",
+    "zoomOut": "Verkleinern",
+    "zoomIn": "Vergrößern",
+    "zoomFit": "An Breite anpassen",
+    "fit": "Breite",
+    "appearance": {
+      "system": "Darstellung: automatisch",
+      "light": "Darstellung: hell",
+      "dark": "Darstellung: dunkel"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -192,7 +210,8 @@
     "server": "Server",
     "signOut": "Abmelden",
     "deleteAccount": "Konto löschen",
-    "deleteAccountHint": "Öffnet Ihr Konto im Web, wo Sie es mit allem, was Ihnen gehört, löschen können."
+    "deleteAccountHint": "Öffnet Ihr Konto im Web, wo Sie es mit allem, was Ihnen gehört, löschen können.",
+    "signOutFailed": "Die Abmeldung konnte nicht abgeschlossen werden. Versuchen Sie es erneut."
   },
   "header": {
     "search": "Suchen"
@@ -211,9 +230,7 @@
     "share": "Teilen"
   },
   "more": {
-    "soon": "Demnächst verfügbar",
-    "timers": "Timer",
-    "voiceInput": "Spracheingabe"
+    "timers": "Timer"
   },
   "writes": {
     "consentNeeded": "Damit die App Änderungen vornehmen kann, braucht stella Ihre Erlaubnis. Melden Sie sich erneut an, um sie zu erteilen.",
@@ -292,6 +309,29 @@
   "palette": {
     "placeholder": "Akten und Chats suchen oder einen Befehl ausführen",
     "noResults": "Nichts passt zu „{query}“"
+  },
+  "search": {
+    "placeholder": "stella durchsuchen",
+    "clear": "Suche löschen",
+    "cancel": "Abbrechen",
+    "recent": "Letzte Suchen",
+    "clearRecent": "Löschen",
+    "hint": "Durchsuchen Sie Akten, Dokumente, Aufgaben, Chats und Rechtsprechung.",
+    "filters": "Filter",
+    "noResultsTitle": "Keine Ergebnisse",
+    "noResults": "Nichts passt zu „{query}“. Versuchen Sie andere Wörter oder entfernen Sie einen Filter.",
+    "loadFailed": "Die Suche konnte nicht ausgeführt werden.",
+    "retry": "Erneut versuchen",
+    "type": {
+      "document": "Dokumente",
+      "matter": "Akten",
+      "task": "Aufgaben",
+      "caseLaw": "Rechtsprechung",
+      "chat": "Chats",
+      "folder": "Ordner",
+      "message": "E-Mails",
+      "link": "Links"
+    }
   },
   "pane": {
     "showList": "Liste einblenden",

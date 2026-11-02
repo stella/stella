@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
+import * as v from "valibot";
 
 import { writeApproval } from "./ci-job-classification/decisions";
 import {
@@ -18,6 +19,26 @@ import { ReviewRequiredError } from "./ci-job-classification/review";
 import { AdmissionError } from "./ci-job-classification/yaml";
 
 type ClassificationInputs = ReturnType<typeof readClassificationInputs>;
+type MergeGroupMember = { number: number; head: string };
+type MergeGroup = { members: MergeGroupMember[] };
+const MERGE_QUEUE_RESPONSE = v.object({
+  data: v.object({
+    repository: v.object({
+      mergeQueue: v.object({
+        entries: v.object({
+          nodes: v.array(
+            v.object({
+              pullRequest: v.object({
+                number: v.number(),
+                headRefOid: v.pipe(v.string(), v.regex(/^[a-f0-9]{40}$/u)),
+              }),
+            }),
+          ),
+        }),
+      }),
+    }),
+  }),
+});
 const generateWithJobs = (inputs: ClassificationInputs) => {
   let jobs: ReadonlyMap<string, DerivedJob> | undefined;
   const result = generateClassification({
@@ -208,6 +229,135 @@ export const checkJobClassification = (root: string, base?: string) =>
           }),
   });
 
+const gitOutput = (root: string, args: string[]) => {
+  const result = Bun.spawnSync(["git", "-C", root, ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    throw new AdmissionError({
+      message:
+        new TextDecoder().decode(result.stderr).trim() ||
+        `git ${args.join(" ")} failed`,
+    });
+  }
+  return new TextDecoder().decode(result.stdout);
+};
+
+const contentAt = (root: string, revision: string, file: string) => {
+  const result = Bun.spawnSync(
+    ["git", "-C", root, "show", `${revision}:${file}`],
+    {
+      stdout: "pipe",
+      stderr: "ignore",
+    },
+  );
+  return result.exitCode === 0
+    ? new TextDecoder().decode(result.stdout)
+    : undefined;
+};
+
+type MergeGroupCheckOptions = {
+  root: string;
+  base: string;
+  // Read only after the exact check fails, so a queue read failure cannot
+  // fail a group that passes on its own digests.
+  readMergeGroup: () => MergeGroup;
+};
+
+// A queued tree may combine independently reviewed inputs. Each byte of every
+// changed classification input must have appeared on an approving PR head;
+// this deliberately does not infer provenance from patches or commit authors.
+export const checkMergeGroupJobClassification = ({
+  root,
+  base,
+  readMergeGroup,
+}: MergeGroupCheckOptions) => {
+  const exact = checkJobClassification(root, base);
+  if (exact.isOk() || !(exact.error instanceof ReviewRequiredError)) {
+    return exact;
+  }
+  const mergeGroup = readMergeGroup();
+  const headInputs = readClassificationInputs(root);
+  const head = generateWithJobs(headInputs);
+  // NUL-separated: Git quotes non-ASCII, tab and newline names in line output,
+  // and a quoted name would never match a classification input.
+  const changedFiles = gitOutput(root, [
+    "diff",
+    "--name-only",
+    "-z",
+    "--no-renames",
+    base,
+    "HEAD",
+  ])
+    .split("\0")
+    .filter(
+      (file) =>
+        file.length > 0 &&
+        isClassificationInput(file) &&
+        !file.startsWith(`${CLASSIFICATION_DECISIONS_PATH}/`),
+    );
+  const members = mergeGroup.members.map((member) => {
+    const inputs = readClassificationInputsAtRevision(root, member.head);
+    return { ...member, inputs, generated: generateWithJobs(inputs) };
+  });
+  const stale = [...head.jobs].filter(([key, job]) => {
+    const decision = headInputs.decisions[key];
+    return !decision?.approvedDigests.includes(job.digest);
+  });
+  const ordinaryComposable = stale.every(([key, job]) => {
+    const decision = headInputs.decisions[key];
+    if (
+      decision === undefined ||
+      job.privileged ||
+      decision.kind === "priority"
+    ) {
+      return false;
+    }
+    const approvers = members.filter((member) => {
+      const memberDecision = member.inputs.decisions[key];
+      const memberJob = member.generated.jobs.get(key);
+      return (
+        memberDecision !== undefined &&
+        memberJob !== undefined &&
+        memberDecision.kind === decision.kind &&
+        memberDecision.qualifier === decision.qualifier &&
+        memberDecision.approvedDigests.includes(memberJob.digest)
+      );
+    });
+    return (
+      approvers.length > 0 &&
+      changedFiles.every((file) => {
+        const combined = contentAt(root, "HEAD", file);
+        return approvers.some(
+          (member) => contentAt(root, member.head, file) === combined,
+        );
+      })
+    );
+  });
+  if (ordinaryComposable) {
+    // Composition waives the review of ordinary jobs only; privileged changes
+    // elsewhere in the group stay reported as sensitive.
+    return Result.ok({
+      workflowCount: head.workflowCount,
+      privilegedJobs: exact.error.privilegedJobs,
+    });
+  }
+  const later = mergeGroup.members.at(-1);
+  const refusal = later
+    ? `classification needs re-approval after #${later.number}`
+    : undefined;
+  return Result.err(
+    new ReviewRequiredError({
+      message: refusal
+        ? `${refusal}\n${exact.error.message}`
+        : exact.error.message,
+      privilegedJobs: exact.error.privilegedJobs,
+      ...(refusal ? { refusal } : {}),
+    }),
+  );
+};
+
 const gitMergeBase = (root: string) => {
   const result = Bun.spawnSync(
     ["git", "-C", root, "merge-base", "origin/main", "HEAD"],
@@ -284,7 +434,17 @@ const parseCli = (args: string[]): CliOptions => {
 // workflow revision either way.
 const pushTouchesClassification = (root: string, base: string) => {
   const result = Bun.spawnSync(
-    ["git", "-C", root, "diff", "--name-only", "--no-renames", base, "HEAD"],
+    [
+      "git",
+      "-C",
+      root,
+      "diff",
+      "--name-only",
+      "-z",
+      "--no-renames",
+      base,
+      "HEAD",
+    ],
     { stdout: "pipe", stderr: "pipe" },
   );
   if (result.exitCode !== 0) {
@@ -296,7 +456,7 @@ const pushTouchesClassification = (root: string, base: string) => {
   }
   return new TextDecoder()
     .decode(result.stdout)
-    .split("\n")
+    .split("\0")
     .some(isClassificationInput);
 };
 
@@ -314,8 +474,70 @@ const decisionsFileChanged = (root: string) =>
     { stdout: "pipe", stderr: "ignore" },
   ).stdout.length > 0;
 
+const isMergeGroupEvent = () =>
+  process.env["GITHUB_EVENT_NAME"] === "merge_group";
+
+const currentMergeGroup = (): MergeGroup => {
+  const ref = process.env["GITHUB_REF"] ?? "";
+  const match = /\/pr-([0-9]+)-[a-f0-9]{40}$/u.exec(ref);
+  const repository = process.env["GITHUB_REPOSITORY"];
+  const retry = process.env["GH_RETRY_SCRIPT"];
+  if (!match || !repository || !retry) {
+    throw new AdmissionError({ message: "Missing merge-group queue context" });
+  }
+  const [owner, name] = repository.split("/");
+  if (!owner || !name) {
+    throw new AdmissionError({ message: "Invalid GITHUB_REPOSITORY" });
+  }
+  const query = `query($owner:String!,$name:String!){repository(owner:$owner,name:$name){mergeQueue{entries(first:100){nodes{pullRequest{number headRefOid}}}}}}`;
+  const response = Bun.spawnSync(
+    [
+      "bash",
+      retry,
+      "api",
+      "graphql",
+      "-f",
+      `query=${query}`,
+      "-F",
+      `owner=${owner}`,
+      "-F",
+      `name=${name}`,
+    ],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  if (response.exitCode !== 0) {
+    throw new AdmissionError({
+      message:
+        new TextDecoder().decode(response.stderr).trim() ||
+        "Cannot read the merge queue",
+    });
+  }
+  const entries = v.parse(
+    MERGE_QUEUE_RESPONSE,
+    JSON.parse(new TextDecoder().decode(response.stdout)),
+  ).data.repository.mergeQueue.entries.nodes;
+  const leadingNumber = Number(match[1]);
+  const members: MergeGroupMember[] = [];
+  for (const entry of entries) {
+    members.push({
+      number: entry.pullRequest.number,
+      head: entry.pullRequest.headRefOid,
+    });
+    if (entry.pullRequest.number === leadingNumber) {
+      return { members };
+    }
+  }
+  throw new AdmissionError({ message: "Merge group is absent from the queue" });
+};
+
 const runCheck = (root: string, base: string) => {
-  const result = checkJobClassification(root, base);
+  const result = isMergeGroupEvent()
+    ? checkMergeGroupJobClassification({
+        root,
+        base,
+        readMergeGroup: currentMergeGroup,
+      })
+    : checkJobClassification(root, base);
   let privilegedJobs: string[] = [];
   if (result.isErr() && result.error instanceof ReviewRequiredError) {
     privilegedJobs = result.error.privilegedJobs;
@@ -330,10 +552,29 @@ const runCheck = (root: string, base: string) => {
       githubOutput,
       `privileged_classification_change=${sensitive}\n`,
     );
+    if (
+      result.isErr() &&
+      result.error instanceof ReviewRequiredError &&
+      result.error.refusal
+    ) {
+      appendFileSync(
+        githubOutput,
+        `classification_refusal=${result.error.refusal}\n`,
+      );
+    }
   }
   if (privilegedJobs.length) {
     process.stdout.write(
       `::error title=Sensitive classification change::${escapeAnnotation(privilegedJobs.join(", "))}\n`,
+    );
+  }
+  if (
+    result.isErr() &&
+    result.error instanceof ReviewRequiredError &&
+    result.error.refusal
+  ) {
+    process.stdout.write(
+      `::error title=Classification refusal::${escapeAnnotation(result.error.refusal)}\n`,
     );
   }
   if (result.isErr()) {

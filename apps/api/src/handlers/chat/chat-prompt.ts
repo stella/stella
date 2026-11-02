@@ -738,7 +738,7 @@ type BuildChatSystemPromptProps = {
 
 const DEFAULT_BROWSER_EXTENSION = {
   protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-  status: "unsupported-browser",
+  status: "unsupported-device",
 } satisfies BrowserExtensionCapability;
 
 const resolveActiveFilePromptContext = async ({
