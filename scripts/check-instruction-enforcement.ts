@@ -31,12 +31,13 @@
 // metric gates it, so the count grows only with a reasoned allowance.
 //
 // Usage:
-//   bun scripts/check-instruction-enforcement.ts --check
+//   bun --preload ./scripts/offline-network-preload.ts scripts/check-instruction-enforcement.ts --check
 
 import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { assertOfflineCheckPreload } from "./offline-check-startup.ts";
 import { flattenWorkflowSteps } from "./workflow-steps.ts";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -61,7 +62,7 @@ export const CI_MARKDOWN_READER_INPUTS = [
   ".ai/shared/modules/*.md",
 ];
 export const CI_MARKDOWN_READER_COMMAND =
-  "bun scripts/check-instruction-enforcement.ts --check";
+  "bun --preload ./scripts/offline-network-preload.ts scripts/check-instruction-enforcement.ts --check";
 
 // --- Parsing ----------------------------------------------------------------
 
@@ -840,6 +841,8 @@ const runCheck = (): number => {
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
+
   const args = process.argv.slice(2);
   if (args.length !== 1 || args[0] !== "--check") {
     panic(`Usage: bun scripts/check-instruction-enforcement.ts --check`);
