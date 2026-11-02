@@ -524,7 +524,12 @@
     "aiSteerWriteIn": "Rakstīt valodā: {language}",
     "aiSteerRemember": "Atcerēties nākamajai reizei",
     "billingDraftsPreference": "Jūsu melnrakstu preference",
-    "billingDraftsForgetPreference": "Aizmirst preferenci"
+    "billingDraftsForgetPreference": "Aizmirst preferenci",
+    "aiStructureSplit": "{count, plural, zero {stella AI iesaka sadalīt šo ierakstu # daļās} one {stella AI iesaka sadalīt šo ierakstu # daļā} other {stella AI iesaka sadalīt šo ierakstu # daļās}}",
+    "aiStructureMove": "stella AI iesaka pārvietot {duration} uz lietu {matter}",
+    "aiStructureCreate": "{count, plural, zero {Izveidot # ierakstus} one {Izveidot # ierakstu} other {Izveidot # ierakstus}}",
+    "aiStructureMoveAccept": "Pārvietot",
+    "aiFlagSplit": "Sadalīt ierakstu"
   },
   "dictation": {
     "title": "Diktēšana",

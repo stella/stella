@@ -524,7 +524,12 @@
     "aiSteerWriteIn": "Escrever em {language}",
     "aiSteerRemember": "Lembrar da próxima vez",
     "billingDraftsPreference": "Sua preferência de redação",
-    "billingDraftsForgetPreference": "Esquecer preferência"
+    "billingDraftsForgetPreference": "Esquecer preferência",
+    "aiStructureSplit": "{count, plural, one {stella AI sugere dividir este lançamento em # parte} other {stella AI sugere dividir este lançamento em # partes}}",
+    "aiStructureMove": "stella AI sugere mover {duration} para {matter}",
+    "aiStructureCreate": "{count, plural, one {Criar # lançamento} other {Criar # lançamentos}}",
+    "aiStructureMoveAccept": "Mover",
+    "aiFlagSplit": "Dividir lançamento"
   },
   "dictation": {
     "title": "Ditado",

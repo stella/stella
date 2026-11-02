@@ -524,7 +524,12 @@
     "aiSteerWriteIn": "Pisz w języku: {language}",
     "aiSteerRemember": "Zapamiętaj na przyszłość",
     "billingDraftsPreference": "Twoja preferencja dla propozycji",
-    "billingDraftsForgetPreference": "Zapomnij preferencję"
+    "billingDraftsForgetPreference": "Zapomnij preferencję",
+    "aiStructureSplit": "{count, plural, one {stella AI proponuje podzielić wpis na # część} few {stella AI proponuje podzielić wpis na # części} many {stella AI proponuje podzielić wpis na # części} other {stella AI proponuje podzielić wpis na # części}}",
+    "aiStructureMove": "stella AI proponuje przenieść {duration} do sprawy {matter}",
+    "aiStructureCreate": "{count, plural, one {Utwórz # wpis} few {Utwórz # wpisy} many {Utwórz # wpisów} other {Utwórz # wpisu}}",
+    "aiStructureMoveAccept": "Przenieś",
+    "aiFlagSplit": "Podziel wpis"
   },
   "dictation": {
     "title": "Dyktowanie",
