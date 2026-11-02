@@ -182,6 +182,17 @@
       "system": "Välimus: automaatne",
       "light": "Välimus: hele",
       "dark": "Välimus: tume"
+    },
+    "edit": {
+      "saved": "Salvestatud",
+      "saving": "Salvestamine…",
+      "notSaved": "Veel salvestamata",
+      "done": "Valmis",
+      "openFailed": "Seda dokumenti ei saa praegu muuta",
+      "takenOver": "Seda dokumenti muudab nüüd keegi teine. Teie muudatusi pärast viimast salvestamist ei säilitatud.",
+      "finishFailed": "Teie muudatused on salvestatud, kuid neist ei saanud veel uut versiooni. Puudutage uuesti Valmis või lahkuge: järgmine muutmine jätkab neist.",
+      "stay": "Jää",
+      "leave": "Lahku"
     }
   },
   "signIn": {

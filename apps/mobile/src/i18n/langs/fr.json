@@ -182,6 +182,17 @@
       "system": "Apparence : automatique",
       "light": "Apparence : claire",
       "dark": "Apparence : sombre"
+    },
+    "edit": {
+      "saved": "Enregistré",
+      "saving": "Enregistrement…",
+      "notSaved": "Pas encore enregistré",
+      "done": "Terminé",
+      "openFailed": "Ce document ne peut pas être modifié pour le moment",
+      "takenOver": "Quelqu’un d’autre modifie maintenant ce document. Vos modifications depuis le dernier enregistrement n’ont pas été conservées.",
+      "finishFailed": "Vos modifications sont enregistrées, mais elles ne sont pas encore devenues une nouvelle version. Touchez à nouveau Terminé, ou quittez le document. La prochaine modification reprendra à partir de là.",
+      "stay": "Rester",
+      "leave": "Quitter"
     }
   },
   "signIn": {

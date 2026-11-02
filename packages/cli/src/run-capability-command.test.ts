@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { PassThrough } from "node:stream";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
+import { resolveEffectiveGrants } from "./auth/command-scopes.js";
 import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import type { Context } from "./context.js";
@@ -165,6 +166,7 @@ const makeTtyContext = ({
     configDir: "/tmp/stella-test",
     serverUrl,
     token,
+    effectiveGrants: resolveEffectiveGrants({ token }),
   };
   return {
     context,
@@ -514,6 +516,52 @@ describe("runCapabilityCommand: flag -> capability executor payload", () => {
 });
 
 describe("runCapabilityCommand: compound scope preflight", () => {
+  for (const admitted of [false, true]) {
+    test(`capability execution follows effective server grants when token claims ${admitted ? "deny" : "allow"}`, async () => {
+      const server = startServer({ kind: "echo" });
+      const token = makeToken(
+        admitted ? ["read"] : ["documents_write", "templates"],
+      );
+      const tty = makeTtyContext({
+        serverUrl: server.url,
+        stdinData: "",
+        isTTY: false,
+        token,
+      });
+      try {
+        await runCapabilityCommand({
+          context: {
+            ...tty.context,
+            effectiveGrants: resolveEffectiveGrants({
+              token,
+              registry: {
+                grantedScopes: admitted
+                  ? ["stella:documents_write", "stella:templates"]
+                  : ["stella:read"],
+              },
+            }),
+          },
+          flags: {},
+          spec: capSpec({
+            capabilityId: "templates.fills.create",
+            scope: "documents_write",
+            additionalScopes: ["templates"],
+          }),
+        });
+        expect(server.calls).toHaveLength(admitted ? 1 : 0);
+        if (admitted) {
+          expect(tty.exitCode()).toBeUndefined();
+          expect(tty.stderrText()).toBe("");
+        } else {
+          expect(tty.exitCode()).toBe(EXIT_CODES.auth);
+          expect(tty.stderrText()).toContain("stella:documents_write");
+        }
+      } finally {
+        server.stop();
+      }
+    });
+  }
+
   test("rejects a document-only token before invoking a template capability", async () => {
     const server = startServer({ kind: "echo" });
     const tty = makeTtyContext({

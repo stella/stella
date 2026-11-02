@@ -1,9 +1,6 @@
 import * as v from "valibot";
 
-import {
-  defaultVarcharSchema,
-  resourceIdSchema,
-} from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 import {
   playbookPositionsSchema,
@@ -11,7 +8,7 @@ import {
 } from "@/api/lib/workflow/playbook-positions";
 
 const playbookDefinitionFields = {
-  name: defaultVarcharSchema,
+  name: displayNameSchema(),
   description: v.exactOptional(v.pipe(v.string(), v.maxLength(2000))),
   scope: v.exactOptional(playbookScopeSchema),
   positions: playbookPositionsSchema,

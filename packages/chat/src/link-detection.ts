@@ -14,18 +14,27 @@ const BARE_HOST_LABEL_START = /^[\p{L}\p{N}]/u;
 const UNSAFE_CHARACTERS = /[\s\p{Cc}\p{Cf}\\]/u;
 const SPECIAL_USE_SUFFIX =
   /(?:^|\.)(?:localhost|local|internal|invalid|test|example|onion)$/iu;
-const AMBIGUOUS_FILE_SUFFIXES = new Set([
-  "zip",
+// File extensions that are also ICANN top-level domains. A bare token such as
+// "memo.md" or "smlouva.pl" is far more often a file name than a website, so it
+// only becomes a link with a scheme, a "www." prefix or a path. Extensions that
+// are not TLDs (pdf, docx, txt, ...) never pass the ICANN check and need no entry.
+export const FILE_EXTENSION_TLDS: ReadonlySet<string> = new Set([
+  "ai",
+  "dot",
+  "java",
+  "md",
+  "mk",
+  "mobi",
   "mov",
-  "pdf",
-  "doc",
-  "docx",
-  "txt",
-  "js",
-  "ts",
-  "json",
-  "xml",
-  "html",
+  "one",
+  "pl",
+  "pm",
+  "ps",
+  "pub",
+  "py",
+  "rs",
+  "sh",
+  "zip",
 ]);
 
 export const normalizeChatLink = (input: string) => {
@@ -58,10 +67,12 @@ export const normalizeChatLink = (input: string) => {
     if (!domain.isIcann || !domain.domain || domain.isIp) {
       return null;
     }
+    const hasPath = url.pathname !== "/" || url.search !== "";
     if (
       !/^www\./iu.test(input) &&
+      !hasPath &&
       domain.publicSuffix &&
-      AMBIGUOUS_FILE_SUFFIXES.has(domain.publicSuffix)
+      FILE_EXTENSION_TLDS.has(domain.publicSuffix)
     ) {
       return null;
     }

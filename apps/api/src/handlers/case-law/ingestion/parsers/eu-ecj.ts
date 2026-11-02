@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: the lost-content verdict is the same validateAst result; only the logging moved to the pipeline.
 // parser-output-unchanged: Whole-document validation reuses the unmodified parsed source; bounded decision subtrees retain serialization and reparsing, so diagnostics and output are unchanged.
 /**
@@ -43,10 +44,11 @@
  */
 
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -119,7 +121,7 @@ export type ParseEcjDecisionOutput = {
 export const parseEcjDecisionHtml = (
   input: ParseEcjDecisionInput,
 ): ParseEcjDecisionOutput => {
-  const $ = cheerio.load(input.html);
+  const $ = load(input.html);
   const { boundary, root: $document } = ecjDocumentRoot($);
   const blocks = buildBlocks($, $document);
   const keywords = extractKeywords($document);
@@ -431,7 +433,7 @@ export const ecjConverterVersion = (html: string): string | undefined =>
  * the caller must be able to tell apart from a bounded document.
  */
 export const ecjDocumentHtml = (html: string): EcjDocumentSource => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const document = ecjDocumentRoot($);
   return {
     boundary: document.boundary,
@@ -603,7 +605,7 @@ export const ecjStatesKeywordChain = (html: string): boolean =>
   new RegExp(`class="(?:${CLASS_PREFIX})?${CLASS.index}"`, "u").test(html);
 
 export const ecjKeywordSpacingNeedsVerbatim = (html: string): boolean => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const raw = visibleHtmlText($(sel(CLASS.index)).first()).trim();
   return (
     raw.length > 0 &&
