@@ -36,6 +36,7 @@
     ],
     "scripts/autofix-push-scope.test.ts": ["**"],
     "scripts/baseline-paths.test.ts": ["**"],
+    "scripts/baseline-shrink.test.ts": ["**"],
     "scripts/bot-refresh-auto-merge.test.ts": [
       ".github/workflows/bot-refresh-auto-merge.yml"
     ],
@@ -155,6 +156,7 @@
       "turbo.json"
     ],
     "scripts/ci-browser-scope.test.ts": ["**"],
+    "scripts/ci-browser-suites.test.ts": ["**"],
     "scripts/ci-check-budgets.test.ts": [".github/ci-checks/**", "scripts/**"],
     "scripts/ci-check-pool.test.ts": [
       ".github/**",
@@ -169,6 +171,7 @@
     "scripts/ci-gate-classes.test.ts": [".github/**"],
     "scripts/ci-install-store.test.ts": [".github/**"],
     "scripts/ci-job-classification.test.ts": ["**"],
+    "scripts/ci-merge-group-pr-coverage.test.ts": ["**"],
     "scripts/ci-mirror-reconciliation.test.ts": [".github/**"],
     "scripts/ci-plan-bun.test.ts": [".github/**"],
     "scripts/ci-plan-scope.test.ts": ["**"],
