@@ -7,15 +7,15 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
-import { BidiText } from "@stll/ui/bidi-text";
+import { BidiText, stripDirectionalControls } from "@stll/ui/bidi-text";
 import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
+import { Button } from "@stll/ui/button";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { MatterIcon } from "@stll/ui/matter-icon";
 
 import { MatterSwitcher } from "@/components/breadcrumbs/matter-switcher";
 import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
 import { MatterNumberHint } from "@/components/matter-number-hint";
-import Tooltip from "@/components/tooltip";
 import {
   MatterColorContextPicker,
   MatterColorPicker,
@@ -164,7 +164,8 @@ export const WorkspaceBreadcrumb = ({
   }
   const workspace = workspaceView.items;
 
-  const displayName = workspace.name;
+  // Also a `title`, which the browser shows outside any isolating element.
+  const displayName = stripDirectionalControls(workspace.name);
 
   const startEditingName = () => {
     nameRename.startEditing(displayName);
@@ -182,21 +183,19 @@ export const WorkspaceBreadcrumb = ({
 
   const colorPicker = match ? (
     <MatterColorPicker matter={workspace}>
-      <Tooltip
-        content={changeColorLabel}
-        render={
-          <button
-            aria-label={changeColorLabel}
-            className="hover:bg-muted cursor-pointer rounded-sm p-0.5"
-            type="button"
-          >
-            <MatterIcon
-              className="size-3.5 shrink-0"
-              matter={{ id: workspaceId, color: workspace.color }}
-            />
-          </button>
-        }
-      />
+      {/* Icon buttons name themselves in their tooltip. Held to the
+          breadcrumb's glyph scale so the trail does not grow a taller row. */}
+      <Button
+        aria-label={changeColorLabel}
+        className="size-5 sm:size-5"
+        size="icon-xs"
+        variant="ghost"
+      >
+        <MatterIcon
+          className="size-3.5 shrink-0"
+          matter={{ id: workspaceId, color: workspace.color }}
+        />
+      </Button>
     </MatterColorPicker>
   ) : (
     <MatterIcon
@@ -265,13 +264,15 @@ export const WorkspaceBreadcrumb = ({
     }
     if (showMatterNumber && workspace.reference) {
       return (
-        <button
-          className="text-foreground-muted hover:text-muted-foreground cursor-text text-sm whitespace-pre"
+        <Button
+          className="cursor-text"
           onClick={() => refRename.startEditing(workspace.reference)}
-          type="button"
+          variant="plain"
         >
-          {workspace.reference}
-        </button>
+          <span className="text-foreground-muted hover:text-muted-foreground text-sm whitespace-pre">
+            {workspace.reference}
+          </span>
+        </Button>
       );
     }
     return null;
@@ -303,7 +304,7 @@ export const WorkspaceBreadcrumb = ({
       <>
         <BreadcrumbQueryContent view={workspaceView} />
         {clientSegment}
-        <BreadcrumbItem className="shrink-0">
+        <BreadcrumbItem className="group/crumb shrink-0">
           {(() => {
             if (isEditing) {
               return (
@@ -383,7 +384,9 @@ export const WorkspaceBreadcrumb = ({
                     </span>
                   ) : null}
                 </Link>
-                {isEditingRef ? null : <MatterSwitcher matter={workspace} />}
+                {isEditingRef ? null : (
+                  <MatterSwitcher matter={workspace} revealOnHover />
+                )}
               </>
             );
           })()}
@@ -443,7 +446,7 @@ export const WorkspaceBreadcrumb = ({
           title={displayName}
           to="/workspaces/$workspaceId"
         >
-          {displayName}
+          <BidiText as="span">{displayName}</BidiText>
         </Link>
         {referenceSegment}
         {isEditingRef ? null : <MatterSwitcher matter={workspace} />}

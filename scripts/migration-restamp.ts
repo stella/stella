@@ -91,6 +91,38 @@ const trackedReferenceFiles = (cwd: string, name: string) => {
     });
 };
 
+/**
+ * Files named after a migration (a lock allowance is
+ * `<migration name>.json`): the name lives in the path, not the contents, so
+ * the reference search cannot see them and they move with the migration.
+ */
+const trackedNamedFiles = (cwd: string, name: string) => {
+  const result = Bun.spawnSync(
+    ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+    { cwd, stdout: "pipe", stderr: "pipe" },
+  );
+  if (result.exitCode !== 0) {
+    panic(
+      `git ls-files failed (${result.exitCode}): ${result.stderr.toString()}`,
+    );
+  }
+  return [
+    ...new Set(
+      result.stdout
+        .toString()
+        .split("\0")
+        .filter(Boolean)
+        .filter((file) => {
+          const base = path.posix.basename(file);
+          return (
+            base.slice(0, base.length - path.posix.extname(base).length) ===
+            name
+          );
+        }),
+    ),
+  ];
+};
+
 export const verifyRestampedMigrations = ({
   baseRef,
   cwd,
@@ -205,9 +237,19 @@ export const restampMigrations = ({
       plan.flatMap(({ oldName }) => trackedReferenceFiles(cwd, oldName)),
     ),
   ].filter((file) => path.posix.basename(file) !== "migration.sql");
-  const outside = referenceFiles.filter(
-    (file) => !WRITABLE_OUTPUTS.some((pattern) => pattern.match(file)),
+  const namedFiles = plan.flatMap(({ oldName, newName }) =>
+    trackedNamedFiles(cwd, oldName).map((file) => ({
+      file,
+      movedFile: path.posix.join(
+        path.posix.dirname(file),
+        `${newName}${path.posix.extname(file)}`,
+      ),
+    })),
   );
+  const outside = [
+    ...referenceFiles,
+    ...namedFiles.map(({ file }) => file),
+  ].filter((file) => !WRITABLE_OUTPUTS.some((pattern) => pattern.match(file)));
   if (outside.length > 0) {
     throw new MigrationRestampScopeError(
       `Migration references outside the re-stamp outputs; re-stamp by hand: ${outside.join(", ")}`,
@@ -219,7 +261,14 @@ export const restampMigrations = ({
   for (const { directory, movedDirectory } of plan.toReversed()) {
     renameSync(path.join(cwd, directory), path.join(cwd, movedDirectory));
   }
+  for (const { file, movedFile } of namedFiles.toReversed()) {
+    renameSync(path.join(cwd, file), path.join(cwd, movedFile));
+  }
   const movedPath = (file: string) => {
+    const named = namedFiles.find((entry) => entry.file === file);
+    if (named !== undefined) {
+      return named.movedFile;
+    }
     const owner = plan.find(({ directory }) =>
       file.startsWith(`${directory}/`),
     );

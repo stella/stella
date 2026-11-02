@@ -123,12 +123,13 @@ for (const row of rows) {
       const signal = await read();
       expect(signal.kind).toBe(row.kind);
       const verdict = combine([signal]);
-      const start = decideStart(verdict, "index_build");
+      const start = decideStart(verdict, "index_build", defaultConfig);
       expect(start.decision).toBe(row.decision);
       const batch = nextBatch({
         state: initialBatchState(),
         verdict,
         lastDurationMs: null,
+        config: defaultConfig,
         clock,
       });
       expect(batch.action).toBe(row.action);
@@ -170,7 +171,9 @@ test("an enabled metric factory failure still produces an unknown blocking signa
   });
   const signal = await read();
   expect(signal.kind).toBe("unknown");
-  expect(decideStart(combine([signal]), "index_build").decision).toBe("wait");
+  expect(
+    decideStart(combine([signal]), "index_build", defaultConfig).decision,
+  ).toBe("wait");
 });
 
 test("opt-out environment accepts only the explicit disabled value", () => {
@@ -213,7 +216,9 @@ test("an adapter Err remains an unknown blocking signal", async () => {
   });
   const signal = await read();
   expect(signal.kind).toBe("unknown");
-  expect(decideStart(combine([signal]), "index_build").decision).toBe("wait");
+  expect(
+    decideStart(combine([signal]), "index_build", defaultConfig).decision,
+  ).toBe("wait");
 });
 
 test("the migrator requirement rejects only a missing configuration", () => {

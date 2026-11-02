@@ -140,7 +140,8 @@ import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
+import { useTimeBillingChromeEnabled } from "@/hooks/use-time-billing-preview";
+import { useTimeChromeVisible } from "@/hooks/use-time-chrome-visible";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -272,7 +273,8 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
   const publicLawEnabled = isPublicLawEnabled();
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
   const inboxPreviewEnabled = useInboxPreviewEnabled();
-  const timeBillingPreviewEnabled = useTimeBillingPreviewEnabled();
+  const timeBillingPreviewEnabled = useTimeBillingChromeEnabled();
+  const timeChromeVisible = useTimeChromeVisible();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
   const canReadInvoices = usePermissions({ workspace: ["read"] });
   const matterBillingLinks = getMatterBillingLinks({
@@ -286,7 +288,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
     // The public /tools catalogue stays out of the authenticated app
     // nav; signed-in users manage tools via /knowledge/tools instead.
     includePublicTools: false,
-    includeTimesheets: timeBillingPreviewEnabled && canReadTimeEntries,
+    includeTimesheets: timeChromeVisible,
     publicKnowledge: isPublicKnowledgeEnabled(),
   });
   const user = useAuthenticatedUser();
@@ -1550,23 +1552,22 @@ export const MatterItem = ({
             )}
             data-pinned={isPinned || undefined}
           >
-            <Tooltip
-              content={isPinned ? t("common.unpin") : t("common.pin")}
-              render={
-                <button
-                  aria-label={isPinned ? t("common.unpin") : t("common.pin")}
-                  className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden"
-                  onClick={() => onTogglePin(ws.id)}
-                  type="button"
-                />
-              }
+            {/* An icon button names itself in its tooltip. Sized to the
+                actions menu trigger beside it, so the two hover actions
+                stay one scale. */}
+            <Button
+              aria-label={isPinned ? t("common.unpin") : t("common.pin")}
+              className="size-5 sm:size-5"
+              onClick={() => onTogglePin(ws.id)}
+              size="icon-xs"
+              variant="ghost"
             >
               {isPinned ? (
                 <PinOffIcon className="size-3.5" />
               ) : (
                 <PinIcon className="size-3.5" />
               )}
-            </Tooltip>
+            </Button>
             <Menu
               onOpenChange={(open) => {
                 setMenuOpen(open);
@@ -1769,14 +1770,16 @@ export const MatterActivityList = ({
       <SidebarMenuSub className="border-0" id={id}>
         <SidebarMenuSubItem>
           <MatterActivityRow>
-            <button
+            {/* The sub-row styles this button through Slot; a plain Button
+                adds no look of its own for the row's classes to fight. */}
+            <Button
               onClick={() => {
                 detached(refetch(), "app-sidebar.refetch");
               }}
-              type="button"
+              variant="plain"
             >
               {t("common.tryAgain")}
-            </button>
+            </Button>
           </MatterActivityRow>
         </SidebarMenuSubItem>
       </SidebarMenuSub>
@@ -1882,17 +1885,17 @@ export const MatterActivityList = ({
         {hasNextPage ? (
           <SidebarMenuSubItem>
             <MatterActivityRow className="text-muted-foreground justify-start">
-              <button
+              <Button
                 disabled={isFetchingNextPage}
                 onClick={() => {
                   detached(fetchNextPage(), "app-sidebar.fetch-next-page");
                 }}
-                type="button"
+                variant="plain"
               >
                 {isFetchingNextPage
                   ? t("common.loading")
                   : t("common.showMore")}
-              </button>
+              </Button>
             </MatterActivityRow>
           </SidebarMenuSubItem>
         ) : null}

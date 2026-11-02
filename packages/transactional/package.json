@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     "./emails/*": "./emails/*.tsx",
+    "./push/*": "./push/*.ts",
     "./render": "./render/render.ts"
   },
   "scripts": {

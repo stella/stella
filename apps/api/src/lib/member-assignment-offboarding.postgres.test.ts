@@ -10,6 +10,7 @@ import type { Transaction } from "@/api/db/root";
 import { abortableTx, safeDbFromScoped } from "@/api/db/safe-db";
 import {
   auditLogs,
+  billingDraftUserSettings,
   contacts,
   desktopEditHandoffs,
   desktopEditSessions,
@@ -374,6 +375,38 @@ if (!databaseUrl || !runPostgresTests) {
           userId,
           report: { ...report, desktopId: Bun.randomUUIDv7() },
         });
+        await Promise.all(
+          [
+            {
+              organizationId,
+              userId,
+              preference: "Concise",
+              consentAt: new Date(),
+            },
+            {
+              organizationId,
+              userId: actorUserId,
+              preference: "Detailed",
+              consentAt: new Date(),
+            },
+            {
+              organizationId: otherOrganizationId,
+              userId,
+              preference: "Other firm",
+              consentAt: new Date(),
+            },
+          ].map(
+            async (settings) =>
+              await createScopedDb(
+                markRlsDatabase(db),
+                [],
+                settings.organizationId,
+                settings.userId,
+              )(async (tx) => {
+                await tx.insert(billingDraftUserSettings).values(settings);
+              }),
+          ),
+        );
         const historyLookupKey = Bun.randomUUIDv7();
         await db.insert(searchHistoryEntries).values(
           [
@@ -441,6 +474,27 @@ if (!databaseUrl || !runPostgresTests) {
                 eq(desktopPresence.organizationId, otherOrganizationId),
               ),
           ),
+        ).toBe(1);
+        expect(
+          await scopedDb(
+            async (tx) => await tx.$count(billingDraftUserSettings),
+          ),
+        ).toBe(0);
+        expect(
+          await createScopedDb(
+            markRlsDatabase(db),
+            [],
+            organizationId,
+            actorUserId,
+          )(async (tx) => await tx.$count(billingDraftUserSettings)),
+        ).toBe(1);
+        expect(
+          await createScopedDb(
+            markRlsDatabase(db),
+            [],
+            otherOrganizationId,
+            userId,
+          )(async (tx) => await tx.$count(billingDraftUserSettings)),
         ).toBe(1);
         const remainingHistory = await db
           .select({
@@ -519,7 +573,7 @@ if (!databaseUrl || !runPostgresTests) {
           const memberId = Bun.randomUUIDv7();
           const workspaceId = createSafeId<"workspace">();
           const taskId = createSafeId<"entity">();
-          const contactId = createSafeId<"contact">();
+          let contactId = createSafeId<"contact">();
           const contactWrite =
             kind === "contact-create" || kind === "contact-update";
           const recordAuditEvent = createBackgroundAuditRecorder({
@@ -633,7 +687,9 @@ if (!databaseUrl || !runPostgresTests) {
                   addAssigneeHandler({
                     safeDb,
                     workspaceId,
+                    actorUserId,
                     recordAuditEvent,
+                    fileNotifications: () => {},
                     body: { taskId, userId: leaverUserId },
                   }),
                 );
@@ -643,7 +699,9 @@ if (!databaseUrl || !runPostgresTests) {
                   moveAssigneeHandler({
                     safeDb,
                     workspaceId,
+                    actorUserId,
                     recordAuditEvent,
+                    fileNotifications: () => {},
                     body: {
                       taskId,
                       fromUserId: actorUserId,
@@ -653,14 +711,13 @@ if (!databaseUrl || !runPostgresTests) {
                 );
               }
               if (kind === "contact-create") {
-                return await Result.gen(() =>
+                const result = await Result.gen(() =>
                   createContactHandler({
                     safeDb,
                     organizationId,
                     userId: actorUserId,
                     recordAuditEvent,
                     body: {
-                      id: contactId,
                       type: "person",
                       displayName: "Assignment contact",
                       originatingAttorneyId: leaverUserId,
@@ -668,6 +725,10 @@ if (!databaseUrl || !runPostgresTests) {
                     },
                   }),
                 );
+                if (Result.isOk(result)) {
+                  contactId = result.value.id;
+                }
+                return result;
               }
               return await Result.gen(() =>
                 updateContactHandler({

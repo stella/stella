@@ -10,6 +10,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { requireBrowserStorage } from "@/lib/account/browser-storage";
 import { MCP_OAUTH_REQUEST_STORAGE_KEY } from "@/lib/account/storage-keys";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { createRandomValue } from "@/lib/uuid";
 
 const CHANNEL_NAME = "mcp-oauth";
@@ -267,7 +268,10 @@ function consumeRedirectRequest(nonce: string): boolean {
   if (stored.isErr() || !stored.value) {
     return false;
   }
-  const serialized = stored.value;
+  return isLiveRedirectRecord(stored.value);
+}
+
+function isLiveRedirectRecord(serialized: string): boolean {
   const parsed = Result.try(() => {
     const value: unknown = JSON.parse(serialized);
     return value;
@@ -279,6 +283,36 @@ function consumeRedirectRequest(nonce: string): boolean {
     parsed.isOk() &&
     Temporal.Now.instant().epochMilliseconds < parsed.value.expiresAt
   );
+}
+
+// Records the callback never consumed (tab closed mid-flow) would otherwise
+// outlive the session. One pass: collect keys first, since removal shifts
+// indexes.
+export function sweepStaleRedirectRequests(): void {
+  const swept = requireBrowserStorage("session").andThen((storage) =>
+    Result.try(() => {
+      const stale: string[] = [];
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (key === null || !key.startsWith(REDIRECT_REQUEST_STORAGE_PREFIX)) {
+          continue;
+        }
+        const value = storage.getItem(key);
+        if (value === null || !isLiveRedirectRecord(value)) {
+          stale.push(key);
+        }
+      }
+      for (const key of stale) {
+        storage.removeItem(key);
+      }
+    }),
+  );
+  if (swept.isErr()) {
+    getAnalytics().captureError(swept.error, {
+      fingerprintKey: "sweepStaleRedirectRequests:failure",
+      scope: { type: "handler", handlerId: "sweepStaleRedirectRequests" },
+    });
+  }
 }
 
 function broadcastMcpConnectionRefresh(): void {

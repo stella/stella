@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -131,7 +132,8 @@ export const SearchSummaryItem = ({
       <CapabilityAction action={{ capability: "ai" }} surface="control">
         {(capabilityProps) => (
           <Button
-            className="mb-2 h-auto w-full items-start justify-start gap-3 rounded-md px-2.5 py-2.5 text-start whitespace-normal sm:h-auto"
+            layout="wrap"
+            className="mb-2 w-full gap-3 rounded-md px-2.5 py-2.5"
             disabled={isPending}
             onClick={onClick}
             variant={isError ? "destructive-outline" : "outline"}
@@ -236,16 +238,18 @@ const SummaryBody = ({
           content={`${citation.title}\n${citation.reason}`}
           key={`${citation.id}-${start}`}
           render={
-            <button
-              className="text-foreground hover:bg-muted mx-0.5 rounded-sm px-1 font-medium"
+            <Button
+              className="mx-0.5"
               onClick={(event) => {
                 event.stopPropagation();
                 onCitationClick(citation.id);
               }}
-              type="button"
+              variant="plain"
             >
-              [{citation.number}]
-            </button>
+              <span className="text-foreground hover:bg-muted rounded-sm px-1 font-medium">
+                [{citation.number}]
+              </span>
+            </Button>
           }
         />,
       );
@@ -375,11 +379,11 @@ export const SearchResultItem = ({
       name: hit.lastEditedByName,
     };
   }
-  let meta: string;
+  let meta: readonly string[];
   if (hit.type === "contact") {
-    meta = t(KIND_TRANSLATION_KEYS[hit.type]);
+    meta = [t(KIND_TRANSLATION_KEYS[hit.type])];
   } else if (hit.type === "case-law") {
-    meta = "";
+    meta = [];
   } else if (hit.type === "matter" || hit.type === "chat") {
     meta = compactMeta([hit.workspaceName, formatted]);
   } else {
@@ -400,13 +404,24 @@ export const SearchResultItem = ({
     >
       <SearchHitIcon hit={hit} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{hit.title || hit.id}</p>
-        {(meta || editorMeta) && (
+        <p className="truncate text-sm font-medium">
+          <BidiText>{hit.title || hit.id}</BidiText>
+        </p>
+        {(meta.length > 0 || editorMeta) && (
           <div className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
-            {meta ? <span className="min-w-0 truncate">{meta}</span> : null}
+            {meta.length > 0 ? (
+              <span className="min-w-0 truncate">
+                {meta.map((part, position) => (
+                  <Fragment key={part}>
+                    {position > 0 ? " · " : null}
+                    <BidiText>{part}</BidiText>
+                  </Fragment>
+                ))}
+              </span>
+            ) : null}
             {editorMeta ? (
               <>
-                {meta ? <span className="shrink-0">·</span> : null}
+                {meta.length > 0 ? <span className="shrink-0">·</span> : null}
                 <UserIdentity
                   as="span"
                   avatarClassName="size-4 shrink-0 text-[0.5rem]"

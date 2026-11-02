@@ -513,7 +513,7 @@ function ViewChromeRow({
 }) {
   const navigate = Route.useNavigate();
   return (
-    <div className="flex min-w-0 flex-col border-b md:flex-row md:items-center md:justify-between">
+    <div className="flex min-w-0 flex-col border-b md:flex-row md:flex-wrap md:items-center md:justify-between">
       <div
         className={cn(
           "flex min-w-0 items-center",

@@ -12,11 +12,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
-import {
-  assertProperty,
-  propertyConfig,
-  propertyTestTimeout,
-} from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -79,7 +75,10 @@ import { plCourtsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures"
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createIngestionRoleScopedDb,
+  createTestPglite,
+} from "@/api/tests/pglite-test-db";
 
 // One batch application behind two callers: a crawl page and a caller that
 // hands over records it already holds. Whatever stops a batch short of every
@@ -93,8 +92,7 @@ let scopedDb: ScopedDb;
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client, relations: { ...relations, ...authRelationsPart } });
-  scopedDb = async (callback) =>
-    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+  scopedDb = createIngestionRoleScopedDb(db);
 }, propertyTestTimeout(120_000));
 
 afterAll(async () => {
@@ -1315,7 +1313,8 @@ describe("the batch bounds", () => {
   });
 
   test("a binary payload weighs its byte length, as a Buffer or a Uint8Array", () => {
-    fc.assert(
+    assertProperty(
+      "a binary payload weighs its byte length, as a Buffer or a Uint8Array",
       fc.property(fc.uint8Array({ maxLength: 4096 }), (bytes) => {
         const asBuffer = Buffer.from(bytes);
         // The fixture reaches the fault: a Buffer serializes as a JSON array.
@@ -1338,7 +1337,7 @@ describe("the batch bounds", () => {
           measured(new Uint8Array()) + 2 * bytes.length,
         );
       }),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
 
     const payload = Buffer.alloc(8 * 1024 * 1024, 255);

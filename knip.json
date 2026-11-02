@@ -144,6 +144,9 @@
     "packages/decision-reader": {
       "entry": ["src/**/*.test.{ts,tsx}"]
     },
+    "packages/html": {
+      "entry": ["src/load.ts", "src/**/*.test.ts"]
+    },
     "packages/legal-atlas": {
       "entry": ["src/**/*.test.ts"]
     },

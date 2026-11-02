@@ -18,11 +18,10 @@ import { createControlSession } from "../lib/control-session";
 import {
   controllerForSender,
   disconnectBrowserController,
-  forgetBrowserControllerTab,
-  notifyControllerTab,
+  endControllerAfterTabClosed,
+  notifyStellaTabs,
   pairStellaTab,
   readBrowserController,
-  replaceBrowserControllerTab,
 } from "../lib/controller";
 import {
   enforceStoppedDownload,
@@ -45,6 +44,11 @@ import {
   POPUP_PORT_NAME,
   type PopupResponse,
 } from "../lib/popup-request";
+import {
+  forgetStellaTab,
+  rememberStellaTab,
+  replaceStellaTab,
+} from "../lib/stella-tabs";
 import {
   forgetContainedTab,
   onContainedTabsChanged,
@@ -72,11 +76,11 @@ const isTrustedSender = (sender: chrome.runtime.MessageSender): boolean => {
   return trustedStellaOriginFromUrl(sender.url) !== null;
 };
 
-/** Tells the controller's stella tab about a change to the controlled tab. */
+/** Tells the connected stella tabs about a change to the controlled tab. */
 const notifyController = async (): Promise<void> => {
   const controller = await readBrowserController();
   if (controller) {
-    await notifyControllerTab(controller.tabId, {
+    await notifyStellaTabs(controller.origin, {
       controlledTabId: await readControlledTabId(controller.controllerId),
       controllerId: controller.controllerId,
     });
@@ -93,15 +97,12 @@ const handleTabReplaced = async (
 ): Promise<void> => {
   await session.change(async () => {
     await replaceTab(addedTabId, removedTabId);
-    const controllerMoved = await replaceBrowserControllerTab(
-      addedTabId,
-      removedTabId,
-    );
+    await replaceStellaTab(addedTabId, removedTabId);
     const controlledMoved = await replaceControlledTab(
       addedTabId,
       removedTabId,
     );
-    if (controllerMoved || controlledMoved) {
+    if (controlledMoved) {
       await notifyController();
     }
   });
@@ -109,13 +110,15 @@ const handleTabReplaced = async (
 
 const handleTabRemoved = async (tabId: number): Promise<void> => {
   forgetOpenedTab(tabId);
-  const controller = await readBrowserController();
-  if (controller?.tabId === tabId) {
+  const closedStellaTab = await forgetStellaTab(tabId);
+  if (closedStellaTab !== null) {
+    // Checked inside the session, so a pairing queued ahead is applied.
     await session.change(async () => {
-      await forgetBrowserControllerTab(tabId);
+      await endControllerAfterTabClosed(closedStellaTab);
     });
     return;
   }
+  const controller = await readBrowserController();
   if (
     controller !== null &&
     (await readControlledTabId(controller.controllerId)) === tabId
@@ -184,17 +187,16 @@ type CommandRequest = Extract<BrowserExtensionRequest, { type: "command" }>;
 
 const runCommand = async (
   message: CommandRequest,
-  senderTabId: number,
   senderUrl: string,
 ): Promise<BrowserControlResult> => {
   const execution = await session.runCommand(message.turnId, async (signal) => {
     // Checked inside the session: a pairing change that was queued ahead of
     // this command has been applied by now.
-    const controller = await controllerForSender(senderTabId, senderUrl);
+    const controller = await controllerForSender(senderUrl);
     if (!controller || controller.controllerId !== message.controllerId) {
       return browserControlError(
         BROWSER_CONTROL_ERROR_CODE.staleController,
-        "Connect this stella tab from the extension popup before using browser actions.",
+        "Connect stella from the extension popup before using browser actions.",
       );
     }
     if (!(await hasAllSiteAccess())) {
@@ -237,12 +239,19 @@ const handleWebMessage = (
     return;
   }
   const senderUrl = sender.url ?? "";
+  const senderOrigin = trustedStellaOriginFromUrl(senderUrl);
+  if (senderOrigin !== null) {
+    rememberStellaTab(senderTabId, {
+      documentId: sender.documentId ?? null,
+      origin: senderOrigin,
+    }).catch(() => undefined);
+  }
 
   if (message.type === "cancel") {
     // The target is fixed on receipt; checking the sender reads storage,
     // and a command admitted meanwhile is not the one being stopped.
     const stop = session.stopTurn(message.turnId);
-    controllerForSender(senderTabId, senderUrl)
+    controllerForSender(senderUrl)
       .then((controller) => {
         if (controller?.controllerId === message.controllerId) {
           stop();
@@ -256,13 +265,11 @@ const handleWebMessage = (
   // Admitted synchronously, before any await, so a cancel the page sends
   // right after this command always finds it.
   const result =
-    message.type === "command"
-      ? runCommand(message, senderTabId, senderUrl)
-      : null;
+    message.type === "command" ? runCommand(message, senderUrl) : null;
 
   const respond = async (): Promise<BrowserExtensionResponse> => {
     if (result === null) {
-      const controller = await controllerForSender(senderTabId, senderUrl);
+      const controller = await controllerForSender(senderUrl);
       return {
         allSitesGranted: await hasAllSiteAccess(),
         controlledTabId: controller

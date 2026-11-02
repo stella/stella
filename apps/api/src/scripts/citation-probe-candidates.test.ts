@@ -14,6 +14,16 @@ describe("citation probe candidates", () => {
     expect(residual("č.j.: KUJCK 987/2019")).toBe(false);
   });
 
+  test("an authority file number joined by non-breaking hyphens is benign", () => {
+    const nb = "\u2011";
+    expect(
+      residual(`č. j. ABCD${nb}123456${nb}12/XY${nb}2020${nb}1234AB`),
+    ).toBe(false);
+    expect(residual(`č. j. ÚOHS${nb}S123/2019/VZ`)).toBe(false);
+    expect(residual(`sp. zn. 12 C 345/2020 ÚOHS${nb}S123/2019/VZ`)).toBe(true);
+    expect(residual("sp. zn. 12 C 345/2020 ÚOHS-S123/2019/VZ")).toBe(true);
+  });
+
   test("an enforcement-officer or arbitration file is benign, a docket is not", () => {
     expect(residual("sp. zn. EX 1234/23")).toBe(false);
     expect(residual("sp.zn. EX 567/07")).toBe(false);
@@ -66,6 +76,8 @@ describe("citation probe candidates", () => {
     expect(residual("sygn. akt UZP/ZO/O-567/07")).toBe(false);
     expect(residual("sygn. akt UZP/ZO/O- 2279/05")).toBe(false);
     expect(residual("sygn. akt UZP/ZO/0-\n2039/06")).toBe(false);
+    expect(residual("sygn. akt. UZP/ZO/0 -1234/05")).toBe(false);
+    expect(residual("sygn. akt UZP/ZO/ 0-567/07")).toBe(false);
     expect(residual("sygn. akt UZP/ZO/0-1234/05/A")).toBe(true);
     expect(residual("sygn. akt V CSK 123/05")).toBe(true);
   });

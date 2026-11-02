@@ -81,17 +81,17 @@
     }
   },
   "aiColumns": {
-    "countSummary": "{columns} colunas × {rows} linhas = {answers, plural, one {# resposta} other {# respostas}}. As respostas consomem o orçamento.",
+    "countSummary": "{columns} colunas × {rows} linhas = {answers, plural, one {# resposta} other {# respostas} many {# respostas}}. As respostas consomem o orçamento.",
     "modelRefused": "O modelo se recusou a responder",
     "nothingFound": "Nada encontrado",
     "refusedBudget": "Não executado: orçamento de respostas indisponível",
     "rerunAllPage": "Executar tudo novamente (esta página)",
     "rerunColumnPage": "Executar coluna novamente (esta página)",
     "runColumnPage": "Executar coluna (esta página)",
-    "runPageRows": "Executar para {count, plural, one {# linha desta página} other {# linhas desta página}}",
+    "runPageRows": "Executar para {count, plural, one {# linha desta página} other {# linhas desta página} many {# linhas desta página}}",
     "runRemainingPage": "Executar restantes (esta página)",
-    "runSelectedRows": "Executar para {count, plural, one {# linha selecionada} other {# linhas selecionadas}}",
-    "selectedRun": "Executar colunas de IA para {count, plural, one {# linha} other {# linhas}}"
+    "runSelectedRows": "Executar para {count, plural, one {# linha selecionada} other {# linhas selecionadas} many {# linhas selecionadas}}",
+    "selectedRun": "Executar colunas de IA para {count, plural, one {# linha} other {# linhas} many {# linhas}}"
   },
   "aiDisclosure": {
     "caseLaw": "Os resumos, notas e análises de decisões judiciais feitos por IA são gerados pelo stella, não são endossados pelos tribunais e não representam a fundamentação dos próprios tribunais; são ferramentas de apoio para profissionais do direito, e o texto da decisão continua sendo a fonte oficial."
@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Entre novamente para continuar com esta ação.",
     "resendCode": "Enviar código novamente para <email>{emailAddress}</email>",
     "selectOrganization": "Selecione uma organização",
+    "sessionExpired": "Sua sessão expirou",
+    "sessionExpiredDescription": "Entre em uma nova aba. O que você digitou continua nesta página.",
     "signIn": "Faça login",
     "signInBeforeInvitation": "Você precisa fazer login antes de aceitar um convite para uma organização.",
     "signInWithPassword": "Entrar com senha",
@@ -203,7 +205,7 @@
       "editInterpretationNote": "Editar nota de interpretação",
       "empty": "Marque itens desta lista como fatos para verificar documentos em relação a eles.",
       "extractionAndReview": "Extração e revisão",
-      "factCount": "{count, plural, one {# fato} other {# fatos}}",
+      "factCount": "{count, plural, one {# fato} other {# fatos} many {# fatos}}",
       "heldDescription": "Estas extrações são <strong>genuinamente incertas quanto ao significado</strong> — o conteúdo é provisório ou não confirmado, e não apenas escrito à mão. Elas ficam fora da pontuação até que um revisor as confirme, edite ou redigite. Uma fonte legível nunca é colocada em espera apenas por causa do seu meio.",
       "heldForReview": "Em espera para revisão",
       "holdOutOfScoring": "Excluir da pontuação",
@@ -255,14 +257,14 @@
       "reopenedTooltip": "Um revisor reclassificou isto como um fato verificável; uma verificação ativa contra o registro ainda está pendente.",
       "score": {
         "anchorFactsDisagree": "Fatos-âncora divergem",
-        "conflictCount": "{count, plural, one {# conflito} other {# conflitos}}",
+        "conflictCount": "{count, plural, one {# conflito} other {# conflitos} many {# conflitos}}",
         "noCoverage": "<strong>O registro é silente.</strong> Nenhum fato-âncora na base de dados trata desta alegação. Isso é diferente de uma pontuação baixa — significa que ainda não há nada contra o que verificá-la.",
         "notVerifiable": "<strong>Não é uma asserção verificável.</strong> É o tipo de afirmação que nenhum documento poderia jamais resolver — um contrafactual, uma previsão, uma declaração de intenção, uma conclusão jurídica ou uma alegação vaga demais para ser verificada. Deixada de lado em vez de pontuada.",
         "outOf100": "<strong>/ 100</strong> pontuação de sustentação",
-        "supportCount": "{count, plural, one {# sustentação} other {# sustentações}}",
+        "supportCount": "{count, plural, one {# sustentação} other {# sustentações} many {# sustentações}}",
         "verdictWithheld": "Veredito retido"
       },
-      "sourceCount": "{count, plural, one {# fonte} other {# fontes}}",
+      "sourceCount": "{count, plural, one {# fonte} other {# fontes} many {# fontes}}",
       "whyScore": "Por que esta pontuação — fatos-âncora"
     },
     "claimTypes": {
@@ -314,7 +316,7 @@
       "readyToConfirm": "Pronta para confirmar"
     },
     "matches": {
-      "count": "{count, plural, one {# correspondência} other {# correspondências}}",
+      "count": "{count, plural, one {# correspondência} other {# correspondências} many {# correspondências}}",
       "position": "{current}/{total}"
     },
     "review": {
@@ -336,7 +338,7 @@
         "pinUnresolved": "A versão do documento na qual esta verificação foi iniciada não pode mais ser encontrada.",
         "unsupportedFormat": "Só é possível verificar arquivos DOCX, PDFs e arquivos com uma versão em PDF."
       },
-      "evidencePinned": "Verificado em relação a {count, plural, one {# fato} other {# fatos}}, como estavam em {checkedAt}. Edições posteriores na lista não alteram esta verificação.",
+      "evidencePinned": "Verificado em relação a {count, plural, one {# fato} other {# fatos} many {# fatos}}, como estavam em {checkedAt}. Edições posteriores na lista não alteram esta verificação.",
       "failedTitle": "Falha na verificação",
       "history": {
         "label": "Histórico de verificações",
@@ -382,16 +384,16 @@
       }
     },
     "verification": {
-      "acceptRoutine": "Aceitar {count, plural, one {# alegação de rotina} other {# alegações de rotina}}",
-      "attentionComplete": "<strong>Todas as alegações que exigiam julgamento foram decididas.</strong> {count, plural, one {A # determinação de rotina não requer revisão individual.} other {As # determinações de rotina não requerem revisão individual.}}",
-      "attentionOpen": "<strong>{count, plural, one {# alegação precisa} other {# alegações precisam}} do seu julgamento</strong> — conflitos e interpretações contestadas. {routineCount, plural, one {A outra # é de rotina e não precisa de aprovação individual.} other {As outras # são de rotina e não precisam de aprovação individual.}}",
+      "acceptRoutine": "Aceitar {count, plural, one {# alegação de rotina} other {# alegações de rotina} many {# alegações de rotina}}",
+      "attentionComplete": "<strong>Todas as alegações que exigiam julgamento foram decididas.</strong> {count, plural, one {A # determinação de rotina não requer revisão individual.} other {As # determinações de rotina não requerem revisão individual.} many {As # determinações de rotina não requerem revisão individual.}}",
+      "attentionOpen": "<strong>{count, plural, one {# alegação precisa} other {# alegações precisam} many {# alegações precisam}} do seu julgamento</strong> — conflitos e interpretações contestadas. {routineCount, plural, one {A outra # é de rotina e não precisa de aprovação individual.} other {As outras # são de rotina e não precisam de aprovação individual.} many {As outras # são de rotina e não precisam de aprovação individual.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, contestada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, em disputa} other {}})",
       "documentView": {
         "label": "Visualização do documento",
         "original": "Original",
         "reading": "Modo de leitura"
       },
-      "notLocated": "{count, plural, one {# alegação não foi localizada no original} other {# alegações não foram localizadas no original}}",
+      "notLocated": "{count, plural, one {# alegação não foi localizada no original} other {# alegações não foram localizadas no original} many {# alegações não foram localizadas no original}}",
       "pdfTextFailed": "Não foi possível ler o texto do PDF, por isso as alegações não estão marcadas nas páginas.",
       "selectClaim": "Selecione uma alegação para inspecionar o registro.",
       "showQueue": "Mostrar fila",
@@ -424,7 +426,7 @@
       "title": "Falha ao criar a versão bilíngue"
     },
     "success": {
-      "description": "<bdi>{fileName}</bdi> está pronto com {rowCount, plural, one {# linha} other {# linhas}} para traduzir.",
+      "description": "<bdi>{fileName}</bdi> está pronto com {rowCount, plural, one {# linha} other {# linhas} many {# linhas}} para traduzir.",
       "title": "Versão bilíngue criada"
     }
   },
@@ -483,7 +485,7 @@
       "model": "IA"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# linha foi ignorada} other {# linhas foram ignoradas}}: não contêm texto traduzível.",
+      "droppedRows": "{count, plural, one {# linha foi ignorada} other {# linhas foram ignoradas} many {# linhas foram ignoradas}}: não contêm texto traduzível.",
       "start": "Iniciar tradução",
       "starting": "Iniciando…"
     },
@@ -496,12 +498,12 @@
     },
     "run": {
       "cancelled": "A tradução foi cancelada.",
-      "doneSummary": "{count, plural, one {# linha traduzida} other {# linhas traduzidas}}.",
+      "doneSummary": "{count, plural, one {# linha traduzida} other {# linhas traduzidas} many {# linhas traduzidas}}.",
       "doneTitle": "Tradução concluída",
-      "failedRows": "{count, plural, one {Não foi possível traduzir # linha} other {Não foi possível traduzir # linhas}}.",
+      "failedRows": "{count, plural, one {Não foi possível traduzir # linha} other {Não foi possível traduzir # linhas} many {Não foi possível traduzir # linhas}}.",
       "failedTitle": "Tradução interrompida",
       "hint": "A tradução é executada no servidor. Mantenha esta janela aberta para acompanhá-la.",
-      "moreRows": "{count, plural, one {mais # linha} other {mais # linhas}}",
+      "moreRows": "{count, plural, one {mais # linha} other {mais # linhas} many {mais # linhas}}",
       "progress": "{completed} de {total} linhas traduzidas",
       "title": "Tradução em andamento…",
       "warningsTitle": "Linhas para conferir"
@@ -512,15 +514,15 @@
     "amount": "Valor",
     "amountMustBePositive": "O valor deve ser maior que zero",
     "approval": {
-      "approveAll": "{count, plural, one {Aprovar # lançamento} other {Aprovar os # lançamentos}}",
-      "approveSelected": "Aprovar {count, plural, one {# registro selecionado} other {# registros selecionados}}",
+      "approveAll": "{count, plural, one {Aprovar # lançamento} other {Aprovar os # lançamentos} many {Aprovar os # lançamentos}}",
+      "approveSelected": "Aprovar {count, plural, one {# registro selecionado} other {# registros selecionados} many {# registros selecionados}}",
       "billedTotal": "{duration} faturado",
       "empty": "Nada aguarda aprovação neste caso.",
       "emptyWeek": "Nada aguarda aprovação nesta semana. O tempo enviado aparece aqui.",
       "everyone": "Todos",
       "failed": "A alteração não foi salva. Tente novamente.",
       "myTime": "Meu tempo",
-      "pending": "{count, plural, one {# lançamento para aprovar} other {# lançamentos para aprovar}}",
+      "pending": "{count, plural, one {# lançamento para aprovar} other {# lançamentos para aprovar} many {# lançamentos para aprovar}}",
       "refusals": {
         "invalidEntry": "Adicione uma descrição e confira a data do trabalho; depois aprove o registro.",
         "notApprover": "Somente o aprovador designado ou um administrador pode aprovar este registro.",
@@ -540,7 +542,7 @@
         "timePeriodLocked": "Este mês está bloqueado, então o registro não pode ser devolvido. Peça a um administrador para desbloqueá-lo.",
         "wrongStatus": "Tempo faturado ou anulado não pode ser devolvido a quem o registrou."
       },
-      "returnSelected": "Devolver {count, plural, one {# registro selecionado} other {# registros selecionados}}",
+      "returnSelected": "Devolver {count, plural, one {# registro selecionado} other {# registros selecionados} many {# registros selecionados}}",
       "selectEntry": "Selecionar registro",
       "timeEntries": "Registros de tempo",
       "title": "Aprovações"
@@ -630,7 +632,7 @@
       "continueToDetails": "Continuar para os dados",
       "continueToIssue": "Continuar para a emissão",
       "datesAndPayment": "Datas e pagamento",
-      "days": "{days, plural, one {# dia} other {# dias}}",
+      "days": "{days, plural, one {# dia} other {# dias} many {# dias}}",
       "draftSavedTitle": "Rascunho da fatura salvo",
       "dueIn": "Vence em",
       "dueOn": "vence em {date}",
@@ -647,11 +649,13 @@
       "noExpenses": "Não há despesas aprovadas e não faturadas neste caso.",
       "noTime": "Não há tempo aprovado e não faturado neste caso.",
       "noVat": "Sem IVA",
+      "notReadyDescription": "Você pode salvar um rascunho agora e emiti-lo quando isso estiver configurado.",
+      "notReadyTitle": "Ainda não está pronta para emitir",
       "nothingToBill": "Ainda não há nada a faturar. Aprove lançamentos de tempo ou despesas deste caso para faturá-los.",
       "openInvoice": "Abrir fatura",
-      "otherCurrency": "{count, plural, one {# item está registrado} other {# itens estão registrados}} em outra moeda que não {currency} e ficam para uma fatura separada.",
+      "otherCurrency": "{count, plural, one {# item está registrado} other {# itens estão registrados} many {# itens estão registrados}} em outra moeda que não {currency} e ficam para uma fatura separada.",
       "outsideScope": "Fora do âmbito do IVA, 0 %",
-      "pendingApprovals": "{count, plural, one {# item aguarda} other {# itens aguardam}} aprovação. Revisar aprovações.",
+      "pendingApprovals": "{count, plural, one {# item aguarda} other {# itens aguardam} many {# itens aguardam}} aprovação. Revisar aprovações.",
       "rate": "Valor/hora",
       "readyDescription": "Ao emitir, a fatura recebe o próximo número da sua série e fica bloqueada. Um rascunho ainda pode ser editado.",
       "readyTitle": "Pronta para emitir",
@@ -672,7 +676,7 @@
       "tax": "Impostos e moeda",
       "taxableSupplyDate": "Data do fato gerador",
       "timeEntries": "Lançamentos de tempo",
-      "timeSummary": "{count, plural, one {# lançamento} other {# lançamentos}} · {hours} h",
+      "timeSummary": "{count, plural, one {# lançamento} other {# lançamentos} many {# lançamentos}} · {hours} h",
       "title": "Nova fatura",
       "totalsSummary": "Sem IVA {net} · IVA {vat} · Total {total}",
       "vat": "Tratamento do IVA",
@@ -840,7 +844,6 @@
     },
     "selectMatter": "Selecione um caso...",
     "selectMatterToStart": "Selecione um caso para começar a cronometrar",
-    "selectedCount": "{count, plural, one {# selecionado} many {# selecionados} other {# selecionados}}",
     "sellerProfiles": {
       "add": "Adicionar perfil de vendedor",
       "archiveConfirm": "Arquivar este perfil de vendedor? Ele não estará mais disponível para novas faturas.",
@@ -892,6 +895,24 @@
       "title": "Sugestões a partir da sua atividade",
       "unnamedRecord": "Registro do caso"
     },
+    "timeReport": {
+      "billableHours": "Horas faturáveis",
+      "billableShare": "Percentual faturável",
+      "change": "Variação: {value}",
+      "changePoints": "Variação em pontos percentuais: {value}",
+      "collapse": "Recolher {name}",
+      "empty": "Registre horas para preencher este relatório.",
+      "expand": "Expandir {name}",
+      "internal": "Interno",
+      "pendingEntries": "Aguardando aprovação",
+      "period": "Período",
+      "privacy": "Este relatório usa somente lançamentos de horas registrados. A atividade no computador permanece em cada dispositivo.",
+      "title": "Relatório de horas da equipe",
+      "tooLargeToLoad": "Este relatório é grande demais para ser carregado. Encurte o período ou mostre semanas ou meses como colunas.",
+      "tooManyCells": "Este relatório é grande demais para ser exibido aqui. Encurte o período, mostre semanas ou meses como colunas ou exporte-o como CSV.",
+      "total": "Total geral",
+      "unbilledValue": "Valor faturável não faturado"
+    },
     "timerActive": "Temporizador em execução",
     "timesheets": "Planilhas de horas",
     "total": "Total",
@@ -929,6 +950,7 @@
     "desktopUnavailable": "Conecte ou atualize o stella desktop.",
     "featureUnavailable": "Este recurso está indisponível.",
     "ocrUnavailable": "O OCR está indisponível.",
+    "openSettings": "Abrir configurações",
     "translationMissing": "Nenhum serviço de tradução está configurado."
   },
   "caseLaw": {
@@ -983,14 +1005,14 @@
     },
     "citation": {
       "citedAtLeast": "Citada pelo menos {count} vezes",
-      "citedSummary": "{count, plural, =0 {Não citada} one {Citada uma vez} other {Citada # vezes}}",
+      "citedSummary": "{count, plural, =0 {Não citada} one {Citada uma vez} other {Citada # vezes} many {Citada # vezes}}",
       "dateUnavailable": "Data indisponível",
-      "decisionCount": "{count, plural, =0 {Nenhuma decisão} one {# decisão} other {# decisões}}",
+      "decisionCount": "{count, plural, =0 {Nenhuma decisão} one {# decisão} other {# decisões} many {# decisões}}",
       "goToMention": "Ir para a menção {number}",
       "goToParagraph": "Ir para o parágrafo {paragraph}",
       "lastNegative": "última citação negativa em {year}",
       "mentionMark": "menção {number}",
-      "mentionsInDecision": "{count, plural, one {Citada uma vez nesta decisão} other {Citada # vezes nesta decisão}}",
+      "mentionsInDecision": "{count, plural, one {Citada uma vez nesta decisão} other {Citada # vezes nesta decisão} many {Citada # vezes nesta decisão}}",
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
       "none": "Nenhuma citação registrada ainda.",
       "notInStella": "Ainda não está no stella",
@@ -1015,7 +1037,7 @@
       },
       "unresolved": "Sem decisão associada",
       "whereCited": "Onde cita esta decisão",
-      "yearTitle": "{year}: {count, plural, one {# citação} other {# citações}}"
+      "yearTitle": "{year}: {count, plural, one {# citação} other {# citações} many {# citações}}"
     },
     "columns": {
       "caseNumber": "Número do processo",
@@ -1024,7 +1046,7 @@
       "summary": "Ementa / trecho encontrado"
     },
     "corpusStatus": {
-      "courtCount": "{count, plural, one {# tribunal} other {# tribunais}}",
+      "courtCount": "{count, plural, one {# tribunal} other {# tribunais} many {# tribunais}}",
       "newLast24Hours": "{count} nas últimas 24 h",
       "newLast7Days": "Novas nos últimos 7 dias",
       "otherCourts": "Outros tribunais"
@@ -1042,7 +1064,7 @@
       "countryNavigation": "Ir para um país",
       "courtsHeading": "Por tribunal",
       "decisionYears": "Anos das decisões",
-      "decisionsAcross": "decisões de {count, plural, one {# jurisdição} other {# jurisdições}}",
+      "decisionsAcross": "decisões de {count, plural, one {# jurisdição} other {# jurisdições} many {# jurisdições}}",
       "description": "Quanta jurisprudência o acervo contém, por país e por tribunal, e quão atualizada está cada fonte.",
       "generatedAt": "Números de {date}",
       "healthCurrent": "Atualizado",
@@ -1056,7 +1078,7 @@
       "notCountedYet": "Ainda não contado",
       "notMeasuredYet": "Ainda não medido",
       "searchable": "Pesquisáveis",
-      "sourceExceptions": "{count, plural, one {# fonte precisa de atenção} other {# fontes precisam de atenção}}",
+      "sourceExceptions": "{count, plural, one {# fonte precisa de atenção} other {# fontes precisam de atenção} many {# fontes precisam de atenção}}",
       "sourcesCurrent": "Fontes em dia",
       "syncedAt": "Sincronizado {time}",
       "title": "Cobertura da jurisprudência",
@@ -1099,24 +1121,24 @@
       "showInCountry": "Mostrar {filter} em {country}"
     },
     "languages": {
-      "count": "{count, plural, one {# idioma} other {# idiomas}}",
+      "count": "{count, plural, one {# idioma} other {# idiomas} many {# idiomas}}",
       "matchedIn": "Correspondência em {language}"
     },
     "loadingMore": "Carregando mais...",
     "marginFilter": {
       "label": "Filtro de dispositivos citados",
-      "paragraph": "{count, plural, =0 {Nenhum dispositivo citado no ¶{paragraph}} one {# dispositivo citado no ¶{paragraph}} many {# de dispositivos citados no ¶{paragraph}} other {# dispositivos citados no ¶{paragraph}}}",
-      "selection": "{count, plural, =0 {Nenhum dispositivo citado na seleção} one {# dispositivo citado na seleção} many {# de dispositivos citados na seleção} other {# dispositivos citados na seleção}}",
-      "unnumberedParagraph": "{count, plural, =0 {Nenhum dispositivo citado neste parágrafo} one {# dispositivo citado neste parágrafo} many {# de dispositivos citados neste parágrafo} other {# dispositivos citados neste parágrafo}}"
+      "paragraph": "{count, plural, one {# dispositivo citado no ¶{paragraph}} many {# de dispositivos citados no ¶{paragraph}} other {# dispositivos citados no ¶{paragraph}}}",
+      "selection": "{count, plural, one {# dispositivo citado na seleção} many {# de dispositivos citados na seleção} other {# dispositivos citados na seleção}}",
+      "unnumberedParagraph": "{count, plural, one {# dispositivo citado neste parágrafo} many {# de dispositivos citados neste parágrafo} other {# dispositivos citados neste parágrafo}}"
     },
     "matterLinks": {
-      "alreadySaved": "{count, plural, one {# decisão já estava salva aqui} other {# decisões já estavam salvas aqui}}",
+      "alreadySaved": "{count, plural, one {# decisão já estava salva aqui} other {# decisões já estavam salvas aqui} many {# decisões já estavam salvas aqui}}",
       "empty": "Ainda não há jurisprudência salva neste caso.",
       "emptyAction": "Pesquisar jurisprudência",
       "note": "Nota",
       "notePlaceholder": "Por que estas decisões importam aqui…",
-      "rejectedLimit": "{count, plural, one {# decisão não foi salva: o caso está cheio} other {# decisões não foram salvas: o caso está cheio}}",
-      "rejectedMissing": "{count, plural, one {# decisão não foi encontrada} other {# decisões não foram encontradas}}",
+      "rejectedLimit": "{count, plural, one {# decisão não foi salva: o caso está cheio} other {# decisões não foram salvas: o caso está cheio} many {# decisões não foram salvas: o caso está cheio}}",
+      "rejectedMissing": "{count, plural, one {# decisão não foi encontrada} other {# decisões não foram encontradas} many {# decisões não foram encontradas}}",
       "remove": "Remover do caso",
       "save": "Salvar em um caso",
       "savePage": "{count, plural, one {# decisão desta página será salva.} many {# decisões desta página serão salvas.} other {# decisões desta página serão salvas.}}",
@@ -1140,16 +1162,16 @@
       "pageOfCount": "Página {page} de {pageCount}",
       "pageOfEstimatedCount": "Página {page} de ~{pageCount}",
       "pageOfEstimatedCountLabel": "Página {page} de cerca de {pageCount}",
-      "pageWithEstimatedMatchCounts": "Página {page} · cerca de {exactCount, plural, one {# correspondência exata} many {# correspondências exatas} other {# correspondências exatas}} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais}} nesta página",
+      "pageWithEstimatedMatchCounts": "Página {page} · cerca de {exactCount, plural, one {# correspondência exata} many {# correspondências exatas} other {# correspondências exatas}} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais} many {# correspondências parciais}} nesta página",
       "pageWithEstimatedResultCount": "Página {page} · cerca de {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
-      "pageWithMatchCounts": "Página {page} · {exactCount, plural, one {# correspondência exata} other {# correspondências exatas}} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais}} nesta página",
-      "pageWithPartialMatchCount": "Página {page} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais}} nesta página",
+      "pageWithMatchCounts": "Página {page} · {exactCount, plural, one {# correspondência exata} other {# correspondências exatas} many {# correspondências exatas}} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais} many {# correspondências parciais}} nesta página",
+      "pageWithPartialMatchCount": "Página {page} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais} many {# correspondências parciais}} nesta página",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
       "perPage": "Por página",
       "refineForMore": "Refine a pesquisa para ver mais resultados"
     },
-    "paragraphRangeNotFound": "{count, plural, one {O parágrafo {range} não foi encontrado neste texto.} other {Os parágrafos {range} não foram encontrados neste texto.}}",
-    "paragraphRangeSelected": "{count, plural, one {O parágrafo {range} está destacado.} other {Os parágrafos {range} estão destacados.}}",
+    "paragraphRangeNotFound": "{count, plural, one {O parágrafo {range} não foi encontrado neste texto.} other {Os parágrafos {range} não foram encontrados neste texto.} many {Os parágrafos {range} não foram encontrados neste texto.}}",
+    "paragraphRangeSelected": "{count, plural, one {O parágrafo {range} está destacado.} other {Os parágrafos {range} estão destacados.} many {Os parágrafos {range} estão destacados.}}",
     "provision": {
       "article": "art. {value}",
       "letter": "alínea {value})",
@@ -1165,7 +1187,7 @@
       "sourceAttribution": "Os dados de origem estão livremente disponíveis em <link>{source}</link>."
     },
     "research": {
-      "answering": "{count, plural, one {Respondendo # célula…} other {Respondendo # células…}}",
+      "answering": "{count, plural, one {Respondendo # célula…} other {Respondendo # células…} many {Respondendo # células…}}",
       "answers": {
         "failureReasons": {
           "decisionUnavailable": "Decisão indisponível",
@@ -1192,7 +1214,7 @@
       "removeFromSearch": "Remover desta pesquisa",
       "runAll": "Responder tudo",
       "runConfirm": "Responder agora",
-      "runEstimate": "{rows, plural, one {# decisão} other {# decisões}} × {columns, plural, one {# pergunta} other {# perguntas}} nesta página: {cells, plural, one {será gerada # resposta} other {serão geradas # respostas}}.",
+      "runEstimate": "{rows, plural, one {# decisão} other {# decisões} many {# decisões}} × {columns, plural, one {# pergunta} other {# perguntas} many {# perguntas}} nesta página: {cells, plural, one {será gerada # resposta} other {serão geradas # respostas} many {serão geradas # respostas}}.",
       "runTitle": "Responder esta página",
       "savedQuestions": "Perguntas salvas",
       "title": "Tabelas de pesquisa"
@@ -1209,7 +1231,7 @@
       "line": "Nenhuma correspondência exata para <bdi>{original}</bdi>; mostrando resultados para <bdi>{query}</bdi>",
       "searchOriginal": "Pesquisar minhas palavras originais"
     },
-    "sameCaseNumber": "{count, plural, one {# decisão tem} other {# decisões têm}} este número de processo. Escolha o tribunal.",
+    "sameCaseNumber": "{count, plural, one {# decisão tem} other {# decisões têm} many {# decisões têm}} este número de processo. Escolha o tribunal.",
     "searchLabel": "Pesquisar jurisprudência",
     "searchPlaceholder": "Número do processo, ECLI ou palavras, p. ex. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1257,7 +1279,7 @@
       "citedDecisionPassage": "Trecho da decisão",
       "cites": "Cita",
       "dissentByline": "Voto divergente: <bdi>{names}</bdi>",
-      "goToParagraph": "{count, plural, one {Ir para o parágrafo} other {Ir para os parágrafos}}",
+      "goToParagraph": "{count, plural, one {Ir para o parágrafo} other {Ir para os parágrafos} many {Ir para os parágrafos}}",
       "judgeRole": {
         "advocateGeneral": "Advogado-geral",
         "dissenting": "Voto divergente",
@@ -1272,7 +1294,7 @@
       "popularName": "Nome popular",
       "portraitCredit": "Fonte dos retratos: {source}",
       "provisionMentions": "{count, number}×",
-      "provisionMentionsLabel": "{count, plural, one {# menção} other {# menções}}",
+      "provisionMentionsLabel": "{count, plural, one {# menção} other {# menções} many {# menções}}",
       "provisionsCited": "Dispositivos citados",
       "provisionsFailed": "O processamento das citações falhou",
       "provisionsNoneFound": "Nenhum dispositivo citado encontrado",
@@ -1317,15 +1339,15 @@
     "firstParty": "stella",
     "firstPartyTooltip": "Criado pela equipe stella",
     "installFailed": "Falha na instalação",
-    "installPack": "{count, plural, one {Instalar # ferramenta} other {Instalar # ferramentas}}",
+    "installPack": "{count, plural, one {Instalar # ferramenta} other {Instalar # ferramentas} many {Instalar # ferramentas}}",
     "installed": "{name} instalado",
     "installedShort": "Instalado",
     "onboarding": {
       "packTitle": "Recomendado para sua jurisdição"
     },
     "openHomepage": "Abrir página inicial",
-    "packDescription": "{count, plural, one {# ferramenta} other {# ferramentas}} selecionadas para sua prática. Instale com um clique ou escolha individualmente abaixo.",
-    "packInstalled": "{count, plural, one {# ferramenta instalada} other {# ferramentas instaladas}}",
+    "packDescription": "{count, plural, one {# ferramenta} other {# ferramentas} many {# ferramentas}} selecionadas para sua prática. Instale com um clique ou escolha individualmente abaixo.",
+    "packInstalled": "{count, plural, one {# ferramenta instalada} other {# ferramentas instaladas} many {# ferramentas instaladas}}",
     "packPartial": "{installed} instaladas, {failed} com falha",
     "removed": "Esta ferramenta não está mais disponível.",
     "sectionOthers": "Outros",
@@ -1338,9 +1360,30 @@
       "none": "Sem configuração"
     },
     "skillNeedsUnavailableTools": "Não é oferecida no chat. Precisa de uma ferramenta que não está disponível lá: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Oculte nomes de clientes, números de conta, endereços e outros dados pessoais antes de compartilhar o conteúdo do caso com provedores de IA. Reversível no lado do cliente; o texto original nunca sai do seu espaço de trabalho.",
+      "ares": "Consulta de empresas tchecas por IČO ou razão social no registro público ARES (registro administrativo de agentes econômicos, equivalente tcheco a uma junta comercial).",
+      "boe": "Legislação consolidada espanhola, diário oficial e BORME (boletim do registro comercial) da API oficial de dados abertos do Boletín Oficial del Estado.",
+      "brreg": "Consulta de empresas norueguesas por organisasjonsnummer ou razão social na API aberta pública Enhetsregisteret da Brreg.",
+      "companiesHouse": "Consulta de empresas britânicas por número de registro na Companies House ou razão social na API de dados públicos da Companies House. Requer uma chave de API gratuita.",
+      "createDocx": "Gere documentos do Word no chat com formatação, tabelas, cabeçalhos e estilos incorporados. O resultado pode ser baixado e editado no Word, LibreOffice e Pages.",
+      "denue": "Consulta de estabelecimentos e unidades econômicas do México por Id de estabelecimento DENUE, nome ou razão social na API oficial DENUE do INEGI. O DENUE é um diretório de estabelecimentos, não o registro societário Registro Público de Comercio. Requer um token gratuito da API do INEGI.",
+      "edgar": "Consulta de companhias abertas dos EUA por Central Index Key (CIK) na API de submissões EDGAR da SEC.",
+      "gcis": "Consulta de empresas taiwanesas por 統一編號 (tongbian, identificação fiscal) ou razão social na API de dados abertos do portal Commerce Industrial Services do Ministério de Assuntos Econômicos (MoEA).",
+      "infosoud": "Consulta de processos judiciais tchecos e calendário de audiências em infosoud.gov.cz. Pesquise por número do processo, tribunal ou parte para obter as datas das audiências e o andamento do processo.",
+      "krs": "Consulta de empresas polonesas por número KRS na API aberta do Krajowy Rejestr Sądowy (KRS) do Ministério da Justiça. Abrange o Rejestr Przedsiębiorców (sociedades empresárias) e o Rejestr Stowarzyszeń (associações e fundações).",
+      "orsr": "Consulta de empresas eslovacas por IČO ou razão social na API JSON do Obchodný register Slovenskej republiky, operada pelo Ministério da Justiça.",
+      "prh": "Consulta de empresas finlandesas por Y-tunnus ou razão social na API aberta AvoinData v3 do Patentti- ja rekisterihallitus (PRH).",
+      "rechercheEntreprises": "Consulta de empresas francesas por SIREN, SIRET ou razão social na API aberta recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Consulta eslovaca por IČO ou nome no Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO), mantido pelo Instituto de Estatística da República Eslovaca. Abrange todas as pessoas jurídicas e empresários, incluindo empresários individuais, associações, fundações e órgãos públicos fora do registro comercial.",
+      "vies": "Validação de números de IVA em toda a UE pela API REST do sistema de troca de informações sobre o IVA (VIES) da Comissão Europeia. Confirma se um número de IVA está registrado no Estado-membro do fornecedor e retorna o nome e o endereço do operador quando o Estado-membro os divulga.",
+      "webSearch": "Pesquise na web pública e leia páginas individuais. As consultas buscam primeiro fontes primárias (tribunais, portais de legislação) quando há uma jurisdição definida; caso contrário, a web aberta. Ativação por conversa."
+    },
     "toolNames": {
       "anonymize": "Anonimizar",
       "createDocx": "Criar DOCX",
+      "gcis": "Registro de empresas GCIS",
+      "vies": "Validação de IVA da UE (VIES)",
       "webSearch": "Pesquisa na web"
     },
     "unavailable": "Ainda não disponível"
@@ -1414,10 +1457,12 @@
           "click": "Clicar",
           "fill": "Inserir texto",
           "open": "Abrir site",
+          "openNewTab": "Abrir site em nova aba",
           "pressKey": "Pressionar tecla",
           "select": "Selecionar opção",
           "snapshot": "Ler página",
-          "snapshotContinue": "Continuar lendo a página"
+          "snapshotContinue": "Continuar lendo a página",
+          "switchTab": "Mudar para a aba"
         },
         "askAgain": "Perguntar novamente",
         "autoApproveReads": "Aprovar automaticamente a leitura de páginas",
@@ -1451,11 +1496,15 @@
     "audioContent": "Áudio gerado",
     "browserExtension": {
       "connect": "Conectar extensão",
-      "connectDescription": "Nesta aba, clique no ícone da extensão stella na barra do navegador. Se solicitado, permita o acesso aos sites e conecte esta aba.",
+      "connectDescription": "Clique no ícone da extensão stella na barra do navegador, permita o acesso aos sites se solicitado e conecte o stella. Uma única conexão vale para todas as suas abas do stella.",
       "connected": "Extensão conectada",
       "description": "A stella pode abrir e ler sites para você em outra aba quando você pedir.",
       "install": "Instalar extensão",
-      "installDescription": "Com a extensão stella, a stella pode abrir e ler sites para você em outra aba quando você pedir. Instale pela Chrome Web Store."
+      "installDescription": "Com a extensão stella, a stella pode abrir e ler sites para você em outra aba quando você pedir. Instale pela Chrome Web Store.",
+      "reload": "Recarregar esta aba",
+      "reloadDescription": "Sua extensão stella é mais recente que esta aba. Recarregue a aba para continuar usando.",
+      "updating": "Atualização da extensão pendente",
+      "updatingDescription": "Sua extensão stella está em uma versão anterior. O Chrome a atualiza automaticamente, em geral em poucas horas; depois disso, a stella poderá voltar a abrir e ler sites para você."
     },
     "cancelQueuedMessage": "Cancelar mensagem na fila",
     "caseLawGreeting": "Pergunte sobre esta decisão; o texto completo está disponível aqui.",
@@ -1670,17 +1719,17 @@
     "pastedChars": "Colado · {count} caracteres",
     "pastedText": {
       "expand": "Mostrar texto completo",
-      "fromClipboard": "{count, plural, one {# caractere colado} other {# caracteres colados}}",
+      "fromClipboard": "{count, plural, one {# caractere colado} other {# caracteres colados} many {# caracteres colados}}",
       "fromPromptFallback": "Habilidade",
       "showInTextField": "Mostrar no campo de texto",
       "title": "Texto colado"
     },
     "placeholder": "Digite sua pergunta aqui, / para habilidades, @ para adicionar contexto",
     "processSummary": {
-      "analyses": "{count, plural, one {# análise} other {# análises}}",
-      "changesSaved": "{count, plural, one {# alteração salva} other {# alterações salvas}}",
-      "documentEdits": "{count, plural, one {# edição do documento} other {# edições do documento}}",
-      "sourcesChecked": "{count, plural, one {# fonte consultada} other {# fontes consultadas}}"
+      "analyses": "{count, plural, one {# análise} other {# análises} many {# análises}}",
+      "changesSaved": "{count, plural, one {# alteração salva} other {# alterações salvas} many {# alterações salvas}}",
+      "documentEdits": "{count, plural, one {# edição do documento} other {# edições do documento} many {# edições do documento}}",
+      "sourcesChecked": "{count, plural, one {# fonte consultada} other {# fontes consultadas} many {# fontes consultadas}}"
     },
     "promptImprovementStrategies": {
       "decompose": {
@@ -1707,7 +1756,7 @@
     "queuedAttachmentCount": "{count, plural, one {# anexo} many {# anexos} other {# anexos}}",
     "queuedNotice": "Na fila: será enviada quando a resposta atual terminar",
     "reasoning": "Raciocínio",
-    "reasoningTokens": "{count, plural, one {# token de raciocínio} other {# tokens de raciocínio}}",
+    "reasoningTokens": "{count, plural, one {# token de raciocínio} other {# tokens de raciocínio} many {# tokens de raciocínio}}",
     "recapLoading": "Resumindo a conversa…",
     "removeSuggestion": "(remover)",
     "renameThread": "Renomear conversa",
@@ -1892,8 +1941,8 @@
       "set_practice_jurisdictions": "Definir jurisdições de atuação",
       "show_in_document": "Mostrando no documento",
       "spawn_subagents": "Delegando para subagentes",
-      "suggestChangesApplied": "{applied, plural, one {# edição aplicada} other {# edições aplicadas}}",
-      "suggestChangesAppliedWithSkipped": "{applied, plural, one {# edição aplicada} other {# edições aplicadas}} ({skipped, plural, one {# ignorada} other {# ignoradas}})",
+      "suggestChangesApplied": "{applied, plural, one {# edição aplicada} other {# edições aplicadas} many {# edições aplicadas}}",
+      "suggestChangesAppliedWithSkipped": "{applied, plural, one {# edição aplicada} other {# edições aplicadas} many {# edições aplicadas}} ({skipped, plural, one {# ignorada} other {# ignoradas} many {# ignoradas}})",
       "suggestChangesAuthorNameDialogDescription": "As edições automáticas do documento são atribuídas a você como autor das alterações controladas. Defina um nome de preferência para continuar.",
       "suggestChangesAuthorNameDialogTitle": "Defina seu nome para o controle de alterações",
       "suggestChangesRepresentationDirect": "Reescrever",
@@ -1921,7 +1970,7 @@
       "sourceCode": "Código-fonte",
       "statusWaiting": "Aguardando",
       "toggleDetails": "Alternar detalhes",
-      "unrestoredFields": "{count, plural, one {# campo não pôde ser preenchido} other {# campos não puderam ser preenchidos}} com valores reais no modo anonimizado. Revise: {fields}"
+      "unrestoredFields": "{count, plural, one {# campo não pôde ser preenchido} other {# campos não puderam ser preenchidos} many {# campos não puderam ser preenchidos}} com valores reais no modo anonimizado. Revise: {fields}"
     },
     "turnNotification": {
       "failedBody": "Uma resposta do chat na stella não foi concluída.",
@@ -1995,7 +2044,7 @@
     "linkedClauses": "Cláusulas vinculadas",
     "loadFailed": "Falha ao carregar cláusulas",
     "loading": "Carregando cláusulas…",
-    "needUpdate": "{count, plural, one {# precisa de atualização} other {# precisam de atualização}}",
+    "needUpdate": "{count, plural, one {# precisa de atualização} other {# precisam de atualização} many {# precisam de atualização}}",
     "noChanges": "Sem alterações",
     "noLinkedClauses": "Nenhuma cláusula vinculada",
     "noResults": "Ainda não há cláusulas",
@@ -2026,7 +2075,7 @@
     "syncFailed": "Falha ao sincronizar",
     "syncVersion": "Sincronizar com o mais recente",
     "synced": "Sincronizado com a versão mais recente",
-    "syncedAllResult": "{count, plural, =0 {Tudo já está atualizado} one {# cláusula sincronizada} other {# cláusulas sincronizadas}}",
+    "syncedAllResult": "{count, plural, =0 {Tudo já está atualizado} one {# cláusula sincronizada} other {# cláusulas sincronizadas} many {# cláusulas sincronizadas}}",
     "takeTheirText": "Usar o texto salvo",
     "titleLabel": "Título",
     "titlePlaceholder": "ex.: Cláusula de confidencialidade",
@@ -2107,6 +2156,7 @@
     "clearDate": "Limpar data",
     "clearFilters": "Limpar filtros",
     "clearSearch": "Limpar busca",
+    "clearSelection": "Limpar seleção",
     "close": "Fechar",
     "columns": "Colunas",
     "comfortable": "Confortável",
@@ -2151,6 +2201,7 @@
     "description": "Descrição",
     "details": "Detalhes",
     "detailsHiddenFeatureUnavailable": "Detalhes ocultos: recurso não ativado",
+    "detailsHiddenUnrecognizedResource": "Foram registradas alterações em um tipo de recurso que esta versão não reconhece.",
     "detailsUnavailable": "Detalhes indisponíveis",
     "disconnect": "Desconectar",
     "dismiss": "Descartar",
@@ -2166,14 +2217,14 @@
     "doubleClickToRename": "Clique duas vezes para renomear",
     "download": "Baixar",
     "dragAndDrop": {
-      "cancelled": "{count, plural, one {Movimentação cancelada. {itemName} não foi movido.} other {Movimentação cancelada. {itemName} não foram movidos.}}",
-      "droppedOn": "{count, plural, one {{itemName} foi solto sobre {destinationName}.} other {{itemName} foram soltos sobre {destinationName}.}}",
-      "movedNear": "{count, plural, one {{itemName} foi movido para perto de {destinationName}.} other {{itemName} foram movidos para perto de {destinationName}.}}",
-      "movedTo": "{count, plural, one {{itemName} foi movido para {destinationName}.} other {{itemName} foram movidos para {destinationName}.}}",
-      "movingNear": "{count, plural, one {Movendo {itemName} para perto de {destinationName}.} other {Movendo {itemName} para perto de {destinationName}.}}",
-      "movingTo": "{count, plural, one {Movendo {itemName} para {destinationName}.} other {Movendo {itemName} para {destinationName}.}}",
-      "pickedUp": "{count, plural, one {{itemName} foi selecionado para mover.} other {{itemName} foram selecionados para mover.}}",
-      "selectedItems": "{count, plural, one {# item selecionado} other {# itens selecionados}}"
+      "cancelled": "{count, plural, one {Movimentação cancelada. {itemName} não foi movido.} other {Movimentação cancelada. {itemName} não foram movidos.} many {Movimentação cancelada. {itemName} não foram movidos.}}",
+      "droppedOn": "{count, plural, one {{itemName} foi solto sobre {destinationName}.} other {{itemName} foram soltos sobre {destinationName}.} many {{itemName} foram soltos sobre {destinationName}.}}",
+      "movedNear": "{count, plural, one {{itemName} foi movido para perto de {destinationName}.} other {{itemName} foram movidos para perto de {destinationName}.} many {{itemName} foram movidos para perto de {destinationName}.}}",
+      "movedTo": "{count, plural, one {{itemName} foi movido para {destinationName}.} other {{itemName} foram movidos para {destinationName}.} many {{itemName} foram movidos para {destinationName}.}}",
+      "movingNear": "{count, plural, one {Movendo {itemName} para perto de {destinationName}.} other {Movendo {itemName} para perto de {destinationName}.} many {Movendo {itemName} para perto de {destinationName}.}}",
+      "movingTo": "{count, plural, one {Movendo {itemName} para {destinationName}.} other {Movendo {itemName} para {destinationName}.} many {Movendo {itemName} para {destinationName}.}}",
+      "pickedUp": "{count, plural, one {{itemName} foi selecionado para mover.} other {{itemName} foram selecionados para mover.} many {{itemName} foram selecionados para mover.}}",
+      "selectedItems": "{count, plural, one {# item selecionado} other {# itens selecionados} many {# itens selecionados}}"
     },
     "duplicate": "Duplicar",
     "duplicated": "Duplicado",
@@ -2328,7 +2379,7 @@
     "retry": "Tentar novamente",
     "role": "Função",
     "run": "Executar",
-    "runSizeConfirmDescription": "Esta execução está estimada em {estimated, plural, one {# unidade de uso} other {# unidades de uso}}; há {available, plural, one {# disponível} other {# disponíveis}}. Iniciar mesmo assim?",
+    "runSizeConfirmDescription": "Esta execução está estimada em {estimated, plural, one {# unidade de uso} other {# unidades de uso} many {# unidades de uso}}; há {available, plural, one {# disponível} other {# disponíveis} many {# disponíveis}}. Iniciar mesmo assim?",
     "running": "Em execução",
     "save": "Salvar",
     "saveAndLeave": "Salvar e sair",
@@ -2345,8 +2396,11 @@
     "selectAMatter": "Selecione um caso",
     "selectARole": "Selecione uma função",
     "selectAll": "Selecionar tudo",
+    "selectAllRows": "Selecionar todas as linhas",
     "selectDate": "Selecionar data…",
+    "selectRow": "Selecionar {label}",
     "selected": "Selecionado",
+    "selectedCount": "{count, plural, one {# selecionado} many {# selecionados} other {# selecionados}}",
     "sessions": "Sessões",
     "settings": "Configurações",
     "showAll": "Mostrar tudo",
@@ -2361,7 +2415,7 @@
     "stale": "Desatualizado",
     "start": "Começar",
     "status": "Status",
-    "stepCount": "{count, plural, one {# etapa} other {# etapas}}",
+    "stepCount": "{count, plural, one {# etapa} other {# etapas} many {# etapas}}",
     "stepProgress": "{current} de {total}",
     "suggested": "Sugestão",
     "summarizeChanges": "Resumir alterações",
@@ -2388,7 +2442,6 @@
     "unverifiedCitationHint": "Não foi possível associar esta citação ao documento de origem.",
     "uploadFiles": "Carregar arquivos",
     "urlIdentifier": "Identificador de URL",
-    "urlIdentifierPlaceholder": "minha-organização",
     "user": "Usuário",
     "value": "Valor",
     "vatId": "Número de IVA",
@@ -2439,6 +2492,7 @@
     "scopeMemoryWrite": "Criar e atualizar as memórias do assistente",
     "scopeOfflineAccess": "Manter você conectado sem exigir aprovação repetida",
     "scopeOnboarding": "Configure as jurisdições de atuação da sua organização",
+    "scopeOrganizationCreate": "Criar novas organizações das quais você será proprietário",
     "scopeProfile": "Acesse as informações do seu perfil",
     "scopeRead": "Leia seus documentos, casos e contatos",
     "scopeReadAnonymized": "Leia versões anônimas de seus documentos e casos",
@@ -2448,7 +2502,7 @@
     "scopeTemplates": "Listar, preencher e criar seus modelos de documento",
     "scopeTemplatesAnonymized": "Listar, preencher e criar versões anônimas de seus modelos de documento",
     "sensitiveAccess": "Inclui acesso que pode excluir dados ou alterar sua organização",
-    "showAllPermissions": "{count, plural, one {Mostrar a permissão} other {Mostrar todas as # permissões}}",
+    "showAllPermissions": "{count, plural, one {Mostrar a permissão} other {Mostrar todas as # permissões} many {Mostrar todas as # permissões}}",
     "signedInAs": "Conectado como <email>{accountEmail}</email>",
     "summaryAdminRead": "registro de auditoria",
     "summaryAdminWrite": "membros e configurações da organização",
@@ -2596,8 +2650,8 @@
     "filterPersons": "Pessoas",
     "import": {
       "confirmAction": "Confirmar importação",
-      "previewSummary": "{valid, plural, one {# pronto} other {# prontos}}, {invalid, plural, one {# com erro} other {# com erros}}",
-      "resultsSummary": "{created, plural, one {# criado} other {# criados}}, {skipped, plural, one {# ignorado} other {# ignorados}}",
+      "previewSummary": "{valid, plural, one {# pronto} other {# prontos} many {# prontos}}, {invalid, plural, one {# com erro} other {# com erros} many {# com erros}}",
+      "resultsSummary": "{created, plural, one {# criado} other {# criados} many {# criados}}, {skipped, plural, one {# ignorado} other {# ignorados} many {# ignorados}}",
       "rowLabel": "Cliente {index}",
       "skippedDuplicateContactId": "Ignorado: ID de contato duplicado",
       "skippedDuplicateExternalRef": "Ignorado: a mesma origem e o mesmo ID externo aparecem duas vezes",
@@ -2634,11 +2688,11 @@
         "type": "Tipo de contato"
       },
       "fileInvalid": "Escolha um único arquivo CSV, TSV ou TXT.",
-      "fileSummary": "{name}, {count, plural, one {# contato} other {# contatos}}",
+      "fileSummary": "{name}, {count, plural, one {# contato} other {# contatos} many {# contatos}}",
       "generateDisplayName": "Criar nomes de exibição a partir dos campos de nome associados",
       "ignore": "Não importar",
       "importAnother": "Importar outro arquivo",
-      "importCount": "Importar {count, plural, one {# contato} other {# contatos}}",
+      "importCount": "Importar {count, plural, one {# contato} other {# contatos} many {# contatos}}",
       "importFailed": "Não foi possível importar os contatos.",
       "inspectFailed": "Não foi possível ler este arquivo de contatos.",
       "issue": {
@@ -2661,7 +2715,7 @@
       "preview": "Revisar importação",
       "previewFailed": "Não foi possível criar a prévia da importação.",
       "reviewDescription": "Nada foi importado ainda. Edite qualquer linha abaixo e depois importe os contatos prontos.",
-      "reviewSummary": "{ready, plural, one {# contato está pronto} other {# contatos estão prontos}}. {errors, plural, =0 {Nenhum erro.} one {# erro precisa ser corrigido.} other {# erros precisam ser corrigidos.}}",
+      "reviewSummary": "{ready, plural, one {# contato está pronto} other {# contatos estão prontos} many {# contatos estão prontos}}. {errors, plural, =0 {Nenhum erro.} one {# erro precisa ser corrigido.} other {# erros precisam ser corrigidos.} many {# erros precisam ser corrigidos.}}",
       "sampleValues": "Valores de exemplo",
       "sourceColumn": "Coluna de origem",
       "sourceRow": "Linha {index}",
@@ -2775,11 +2829,11 @@
       "deleteParagraph": "Excluir parágrafo",
       "replacement": "“{find}” → “{replace}”"
     },
-    "countHigh": "{count, plural, one {# alto} other {# altos}}",
-    "countLow": "{count, plural, one {# baixo} other {# baixos}}",
-    "countMedium": "{count, plural, one {# médio} other {# médios}}",
-    "countUnspecified": "{count, plural, one {# não especificado} other {# não especificados}}",
-    "finalizePendingNote": "{count, plural, one {# sugestão ainda está pendente de revisão.} other {# sugestões ainda estão pendentes de revisão.}}",
+    "countHigh": "{count, plural, one {# alto} other {# altos} many {# altos}}",
+    "countLow": "{count, plural, one {# baixo} other {# baixos} many {# baixos}}",
+    "countMedium": "{count, plural, one {# médio} other {# médios} many {# médios}}",
+    "countUnspecified": "{count, plural, one {# não especificado} other {# não especificados} many {# não especificados}}",
+    "finalizePendingNote": "{count, plural, one {# sugestão ainda está pendente de revisão.} other {# sugestões ainda estão pendentes de revisão.} many {# sugestões ainda estão pendentes de revisão.}}",
     "hideAccepted": "Ocultar sugestões aceitas",
     "keepInReview": "Manter em revisão",
     "notApplied": "Alteração não aplicada",
@@ -2797,7 +2851,7 @@
       "commentOnSelection": "Comentar o texto selecionado",
       "deleteParagraph": "{label, select, none {Excluir um parágrafo} other {Excluir o parágrafo {label}}}",
       "deleteParagraphRange": "Excluir os parágrafos {first} a {last}",
-      "deleteParagraphs": "{count, plural, one {Excluir # parágrafo} other {Excluir # parágrafos}}",
+      "deleteParagraphs": "{count, plural, one {Excluir # parágrafo} other {Excluir # parágrafos} many {Excluir # parágrafos}}",
       "deleteTable": "Excluir uma tabela",
       "deleteTableColumn": "Excluir uma coluna de tabela",
       "deleteTableRow": "Excluir uma linha de tabela",
@@ -2884,6 +2938,7 @@
       "aiOutputModerated": "O provedor de IA moderou a resposta. Reformule a solicitação ou escolha outro modelo.",
       "aiProviderTaskUnsupported": "O provedor de IA configurado não consegue realizar esta tarefa. Escolha um provedor que consiga.",
       "aiUnknown": "A solicitação de IA falhou. Tente novamente.",
+      "alreadyOrganizationMember": "Esta pessoa já é membro desta organização.",
       "clauseDirectivesInvalid": "Uma cláusula vinculada contém diretivas inválidas. Corrija a cláusula antes de preencher o modelo.",
       "clauseDirectivesInvalidDetails": "A cláusula {clauseName} no campo {slotName} contém diretivas inválidas. Abra o editor de cláusulas, corrija os parágrafos indicados e preencha o modelo novamente.",
       "clauseDirectivesOverrideInvalidDetails": "O texto substituto da cláusula {clauseName} no campo {slotName} contém diretivas inválidas. Corrija o texto substituto deste preenchimento antes de tentar novamente.",
@@ -2899,12 +2954,21 @@
       "idempotencyInProgress": "Esta solicitação ainda está sendo processada. Aguarde um momento e tente novamente.",
       "idempotencyKeyReused": "Os dados mudaram desde a tentativa anterior. Redefina o formulário e tente novamente.",
       "internalServerError": "Algo deu errado. Tente novamente.",
+      "invitationAlreadyPending": "Esta pessoa já tem um convite pendente. Reenvie-o em Convites pendentes.",
+      "invitationEmailUnverified": "Verifique seu endereço de e-mail para responder a este convite.",
+      "invitationLimitReached": "Esta organização atingiu o limite de convites. Cancele primeiro um convite pendente.",
+      "invitationOtherRecipient": "Este convite foi enviado para outro endereço de e-mail.",
+      "invitationRoleNotAllowed": "Você não pode convidar alguém com esta função. Escolha outra função.",
+      "invoiceNumberSeriesMissing": "Configure uma série de numeração padrão para faturas em Séries de numeração, nas configurações da organização, e depois emita a fatura.",
+      "invoiceSellerProfileMissing": "Adicione um perfil de vendedor em Perfis de faturamento, nas configurações da organização, e depois emita a fatura.",
       "legalSourceEntityLimitReached": "Este assunto atingiu o limite de itens, portanto não foi possível criar o documento.",
       "legalSourceFilePropertyMissing": "Este assunto não tem uma propriedade de arquivo, portanto não foi possível criar o documento.",
       "matterContactCapacityExceeded": "Este caso tem mais contatos do que é possível exibir. Remova vínculos visíveis com contatos para exibir os contatos restantes.",
       "matterContactCapacityReached": "Este caso atingiu o limite de contatos. Remova um vínculo com um contato antes de adicionar outro.",
       "mcpAuthorizationApprovalRequired": "Um administrador precisa aprovar este conector antes que você possa se conectar.",
       "notOrganizationMember": "Você não é membro desta organização.",
+      "organizationLastOwner": "Uma organização precisa de um proprietário. Transfira a propriedade primeiro.",
+      "organizationMemberLimitReached": "Esta organização atingiu o limite de membros.",
       "providerKeyRejected": "O provedor rejeitou a chave de API.",
       "providerRateLimited": "O limite de solicitações do provedor foi atingido. Tente novamente em instantes.",
       "thirdPartyBoundaryRefusal": "A solicitação tentou usar conteúdo fora do contexto permitido do espaço de trabalho.",
@@ -2965,7 +3029,6 @@
     "failedToVerifyOtp": "Falha ao verificar o código",
     "matterNotFound": "Caso não encontrado",
     "partyAlreadyExists": "O contato já tem este papel no caso",
-    "slugAlreadyTaken": "Este slug já está em uso",
     "uploadFailed": "Falha no upload"
   },
   "feedback": {
@@ -3031,6 +3094,7 @@
     },
     "compareChangeSummary": "Mudanças por tipo",
     "compareCreated": "Documento de alterações controladas criado",
+    "compareDocxOnly": "Comparar (somente DOCX)",
     "compareFailed": "Falha na comparação",
     "compareNeedsTwoVersions": "Carregue outra versão DOCX para comparar.",
     "compareNoChanges": "Nenhuma diferença suportada foi encontrada.",
@@ -3040,7 +3104,7 @@
     "compareRedlineUnavailable": "A comparação foi salva, mas seu arquivo não pôde ser aberto. Atualize o histórico da versão para tentar novamente.",
     "compareRequestFailed": "As versões não puderam ser comparadas.",
     "compareTo": "Comparar com",
-    "compareUnsupported": "{count, plural, one {# parte não comparada} other {# partes não comparadas}}",
+    "compareUnsupported": "{count, plural, one {# parte não comparada} other {# partes não comparadas} many {# partes não comparadas}}",
     "compareUnsupportedDescription": "Estas partes do documento não foram comparadas:",
     "compareUnsupportedReasons": {
       "missingInBase": "A parte do documento existe apenas no destino",
@@ -3049,7 +3113,7 @@
       "unsupportedContent": "Esta versão contém conteúdo que ainda não pode ser comparado."
     },
     "compareUnverified": "Comparação não verificada",
-    "compareVerificationFailures": "{count, plural, one {Uma verificação de ida e volta falhou. Revise esta comparação antes de confiar nela.} other {# verificações de ida e volta falharam. Revise esta comparação antes de confiar nela.}}",
+    "compareVerificationFailures": "{count, plural, one {Uma verificação de ida e volta falhou. Revise esta comparação antes de confiar nela.} other {# verificações de ida e volta falharam. Revise esta comparação antes de confiar nela.} many {# verificações de ida e volta falharam. Revise esta comparação antes de confiar nela.}}",
     "compareVerified": "Comparação verificada",
     "compareVersions": "{targetVersion} vs {baseVersion}",
     "compareVersionsDescription": "Selecione a versão anterior como base e a versão posterior como destino.",
@@ -3086,6 +3150,7 @@
     "selectVersion": "Selecione uma versão",
     "setLabel": "Definir rótulo",
     "showDiff": "Mostrar diferença",
+    "showText": "Mostrar texto",
     "showVersionList": "Mostrar histórico de versões",
     "uploadDate": "Data de upload",
     "uploadNewVersion": "Carregar nova versão",
@@ -3700,8 +3765,8 @@
       "unsupportedVisualContent": "Este arquivo contém imagens ou gráficos vetoriais que não podem ser verificados quanto a texto sensível. A exportação não está disponível.",
       "workspaceTermsHeading": "Termos do espaço de trabalho ({count})"
     },
-    "closeAllTabs": "Fechar {count, plural, one {# aba} other {todas as # abas}}",
-    "closeOtherTabs": "Fechar {count, plural, one {a outra aba} other {as outras # abas}}",
+    "closeAllTabs": "Fechar {count, plural, one {# aba} many {todas as # abas} other {todas as # abas}}",
+    "closeOtherTabs": "Fechar {count, plural, one {a outra aba} many {as outras # abas} other {as outras # abas}}",
     "closeTab": "Fechar <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Este é um arquivo antigo do {format}. Salve-o novamente como {replacementExtension} para convertê-lo.",
@@ -3737,7 +3802,7 @@
       "remove": "Desagrupar abas",
       "rename": "Renomear grupo",
       "saveFailed": "Não foi possível salvar os grupos de abas neste navegador.",
-      "tabCount": "{count, plural, one {# aba} other {# abas}}",
+      "tabCount": "{count, plural, one {# aba} other {# abas} many {# abas}}",
       "ungroup": "Remover do grupo"
     },
     "hidePane": "Ocultar painel",
@@ -3814,10 +3879,10 @@
         "missingFromTarget": "Ausente do documento-alvo",
         "notComparable": "Não comparável"
       },
-      "basisCombined": "{count, plural, one {Revisão conforme {name} e comparação com # documento de referência} other {Revisão conforme {name} e comparação com # documentos de referência}}",
+      "basisCombined": "{count, plural, one {Revisão conforme {name} e comparação com # documento de referência} other {Revisão conforme {name} e comparação com # documentos de referência} many {Revisão conforme {name} e comparação com # documentos de referência}}",
       "basisDivider": "e / ou",
       "basisPlaybook": "Revisão conforme {name}",
-      "basisReferences": "{count, plural, one {Comparação com # documento de referência} other {Comparação com # documentos de referência}}",
+      "basisReferences": "{count, plural, one {Comparação com # documento de referência} other {Comparação com # documentos de referência} many {Comparação com # documentos de referência}}",
       "basisToggle": "O que foi comparado",
       "changeBasis": "Alterar base da revisão",
       "chatDraft": {
@@ -3829,7 +3894,7 @@
       },
       "checks": "O que é verificado:",
       "commentFailed": "Não foi possível adicionar o comentário",
-      "comparedWithReferences": "{count, plural, one {Comparado com # documento de referência} other {Comparado com # documentos de referência}}",
+      "comparedWithReferences": "{count, plural, one {Comparado com # documento de referência} other {Comparado com # documentos de referência} many {Comparado com # documentos de referência}}",
       "decidedCount": "{count, number} decidido",
       "decision": "Decisão",
       "decisionFailed": "Não foi possível registrar sua decisão",
@@ -3855,13 +3920,13 @@
       "filterCoverage": "Cobertura",
       "filterDeviations": "Desvios",
       "flag": "Sinalizar",
-      "flaggedPositions": "{total, plural, one {{flagged, number} de # posição sinalizada} other {{flagged, number} de # posições sinalizadas}}",
+      "flaggedPositions": "{total, plural, one {{flagged, number} de # posição sinalizada} other {{flagged, number} de # posições sinalizadas} many {{flagged, number} de # posições sinalizadas}}",
       "fromChat": "Do chat",
       "fromThisMatter": "Deste caso",
       "history": {
         "backToLatest": "Voltar à versão mais recente",
         "decided": "{decided, number} de {total, number} decidido",
-        "references": "{count, plural, one {# referência} other {# referências}}"
+        "references": "{count, plural, one {# referência} other {# referências} many {# referências}}"
       },
       "impact": {
         "favourable": "Favorável",
@@ -3906,9 +3971,9 @@
         "review": "Principal: constatações no painel largo"
       },
       "passageUnavailable": "Texto de referência indisponível",
-      "passagesCount": "{count, plural, one {# trecho} other {# trechos}}",
+      "passagesCount": "{count, plural, one {# trecho} other {# trechos} many {# trechos}}",
       "passagesToggle": "Trechos",
-      "pendingCount": "{count, plural, one {# pendente} other {# pendente}}",
+      "pendingCount": "{count, plural, one {# pendente} other {# pendente} many {# pendente}}",
       "perspective": {
         "neutral": "Não especificado",
         "other": "Outro…",
@@ -3924,7 +3989,7 @@
         "absent": "Não",
         "present": "Sim"
       },
-      "progressPositions": "{total, plural, one {{completed, number} de # posição} other {{completed, number} de # posições}}",
+      "progressPositions": "{total, plural, one {{completed, number} de # posição} other {{completed, number} de # posições} many {{completed, number} de # posições}}",
       "proposedChange": "Alteração proposta",
       "proposing": "Propondo posições… {count, number}",
       "readOnlyRun": "Decidido nesta revisão",
@@ -3942,7 +4007,7 @@
       "results": "Resultados da revisão",
       "reviewAgain": "Iniciar outra revisão",
       "reviewPositionsFirst": "Revisar as posições primeiro",
-      "reviewedAgainstCombined": "{count, plural, one {Revisado conforme {name} e comparado com # documento de referência} other {Revisado conforme {name} e comparado com # documentos de referência}}",
+      "reviewedAgainstCombined": "{count, plural, one {Revisado conforme {name} e comparado com # documento de referência} other {Revisado conforme {name} e comparado com # documentos de referência} many {Revisado conforme {name} e comparado com # documentos de referência}}",
       "reviewing": "Revisão em andamento…",
       "reviewingHint": "Isso pode levar alguns minutos para documentos grandes.",
       "run": "Iniciar revisão",
@@ -3967,7 +4032,7 @@
         "forParty": "para {role}",
         "noSide": "nenhuma parte",
         "proposedFromReferences": "posições propostas a partir das referências",
-        "unnamedReferences": "{count, plural, one {# documento de referência} other {# documentos de referência}}"
+        "unnamedReferences": "{count, plural, one {# documento de referência} other {# documentos de referência} many {# documentos de referência}}"
       },
       "targetAsReference": "O documento revisado não pode ser sua própria referência.",
       "targetColumn": "Este documento",
@@ -4008,9 +4073,9 @@
       "deleteFileConfirm": "Excluir arquivo? Isso não pode ser desfeito.",
       "disableSkill": "Desativar habilidade",
       "discoverSkills": "Buscar habilidades",
-      "discoveredSkills": "{count, plural, one {# habilidade encontrada} other {# habilidades encontradas}}",
+      "discoveredSkills": "{count, plural, one {# habilidade encontrada} other {# habilidades encontradas} many {# habilidades encontradas}}",
       "discoveryEmpty": "Nenhuma habilidade foi encontrada neste repositório ou pasta.",
-      "discoverySkippedInvalid": "{count, plural, one {# habilidade inválida foi ignorada} other {# habilidades inválidas foram ignoradas}}",
+      "discoverySkippedInvalid": "{count, plural, one {# habilidade inválida foi ignorada} other {# habilidades inválidas foram ignoradas} many {# habilidades inválidas foram ignoradas}}",
       "editSkill": "Editar habilidade",
       "enableSkill": "Ativar habilidade",
       "fileExists": "Já existe um arquivo com este caminho",
@@ -4020,11 +4085,11 @@
       "importFailureLimit": "O limite de habilidades foi atingido.",
       "importFailureNameConflict": "Já existe uma habilidade com este nome.",
       "importHelp": "Cole a URL de um repositório ou pasta pública do GitHub, ou de um arquivo SKILL.md. Revise as habilidades encontradas antes de instalá-las.",
-      "importPartial": "{installedCount, plural, one {{installed} importada} other {{installed} importadas}}; {failedCount, plural, one {{failed} falhou} other {{failed} falharam}}.",
+      "importPartial": "{installedCount, plural, one {{installed} importada} other {{installed} importadas} many {{installed} importadas}}; {failedCount, plural, one {{failed} falhou} other {{failed} falharam} many {{failed} falharam}}.",
       "importSelected": "Importar selecionadas ({count})",
       "importSkill": "Importar de URL",
       "importTitle": "Importar habilidade",
-      "importedSkills": "{count, plural, one {# habilidade importada} other {# habilidades importadas}}",
+      "importedSkills": "{count, plural, one {# habilidade importada} other {# habilidades importadas} many {# habilidades importadas}}",
       "invalidPath": "O caminho deve usar letras minúsculas, dígitos, pontos, hifens ou sublinhados",
       "invocationAuto": "Automaticamente",
       "invocationAutoHelp": "A IA pode usar esta habilidade por conta própria quando ela se encaixar no pedido.",
@@ -4040,11 +4105,33 @@
       "scopePrivate": "Só eu",
       "scopeTeam": "Todos na equipe",
       "selectionLimit": "Selecione até {count} habilidades por vez.",
-      "skippedFiles": "{count, plural, one {# arquivo não foi importado} other {# arquivos não foram importados}}",
+      "skippedFiles": "{count, plural, one {# arquivo não foi importado} other {# arquivos não foram importados} many {# arquivos não foram importados}}",
       "skippedReasonNotUtf8Text": "Não é texto UTF-8",
       "skippedReasonOutsideSkillFolder": "Fora da pasta da habilidade",
       "skippedReasonUnsupportedExtension": "Tipo de arquivo não compatível",
       "skippedReasonUnsupportedFolder": "Não está em uma pasta de recursos",
+      "starter": {
+        "compare": {
+          "body": "Compare duas versões deste documento e liste cada alteração relevante com sua localização.",
+          "description": "Liste cada alteração relevante entre duas versões",
+          "name": "Comparar versões"
+        },
+        "draft": {
+          "body": "Redija uma resposta ponderada a esta carta. Mantenha o tom profissional, trate de cada ponto levantado e aponte as questões em aberto para eu confirmar.",
+          "description": "Redija uma resposta profissional a uma carta",
+          "name": "Redigir uma resposta"
+        },
+        "risks": {
+          "body": "Analise este documento em busca de riscos jurídicos, proteções ausentes e cláusulas ambíguas. Cite a cláusula específica de cada achado.",
+          "description": "Identifique riscos jurídicos e cláusulas ambíguas",
+          "name": "Identificar riscos"
+        },
+        "summarize": {
+          "body": "Resuma este documento. Aborde as partes, as principais obrigações, as datas, as condições financeiras e eventuais cláusulas de rescisão ou responsabilidade.",
+          "description": "Obtenha um resumo estruturado das principais condições",
+          "name": "Resumir um documento"
+        }
+      },
       "uploadHelp": "Use um arquivo SKILL.md ou uma pasta .zip contendo SKILL.md e recursos opcionais somente leitura.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/caminho/para/habilidade",
       "version": "Versão: {version}"
@@ -4135,7 +4222,7 @@
       "autosave": {
         "failed": "Não foi possível salvar",
         "nameMissing": "Não salvo: adicione um nome",
-        "positionsNeedAttention": "Não salvo: {count, plural, one {# posição precisa} other {# posições precisam}} de atenção"
+        "positionsNeedAttention": "Não salvo: {count, plural, one {# posição precisa} other {# posições precisam} many {# posições precisam}} de atenção"
       },
       "buildWithAi": {
         "description": "Responda a algumas perguntas em um chat e o playbook vai sendo salvo durante a conversa.",
@@ -4165,7 +4252,7 @@
       "created": "Playbook criado",
       "customizeAnswer": "Alterar a resposta extraída",
       "customizeAnswerHint": "Editar a pergunta ou o formato da resposta.",
-      "decisionLine": "{runs, plural, one {aceito {accepted, number} · descartado {dismissed, number} · em # revisão} other {aceito {accepted, number} · descartado {dismissed, number} · em # revisões}}",
+      "decisionLine": "{runs, plural, one {aceito {accepted, number} · descartado {dismissed, number} · em # revisão} other {aceito {accepted, number} · descartado {dismissed, number} · em # revisões} many {aceito {accepted, number} · descartado {dismissed, number} · em # revisões}}",
       "deleteFailed": "Não foi possível excluir o playbook",
       "deletePlaybook": "Excluir playbook",
       "deletePosition": "Excluir posição",
@@ -4275,7 +4362,7 @@
       "starters": {
         "addedToast": "Playbook adicionado",
         "browseButton": "Explorar playbooks iniciais",
-        "positionCount": "{count, plural, one {# posição} other {# posições}}",
+        "positionCount": "{count, plural, one {# posição} other {# posições} many {# posições}}",
         "title": "Playbooks iniciais",
         "useStarter": "Usar este modelo"
       },
@@ -4549,12 +4636,13 @@
       "flowRunFailed": "O fluxo de trabalho <bdi>{flowName}</bdi> falhou",
       "mention": "<bdi>{actorName}</bdi> mencionou você em um comentário",
       "reportExportFailed": "Falha ao exportar seu relatório",
-      "reportExportSucceeded": "Seu relatório está pronto"
+      "reportExportSucceeded": "Seu relatório está pronto",
+      "taskAssigned": "<bdi>{actorName}</bdi> atribuiu uma tarefa a você"
     },
     "loadOlder": "Carregar mais antigas",
     "markAllRead": "Marcar todas como lidas",
     "title": "Notificações",
-    "unreadLabel": "{count, plural, one {# notificação não lida} other {# notificações não lidas}}"
+    "unreadLabel": "{count, plural, one {# notificação não lida} other {# notificações não lidas} many {# notificações não lidas}}"
   },
   "onboarding": {
     "aiConfigFailed": "Não foi possível salvar sua configuração de IA. Você pode terminar nas configurações.",
@@ -4565,7 +4653,7 @@
     "browserExtensionCardDescription": "Deixe o chat trabalhar com os sites que você já usa, em uma guia do Chrome que você escolher.",
     "catalogueAlwaysOn": "Sempre ativo",
     "catalogueCommunityHeading": "Outros",
-    "catalogueContinueWithCount": "{count, plural, one {Continuar com # ferramenta} other {Continuar com # ferramentas}}",
+    "catalogueContinueWithCount": "{count, plural, one {Continuar com # ferramenta} other {Continuar com # ferramentas} many {Continuar com # ferramentas}}",
     "catalogueDetailAbout": "Sobre",
     "catalogueDetailCost": "Custo",
     "catalogueDetailJurisdictions": "Jurisdições",
@@ -4574,7 +4662,7 @@
     "catalogueFootnote": "Você pode criar suas próprias ferramentas mais tarde diretamente no app, ou <link>solicitar a adição via GitHub</link>.",
     "cataloguePartial": "{installed} instaladas, {failed} falharam",
     "cataloguePreviewBaseline": "Integradas",
-    "cataloguePreviewCount": "{count, plural, =0 {Nenhum recurso} one {# recurso} other {# recursos}}",
+    "cataloguePreviewCount": "{count, plural, =0 {Nenhum recurso} one {# recurso} other {# recursos} many {# recursos}}",
     "cataloguePreviewEmpty": "Escolha no pacote recomendado ou descubra mais ferramentas abaixo.",
     "cataloguePreviewYourStack": "Sua seleção",
     "catalogueProposeTool": "Propor nova ferramenta",
@@ -4717,7 +4805,15 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Usando os padrões"
     },
+    "creationEvaluationLimitReached": "Você já utilizou todos os {limit} períodos de avaliação de organizações. Excluir uma organização não restaura um período de avaliação. Use uma organização existente ou entre em contato com o suporte para obter acesso pago.",
+    "creationInvalidName": "Digite um nome de organização válido (até {maxLength} caracteres).",
+    "creationNotAllowed": "Esta conta não pode criar organizações.",
+    "creationOutcomeUnknown": "A solicitação pode ter criado uma organização. Tente novamente para verificar o resultado.",
+    "creationRateLimited": "Muitas organizações foram criadas recentemente. Tente novamente mais tarde.",
+    "creationRefused": "Não foi possível criar a organização. Confira os dados e tente novamente.",
+    "creationSlugConflict": "Este endereço de organização já está em uso. Escolha outro nome ou endereço.",
     "invitations": {
+      "cancelConfirmDescription": "O link do convite enviado para {email} deixará de funcionar. Para convidar essa pessoa novamente, envie um novo convite.",
       "cancelInvitation": "Cancelar convite",
       "emailAddressLabel": "Endereço de e-mail",
       "emailAddressPlaceholder": "usuário@exemplo.com",
@@ -4725,12 +4821,14 @@
       "inviteMember": "Convidar membro",
       "inviteMemberDescription": "Envie um convite para ingressar na sua organização",
       "invited": "Convidado",
+      "keepInvitation": "Manter convite",
       "noInvitationsFound": "Nenhum convite encontrado",
       "resendInvitation": "Reenviar convite",
       "sendInvitation": "Enviar convite",
       "statuses": {
         "accepted": "Aceito",
         "canceled": "Cancelado",
+        "expired": "Expirado",
         "pending": "Pendente",
         "rejected": "Rejeitado"
       }
@@ -4764,6 +4862,8 @@
       "typeEmailToConfirm": "Digite {email} para confirmar",
       "updateRole": "Atualizar função"
     },
+    "newOrganization": "Nova organização",
+    "newOrganizationDescription": "Crie uma organização da qual você será proprietário.",
     "roles": {
       "admin": "Administrador",
       "descriptions": {
@@ -4779,6 +4879,9 @@
       "owner": "Proprietário"
     },
     "settingsDescription": "Edite o nome e o slug da sua organização",
+    "startOver": "Recomeçar",
+    "startOverDescription": "A solicitação original pode já ter criado uma organização. Confira suas organizações antes de recomeçar; uma nova solicitação pode criar outra organização.",
+    "startOverTitle": "Iniciar uma nova solicitação de criação?",
     "switchOrganization": "Mudar de organização"
   },
   "publicTools": {
@@ -4953,8 +5056,9 @@
   "search": {
     "aiRefine": "Melhore a consulta com IA",
     "caseLawEmptyState": "Comece a digitar para pesquisar decisões judiciais.",
-    "caseLawMatchingDecisions": "{count, plural, one {# decisão correspondente} other {# decisões correspondentes}}",
-    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ decisão correspondente} other {#+ decisões correspondentes}}",
+    "caseLawMatchingDecisions": "{count, plural, one {# decisão correspondente} other {# decisões correspondentes} many {# decisões correspondentes}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ decisão correspondente} other {#+ decisões correspondentes} many {#+ decisões correspondentes}}",
+    "chatCoveragePartial": "Nem todas as conversas foram pesquisadas por completo.",
     "continueInChat": "Continuar no chat",
     "dateFrom": "De",
     "dateTo": "Para",
@@ -5091,8 +5195,8 @@
       "desktopDocumentsTitle": "Edição de documentos no computador",
       "desktopDownloadMac": "Baixar para macOS",
       "desktopDownloadOtherMac": "No Windows? Baixar para Windows",
-      "desktopDownloadOtherWindows": "Ou obtenha o instalador .msi para implantações gerenciadas por TI",
       "desktopDownloadWindows": "Baixar para Windows",
+      "desktopDownloadWindowsArm": "Windows em ARM? Baixar a versão para ARM",
       "desktopHeroTitle": "Sua área de transferência, pronta quando você precisar",
       "desktopInstallMacStep": "Abra o DMG e arraste o stella desktop para Aplicativos.",
       "desktopInstallOpenStep": "Abra o stella desktop uma vez. A área de transferência aparece na hora e continua disponível pela barra de menus do macOS ou pela bandeja do sistema do Windows.",
@@ -5202,7 +5306,7 @@
       "mcpTitle": "Servidor MCP",
       "mcpUrlLabel": "URL do servidor",
       "noMatches": "Nenhuma conexão corresponde a “{query}”",
-      "permissionCount": "{count, plural, one {# permissão} other {# permissões}}",
+      "permissionCount": "{count, plural, one {# permissão} other {# permissões} many {# permissões}}",
       "privateCredentialOnly": "Somente credencial privada",
       "searchPlaceholder": "Buscar conexões",
       "title": "Conexões",
@@ -5236,6 +5340,7 @@
       "auditLogsActionUpdate": "Atualizar",
       "auditLogsAllActions": "Todas as ações",
       "auditLogsChanges": "Alterações",
+      "auditLogsDeletedResource": "{kind} excluído",
       "auditLogsDescription": "Quem fez o quê nesta organização e quando.",
       "auditLogsEmpty": "Ainda não há atividade.",
       "auditLogsError": "Não foi possível carregar o registro de atividades.",
@@ -5246,12 +5351,118 @@
       "auditLogsFrom": "Data inicial",
       "auditLogsLoading": "Carregando registros...",
       "auditLogsResourceId": "ID do recurso",
+      "auditLogsResourceIdentifier": "ID do recurso: {id}",
       "auditLogsResourceType": "Tipo de recurso",
       "auditLogsResourceTypePlaceholder": "ex.: workspace",
+      "auditLogsSentenceAccess": "{resource} foi aberto.",
+      "auditLogsSentenceActivity": "Uma atividade foi registrada para {resource}.",
+      "auditLogsSentenceCancel": "{resource} foi cancelado.",
+      "auditLogsSentenceConfirmationShown": "A confirmação de {resource} foi exibida.",
+      "auditLogsSentenceCreate": "{resource} foi criado.",
+      "auditLogsSentenceDelete": "{resource} foi excluído.",
+      "auditLogsSentenceDownload": "{resource} foi baixado.",
+      "auditLogsSentenceExecute": "{resource} foi executado.",
+      "auditLogsSentenceIssued": "{resource} foi emitido.",
+      "auditLogsSentenceRedeemed": "{resource} foi resgatado.",
+      "auditLogsSentenceRefused": "{resource} foi recusado.",
+      "auditLogsSentenceReview": "{resource} foi revisado.",
+      "auditLogsSentenceSessionCreated": "Uma sessão foi criada para {resource}.",
+      "auditLogsSentenceUpdate": "{resource} foi atualizado.",
       "auditLogsTime": "Hora",
       "auditLogsTo": "Data final",
+      "auditLogsUnavailableResource": "{kind} (indisponível)",
+      "auditLogsUnknownResource": "item desconhecido",
       "auditLogsUserId": "ID do usuário",
       "auditLogsUserIdPlaceholder": "Filtrar por ID do usuário",
+      "auditResourceKinds": {
+        "agent_skill": "habilidade",
+        "agent_skill_comment": "comentário da habilidade",
+        "agent_skill_proposal": "proposta de habilidade",
+        "ai_memory": "memória da IA",
+        "announcement": "anúncio",
+        "bilingual_translation_run": "tradução bilíngue",
+        "billing_code": "código de faturamento",
+        "case_law_decision_annotation": "anotação de jurisprudência",
+        "case_law_matter_link": "vínculo entre jurisprudência e caso",
+        "case_law_reader_answer": "resposta do leitor de jurisprudência",
+        "case_law_research_column": "coluna de pesquisa jurisprudencial",
+        "chat_file": "arquivo da conversa",
+        "chat_message": "mensagem da conversa",
+        "chat_thread": "conversa",
+        "chat_tool_execution": "execução de ferramenta da conversa",
+        "chat_tool_grant": "permissão de ferramenta da conversa",
+        "clause": "cláusula",
+        "clause_category": "categoria de cláusulas",
+        "clause_template_link": "vínculo entre cláusula e modelo",
+        "clause_variant": "variante de cláusula",
+        "contact": "contato",
+        "contact_directory": "diretório de contatos",
+        "desktop_edit_session": "sessão de edição no computador",
+        "document_annotation": "anotação de documento",
+        "document_review_run": "revisão de documento",
+        "document_translation_run": "tradução de documento",
+        "document_type": "tipo de documento",
+        "entity": "elemento",
+        "entity_version": "versão do item",
+        "expense": "despesa",
+        "feedback_report": "relatório de comentários",
+        "field": "campo",
+        "file_comparison": "comparação de arquivos",
+        "flow_definition": "definição do fluxo de trabalho",
+        "flow_run": "execução do fluxo de trabalho",
+        "folio_collab_room": "sala de colaboração do Folio",
+        "invoice": "fatura",
+        "legal_list": "lista jurídica",
+        "legal_list_generation": "geração de lista jurídica",
+        "legal_list_item": "entrada da lista jurídica",
+        "legal_list_verification": "verificação da lista jurídica",
+        "legal_resolve": "consulta de referência jurídica",
+        "legislation_matter_link": "vínculo entre legislação e caso",
+        "machine_api_key": "chave de API da máquina",
+        "mcp_connection": "conexão MCP",
+        "mcp_gateway_tool": "ferramenta de gateway MCP",
+        "mcp_web_handoff": "transferência web MCP",
+        "number_series": "série de numeração",
+        "organization_access_state": "status de acesso à organização",
+        "organization_settings": "configurações da organização",
+        "pdf_signing_session": "sessão para assinatura em PDF",
+        "personal_api_key": "chave de API pessoal",
+        "playbook": "playbook",
+        "property": "propriedade",
+        "rate_entry": "entrada de tarifa",
+        "rate_table": "tabela de tarifas",
+        "report_export": "exportação de relatório",
+        "saved_search": "pesquisa salva",
+        "saved_time_narrative": "descrição de tempo salva",
+        "search_history": "histórico de pesquisa",
+        "seller_profile": "perfil do vendedor",
+        "service_oauth_client": "cliente OAuth de serviço",
+        "signal": "sinal",
+        "statute_annotation": "anotação legislativa",
+        "style_set": "conjunto de estilos",
+        "template": "modelo",
+        "template_lookup_format": "formato para buscar modelos",
+        "time_daily_target": "meta diária de tempo",
+        "time_entry": "registro de tempo",
+        "time_timer": "temporizador",
+        "usage_allocation": "alocação de uso",
+        "usage_entitlement": "direito de uso",
+        "usage_event": "evento de uso",
+        "usage_provider_event": "evento de uso do provedor",
+        "user_file": "arquivo",
+        "vat_rate": "alíquota de IVA",
+        "view": "visualização",
+        "view_template": "modelo de visualização",
+        "work_obligation": "obrigação de trabalho",
+        "workspace_contact": "contato do caso",
+        "workspace_member": "membro do caso"
+      },
+      "billingDrafts": {
+        "description": "Redija descrições com base nas atividades selecionadas e nos arquivos de conhecimento do escritório ou do cliente. Cada usuário também dá seu consentimento. Depois que as diretrizes do escritório forem anexadas, os rascunhos são verificados com base nelas.",
+        "firm": "Diretrizes do escritório",
+        "ledes": "Faturamento eletrônico (LEDES)",
+        "title": "Rascunhos de faturamento com IA"
+      },
       "documentProcessing": {
         "description": "Reconheça automaticamente texto em PDFs digitalizados para que seu conteúdo possa ser pesquisado.",
         "title": "Reconhecimento de texto de documentos",
@@ -5274,6 +5485,7 @@
         "title": "Extração de memória",
         "toggleLabel": "Sugerir memórias do histórico de chat em segundo plano"
       },
+      "pastInvitations": "Convites anteriores",
       "pendingInvitations": "Convites pendentes",
       "practiceJurisdictions": "Jurisdições",
       "practiceJurisdictionsDescription": "Selecione as jurisdições relevantes para você.",
@@ -5285,6 +5497,13 @@
       "renameDescription": "Os membros verão o novo nome imediatamente.",
       "renameTitle": "Renomear organização",
       "renameTypeToConfirm": "Digite o novo nome para confirmar: {name}",
+      "slug": {
+        "change": "Alterar identificador",
+        "conflict": "Este identificador já está sendo usado por outra organização.",
+        "description": "Escolha um novo identificador ou gere um aleatório. O identificador anterior deixará de funcionar.",
+        "opaque": "Gerar um identificador aleatório",
+        "title": "Identificador da organização"
+      },
       "timePolicy": {
         "description": "Defina o arredondamento do tempo, os limites de edição e os bloqueios mensais.",
         "editWindow": "Prazo de edição (dias)",
@@ -5334,7 +5553,7 @@
       "usagePlanSeats": "Assentos",
       "usagePlansDescription": "Escolha um plano para sua organização.",
       "usagePlansTitle": "Planos",
-      "usageSeats": "{count, plural, one {# assento} other {# assentos}}",
+      "usageSeats": "{count, plural, one {# assento} other {# assentos} many {# assentos}}",
       "usageStatusCancelled": "Cancelado",
       "usageStatusPastDue": "Vencido",
       "usageStatusPaused": "Pausado",
@@ -5372,7 +5591,7 @@
     "summaryPlaceholder": "O que muda?"
   },
   "statutes": {
-    "amendedTimes": "{count, plural, =0 {Nunca alterada} one {Alterada uma vez} other {Alterada # vezes}}",
+    "amendedTimes": "{count, plural, =0 {Nunca alterada} one {Alterada uma vez} other {Alterada # vezes} many {Alterada # vezes}}",
     "asOf": "Texto em vigor em",
     "backToList": "Todas as normas",
     "citingDecisionHideSnippet": "Recolher trecho",
@@ -5659,6 +5878,7 @@
       "open": "Aberta"
     },
     "subtasks": "Subtarefas",
+    "taskCompleted": "Tarefa concluída",
     "title": "Tarefas",
     "untitled": "Tarefa sem título",
     "workTypeValues": {
@@ -5709,7 +5929,7 @@
     "clearMyLookupFormatDefault": "Remover meu padrão",
     "conditionAddGroup": "Adicionar grupo",
     "conditionAddRule": "Adicionar regra",
-    "conditionCount": "{count, plural, one {# condição} other {# condições}}",
+    "conditionCount": "{count, plural, one {# condição} other {# condições} many {# condições}}",
     "conditionDecidedNo": "Não · {probability}",
     "conditionDecidedOnGenerate": "Será decidido ao gerar",
     "conditionDecidedYes": "Sim · {probability}",
@@ -5772,7 +5992,7 @@
     "dragAndDrop": "ou arraste e solte",
     "dropToCreate": "Solte um arquivo .docx para criar um modelo",
     "editFields": "Editar campos",
-    "emptyFieldsWarning": "{count, plural, one {# campo ainda está vazio} other {# campos ainda estão vazios}}: {names}",
+    "emptyFieldsWarning": "{count, plural, one {# campo ainda está vazio} other {# campos ainda estão vazios} many {# campos ainda estão vazios}}: {names}",
     "fieldCount": "{count, plural, one {# campo} many {# campos} other {# campos}}",
     "fieldFormat": "Formato de saída",
     "fieldFormatHint": "Use '{{key}}' para inserir uma parte.",
@@ -5996,7 +6216,7 @@
     "templateSaved": "Modelo salvo",
     "unmatchedPlaceholders": "Alguns espaços reservados não foram preenchidos: {list}",
     "untitledTemplate": "Modelo sem título",
-    "unusedFields": "{count, plural, one {# campo não usado} other {# campos não usados}}",
+    "unusedFields": "{count, plural, one {# campo não usado} other {# campos não usados} many {# campos não usados}}",
     "unusedValues": "Alguns valores não foram utilizados: {list}",
     "upToNItems": "Até {max}",
     "updatedAgo": "Atualizado {time}",
@@ -6007,11 +6227,11 @@
     "useAsMyLookupFormatDefault": "Usar como meu padrão",
     "useTemplate": "Usar modelo",
     "useTemplateHint": "Preencha os campos e baixe o documento ou salve-o em um caso.",
-    "usedTimes": "Usado {count, plural, one {# vez} other {# vezes}}",
+    "usedTimes": "Usado {count, plural, one {# vez} other {# vezes} many {# vezes}}",
     "validationErrors": "Corrija os erros destacados",
     "validationKrsFormat": "Informe um número KRS de 10 dígitos",
     "validationMaxLength": "Máximo de {max} caracteres",
-    "validationMinItems": "Adicione pelo menos {min, plural, one {# item} other {# itens}}",
+    "validationMinItems": "Adicione pelo menos {min, plural, one {# item} other {# itens} many {# itens}}",
     "validationMinLength": "Mínimo de {min} caracteres",
     "validationNumberMax": "O valor máximo é {max}",
     "validationNumberMin": "O valor mínimo é {min}",
@@ -6033,7 +6253,7 @@
       "entriesTitle": "Tempo lançado",
       "nextWeek": "Próxima semana",
       "noActivity": "Ainda não há nada para lançar. Trabalhe em um caso e sua atividade aparecerá aqui para você aceitar.",
-      "pendingCount": "{count, plural, one {# sugestão} other {# sugestões}}",
+      "pendingCount": "{count, plural, one {# sugestão} other {# sugestões} many {# sugestões}}",
       "previousWeek": "Semana anterior",
       "range": "{start} – {end}",
       "refusals": {
@@ -6104,8 +6324,7 @@
   "validation": {
     "invalidEmail": "Insira um endereço de e-mail válido.",
     "organizationNameRequired": "O nome da organização é obrigatório",
-    "slugFormat": "O slug deve conter letras minúsculas, números e hifens",
-    "slugRequired": "O slug é obrigatório"
+    "slugFormat": "O slug deve conter letras minúsculas, números e hifens"
   },
   "verify": {
     "history": "{history, select, refiled {Impresso com a referência <bdi>{reference}</bdi>; agora está arquivado com a referência <bdi>{currentReference}</bdi> no caso <bdi>{matterName}</bdi>.} superseded {Esta referência aponta para a versão {version, number}; a versão atual é a {currentVersion, number}.} other {Impresso com a referência <bdi>{reference}</bdi>; agora está arquivado com a referência <bdi>{currentReference}</bdi> no caso <bdi>{matterName}</bdi>. Esta referência aponta para a versão {version, number}; a versão atual é a {currentVersion, number}.}}",
@@ -6146,7 +6365,7 @@
       "copied": "Copiado para o caso",
       "copyOption": "Copiar (manter original)",
       "description": "Copiar ou mover \"{name}\" para outro caso",
-      "descriptionCount": "Copiar ou mover {count, plural, one {# item} other {# itens}} para outro caso",
+      "descriptionCount": "Copiar ou mover {count, plural, one {# item} other {# itens} many {# itens}} para outro caso",
       "dragFolder": "Arraste para mover a pasta",
       "goToMatter": "Ir para o caso",
       "menuItem": "Copiar/Mover para caso",
@@ -6172,6 +6391,7 @@
     },
     "createNewWorkspace": "Criar novo caso",
     "defaultName": "Sem título",
+    "deleteFromMatter": "Excluir do caso…",
     "deleteItem": "Excluir item",
     "deleteItems": "Excluir {count, plural, one {# item} many {# itens} other {# itens}}",
     "deleteItemsDescription": "Tem certeza de que deseja excluir {count, plural, one {# item} many {# itens} other {# itens}}? Esta ação não pode ser desfeita.",
@@ -6182,6 +6402,10 @@
     "deleteWorkspaceConfirmDescription": "Tem certeza de que deseja excluir este caso? Esta ação não pode ser desfeita.",
     "deletedItem": "Excluído: {name}",
     "deletingWorkspace": "Excluindo caso",
+    "documentSwitcher": {
+      "searchPlaceholder": "Encontrar um documento…",
+      "trigger": "Trocar de documento"
+    },
     "documentsCount": "{count, plural, one {# documento} many {# documentos} other {# documentos}}",
     "dropToUploadFiles": "Solte para fazer upload de arquivos",
     "duplicateMatter": "Duplicar caso",
@@ -6210,7 +6434,7 @@
       "addFilePropertyToUpload": "Adicione uma propriedade de arquivo para fazer upload de arquivos",
       "attachedTemplateUpload": {
         "confirm": "Remover link e enviar",
-        "description": "{count, plural, one {Este arquivo contém um link para um modelo do Word fora do documento.} other {Estes arquivos contêm links para modelos do Word fora dos documentos.}} A stella não os enviará sem alterações porque o Word pode carregar conteúdo ou macros por esses links.",
+        "description": "{count, plural, one {Este arquivo contém um link para um modelo do Word fora do documento.} other {Estes arquivos contêm links para modelos do Word fora dos documentos.} many {Estes arquivos contêm links para modelos do Word fora dos documentos.}} A stella não os enviará sem alterações porque o Word pode carregar conteúdo ou macros por esses links.",
         "effect": "Ao continuar, somente o link do modelo é removido da cópia enviada. O arquivo original no seu dispositivo não é alterado.",
         "localLocation": "Local do modelo: um caminho de arquivo local fora deste documento",
         "mixedLocation": "Locais dos modelos: mais de um tipo de caminho externo",
@@ -6267,6 +6491,7 @@
       "downloadSearchablePdf": "PDF pesquisável",
       "downloadWithComments": "Baixar com comentários",
       "emptyFile": "O arquivo está vazio.",
+      "fileTooLarge": "O arquivo é maior que {limit, number} MB.",
       "includeReferenceNumber": "Incluir número de referência",
       "itemLimitReached": "Este assunto atingiu o limite de itens.",
       "maxEntitiesReached": "Número máximo de itens atingido",
@@ -6333,7 +6558,7 @@
       "rateLimited": "Limite de taxa atingido; retomando em {seconds, number}s",
       "referencedUpload": {
         "choiceLabel": "O que fazer com {fileName}",
-        "description": "{count, plural, one {# arquivo carrega a referência de um documento que você já tem.} other {# arquivos carregam referências de documentos que você já tem.}} Escolha o que fazer com cada um.",
+        "description": "{count, plural, one {# arquivo carrega a referência de um documento que você já tem.} other {# arquivos carregam referências de documentos que você já tem.} many {# arquivos carregam referências de documentos que você já tem.}} Escolha o que fazer com cada um.",
         "matchedDocument": "Versão {version, number} de <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) no caso <bdi>{matterName}</bdi>",
         "title": "Arquivar como novas versões?",
         "uploadAsNewDocument": "Enviar como novo documento"
@@ -6374,8 +6599,8 @@
     "filesystem": {
       "collapseAll": "Recolher todas as pastas",
       "expandAll": "Expandir todas as pastas",
-      "fileCount": "{count, plural, one {# arquivo} other {# arquivos}}",
-      "matchingFileCount": "{count, plural, one {# arquivo correspondente} other {# arquivos correspondentes}}",
+      "fileCount": "{count, plural, one {# arquivo} other {# arquivos} many {# arquivos}}",
+      "matchingFileCount": "{count, plural, one {# arquivo correspondente} other {# arquivos correspondentes} many {# arquivos correspondentes}}",
       "moveToRoot": "Solte aqui para passar para o nível raiz",
       "newSubfolder": "Nova subpasta",
       "noFilesYet": "Nenhum arquivo ainda"
@@ -6481,7 +6706,7 @@
       "deleteAll": "Excluir tudo",
       "deleteAllConfirm": "Excluir todos os itens {count} em \"{column}\"?",
       "hideColumn": "Ocultar coluna",
-      "moveFailed": "{failed, plural, one {Não foi possível mover # de {total} itens.} other {Não foi possível mover # de {total} itens.}}",
+      "moveFailed": "{failed, plural, one {Não foi possível mover # de {total} itens.} other {Não foi possível mover # de {total} itens.} many {Não foi possível mover # de {total} itens.}}",
       "readOnlyGrouping": "Este agrupamento é somente leitura",
       "selectPropertyHint": "Selecione uma propriedade para agrupar na barra de ferramentas",
       "uploadDocument": "Carregar documento",
@@ -6550,17 +6775,20 @@
           "webhook": "Chamada web"
         },
         "documentReview": {
-          "decided": "Decidiu {count, plural, one {# constatação} other {# constatações}} na revisão de",
+          "decided": "Decidiu {count, plural, one {# constatação} other {# constatações} many {# constatações}} na revisão de",
           "started": "Iniciou uma revisão de"
         },
         "empty": "Ainda não há atividade neste caso.",
         "fields": {
           "dueDate": "data de vencimento",
+          "name": "nome",
           "parentFolder": "pasta principal",
           "priority": "prioridade",
           "property": "propriedade",
           "schedule": "programação",
-          "sortOrder": "ordem"
+          "sortOrder": "ordem",
+          "status": "status",
+          "type": "tipo"
         },
         "filterLabel": "Filtrar atividade",
         "filters": {
@@ -6590,7 +6818,7 @@
           "scheduled": "Iniciado conforme agendamento",
           "scheduledBy": "Automação agendada de {user}"
         },
-        "runCount": "{count, plural, one {# atividade} other {# atividades}}",
+        "runCount": "{count, plural, one {# atividade} other {# atividades} many {# atividades}}",
         "sources": {
           "chat": "Conversa no chat",
           "mcp": "Ferramenta conectada"
@@ -6610,8 +6838,18 @@
           "team": "equipe do caso",
           "translation": "tradução"
         },
+        "taskLinks": {
+          "added": "Vinculou {name} a",
+          "addedUnnamed": "Vinculou um item a",
+          "removed": "Desvinculou {name} de",
+          "removedUnnamed": "Desvinculou um item de"
+        },
         "title": "Atividade",
         "updatedFields": "Atualizado: {fields}",
+        "versions": {
+          "added": "Adicionou a versão {version} de",
+          "deleted": "Excluiu a versão {version} de"
+        },
         "views": {
           "list": "Visualização em lista",
           "timeline": "Visualização da linha do tempo"
@@ -6693,7 +6931,7 @@
           "cleaned": "Limpa",
           "cleaning": "Limpando a página",
           "contentCrop": "Recortar ao conteúdo",
-          "description": "{count, plural, one {Revise a página limpa antes de usá-la. O documento só muda quando você fizer isso.} other {Revise cada uma das # páginas limpas antes de usá-las. O documento só muda quando você fizer isso.}}",
+          "description": "{count, plural, one {Revise a página limpa antes de usá-la. O documento só muda quando você fizer isso.} other {Revise cada uma das # páginas limpas antes de usá-las. O documento só muda quando você fizer isso.} many {Revise cada uma das # páginas limpas antes de usá-las. O documento só muda quando você fizer isso.}}",
           "deskew": "Endireitar",
           "failedEngine": "Não foi possível limpar. A página continua como está.",
           "failedRender": "Não foi possível preparar a página para limpeza. Ela continua como está.",
@@ -6708,17 +6946,17 @@
           "reject": "Manter original",
           "rejectPage": "Manter a página original {number}",
           "rejected": "Original mantido",
-          "scope": "{count, plural, =0 {Endireitar e limpar todas as páginas} one {Endireitar e limpar a página selecionada} other {Endireitar e limpar as # páginas selecionadas}}",
+          "scope": "{count, plural, =0 {Endireitar e limpar todas as páginas} one {Endireitar e limpar a página selecionada} other {Endireitar e limpar as # páginas selecionadas} many {Endireitar e limpar as # páginas selecionadas}}",
           "unrecognized": "A página não foi reconhecida como uma digitalização. Ela continua como está.",
           "unrecognizedNoContent": "Nenhum conteúdo foi encontrado nesta página. Ela continua como está.",
           "unrecognizedNoPage": "Não foi possível encontrar as bordas da página. Ela continua como está.",
           "unrecognizedTooLarge": "A página é grande demais para ser limpa. Ela continua como está.",
-          "use": "{count, plural, =0 {Usar páginas limpas} one {Usar # página limpa} other {Usar # páginas limpas}}"
+          "use": "{count, plural, =0 {Usar páginas limpas} one {Usar # página limpa} other {Usar # páginas limpas} many {Usar # páginas limpas}}"
         },
         "crop": "Recortar",
         "cropAdvanced": "Opções avançadas",
         "cropBottom": "Inferior (mm)",
-        "cropDescription": "{count, plural, one {Defina as margens de recorte para a página selecionada em milímetros.} other {Defina as margens de recorte para as # páginas selecionadas em milímetros.}}",
+        "cropDescription": "{count, plural, one {Defina as margens de recorte para a página selecionada em milímetros.} other {Defina as margens de recorte para as # páginas selecionadas em milímetros.} many {Defina as margens de recorte para as # páginas selecionadas em milímetros.}}",
         "cropHandle": "Redimensionar o recorte: {position}",
         "cropHandleBottom": "inferior",
         "cropHandleBottomLeft": "inferior esquerdo",
@@ -6751,7 +6989,7 @@
         "duplicate": "Duplicar",
         "editPages": "Editar páginas",
         "multiSelectHint": "Mantenha {modifier} pressionado para selecionar mais páginas",
-        "pageCount": "{count, plural, one {# página} other {# páginas}}",
+        "pageCount": "{count, plural, one {# página} other {# páginas} many {# páginas}}",
         "pageNumber": "Página {number}",
         "pages": "Páginas",
         "redo": "Refazer edição da página",
@@ -6787,14 +7025,14 @@
     "playbooks": {
       "autoRun": "Execução automática",
       "autoRunHint": "Detecta e executa automaticamente cada playbook que corresponde aos tipos dos documentos",
-      "autoRunStarted": "Executando {count, plural, one {# playbook} other {# playbooks}}",
+      "autoRunStarted": "Executando {count, plural, one {# playbook} other {# playbooks} many {# playbooks}}",
       "projection": "Mostrar resultados como",
       "projectionColumns": "Colunas da tabela",
       "projectionNone": "Somente revisão",
-      "reviewStarted": "Revisando {count, plural, one {# documento} other {# documentos}}",
+      "reviewStarted": "Revisando {count, plural, one {# documento} other {# documentos} many {# documentos}}",
       "run": "Executar playbook",
       "runFailed": "Falha ao executar o playbook",
-      "runStarted": "Executando playbook ({count, plural, one {# coluna} other {# colunas}})"
+      "runStarted": "Executando playbook ({count, plural, one {# coluna} other {# colunas} many {# colunas}})"
     },
     "possibleDuplicates": "Possíveis duplicatas",
     "properties": {
@@ -6808,7 +7046,7 @@
         "addAnother": "Adicionar outra coluna",
         "createFailed": "Não foi possível criar as colunas",
         "createMany": "Criar {count} colunas",
-        "createdMany": "{count} colunas criadas",
+        "createdMany": "{count, plural, one {# coluna criada} many {# de colunas criadas} other {# colunas criadas}}",
         "createdOne": "Coluna criada",
         "promptPlaceholder": "O que esta coluna deve extrair? Para usar / e @, refine-a na caixa de diálogo da coluna.",
         "title": "Adicionar colunas"
@@ -6859,8 +7097,8 @@
       "markAllAsReviewed": "Marcar tudo como revisado",
       "markThisGroupAsLocked": "Bloquear este grupo",
       "markThisGroupAsReviewed": "Marcar este grupo como revisado",
-      "markedAsLocked": "{count, plural, one {# célula bloqueada} other {# células bloqueadas}}",
-      "markedAsReviewed": "{count, plural, one {# célula marcada como revisada} other {# células marcadas como revisadas}}",
+      "markedAsLocked": "{count, plural, one {# célula bloqueada} other {# células bloqueadas} many {# células bloqueadas}}",
+      "markedAsReviewed": "{count, plural, one {# célula marcada como revisada} other {# células marcadas como revisadas} many {# células marcadas como revisadas}}",
       "money": "Valor monetário",
       "multiSelect": "Seleção múltipla",
       "nameProperty": "Propriedade de nome",
@@ -6900,7 +7138,7 @@
       "sortDescendingDate": "O mais novo primeiro",
       "sortDescendingNumber": "Maior primeiro",
       "sortDescendingText": "Z → A",
-      "splitOptions": "{count, plural, one {Dividir em # opção} other {Dividir em # opções}}",
+      "splitOptions": "{count, plural, one {Dividir em # opção} other {Dividir em # opções} many {Dividir em # opções}}",
       "suggestWithAI": "Sugerir com IA",
       "text": "Texto",
       "typeChangeWarning": "Os dados existentes serão apagados e reconstruídos ao salvar.",
@@ -6909,7 +7147,7 @@
       "untitledColumn": "Nome da coluna, ex.: Data de vigência"
     },
     "reference": "Número de referência",
-    "referenceChangeConfirmDescription": "{count, plural, one {# versão de documento tem} other {# versões de documentos têm}} a referência <bdi>{oldReference}</bdi>. As cópias impressas a mantêm e continuam abrindo pelo código de verificação. As novas versões serão numeradas em <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> permanece reservada para este caso e não pode ser atribuída a outro.",
+    "referenceChangeConfirmDescription": "{count, plural, one {# versão de documento tem} other {# versões de documentos têm} many {# versões de documentos têm}} a referência <bdi>{oldReference}</bdi>. As cópias impressas a mantêm e continuam abrindo pelo código de verificação. As novas versões serão numeradas em <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> permanece reservada para este caso e não pode ser atribuída a outro.",
     "referenceChangeConfirmTitle": "Alterar a referência do caso?",
     "referenceConventionHint": "Formato preferido: {example}",
     "referenceFormatWarning": "Não corresponde ao formato preferido.",
@@ -6964,7 +7202,7 @@
     "views": {
       "addAdvancedFilter": "Adicionar filtro avançado",
       "addFields": "Adicionar campos",
-      "advancedFilterCount": "{count, plural, =0 {Qualquer} one {# regra} other {# regras}}",
+      "advancedFilterCount": "{count, plural, =0 {Qualquer} one {# regra} other {# regras} many {# regras}}",
       "aiGenerated": "Gerado por IA",
       "calendar": {
         "addDates": "+ Datas",
@@ -6989,10 +7227,9 @@
       "exportTable": "Exportar tabela",
       "exportXlsx": "Exportar XLSX",
       "fields": "Campos:",
-      "fieldsSelected": "{count, plural, one {# selecionado} many {# selecionados} other {# selecionados}}",
       "filter": "Filtrar",
       "filterByPlaceholder": "Filtrar por…",
-      "filtersWithCount": "{count, plural, one {# filtro} other {# filtros}}",
+      "filtersWithCount": "{count, plural, one {# filtro} other {# filtros} many {# filtros}}",
       "findAllColumns": "Todas as colunas",
       "findColumnMetadataNotSearchable": "Ordene esta coluna em vez de localizar nela",
       "findColumnNotSearchable": "Filtre esta coluna em vez de localizar nela",
@@ -7000,11 +7237,11 @@
       "findInTable": "Localizar na tabela",
       "findInTableHint": "Busca nas linhas desta página",
       "findPlaceholder": "Localizar nas linhas…",
-      "findScopeColumns": "{count, plural, one {# coluna} other {# colunas}}",
-      "findTermTooShort": "{count, plural, one {Digite pelo menos # caractere} other {Digite pelo menos # caracteres}}",
+      "findScopeColumns": "{count, plural, one {# coluna} other {# colunas} many {# colunas}}",
+      "findTermTooShort": "{count, plural, one {Digite pelo menos # caractere} other {Digite pelo menos # caracteres} many {Digite pelo menos # caracteres}}",
       "group": "Grupo",
       "groupBy": "Agrupar por:",
-      "groupItemCount": "{count, plural, one {# item} other {# itens}}",
+      "groupItemCount": "{count, plural, one {# item} other {# itens} many {# itens}}",
       "hideColumn": "Ocultar coluna",
       "layouts": {
         "avt": "AVT",
