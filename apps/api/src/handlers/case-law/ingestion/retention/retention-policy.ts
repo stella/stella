@@ -2,22 +2,28 @@
  * How the pipeline checks that a parsed decision kept the publisher's text.
  *
  * The check compares a decision's blocks against text taken from what the
- * publisher served, its stored `sourceRaw`, never against anything the
- * parser produced. A parser that validated itself could only report loss
+ * publisher served, its stored `sourceRaw` and original sidecar bytes, never
+ * against anything the parser produced. A parser that validated itself could only report loss
  * after the point it chose to compare from: text dropped while selecting
  * the body, decoding a field or splitting paragraphs would be invisible,
  * because the comparison text had already lost it too.
  *
  * So every source declares its projection here, one per source, and the
  * pipeline runs the oracle once for every decision a parser built. A
- * projection reads `sourceRaw` alone; the `retention-source-independence`
+ * projection reads `sourceRaw` and original sidecar bytes independently;
+ * the `retention-source-independence`
  * lint rule keeps parser modules and AST builders out of the projection
  * modules, which is what makes the two implementations independent.
  */
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import type {
   validateAst,
   ValidationSource,
 } from "@/api/lib/legal-search/parsers/validate-ast";
+
+export type RetentionProjectionContext = {
+  readonly sourceRawObjects: NonNullable<IngestionResult["sourceRawObjects"]>;
+};
 
 /**
  * The oracle's tolerances and source handling, as the projection states
@@ -111,8 +117,11 @@ export type RetentionPolicy =
       /**
        * Asynchronous because some stored raws hold a publisher file (a PDF
        * inside the envelope) whose text only an asynchronous reader can
-       * extract.
+       * extract. Sidecar bytes are supplied as independent source context.
        */
-      readonly project: (sourceRaw: string) => Promise<RetentionProjection>;
+      readonly project: (
+        sourceRaw: string,
+        context: RetentionProjectionContext,
+      ) => Promise<RetentionProjection>;
     }
   | { readonly type: "unparsed"; readonly reason: RetentionUnparsedReason };
