@@ -13061,6 +13061,64 @@
         }
       }
     },
+    "outputSchema": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "organizationId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "role": {
+              "enum": ["owner"],
+              "type": "string"
+            },
+            "nextCall": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "enum": ["stella auth login"],
+                  "type": "string"
+                },
+                "instruction": {
+                  "type": "string"
+                }
+              },
+              "required": ["command", "instruction"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["organizationId", "name", "slug", "role", "nextCall"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "applied": {
+              "enum": [true],
+              "type": "boolean"
+            },
+            "resultOmitted": {
+              "enum": [true],
+              "type": "boolean"
+            },
+            "reason": {
+              "enum": ["result_too_large"],
+              "type": "string"
+            }
+          },
+          "required": ["applied", "resultOmitted", "reason"],
+          "additionalProperties": false
+        }
+      ],
+      "type": "object"
+    },
     "annotations": {
       "title": "Create organization",
       "readOnlyHint": false,
