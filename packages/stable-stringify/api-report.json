@@ -1,0 +1,25 @@
+{
+  "package": "@stll/stable-stringify",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/index.d.ts",
+      "exports": [
+        {
+          "name": "StableStringifyInput",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "stableStringify",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/index.d.ts": "export { stableStringify } from \"./stable-stringify.js\";\nexport type { StableStringifyInput } from \"./stable-stringify.js\";\n",
+    "./src/stable-stringify.d.ts": "export type StableStringifyInput = bigint | boolean | number | string | symbol | null | undefined | ((...args: never[]) => unknown) | readonly StableStringifyInput[] | {\n    readonly [key: string]: StableStringifyInput;\n};\nexport declare const stableStringify: (value: StableStringifyInput, seen?: WeakSet<object>) => string;\n"
+  }
+}

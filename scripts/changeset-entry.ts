@@ -32,18 +32,16 @@ const changesetPackageName = (line: string): string | null => {
  * An entry with no frontmatter (`bun run changeset --empty`) names none: it
  * records a deliberate no-release change and belongs in no changelog.
  */
-export const parseChangesetEntry = (
-  entry: string,
-): { packages: readonly string[]; summary: string } => {
+const parseChangesetFrontmatter = (entry: string) => {
   const lines = entry.split("\n");
   if (lines.at(0)?.trim() !== CHANGESET_FRONTMATTER_FENCE) {
-    return { packages: [], summary: "" };
+    return { entries: [], summary: "" };
   }
-  const packages: string[] = [];
+  const entries: { name: string; bump: string }[] = [];
   for (const [index, line] of lines.slice(1).entries()) {
     if (line.trim() === CHANGESET_FRONTMATTER_FENCE) {
       return {
-        packages,
+        entries,
         summary: lines
           .slice(index + 2)
           .join("\n")
@@ -52,10 +50,43 @@ export const parseChangesetEntry = (
     }
     const name = changesetPackageName(line);
     if (name !== null) {
-      packages.push(name);
+      entries.push({ name, bump: line.slice(line.indexOf(":") + 1).trim() });
     }
   }
   throw new ChangesetEntryError(
     "A pending changeset has unterminated frontmatter",
   );
 };
+
+export const parseChangesetEntry = (
+  entry: string,
+): { packages: readonly string[]; summary: string } => {
+  const { entries, summary } = parseChangesetFrontmatter(entry);
+  return { packages: entries.map(({ name }) => name), summary };
+};
+
+type ChangesetRelease = { name: string; type: "major" | "minor" | "patch" };
+
+/**
+ * The bump as the YAML reader Changesets uses sees it: a single- or
+ * double-quoted scalar is unquoted, and a trailing ` # comment` is dropped.
+ * Anything else stays as written, so only an exact bump name authorizes.
+ */
+const changesetBumpValue = (raw: string): string => {
+  const quoted = /^(["'])([^"']*)\1(?:\s+#.*)?$/u.exec(raw);
+  if (quoted !== null) {
+    return quoted[2] ?? "";
+  }
+  const comment = /\s#/u.exec(raw);
+  return comment === null ? raw : raw.slice(0, comment.index).trimEnd();
+};
+
+export const parseChangesetReleases = (
+  entry: string,
+): readonly ChangesetRelease[] =>
+  parseChangesetFrontmatter(entry).entries.flatMap(({ name, bump }) => {
+    const type = changesetBumpValue(bump);
+    return type === "major" || type === "minor" || type === "patch"
+      ? [{ name, type }]
+      : [];
+  });

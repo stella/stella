@@ -1,0 +1,46 @@
+{
+  "package": "@stll/ssr-kit",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/path-policy.d.ts",
+      "exports": [
+        {
+          "name": "PathMatcher",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PathRule",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "createPathMatcher",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./hydration": {
+      "type": "module",
+      "file": "./src/hydration.d.ts",
+      "exports": [
+        {
+          "name": "HydrationBootOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "bootHydratedClient",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/hydration.d.ts": "type HydrationBootBase = {\n    hydrate: () => Promise<void>;\n    initializeClientState: () => Promise<unknown>;\n};\nexport type HydrationBootOptions = (HydrationBootBase & {\n    type: \"client-rendered\";\n}) | (HydrationBootBase & {\n    type: \"server-rendered\";\n});\nexport declare const bootHydratedClient: (options: HydrationBootOptions) => Promise<unknown>;\nexport {};\n",
+    "./src/path-policy.d.ts": "export type PathRule = {\n    readonly type: \"exact\";\n    readonly path: `/${string}`;\n} | {\n    readonly type: \"subtree\";\n    readonly path: `/${string}`;\n};\nexport type PathMatcher = (pathname: string) => boolean;\nexport declare const createPathMatcher: (rules: readonly PathRule[]) => PathMatcher;\n"
+  }
+}

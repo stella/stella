@@ -302,6 +302,10 @@
   ],
   "changeScoped": [
     {
+      "path": "scripts/changeset-entry.test.ts",
+      "reason": "Runs under package_checks_required in ci-checks-policy (Published package API reports); every change outside documentation selects that scope."
+    },
+    {
       "path": "scripts/check-publish-reproducibility.sh",
       "reason": "Runs under published_exports_required in ci-checks-generated; package sources, manifests and packing inputs select that scope."
     },
@@ -312,6 +316,26 @@
     {
       "path": "scripts/generate-npm-release-jobs.ts",
       "reason": "Runs under published_exports_required in ci-checks-generated; package manifests, the publishing inventory and generator changes select that scope."
+    },
+    {
+      "path": "scripts/package-api-base.sh",
+      "reason": "Runs under package_checks_required in ci-checks-policy (Published package API reports); every change outside documentation selects that scope."
+    },
+    {
+      "path": "scripts/package-api-compatibility.test.ts",
+      "reason": "Runs under package_checks_required in ci-checks-policy (Published package API reports); every change outside documentation selects that scope."
+    },
+    {
+      "path": "scripts/package-api-export-space.test.ts",
+      "reason": "Runs under package_checks_required in ci-checks-policy (Published package API reports); every change outside documentation selects that scope."
+    },
+    {
+      "path": "scripts/package-api-report.test.ts",
+      "reason": "Runs under package_checks_required in ci-checks-policy (Published package API reports); every change outside documentation selects that scope."
+    },
+    {
+      "path": "scripts/package-api-report.ts",
+      "reason": "Runs under package_checks_required in ci-checks-policy (Published package API reports); every change outside documentation selects that scope."
     }
   ]
 }

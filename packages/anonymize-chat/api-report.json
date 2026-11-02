@@ -1,0 +1,171 @@
+{
+  "package": "@stll/anonymize-chat",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/index.d.ts",
+      "exports": [
+        {
+          "name": "CHAT_SEND_MODE",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CHAT_SEND_MODES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CHAT_TRANSPORT_ERROR_CODE",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CHAT_TRANSPORT_ERROR_CODES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ChatAnonInputLimitError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "ChatAnonPair",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatAnonResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatAnonRuntime",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatSendMode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatTransportErrorCode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatTransportErrorPayload",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DEFAULT_CHAT_ANON_ENTITY_LABELS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "FORCED_SENSITIVE_VALUES_MAX",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "FORCED_SENSITIVE_VALUE_MAX_LENGTH",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "buildChatAnonPipelineConfig",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "chatSendModeSchema",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "chatTransportErrorCodeSchema",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "chatTransportErrorPayloadSchema",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "createThirdPartyBoundaryRefusalPayload",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "findChatAnonPlaceholders",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getPreferredChatSendMode",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isChatSendMode",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isThirdPartyBoundaryRefusalError",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isThirdPartyBoundaryRefusalPayload",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeChatAnonLocaleLanguage",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeForExclusion",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseChatTransportErrorMessage",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseChatTransportErrorPayload",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "runChatAnonPipeline",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./normalization": {
+      "type": "module",
+      "file": "./src/normalization.d.ts",
+      "exports": [
+        {
+          "name": "normalizeForExclusion",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/index.d.ts": "import * as v from \"valibot\";\nimport type { createNativePipelineFromConfig, createPipelineContext, deanonymise, GazetteerEntry, getBinding, PipelineConfig, SupportedLanguage } from \"@stll/anonymize-wasm\";\nexport declare const DEFAULT_CHAT_ANON_ENTITY_LABELS: readonly [\n    \"person\",\n    \"organization\",\n    \"phone number\",\n    \"address\",\n    \"country\",\n    \"email address\",\n    \"date\",\n    \"date of birth\",\n    \"bank account number\",\n    \"iban\",\n    \"tax identification number\",\n    \"identity card number\",\n    \"birth number\",\n    \"national identification number\",\n    \"social security number\",\n    \"registration number\",\n    \"case number\",\n    \"credit card number\",\n    \"passport number\",\n    \"crypto\",\n    \"monetary amount\",\n    \"land parcel\",\n    \"misc\"\n];\ndeclare const ChatAnonInputLimitError_base: import(\"better-result\").TaggedErrorClass<\"ChatAnonInputLimitError\">;\nexport declare class ChatAnonInputLimitError extends ChatAnonInputLimitError_base<{\n    message: string;\n}> {\n}\nexport declare const FORCED_SENSITIVE_VALUES_MAX = 256;\nexport declare const FORCED_SENSITIVE_VALUE_MAX_LENGTH = 4096;\nexport type ChatAnonPair = {\n    placeholder: string;\n    original: string;\n    label: string;\n};\nexport type ChatAnonResult = {\n    redactedText: string;\n    pairs: ChatAnonPair[];\n    redactionMap: Map<string, string>;\n    entityCount: number;\n};\nexport declare const CHAT_SEND_MODES: readonly [\n    \"anonymized\",\n    \"rawOverride\"\n];\nexport type ChatSendMode = (typeof CHAT_SEND_MODES)[number];\nexport declare const CHAT_SEND_MODE: {\n    readonly anonymized: \"anonymized\";\n    readonly rawOverride: \"rawOverride\";\n};\nexport declare const chatSendModeSchema: v.PicklistSchema<readonly [\n    \"anonymized\",\n    \"rawOverride\"\n], undefined>;\nexport declare const isChatSendMode: (value: unknown) => value is ChatSendMode;\nexport declare const getPreferredChatSendMode: (anonymized: boolean) => ChatSendMode;\nexport declare const CHAT_TRANSPORT_ERROR_CODE: {\n    readonly thirdPartyBoundaryRefusal: \"third_party_boundary_refusal\";\n};\ntype ChatTransportErrorCodeValue = (typeof CHAT_TRANSPORT_ERROR_CODE)[keyof typeof CHAT_TRANSPORT_ERROR_CODE];\nexport declare const CHAT_TRANSPORT_ERROR_CODES: readonly [\n    \"third_party_boundary_refusal\"\n];\nexport declare const chatTransportErrorCodeSchema: v.PicklistSchema<readonly [\n    \"third_party_boundary_refusal\"\n], undefined>;\nexport type ChatTransportErrorCode = ChatTransportErrorCodeValue;\nexport declare const chatTransportErrorPayloadSchema: v.StrictObjectSchema<{\n    readonly code: v.PicklistSchema<readonly [\n        \"third_party_boundary_refusal\"\n    ], undefined>;\n    readonly message: v.StringSchema<undefined>;\n}, undefined>;\nexport type ChatTransportErrorPayload = v.InferOutput<typeof chatTransportErrorPayloadSchema>;\nexport declare const createThirdPartyBoundaryRefusalPayload: (message: string) => ChatTransportErrorPayload;\nexport declare const parseChatTransportErrorPayload: (payload: unknown) => ChatTransportErrorPayload | null;\nexport declare const parseChatTransportErrorMessage: (message: string) => ChatTransportErrorPayload | null;\nexport declare const isThirdPartyBoundaryRefusalPayload: (payload: ChatTransportErrorPayload | null) => boolean;\nexport declare const isThirdPartyBoundaryRefusalError: (error: Error) => boolean;\ntype ChatAnonPipeline = Pick<Awaited<ReturnType<typeof createNativePipelineFromConfig>>, \"redactText\">;\ntype ChatAnonPipelineOptions<TBinding, TPipelineContext> = Omit<Parameters<typeof createNativePipelineFromConfig>[0], \"binding\" | \"context\"> & {\n    binding: TBinding;\n    context: TPipelineContext;\n};\nexport type ChatAnonRuntime<TBinding = Awaited<ReturnType<typeof getBinding>>, TPipelineContext = ReturnType<typeof createPipelineContext>, TPipeline extends ChatAnonPipeline = Awaited<ReturnType<typeof createNativePipelineFromConfig>>> = {\n    getBinding: () => Promise<TBinding> | TBinding;\n    createNativePipelineFromConfig: (options: ChatAnonPipelineOptions<TBinding, TPipelineContext>) => Promise<TPipeline> | TPipeline;\n    createPipelineContext: () => TPipelineContext;\n    deanonymise: typeof deanonymise;\n};\nexport declare const normalizeChatAnonLocaleLanguage: (locale: string | undefined) => SupportedLanguage | null;\nexport declare const buildChatAnonPipelineConfig: ({ hasGazetteer, locale, workspaceId, enableDenyList, denyListCountries, standaloneStreetDetection, }: {\n    hasGazetteer: boolean;\n    locale?: string | undefined;\n    workspaceId: string;\n    enableDenyList?: boolean | undefined;\n    denyListCountries?: readonly string[] | undefined;\n    standaloneStreetDetection?: PipelineConfig[\"standaloneStreetDetection\"];\n}) => PipelineConfig;\nexport { normalizeForExclusion } from \"./normalization\";\nexport declare const findChatAnonPlaceholders: (text: string) => string[];\nexport declare const runChatAnonPipeline: <TBinding, TPipelineContext, TPipeline extends ChatAnonPipeline>({ context: providedContext, dictionaries, excludedCanonicals, forcedSensitiveValues, gazetteerEntries, runtime, text, locale, workspaceId, enableDenyList, denyListCountries, standaloneStreetDetection, }: {\n    runtime: ChatAnonRuntime<TBinding, TPipelineContext, TPipeline>;\n    dictionaries: NonNullable<PipelineConfig[\"dictionaries\"]>;\n    text: string;\n    locale?: string | undefined;\n    workspaceId: string;\n    gazetteerEntries?: GazetteerEntry[] | undefined;\n    context?: TPipelineContext | undefined;\n    forcedSensitiveValues?: readonly string[] | undefined;\n    enableDenyList?: boolean | undefined;\n    denyListCountries?: readonly string[] | undefined;\n    standaloneStreetDetection?: PipelineConfig[\"standaloneStreetDetection\"];\n    excludedCanonicals?: readonly string[] | undefined;\n}) => Promise<ChatAnonResult>;\n",
+    "./src/normalization.d.ts": "export declare const normalizeForExclusion: (value: string) => string;\n"
+  }
+}
