@@ -95,6 +95,10 @@
     "./list": "./src/components/list.tsx",
     "./label": "./src/components/label.tsx",
     "./landing": "./src/components/landing.tsx",
+    "./document-mark": {
+      "react-native": "./src/components/document-mark.native.tsx",
+      "default": "./src/components/document-mark.tsx"
+    },
     "./matter-icon": {
       "react-native": "./src/components/matter-icon.native.tsx",
       "default": "./src/components/matter-icon.tsx"

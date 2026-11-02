@@ -16,7 +16,6 @@ import {
   EMPTY_ENTITIES_LOAD,
   ENTITY_PAGE_SIZE,
   entitySections,
-  fileTypeOf,
   listMatterEntities,
   type MatterEntity,
 } from "./matter-entities";
@@ -169,23 +168,17 @@ describe("listing a matter's entities", () => {
     });
     expect(
       result.isOk()
-        ? result.value.items.map((entity) => entity.fileType)
+        ? result.value.items.map((entity) => entity.format)
         : result.error._tag,
-    ).toEqual(["PDF", "DOCX", undefined]);
+    ).toEqual([
+      { kind: "pdf", label: "PDF" },
+      { kind: "word", label: "DOCX" },
+      undefined,
+    ]);
     const [call] = calls;
     expect(call !== "token" && call?.body).toMatchObject({
       fieldIds: ["files"],
     });
-  });
-
-  test("a format is the media type's name, else the file name's extension", () => {
-    expect(fileTypeOf("application/pdf; charset=binary", undefined)).toBe(
-      "PDF",
-    );
-    expect(fileTypeOf("application/octet-stream", "výpis.Xlsx")).toBe("XLSX");
-    expect(fileTypeOf(undefined, "bez přípony")).toBeUndefined();
-    expect(fileTypeOf("constructor", "a.pdf")).toBe("PDF");
-    expect(fileTypeOf("__proto__", undefined)).toBeUndefined();
   });
 
   test("the first page carries no cursor", async () => {

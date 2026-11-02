@@ -50,8 +50,8 @@ export const EntityRow = ({
       return t(`status.${status}`);
     }
     // A document names its file's format ("PDF", "DOCX") rather than its kind.
-    if (entity.fileType !== undefined) {
-      return entity.fileType;
+    if (entity.format?.label !== undefined) {
+      return entity.format.label;
     }
     return isKnownEntityKind(kind) ? t(`kind.${kind}`) : undefined;
   })();
@@ -77,7 +77,11 @@ export const EntityRow = ({
       style={{ paddingStart: depth * DEPTH_INDENT }}
     >
       <View className="pt-0.5">
-        <EntityKindIcon color={ui.mutedForeground} kind={entity.kind} />
+        <EntityKindIcon
+          color={ui.mutedForeground}
+          format={entity.format}
+          kind={entity.kind}
+        />
       </View>
       <View className="flex-1 gap-0.5">
         <Text numberOfLines={2} variant="rowTitle">

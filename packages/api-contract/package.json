@@ -107,6 +107,7 @@
     "./desktop-rpc": "./src/desktop-rpc.gen.ts",
     "./document-translation": "./src/document-translation.ts",
     "./email-mime-types": "./src/email-mime-types.ts",
+    "./document-format": "./src/document-format.ts",
     "./entity-views": "./src/entity-views.ts",
     "./feedback": "./src/feedback.ts",
     "./entity-reference": "./src/entity-reference.ts",

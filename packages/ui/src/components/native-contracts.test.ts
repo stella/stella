@@ -12,6 +12,9 @@ import { expect, test } from "bun:test";
 import { type Button, BUTTON_SIZE_CONTENT } from "./button";
 import type { Button as NativeButton } from "./button.native";
 import { BUTTON_SIZES, type ButtonContract } from "./button.shared";
+import type { DocumentMark } from "./document-mark";
+import type { DocumentMark as NativeDocumentMark } from "./document-mark.native";
+import type { DocumentMarkContract } from "./document-mark.shared";
 import type { Input } from "./input";
 import type { Input as NativeInput } from "./input.native";
 import type { InputContract } from "./input.shared";
@@ -54,6 +57,10 @@ const CONTRACTS: Record<string, readonly [true, true]> = {
     Accepts<typeof Button, ButtonContract>,
     Accepts<typeof NativeButton, ButtonContract>,
   ],
+  "document-mark": [true, true] satisfies [
+    Accepts<typeof DocumentMark, DocumentMarkContract>,
+    Accepts<typeof NativeDocumentMark, DocumentMarkContract>,
+  ],
   input: [true, true] satisfies [
     Accepts<typeof Input, InputContract>,
     Accepts<typeof NativeInput, InputContract>,
@@ -89,7 +96,7 @@ const CONTRACTS: Record<string, readonly [true, true]> = {
 };
 
 test("each web and React Native renderer accepts its shared contract", () => {
-  expect(Object.keys(CONTRACTS)).toHaveLength(9);
+  expect(Object.keys(CONTRACTS)).toHaveLength(10);
 });
 
 test("the web button sizes exactly the shared sizes", () => {
