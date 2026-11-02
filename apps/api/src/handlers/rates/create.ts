@@ -48,13 +48,12 @@ export const createRateTableHandler = async function* ({
         id: { workspaceId },
         tx,
       });
-      // Lock rows then count to serialize concurrent adds.
-      // PG rejects FOR UPDATE with aggregate functions.
+      // Every rate-table write in the matter holds the lock above, so this
+      // read stays current until the insert commits.
       const lockedRows = await tx
-        .select({ id: rateTables.id })
+        .select({ id: rateTables.id, isDefault: rateTables.isDefault })
         .from(rateTables)
-        .where(eq(rateTables.workspaceId, workspaceId))
-        .for("update");
+        .where(eq(rateTables.workspaceId, workspaceId));
 
       if (lockedRows.length >= LIMITS.rateTablesPerWorkspace) {
         throw new HandlerError({
@@ -66,17 +65,8 @@ export const createRateTableHandler = async function* ({
       // Rates resolve only from a matter's default table, so a matter that
       // has tables always has exactly one default: a table created while the
       // matter has none becomes the default whatever the request asked.
-      const [currentDefault] = await tx
-        .select({ id: rateTables.id })
-        .from(rateTables)
-        .where(
-          and(
-            eq(rateTables.workspaceId, workspaceId),
-            eq(rateTables.isDefault, true),
-          ),
-        )
-        .limit(1);
-      const isDefault = body.isDefault === true || currentDefault === undefined;
+      const isDefault =
+        body.isDefault === true || !lockedRows.some((row) => row.isDefault);
 
       const previousDefaults = isDefault
         ? await tx

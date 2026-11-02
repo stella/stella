@@ -1608,12 +1608,6 @@
     "reason": "builder-for in apps/api/src/handlers/properties/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/rates/create.ts",
-    "fingerprint": "c985c28ae08afb0f8e529cd72a630506bcc0d18352d7134cb21b994737db2771",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/rates/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/rates/entries/create.ts",
     "fingerprint": "bd22e7f053951a26804ba846859e82407821f7ae010b7c17a2a06938eb0c887f",
     "count": 1,
