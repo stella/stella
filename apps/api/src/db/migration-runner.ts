@@ -623,12 +623,15 @@ const prepareSchemaPhase = async ({
 }: PrepareSchemaPhaseOptions) => {
   await observeSchema(SCHEMA_LANE_STEP, async () => {
     await connection.unsafe(bootstrapRoleSql);
-    const [liftTimeout, takeLane, restoreTimeout] =
-      CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
-    await connection.unsafe(liftTimeout);
-    await connection.unsafe(takeLane);
+    const { lift, lock, restore } = CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
+    for (const statement of lift) {
+      await connection.unsafe(statement);
+    }
+    await connection.unsafe(lock);
     onLaneAcquired();
-    await connection.unsafe(restoreTimeout);
+    for (const statement of restore) {
+      await connection.unsafe(statement);
+    }
   });
 
   const bundle = readMigrationFiles({ migrationsFolder });
