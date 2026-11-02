@@ -467,3 +467,84 @@ test("a committed report is compared as JSON: key order and layout never make it
     "stale packages/fixture/api-report.json",
   );
 });
+
+test("a member removed from a nested result or parameter type is a breaking change", async () => {
+  const root = await fixture();
+  const packageDir = path.join(root, "packages/fixture");
+  replace(
+    root,
+    "src/model.ts",
+    "export type Input = string | number;\nexport const convert = (input: Input): string => String(input);\nexport interface Reader { read(): { marker: number; value?: string }; write(options: { marker: number; flush?: boolean }): void }\n",
+  );
+  const before = generateApiReport(packageDir);
+  replace(
+    root,
+    "src/model.ts",
+    "export type Input = string | number;\nexport const convert = (input: Input): string => String(input);\nexport interface Reader { read(): { marker: number }; write(options: { marker: number }): void }\n",
+  );
+  const after = generateApiReport(packageDir);
+  const messages = breakingApiChanges({ before, after, packageDir }).map(
+    ({ message }) => message,
+  );
+  expect(messages).toContain("./model#Reader.read(): removed member value");
+  expect(messages).toContain(
+    "./model#Reader.write(options): removed member flush",
+  );
+  replace(
+    root,
+    "src/model.ts",
+    "export type Input = string | number;\nexport const convert = (input: Input | boolean): string => String(input);\nexport interface Reader { read(): { marker: number; value?: string; extra?: number }; write(options: { marker: number; flush?: boolean; sync?: boolean }): void }\n",
+  );
+  expect(
+    breakingApiChanges({
+      before,
+      after: generateApiReport(packageDir),
+      packageDir,
+    }),
+  ).toEqual([]);
+});
+
+test("a null export key or a more specific pattern takes subpaths from a wildcard", async () => {
+  const root = await fixture();
+  const packageDir = path.join(root, "packages/fixture");
+  mkdirSync(path.join(packageDir, "src/features/private"), { recursive: true });
+  replace(root, "src/features/public.ts", "export const open = 1;\n");
+  replace(root, "src/features/internal.ts", "export const hidden = 1;\n");
+  replace(root, "src/features/private/secret.ts", "export const secret = 1;\n");
+  replace(
+    root,
+    "package.json",
+    JSON.stringify({
+      name: "@stll/fixture",
+      exports: {
+        "./features/*": "./src/features/*.ts",
+        "./features/internal": null,
+        "./features/private/*": null,
+      },
+    }),
+  );
+  expect(Object.keys(generateApiReport(packageDir).entrypoints)).toEqual([
+    "./features/public",
+  ]);
+});
+
+test("a base API that no longer type-checks needs a breaking release instead of failing the check", async () => {
+  const root = await fixture();
+  const packageDir = path.join(root, "packages/fixture");
+  const after = generateApiReport(packageDir);
+  const before = {
+    ...after,
+    declarations: {
+      ...after.declarations,
+      "./src/model.d.ts":
+        'import type { Gone } from "missing-dependency";\nexport type Input = Gone;\nexport declare const convert: (input: Input) => string;\n',
+    },
+  };
+  const breaks = breakingApiChanges({ before, after, packageDir });
+  expect(breaks).toHaveLength(1);
+  expect(breaks[0]).toMatchObject({ type: "signature", entrypoint: "." });
+  expect(breaks[0]?.message).toContain("base API no longer type-checks");
+  expect(() =>
+    breakingApiChanges({ before: after, after: before, packageDir }),
+  ).toThrow("missing-dependency");
+});

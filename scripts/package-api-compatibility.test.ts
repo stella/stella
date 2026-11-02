@@ -225,3 +225,28 @@ test("two aliases of one namespace are compared against each new target", () => 
     }),
   );
 });
+
+test("a brand keyed on a unique symbol compares equal to itself across the two trees", () => {
+  const branded = (tag: string) =>
+    report(
+      `declare const __brand: unique symbol;\nexport type Client = number & { readonly [__brand]: "${tag}" };\n`,
+    );
+  expect(
+    breakingApiChanges({
+      before: branded("Client"),
+      after: { ...branded("Client"), package: "@stll/fixture-next" },
+      packageDir: process.cwd(),
+    }),
+  ).toEqual([]);
+  expect(
+    breakingApiChanges({
+      before: branded("Client"),
+      after: branded("Other"),
+      packageDir: process.cwd(),
+    }),
+  ).toContainEqual(
+    expect.objectContaining({
+      message: expect.stringContaining("incompatible type signature"),
+    }),
+  );
+});

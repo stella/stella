@@ -126,9 +126,53 @@ const symbolKind = (symbol: ts.Symbol): string => {
   return matched.join("+");
 };
 
+const formatDiagnostics = (diagnostics: readonly ts.Diagnostic[]): string =>
+  ts.formatDiagnostics(diagnostics, {
+    getCanonicalFileName: (file) => file,
+    getCurrentDirectory: () => ROOT,
+    getNewLine: () => "\n",
+  });
+
+/**
+ * The global declaration scripts the package's tsconfig includes (a `.d.ts`
+ * with no import or export, such as one that references a styling library's
+ * JSX props). They are the environment its declarations type-check in, so
+ * every declaration program loads them from the package.
+ */
+const ambientDeclarationFiles = (packageDir: string): string[] => {
+  const configFile = path.join(packageDir, "tsconfig.json");
+  if (!existsSync(configFile)) {
+    return [];
+  }
+  const parsed = ts.getParsedCommandLineOfConfigFile(
+    configFile,
+    {},
+    {
+      ...ts.sys,
+      onUnRecoverableConfigFileDiagnostic: (diagnostic) =>
+        fail(formatDiagnostics([diagnostic])),
+    },
+  );
+  return (parsed?.fileNames ?? [])
+    .filter(
+      (file) =>
+        /\.d\.[cm]?ts$/u.test(file) &&
+        !file.includes(INSTALLED_PATH) &&
+        !ts.isExternalModule(
+          ts.createSourceFile(
+            file,
+            readFileSync(file, "utf-8"),
+            ts.ScriptTarget.Latest,
+          ),
+        ),
+    )
+    .toSorted(compareCodeUnit);
+};
+
 const declarationProgram = (
   files: Map<string, string>,
   rootNames: string[],
+  packageDir: string,
 ): ts.Program => {
   const host = compilerHost();
   const originalRead = host.readFile.bind(host);
@@ -152,27 +196,24 @@ const declarationProgram = (
     directories.has(directory) ||
     (originalDirectoryExists?.(directory) ?? false);
   return ts.createProgram({
-    rootNames,
+    rootNames: [...rootNames, ...ambientDeclarationFiles(packageDir)],
     options: { ...compilerOptions, skipLibCheck: false },
     host,
   });
 };
 
+/**
+ * Any semantic error in a compared declaration fails: TypeScript gives an
+ * unresolvable reference its error type, which is assignable both ways and has
+ * no members, so a break behind it would compare as compatible.
+ */
 const assertResolvableDeclarations = (
   program: ts.Program,
   source: ts.SourceFile,
 ): void => {
-  const unresolved = program
-    .getSemanticDiagnostics(source)
-    .filter(({ code }) => [2304, 2305, 2307, 2503, 2694, 7016].includes(code));
-  if (unresolved.length > 0) {
-    fail(
-      ts.formatDiagnostics(unresolved, {
-        getCanonicalFileName: (file) => file,
-        getCurrentDirectory: () => ROOT,
-        getNewLine: () => "\n",
-      }),
-    );
+  const diagnostics = program.getSemanticDiagnostics(source);
+  if (diagnostics.length > 0) {
+    fail(formatDiagnostics(diagnostics));
   }
 };
 
@@ -216,6 +257,46 @@ const exportTargets = (
   );
 };
 
+/**
+ * The export map key Node resolves a subpath through: an exact key first,
+ * then the pattern with the longest prefix before its `*`, then the longer
+ * key. A wildcard match only belongs to its pattern when that pattern wins,
+ * so a `null` key or a more specific pattern takes the subpath away from it.
+ */
+export const resolvingExportKey = (
+  keys: readonly string[],
+  subpath: string,
+): string | undefined => {
+  if (keys.includes(subpath)) {
+    return subpath;
+  }
+  let best: string | undefined;
+  for (const key of keys) {
+    const star = key.indexOf("*");
+    if (star === -1 || key.includes("*", star + 1)) {
+      continue;
+    }
+    const prefix = key.slice(0, star);
+    const suffix = key.slice(star + 1);
+    if (
+      subpath.length < key.length ||
+      !subpath.startsWith(prefix) ||
+      !subpath.endsWith(suffix)
+    ) {
+      continue;
+    }
+    const bestStar = best?.indexOf("*") ?? -1;
+    if (
+      best === undefined ||
+      star > bestStar ||
+      (star === bestStar && key.length > best.length)
+    ) {
+      best = key;
+    }
+  }
+  return best;
+};
+
 export const generateApiReport = (packageDir: string): ApiReport => {
   const manifest: unknown = JSON.parse(
     readFileSync(path.join(packageDir, "package.json"), "utf-8"),
@@ -230,14 +311,35 @@ export const generateApiReport = (packageDir: string): ApiReport => {
     return fail(`${packageDir}: expected a named package with exports`);
   }
   const exports = manifest.exports;
-  const targets =
+  const subpathMap =
     typeof exports === "object" &&
     exports !== null &&
-    Object.keys(exports).some((key) => key.startsWith("."))
-      ? Object.entries(exports).flatMap(([key, value]) =>
-          exportTargets(value, key),
-        )
-      : exportTargets(exports, ".");
+    Object.keys(exports).some((key) => key.startsWith("."));
+  const exportKeys = subpathMap ? Object.keys(exports) : ["."];
+  const targets = subpathMap
+    ? Object.entries(exports).flatMap(([key, value]) =>
+        exportTargets(value, key),
+      )
+    : exportTargets(exports, ".");
+  // A pattern's matches, as subpath and file, that Node resolves through it.
+  const patternMatches = (key: string, target: string) => {
+    const pattern = key.split(" [").at(0) ?? key;
+    const condition = key.slice(pattern.length);
+    const [prefix = "", suffix = ""] = target.split("*");
+    return [...new Bun.Glob(target).scanSync({ cwd: packageDir })]
+      .toSorted(compareCodeUnit)
+      .flatMap((file) => {
+        const relative = file.startsWith("./") ? file : `./${file}`;
+        const match = relative.slice(
+          prefix.length,
+          relative.length - suffix.length,
+        );
+        const subpath = pattern.replaceAll("*", () => match);
+        return resolvingExportKey(exportKeys, subpath) === pattern
+          ? [{ key: `${subpath}${condition}`, target: relative, file }]
+          : [];
+      });
+  };
   const expanded = targets.flatMap(({ key, target }) => {
     if (!target.startsWith("./") || target.includes("..")) {
       return fail(`Unsupported export target ${key}: ${target}`);
@@ -245,24 +347,14 @@ export const generateApiReport = (packageDir: string): ApiReport => {
     if (!target.includes("*")) {
       return [{ key, target }];
     }
-    const files = [
-      ...new Bun.Glob(target).scanSync({ cwd: packageDir }),
-    ].toSorted();
-    if (files.length === 0) {
+    const matches = patternMatches(key, target);
+    if (matches.length === 0) {
       return fail(`Export pattern ${key} matches no files: ${target}`);
     }
     if (!/\.(?:tsx?|mts|cts|[cm]?js|jsx)$/u.test(target)) {
       return [{ key, target }];
     }
-    const [prefix, suffix = ""] = target.split("*");
-    return files.map((file) => {
-      const relative = file.startsWith("./") ? file : `./${file}`;
-      const match = relative.slice(
-        prefix?.length ?? 0,
-        relative.length - suffix.length,
-      );
-      return { key: key.replaceAll("*", () => match), target: relative };
-    });
+    return matches.map((match) => ({ key: match.key, target: match.target }));
   });
   const moduleTargets = expanded.filter(({ target }) =>
     /\.(?:tsx?|mts|cts)$/u.test(target),
@@ -283,9 +375,7 @@ export const generateApiReport = (packageDir: string): ApiReport => {
       entrypoints.set(key, {
         type: "asset",
         target,
-        files: [...new Bun.Glob(target).scanSync({ cwd: packageDir })].toSorted(
-          compareCodeUnit,
-        ),
+        files: patternMatches(key, target).map(({ file }) => file),
       });
       continue;
     }
@@ -388,7 +478,7 @@ export const generateApiReport = (packageDir: string): ApiReport => {
   const roots = [...entrypoints.values()].flatMap((entry) =>
     entry.type === "module" ? [path.resolve(snapshotRoot, entry.file)] : [],
   );
-  const surface = declarationProgram(files, roots);
+  const surface = declarationProgram(files, roots, packageDir);
   const reachable = new Set(
     surface.getSourceFiles().map(({ fileName }) => fileName),
   );
@@ -433,17 +523,48 @@ const isReadonlyMember = (member: ts.Symbol): boolean => {
   );
 };
 
+type NarrowingComparison = {
+  checker: ts.TypeChecker;
+  /** Old and new type pairs already compared, so recursive types end. */
+  compared: Map<ts.Type, Set<ts.Type>>;
+  /** How many types deep below the exported symbol this comparison is. */
+  depth: number;
+};
+
+// Nested shapes the package declares are walked this deep; a deeper chain is
+// a recursive type, already compared at its first occurrence.
+const MAX_NESTED_DEPTH = 8;
+
+const signatureKinds = [
+  [ts.SignatureKind.Call, ""],
+  [ts.SignatureKind.Construct, "new "],
+] as const;
+
 /**
  * Assignability lets an optional member disappear and a mutable one become
  * readonly, yet consumers that read or assign that member break. Every public
- * member the old type exposes must stay, and stay writable if it was.
+ * member the old type exposes must stay, and stay writable if it was, at
+ * every depth: in member types, and in the parameters and results of call
+ * and construct signatures that keep their overload count.
  */
-const narrowedMembers = (
-  checker: ts.TypeChecker,
+const narrowedTypeMembers = (
+  comparison: NarrowingComparison,
   oldType: ts.Type,
   nextType: ts.Type,
   label: string,
 ): string[] => {
+  // One type object on both sides is one declaration (a library or
+  // dependency type): nothing in it changed.
+  if (oldType === nextType) {
+    return [];
+  }
+  const seen = comparison.compared.get(oldType) ?? new Set<ts.Type>();
+  if (seen.has(nextType)) {
+    return [];
+  }
+  seen.add(nextType);
+  comparison.compared.set(oldType, seen);
+  const { checker } = comparison;
   // Keyed on the escaped name: symbol-keyed members such as
   // `[Symbol.iterator]` have no string name a lookup by name would accept.
   const nextMembers = new Map(
@@ -451,7 +572,7 @@ const narrowedMembers = (
       .getPropertiesOfType(nextType)
       .map((member) => [member.escapedName, member]),
   );
-  return checker.getPropertiesOfType(oldType).flatMap((member) => {
+  const breaks = checker.getPropertiesOfType(oldType).flatMap((member) => {
     if (isNonPublicMember(member)) {
       return [];
     }
@@ -459,11 +580,102 @@ const narrowedMembers = (
     if (nextMember === undefined) {
       return [`${label}: removed member ${member.name}`];
     }
-    return isReadonlyMember(nextMember) && !isReadonlyMember(member)
-      ? [`${label}: member ${member.name} became readonly`]
-      : [];
+    if (isReadonlyMember(nextMember) && !isReadonlyMember(member)) {
+      return [`${label}: member ${member.name} became readonly`];
+    }
+    return nestedNarrowing(
+      comparison,
+      checker.getNonNullableType(checker.getTypeOfSymbol(member)),
+      checker.getNonNullableType(checker.getTypeOfSymbol(nextMember)),
+      `${label}.${member.name}`,
+    );
   });
+  for (const [kind, prefix] of signatureKinds) {
+    const oldSignatures = checker.getSignaturesOfType(oldType, kind);
+    const nextSignatures = checker.getSignaturesOfType(nextType, kind);
+    if (oldSignatures.length !== nextSignatures.length) {
+      continue;
+    }
+    for (const [index, oldSignature] of oldSignatures.entries()) {
+      const nextSignature =
+        nextSignatures[index] ?? panic("Signature counts differ");
+      const signatureLabel = `${prefix}${label}${oldSignatures.length > 1 ? `#${index + 1}` : ""}`;
+      breaks.push(
+        ...nestedNarrowing(
+          comparison,
+          checker.getNonNullableType(
+            checker.getReturnTypeOfSignature(oldSignature),
+          ),
+          checker.getNonNullableType(
+            checker.getReturnTypeOfSignature(nextSignature),
+          ),
+          `${signatureLabel}()`,
+        ),
+      );
+      for (const [position, parameter] of oldSignature.parameters.entries()) {
+        const nextParameter = nextSignature.parameters[position];
+        if (nextParameter === undefined) {
+          continue;
+        }
+        breaks.push(
+          ...nestedNarrowing(
+            comparison,
+            checker.getNonNullableType(checker.getTypeOfSymbol(parameter)),
+            checker.getNonNullableType(checker.getTypeOfSymbol(nextParameter)),
+            `${signatureLabel}(${parameter.name})`,
+          ),
+        );
+      }
+    }
+  }
+  return breaks;
 };
+
+/** A type the compared declarations declare, not one from a dependency or lib. */
+const isPackageDeclaredType = (type: ts.Type): boolean =>
+  (type.aliasSymbol ?? type.getSymbol())?.declarations?.some((declaration) =>
+    /[\\/]__api_(?:before|after)__[\\/]/u.test(
+      declaration.getSourceFile().fileName,
+    ),
+  ) ?? false;
+
+/**
+ * Below the exported symbol only object types the package itself declares
+ * are walked. A primitive or a union has the apparent members of its
+ * constituents, which widening a type legitimately changes, and assignability
+ * already guards them; a dependency's type is the same on both sides.
+ */
+const nestedNarrowing = (
+  comparison: NarrowingComparison,
+  oldType: ts.Type,
+  nextType: ts.Type,
+  label: string,
+): string[] =>
+  comparison.depth < MAX_NESTED_DEPTH &&
+  hasFlag(oldType.flags, ts.TypeFlags.Object) &&
+  hasFlag(nextType.flags, ts.TypeFlags.Object) &&
+  isPackageDeclaredType(oldType) &&
+  isPackageDeclaredType(nextType)
+    ? narrowedTypeMembers(
+        { ...comparison, depth: comparison.depth + 1 },
+        oldType,
+        nextType,
+        label,
+      )
+    : [];
+
+const narrowedMembers = (
+  checker: ts.TypeChecker,
+  oldType: ts.Type,
+  nextType: ts.Type,
+  label: string,
+): string[] =>
+  narrowedTypeMembers(
+    { checker, compared: new Map(), depth: 0 },
+    oldType,
+    nextType,
+    label,
+  );
 
 type SignatureComparisonOptions = {
   checker: ts.TypeChecker;
@@ -541,15 +753,35 @@ export const breakingApiChanges = ({
         virtualFile(side, file),
         file.endsWith(".json")
           ? contents
-          : normalizeCompatibilityDeclarations(contents),
+          : normalizeCompatibilityDeclarations(contents, file),
       );
     }
   }
-  const program = declarationProgram(files, [...files.keys()]);
+  const program = declarationProgram(files, [...files.keys()], packageDir);
+  const baseRoot = `${virtualFile("before", "")}${path.sep}`;
+  const baseDiagnostics: ts.Diagnostic[] = [];
   for (const source of program.getSourceFiles()) {
-    if (files.has(source.fileName)) {
+    if (!files.has(source.fileName)) {
+      continue;
+    }
+    if (source.fileName.startsWith(baseRoot)) {
+      baseDiagnostics.push(...program.getSemanticDiagnostics(source));
+    } else {
       assertResolvableDeclarations(program, source);
     }
+  }
+  if (baseDiagnostics.length > 0) {
+    // The base API no longer type-checks against the installed dependencies
+    // (a dependency dropped a type it names), so no member can be compared
+    // reliably. The change is reported as a break that a breaking-release
+    // changeset authorizes instead of failing before authorization is read.
+    return [
+      {
+        type: "signature",
+        entrypoint: ".",
+        message: `base API no longer type-checks against the installed dependencies, so it cannot be compared:\n${formatDiagnostics(baseDiagnostics).trimEnd()}`,
+      },
+    ];
   }
   const checker = program.getTypeChecker();
   const breaks: ApiBreak[] = [];

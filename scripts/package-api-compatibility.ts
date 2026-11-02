@@ -114,10 +114,31 @@ const strictMethodType = (methods: readonly Method[]): ts.TypeNode => {
   );
 };
 
+const isUniqueSymbolType = (type: ts.TypeNode | undefined): boolean =>
+  type !== undefined &&
+  ts.isTypeOperatorNode(type) &&
+  type.operator === ts.SyntaxKind.UniqueKeyword &&
+  type.type.kind === ts.SyntaxKind.SymbolKeyword;
+
+/**
+ * Each declaration tree declares its own `unique symbol`, so a brand keyed on
+ * one is nominally different in the base and the current tree although
+ * nothing changed. The symbol becomes a string literal named after its file
+ * and declaration, the same on both sides and distinct from every other.
+ */
+const uniqueSymbolStandIn = (file: string, name: ts.Node): ts.TypeNode =>
+  ts.factory.createLiteralTypeNode(
+    ts.factory.createStringLiteral(
+      `__api_unique_symbol:${file}:${ts.isIdentifier(name) ? name.text : name.getText()}`,
+    ),
+  );
+
 // TypeScript deliberately compares method parameters bivariantly. API
 // compatibility must reject narrower inputs, including overloaded methods.
 export const normalizeCompatibilityDeclarations = (
   contents: string,
+  /** The declaration's path in the report, the same in both trees. */
+  file = "api.d.ts",
 ): string => {
   const source = ts.createSourceFile(
     "api.d.ts",
@@ -130,6 +151,43 @@ export const normalizeCompatibilityDeclarations = (
     (context) => {
       const visit: ts.Visitor = (node) => {
         let visited = ts.visitEachChild(node, visit, context);
+        if (
+          ts.isVariableDeclaration(visited) &&
+          isUniqueSymbolType(visited.type)
+        ) {
+          return ts.factory.updateVariableDeclaration(
+            visited,
+            visited.name,
+            visited.exclamationToken,
+            uniqueSymbolStandIn(file, visited.name),
+            visited.initializer,
+          );
+        }
+        if (
+          ts.isPropertyDeclaration(visited) &&
+          isUniqueSymbolType(visited.type)
+        ) {
+          visited = ts.factory.updatePropertyDeclaration(
+            visited,
+            visited.modifiers,
+            visited.name,
+            visited.questionToken ?? visited.exclamationToken,
+            uniqueSymbolStandIn(file, visited.name),
+            visited.initializer,
+          );
+        }
+        if (
+          ts.isPropertySignature(visited) &&
+          isUniqueSymbolType(visited.type)
+        ) {
+          return ts.factory.updatePropertySignature(
+            visited,
+            visited.modifiers,
+            visited.name,
+            visited.questionToken,
+            uniqueSymbolStandIn(file, visited.name),
+          );
+        }
         if (ts.isClassDeclaration(visited)) {
           visited = ts.factory.updateClassDeclaration(
             visited,
