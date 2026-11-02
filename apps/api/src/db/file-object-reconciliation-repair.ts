@@ -1,6 +1,6 @@
 /**
  * Online repair behind migration
- * 20261101185803_file_reservation_reconciliation_state.
+ * 20261101221634_file_reservation_reconciliation_state.
  *
  * The migration adds the reconciliation columns and their checks NOT VALID.
  * A write row recorded before then carries a write identity and no
@@ -15,8 +15,9 @@
  * completion.
  */
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+import type { Verdict } from "@stll/db-load-gate/health";
 
+import { loadGateHealthConfig } from "../env-online-index";
 import { createBackfillRuntime } from "./backfill-runtime";
 import { readConstraintCompletion } from "./online-constraint-completion";
 import { validateOnlineConstraints } from "./online-ddl";
@@ -109,7 +110,7 @@ const scheduleUntilEmpty = async (
     name: REPAIR_NAME,
     tableName: TABLE_NAME,
     initialSize: BATCH,
-    config: defaultConfig,
+    config: loadGateHealthConfig(),
     connection,
     readVerdict,
     clock,
@@ -148,7 +149,7 @@ const validateConstraints = async (
 export const createFileObjectReconciliationRepair = (
   options: RepairRuntimeOptions = {},
 ): OnlineRepair => ({
-  introducedBy: "20261101185803_file_reservation_reconciliation_state",
+  introducedBy: "20261101221634_file_reservation_reconciliation_state",
   name: REPAIR_NAME,
   readCompletion,
   repair: async (connection, tables) => {

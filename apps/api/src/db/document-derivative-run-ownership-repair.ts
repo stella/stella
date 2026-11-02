@@ -1,6 +1,6 @@
 /**
  * Online repairs behind migration
- * 20261101190003_document_derivative_entity_ownership.
+ * 20261101221834_document_derivative_entity_ownership.
  *
  * The migration keys every review and bilingual run to its document with an
  * `ON DELETE CASCADE` foreign key, NOT VALID. Runs of documents permanently
@@ -17,8 +17,9 @@
 import { panic } from "better-result";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+import type { Verdict } from "@stll/db-load-gate/health";
 
+import { loadGateHealthConfig } from "../env-online-index";
 import { isRecord } from "../lib/type-guards";
 import { createBackfillRuntime } from "./backfill-runtime";
 import { readConstraintCompletion } from "./online-constraint-completion";
@@ -98,7 +99,7 @@ const eraseOrphanRuns = async (
     initialSize: BATCH,
     // The runtime sets these timeouts on every batch transaction.
     config: {
-      ...defaultConfig,
+      ...loadGateHealthConfig(),
       batchLockTimeoutMs: 30_000,
       batchStatementTimeoutMs: 60_000,
     },
@@ -142,7 +143,7 @@ const createRunOwnershipRepair = (
   constraint: RunOwnershipConstraint,
   options: RepairRuntimeOptions,
 ): OnlineRepair => ({
-  introducedBy: "20261101190003_document_derivative_entity_ownership",
+  introducedBy: "20261101221834_document_derivative_entity_ownership",
   name: constraint.constraintName,
   readCompletion: async (connection) =>
     await readConstraintCompletion({
