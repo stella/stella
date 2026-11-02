@@ -20,6 +20,11 @@
     "reason": "not app-code dead: append-only audit timestamp written by a migration-owned trigger (see schema/case-law.ts comment). Migrations are excluded by design."
   },
   {
+    "table": "case_law_population_seed_state",
+    "column": "foldGeneration",
+    "reason": "not app-code dead: incremented by the migration-owned fold function (apps/api/drizzle/20261101022151_case_law_population_counts/migration.sql) and read back through read_case_law_population_freshness(), which serves it as the fold number. Migrations are excluded by design."
+  },
+  {
     "table": "case_law_citation_resolution_census_runs",
     "column": "keysScanned",
     "reason": "dormant feature: citation-resolution-census-consts.ts is explicitly headed 'Dormant closed vocabularies of the citation-resolution census' -- the whole table is scaffolded ahead of a census feature that has not landed; only referenced in branded-id registries and RLS/schema-invariant tests."

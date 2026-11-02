@@ -56,6 +56,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33232
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 35620
       }
     ],
     "anthropic/extended": [
@@ -114,6 +118,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33722
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 36110
       }
     ],
     "bedrock/default": [
@@ -168,6 +176,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33487
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 35874
       }
     ],
     "bedrock/extended": [
@@ -222,6 +234,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33975
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 36363
       }
     ],
     "google/default": [
@@ -272,6 +288,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 32597
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 34625
       }
     ],
     "google/extended": [
@@ -318,6 +338,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33075
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 35103
       }
     ],
     "mistral/default": [
@@ -372,6 +396,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34781
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37096
       }
     ],
     "mistral/extended": [
@@ -426,6 +454,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 35307
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37623
       }
     ],
     "openai/default": [
@@ -480,6 +512,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34363
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 36678
       }
     ],
     "openai/extended": [
@@ -534,6 +570,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34878
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37193
       }
     ],
     "openrouter-anthropic/default": [
@@ -588,6 +628,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34609
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37079
       }
     ],
     "openrouter-anthropic/extended": [
@@ -642,6 +686,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 35120
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37591
       }
     ],
     "openrouter/default": [
@@ -696,6 +744,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34609
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37079
       }
     ],
     "openrouter/extended": [
@@ -750,6 +802,10 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 35120
+      },
+      {
+        "reason": "complete contact save fields exposed to agents",
+        "tokens": 37591
       }
     ]
   },

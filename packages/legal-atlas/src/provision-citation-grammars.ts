@@ -24,6 +24,7 @@ import type {
   ProvisionReference,
   ProvisionUnit,
 } from "@stll/legal-ast/provision-reference";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -838,7 +839,7 @@ export const PROVISION_CITATION_GRAMMARS = {
         patternSource: String.raw`s\s*\.?\s*ř\s*\.?\s*s\s*\.?(?![\p{L}\p{N}])`,
       },
     ],
-    anchorSeparator: "-",
+    anchorSeparator: E_SBIRKA_ANCHORS.segmentSeparator,
     connectors: [",", String.raw`a(?=\s)`, String.raw`ve\s+spojení\s+s(?=\s)`],
     gazette: {
       eli: ({ number, year }) =>

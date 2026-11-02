@@ -19,6 +19,11 @@
     "allow-activity-copy-text",
     "allow-time-entry-candidates",
     "allow-time-entry-submit-batch-confirmed",
-    "allow-activity-assign-ranges"
+    "allow-activity-assign-ranges",
+    "allow-billing-draft-get-settings",
+    "allow-billing-draft-grant-consent",
+    "allow-billing-draft-withdraw-consent",
+    "allow-billing-draft-set-preference",
+    "allow-billing-draft-create-confirmed"
   ]
 }

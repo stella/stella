@@ -297,6 +297,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   workspace_member: "team",
   workspace_contact: "team",
   case_law_matter_link: "court",
+  legislation_matter_link: "court",
   case_law_decision_annotation: "court",
   statute_annotation: "court",
   case_law_research_column: "court",
@@ -493,7 +494,7 @@ const createOrganizationBackgroundAuditRecorder =
     });
   };
 
-type AccountAuditEvent = {
+export type AccountAuditEvent = {
   type: AccountAuditEventType;
   resourceId: string;
 };

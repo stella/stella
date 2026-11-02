@@ -5,8 +5,18 @@ import type {
   TokenUsage,
 } from "@tanstack/ai";
 import { EventType } from "@tanstack/ai";
-import { describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
+import fc from "fast-check";
 
+import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { createTestState } from "@stll/test-state";
 
@@ -22,6 +32,7 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { SERVER_ANALYTICS_EVENTS } from "./server-analytics";
 import type { ServerAnalytics } from "./server-analytics";
+import type { TanStackAIAnalyticsCallbacks } from "./tanstack-ai";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
@@ -1915,5 +1926,165 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     } finally {
       warnSpy.mockRestore();
     }
+  });
+});
+
+describe("a failed generation is recorded once per callbacks family", () => {
+  // An anticipated failure keeps these tests off the exception sink; the
+  // ledger is the same for every kind.
+  const providerFailure = () =>
+    Object.assign(new Error("rate limited"), { statusCode: 429 });
+
+  // Each recorded failure also logs at WARN; the events are what is asserted.
+  beforeEach(async () => {
+    const { logger } = await import("@/api/lib/observability/logger");
+    spyOn(logger, "warn").mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    mock.restore();
+  });
+
+  const boundModel = (modelId: string) => ({
+    keySource: "instance" as const,
+    modelId,
+    provider: "openai" as const,
+  });
+
+  const createFamilyRoot = async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const root = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
+      dataClass: "public_corpus",
+      analytics: {
+        capture: (event) => {
+          events.push(event);
+        },
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "case-law.analysis.significance",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_failure_family",
+    });
+    const recorded = () => ({
+      failed: events.filter(
+        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+      ).length,
+      generationErrors: events.filter(
+        (event) =>
+          event.event === SERVER_ANALYTICS_EVENTS.aiGeneration &&
+          event.properties["$ai_is_error"] === true,
+      ).length,
+    });
+    return { recorded, root };
+  };
+
+  // The middleware's terminal hook for one run that failed at the provider.
+  const failRun = async (
+    member: TanStackAIAnalyticsCallbacks,
+    runId: string,
+  ): Promise<void> => {
+    await member.middleware.onError?.(createMiddlewareContext({ runId }), {
+      duration: 50,
+      error: providerFailure(),
+    });
+  };
+
+  test("a run that failed on a bound model and is caught by the caller records once", async () => {
+    const { recorded, root } = await createFamilyRoot();
+    const bound = root.forModel(boundModel("gpt-5.4-mini"));
+
+    await failRun(bound, "run_bound");
+    root.captureError(providerFailure());
+
+    expect(recorded()).toEqual({ failed: 1, generationErrors: 1 });
+  });
+
+  test("a failure before any model call records once from the catch path", async () => {
+    const { recorded, root } = await createFamilyRoot();
+    root.forModel(boundModel("gpt-5.4-mini"));
+
+    root.captureError(providerFailure());
+    root.captureError(providerFailure());
+
+    expect(recorded()).toEqual({ failed: 1, generationErrors: 1 });
+  });
+
+  test("two concurrent runs that both fail record twice", async () => {
+    const { recorded, root } = await createFamilyRoot();
+    const first = root.forModel(boundModel("gpt-5.4-mini"));
+    const second = root.forModel(boundModel("gpt-5.4"));
+
+    await Promise.all([failRun(first, "run_a"), failRun(second, "run_b")]);
+    root.captureError(providerFailure());
+    root.captureError(providerFailure());
+
+    expect(recorded()).toEqual({ failed: 2, generationErrors: 2 });
+  });
+
+  test("a nested binding shares the root's ledger", async () => {
+    const { recorded, root } = await createFamilyRoot();
+    const child = root.forModel(boundModel("gpt-5.4-mini"));
+    const grandchild = child.forModel(boundModel("gpt-5.4"));
+
+    await failRun(grandchild, "run_nested");
+    child.captureError(providerFailure());
+    root.captureError(providerFailure());
+
+    expect(recorded()).toEqual({ failed: 1, generationErrors: 1 });
+  });
+
+  test("every interleaving of run failures and catch-path reports records each failed run once", async () => {
+    // The root, two bound children, and two grandchildren.
+    const memberCount = 5;
+    const step = fc.record({
+      kind: fc.constantFrom("run" as const, "catch" as const),
+      member: fc.nat({ max: memberCount - 1 }),
+    });
+    await assertProperty(
+      "every interleaving of run failures and catch-path reports records each failed run once",
+      fc.asyncProperty(
+        fc.array(step, { minLength: 1, maxLength: 12 }),
+        async (steps) => {
+          const { recorded, root } = await createFamilyRoot();
+          const child = root.forModel(boundModel("gpt-5.4-mini"));
+          const members = [
+            root,
+            child,
+            root.forModel(boundModel("gpt-5.4")),
+            child.forModel(boundModel("gpt-5.4-nano")),
+            child.forModel(boundModel("gpt-5.4")),
+          ];
+
+          // A run reaches its terminal hook once, so each "run" step is a
+          // distinct failed run. A catch-path report before any run failed
+          // is a failure before the model call: one more distinct failure.
+          // A catch-path report after one is the caller's echo of a run the
+          // middleware already recorded.
+          let failedRuns = 0;
+          let failedBeforeModelCall = 0;
+          for (const [index, { kind, member }] of steps.entries()) {
+            const target = members.at(member) ?? root;
+            if (kind === "run") {
+              await failRun(target, `run_${String(index)}`);
+              failedRuns += 1;
+            } else {
+              if (failedRuns === 0) {
+                failedBeforeModelCall = 1;
+              }
+              target.captureError(providerFailure());
+            }
+          }
+
+          const expected = failedRuns + failedBeforeModelCall;
+          expect(recorded()).toEqual({
+            failed: expected,
+            generationErrors: expected,
+          });
+        },
+      ),
+    );
   });
 });

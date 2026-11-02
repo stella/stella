@@ -32,6 +32,8 @@ const ACTIVITY_PERSISTENCE_STATUSES = [
 ] as const;
 type ActivityPersistenceStatus = (typeof ACTIVITY_PERSISTENCE_STATUSES)[number];
 
+/** Whether stella AI descriptions ask before sending a suggestion's titles. */
+
 export const ACTIVITY_DETAILS_ACCESS = [
   "disabled",
   "ready",

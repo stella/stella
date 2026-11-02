@@ -5,6 +5,7 @@ import type { AggregateLockDefinition } from "../aggregate-lock-definition";
 export default {
   rank: 0,
   kind: "row",
+  holder: "owner",
 } as const satisfies AggregateLockDefinition;
 
 export type Identity = SafeId<"organization">;

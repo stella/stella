@@ -58,6 +58,7 @@ import type {
 import { CaptureDetailsControl } from "./ActivityCaptureDetails";
 import type { CaptureDetailsCommand } from "./ActivityCaptureDetails";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
+import { useBillingDraftSettings } from "./billing-draft-settings";
 
 type ActivitySettingsView =
   | { type: "loading" }
@@ -237,6 +238,7 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
           {t("detectCallsDescription")}
         </p>
       </div>
+      <BillingDraftConsentSettings />
       <CaptureDetailsControl onCommand={onCommand} settings={settings} />
       {settings.appNameOnlyApps.length > 0 ? (
         <div className="flex flex-col gap-2">
@@ -990,6 +992,74 @@ export const ActivitySettingsPane = () => {
         settings={settings}
       />
       {dialogView}
+    </div>
+  );
+};
+
+/**
+ * Consent to stella AI drafts, kept on the server. Withdrawing stays possible
+ * whenever consent exists, even where the firm has drafting off; it applies
+ * in this window at once and is sent again until the server confirms it.
+ */
+const BillingDraftConsentSettings = () => {
+  const t = useTranslations("activity");
+  const { settings, setConsent, setPreference } = useBillingDraftSettings(true);
+  if (settings.type === "loading" || settings.type === "unavailable") {
+    return null;
+  }
+  if (settings.type === "failed") {
+    return (
+      <p className="text-muted-foreground text-xs">
+        {t("billingDraftsUnavailable")}
+      </p>
+    );
+  }
+  const { consent } = settings;
+  const withdrawable =
+    consent === "granted" || consent === "pending-withdrawal";
+  if (!withdrawable && settings.mode === "off") {
+    return null;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm">{t("billingDraftsTitle")}</span>
+      <p className="text-muted-foreground text-xs">
+        {withdrawable ? t("billingDraftsGranted") : t("billingDraftsRevoked")}
+      </p>
+      {consent === "pending-withdrawal" ? (
+        <p className="text-muted-foreground text-xs" role="status">
+          {t("billingDraftsWithdrawPending")}
+        </p>
+      ) : null}
+      {settings.preference === null ? null : (
+        <div className="flex flex-col gap-1">
+          <span className="text-muted-foreground text-xs">
+            {t("billingDraftsPreference")}
+          </span>
+          <bdi className="text-sm text-pretty">{settings.preference}</bdi>
+          <Button
+            className="self-start"
+            onClick={() => {
+              void setPreference(null);
+            }}
+            size="xs"
+            variant="ghost"
+          >
+            {t("billingDraftsForgetPreference")}
+          </Button>
+        </div>
+      )}
+      {consent === "granted" ? (
+        <Button
+          className="self-start"
+          onClick={() => {
+            void setConsent("revoked");
+          }}
+          variant="outline"
+        >
+          {t("billingDraftsWithdraw")}
+        </Button>
+      ) : null}
     </div>
   );
 };

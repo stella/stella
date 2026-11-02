@@ -108,7 +108,10 @@ import type {
   SafeIdType,
 } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
-import type { DocumentSource } from "@/api/lib/document-source";
+import type {
+  DocumentSource,
+  ImportDocumentSource,
+} from "@/api/lib/document-source";
 import type { TemplateManifest } from "@/api/lib/docx/types";
 import type { AgendaAttendeeType } from "@/api/lib/entity-constants";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
@@ -611,6 +614,7 @@ export type {
   DocumentAst,
   DocumentSource,
   EmptyAst,
+  ImportDocumentSource,
   EntityKind,
   FieldContent,
   PersistedChatMessageContent,

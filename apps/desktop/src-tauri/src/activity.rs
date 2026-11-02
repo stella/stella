@@ -5972,6 +5972,39 @@ mod tests {
     assert_eq!(contract["changedEvent"], CHANGED_EVENT);
   }
 
+  /// The local stella AI approval is gone: drafting consent lives on the
+  /// server. A saved approval stays in the file as an unknown key and grants
+  /// nothing.
+  #[test]
+  fn a_saved_local_ai_approval_is_kept_but_grants_nothing() {
+    let saved: ActivitySettings = serde_json::from_value(serde_json::json!({
+      "recordingStatus": "recording",
+      "retention": "month",
+      "narrativeAssist": "always",
+    }))
+    .unwrap();
+    assert_eq!(saved.extra["narrativeAssist"], "always");
+    assert_eq!(
+      serde_json::to_value(&saved).unwrap()["narrativeAssist"],
+      "always"
+    );
+    let mut manager = recording_manager();
+    manager.settings = saved;
+    let settings = manager.settings_snapshot(
+      local_date(at(0)),
+      at(0),
+      &ActivitySettingsCaller::for_account_test(1, "fixture"),
+      0,
+      ActivityDetailsAccess::Ready,
+    );
+    assert!(
+      serde_json::to_value(&settings)
+        .unwrap()
+        .get("narrativeAssist")
+        .is_none()
+    );
+  }
+
   fn call(identifier: &str, window_title: Option<&str>) -> Observation {
     Observation::Call {
       identifier: identifier.to_string(),

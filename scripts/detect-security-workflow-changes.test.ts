@@ -336,14 +336,21 @@ test("migration jobs use the CI plan selector and fail open on detector errors",
         v.looseObject({
           id: v.optional(v.string()),
           run: v.optional(v.string()),
+          env: v.optional(v.record(v.string(), v.string())),
         }),
       ),
     }),
     migrations.jobs["ci-plan"],
   );
-  expect(plan.outputs["database_migrations_required"]).toContain(
-    "steps.changed-files.outputs.database_migrations_required",
+  // The plan combines the selector's answer with the schema import answers.
+  expect(plan.outputs["database_migrations_required"]).toBe(
+    `\${{ steps.migration-scope.outputs.database_migrations_required }}`,
   );
+  expect(
+    plan.steps.find(({ id }) => id === "migration-scope")?.env?.[
+      "MIGRATION_PATHS"
+    ],
+  ).toBe(`\${{ steps.changed-files.outputs.database_migrations_required }}`);
   const selector = plan.steps.find(({ id }) => id === "changed-files")?.run;
   expect(selector).toBe("bun scripts/ci-plan-scope.ts");
   // The scope module runs the same detector and widens on its failure.

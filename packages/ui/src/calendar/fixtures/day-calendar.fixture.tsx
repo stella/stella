@@ -90,7 +90,7 @@ const activityBlocks = mergeShortSegments(ACTIVITY, {
     const apps = [...new Set(merged.sources.map(({ app }) => app))].join(" · ");
     return {
       accessibleLabel: `Rapid switching: ${apps}`,
-      detail: `${apps} · ${String(merged.sources.length)}×`,
+      caption: `${apps} · ${String(merged.sources.length)}×`,
       endMs: merged.endMs,
       id: merged.id,
       kind: "mixed",
@@ -114,7 +114,7 @@ const activityBlocks = mergeShortSegments(ACTIVITY, {
 const entryBlocks: DayCalendarBlock[] = [
   {
     accessibleLabel: "Service agreement review, draft",
-    detail: "Review of the draft service agreement",
+    caption: "Review of the draft service agreement",
     endMs: at(9, 5),
     id: "e1",
     kind: "entry",
@@ -125,7 +125,7 @@ const entryBlocks: DayCalendarBlock[] = [
   },
   {
     accessibleLabel: "Lease renewal call",
-    detail: "Call with the landlord",
+    caption: "Call with the landlord",
     endMs: at(11, 40),
     id: "e2",
     kind: "entry",

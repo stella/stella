@@ -81,6 +81,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   // A roster row of a court, addressed only as the subject of a portrait.
   caseLawJudge: { type: "non_resource", reason: "subresource" },
   caseLawMatterLink: { type: "non_resource", reason: "association" },
+  legislationMatterLink: { type: "non_resource", reason: "association" },
   caseLawPolarityRule: { type: "non_resource", reason: "policy" },
   caseLawProvisionCitation: { type: "non_resource", reason: "association" },
   caseLawReconciliationItem: { type: "non_resource", reason: "workflow" },

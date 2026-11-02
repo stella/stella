@@ -91,6 +91,13 @@ const visualLoaders = {
       return { default: ChatLongPastePlayground };
     },
   },
+  "button-label": {
+    load: async () => {
+      const { ButtonLabelPlayground } =
+        await import("./-components/button-label-playground");
+      return { default: ButtonLabelPlayground };
+    },
+  },
   "chat-composer-reference": {
     load: async () => {
       const { ChatComposerReferencePlayground } =

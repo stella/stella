@@ -9,7 +9,7 @@ import type {
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { defaultVarcharSchema, fileSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema, fileSchema } from "@/api/lib/custom-schema";
 import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
@@ -22,7 +22,7 @@ import {
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const createTemplateFromStylesBodySchema = v.object({
-  name: defaultVarcharSchema,
+  name: displayNameSchema(),
   styleSource: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
 });
 

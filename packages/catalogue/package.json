@@ -18,6 +18,7 @@
       "types": "./src/schema.ts",
       "import": "./src/schema.ts"
     },
+    "./entries/*": "./entries/*",
     "./pinned-facts": {
       "types": "./scripts/pinned-content-facts.ts",
       "import": "./scripts/pinned-content-facts.ts"

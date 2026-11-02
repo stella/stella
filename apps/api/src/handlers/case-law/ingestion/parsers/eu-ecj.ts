@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: the lost-content verdict is the same validateAst result; only the logging moved to the pipeline.
 // parser-output-unchanged: Whole-document validation reuses the unmodified parsed source; bounded decision subtrees retain serialization and reparsing, so diagnostics and output are unchanged.
 /**
@@ -43,10 +44,11 @@
  */
 
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -119,7 +121,7 @@ export type ParseEcjDecisionOutput = {
 export const parseEcjDecisionHtml = (
   input: ParseEcjDecisionInput,
 ): ParseEcjDecisionOutput => {
-  const $ = cheerio.load(input.html);
+  const $ = load(input.html);
   const { boundary, root: $document } = ecjDocumentRoot($);
   const blocks = buildBlocks($, $document);
   const keywords = extractKeywords($document);
@@ -431,7 +433,7 @@ export const ecjConverterVersion = (html: string): string | undefined =>
  * the caller must be able to tell apart from a bounded document.
  */
 export const ecjDocumentHtml = (html: string): EcjDocumentSource => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const document = ecjDocumentRoot($);
   return {
     boundary: document.boundary,
@@ -603,7 +605,7 @@ export const ecjStatesKeywordChain = (html: string): boolean =>
   new RegExp(`class="(?:${CLASS_PREFIX})?${CLASS.index}"`, "u").test(html);
 
 export const ecjKeywordSpacingNeedsVerbatim = (html: string): boolean => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const raw = visibleHtmlText($(sel(CLASS.index)).first()).trim();
   return (
     raw.length > 0 &&
@@ -829,14 +831,18 @@ const buildBlocks = (
   };
 
   if (layout === "classed") {
-    return walk({ type: "settled", numbers: new Map() });
+    return unmarkOperativeFormula(
+      walk({ type: "settled", numbers: new Map() }),
+    );
   }
   const candidates: PrintedNumberCandidate[] = [];
   walk({ type: "survey", candidates });
-  return walk({
-    type: "settled",
-    numbers: settlePrintedNumbers(candidates),
-  });
+  return unmarkOperativeFormula(
+    walk({
+      type: "settled",
+      numbers: settlePrintedNumbers(candidates),
+    }),
+  );
 };
 
 const tagNameOf = (node: AnyNode | undefined): string | undefined =>
@@ -1355,6 +1361,74 @@ const promoteToHeading = (builder: BlockBuilder, index: number): void => {
     inlines: block.inlines,
     plainText: block.plainText,
   };
+};
+
+/**
+ * The most lines the sentence introducing the ruling is set on: `On those
+ * grounds,` / `THE COURT,` / `in answer to the questions …, hereby rules:`.
+ */
+const MAX_FORMULA_LINES = 4;
+
+/** Longer than this, a line is a ruling, not part of the formula. */
+const MAX_FORMULA_LINE_LENGTH = 400;
+
+/** `1.`, `2)`, `I.`, `(a)`, `–`: the marker a ruling item opens with. */
+const RULING_ITEM_START =
+  /^(?:\(?\d{1,3}[.)]|\(?[IVXLC]{1,6}[.)]|\(\p{L}{1,3}\)|[-–—•])\s/u;
+
+/** Every language closes the formula with a colon (`hereby rules:`, `dit pour droit :`). */
+const ENDS_FORMULA = /:\s*$/u;
+
+const isFormulaLine = (block: Block | undefined): boolean =>
+  block?.type === "paragraph" &&
+  block.role === "holding" &&
+  block.number === undefined &&
+  block.plainText.length <= MAX_FORMULA_LINE_LENGTH &&
+  !RULING_ITEM_START.test(block.plainText);
+
+/**
+ * Take the role of the ruling off the sentence that introduces it.
+ *
+ * Where the sentence is one paragraph it is the operative part's heading
+ * (`promoteToHeading`). Where the Court sets it on several lines (the
+ * unmarked opening row of a General Court judgment, the bare paragraphs of
+ * the oldest layout), only its first line, if any, is the heading, and the
+ * rest reached the operative part as rulings: `THE GENERAL COURT (Sixth
+ * Chamber)`, `hereby:`. Those lines run from the start of the operative
+ * part to the first that ends in a colon, which is how the sentence ends in
+ * every language; a numbered or marked line is a ruling and ends the
+ * search. A heading that already ends in a colon holds the whole sentence,
+ * so what follows it is the ruling, numbered or not.
+ */
+const unmarkOperativeFormula = (blocks: Block[]): Block[] => {
+  for (const [start, block] of blocks.entries()) {
+    const previous = blocks[start - 1];
+    const opensRuling =
+      block.type === "paragraph" &&
+      block.role === "holding" &&
+      !(previous?.type === "paragraph" && previous.role === "holding");
+    if (
+      !opensRuling ||
+      (previous?.type === "heading" && ENDS_FORMULA.test(previous.plainText))
+    ) {
+      continue;
+    }
+    const lines = blocks.slice(start, start + MAX_FORMULA_LINES);
+    const end = lines.findIndex(
+      (line) => !isFormulaLine(line) || ENDS_FORMULA.test(line.plainText),
+    );
+    const last = lines[end];
+    if (end === -1 || !isFormulaLine(last)) {
+      continue;
+    }
+    for (const [offset, line] of lines.slice(0, end + 1).entries()) {
+      if (line.type === "paragraph") {
+        const { role: _role, ...unmarked } = line;
+        blocks[start + offset] = unmarked;
+      }
+    }
+  }
+  return blocks;
 };
 
 /**

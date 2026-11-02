@@ -1,5 +1,19 @@
 # @stll/auth-model
 
+## 0.5.0
+
+### Minor Changes
+
+- [#7600](https://github.com/stella/stella/pull/7600) [`cd76389`](https://github.com/stella/stella/commit/cd7638987595cc0f1776b204073fb958bf94bf35) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose a shared invitation lifecycle classifier for pending, past, and accepted invitations.
+
+- [#7607](https://github.com/stella/stella/pull/7607) [`34a741f`](https://github.com/stella/stella/commit/34a741fa7878e68f1cf01093d1208719e783df75) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export the opaque organization slug generator next to the shared slug rules.
+
+## 0.4.0
+
+### Minor Changes
+
+- [#7633](https://github.com/stella/stella/pull/7633) [`ea026da`](https://github.com/stella/stella/commit/ea026da403d121c9894049e1dd7f803120a73577) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow organization owners and admins to change an existing organization's slug through generated capabilities, with an opaque identifier option and shared slug validation.
+
 ## 0.3.0
 
 ### Minor Changes
