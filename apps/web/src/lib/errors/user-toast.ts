@@ -4,7 +4,7 @@ import { Result } from "better-result";
 
 import { copyToClipboard } from "@stll/clipboard";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
-import { createDetached } from "@stll/errors";
+import { createDetached, type DetachedOperand } from "@stll/errors";
 import { stellaToast } from "@stll/ui/toast";
 
 import { ProviderDiagnosticToast } from "@/components/provider-diagnostic-content";
@@ -296,11 +296,11 @@ type DetachedUserActionOptions = {
  * `detached`, a rejection is shown as well as reported: a press must never
  * end in nothing.
  */
-export const detachedUserAction = (
-  operation: unknown,
+export const detachedUserAction = <Operand>(
+  operation: DetachedOperand<Operand>,
   { context, failureMessage }: DetachedUserActionOptions,
 ): void => {
   createDetached((error) => {
     notifyUserError(error, failureMessage);
-  })(operation, context);
+  })<Operand>(operation, context);
 };
