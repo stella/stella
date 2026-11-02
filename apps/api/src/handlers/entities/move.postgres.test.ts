@@ -18,6 +18,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { moveEntityHandler } from "./move";
 import type { MoveEntityHandlerProps } from "./move";
@@ -316,9 +317,9 @@ if (!databaseUrl || !runPostgresTests) {
           } finally {
             releaseFirst.resolve(undefined);
             await first;
-            await firstDb
-              .delete(organization)
-              .where(eq(organization.id, hierarchy.organizationId));
+            await deleteOrganizationsForTest(firstDb, [
+              hierarchy.organizationId,
+            ]);
           }
         });
       }, 20_000);
@@ -349,9 +350,7 @@ if (!databaseUrl || !runPostgresTests) {
           ).toEqual(before);
           await expectTerminatingChains(db, hierarchy.workspaceId);
         } finally {
-          await db
-            .delete(organization)
-            .where(eq(organization.id, hierarchy.organizationId));
+          await deleteOrganizationsForTest(db, [hierarchy.organizationId]);
         }
       });
     });

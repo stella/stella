@@ -120,7 +120,6 @@ import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { storedCorpusValidationFailure } from "@/api/lib/legal-search/corpus-storage";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
-import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -232,7 +231,7 @@ import {
   MAX_LIST_LIMIT,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
-  searchIndexUnavailableResult,
+  searchRefusalResult,
   structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
@@ -2065,8 +2064,9 @@ const readCaseLawSearchAnswer = (
   if (timeout !== null) {
     return { type: "failed", result: timeout };
   }
-  if (isSearchIndexUnavailable(answer)) {
-    return { type: "failed", result: searchIndexUnavailableResult(answer) };
+  const refusal = searchRefusalResult(answer);
+  if (refusal !== null) {
+    return { type: "failed", result: refusal };
   }
   const resultMessage = handlerResultMessage(answer);
   if (resultMessage === INVALID_CURSOR_MESSAGE) {

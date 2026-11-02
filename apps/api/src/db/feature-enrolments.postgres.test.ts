@@ -31,6 +31,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { ORGANIZATION_DELETION_FOR_TEST_SQL } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -95,7 +96,9 @@ describe.skipIf(!runPostgresTests)(
               expect(scoped?.featureIds).toEqual([LEGAL_LISTS_FEATURE_ID]);
             });
           } finally {
-            await client`DELETE FROM organization WHERE id = ${organizationId}`;
+            await client.unsafe(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+              organizationId,
+            ]);
             await client`DELETE FROM "user" WHERE id = ${userId}`;
           }
         });
@@ -366,7 +369,9 @@ describe.skipIf(!runPostgresTests)(
         } finally {
           restoreRuntimeMode();
           for (const orgId of [orgA, orgB]) {
-            await client`DELETE FROM organization WHERE id = ${orgId}`;
+            await client.unsafe(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+              orgId,
+            ]);
           }
           for (const userId of [userA, userB]) {
             await client`DELETE FROM "user" WHERE id = ${userId}`;

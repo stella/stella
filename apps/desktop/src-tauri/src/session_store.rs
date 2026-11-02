@@ -116,44 +116,65 @@ pub async fn persist_session_store(
   store_path: &Path,
   payload: &SessionStorePayload,
 ) -> Result<(), String> {
-  if let Some(parent) = store_path.parent() {
-    fs::create_dir_all(parent)
-      .await
-      .map_err(|e| format!("mkdir failed: {e}"))?;
-  }
-
-  let json = serde_json::to_string_pretty(payload)
-    .map_err(|e| format!("serialize failed: {e}"))?;
-
-  let temp_path = format!(
-    "{}.{}.{}.tmp",
-    store_path.display(),
-    std::process::id(),
-    uuid::Uuid::new_v4()
-  );
-
-  fs::write(&temp_path, &json)
-    .await
-    .map_err(|e| format!("write failed: {e}"))?;
-
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::PermissionsExt;
-    let _ =
-      fs::set_permissions(&temp_path, std::fs::Permissions::from_mode(0o600)).await;
-  }
-
-  fs::rename(&temp_path, store_path)
-    .await
-    .map_err(|e| format!("rename failed: {e}"))?;
-
-  Ok(())
+  let path = store_path.to_path_buf();
+  let json = serde_json::to_vec_pretty(payload)
+    .map_err(|error| format!("serialize failed: {error}"))?;
+  tokio::task::spawn_blocking(move || {
+    if let Some(parent) = path.parent() {
+      crate::local_store::create_private_dir(parent)
+        .map_err(|error| format!("mkdir failed: {error}"))?;
+    }
+    crate::local_store::write_private_atomic(&path, &json)
+  })
+  .await
+  .map_err(|error| format!("store task failed: {error}"))?
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
   use std::path::PathBuf;
+
+  #[cfg(unix)]
+  #[tokio::test]
+  async fn local_file_creation_keeps_session_state() {
+    use std::os::unix::fs::PermissionsExt;
+    if crate::local_store::local_file_creation_child(
+      "session_store::tests::local_file_creation_keeps_session_state",
+    ) {
+      return;
+    }
+    let path = unique_path("local-file");
+    persist_session_store(&path, &make_payload()).await.unwrap();
+    assert_eq!(
+      std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+      0o600
+    );
+    assert_eq!(
+      std::fs::metadata(path.parent().unwrap())
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o777,
+      0o700
+    );
+    assert_eq!(
+      std::fs::read_dir(path.parent().unwrap()).unwrap().count(),
+      1
+    );
+    let blocked = path.join("sessions.json");
+    assert!(
+      persist_session_store(&blocked, &make_payload())
+        .await
+        .unwrap_err()
+        .contains("mkdir failed")
+    );
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
 
   fn make_session() -> PersistedDesktopSession {
     PersistedDesktopSession {
@@ -198,11 +219,10 @@ mod tests {
   }
 
   fn unique_path(name: &str) -> PathBuf {
-    std::env::temp_dir().join(format!(
-      "stella-test-{}-{}.json",
-      name,
-      uuid::Uuid::new_v4()
-    ))
+    let directory =
+      std::env::temp_dir().join(format!("stella-test-{name}-{}", uuid::Uuid::new_v4()));
+    crate::local_store::create_private_dir(&directory).unwrap();
+    directory.join("sessions.json")
   }
 
   // -- Serde round-trip --
