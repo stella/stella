@@ -412,9 +412,9 @@ const toTerminalAssistantMessage = ({
     }),
     parts: runProducedParts ? responseMessage.parts : owningParts,
     role: responseMessage?.role ?? "assistant",
-    ...(owningAssistantMessage?.createdAt === undefined
-      ? {}
-      : { createdAt: owningAssistantMessage.createdAt }),
+    ...(owningAssistantMessage?.createdAt !== undefined
+      ? { createdAt: owningAssistantMessage.createdAt }
+      : {}),
   });
   return attachTerminalTurnOutcome({ message, turnOutcome: outcome });
 };

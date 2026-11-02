@@ -1352,8 +1352,9 @@ const pageMetadataOf = ({ detail, files, id, row }: PageMetadataOptions) => {
           title: file.title,
           documentUrl: metadataAddressOf(id, file),
           status: fetched?.status,
+          // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
           sha256:
-            fetched?.bytes === undefined ? undefined : sha256(fetched.bytes),
+            fetched?.bytes !== undefined ? sha256(fetched.bytes) : undefined,
         };
       },
     ),

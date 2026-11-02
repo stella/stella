@@ -374,7 +374,7 @@ export const ChatThreadMessages = ({
     // carries retry and stop.
     message.role === "assistant" &&
     index !== messages.length - 1 &&
-    message.metadata?.contextNotice === undefined &&
+    !carriesContextNotice(message) &&
     !hasVisibleAssistantParts(message.parts) ? null : (
       <ChatRenderErrorBoundary
         fallback={<MessageRenderFallback message={message} />}
@@ -1808,6 +1808,10 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
  * answer text, or a finished web search or fetch, which shows in the sources
  * tray instead of as a step.
  */
+/** A message without metadata carries no context notice. */
+const carriesContextNotice = (message: ChatUIMessage): boolean =>
+  message.metadata?.contextNotice !== undefined;
+
 const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
   toAssistantPartRenderEntries(parts).some((entry) => {
     if (entry.type !== "standard") {

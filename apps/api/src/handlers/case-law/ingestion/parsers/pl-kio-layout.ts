@@ -1017,8 +1017,12 @@ const reflowOf = (
   const breaks = blocks.flatMap((block) => {
     const lines = bodyLinesOf(block, numbered);
     return lines.slice(1).flatMap((line, index) => {
+      // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
       const previous = lines[index];
-      return previous?.end === undefined ||
+      if (previous === undefined) {
+        return [];
+      }
+      return previous.end === undefined ||
         previous.text.length === 0 ||
         line.text.length === 0
         ? []

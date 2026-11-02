@@ -342,7 +342,8 @@ const withSuperscripts = (
         out.push({
           text: mark.text,
           bold: run?.bold ?? false,
-          ...(run?.italic === undefined ? {} : { italic: run.italic }),
+          // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
+          ...(run?.italic !== undefined ? { italic: run.italic } : {}),
           superscript: true,
         });
       }

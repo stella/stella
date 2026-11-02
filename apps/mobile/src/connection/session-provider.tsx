@@ -95,9 +95,9 @@ const revokeSession = async (session: StoredSession) => {
 export const SessionProvider = ({ children }: React.PropsWithChildren) => {
   const restored = use(restoredSource);
   const [state, setState] = useState<SessionState>(() =>
-    restored?.session() === undefined
-      ? { status: "signed-out", ended: false }
-      : { status: "signed-in", source: restored },
+    restored?.session() !== undefined
+      ? { status: "signed-in", source: restored }
+      : { status: "signed-out", ended: false },
   );
   const [boundary] = useState(() => {
     const created = createSessionEndBoundary();

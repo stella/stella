@@ -90,11 +90,14 @@ const CALL_FIELDS = {
   arguments: ({ selected }) => selected.arguments,
   input: ({ selected }) => selected.input,
   metadata: ({ selected }) => selected.metadata,
-  approval: ({ selected, other }) =>
-    selected.approval?.approved === undefined &&
-    other.approval?.approved !== undefined
+  approval: ({ selected, other }) => {
+    if (selected.approval?.approved !== undefined) {
+      return selected.approval;
+    }
+    return other.approval?.approved !== undefined
       ? other.approval
-      : (selected.approval ?? other.approval),
+      : (selected.approval ?? other.approval);
+  },
   state: ({ selected, result }) => {
     if (result === undefined) {
       return selected.state;

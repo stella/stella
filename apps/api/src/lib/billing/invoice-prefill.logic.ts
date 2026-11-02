@@ -419,11 +419,11 @@ export const buyerSnapshotFromContact = (
 ): InvoiceBuyerSnapshot => {
   const { addresses } = contact;
   const address: BillingAddress | undefined =
-    contact.billingAddress?.line1 === undefined
-      ? (addresses?.find((entry) => entry.type === "billing") ??
+    contact.billingAddress?.line1 !== undefined
+      ? contact.billingAddress
+      : (addresses?.find((entry) => entry.type === "billing") ??
         addresses?.find((entry) => entry.isPrimary) ??
-        addresses?.at(0))
-      : contact.billingAddress;
+        addresses?.at(0));
   const identifiers = contactTaxIdentifiers({
     taxId: contact.taxId,
     vatId: contact.vatId,

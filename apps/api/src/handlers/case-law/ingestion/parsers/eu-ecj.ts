@@ -1279,7 +1279,8 @@ const visitLegacyParagraph = (
     printedNumbers.candidates.push({
       index,
       number: printed.value,
-      marker: match?.groups?.["dot"] === undefined ? "bare" : "dotted",
+      // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
+      marker: match?.groups?.["dot"] !== undefined ? "dotted" : "bare",
       dated:
         printed.value <= DAYS_IN_MONTH_MAX &&
         MONTH_AND_YEAR.test(body.plainText),

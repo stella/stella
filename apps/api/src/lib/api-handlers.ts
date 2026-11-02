@@ -2255,7 +2255,8 @@ export const createSafeRootHandler = <
     : [dependencies?: HandlerAdmissionDependencies<RootHandlerContext<TConfig>>]
 ): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> => {
   const admission = dependencies.at(0);
-  if (config.idempotency !== undefined && admission?.authorize === undefined) {
+  const authorizesBeforeReplay = admission?.authorize !== undefined;
+  if (config.idempotency !== undefined && !authorizesBeforeReplay) {
     panic("Replay-enabled root handlers require pre-replay authorization");
   }
   const core = createSafeScopedHandler("member", config, handler, admission);

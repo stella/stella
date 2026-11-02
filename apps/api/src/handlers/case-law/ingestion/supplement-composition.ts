@@ -564,14 +564,14 @@ const supplementBlocks = (supplement: StoredSupplement): Block[] => {
           ...block,
           id: `${prefix}${block.id}`,
           anchorId: `${prefix}${block.anchorId}`,
-          ...(block.note?.noteId === undefined
-            ? {}
-            : {
+          ...(block.note?.noteId !== undefined
+            ? {
                 note: {
                   ...block.note,
                   noteId: `${prefix}${block.note.noteId}`,
                 },
-              }),
+              }
+            : {}),
         };
       case "table":
       case "image":

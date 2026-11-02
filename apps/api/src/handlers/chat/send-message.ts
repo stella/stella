@@ -2538,10 +2538,10 @@ export const createSendMessage = (
           ? undefined
           : {
               ...body.activeFile,
-              ...(activeFileEntity?.currentVersionId === null ||
-              activeFileEntity?.currentVersionId === undefined
-                ? {}
-                : { currentVersionId: activeFileEntity.currentVersionId }),
+              ...(activeFileEntity !== undefined &&
+              activeFileEntity.currentVersionId !== null
+                ? { currentVersionId: activeFileEntity.currentVersionId }
+                : {}),
             };
       const validationThreadState = yield* Result.await(
         readThreadValidationState({
@@ -3862,10 +3862,13 @@ const attachActiveFileFallbackWhenExtractionIsEmpty = async ({
   Result<ChatMessage[], HandlerError<422 | 500> | SafeDbError>
 > =>
   await Result.gen(async function* () {
+    if (activeFile === undefined) {
+      return Result.ok(hydratedMessages);
+    }
     if (
       sendMode !== CHAT_SEND_MODE.rawOverride ||
       workspaceId === null ||
-      activeFile?.fileFieldId === undefined ||
+      activeFile.fileFieldId === undefined ||
       activeFile.supportsDocxEdits === true
     ) {
       return Result.ok(hydratedMessages);

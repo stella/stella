@@ -188,10 +188,10 @@ const parseOfficeSpan = (line: string): OfficeSpan => {
     if (parsed === undefined) {
       continue;
     }
-    if (match.groups?.["until"] === undefined) {
-      start ??= parsed;
-    } else {
+    if (match.groups?.["until"] !== undefined) {
       end = parsed;
+    } else {
+      start ??= parsed;
     }
   }
   return { start, end };

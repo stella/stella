@@ -1341,8 +1341,9 @@ const assembleAuthorityDecision = ({
   const decisionDate = dayOf(row.time);
   const sourceUrl = documentPageUrl(urn);
   const resource = body?.resource ?? plUodoBodyResourceOf(row);
+  // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
   const documentUrl =
-    resource?.ref === undefined ? undefined : bodyPdfUrl(urn, resource.ref);
+    resource?.ref !== undefined ? bodyPdfUrl(urn, resource.ref) : undefined;
 
   // A parse failure is not the decision's failure: the body is stored
   // verbatim below, so its text is recoverable by re-parsing what was kept.

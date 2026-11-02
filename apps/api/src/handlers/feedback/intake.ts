@@ -278,7 +278,7 @@ export const receivePublicFeedback = async ({
     input: toReportInput(body),
     reporter: { via: "intake" },
     instance: body.instance,
-    ...(deps?.submitDeps === undefined ? {} : { deps: deps.submitDeps }),
+    ...(deps?.submitDeps !== undefined ? { deps: deps.submitDeps } : {}),
   });
   if (Result.isError(submitted)) {
     return errorResponse(

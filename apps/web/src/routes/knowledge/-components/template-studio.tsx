@@ -717,9 +717,9 @@ export const TemplateStudioPage = ({
       // A lookup field's non-default output is addressed by `{{ path.key }}`;
       // the bare `{{ path }}` renders the default (first) format.
       const marker = fieldMarker(
-        options?.formatKey === undefined
-          ? path
-          : `${path}.${options.formatKey}`,
+        options?.formatKey !== undefined
+          ? `${path}.${options.formatKey}`
+          : path,
       );
       view.dispatch(
         view.state.tr.insertText(marker, from, to).scrollIntoView(),

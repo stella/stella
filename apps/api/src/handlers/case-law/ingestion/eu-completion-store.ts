@@ -514,10 +514,9 @@ const holdPublisherRefusalTx = async (
       .limit(1)
   ).at(0);
   const batch =
-    control?.batch === undefined || control.batch === null
-      ? initialBatchState()
-      : decodeCheckpoint({ cursor: control.cursor, batch: control.batch })
-          .batch;
+    control !== undefined && control.batch !== null
+      ? decodeCheckpoint({ cursor: control.cursor, batch: control.batch }).batch
+      : initialBatchState();
   const currentTime = now();
   const held = {
     ...batch,
@@ -566,10 +565,9 @@ const preparePublisherRefusalTx = async (
       .limit(1)
   ).at(0);
   const batch =
-    control?.batch === undefined || control.batch === null
-      ? initialBatchState()
-      : decodeCheckpoint({ cursor: control.cursor, batch: control.batch })
-          .batch;
+    control !== undefined && control.batch !== null
+      ? decodeCheckpoint({ cursor: control.cursor, batch: control.batch }).batch
+      : initialBatchState();
   const progress = control?.healthyRows ?? 0;
   // Only publisher success after the latest refusal can isolate this document.
   const baseline = receipt.refusalProgress;
@@ -1769,9 +1767,9 @@ const createGateOperations = ({ transaction, cleanup }: StoreContext) => {
           .where(eq(euCompletionControls.key, sourceControl(sourceId)))
           .limit(1)
       ).at(0);
-      return row?.batch === undefined || row.batch === null
-        ? initialBatchState()
-        : decodeCheckpoint({ cursor: row.cursor, batch: row.batch }).batch;
+      return row !== undefined && row.batch !== null
+        ? decodeCheckpoint({ cursor: row.cursor, batch: row.batch }).batch
+        : initialBatchState();
     });
   const savePreflightGateState = async (batch: BatchState) =>
     await cleanup(async (tx) => {
@@ -1937,10 +1935,10 @@ const createProbeOperations = ({ transaction, now }: StoreContext) => {
           .limit(1)
       ).at(0);
       const sourceBatch =
-        progress?.batch === undefined || progress.batch === null
-          ? null
-          : decodeCheckpoint({ cursor: progress.cursor, batch: progress.batch })
-              .batch;
+        progress !== undefined && progress.batch !== null
+          ? decodeCheckpoint({ cursor: progress.cursor, batch: progress.batch })
+              .batch
+          : null;
       const heldSince = sourceBatch?.heldSince ?? null;
       return {
         hasQueuedWork: queued,

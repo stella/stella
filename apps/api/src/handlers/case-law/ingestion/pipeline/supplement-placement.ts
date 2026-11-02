@@ -493,9 +493,9 @@ export const keepSupplementStandalone = async (
     try: async () =>
       await pointSupplementRawAt(
         placement,
-        own?.key === null || own?.key === undefined || own.redactedAt !== null
-          ? null
-          : { key: own.key, contentType: own.contentType },
+        own !== undefined && own.key !== null && own.redactedAt === null
+          ? { key: own.key, contentType: own.contentType }
+          : null,
       ),
     catch: (cause) => cause,
   });

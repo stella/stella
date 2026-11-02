@@ -132,7 +132,10 @@ export const defineScopedTransitions = <
   const keyColumn = columns[key];
   const keyNames = [key, ...scope];
   const keyColumns = keyNames.map((name) => columns[name]);
-  if (state?.enumValues === undefined || keyColumn === undefined) {
+  if (state === undefined || keyColumn === undefined) {
+    panic("A scoped transition requires an enum state and identity columns");
+  }
+  if (state.enumValues === undefined) {
     panic("A scoped transition requires an enum state and identity columns");
   }
   const stateValues = state.enumValues;
