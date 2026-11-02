@@ -78,6 +78,7 @@ const PARSED_GENERATION_COLUMNS = {
   parsedSourceHash: "proof",
   parsedSourceHashVersion: "proof",
   parsedSourceRawS3Key: "proof",
+  parsedInputState: "proof",
   sourceObservedAt: "bookkeeping",
   sourceObservationOrder: "bookkeeping",
   sourceObservationHash: "bookkeeping",

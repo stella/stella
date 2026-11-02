@@ -22,6 +22,7 @@ export const SCHEDULER_BACKFILL_IDS = {
   populationCounts: "caseLaw.foldPopulationCounts.minutely",
   decisionIdentifiers: "caseLaw.reconcileDecisionIdentifiers.minutely",
   provisionState: "caseLaw.backfillProvisionState.minutely",
+  parsedInputState: "caseLaw.backfillParsedInputState.fiveMinute",
   expressionIds: "legislation.backfillExpressionIds.fiveMinute",
 } as const;
 

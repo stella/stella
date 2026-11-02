@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 
-import * as cheerio from "cheerio";
 import { createInterface } from "node:readline";
 import * as v from "valibot";
+
+import { load } from "@stll/html";
 
 import { extractNsMetadata } from "../../src/handlers/case-law/ingestion/parsers/cz-ns";
 
@@ -41,7 +42,7 @@ for await (const line of lines) {
     );
     continue;
   }
-  const { source } = extractNsMetadata(cheerio.load(row.printHtml));
+  const { source } = extractNsMetadata(load(row.printHtml));
   if (source.ustavniStiznost === undefined) {
     process.stdout.write(
       `${JSON.stringify({

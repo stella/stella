@@ -18,6 +18,15 @@ bun --no-env-file scripts/dependency-audit.ts --prepare-remediation
 # Runs after the fix so acceptances it resolved are removed in the same pull
 # request; pruning only removes entries, so it never accepts an advisory.
 bun --no-env-file scripts/dependency-audit.ts --prune-baseline
+# The writers serialize plain JSON; the repository formatter owns the layout
+# the format check enforces on every pull request.
+written=()
+while IFS= read -r file; do
+  written+=("$file")
+done < <(git diff --name-only -- scripts/dependency-audit-baseline.json ':(glob)**/package.json')
+if (( ${#written[@]} > 0 )); then
+  bun fmt "${written[@]}"
+fi
 if ! git diff --quiet -- bun.lock bunfig.toml scripts/dependency-audit-baseline.json ':(glob)**/package.json'; then
   echo "changed=true" >> "$GITHUB_OUTPUT"
   exit 0

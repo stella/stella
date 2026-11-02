@@ -4,7 +4,7 @@ import { getMigrationsToRun } from "drizzle-orm/migrator.utils";
 import fc from "fast-check";
 import nodePath from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import migrationAliasInventory from "./migration-alias-inventory.json";
 import {
@@ -221,7 +221,8 @@ describe("migration ledger adoption", () => {
   });
 
   test("adopts every predecessor in a chain ending at the bundled hash", () => {
-    fc.assert(
+    assertProperty(
+      "adopts every predecessor in a chain ending at the bundled hash",
       fc.property(
         fc.array(fc.integer({ min: 1, max: 1_000_000 }), {
           minLength: 1,
@@ -256,7 +257,7 @@ describe("migration ledger adoption", () => {
           ]);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -264,7 +265,8 @@ describe("migration ledger adoption", () => {
     const bundle = readMigrationFiles({
       migrationsFolder: MIGRATIONS_DIR,
     }).slice(0, 3);
-    fc.assert(
+    assertProperty(
+      "pending status agrees with Drizzle in the supplied migration order",
       fc.property(
         fc.tuple(fc.boolean(), fc.boolean(), fc.boolean()),
         (applied) => {
@@ -303,7 +305,7 @@ describe("migration ledger adoption", () => {
           ).toMatchObject({ pending: drizzlePending.length > 0 });
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

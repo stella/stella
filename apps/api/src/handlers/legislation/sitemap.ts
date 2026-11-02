@@ -3,13 +3,14 @@ import type { SQL } from "drizzle-orm";
 import * as v from "valibot";
 
 import { PUBLIC_LEGISLATION_PAGE_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { classifyFailure } from "@stll/errors";
 
 import { legislationDocuments, statuteSitemapShards } from "@/api/db/schema";
 import {
   projectStatuteSitemapShard,
   projectStatuteSitemapStatute,
 } from "@/api/handlers/legislation/catalog-response";
-import { status } from "@/api/http/status";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import {
   SITEMAP_ALL_BUCKET,
@@ -21,9 +22,33 @@ import type {
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 
 const SITEMAP_COUNTRY_PATTERN = "^[a-z]{2,3}$";
 const SITEMAP_BUCKET_PATTERN = "^(?:all|[0-9]{2})$";
+
+const SITEMAP_CAPACITY_EXCEEDED = failureSink({
+  event: "legislation.sitemap_capacity_exceeded",
+  expected: [],
+});
+
+/**
+ * A sitemap that would outgrow the protocol's bounds is refused rather than
+ * served truncated: the answer could not be built within its own contract.
+ */
+const capacityExceeded = (message: string) =>
+  observedStatus(
+    {
+      sink: SITEMAP_CAPACITY_EXCEEDED,
+      cause: classifyFailure(
+        new HandlerError({ status: 500, message }),
+        "response_invalid",
+      ),
+    },
+    500,
+    { message },
+  );
 
 export const sitemapShardStatutesQuerySchema = v.object({
   country: v.pipe(
@@ -70,17 +95,15 @@ export const listStatuteSitemapShardsHandler = async (
   );
 
   if (shards.length > LIMITS.statuteSitemapIndexEntryLimit) {
-    return status(500, {
-      message: "Statute sitemap shard count exceeds sitemap index capacity.",
-    });
+    return capacityExceeded(
+      "Statute sitemap shard count exceeds sitemap index capacity.",
+    );
   }
 
   if (
     shards.some((shard) => shard.total > LIMITS.statuteSitemapShardUrlLimit)
   ) {
-    return status(500, {
-      message: "Statute sitemap bucket exceeds shard capacity.",
-    });
+    return capacityExceeded("Statute sitemap bucket exceeds shard capacity.");
   }
 
   return {
@@ -157,9 +180,9 @@ export const listStatuteSitemapStatutesHandler = async (
   );
 
   if (rows.length > LIMITS.statuteSitemapShardUrlLimit) {
-    return status(500, {
-      message: "Statute sitemap shard exceeds sitemap URL capacity.",
-    });
+    return capacityExceeded(
+      "Statute sitemap shard exceeds sitemap URL capacity.",
+    );
   }
 
   return {
