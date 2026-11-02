@@ -75,8 +75,8 @@
   "allowWebsiteAccess": {
     "message": "Luba juurdepääs veebisaitidele"
   },
-  "connectTab": {
-    "message": "Ühenda see stella vahekaart"
+  "connectStella": {
+    "message": "Ühenda stella"
   },
   "adoptTab": {
     "message": "Kasuta seda vahekaarti stellaga"
@@ -97,9 +97,9 @@
     "message": "Ühenduse kontrollimine…"
   },
   "statusConnectedElsewhere": {
-    "message": "Ühendatud on teine stella vahekaart"
+    "message": "stella on ühendatud teisel aadressil"
   },
-  "connectTabInstead": {
-    "message": "Ühenda selle asemel see stella vahekaart"
+  "connectStellaInstead": {
+    "message": "Ühenda stella hoopis siin"
   }
 }

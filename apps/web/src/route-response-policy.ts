@@ -25,6 +25,7 @@ export const ROUTE_CACHE_CLASSES = {
   "/settings": "private-no-store",
   "/time": "private-no-store",
   "/time/approvals": "private-no-store",
+  "/time/report": "private-no-store",
   "/auth/handoff": "private-no-store",
   "/auth/reauth": "private-no-store",
   "/auth/error": "private-no-store",

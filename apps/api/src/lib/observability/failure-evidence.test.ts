@@ -331,6 +331,31 @@ describe("failure evidence reads frames", () => {
     });
   });
 
+  test("a panic names its caller, not the helper that built it", () => {
+    const error = new Error("boom");
+    error.stack = [
+      "Error: boom",
+      "    at i (/app/node_modules/better-result/dist/index.mjs:1:322)",
+      "    at i (/root/.bun/install/cache/better-result@3.0.1/index.mjs:1:322)",
+      "    at load (/app/apps/api/src/lib/caller.ts:12:7)",
+    ].join("\n");
+
+    expect(readEvidence(error).nodes[0]?.frame).toEqual({
+      kind: "recognized",
+      location: "/app/apps/api/src/lib/caller.ts:12:7",
+    });
+  });
+
+  test("a stack of only helper frames has no frame to report", () => {
+    const error = new Error("boom");
+    error.stack = [
+      "Error: boom",
+      "    at i (/app/node_modules/better-result/dist/index.mjs:1:322)",
+    ].join("\n");
+
+    expect(readEvidence(error).nodes[0]?.frame).toEqual({ kind: "absent" });
+  });
+
   test("a frame outside this build's paths is present but not shipped", () => {
     const error = errorWithStack(
       "x",

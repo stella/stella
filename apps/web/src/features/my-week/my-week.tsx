@@ -4,6 +4,7 @@ import {
   useSuspenseInfiniteQuery,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -165,6 +166,8 @@ export const MyWeek = ({
   const { week } = queries;
   const entriesQuery = useSuspenseInfiniteQuery(queries.entries);
   const { data: suggestionRange } = useSuspenseQuery(queries.suggestions);
+  const tReport = useTranslations("billing.timeReport");
+  const canReadTime = usePermissions({ timeEntry: ["read"] });
   const canDecide = usePermissions({ timeEntry: ["create"] });
   const canEdit = usePermissions({ timeEntry: ["update"] });
   const canApprove = usePermissions({ timeEntry: ["approve"] });
@@ -256,6 +259,7 @@ export const MyWeek = ({
                 {tCommon("logTime")}
               </Button>
             )}
+            {canReadTime && <Link to="/time/report">{tReport("title")}</Link>}
             {/* Members approve what is assigned to them, so the link follows
                 the queue, not the role; it shows nothing while none waits. */}
             <PendingApprovalsLink

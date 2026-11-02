@@ -574,8 +574,15 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-section-sign-glyph.fixture.tsx", [
     "no-section-sign-glyph/no-section-sign-glyph",
   ]),
+  fixtureRuleOverride("no-style-substring-match.fixture.ts", [
+    "no-style-substring-match/no-style-substring-match",
+  ]),
   fixtureRuleOverride("no-inert-autofocus.fixture.tsx", [
     "no-inert-autofocus/no-inert-autofocus",
+  ]),
+  fixtureRuleOverride("no-optional-chain-null-compare.fixture.ts", [
+    "no-optional-chain-null-compare/no-optional-chain-null-compare",
+    "no-optional-chain-null-compare/no-optional-chain-absent-match",
   ]),
   fixtureRuleOverride("no-constructed-fetch-object.fixture.ts", [
     "no-constructed-fetch-object/no-constructed-fetch-object",
@@ -604,6 +611,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-justified-reader-text.fixture.tsx", [
     "no-justified-reader-text/no-justified-reader-text",
+  ]),
+  fixtureRuleOverride("no-raw-reader-scroll.fixture.ts", [
+    "no-raw-reader-scroll/no-raw-reader-scroll",
   ]),
   fixtureRuleOverride("no-sm-breakpoint-in-desktop.fixture.tsx", [
     "no-sm-breakpoint-in-desktop/no-sm-breakpoint-in-desktop",
@@ -673,6 +683,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-global-testing-library-screen",
     "bun-test-hygiene/no-unmanaged-database-client",
     "bun-test-hygiene/no-forced-database-drop",
+    "bun-test-hygiene/require-fetch-after-all",
     "bun-test-hygiene/no-wait-for-under-fake-timers",
     "bun-test-hygiene/require-module-mock-reset",
   ]),
@@ -721,6 +732,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("require-fetch-timeout.fixture.ts", [
     "require-fetch-timeout/require-fetch-timeout",
+  ]),
+  fixtureRuleOverride("no-fetch-response-body-replacement.fixture.ts", [
+    "no-fetch-response-body-replacement/no-fetch-response-body-replacement",
   ]),
   fixtureRuleOverride("require-bounded-request-schema.fixture.ts", [
     "require-bounded-request-schema/require-bounded-request-schema",
@@ -1748,6 +1762,7 @@ const config = defineConfig({
     ],
     "no-nanoid/no-nanoid": "error",
     "no-section-sign-glyph/no-section-sign-glyph": "error",
+    "no-style-substring-match/no-style-substring-match": "error",
     "no-inert-autofocus/no-inert-autofocus": "error",
     "no-hand-built-date-range-filter/no-hand-built-date-range-filter": "error",
     "confine-server-reads/confine-server-reads": "error",
@@ -2008,7 +2023,9 @@ const config = defineConfig({
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
+    "./.oxlint-plugins/no-style-substring-match.ts",
     "./.oxlint-plugins/no-inert-autofocus.ts",
+    "./.oxlint-plugins/no-optional-chain-null-compare.ts",
     "./.oxlint-plugins/no-constructed-fetch-object.ts",
     "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
@@ -2102,6 +2119,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-api-error-check.ts",
     "./.oxlint-plugins/require-function-replacer.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
+    "./.oxlint-plugins/no-fetch-response-body-replacement.ts",
     "./.oxlint-plugins/require-file-transport-disposition.ts",
     "./.oxlint-plugins/require-escape-like.ts",
     "./.oxlint-plugins/sql-perf.ts",
@@ -2176,6 +2194,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-dropped-fake-timers.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
+    "./.oxlint-plugins/no-global-fetch-replacement.ts",
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/inspector-header-title.ts",
@@ -2199,6 +2218,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/no-auto-hyphenation-in-reader.ts",
     "./.oxlint-plugins/no-justified-reader-text.ts",
+    "./.oxlint-plugins/no-raw-reader-scroll.ts",
     "./.oxlint-plugins/no-sm-breakpoint-in-desktop.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
@@ -2537,6 +2557,7 @@ const config = defineConfig({
         "bun-test-hygiene/no-identical-title": "error",
         "bun-test-hygiene/no-promise-matchers": "error",
         "bun-test-hygiene/no-forced-database-drop": "error",
+        "bun-test-hygiene/require-fetch-after-all": "error",
         "bun-test-hygiene/no-wait-for-under-fake-timers": "error",
         "bun-test-hygiene/require-module-mock-reset": "error",
         "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
@@ -3054,14 +3075,6 @@ const config = defineConfig({
       rules: { "no-bare-error/no-bare-error": "off" },
     },
     {
-      // Test-only adapter helper consumed exclusively from
-      // `**/*.test.ts`. Not part of any production code path.
-      files: [
-        "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
-      ],
-      rules: { "no-bare-error/no-bare-error": "off" },
-    },
-    {
       // This helper serializes its boundary into the page before modules load,
       // so it cannot import `panic()` there.
       files: ["apps/desktop/tests/browser/tauri-ipc.ts"],
@@ -3152,6 +3165,12 @@ const config = defineConfig({
                 utilities: ["transition-[height]"],
               },
               {
+                path: "packages/ui/src/components/collapsible.tsx",
+                reason:
+                  "Collapsible panel is a disclosure: it opens from zero to the height it owns, with the accordion's timing.",
+                utilities: ["transition-[height]"],
+              },
+              {
                 path: "packages/ui/src/components/outline-rail.tsx",
                 reason:
                   "Outline rail marker animates the width and height it owns as the active section changes.",
@@ -3219,7 +3238,10 @@ const config = defineConfig({
       // The desktop shell runs in the system WebView of its minimum macOS
       // version, which predates `Array#toSorted` and `Array#toReversed`; sort
       // or reverse a fresh array there (apps/desktop/tests/webview-baseline).
-      files: ["apps/desktop/src/**/*.{ts,tsx}"],
+      files: [
+        "apps/desktop/src/**/*.{ts,tsx}",
+        "packages/ui/src/calendar/day-calendar.logic.ts",
+      ],
       rules: {
         "unicorn/no-array-sort": "off",
         "unicorn/no-array-reverse": "off",
@@ -4124,6 +4146,25 @@ const config = defineConfig({
       },
     },
     {
+      // A reader's controls bar floats over the top of its text: a jump lands
+      // below it through `scrollReaderToBlock`, the rule's one owner.
+      files: [
+        "packages/decision-reader/src/**/*.{ts,tsx}",
+        "apps/web/src/components/legal-reader/**/*.{ts,tsx}",
+        "apps/web/src/features/case-law/**/*.{ts,tsx}",
+        "apps/web/src/features/statutes/**/*.{ts,tsx}",
+        "apps/web/src/routes/law/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-reader-scroll.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.{ts,tsx}",
+        "packages/decision-reader/src/reader-landing.ts",
+      ],
+      rules: {
+        "no-raw-reader-scroll/no-raw-reader-scroll": "error",
+      },
+    },
+    {
       // Desktop windows start `sm` at zero so the design system's pointer
       // sizes apply in every window; a layout that follows the window's
       // width names that width instead (apps/desktop/src/mainview/index.css).
@@ -4594,6 +4635,22 @@ const config = defineConfig({
       ],
       rules: {
         "no-hookless-use-function/no-hookless-use-function": "error",
+      },
+    },
+    {
+      // Product sources are clean; tests and scripts follow the dated
+      // changed-lines rollout in scripts/guard-rollouts.
+      files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/test-support/**",
+        "**/tests/**",
+        "**/e2e/**",
+      ],
+      rules: {
+        "no-optional-chain-null-compare/no-optional-chain-null-compare":
+          "error",
       },
     },
     {
@@ -5344,6 +5401,8 @@ const config = defineConfig({
       files: ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
       rules: {
         "require-fetch-timeout/require-fetch-timeout": "error",
+        "no-fetch-response-body-replacement/no-fetch-response-body-replacement":
+          "error",
         "require-escape-like/require-escape-like": "error",
       },
     },
@@ -6500,6 +6559,23 @@ const config = defineConfig({
       rules: {
         "no-direct-test-state/no-direct-test-state": "error",
         "no-shared-checkout-mutation/no-shared-checkout-mutation": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/**/*.{test,spec}.{ts,tsx,js,jsx}",
+        "apps/api/**/__tests__/**/*.{ts,tsx,js,jsx}",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/src/mcp/__fixtures__/external-source/replay.ts",
+        ".oxlint-plugins/__fixtures__/no-global-fetch-replacement.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/tests/helpers/test-fetch.ts",
+        // The process-wide guard that restores fetch after every test.
+        "apps/api/src/tests/fetch-global-guard.ts",
+      ],
+      rules: {
+        "no-global-fetch-replacement/no-global-fetch-replacement": "error",
       },
     },
     {

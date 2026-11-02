@@ -1,1 +1,1 @@
-{"group/search-content":{"valid":false,"declarations":[],"values":{}},"rtl:flex":{"valid":true,"declarations":[["","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}}}
+{"[&[hidden]:not([hidden=until-found])]:flex":{"valid":true,"declarations":[["","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}},"group/search-content":{"valid":false,"declarations":[],"values":{}},"rtl:flex":{"valid":true,"declarations":[["","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}}}
