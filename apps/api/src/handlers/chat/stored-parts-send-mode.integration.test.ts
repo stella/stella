@@ -43,7 +43,7 @@ import {
   wireOrgAIConfig,
   wireSideModel,
 } from "@/api/tests/helpers/provider-wire-contract";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type {
   ProviderWireReplay,
   ReplayedRequest,
@@ -299,6 +299,13 @@ let previousBedrockEndpoint: string | undefined;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 const catalogEntryIds: SafeId<"anonymizationBlacklistEntry">[] = [];
 
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({ passThroughOrigins: [fakeS3.endpoint] }),
+});
+
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
@@ -313,7 +320,6 @@ beforeAll(async () => {
   process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
     "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
   fakeS3 = startFakeS3();
-  replay = installProviderWireReplay({ passThroughOrigins: [fakeS3.endpoint] });
   // The organization's catalog names every planted value, so anonymized
   // mode recognises each one wherever it is stored.
   for (const canonical of Object.values(PLANTED)) {
@@ -329,7 +335,6 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  replay.restore();
   fakeS3.stop();
   env.USE_MOCK_AI = previousMockAI;
   if (previousBedrockEndpoint === undefined) {

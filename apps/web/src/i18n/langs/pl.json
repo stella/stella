@@ -1455,10 +1455,12 @@
           "click": "Kliknij",
           "fill": "Wprowadź tekst",
           "open": "Otwórz witrynę",
+          "openNewTab": "Otwórz witrynę w nowej karcie",
           "pressKey": "Naciśnij klawisz",
           "select": "Wybierz opcję",
           "snapshot": "Odczytaj stronę",
-          "snapshotContinue": "Czytaj stronę dalej"
+          "snapshotContinue": "Czytaj stronę dalej",
+          "switchTab": "Przełącz na kartę"
         },
         "askAgain": "Pytaj ponownie",
         "autoApproveReads": "Automatycznie zatwierdzaj odczyt stron",
@@ -1496,7 +1498,11 @@
       "connected": "Rozszerzenie połączone",
       "description": "Na Twoją prośbę stella może otwierać i czytać strony internetowe w osobnej karcie.",
       "install": "Zainstaluj rozszerzenie",
-      "installDescription": "Rozszerzenie stella pozwala na Twoją prośbę otwierać i czytać strony w osobnej karcie. Zainstaluj je z Chrome Web Store."
+      "installDescription": "Rozszerzenie stella pozwala na Twoją prośbę otwierać i czytać strony w osobnej karcie. Zainstaluj je z Chrome Web Store.",
+      "reload": "Odśwież tę kartę",
+      "reloadDescription": "Twoje rozszerzenie stella jest nowsze niż ta karta. Odśwież kartę, aby dalej z niego korzystać.",
+      "updating": "Oczekiwanie na aktualizację rozszerzenia",
+      "updatingDescription": "Twoje rozszerzenie stella jest w starszej wersji. Chrome aktualizuje je automatycznie, zwykle w ciągu kilku godzin; potem stella znów będzie mogła otwierać i czytać dla Ciebie strony."
     },
     "cancelQueuedMessage": "Anuluj wiadomość w kolejce",
     "caseLawGreeting": "Zapytaj mnie o to orzeczenie — mam dostęp do pełnej treści.",
@@ -5446,6 +5452,12 @@
         "work_obligation": "obowiązek pracy",
         "workspace_contact": "kontakt w sprawie",
         "workspace_member": "członek sprawy"
+      },
+      "billingDrafts": {
+        "description": "Twórz opisy pracy na podstawie wybranych aktywności i plików wiedzy kancelarii lub klienta. Każdy użytkownik wyraża również zgodę. Przed włączeniem projektów dołącz wytyczne kancelarii.",
+        "firm": "Wytyczne kancelarii",
+        "ledes": "Fakturowanie elektroniczne (LEDES)",
+        "title": "Projekty rozliczeń z AI"
       },
       "documentProcessing": {
         "description": "Automatycznie rozpoznawaj tekst w zeskanowanych plikach PDF, aby można było przeszukiwać ich zawartość.",

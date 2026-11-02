@@ -10,6 +10,7 @@ import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { toSafeId } from "@/api/lib/branded-types";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   authorizedMemberRole,
@@ -94,10 +95,14 @@ const exercise = async ({
   answer = async () => await Promise.resolve("Revize smlouvy o dílo."),
 }: ExerciseOptions) => {
   const calls: GenerateOptions[] = [];
-  const { scopedDb } = createScopedDbMock(
-    {},
-    {
-      featureAccess: {
+  const { scopedDb } = createScopedDbMock({});
+  const device = await createDesktopDeviceSigner();
+  const authorizeAccount = async (request: Request) =>
+    Result.ok({
+      // Built per request, after the grants below are configured.
+      featureAccessSnapshot: buildFeatureAccessSnapshot({
+        organizationId: toSafeId<"organization">(ORGANIZATION_ID),
+        userId: USER_ID,
         identity: { email: "desktop@example.test", emailVerified: true },
         enrolments:
           hidden === "time-billing"
@@ -105,16 +110,11 @@ const exercise = async ({
             : [
                 {
                   featureId: "time-billing",
-                  organizationId: toSafeId<"organization">(ORGANIZATION_ID),
+                  organizationId: ORGANIZATION_ID,
                   userId: USER_ID,
                 },
               ],
-      },
-    },
-  );
-  const device = await createDesktopDeviceSigner();
-  const authorizeAccount = async (request: Request) =>
-    Result.ok({
+      }),
       consumedProof: await claimFixtureDeviceProof({
         request: await device.signRequest({
           request,
