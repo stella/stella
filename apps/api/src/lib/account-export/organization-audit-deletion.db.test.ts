@@ -92,10 +92,6 @@ const downloadServer = serveRoutesForTest(
               scopes: [ACCOUNT_EXPORT_SCOPES.read],
               credential: { type: "oauth_client" as const, clientId: "cli" },
             }),
-          resolveOAuthUser: async (userId) => ({
-            id: userId,
-            email: `${userId}@example.test`,
-          }),
         }),
       },
     },
