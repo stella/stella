@@ -123,6 +123,9 @@ export const buildOrganizationAuditArchive = async ({
           ...auditLogArchiveColumns(readContext),
           id: auditLogs.id,
           cursorCreatedAt: sql<string>`${auditLogs.createdAt}::text`,
+          // The row's exact instant in UTC, microseconds included, for the
+          // manifest and the archive's recorded coverage.
+          createdAtInstant: sql<string>`to_char(${auditLogs.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
         })
         .from(auditLogs)
         .where(
@@ -187,7 +190,7 @@ export const buildOrganizationAuditArchive = async ({
         if (!row.matterReadable) {
           matterWithheldRowCount += 1;
         }
-        coverage.coveredThrough = row.createdAt;
+        coverage.coveredThrough = row.createdAtInstant;
       }
       const last = rows.at(-1);
       if (
@@ -216,12 +219,7 @@ export const buildOrganizationAuditArchive = async ({
           organizationId,
           auditRowCount: coverage.rowCount,
           matterWithheldRowCount,
-          coveredThrough:
-            coverage.coveredThrough === null
-              ? null
-              : Temporal.Instant.fromEpochMilliseconds(
-                  coverage.coveredThrough.getTime(),
-                ).toString(),
+          coveredThrough: coverage.coveredThrough,
         }),
       ),
     };

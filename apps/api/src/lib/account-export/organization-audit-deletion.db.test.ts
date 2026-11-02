@@ -7,7 +7,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 
@@ -368,6 +368,61 @@ describe("organization deletion requires an audit log archive", () => {
         { eventType: "account.data_export.downloaded" },
       ]),
     );
+  });
+
+  test("the archive records the newest row's exact instant, microseconds included", async () => {
+    const created = await createOrganization();
+    const archived = await exportAuditTrail(created);
+    // The column keeps microseconds, which a JavaScript Date would round away.
+    const utcInstant = (
+      column:
+        typeof auditLogs.createdAt | typeof accountExports.auditCoveredThrough,
+    ) =>
+      sql<string>`to_char(${column} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+    const [newest] = await rootDb
+      .select({ instant: utcInstant(auditLogs.createdAt) })
+      .from(auditLogs)
+      .where(eq(auditLogs.organizationId, created.organizationId))
+      .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
+      .limit(1);
+    const instant = newest?.instant ?? panic("The trail must hold a row");
+    expect(archived.coverage.coveredThrough).toBe(instant);
+    expect(archiveText(archived.archive)).toContain(
+      `"coveredThrough":"${instant}"`,
+    );
+    const [recorded] = await rootDb
+      .select({ instant: utcInstant(accountExports.auditCoveredThrough) })
+      .from(accountExports)
+      .where(eq(accountExports.id, archived.exportId));
+    expect(recorded?.instant).toBe(instant);
+  });
+
+  test("archive requests share one hourly budget across the organizations an account owns", async () => {
+    const first = await createOrganization();
+    const owned = [first];
+    while (owned.length <= ACCOUNT_EXPORT_LIMITS.requestsPerWindow) {
+      owned.push(await createOrganization(first.owner));
+    }
+    const outcomes = [];
+    // Sequential: each request must see the ones before it.
+    for (const { organizationId } of owned) {
+      const requested = await requestOrganizationAuditExport({
+        userId: first.ownerId,
+        organizationId,
+        db: rootDb,
+      });
+      outcomes.push(Result.isOk(requested) ? "requested" : requested.error);
+    }
+    expect(outcomes.slice(0, ACCOUNT_EXPORT_LIMITS.requestsPerWindow)).toEqual(
+      Array.from(
+        { length: ACCOUNT_EXPORT_LIMITS.requestsPerWindow },
+        () => "requested",
+      ),
+    );
+    expect(outcomes.at(-1)).toMatchObject({
+      status: 429,
+      code: "account_export_request_limited",
+    });
   });
 
   test("a member who is not an owner can neither start nor download the archive", async () => {

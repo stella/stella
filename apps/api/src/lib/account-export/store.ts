@@ -48,7 +48,11 @@ export type AccountExportSubject =
 /** The audit rows one organization audit archive holds. */
 export type OrganizationAuditCoverage = {
   rowCount: number;
-  coveredThrough: Date | null;
+  /**
+   * The newest archived row's creation instant as UTC ISO text with the
+   * column's microseconds, which a JavaScript Date would round away.
+   */
+  coveredThrough: string | null;
 };
 
 /** What a finished build publishes; it always matches its claim's subject. */
@@ -290,8 +294,11 @@ type InsertRequestedExportOptions = {
 };
 
 /**
- * Insert a new request under the account lock, within the hourly budget of
- * its subject, after retiring the ready export it replaces.
+ * Insert a new request under the account lock, within the account's hourly
+ * budget for the export's kind, after retiring the ready export it replaces.
+ * Organization audit archives share one budget across every organization the
+ * account owns, so owning more organizations does not multiply the work an
+ * account can queue.
  */
 const insertRequestedExport = async (
   tx: Transaction,
@@ -305,7 +312,7 @@ const insertRequestedExport = async (
     .where(
       and(
         eq(accountExports.userId, userId),
-        subjectPredicate(subject),
+        eq(accountExports.kind, subject.kind),
         sql`${accountExports.createdAt} > CURRENT_TIMESTAMP - (${ACCOUNT_EXPORT_LIMITS.requestWindowMs} * INTERVAL '1 millisecond')`,
       ),
     )
@@ -808,7 +815,10 @@ const coverageColumns = (built: AccountExportBuild) =>
   built.kind === "organization_audit"
     ? {
         auditRowCount: built.coverage.rowCount,
-        auditCoveredThrough: built.coverage.coveredThrough,
+        auditCoveredThrough:
+          built.coverage.coveredThrough === null
+            ? null
+            : sql<Date>`${built.coverage.coveredThrough}::timestamptz`,
       }
     : {};
 
