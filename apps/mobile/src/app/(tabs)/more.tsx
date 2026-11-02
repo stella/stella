@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import type { Href } from "expo-router";
+import { useHeaderHeight } from "expo-router/react-navigation";
 import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
@@ -34,6 +35,7 @@ const MoreScreen = () => {
   const t = useTranslations();
   const colors = useAppColors();
   const scan = useScan();
+  const headerHeight = useHeaderHeight();
 
   const groups: readonly (readonly MoreRow[])[] = [
     [
@@ -84,9 +86,14 @@ const MoreScreen = () => {
     >
       <ScrollView
         alwaysBounceVertical={false}
-        contentContainerStyle={screenStyles.content}
-        // The header is the platform's translucent bar; the list scrolls under it.
-        contentInsetAdjustmentBehavior="automatic"
+        // The cards start below the translucent header by its own height.
+        // Left to the system's automatic inset, a list too short to scroll
+        // kept its first offset and sat under the bar.
+        contentContainerStyle={[
+          screenStyles.content,
+          { paddingTop: headerHeight + screenStyles.content.paddingTop },
+        ]}
+        contentInsetAdjustmentBehavior="never"
       >
         {groups.map((rows) => (
           <View
