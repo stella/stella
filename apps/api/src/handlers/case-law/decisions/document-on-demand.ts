@@ -38,6 +38,8 @@
 
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
 
+import { declareFailureClass, type FailureReason } from "@stll/errors";
+
 import type {
   ImmediatePublisherSlotResult,
   PublisherPacingOutcome,
@@ -72,13 +74,29 @@ const READ_BUDGET_LABEL = "caseLaw.deferredDocumentRead";
 /** Concurrent read-through fetches allowed at a time. */
 const CONCURRENT_FETCH_LIMIT = 2;
 
+export type DocumentReadDeferral =
+  PublisherPacingOutcome | "ownership-busy" | "ownership-lost";
+
+/**
+ * Every deferral is a designed outcome: the reader gets the metadata-only
+ * decision and the queue keeps the work. None of them is a defect, so each
+ * is graded by its cause rather than by the tag's baseline.
+ */
+const DEFERRAL_REASON = {
+  "pacing-deferred": "work_capacity_unavailable",
+  "pacing-unavailable": "limiter_store_unavailable",
+  "ownership-busy": "deferred_document_owned_elsewhere",
+  "ownership-lost": "deferred_document_owned_elsewhere",
+} as const satisfies Record<DocumentReadDeferral, FailureReason>;
+
 class DocumentPacingOutcome extends TaggedError("DocumentPacingOutcome")<{
   message: string;
   outcome: DocumentReadDeferral;
-}> {}
-
-export type DocumentReadDeferral =
-  PublisherPacingOutcome | "ownership-busy" | "ownership-lost";
+}> {
+  static {
+    declareFailureClass(this, ({ outcome }) => DEFERRAL_REASON[outcome]);
+  }
+}
 
 const CAPTURE_SOURCE = "case-law-document-on-demand";
 
