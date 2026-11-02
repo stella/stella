@@ -129,6 +129,45 @@ test("billing configuration refuses missing and foreign clients while retaining 
         response: { message: "Client not found" },
       });
     }
+    // The firm binds one guideline file, as its unique index requires; a
+    // second is refused as input, never as a constraint failure.
+    expect(
+      await updateBillingDraftConfiguration.handler(
+        asTestRaw<
+          Parameters<typeof updateBillingDraftConfiguration.handler>[0]
+        >({
+          safeDb,
+          user: { id: userId },
+          session: { activeOrganizationId: organizationId },
+          memberRole: sessionMemberRole("owner"),
+          featureAccessSnapshot: buildFeatureAccessSnapshot({
+            userId,
+            organizationId,
+            identity: { email: `${userId}@example.test`, emailVerified: true },
+            enrolments: [{ userId, organizationId, featureId: "time-billing" }],
+          }),
+          body: {
+            expectedUpdatedAt: new Date(0).toISOString(),
+            resourceIds: [
+              createSafeId<"agentSkillResource">(),
+              createSafeId<"agentSkillResource">(),
+            ],
+          },
+          request: new Request(
+            "https://example.test/v1/organization-settings/billing-drafts",
+            { method: "PUT" },
+          ),
+          route:
+            "/v1/organization-settings/billing-drafts" satisfies ApiRoutePath,
+        }),
+      ),
+    ).toMatchObject({
+      code: 400,
+      response: {
+        message:
+          "A firm has one billing guideline file; billing format requires a client",
+      },
+    });
   } finally {
     await db
       .delete(contacts)

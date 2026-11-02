@@ -56,6 +56,7 @@ const project = async (sourceRaw: string | undefined) => {
   }
   return await plTkRetention.project(
     sourceRaw ?? panic("the decision stores no raw"),
+    { sourceRawObjects: {} },
   );
 };
 

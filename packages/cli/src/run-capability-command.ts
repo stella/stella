@@ -9,6 +9,7 @@ import { Result } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 
+import { scopePreflightFailure } from "./auth/command-scopes.js";
 import { chunkCapabilityIds, resolveBulkIdFlags } from "./batch/bulk.js";
 import { runCapabilityChunks } from "./batch/capability-chunks.js";
 import type { Context } from "./context.js";
@@ -26,13 +27,14 @@ import {
   renderCommandResult,
   RESERVED_FLAG_KEYS,
   reservedFlagUsageError,
-  scopePreflightFailure,
   setExit,
   setPath,
   streamOrRenderAllPages,
   writeInputSchema,
   writersFor,
 } from "./run-leaf-command.js";
+import { timingEnd } from "./timing.js";
+import { commandUnavailableMessage } from "./unavailable-command.js";
 
 type LeafFlags = Record<string, unknown>;
 
@@ -136,30 +138,33 @@ export const runCapabilityCommand = async ({
   // validation for both JSON and flags. Keeping a snapshot validator here would
   // reject lenient spellings before the canonical reader sees them.
 
-  // Client-side scope precheck (spec S3): fail before any server call.
+  // Reuse discovery's grant snapshot; decoding the token here could contradict
+  // authenticated server evidence.
   const scopeFailure = scopePreflightFailure({
     additionalScopes: spec.additionalScopes,
     scope: spec.scope,
-    token,
+    effectiveGrants: context.effectiveGrants,
+    serverUrl,
   });
   if (scopeFailure !== undefined) {
-    writers.stderr(
-      `Missing scope stella:${scopeFailure.missingScope}. Re-run '${scopeFailure.loginCommand}' to grant the complete scope set.\n`,
-    );
+    writers.stderr(`${commandUnavailableMessage(scopeFailure)}\n`);
     setExit(context, EXIT_CODES.auth);
     return;
   }
 
   const format = readOutputFormat(flags, context);
   const renderCall = (result: CallToolResult) => {
+    const started = performance.now();
     renderCommandResult({
       context,
+      command: spec.commandPath.join(" "),
       format,
       itemsKey: spec.itemsKey,
       result,
       textPath: undefined,
       writers,
     });
+    timingEnd("output", started);
   };
   const allActive = spec.paginated && flags[RESERVED_FLAG_KEYS.all] === true;
   const paginationPart = spec.paginationPart;
@@ -219,6 +224,7 @@ export const runCapabilityCommand = async ({
   if (allActive && paginationPart !== undefined) {
     await streamOrRenderAllPages({
       context,
+      command: spec.commandPath.join(" "),
       writers,
       format,
       textPath: undefined,

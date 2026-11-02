@@ -14,7 +14,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { ZipArchive } from "@stll/docx-core/zip";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import {
   arrayFiltersFromFieldConfig,
   filtersFromFieldConfig,
@@ -126,7 +126,8 @@ const configured = (fields: readonly FieldMeta[]): FieldMeta[] =>
 
 describe("deriving a manifest from the document that declares it", () => {
   test("a configuration written into the markers reads back as itself", async () => {
-    await fc.assert(
+    await assertProperty(
+      "a configuration written into the markers reads back as itself",
       fc.asyncProperty(configuration, async (fields) => {
         const document = await makeDocx(documentParagraphs);
         const { file, written } = await writeFieldFilters(
@@ -146,12 +147,13 @@ describe("deriving a manifest from the document that declares it", () => {
           ).toMatchObject(field);
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("writing the read-back configuration changes nothing", async () => {
-    await fc.assert(
+    await assertProperty(
+      "writing the read-back configuration changes nothing",
       fc.asyncProperty(configuration, async (fields) => {
         const document = await makeDocx(documentParagraphs);
         const once = await writeFieldFilters(document, rewritesFor(fields));
@@ -163,7 +165,7 @@ describe("deriving a manifest from the document that declares it", () => {
         );
         expect(await deriveManifestFromDocx(twice.file)).toEqual(first);
       }),
-      propertyConfig(),
+      {},
     );
   });
 

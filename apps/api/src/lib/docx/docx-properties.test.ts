@@ -12,7 +12,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { ZipArchive } from "@stll/docx-core/zip";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { tokenize } from "./diff-paragraphs";
 import { discoverPlaceholders } from "./discover-placeholders";
@@ -22,7 +22,8 @@ import { createIdGenerator, W_NS } from "./ooxml";
 
 describe("property: ID generation", () => {
   test("generated IDs never collide with existing", async () => {
-    fc.assert(
+    assertProperty(
+      "generated IDs never collide with existing",
       fc.property(
         fc.uniqueArray(fc.nat({ max: 10_000 }), {
           minLength: 0,
@@ -40,12 +41,13 @@ describe("property: ID generation", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("generated IDs are always unique", async () => {
-    fc.assert(
+    assertProperty(
+      "generated IDs are always unique",
       fc.property(
         fc.uniqueArray(fc.nat({ max: 10_000 }), {
           minLength: 0,
@@ -63,7 +65,7 @@ describe("property: ID generation", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
@@ -88,14 +90,15 @@ describe("property: ID generation", () => {
 
 describe("property: tokenization roundtrip", () => {
   test("tokenize(text).join('') === text for any Unicode", async () => {
-    fc.assert(
+    assertProperty(
+      "tokenize(text).join('') === text for any Unicode",
       fc.property(
         fc.string({ minLength: 1, maxLength: 80, unit: "grapheme" }),
         (text) => {
           expect(tokenize(text).join("")).toBe(text);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 });
@@ -136,7 +139,8 @@ const placeholderName = fc
 
 describe("property: placeholder roundtrip", () => {
   test("discoverPlaceholders finds all Unicode-named tags", async () => {
-    await fc.assert(
+    await assertProperty(
+      "discoverPlaceholders finds all Unicode-named tags",
       fc.asyncProperty(
         fc.uniqueArray(placeholderName, {
           minLength: 1,
@@ -163,7 +167,7 @@ describe("property: placeholder roundtrip", () => {
           expect(discovered.length).toBe(names.length);
         },
       ),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 });
