@@ -1015,7 +1015,6 @@
     "apps/web/src/routes/_protected.admin/-components/organization/deepl-key-card.tsx": 1,
     "apps/web/src/routes/_protected.admin/-components/organization/usage-plans-card.tsx": 1,
     "apps/web/src/routes/_protected.admin/-components/organization/web-search-keys-card.tsx": 1,
-    "apps/web/src/routes/_protected.admin/audit-logs.tsx": 3,
     "apps/web/src/routes/_protected.chat/-components/chat-history-page.tsx": 1,
     "apps/web/src/routes/_protected.contacts/-components/client-invoice-composer.tsx": 3,
     "apps/web/src/routes/_protected.contacts/import.tsx": 3,

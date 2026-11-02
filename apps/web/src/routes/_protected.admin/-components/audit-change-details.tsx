@@ -8,19 +8,34 @@ import {
   AccordionPanel,
   AccordionTrigger,
 } from "@stll/ui/accordion";
-import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
-import { TableCell } from "@stll/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@stll/ui/table";
+import { cn } from "@stll/ui/utils";
 
 import type { fetchAuditLogs } from "@/routes/_protected.admin/-queries/audit-logs";
 
-import { fieldLabel, isUnknownRecord } from "./audit-display-projection";
+import {
+  auditChangeRows,
+  formatAuditValue,
+  formatAuditValueInline,
+  isStructuredAuditValue,
+} from "./audit-change-details.logic";
+import type { AuditChangeRow } from "./audit-change-details.logic";
+import { fieldLabel } from "./audit-display-projection";
 
 type AuditChangeDetailsProps = Pick<
   Awaited<ReturnType<typeof fetchAuditLogs>>["items"][number],
   "changes" | "changesStatus"
 >;
 
-export const AuditChangeDetails = ({
+/** The first change on one line, with a count of the rest. */
+export const AuditChangeSummary = ({
   changes,
   changesStatus,
 }: AuditChangeDetailsProps) => {
@@ -28,52 +43,50 @@ export const AuditChangeDetails = ({
   switch (changesStatus) {
     case AUDIT_CHANGES_STATUS.unrecognizedResource:
       return (
-        <TableCell className="text-muted-foreground max-w-[200px] text-xs">
+        <span className="text-muted-foreground line-clamp-2">
           {t("common.detailsHiddenUnrecognizedResource")}
-        </TableCell>
+        </span>
       );
     case AUDIT_CHANGES_STATUS.featureUnavailable:
       return (
-        <TableCell className="text-muted-foreground max-w-[200px] text-xs">
+        <span className="text-muted-foreground line-clamp-2">
           {t("common.detailsHiddenFeatureUnavailable")}
-        </TableCell>
+        </span>
       );
     case AUDIT_CHANGES_STATUS.visible: {
+      const rows = auditChangeRows(changes);
+      const [first] = rows;
+      if (first === undefined) {
+        return <span className="text-muted-foreground">-</span>;
+      }
+      const emptyValue = t("settings.organization.auditLogsEmptyValue");
+      const inline = (value: unknown) =>
+        formatAuditValueInline(value) ?? emptyValue;
       return (
-        <TableCell className="max-w-[320px] text-xs">
-          {changes === null ? (
-            "-"
-          ) : (
-            <div className="space-y-2">
-              <DetailsGrid>
-                {Object.entries(toChangeRecord(changes)).map(
-                  ([field, change]) => {
-                    const { before, after } = beforeAndAfter(change);
-                    return (
-                      <DetailsItem key={field} label={fieldLabel(field)}>
-                        <bdi>{displayValue(before)}</bdi>
-                        <span aria-hidden="true"> → </span>
-                        <bdi>{displayValue(after)}</bdi>
-                      </DetailsItem>
-                    );
-                  },
-                )}
-              </DetailsGrid>
-              <Accordion>
-                <AccordionItem value="raw-changes">
-                  <AccordionTrigger size="compact">
-                    {t("common.details")}
-                  </AccordionTrigger>
-                  <AccordionPanel keepMounted size="compact">
-                    <pre className="font-mono text-xs whitespace-pre-wrap">
-                      <bdi>{JSON.stringify(changes, null, 2)}</bdi>
-                    </pre>
-                  </AccordionPanel>
-                </AccordionItem>
-              </Accordion>
-            </div>
-          )}
-        </TableCell>
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="min-w-0 truncate">
+            {first.field === "" ? null : (
+              <span className="text-muted-foreground">
+                <bdi>{fieldLabel(first.field)}</bdi>:{" "}
+              </span>
+            )}
+            {first.type === "diff" ? (
+              <>
+                <bdi>{inline(first.before)}</bdi> →{" "}
+                <bdi>{inline(first.after)}</bdi>
+              </>
+            ) : (
+              <bdi>{inline(first.value)}</bdi>
+            )}
+          </span>
+          {rows.length > 1 ? (
+            <span className="text-muted-foreground shrink-0">
+              {t("settings.organization.auditLogsMoreChanges", {
+                count: rows.length - 1,
+              })}
+            </span>
+          ) : null}
+        </span>
       );
     }
     default:
@@ -82,32 +95,122 @@ export const AuditChangeDetails = ({
   }
 };
 
-function beforeAndAfter(change: unknown) {
-  if (
-    !isUnknownRecord(change) ||
-    !["old", "new", "before", "after"].some((key) => Object.hasOwn(change, key))
-  ) {
-    return { before: null, after: change };
+/** Every changed field with its value before and after. */
+export const AuditChangeDetails = ({
+  changes,
+  changesStatus,
+}: AuditChangeDetailsProps) => {
+  const t = useTranslations();
+  switch (changesStatus) {
+    case AUDIT_CHANGES_STATUS.unrecognizedResource:
+      return (
+        <p className="text-muted-foreground">
+          {t("common.detailsHiddenUnrecognizedResource")}
+        </p>
+      );
+    case AUDIT_CHANGES_STATUS.featureUnavailable:
+      return (
+        <p className="text-muted-foreground">
+          {t("common.detailsHiddenFeatureUnavailable")}
+        </p>
+      );
+    case AUDIT_CHANGES_STATUS.visible: {
+      const rows = auditChangeRows(changes);
+      if (rows.length === 0) {
+        return (
+          <p className="text-muted-foreground">
+            {t("settings.organization.auditLogsNoChanges")}
+          </p>
+        );
+      }
+      return (
+        <div className="flex flex-col gap-2">
+          <Table className="table-fixed" scroll="parent">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-1/4">
+                  {t("chat.toolCall.field")}
+                </TableHead>
+                <TableHead>
+                  {t("settings.organization.auditLogsBefore")}
+                </TableHead>
+                <TableHead>
+                  {t("settings.organization.auditLogsAfter")}
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <AuditChangeDetailRow key={row.field} row={row} />
+              ))}
+            </TableBody>
+          </Table>
+          <Accordion>
+            <AccordionItem value="raw-changes">
+              <AccordionTrigger size="compact">
+                {t("common.details")}
+              </AccordionTrigger>
+              <AccordionPanel keepMounted size="compact">
+                <pre className="font-mono text-xs whitespace-pre-wrap">
+                  <bdi>{JSON.stringify(changes, null, 2)}</bdi>
+                </pre>
+              </AccordionPanel>
+            </AccordionItem>
+          </Accordion>
+        </div>
+      );
+    }
+    default:
+      changesStatus satisfies never;
+      return panic("Audit changes require a supported status");
   }
-  const before = change["before"] ?? change["old"] ?? null;
-  const after = change["after"] ?? change["new"] ?? null;
-  return { before, after };
-}
+};
 
-function toChangeRecord(changes: unknown) {
-  return isUnknownRecord(changes) ? changes : {};
-}
+// Values wrap inside their column; the shared cell keeps one line by default.
+const DETAIL_CELL_CLASS = "align-top leading-normal whitespace-normal";
 
-function displayValue(value: unknown) {
-  if (value === null || value === undefined || value === "") {
-    return "—";
+const AuditChangeDetailRow = ({ row }: { row: AuditChangeRow }) => (
+  <TableRow>
+    <TableCell className={cn(DETAIL_CELL_CLASS, "wrap-anywhere")}>
+      <bdi>{fieldLabel(row.field)}</bdi>
+    </TableCell>
+    {row.type === "diff" ? (
+      <>
+        <TableCell className={DETAIL_CELL_CLASS}>
+          <AuditValue value={row.before} />
+        </TableCell>
+        <TableCell className={DETAIL_CELL_CLASS}>
+          <AuditValue value={row.after} />
+        </TableCell>
+      </>
+    ) : (
+      <TableCell className={DETAIL_CELL_CLASS} colSpan={2}>
+        <AuditValue value={row.value} />
+      </TableCell>
+    )}
+  </TableRow>
+);
+
+const AuditValue = ({ value }: { value: unknown }) => {
+  const t = useTranslations();
+  const text = formatAuditValue(value);
+  if (text === null) {
+    return (
+      <span className="text-muted-foreground">
+        {t("settings.organization.auditLogsEmptyValue")}
+      </span>
+    );
   }
-  if (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
-    return String(value);
+  if (isStructuredAuditValue(value)) {
+    return (
+      <pre className="bg-muted/50 rounded-md p-2 font-mono wrap-anywhere whitespace-pre-wrap">
+        <bdi>{text}</bdi>
+      </pre>
+    );
   }
-  return JSON.stringify(value);
-}
+  return (
+    <span className="wrap-anywhere whitespace-pre-wrap">
+      <bdi>{text}</bdi>
+    </span>
+  );
+};

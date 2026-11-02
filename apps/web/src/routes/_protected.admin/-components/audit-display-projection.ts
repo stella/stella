@@ -229,8 +229,3 @@ export const projectAuditResourceLabel = ({
     ? unavailableLabel(kind)
     : kind.replace(/^./u, (letter) => letter.toLocaleUpperCase());
 };
-
-export const isUnknownRecord = (
-  value: unknown,
-): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);

@@ -1,19 +1,22 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, lte, not, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
   API_STORABLE_INSTANT_CHECK,
   apiDateTimeSchema,
 } from "@stll/api-contract/api-date";
-import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
+import {
+  AUDIT_CHANGES_STATUS,
+  AUDIT_PERFORMER_FILTER,
+} from "@stll/api-contract/audit-log";
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user } from "@/api/db/auth-schema";
 import { workspaceCheck } from "@/api/db/rls";
 import type { SafeDb } from "@/api/db/safe-db";
-import { auditLogs } from "@/api/db/schema";
+import { auditLogs, auditPeoplePerformerSql } from "@/api/db/schema";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -33,10 +36,17 @@ import {
   withDescription,
 } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
-import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import type {
+  FeatureAccessPrincipal,
+  FeatureAccessSnapshot,
+} from "@/api/lib/feature-access/policy";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { createCursorPage } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
 
@@ -78,6 +88,14 @@ export const readAuditLogsQuerySchema = v.object({
   ),
   userId: v.exactOptional(
     withDescription(userIdSchema, "Only entries whose actor is this user"),
+  ),
+  performer: v.exactOptional(
+    v.pipe(
+      v.picklist(Object.values(AUDIT_PERFORMER_FILTER)),
+      v.description(
+        "Only entries performed by people (members and their agents), or only by automations (background services)",
+      ),
+    ),
   ),
   from: v.exactOptional(
     v.pipe(
@@ -146,6 +164,19 @@ export const toAuditLogConditions = ({
   }
   if (filter.userId) {
     conditions.push(eq(auditLogs.userId, filter.userId));
+  }
+  switch (filter.performer) {
+    case undefined:
+      break;
+    case AUDIT_PERFORMER_FILTER.people:
+      conditions.push(auditPeoplePerformerSql(auditLogs.performerType));
+      break;
+    case AUDIT_PERFORMER_FILTER.automations:
+      conditions.push(not(auditPeoplePerformerSql(auditLogs.performerType)));
+      break;
+    default:
+      filter.performer satisfies never;
+      return panic("Unhandled audit performer filter");
   }
   if (filter.from) {
     // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
@@ -233,6 +264,150 @@ export const validateAuditLogFilter = (
   return null;
 };
 
+type AuditLogRow = typeof auditLogs.$inferSelect;
+
+/**
+ * The name a reader recognises: the member's name, or the name a background
+ * service declared, before the stored actor id.
+ */
+const auditActorName = (
+  row: Pick<AuditLogRow, "userId" | "performerType" | "performerName">,
+  members: ReadonlyMap<string, string>,
+) =>
+  (row.performerType === "service" ? row.performerName : null) ??
+  members.get(row.userId) ??
+  row.userId;
+
+type AuditLogPageRow = Pick<
+  AuditLogRow,
+  | "id"
+  | "createdAt"
+  | "userId"
+  | "performerType"
+  | "performerName"
+  | "action"
+  | "resourceType"
+  | "resourceId"
+  | "changes"
+  | "metadata"
+> & { createdAtCursor: string; hasStoredChanges: boolean };
+
+type AuditResourceNames = Awaited<ReturnType<typeof resolveAuditResourceNames>>;
+
+const toAuditResource = ({
+  row,
+  resourceKind,
+  resourceNames,
+}: {
+  row: Pick<AuditLogRow, "resourceId">;
+  resourceKind: ClassifiedAuditResourceKind;
+  resourceNames: AuditResourceNames;
+}) =>
+  resourceKind.type === "known"
+    ? {
+        kind: resourceKind.kind,
+        id: row.resourceId,
+        name: resourceNames.get(resourceKind.kind)?.get(row.resourceId) ?? null,
+        available:
+          resourceNames.get(resourceKind.kind)?.has(row.resourceId) ?? false,
+      }
+    : {
+        kind: "unknown" as const,
+        rawKind: resourceKind.raw,
+        id: row.resourceId,
+        name: null,
+        available: false as const,
+      };
+
+const toAuditLogPageItem = ({
+  row,
+  resourceKind,
+  resourceNames,
+  members,
+  featureAccessSnapshot,
+  principal,
+}: {
+  row: AuditLogPageRow;
+  resourceKind: ClassifiedAuditResourceKind;
+  resourceNames: AuditResourceNames;
+  members: ReadonlyMap<string, string>;
+  featureAccessSnapshot: FeatureAccessSnapshot | undefined;
+  principal: FeatureAccessPrincipal;
+}) => ({
+  id: row.id,
+  createdAt: row.createdAt,
+  action: row.action,
+  resourceType: row.resourceType,
+  resourceId: row.resourceId,
+  resource: toAuditResource({ row, resourceKind, resourceNames }),
+  ...(resourceKind.type === "known"
+    ? projectAuditReadChanges({
+        resourceType: resourceKind.kind,
+        changes: row.changes,
+        metadata: row.metadata,
+        featureAccessSnapshot,
+        principal,
+      })
+    : {
+        changes: null,
+        changesStatus: row.hasStoredChanges
+          ? AUDIT_CHANGES_STATUS.unrecognizedResource
+          : AUDIT_CHANGES_STATUS.visible,
+      }),
+  createdAtCursor: row.createdAtCursor,
+  userId: row.userId,
+  performerType: row.performerType,
+  actor: auditActorName(row, members),
+});
+
+// Columns the compliance read does not send to the client.
+const UNPROJECTED_AUDIT_LOG_COLUMNS = [
+  // Tenant scope, implied by the caller's active organization.
+  "organizationId",
+  // Matter scope is a filter on this read, not a per-entry field.
+  "workspaceId",
+  // Read only to pick the detail policy that shapes `changes`.
+  "metadata",
+  // Folded into `actor`, the name a reader recognises.
+  "performerName",
+  // Agent run, trigger and approval provenance belong to the matter activity
+  // feed; the compliance read reports who performed what.
+  "performerId",
+  "triggerType",
+  "triggerUserId",
+  "triggerSource",
+  "triggerSourceId",
+  "runId",
+  "groupId",
+  "approvalStatus",
+  "approvedByUserId",
+  "activityCategory",
+] as const satisfies readonly (keyof AuditLogRow)[];
+
+// `resource`, `changesStatus`, `actor` and the page cursor are derived, not
+// columns.
+type AuditLogPageItem = Omit<
+  ReturnType<typeof toAuditLogPageItem>,
+  "resource" | "changesStatus" | "actor" | "createdAtCursor"
+>;
+
+// Totality guard, bidirectional: every schema column must be projected onto
+// the response or explicitly excused above, and the projection cannot carry
+// a field that traces back to no real column.
+type MissingProjectedAuditLogColumn = UnprojectedColumns<
+  AuditLogRow,
+  AuditLogPageItem,
+  (typeof UNPROJECTED_AUDIT_LOG_COLUMNS)[number]
+>;
+type UnexpectedProjectedAuditLogColumn = UnbackedProjectionKeys<
+  AuditLogRow,
+  AuditLogPageItem,
+  (typeof UNPROJECTED_AUDIT_LOG_COLUMNS)[number]
+>;
+
+true satisfies MissingProjectedAuditLogColumn extends never ? true : never;
+true satisfies UnexpectedProjectedAuditLogColumn extends never ? true : never;
+
 // Runs the validated compliance-read query. Callers must invoke
 // `validateAuditLogFilter` first; this only builds the org-scoped conditions,
 // applies the keyset order, and pages the result. Kept transport-agnostic so
@@ -265,6 +440,8 @@ export const queryAuditLogPage = async function* ({
           id: auditLogs.id,
           createdAt: auditLogs.createdAt,
           userId: auditLogs.userId,
+          performerType: auditLogs.performerType,
+          performerName: auditLogs.performerName,
           action: auditLogs.action,
           resourceType: auditLogs.resourceType,
           resourceId: auditLogs.resourceId,
@@ -338,54 +515,16 @@ export const queryAuditLogPage = async function* ({
         resourceId: ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
       });
 
-      const rowsWithActors = [];
-      for (const { row, resourceKind } of classifiedRows) {
-        const resource =
-          resourceKind.type === "known"
-            ? {
-                kind: resourceKind.kind,
-                id: row.resourceId,
-                name:
-                  resourceNames.get(resourceKind.kind)?.get(row.resourceId) ??
-                  null,
-                available:
-                  resourceNames.get(resourceKind.kind)?.has(row.resourceId) ??
-                  false,
-              }
-            : {
-                kind: "unknown" as const,
-                rawKind: resourceKind.raw,
-                id: row.resourceId,
-                name: null,
-                available: false as const,
-              };
-        rowsWithActors.push({
-          id: row.id,
-          createdAt: row.createdAt,
-          action: row.action,
-          resourceType: row.resourceType,
-          resourceId: row.resourceId,
-          resource,
-          ...(resourceKind.type === "known"
-            ? projectAuditReadChanges({
-                resourceType: resourceKind.kind,
-                changes: row.changes,
-                metadata: row.metadata,
-                featureAccessSnapshot,
-                principal: { organizationId, userId },
-              })
-            : {
-                changes: null,
-                changesStatus: row.hasStoredChanges
-                  ? AUDIT_CHANGES_STATUS.unrecognizedResource
-                  : AUDIT_CHANGES_STATUS.visible,
-              }),
-          createdAtCursor: row.createdAtCursor,
-          userId: row.userId,
-          actor: userMap.get(row.userId) ?? row.userId,
-        });
-      }
-      return rowsWithActors;
+      return classifiedRows.map(({ row, resourceKind }) =>
+        toAuditLogPageItem({
+          row,
+          resourceKind,
+          resourceNames,
+          members: userMap,
+          featureAccessSnapshot,
+          principal: { organizationId, userId },
+        }),
+      );
     }),
   );
 
