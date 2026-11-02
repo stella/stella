@@ -144,7 +144,7 @@ export const DocxEditorTool = () => {
             <span
               className="text-xs"
               role="alert"
-              style={{ color: "var(--destructive, #dc2626)" }}
+              style={{ color: "var(--destructive)" }}
             >
               {error}
             </span>

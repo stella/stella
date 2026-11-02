@@ -5,6 +5,7 @@ export const UI_COLORS = {
   light: {
     accent: "#0000000a",
     accentForeground: "#262626",
+    authGradientEnd: "#cbe1fc",
     background: "#fff",
     border: "#0000001a",
     card: "#fff",
@@ -100,6 +101,7 @@ export const UI_COLORS = {
   dark: {
     accent: "#ffffff0a",
     accentForeground: "#f5f5f5",
+    authGradientEnd: "#1a3a5c",
     background: "#161616",
     border: "#ffffff14",
     card: "#1b1b1b",

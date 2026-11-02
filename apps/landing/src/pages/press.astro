@@ -61,6 +61,8 @@ type Swatch = {
   hex: string;
 };
 
+// The swatches published to press, kept as released rather than read from
+// @stll/brand: a press kit's values change only with a deliberate brand release.
 const swatches: Swatch[] = [
   { name: "Soft Blue", hex: "#CFE1F9", description: "Hero washes, headers, supporting accent." },
   { name: "Pale Blue", hex: "#E6F6FC", description: "Backgrounds, surfaces, light callouts." },
@@ -234,7 +236,7 @@ const gradients = [
               <div class="flex flex-col overflow-hidden rounded-2xl" style="border: 1px solid var(--border)">
                 <div
                   class="flex h-48 items-center justify-center px-8"
-                  style={tile.background === "light" ? "background: #ffffff" : "background: #0c0a09"}
+                  style={tile.background === "light" ? "background: var(--press-tile-light)" : "background: var(--press-tile-dark)"}
                 >
                   <img
                     src={tile.png}

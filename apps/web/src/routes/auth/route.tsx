@@ -30,8 +30,6 @@ function AuthLayout() {
             var(--auth-gradient-end)
           );
         }
-        :root { --auth-gradient-end: #cbe1fc; }
-        .dark { --auth-gradient-end: #1a3a5c; }
       `}</style>
       <div className="flex flex-1 flex-col px-8 lg:px-16 xl:px-24">
         <header className="flex flex-wrap items-end justify-between gap-4 pt-12">

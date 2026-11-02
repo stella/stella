@@ -22,7 +22,7 @@ const ProductShowcase = () => (
               style={{
                 background: "color-mix(in srgb, var(--card) 78%, transparent)",
                 boxShadow:
-                  "inset 0 1px 0 color-mix(in srgb, white 10%, transparent), 0 18px 40px -28px rgba(0, 0, 0, 0.28)",
+                  "inset 0 1px 0 color-mix(in srgb, var(--color-white) 10%, transparent), 0 18px 40px -28px color-mix(in srgb, var(--color-black) 28%, transparent)",
               }}
             >
               {/* Glass light catch — brighter at top edge, fades down. */}
@@ -30,7 +30,7 @@ const ProductShowcase = () => (
                 className="pointer-events-none absolute inset-0"
                 style={{
                   background:
-                    "linear-gradient(180deg, color-mix(in srgb, white 7%, transparent) 0%, transparent 38%)",
+                    "linear-gradient(180deg, color-mix(in srgb, var(--color-white) 7%, transparent) 0%, transparent 38%)",
                 }}
                 aria-hidden="true"
               />
@@ -39,15 +39,15 @@ const ProductShowcase = () => (
                 className="pointer-events-none absolute inset-0"
                 style={{
                   background:
-                    "linear-gradient(180deg, transparent 65%, color-mix(in srgb, black 14%, transparent) 100%)",
+                    "linear-gradient(180deg, transparent 65%, color-mix(in srgb, var(--color-black) 14%, transparent) 100%)",
                 }}
                 aria-hidden="true"
               />
               <Illustration />
               <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-black/4 transition-opacity duration-300 group-hover:opacity-70 dark:ring-white/6" />
               <div className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                <div className="absolute inset-x-6 top-0 h-24 rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.36),rgba(255,255,255,0))] blur-2xl dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0))]" />
-                <div className="absolute inset-0 rounded-[inherit] ring-1 ring-[color:color-mix(in_srgb,var(--auth-gradient-end)_56%,white_44%)] dark:ring-[color:color-mix(in_srgb,var(--auth-gradient-end)_52%,white_16%)]" />
+                <div className="absolute inset-x-6 top-0 h-24 rounded-full bg-[linear-gradient(180deg,color-mix(in_srgb,var(--color-white)_36%,transparent),transparent)] blur-2xl dark:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--color-white)_12%,transparent),transparent)]" />
+                <div className="absolute inset-0 rounded-[inherit] ring-1 ring-[color:color-mix(in_srgb,var(--auth-gradient-end)_56%,var(--color-white)_44%)] dark:ring-[color:color-mix(in_srgb,var(--auth-gradient-end)_52%,var(--color-white)_16%)]" />
               </div>
             </div>
 
@@ -98,7 +98,7 @@ const ProductShowcase = () => (
           .showcase-grid:hover .showcase-tile:hover [data-showcase-shell],
           .showcase-grid:hover .showcase-tile:focus-within [data-showcase-shell] {
             border-color: color-mix(in srgb, var(--auth-gradient-end) 50%, var(--border) 50%);
-            box-shadow: 0 18px 38px -30px rgba(0, 0, 0, 0.22);
+            box-shadow: 0 18px 38px -30px color-mix(in srgb, var(--color-black) 22%, transparent);
           }
         }
 
@@ -109,8 +109,8 @@ const ProductShowcase = () => (
            the blue follows the active write/erase position. The sunburst
            rays' blue moment is set per-keyframe by the WAAPI driver. */
         .review-line .scan {
-          stroke: #549CD1;
-          filter: drop-shadow(0 0 7px rgba(84, 156, 209, 0.55));
+          stroke: var(--illustration-accent);
+          filter: drop-shadow(0 0 7px color-mix(in srgb, var(--illustration-accent) 55%, transparent));
         }
       `}</style>
   </div>

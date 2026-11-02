@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import crypto from "node:crypto";
 
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { pdfFillColor, pdfStrokeColor } from "@/api/lib/files/pdf-color";
 import {
   applySignature,
   captureSigningDigest,
@@ -556,14 +557,14 @@ describe("signing with a visible stamp", () => {
       // The rule: a round-capped 1.5 pt stroke in the brand blue.
       expect(before.slice(0, 4)).toEqual([
         "q",
-        `${STAMP_BRAND_BLUE} RG`,
+        pdfStrokeColor(STAMP_BRAND_BLUE),
         "1.500 w",
         "1 J",
       ]);
       expect(operators.filter((line) => line === "S")).toHaveLength(1);
       expect(before).toContain("S");
       // The mark: both of its paths filled in the brand blue, before BT.
-      const fill = before.indexOf(`${STAMP_BRAND_BLUE} rg`);
+      const fill = before.indexOf(pdfFillColor(STAMP_BRAND_BLUE));
       expect(fill).toBeGreaterThan(before.indexOf("S"));
       expect(before.slice(fill).filter((line) => line === "f")).toHaveLength(2);
       expect(before.at(-1)).toBe("Q");
@@ -580,10 +581,10 @@ describe("signing with a visible stamp", () => {
         new Set(operators.filter((line) => / (?:rg|RG)$/u.test(line))),
       ).toEqual(
         new Set([
-          `${STAMP_BRAND_BLUE} RG`,
-          `${STAMP_BRAND_BLUE} rg`,
-          `${STAMP_NAME_COLOR} rg`,
-          `${STAMP_DETAIL_COLOR} rg`,
+          pdfStrokeColor(STAMP_BRAND_BLUE),
+          pdfFillColor(STAMP_BRAND_BLUE),
+          pdfFillColor(STAMP_NAME_COLOR),
+          pdfFillColor(STAMP_DETAIL_COLOR),
         ]),
       );
 
