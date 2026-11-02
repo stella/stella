@@ -1,4 +1,4 @@
-import { decisionReaderTextPieces } from "@stll/decision-reader/decision-text.logic";
+import { decisionReaderTextPieces } from "@stll/decision-reader/reader-text-pieces.logic";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { ReaderTextPiece } from "@stll/legal-ast/reader-text-quote";

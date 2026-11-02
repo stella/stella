@@ -31,18 +31,12 @@ import {
   courtHeadnoteOrigin,
   decisionCaption,
   decisionDisplayReference,
-  decisionTopMatter,
-  editorialSupplementBlocks,
   footnoteParts,
   resolveDecisionLinkOverlaps,
-  supplementBlockAnchorId,
-  topMatterBlocks,
   wrappedParagraphRuns,
 } from "./decision-text.logic";
 import type {
-  DecisionTopMatter,
   FootnoteParts,
-  TopMatterSource,
   WrappedParagraphRuns,
 } from "./decision-text.logic";
 import {
@@ -67,6 +61,16 @@ import type { DecisionReaderAdapters } from "./reader-adapters";
 import { useReaderAdapters, useReaderMessages } from "./reader-adapters";
 import { ReaderInsetBox } from "./reader-inset-box";
 import type { ReaderSearchMatchRange } from "./reader-search";
+import {
+  decisionTopMatter,
+  editorialSupplementBlocks,
+  supplementBlockAnchorId,
+  topMatterBlocks,
+} from "./reader-text-pieces.logic";
+import type {
+  DecisionTopMatter,
+  TopMatterSource,
+} from "./reader-text-pieces.logic";
 import type {
   CitationAnchorSource,
   CitedProvisionTarget,

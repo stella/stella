@@ -10,15 +10,13 @@ import type { ReaderAnswerSpans } from "@stll/api-contract/reader-answers";
 import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
 import { prepareDecisionProvisionCards } from "@stll/decision-reader/decision-text";
 import type { DecisionProvisionCard } from "@stll/decision-reader/decision-text";
-import {
-  decisionCaseName,
-  decisionReaderTextPieces,
-} from "@stll/decision-reader/decision-text.logic";
+import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import {
   READER_BREADCRUMB_CLEARANCE,
   scrollReaderToBlock,
 } from "@stll/decision-reader/reader-landing";
+import { decisionReaderTextPieces } from "@stll/decision-reader/reader-text-pieces.logic";
 import {
   readerSelectionMatches,
   visibleDecisionBlocks,

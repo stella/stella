@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { decisionReaderTextPieces } from "@stll/decision-reader/decision-text.logic";
+import { decisionReaderTextPieces } from "@stll/decision-reader/reader-text-pieces.logic";
 import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
