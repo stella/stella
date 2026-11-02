@@ -4,7 +4,7 @@ import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { hashKey, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
-import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
+import { useTimeBillingChromeEnabled } from "@/hooks/use-time-billing-preview";
 import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 import { availableShortcutGroups, SHORTCUT_GROUPS } from "@/lib/hotkeys";
 import type { ShortcutGroup, ShortcutId } from "@/lib/hotkeys";
@@ -53,7 +53,7 @@ export const useShortcutOverrides = (): ShortcutOverrides => {
  */
 export const useEffectiveShortcutGroups = (): ShortcutGroup[] => {
   const overrides = useShortcutOverrides();
-  const timeBilling = useTimeBillingPreviewEnabled();
+  const timeBilling = useTimeBillingChromeEnabled();
   return availableShortcutGroups(
     applyOverridesToGroups(SHORTCUT_GROUPS, overrides),
     { timeBilling },

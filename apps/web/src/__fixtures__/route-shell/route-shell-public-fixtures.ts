@@ -185,6 +185,7 @@ export const publicFixtureResponse = (
         vatId: null,
         vatPayer: false,
         invoiceLanguage: null,
+        timeBillingFormat: "categories",
         bankAccounts: [],
         billingAddress: null,
         defaultHourlyRate: null,

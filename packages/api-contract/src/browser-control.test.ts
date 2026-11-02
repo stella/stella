@@ -75,6 +75,11 @@ const COMMAND_EXAMPLES = {
     value: "option-1",
   },
   [BROWSER_CONTROL_ACTION.snapshot]: { action: "snapshot", textOffset: 48_000 },
+  [BROWSER_CONTROL_ACTION.switchTab]: {
+    action: "switch-tab",
+    tabId: 9,
+    url: "https://example.com/opened",
+  },
 } as const satisfies Record<
   BrowserControlCommand["action"],
   BrowserControlCommand
@@ -127,6 +132,35 @@ describe("browser control command contract", () => {
     expect(isReadOnlyBrowserCommand(COMMAND_EXAMPLES["go-back"])).toBe(false);
     expect(isReadOnlyBrowserCommand(COMMAND_EXAMPLES.open)).toBe(false);
     expect(isReadOnlyBrowserCommand(COMMAND_EXAMPLES.click)).toBe(false);
+    expect(isReadOnlyBrowserCommand(COMMAND_EXAMPLES["switch-tab"])).toBe(
+      false,
+    );
+  });
+
+  test("opens in a new tab only when asked with a boolean", () => {
+    const newTab = { action: "open", newTab: true, url: PAGE.url } as const;
+    expect(parseBrowserControlCommand(newTab)).toEqual(newTab);
+    expect(parseBrowserControlCommand({ ...newTab, newTab: "yes" })).toBeNull();
+  });
+
+  test("switches only to a named tab at a named address", () => {
+    expect(
+      parseBrowserControlCommand({ action: "switch-tab", tabId: 9 }),
+    ).toBeNull();
+    expect(
+      parseBrowserControlCommand({
+        action: "switch-tab",
+        tabId: -1,
+        url: PAGE.url,
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserControlCommand({
+        action: "switch-tab",
+        tabId: 9,
+        url: "",
+      }),
+    ).toBeNull();
   });
 
   test("rejects extra fields, malformed references and out-of-range offsets", () => {
@@ -206,6 +240,18 @@ describe("browser control result contract", () => {
       ],
       revision: "revision-1",
       tabId: 7,
+      tabs: [
+        {
+          active: true,
+          tabId: 7,
+          url: "https://example.com/",
+        },
+        {
+          active: false,
+          tabId: 9,
+          url: "https://example.com/opened",
+        },
+      ],
       text: "Page text",
       textOffset: 0,
       textTotalChars: 9,
@@ -228,6 +274,60 @@ describe("browser control result contract", () => {
           text: "x".repeat(BROWSER_CONTROL_LIMITS.pageTextChars + 1),
         },
       }),
+    ).toBeNull();
+  });
+
+  test("lists tabs by address only, never by title", () => {
+    expect(
+      parseBrowserControlResult({
+        ...success,
+        snapshot: {
+          ...success.snapshot,
+          tabs: [
+            {
+              active: false,
+              tabId: 9,
+              title: "Opened",
+              url: "https://example.com/opened",
+            },
+          ],
+        },
+      }),
+    ).toBeNull();
+  });
+
+  test("lists no more tabs than chat may keep", () => {
+    const tab = {
+      active: false,
+      tabId: 9,
+      url: "https://example.com/opened",
+    };
+    expect(
+      parseBrowserControlResult({
+        ...success,
+        snapshot: {
+          ...success.snapshot,
+          tabs: Array.from(
+            { length: BROWSER_CONTROL_LIMITS.tabs + 1 },
+            (_, index) => ({ ...tab, tabId: index }),
+          ),
+        },
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserControlResult({
+        ...success,
+        snapshot: {
+          ...success.snapshot,
+          tabs: [
+            { ...tab, url: "x".repeat(BROWSER_CONTROL_LIMITS.urlChars + 1) },
+          ],
+        },
+      }),
+    ).toBeNull();
+    const { tabs: _tabs, ...untabbed } = success.snapshot;
+    expect(
+      parseBrowserControlResult({ ...success, snapshot: untabbed }),
     ).toBeNull();
   });
 

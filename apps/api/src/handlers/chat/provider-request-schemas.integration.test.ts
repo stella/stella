@@ -98,7 +98,7 @@ import {
   wireOrgAIConfig,
   wireSideModel,
 } from "@/api/tests/helpers/provider-wire-contract";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type {
   ProviderWireReplay,
   ReplayedRequest,
@@ -362,6 +362,16 @@ let previousMockAI: typeof env.USE_MOCK_AI;
 let previousBedrockEndpoint: string | undefined;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({
+    passThroughOrigins: [fakeS3.endpoint],
+    profile,
+  }),
+});
+
 beforeAll(
   async () =>
     await profile.measure("fixture", async () => {
@@ -378,17 +388,12 @@ beforeAll(
       process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
         "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
       fakeS3 = startFakeS3();
-      replay = installProviderWireReplay({
-        passThroughOrigins: [fakeS3.endpoint],
-        profile,
-      });
     }),
 );
 
 afterAll(async () => {
   try {
     await profile.measure("close", async () => {
-      replay.restore();
       fakeS3.stop();
       env.USE_MOCK_AI = previousMockAI;
       if (previousBedrockEndpoint === undefined) {
