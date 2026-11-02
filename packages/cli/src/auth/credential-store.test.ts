@@ -1,7 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmod, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { unlinkSync } from "node:fs";
+import {
+  chmod,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { resolveConfigDir } from "./config-dir.js";
 import {
@@ -13,10 +23,12 @@ import {
   readCredentialFile,
   removeCredential,
   setDefaultOrg,
+  updateCredentialFile,
   upsertCredential,
   writeCredentialFile,
 } from "./credential-store.js";
 import type { AtomicWriteOps, StoredCredential } from "./credential-store.js";
+import { credentialLockPath } from "./refresh-lock.js";
 
 const buildCredential = (
   overrides: Partial<StoredCredential> = {},
@@ -320,4 +332,107 @@ describe("credential store data operations", () => {
     const afterRemoval = removeCredential(file, first.serverUrl, "org-2");
     expect(afterRemoval.defaultOrgByServer[first.serverUrl]).toBe("org-1");
   });
+});
+
+test("parallel credential mutations preserve every profile in the shared store", async () => {
+  const configDir = await mkdtemp(
+    path.join(os.tmpdir(), "stella-store-mutations-"),
+  );
+  try {
+    const orgIds = Array.from({ length: 8 }, (_, index) => `org-${index}`);
+    const results = await Promise.all(
+      orgIds.map(
+        async (orgId) =>
+          await updateCredentialFile(configDir, (file) => ({
+            status: "updated",
+            file: upsertCredential(file, buildCredential({ orgId })),
+            value: undefined,
+          })),
+      ),
+    );
+    expect(results.every((result) => result.isOk())).toBe(true);
+    const stored = await readCredentialFile(configDir);
+    expect(stored.credentials.map(({ orgId }) => orgId).toSorted()).toEqual(
+      orgIds.toSorted(),
+    );
+  } finally {
+    await rm(configDir, { recursive: true, force: true });
+  }
+});
+
+test("production credential writes remain owned by the atomic store updater", async () => {
+  const sourceDir = fileURLToPath(new URL("../", import.meta.url));
+  const bypasses: string[] = [];
+  for await (const file of new Bun.Glob("**/*.ts").scan({ cwd: sourceDir })) {
+    if (file.endsWith(".test.ts") || file === "auth/credential-store.ts") {
+      continue;
+    }
+    if (
+      /\bwriteCredentialFile\b/u.test(
+        await readFile(path.join(sourceDir, file), "utf-8"),
+      )
+    ) {
+      bypasses.push(file);
+    }
+  }
+  expect(bypasses).toEqual([]);
+});
+
+test("credential mutation failures return typed errors and release the store lock", async () => {
+  const configDir = await mkdtemp(
+    path.join(os.tmpdir(), "stella-store-failure-"),
+  );
+  try {
+    const cause = new TypeError("synthetic credential transform failure");
+    const failed = await updateCredentialFile(configDir, () => {
+      throw cause;
+    });
+    expect(failed.isErr()).toBe(true);
+    if (failed.isErr()) {
+      expect(failed.error._tag).toBe("TokenRefreshError");
+      expect(failed.error.cause).toMatchObject({ cause });
+    }
+    const recovered = await updateCredentialFile(configDir, (file) => ({
+      status: "updated",
+      file: upsertCredential(file, buildCredential()),
+      value: "persisted",
+    }));
+    expect(recovered.isOk()).toBe(true);
+    if (recovered.isOk()) {
+      expect(recovered.value).toBe("persisted");
+    }
+    expect((await readCredentialFile(configDir)).credentials).toEqual([
+      buildCredential(),
+    ]);
+  } finally {
+    await rm(configDir, { recursive: true, force: true });
+  }
+});
+
+test("a lock-release failure reports that the credential update was saved", async () => {
+  const configDir = await mkdtemp(
+    path.join(os.tmpdir(), "stella-store-release-"),
+  );
+  try {
+    const updated = await updateCredentialFile(configDir, (file) => {
+      // Removing the lock under its owner makes the release itself fail.
+      unlinkSync(credentialLockPath(configDir));
+      return {
+        status: "updated",
+        file: upsertCredential(file, buildCredential()),
+        value: "persisted",
+      };
+    });
+    expect(updated.isErr()).toBe(true);
+    if (updated.isErr()) {
+      expect(updated.error.message).toStartWith(
+        `The credential store ${credentialsFilePath(configDir)} was updated. Could not remove the credential store lock`,
+      );
+    }
+    expect((await readCredentialFile(configDir)).credentials).toEqual([
+      buildCredential(),
+    ]);
+  } finally {
+    await rm(configDir, { recursive: true, force: true });
+  }
 });

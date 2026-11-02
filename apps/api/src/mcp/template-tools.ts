@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { isActionAdmissionCode } from "@stll/api-contract/action-admission";
@@ -11,6 +11,12 @@ import type {
   TemplatePersistenceResult,
 } from "@/api/db/schema";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
+import {
+  decodeTemplateListCursor,
+  encodeTemplateListCursor,
+  templateCursorCreatedAt,
+  templateListCursorCondition,
+} from "@/api/handlers/templates/list-cursor";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
@@ -52,12 +58,7 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
-import {
-  createCursorPage,
-  decodePaginationCursor,
-  encodePaginationCursor,
-  isUuidPaginationCursorPart,
-} from "@/api/lib/pagination";
+import { createCursorPage } from "@/api/lib/pagination";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import {
@@ -175,6 +176,7 @@ import {
   internalFailureResult,
   invalidCursorResult,
   isToolErrorResult,
+  MAX_LIST_LIMIT,
   notFoundResult,
   nullAsAbsent,
   structuredEgressPlan,
@@ -743,13 +745,19 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
 const listTemplatesArgsSchema = nullAsAbsent(
   v.strictObject({
     template_id: v.optional(
-      uuidInputSchema(
-        "Template id to describe its fields in detail; omit to list templates",
+      uuidInputSchema("Template id for field details; omit to list"),
+    ),
+    limit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(LIMITS.mcpListPageSizeMin),
+        v.maxValue(MAX_LIST_LIMIT),
+        v.description("Page size (list mode)"),
       ),
     ),
     cursor: cursorInput({
-      description:
-        "Opaque cursor from a previous list_templates call to fetch the next page",
+      description: "Next-page cursor from list_templates",
     }),
   }),
 );
@@ -763,16 +771,14 @@ const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: false,
   },
   description:
-    "List the document templates in this organization (NDAs, powers of " +
-    "attorney, leases), or describe one template's fillable fields. Omit " +
-    "template_id to list templates: each template's id, name, field count, " +
-    "tags, and usage guidance (whenToUse / whenNotToUse); use a template " +
-    "whose whenToUse matches the request and skip any whose whenNotToUse " +
-    "applies. Pass template_id to return that template's full field " +
-    "configuration, its named conditions and formula fields. The " +
-    "configuration is in the shape configure_template_fields accepts " +
-    `(see ${TEMPLATE_FIELD_REFERENCE_URI}), and the response carries that ` +
-    "call to make next. " +
+    "List the organization's document templates (NDAs, powers of attorney, " +
+    "leases), or pass template_id for one template's full field " +
+    "configuration, named conditions and formula fields. Listing returns " +
+    "each template's id, name, field count, tags and usage guidance: use one " +
+    "whose whenToUse matches the request; skip any whose whenNotToUse " +
+    "applies. The configuration is in the shape configure_template_fields " +
+    `accepts (see ${TEMPLATE_FIELD_REFERENCE_URI}), and the response carries ` +
+    "that call to make next. " +
     "`arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
   inputSchema: listTemplatesArgsSchema,
   access: "read",
@@ -946,17 +952,6 @@ const TEMPLATE_TOOL_DEFINITIONS = [
   PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION,
 ] as const satisfies readonly McpToolDefinition[];
 
-// The list_templates cursor is the boundary template id alone; the query
-// resolves its (createdAt, id) in-DB.
-const decodeTemplatePageCursor = (cursor: string): string | null => {
-  const parts = decodePaginationCursor(cursor);
-  if (!parts || parts.length !== 1) {
-    return null;
-  }
-  const [rawId] = parts;
-  return isUuidPaginationCursorPart(rawId) ? rawId : null;
-};
-
 const handleListTemplatesTool: TypedMcpToolHandler<
   v.InferInput<typeof LIST_TEMPLATES_PROJECTION>
 > = async ({ args, context }) => {
@@ -974,40 +969,46 @@ const handleListTemplatesTool: TypedMcpToolHandler<
   const { cursor: requestedCursor, template_id: templateId } = routed.output;
 
   // Detail mode: template_id returns one template's field configuration. The
-  // list-only cursor does not apply, so reject the mixed request up front.
+  // Paging applies only to list mode; reject mixed requests before reading detail.
   if (templateId !== undefined) {
-    if (requestedCursor !== undefined) {
+    const pagingFields = [
+      ...(requestedCursor === undefined ? [] : ["cursor"]),
+      ...(routed.output.limit === undefined ? [] : ["limit"]),
+    ];
+    if (pagingFields.length > 0) {
       return structuredErrorResult({
         code: "validation_error",
         message:
-          "cursor applies when listing templates; omit template_id to list",
-        issues: [
-          {
-            path: "cursor",
-            message:
-              "cursor applies when listing templates; omit template_id to list",
-          },
-        ],
-        hint: "Omit 'template_id' to list templates with 'cursor', or omit 'cursor' when requesting a single template_id.",
+          "Paging applies when listing templates; omit template_id to list",
+        issues: pagingFields.map((path) => ({
+          path,
+          message: `${path} applies when listing templates; omit template_id to list`,
+        })),
+        hint: "Omit 'template_id' to list templates with paging, or omit 'cursor' and 'limit' when requesting a single template_id.",
       });
     }
     return await describeTemplateDetail({ templateId, context });
   }
 
-  let boundaryId: string | undefined;
+  let boundary:
+    NonNullable<ReturnType<typeof decodeTemplateListCursor>> | undefined;
   if (requestedCursor !== undefined) {
-    const decoded = decodeTemplatePageCursor(requestedCursor);
+    const decoded = decodeTemplateListCursor(requestedCursor);
     if (decoded === null) {
-      return invalidCursorResult({ cursor: requestedCursor });
+      return invalidCursorResult({
+        cursor: requestedCursor,
+        tool: "list_templates",
+      });
     }
-    boundaryId = decoded;
+    boundary = decoded;
   }
 
-  const limit = LIMITS.templatesCount;
+  const limit = routed.output.limit ?? LIMITS.templatesCount;
   const rows = await context.scopedDb((tx) =>
     tx
       .select({
         id: templates.id,
+        cursorCreatedAt: templateCursorCreatedAt,
         name: templates.name,
         fieldCount: templates.fieldCount,
         tags: templates.tags,
@@ -1018,14 +1019,9 @@ const handleListTemplatesTool: TypedMcpToolHandler<
       .where(
         and(
           eq(templates.organizationId, context.organizationId),
-          // Resolve the full-precision (createdAt, id) boundary in-DB by id
-          // so the cursor never round-trips createdAt through a millisecond
-          // JS Date. The boundary lookup is org-scoped (defense in depth
-          // beyond RLS) so a cursor carrying a foreign template id cannot
-          // shift this org's page boundary.
-          boundaryId === undefined
+          boundary === undefined
             ? undefined
-            : sql`(${templates.createdAt}, ${templates.id}) < (select b.created_at, b.id from templates b where b.id = ${boundaryId} and b.organization_id = ${context.organizationId})`,
+            : templateListCursorCondition(boundary),
         ),
       )
       .orderBy(desc(templates.createdAt), desc(templates.id))
@@ -1035,14 +1031,14 @@ const handleListTemplatesTool: TypedMcpToolHandler<
   const page = createCursorPage({
     rows,
     limit,
-    cursorForItem: (item) => encodePaginationCursor([item.id]),
+    cursorForItem: encodeTemplateListCursor,
   });
 
   // Templates are organization-scoped, so the org id is the anonymization
   // scope. Only the org-authored free text (name, usage guidance, tags) is
   // redacted; ids and field counts pass through.
   const payload = projectionPayload(LIST_TEMPLATES_LIST_PROJECTION, {
-    templates: page.items,
+    templates: page.items.map(({ cursorCreatedAt, ...item }) => item),
     nextCursor: page.nextCursor,
   });
   const textFields = runTextFieldSpecs(

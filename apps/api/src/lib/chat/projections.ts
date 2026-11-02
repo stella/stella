@@ -2564,7 +2564,7 @@ export const LIST_TEMPLATES_LIST_PROJECTION = v.strictObject({
       whenNotToUse: v.nullable(v.string()),
     }),
   ),
-  // Opaque `[templateId]` cursor, base64url-encoded.
+  // Opaque full-precision creation time and template id, base64url-encoded.
   nextCursor: v.nullable(passthroughId()),
 });
 

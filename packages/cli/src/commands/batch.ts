@@ -12,6 +12,10 @@ import { Temporal } from "temporal-polyfill/full";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 
+import {
+  type EffectiveGrants,
+  scopePreflightFailure,
+} from "../auth/command-scopes.js";
 import { createCapabilityBulkHook } from "../batch/bulk.js";
 import {
   type BatchCommand,
@@ -28,11 +32,9 @@ import { type BatchToolCall, withBatchToolClient } from "../mcp-client.js";
 import { EXIT_CODES } from "../mcp-constants.js";
 import { buildCommonFlags, type CommonFlagValues } from "../output-flags.js";
 import type { CapabilityLeafSpec, RouteNode } from "../route-types.js";
-import {
-  scopePreflightFailure,
-  specHasConfirmGate,
-} from "../run-leaf-command.js";
+import { specHasConfirmGate } from "../run-leaf-command.js";
 import { sha256Hex } from "../sha256.js";
+import { commandUnavailableMessage } from "../unavailable-command.js";
 
 type BatchFlags = CommonFlagValues & {
   concurrency: string | undefined;
@@ -158,11 +160,19 @@ export const batchToolResponse = (
   };
 };
 
+/** The invocation's authorization, shared with the single-command executors. */
+type BatchAuthorization = {
+  token: string | undefined;
+  /** Authenticated server grants take precedence over token claims. */
+  effectiveGrants: EffectiveGrants;
+  serverUrl: string | undefined;
+};
+
 type ResolveBatchCommandOptions = {
   tree: RouteNode;
   command: string;
   call: BatchToolCall;
-  token: string | undefined;
+  authorization: BatchAuthorization;
   yes: boolean;
 };
 
@@ -171,17 +181,17 @@ const capabilityCall = async ({
   input,
   items,
   call,
-  token,
+  authorization,
   yes,
 }: {
   spec: CapabilityLeafSpec;
   input: Record<string, unknown>;
   items: readonly BatchItem[];
   call: BatchToolCall;
-  token: string | undefined;
+  authorization: BatchAuthorization;
   yes: boolean;
 }): Promise<BatchResponse> => {
-  const refusal = checkExecution({ spec, token, yes });
+  const refusal = checkExecution({ spec, authorization, yes });
   if (refusal !== undefined) {
     return refusal;
   }
@@ -213,7 +223,7 @@ const capabilityCall = async ({
 
 const checkExecution = ({
   spec,
-  token,
+  authorization,
   yes,
 }: {
   spec: {
@@ -222,10 +232,10 @@ const checkExecution = ({
     destructive: boolean;
     confirmation?: "required";
   };
-  token: string | undefined;
+  authorization: BatchAuthorization;
   yes: boolean;
 }): BatchResponse | undefined => {
-  if (token === undefined) {
+  if (authorization.token === undefined) {
     return {
       status: "error",
       error: {
@@ -235,16 +245,17 @@ const checkExecution = ({
     };
   }
   const scope = scopePreflightFailure({
-    token,
     scope: spec.scope,
     additionalScopes: spec.additionalScopes,
+    effectiveGrants: authorization.effectiveGrants,
+    serverUrl: authorization.serverUrl,
   });
   if (scope !== undefined) {
     return {
       status: "error",
       error: {
         code: "missing_scope",
-        message: `Run '${scope.loginCommand}' to grant stella:${scope.missingScope}`,
+        message: commandUnavailableMessage(scope),
       },
     };
   }
@@ -264,7 +275,7 @@ export const resolveBatchCommand = ({
   tree,
   command,
   call,
-  token,
+  authorization,
   yes,
 }: ResolveBatchCommandOptions): BatchCommand | undefined => {
   let node = tree;
@@ -287,7 +298,14 @@ export const resolveBatchCommand = ({
         spec,
         tree,
         invoke: async (target, input, items) =>
-          capabilityCall({ spec: target, input, items, call, token, yes }),
+          capabilityCall({
+            spec: target,
+            input,
+            items,
+            call,
+            authorization,
+            yes,
+          }),
       });
       return {
         access: spec.access,
@@ -298,7 +316,7 @@ export const resolveBatchCommand = ({
             input: item.input,
             items: [item],
             call,
-            token,
+            authorization,
             yes,
           }),
         ...(bulk === undefined ? {} : { bulk }),
@@ -322,7 +340,7 @@ export const resolveBatchCommand = ({
         access,
         inputSchema: schema,
         execute: async (item) => {
-          const refusal = checkExecution({ spec, token, yes });
+          const refusal = checkExecution({ spec, authorization, yes });
           if (refusal !== undefined) {
             return refusal;
           }
@@ -454,7 +472,11 @@ export const buildBatchCommand = (tree: RouteNode): Command<Context> =>
               tree,
               command,
               call,
-              token: this.token,
+              authorization: {
+                token: this.token,
+                effectiveGrants: this.effectiveGrants,
+                serverUrl: this.serverUrl,
+              },
               yes: flags.yes === true,
             }),
           now: () => Temporal.Now.instant().epochMilliseconds,

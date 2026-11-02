@@ -1,10 +1,4 @@
 import { panic, Result } from "better-result";
-// The generic executor every generated leaf command dispatches through (spec 051
-// S3/S4). It builds the tool-args object from parsed flags (or the `--input`
-// escape hatch), runs the client-side scope precheck, confirms destructive ops,
-// calls the MCP endpoint (following cursors under `--all`, bounded by the
-// ceilings), and renders the result. Exit codes are set on `process.exitCode`
-// directly so stricli's `??=` never overrides them.
 import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { text as readStreamText } from "node:stream/consumers";
@@ -19,14 +13,12 @@ import {
   actionAdmissionRefusalOutput,
   readCliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
-import { decodeAccessTokenClaims } from "./auth/jwt.js";
-import { RESOURCE_SCOPE_PREFIX } from "./auth/scopes.js";
+import { scopePreflightFailure } from "./auth/command-scopes.js";
 import { parseIds } from "./batch/ids.js";
 import type { Context } from "./context.js";
 import { expandSchemaDefs } from "./expand-schema-defs.js";
 import { flagKey } from "./flag-name.js";
 import { kebabCase } from "./generate-route-map.js";
-import { MCP_SCOPE_IMPLICATIONS } from "./generated/mcp-contract.js";
 import { normalizeInputKeyCasing } from "./input-key-casing.js";
 import {
   LOCAL_FILE_FLAG,
@@ -68,6 +60,14 @@ import type {
   FlagSpec,
   LeafCommandSpec,
 } from "./route-types.js";
+import { timingDuration, timingEnd } from "./timing.js";
+// The generic executor every generated leaf command dispatches through (spec 051
+// S3/S4). It builds the tool-args object from parsed flags (or the `--input`
+// escape hatch), runs the client-side scope precheck, confirms destructive ops,
+// calls the MCP endpoint (following cursors under `--all`, bounded by the
+// ceilings), and renders the result. Exit codes are set on `process.exitCode`
+// directly so stricli's `??=` never overrides them.
+import { commandUnavailableMessage } from "./unavailable-command.js";
 
 export { flagKey } from "./flag-name.js";
 export { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
@@ -423,81 +423,6 @@ export const parseInputObject = async ({
   // would reject lenient agent spellings before that canonical reader sees
   // them.
   return parsed.value;
-};
-
-export const scopeGranted = ({
-  token,
-  scope,
-}: {
-  token: string;
-  scope: string;
-}): boolean => {
-  const claims = decodeAccessTokenClaims(token);
-  if (claims?.scope === undefined) {
-    // Opaque token or no scope claim: cannot verify locally, let the server rule.
-    return true;
-  }
-  return claims.scope.split(/\s+/u).includes(`stella:${scope}`);
-};
-
-export const scopePreflightFailure = ({
-  additionalScopes,
-  scope,
-  token,
-}: {
-  additionalScopes?: readonly string[] | undefined;
-  scope?: string | undefined;
-  token: string;
-}): { loginCommand: string; missingScope: string } | undefined => {
-  const claims = decodeAccessTokenClaims(token);
-  if (claims?.scope === undefined) {
-    // Opaque token or no scope claim: cannot verify locally, let the server rule.
-    return undefined;
-  }
-
-  const requiredScopes: string[] = [];
-  if (scope !== undefined) {
-    requiredScopes.push(scope);
-  }
-  if (additionalScopes !== undefined) {
-    requiredScopes.push(...additionalScopes);
-  }
-
-  const grantedScopes = claims.scope
-    .split(/\s+/u)
-    .filter((grantedScope) => grantedScope.length > 0);
-  const grantedScopeSet = new Set(grantedScopes);
-  const missingScope = requiredScopes.find(
-    (requiredScope) =>
-      !grantedScopeSet.has(`${RESOURCE_SCOPE_PREFIX}${requiredScope}`) &&
-      !MCP_SCOPE_IMPLICATIONS.some(
-        ({ grant, scope: impliedScope }) =>
-          impliedScope === `${RESOURCE_SCOPE_PREFIX}${requiredScope}` &&
-          grantedScopeSet.has(grant),
-      ),
-  );
-  if (missingScope === undefined) {
-    return undefined;
-  }
-
-  // `--scopes` takes resource scopes only (the CLI always requests the
-  // identity set itself), so the hint must not echo granted identity scopes
-  // back: a command that `parseScopesFlag` rejects is a hint that loses the
-  // user their refresh token.
-  const requestedScopes = [
-    ...new Set([
-      ...grantedScopes.filter((grantedScope) =>
-        grantedScope.startsWith(RESOURCE_SCOPE_PREFIX),
-      ),
-      ...requiredScopes.map(
-        (requiredScope) => `${RESOURCE_SCOPE_PREFIX}${requiredScope}`,
-      ),
-    ]),
-  ];
-  return {
-    loginCommand: `stella auth login --scopes ${requestedScopes.join(",")}`,
-    missingScope,
-  };
 };
 
 export const confirmDestructive = async ({
@@ -1019,6 +944,7 @@ const followAll = async ({
  */
 export const streamOrRenderAllPages = async ({
   context,
+  command,
   writers,
   format,
   textPath,
@@ -1029,8 +955,12 @@ export const streamOrRenderAllPages = async ({
   toolName,
   cursorInto,
   requestTimeoutMs,
+  now = () => performance.now(),
+  reportOutputDuration = (durationMs) => timingDuration("output", durationMs),
 }: {
   context: Context;
+  /** The command as the caller typed it, without the `stella` prefix. */
+  command: string;
   writers: Writers;
   format: OutputFormat;
   /** Set exactly for a windowed-text leaf; see `LeafCommandSpec.textPath`. */
@@ -1045,71 +975,91 @@ export const streamOrRenderAllPages = async ({
     cursor: string,
   ) => Record<string, unknown>;
   requestTimeoutMs?: number;
+  now?: () => number;
+  reportOutputDuration?: (durationMs: number) => void;
 }): Promise<void> => {
-  const streaming = format === "jsonl" && textPath === undefined;
-  const outcome = await followAll({
-    textPath,
-    itemsKey,
-    baseArgs,
-    serverUrl,
-    token,
-    toolName,
-    cursorInto,
-    ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
-    ...(streaming
-      ? {
-          stream: (item: unknown) => {
-            writers.stdout(jsonlLine(item));
-          },
+  let outputDurationMs = 0;
+  const measureOutput = (render: () => void): void => {
+    const started = now();
+    render();
+    outputDurationMs += now() - started;
+  };
+  try {
+    const streaming = format === "jsonl" && textPath === undefined;
+    const outcome = await followAll({
+      textPath,
+      itemsKey,
+      baseArgs,
+      serverUrl,
+      token,
+      toolName,
+      cursorInto,
+      ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
+      ...(streaming
+        ? {
+            stream: (item: unknown) => {
+              measureOutput(() => writers.stdout(jsonlLine(item)));
+            },
+          }
+        : {}),
+    });
+    if (Result.isError(outcome)) {
+      const failure = outcome.error;
+      switch (failure.type) {
+        case "client":
+          measureOutput(() =>
+            renderClientError({
+              context,
+              error: failure.error,
+              writers,
+              format,
+            }),
+          );
+          return;
+        case "tool":
+          measureOutput(() =>
+            renderToolError({
+              context,
+              command,
+              result: failure.result,
+              writers,
+              format,
+            }),
+          );
+          return;
+        default: {
+          failure satisfies never;
+          panic("Unknown pagination failure");
         }
-      : {}),
-  });
-  if (Result.isError(outcome)) {
-    switch (outcome.error.type) {
-      case "client":
-        renderClientError({
-          context,
-          error: outcome.error.error,
-          writers,
-          format,
-        });
-        return;
-      case "tool":
-        renderToolError({
-          context,
-          result: outcome.error.result,
-          writers,
-          format,
-        });
-        return;
-      default: {
-        outcome.error satisfies never;
-        panic("Unknown pagination failure");
       }
     }
-  }
-  if (!streaming) {
-    const plan = buildRenderPlan({
-      payload: outcome.value.payload,
-      itemsKey,
-      textPath: outcome.value.textPath,
-      singleReadActive: false,
-      columns: undefined,
+    measureOutput(() => {
+      if (!streaming) {
+        const plan = buildRenderPlan({
+          payload: outcome.value.payload,
+          itemsKey,
+          textPath: outcome.value.textPath,
+          singleReadActive: false,
+          columns: undefined,
+        });
+        renderResult({
+          plan,
+          format,
+          writers,
+          allActive: true,
+          width: terminalWidth(context),
+        });
+        setPlanExit(context, plan);
+      }
+      const { count, resumeCursor } = outcome.value;
+      if (resumeCursor !== null) {
+        writers.stderr(
+          `--all truncated at ${count} items/pages; resume with --cursor ${resumeCursor}\n`,
+        );
+      }
     });
-    renderResult({
-      plan,
-      format,
-      writers,
-      allActive: true,
-      width: terminalWidth(context),
-    });
-    setPlanExit(context, plan);
-  }
-  const { count, resumeCursor } = outcome.value;
-  if (resumeCursor !== null) {
-    writers.stderr(
-      `--all truncated at ${count} items/pages; resume with --cursor ${resumeCursor}\n`,
-    );
+  } finally {
+    reportOutputDuration(outputDurationMs);
   }
 };
 
@@ -1143,12 +1093,17 @@ export const toolErrorLines = (
     hint: string | undefined;
     issues: readonly { path: string; message: string }[];
   },
-  flagPaths?: ReadonlySet<string>,
+  {
+    command,
+    flagPaths,
+  }: {
+    /** The command the caller ran; the server's text names only its tool. */
+    command: string;
+    flagPaths?: ReadonlySet<string> | undefined;
+  },
 ): string[] => {
   if (envelope.code === "unknown_tool") {
-    return [
-      "this CLI is too old for this server; run npm i -g @stll/cli@latest",
-    ];
+    return [commandUnavailableMessage({ type: "unknown-to-server", command })];
   }
   const admission = readCliActionAdmissionRefusal(envelope);
   if (admission !== undefined) {
@@ -1187,12 +1142,15 @@ export const toolErrorLines = (
  */
 export const renderToolError = ({
   context,
+  command,
   result,
   writers,
   flagPaths,
   format,
 }: {
   context: Context;
+  /** The command as the caller typed it, without the `stella` prefix. */
+  command: string;
   format?: OutputFormat | undefined;
   result: CallToolResult;
   writers: Writers;
@@ -1215,7 +1173,7 @@ export const renderToolError = ({
     return;
   }
   if (envelope !== null) {
-    for (const line of toolErrorLines(envelope, flagPaths)) {
+    for (const line of toolErrorLines(envelope, { command, flagPaths })) {
       writers.stderr(`${line}\n`);
     }
     if (envelope.requestId !== undefined) {
@@ -1231,6 +1189,8 @@ export const renderToolError = ({
 
 type RenderCommandResultOptions = {
   context: Context;
+  /** The command as the caller typed it, without the `stella` prefix. */
+  command: string;
   format: OutputFormat;
   itemsKey: string | undefined;
   /** See `LeafCommandSpec.composite`. */
@@ -1245,6 +1205,7 @@ type RenderCommandResultOptions = {
 
 export const renderCommandResult = ({
   context,
+  command,
   format,
   itemsKey,
   composite,
@@ -1254,7 +1215,7 @@ export const renderCommandResult = ({
   flagPaths,
 }: RenderCommandResultOptions): void => {
   if (result.isError) {
-    renderToolError({ context, result, writers, flagPaths, format });
+    renderToolError({ context, command, result, writers, flagPaths, format });
     return;
   }
   const payload = parsePayload(result);
@@ -1398,17 +1359,16 @@ export const runLeafCommand = async ({
   // validation for both JSON and flags. Keeping a second client validator here
   // would reject lenient spellings before the canonical reader sees them.
 
-  // Client-side scope precheck (spec S3): fail before any server call. Opaque
-  // tokens still defer to the server, which enforces the same full set.
+  // Reuse discovery's grant snapshot; decoding the token here could contradict
+  // authenticated server evidence.
   const scopeFailure = scopePreflightFailure({
     additionalScopes: spec.additionalScopes,
     scope: spec.scope,
-    token,
+    effectiveGrants: context.effectiveGrants,
+    serverUrl,
   });
   if (scopeFailure !== undefined) {
-    writers.stderr(
-      `Missing scope stella:${scopeFailure.missingScope}. Re-run '${scopeFailure.loginCommand}' to grant the complete scope set.\n`,
-    );
+    writers.stderr(`${commandUnavailableMessage(scopeFailure)}\n`);
     setExit(context, EXIT_CODES.auth);
     return;
   }
@@ -1437,8 +1397,10 @@ export const runLeafCommand = async ({
       ? "table"
       : readOutputFormat(flags, context);
   const renderCall = (result: CallToolResult) => {
+    const started = performance.now();
     renderCommandResult({
       context,
+      command: spec.commandPath.join(" "),
       format,
       itemsKey: spec.itemsKey,
       composite: spec.composite,
@@ -1447,6 +1409,7 @@ export const runLeafCommand = async ({
       writers,
       flagPaths: leafFlagPaths(spec),
     });
+    timingEnd("output", started);
   };
   const allActive = spec.paginated && flags[RESERVED_FLAG_KEYS.all] === true;
 
@@ -1470,6 +1433,7 @@ export const runLeafCommand = async ({
   if (allActive) {
     await streamOrRenderAllPages({
       context,
+      command: spec.commandPath.join(" "),
       writers,
       format,
       textPath: spec.textPath,

@@ -5,6 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { resolveEffectiveGrants } from "./auth/command-scopes.js";
 import { buildApp } from "./build-cli-tree.js";
 import {
   loadBakedCapabilityCatalog,
@@ -102,6 +103,7 @@ const invokeHelp = async (commandTree: RouteNode, argv: string[]) => {
       configDir: "",
       serverUrl: undefined,
       token: undefined,
+      effectiveGrants: resolveEffectiveGrants({}),
     }),
     process: {
       stdout: {
@@ -228,6 +230,7 @@ for (const featureAccess of [undefined, hidden]) {
           configDir: "",
           serverUrl: undefined,
           token: undefined,
+          effectiveGrants: resolveEffectiveGrants({}),
         }),
         process: { stdout: process.stdout, stderr: process.stderr },
       });
@@ -488,5 +491,57 @@ test("the real legal-list catalogue projects every granted command", () => {
         features.includes(entry.featureId ?? ""),
       );
     }
+  }
+});
+
+test("vendor annotations preserve authenticated feature projection while unsupported constraints fall back closed", async () => {
+  const env = await cacheEnv();
+  for (const keyword of ["x-ai-input", "unsupportedConstraint"]) {
+    const response = {
+      result: {
+        tools: listings.map((listing, index) => ({
+          ...listing,
+          inputSchema:
+            index === 0
+              ? { ...listing.inputSchema, [keyword]: { kind: "annotation" } }
+              : listing.inputSchema,
+        })),
+        _meta: { featureAccess: enabled },
+      },
+    };
+    const outcome = await refreshRegistryCache({
+      serverOrigin: ORIGIN,
+      token: "caller-a",
+      env,
+      force: true,
+      fetchRaw: async () =>
+        Result.ok({
+          rawBody: JSON.stringify(response),
+          featureOmittedTools: [],
+          featureOmittedCapabilities: [],
+        }),
+      bakedListings: listings,
+    });
+    expect(outcome.status).toBe(
+      keyword === "x-ai-input" ? "refreshed" : "failed",
+    );
+    const current = await resolveCommandTree({
+      serverOrigin: ORIGIN,
+      env,
+      bakedTree: tree,
+      loadCatalog: async () => entries,
+      annotations,
+      ...(outcome.status === "refreshed"
+        ? {
+            registry: outcome.registry,
+            featureAccess: outcome.featureAccess,
+          }
+        : {}),
+    });
+    expect(leafIds(current.tree).includes(CAPABILITY)).toBe(
+      keyword === "x-ai-input",
+    );
+    expect(leafIds(current.tree).includes(TOOL)).toBe(keyword === "x-ai-input");
+    expect(leafIds(current.tree)).toContain("list_matters");
   }
 });
