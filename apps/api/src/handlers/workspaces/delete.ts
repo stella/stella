@@ -10,7 +10,7 @@ import {
   WorkspaceBillingHistoryError,
   WorkspaceStorageTeardownBoundError,
 } from "@/api/lib/organization-storage-teardown";
-import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
+import { executeAuthorizedWorkspaceDeletionWithRoot } from "@/api/lib/workspace-deletion";
 
 const config = {
   contract: "patch",
@@ -37,7 +37,7 @@ export type DeleteWorkspaceHandlerProps = {
 export const deleteWorkspaceHandler = async function* (
   props: DeleteWorkspaceHandlerProps,
 ) {
-  const outcome = await executeAuthorizedWorkspaceDeletion(props);
+  const outcome = await executeAuthorizedWorkspaceDeletionWithRoot(props);
   if (Result.isError(outcome)) {
     if (outcome.error instanceof WorkspaceBillingHistoryError) {
       return Result.err(
