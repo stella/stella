@@ -443,6 +443,30 @@ describe("writing a field value", () => {
     ]);
   });
 
+  test("refuses a null clear that names a type the property does not have", async () => {
+    await writeOverRest(restPropertyId, "Acme");
+    const refusal = await Result.gen(() =>
+      writeFieldValue({
+        safeDb: safeDb(),
+        authority: editor,
+        workspaceId,
+        userId: userId(),
+        recordAuditEvent: recorder(),
+        entityId,
+        propertyId: restPropertyId,
+        content: null,
+        expectedType: "int",
+        flushSearchRepairs: false,
+      }),
+    );
+    expect(Result.isError(refusal) && refusal.error).toMatchObject({
+      status: 400,
+    });
+    expect((await cellState(restPropertyId)).field).toEqual({
+      content: textContent("Acme"),
+    });
+  });
+
   test("stores 0 in an empty int cell over REST, then clears it with null content", async () => {
     const zero = { version: 1, type: "int", value: 0, currency: null } as const;
     await writeContentOverRest(intPropertyId, zero);

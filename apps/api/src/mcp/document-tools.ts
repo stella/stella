@@ -2447,6 +2447,8 @@ const handleSetFieldValueTool: TypedMcpToolHandler<
       entityId,
       propertyId: brandPersistedPropertyId(parsed.output.property_id),
       content: toFieldContent(parsed.output.content),
+      // A null int clear still names its type, so it must match the property.
+      expectedType: parsed.output.content.type,
     }),
   );
   if (Result.isError(result)) {
