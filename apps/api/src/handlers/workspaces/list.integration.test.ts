@@ -24,6 +24,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { workspaceCreationCapacity } from "@/api/lib/workspaces/creation-capacity";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -175,13 +176,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await testDb
-    .delete(organization)
-    .where(eq(organization.id, statusFilterIds.organization));
+  await deleteOrganizationsForTest(testDb, [
+    statusFilterIds.organization,
+    capacityIds.organization,
+  ]);
   await testDb.delete(user).where(eq(user.id, statusFilterIds.user));
-  await testDb
-    .delete(organization)
-    .where(eq(organization.id, capacityIds.organization));
   await testDb.delete(user).where(eq(user.id, capacityIds.user));
   await releaseRlsFixture();
 });
