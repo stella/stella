@@ -138,7 +138,7 @@ export const parseRuleItems = (source: string): RuleItem[] => {
     const togglesFence =
       fence !== undefined &&
       (openFence === undefined ||
-        (fence[0] === openFence[0] &&
+        (fence.startsWith(openFence.slice(0, 1)) &&
           fence.length >= openFence.length &&
           line.trim() === fence));
     if (togglesFence) {
