@@ -201,12 +201,12 @@
   "avt": {
     "anchorFacts": {
       "addInterpretationNote": "Přidat poznámku k výkladu",
-      "description": "Přímé důkazy — e-maily, zprávy, bankovní záznamy, nesporné skutečnosti — zpracované do souboru referenčních faktů, s nimiž se porovnávají tvrzení. Fakta můžete kontrolovat, upravovat nebo ručně přidávat.",
+      "description": "Přímé důkazy (e-maily, zprávy, bankovní záznamy, nesporné skutečnosti) zpracované do souboru referenčních faktů, s nimiž se porovnávají tvrzení. Fakta můžete kontrolovat, upravovat nebo ručně přidávat.",
       "editInterpretationNote": "Upravit poznámku k výkladu",
       "empty": "Označte položky tohoto seznamu jako fakta, proti nimž se budou kontrolovat dokumenty.",
       "extractionAndReview": "Extrakce a kontrola",
       "factCount": "{count, plural, one {# fakt} few {# fakty} other {# faktů}}",
-      "heldDescription": "Význam těchto extrahovaných údajů je <strong>skutečně nejistý</strong> — jejich obsah je předběžný nebo nepotvrzený, nejde pouze o ručně psaný text. Do hodnocení se nezahrnou, dokud je kontrolující osoba nepotvrdí, neupraví nebo nepřepíše. Čitelný zdroj se nikdy nezařadí do fronty jen kvůli svému médiu.",
+      "heldDescription": "Význam těchto extrahovaných údajů je <strong>skutečně nejistý</strong>: jejich obsah je předběžný nebo nepotvrzený, nejde pouze o ručně psaný text. Do hodnocení se nezahrnou, dokud je kontrolující osoba nepotvrdí, neupraví nebo nepřepíše. Čitelný zdroj se nikdy nezařadí do fronty jen kvůli svému médiu.",
       "heldForReview": "Pozastaveno ke kontrole",
       "holdOutOfScoring": "Vyloučit z hodnocení",
       "inScoring": "Zahrnuto do hodnocení",
@@ -220,10 +220,10 @@
       "title": "Referenční fakta"
     },
     "claimDetail": {
-      "escalatedReview": "Předáno týmu pro důkazy — dokud nebude vyřešen související rozpor, nelze zde žádný závěr potvrdit ani zpochybnit.",
+      "escalatedReview": "Předáno týmu pro důkazy; dokud nebude vyřešen související rozpor, nelze zde žádný závěr potvrdit ani zpochybnit.",
       "flagDispute": "Označit rozpor",
       "humanReview": "Lidská kontrola",
-      "interpretationCaveat": "Jedno z použitých fakt nese závažnou výkladovou výhradu — nejistý je význam důkazu, nikoli médium, z něhož pochází.",
+      "interpretationCaveat": "Jedno z použitých fakt nese závažnou výkladovou výhradu: nejistý je význam důkazu, nikoli médium, z něhož pochází.",
       "notVerifiable": {
         "reopen": "Znovu otevřít → porovnat se záznamy",
         "reopenExplanation": "<strong>Odloženo jako neověřitelné.</strong> Pokud lze toto tvrzení ve skutečnosti ověřit, znovu je otevřete: AVT zachová vaši změnu klasifikace a provede pouze dříve přeskočené porovnání se záznamy.",
@@ -233,15 +233,15 @@
         "add": "Přidat poznámku / opravu",
         "heading": "Vaše poznámka · {savedAt}",
         "headingUndated": "Vaše poznámka",
-        "placeholder": "Zaznamenejte opravu nebo vysvětlení. Uložená poznámka se vztahuje pouze k tomuto tvrzení — nemění závěr ani soubor referenčních faktů.",
+        "placeholder": "Zaznamenejte opravu nebo vysvětlení. Uložená poznámka se vztahuje pouze k tomuto tvrzení; nemění závěr ani soubor referenčních faktů.",
         "saveCorrection": "Uložit opravu"
       },
       "overridden": "Změněno",
-      "overrideNotice": "Závěr změněn na <strong>{verdict}</strong> — níže je beze změny zobrazena vlastní analýza nástroje.",
+      "overrideNotice": "Závěr změněn na <strong>{verdict}</strong>; níže je beze změny zobrazena vlastní analýza nástroje.",
       "overrideTooltip": "Kontrolující osoba zaznamenala jiný závěr. Níže je beze změny zobrazena vlastní analýza nástroje.",
       "overrideVerdict": "Změnit závěr",
       "recordConflict": {
-        "description": "Dva referenční fakty se týkají stejné otázky — <strong>{subject}</strong> — ale odporují si. Oba pocházejí ze zdrojů s <strong>vysokou mírou jistoty</strong>, nejde tedy o problém spolehlivosti: vnitřně rozporné jsou samotné záznamy. AVT nevydá závěr ani tvrzení neohodnotí, protože volba rozhodujícího záznamu vyžaduje váš úsudek a jeho zaznamenání — nástroj ji nesmí provést bez upozornění.",
+        "description": "Dva referenční fakty se týkají stejné otázky (<strong>{subject}</strong>), ale odporují si. Oba pocházejí ze zdrojů s <strong>vysokou mírou jistoty</strong>, nejde tedy o problém spolehlivosti: vnitřně rozporné jsou samotné záznamy. AVT nevydá závěr ani tvrzení neohodnotí, protože volba rozhodujícího záznamu vyžaduje váš úsudek a jeho zaznamenání; nástroj ji nesmí provést bez upozornění.",
         "escalatedNotice": "Označeno pro tým pro důkazy. Rozpor v záznamech zůstává otevřený a započítaný, dokud nebude vybrán rozhodující záznam.",
         "flagForEvidenceTeam": "Označit pro tým pro důkazy",
         "governed": "<strong>{value}</strong> je rozhodující: tvrzení se posuzuje podle tohoto záznamu. Druhý záznam zůstává evidován.",
@@ -258,46 +258,46 @@
       "score": {
         "anchorFactsDisagree": "Referenční fakta si odporují",
         "conflictCount": "{count, plural, one {# rozpor} few {# rozpory} other {# rozporů}}",
-        "noCoverage": "<strong>Záznamy o tom mlčí.</strong> Žádný referenční fakt v databázi se tohoto tvrzení netýká. Nejde o nízké hodnocení — zatím jednoduše není s čím tvrzení porovnat.",
-        "notVerifiable": "<strong>Nejde o ověřitelné tvrzení.</strong> Takové tvrzení nelze rozhodnout žádným dokumentem — jde například o hypotetickou situaci, předpověď, prohlášení o úmyslu, právní závěr nebo příliš neurčité tvrzení. Odkládá se bez hodnocení.",
+        "noCoverage": "<strong>Záznamy o tom mlčí.</strong> Žádný referenční fakt v databázi se tohoto tvrzení netýká. Nejde o nízké hodnocení: zatím jednoduše není s čím tvrzení porovnat.",
+        "notVerifiable": "<strong>Nejde o ověřitelné tvrzení.</strong> Takové tvrzení nelze rozhodnout žádným dokumentem: jde například o hypotetickou situaci, předpověď, prohlášení o úmyslu, právní závěr nebo příliš neurčité tvrzení. Odkládá se bez hodnocení.",
         "outOf100": "<strong>/ 100</strong> míra podpory",
         "supportCount": "{count, plural, one {# podpůrný fakt} few {# podpůrné fakty} other {# podpůrných faktů}}",
         "verdictWithheld": "Závěr nevydán"
       },
       "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdroje} other {# zdrojů}}",
-      "whyScore": "Odůvodnění hodnocení — referenční fakta"
+      "whyScore": "Odůvodnění hodnocení: referenční fakta"
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objektivní, ověřitelné tvrzení — hodnotí se podle záznamů. Patří sem i tvrzení formulovaná jako přiznání nebo popření: posuzuje se jejich podstata, nikoli samotná slova."
+        "hint": "Objektivní, ověřitelné tvrzení; hodnotí se podle záznamů. Patří sem i tvrzení formulovaná jako přiznání nebo popření: posuzuje se jejich podstata, nikoli samotná slova."
       },
       "opinion": {
-        "hint": "Hodnotící soud nebo charakteristika — žádný dokument je nemůže potvrdit ani vyvrátit, proto se odkládá bez hodnocení.",
+        "hint": "Hodnotící soud nebo charakteristika: žádný dokument je nemůže potvrdit ani vyvrátit, proto se odkládá bez hodnocení.",
         "label": "Názor"
       },
       "setAside": "odloženo",
       "unverifiable": {
-        "hint": "Tvrzení, které nelze rozhodnout žádným dokumentem — hypotetická situace, předpověď, prohlášení o úmyslu či přesvědčení, právní závěr nebo příliš neurčité tvrzení. Odkládá se bez hodnocení. Liší se od stavu Bez pokrytí, kdy je fakt ověřitelný, ale záznamy o něm pouze mlčí.",
+        "hint": "Tvrzení, které nelze rozhodnout žádným dokumentem: hypotetická situace, předpověď, prohlášení o úmyslu či přesvědčení, právní závěr nebo příliš neurčité tvrzení. Odkládá se bez hodnocení. Liší se od stavu Bez pokrytí, kdy je fakt ověřitelný, ale záznamy o něm pouze mlčí.",
         "label": "Neověřitelné"
       }
     },
     "confidence": {
       "interpretation": "Výklad",
-      "tooltip": "Jistota výkladu — nakolik je význam tohoto důkazu jednoznačný. Nezávisí na médiu zdroje (rukopis, sken apod.)."
+      "tooltip": "Jistota výkladu: nakolik je význam tohoto důkazu jednoznačný. Nezávisí na médiu zdroje (rukopis, sken apod.)."
     },
     "confirm": {
       "acknowledge": "Vzít na vědomí",
       "recordConflict": "Potvrdit řešení",
-      "supported": "Potvrdit — připraveno",
+      "supported": "Potvrdit: připraveno",
       "verdict": "Potvrdit závěr"
     },
     "disposition": {
-      "contested": "Závěr je jednoznačný, ale výklad jednoho z použitých faktů je sporný — před schválením si zaslouží vaši pozornost.",
+      "contested": "Závěr je jednoznačný, ale výklad jednoho z použitých faktů je sporný; před schválením si zaslouží vaši pozornost.",
       "contradicted": "Záznamy se od tohoto tvrzení odchylují. Než bude možné závěr potvrdit, musí rozhodnout člověk.",
       "nocover": "Žádný referenční fakt se tohoto tvrzení netýká, takže je nelze s ničím porovnat. Schválení je nepovinné.",
-      "notverifiable": "Odloženo jako neověřitelné — schválení je nepovinné. Pokud lze tvrzení ve skutečnosti ověřit, znovu je otevřete níže.",
-      "recordconflict": "Dva důkazní materiály ve spise si odporují. Výše určete, který je rozhodující, nebo věc označte pro tým pro důkazy — nástroj nerozhodne za vás.",
-      "supported": "Záznamy toto tvrzení potvrzují. Svým schválením potvrdíte, že je nástroj vyložil správně — není třeba žádný hodnotící úsudek.",
+      "notverifiable": "Odloženo jako neověřitelné; schválení je nepovinné. Pokud lze tvrzení ve skutečnosti ověřit, znovu je otevřete níže.",
+      "recordconflict": "Dva důkazní materiály ve spise si odporují. Výše určete, který je rozhodující, nebo věc označte pro tým pro důkazy; nástroj nerozhodne za vás.",
+      "supported": "Záznamy toto tvrzení potvrzují. Svým schválením potvrdíte, že je nástroj vyložil správně; není třeba žádný hodnotící úsudek.",
       "tension": "Záznamy toto tvrzení podporují jen částečně. Než bude možné závěr potvrdit, zvažte výše uvedená podpůrná a odporující fakta."
     },
     "documents": {
@@ -356,7 +356,7 @@
       "failed": "Neuloženo",
       "failedTitle": "Vaše změna nebyla uložena"
     },
-    "sourceMediumTooltip": "Médium zdroje — neutrální popis. Samo o sobě nesnižuje míru jistoty.",
+    "sourceMediumTooltip": "Médium zdroje: neutrální popis. Samo o sobě nesnižuje míru jistoty.",
     "states": {
       "contradicted": {
         "chip": "V rozporu",
@@ -386,7 +386,7 @@
     "verification": {
       "acceptRoutine": "Přijmout {count, plural, one {# rutinní tvrzení} few {# rutinní tvrzení} other {# rutinních tvrzení}}",
       "attentionComplete": "<strong>Všechna tvrzení vyžadující úsudek byla vyřízena.</strong> {count, plural, one {Zbývající # rutinní závěr nevyžaduje samostatnou kontrolu.} few {Zbývající # rutinní závěry nevyžadují samostatnou kontrolu.} other {Zbývajících # rutinních závěrů nevyžaduje samostatnou kontrolu.}}",
-      "attentionOpen": "<strong>{count, plural, one {# tvrzení vyžaduje} few {# tvrzení vyžadují} other {# tvrzení vyžaduje}} váš úsudek</strong> — rozpory a sporné výklady. {routineCount, plural, one {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.} few {Zbývající # tvrzení jsou rutinní a nevyžadují samostatné schválení.} other {Zbývajících # tvrzení je rutinních a nevyžaduje samostatné schválení.}}",
+      "attentionOpen": "<strong>{count, plural, one {# tvrzení vyžaduje} few {# tvrzení vyžadují} other {# tvrzení vyžaduje}} váš úsudek</strong>: rozpory a sporné výklady. {routineCount, plural, one {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.} few {Zbývající # tvrzení jsou rutinní a nevyžadují samostatné schválení.} other {Zbývajících # tvrzení je rutinních a nevyžaduje samostatné schválení.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, zkontrolované} disputed {, zpochybněné} other {}})",
       "documentView": {
         "label": "Zobrazení dokumentu",
@@ -1505,7 +1505,7 @@
       "updatingDescription": "Vaše rozšíření stella je ve starší verzi. Chrome jej aktualizuje automaticky, obvykle během několika hodin, a pak pro vás stella bude moct znovu otevírat a číst weby."
     },
     "cancelQueuedMessage": "Zrušit zařazenou zprávu",
-    "caseLawGreeting": "Zeptejte se na toto rozhodnutí — plný text je k dispozici.",
+    "caseLawGreeting": "Zeptejte se na toto rozhodnutí; plný text je k dispozici.",
     "chatAbout": "Vložit do AI chatu",
     "choosePromptImprovementStrategy": "Možnosti vylepšení zadání",
     "commandsSection": "Příkazy",
@@ -1752,7 +1752,7 @@
       "tryOne": "Začni s jedním z těchto"
     },
     "queuedAttachmentCount": "{count, plural, one {# příloha} few {# přílohy} other {# příloh}}",
-    "queuedNotice": "Zařazeno — odešle se po dokončení aktuální odpovědi",
+    "queuedNotice": "Zařazeno: odešle se po dokončení aktuální odpovědi",
     "reasoning": "Uvažování",
     "reasoningTokens": "{count, plural, one {# token uvažování} few {# tokeny uvažování} other {# tokenů uvažování}}",
     "recapLoading": "Shrnutí konverzace…",
@@ -1960,7 +1960,7 @@
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znaků}}",
       "consoleLogs": "Výstup konzole",
       "exactCall": "Přesné volání",
-      "failed": "Tento krok selhal — stella si poradí jinak.",
+      "failed": "Tento krok selhal; stella si poradí jinak.",
       "field": "Pole",
       "input": "Vstup",
       "interrupted": "Přerušeno před dokončením",
@@ -1980,7 +1980,7 @@
     },
     "unsupportedFileType": "Nepodporovaný typ souboru",
     "uploadFailed": "Zpracování souboru selhalo",
-    "usageFallbackNotice": "Denní příděl AI je vyčerpán — odpovědi pokračují na standardním modelu.",
+    "usageFallbackNotice": "Denní příděl AI je vyčerpán; odpovědi pokračují na standardním modelu.",
     "videoContent": "Vygenerované video",
     "webSearch": {
       "answer": "Shrnutí webového vyhledávání",
@@ -4258,7 +4258,7 @@
       "derivedQuestion": "Otázka pro získání odpovědi",
       "derivedType": "Formát odpovědi",
       "descriptionPlaceholder": "Co tento playbook kontroluje?",
-      "disabledBadge": "Vypnuto — při spuštění se přeskočí",
+      "disabledBadge": "Vypnuto: při spuštění se přeskočí",
       "discardChanges": "Zahodit změny",
       "duplicatePosition": "Duplikovat pozici",
       "empty": "Zatím žádné playbooky",
@@ -4273,7 +4273,7 @@
         "restricted": "Odpověď nesmí být uvedena"
       },
       "extractOnlyBadge": "Pouze extrakce",
-      "extractOnlyDescription": "Bez hodnocení — hodnota se zapíše do tabulky.",
+      "extractOnlyDescription": "Bez hodnocení; hodnota se zapíše do tabulky.",
       "extraction": "Extrakce",
       "extractionAuto": "Automatická",
       "extractionManual": "Ruční",
@@ -4443,7 +4443,7 @@
         },
         "insideLabel": "Uvnitř",
         "startBlank": "Začít od nuly",
-        "startBlankHint": "Prázdná dovednost — když přesně víte, co chcete.",
+        "startBlankHint": "Prázdná dovednost: když přesně víte, co chcete.",
         "subtitle": "Vyberte výchozí podobu. Připravíme složky a provedeme vás jejich vyplněním.",
         "title": "Jak má vaše dovednost fungovat?"
       },
@@ -4671,7 +4671,7 @@
     "continue": "Pokračovat",
     "enterTeamName": "Zadejte výše název týmu",
     "getStarted": "Začít",
-    "inviteExternal": "Externí uživatel — bude mít přístup k vašim dokumentům",
+    "inviteExternal": "Externí uživatel: bude mít přístup k vašim dokumentům",
     "inviteHint": "Více adres oddělte čárkou, nebo vložte seznam.",
     "inviteInvalidEmail": "Neplatný e-mail: {value}",
     "inviteSubtitle": "Kolegové dostanou e-mail s odkazem pro připojení.",
@@ -5480,7 +5480,7 @@
       "practiceJurisdictions": "Jurisdikce",
       "practiceJurisdictionsDescription": "Vyberte jurisdikce, které jsou pro vás relevantní.",
       "promptCaching": {
-        "description": "Pokud je zapnuto, stella přidává cache značky tak, aby opakované AI dotazy nad stejným dokumentem nebo vláknem stály ~10× méně a byly rychlejší. Cachované prompty zůstávají u poskytovatele AI až 5 minut a jsou omezené na vaši organizaci. Vypnutí zastaví zasílání cache značek, ale poskytovatelé si mohou prompty stále cachovat oportunisticky — pouze smlouva Zero Data Retention s poskytovatelem zcela vypne cachování na straně serveru.",
+        "description": "Pokud je zapnuto, stella přidává cache značky tak, aby opakované AI dotazy nad stejným dokumentem nebo vláknem stály ~10× méně a byly rychlejší. Cachované prompty zůstávají u poskytovatele AI až 5 minut a jsou omezené na vaši organizaci. Vypnutí zastaví zasílání cache značek, ale poskytovatelé si mohou prompty stále cachovat oportunisticky; pouze smlouva Zero Data Retention s poskytovatelem zcela vypne cachování na straně serveru.",
         "title": "Cachování promptů",
         "toggleLabel": "Povolit cachování promptů u poskytovatelů AI"
       },
@@ -6121,7 +6121,7 @@
       "fieldSettingBrackets": "Značka ve vzoru nemůže obsahovat složené závorky. Odstraňte je z nastavení pole „{fieldPath}“.",
       "fieldWithoutMarker": "Pole „{fieldPath}“ nemá v dokumentu žádnou značku, jeho nastavení se proto neuložilo.",
       "fillFormPreview": "Jak se zobrazí ve formuláři",
-      "fillStale": "Neuložené změny — uložte, aby se vyplňovala aktuální pole.",
+      "fillStale": "Neuložené změny; uložte, aby se vyplňovala aktuální pole.",
       "filledByPerson": "Osoba",
       "formulaExampleLabel": "Příklad",
       "formulaNoFields": "Nejdříve přidejte číselné pole, aby měl vzorec co počítat.",
@@ -6878,7 +6878,7 @@
       "personalDescription": "Osobní spisy jsou jen pro vás. Povýšením na klientský spis je sdílíte s týmem.",
       "personalLabel": "Osobní",
       "promoteCta": "Povýšit na klientský spis",
-      "promoteDescription": "Přidělením klienta sdílíte spis s týmem. Změna je nevratná — spis nelze vrátit na osobní.",
+      "promoteDescription": "Přidělením klienta sdílíte spis s týmem. Změna je nevratná: spis nelze vrátit na osobní.",
       "promoteToClientConfirm": "Spis <bdi>{matterName}</bdi> bude přidělen klientovi <bdi>{clientName}</bdi> a sdílen s týmem. Na osobní ho už nepůjde vrátit.",
       "promotedSuccess": "Spis povýšen",
       "recentClients": "Nedávní klienti",
@@ -7098,7 +7098,7 @@
       "optionsLabel": "Možnosti",
       "person": "Osoba",
       "previewEmpty": "AI nevrátila žádnou hodnotu.",
-      "previewMockNotice": "Falešný náhled — backend ještě není napojený.",
+      "previewMockNotice": "Falešný náhled: backend ještě není napojený.",
       "previewOnFirst": "Náhled na: {document}",
       "previewSkipped": "Na tomto dokumentu není žádný použitelný vstup.",
       "previewSubject": "Vyzkoušej na vzorku",

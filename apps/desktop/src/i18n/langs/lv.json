@@ -38,7 +38,7 @@
     "reconnectAccount": "Atkārtoti savienot ar stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Izmaiņas paliek lokālas un tiks automātiski mēģinātas vēlreiz",
+    "checkpointDelayedBody": "{fileName}: izmaiņas paliek lokālas un tiks automātiski mēģinātas vēlreiz",
     "checkpointDelayedTitle": "Kontrolpunkta sinhronizācija aizkavēta",
     "diagnosticsCopiedBody": "Ielīmējiet to savā atbalsta pieprasījumā, kad nepieciešams.",
     "diagnosticsCopiedTitle": "Diagnostika nokopēta",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Lokālie atkopšanas dati tika atiestatīti",
     "revisionCreatedBody": "{fileName} saglabāts kā versija {versionNumber}. Darbvirsmas rediģēšana pabeigta",
     "revisionCreatedTitle": "stella versija izveidota",
-    "sessionClosedSaved": "{fileName} — Lokālā kopija tiek saglabāta Pagaidu darba kopijās",
-    "sessionClosedUnsaved": "{fileName} — Jums ir nesaglabāti lokālie labojumi. Savu kopiju atradīsiet Pagaidu darba kopijās.",
-    "takenOverBody": "{fileName} — Atkārtoti atveriet no stella, lai pārņemtu rediģēšanu atpakaļ",
+    "sessionClosedSaved": "{fileName}: lokālā kopija tiek saglabāta Pagaidu darba kopijās",
+    "sessionClosedUnsaved": "{fileName}: jums ir nesaglabāti lokālie labojumi. Savu kopiju atradīsiet Pagaidu darba kopijās.",
+    "takenOverBody": "{fileName}: atkārtoti atveriet no stella, lai pārņemtu rediģēšanu atpakaļ",
     "takenOverLocalError": "Darbvirsmas rediģēšana pārvietota uz citu ierīci. Šī lokālā kopija ir saglabāta.",
     "takenOverTitle": "Rediģēšana pārvietota uz citu ierīci"
   },

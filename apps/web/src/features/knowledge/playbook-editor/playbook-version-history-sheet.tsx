@@ -165,7 +165,7 @@ const VersionRow = ({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium" dir="auto">
           {t("common.versionLabel", { version: String(version.version) })}
-          {" — "}
+          {" · "}
           {version.name}
         </p>
         <p className="text-muted-foreground text-xs">

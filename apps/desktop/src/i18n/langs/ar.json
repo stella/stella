@@ -38,7 +38,7 @@
     "reconnectAccount": "إعادة الاتصال بـ stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — تبقى التغييرات محلية وستُعاد المحاولة تلقائياً",
+    "checkpointDelayedBody": "{fileName}: تبقى التغييرات محلية وستُعاد المحاولة تلقائياً",
     "checkpointDelayedTitle": "تأخرت مزامنة نقطة الحفظ",
     "diagnosticsCopiedBody": "الصقها في طلب الدعم عند الحاجة.",
     "diagnosticsCopiedTitle": "تم نسخ معلومات التشخيص",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "تمت إعادة ضبط بيانات الاسترداد المحلية",
     "revisionCreatedBody": "تم حفظ {fileName} بوصفه الإصدار {versionNumber}. انتهى التحرير على سطح المكتب",
     "revisionCreatedTitle": "تم إنشاء مراجعة في stella",
-    "sessionClosedUnsaved": "{fileName} — لديك تعديلات محلية غير محفوظة. ستجد نسختك في نسخ العمل المؤقتة.",
-    "sessionClosedSaved": "{fileName} — تبقى النسخة المحلية محفوظة في نسخ العمل المؤقتة",
-    "takenOverBody": "{fileName} — أعد الفتح من stella هنا لاستعادة التحرير",
+    "sessionClosedUnsaved": "{fileName}: لديك تعديلات محلية غير محفوظة. ستجد نسختك في نسخ العمل المؤقتة.",
+    "sessionClosedSaved": "{fileName}: تبقى النسخة المحلية محفوظة في نسخ العمل المؤقتة",
+    "takenOverBody": "{fileName}: أعد الفتح من stella هنا لاستعادة التحرير",
     "takenOverTitle": "انتقل التحرير إلى جهاز آخر",
     "takenOverLocalError": "انتقل التحرير على سطح المكتب إلى جهاز آخر. هذه النسخة المحلية محفوظة."
   },

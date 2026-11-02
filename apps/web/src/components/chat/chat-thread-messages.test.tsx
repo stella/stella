@@ -999,7 +999,7 @@ describe("chat thread messages", () => {
     expect(html).not.toContain("3 steps");
     expect(disclosureExpanded(html, "1 analysis")).toBe("false");
     expect(disclosureExpanded(html, "Show details")).toBe("false");
-    expect(html).toContain("This step failed — stella will work around it.");
+    expect(html).toContain("This step failed; stella will work around it.");
     expect(html).toContain(">Show details<");
     expect(html).toContain("Here is the answer.");
   });

@@ -38,7 +38,7 @@
     "reconnectAccount": "Ühenda stella webiga uuesti…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Muudatused jäävad kohalikuks ja proovitakse automaatselt uuesti",
+    "checkpointDelayedBody": "{fileName}: muudatused jäävad kohalikuks ja proovitakse automaatselt uuesti",
     "checkpointDelayedTitle": "Kontrollpunkti sünkroonimine viibib",
     "diagnosticsCopiedBody": "Kleepige see vajadusel oma tugipäringule.",
     "diagnosticsCopiedTitle": "Diagnostika kopeeritud",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Kohalikud taasteandmed lähtestati",
     "revisionCreatedBody": "{fileName} salvestatud versioonina {versionNumber}. Töölaua muutmine lõpetatud",
     "revisionCreatedTitle": "stella versioon loodud",
-    "sessionClosedSaved": "{fileName} — Kohalik koopia jääb säilitatuks Ajutistes töökoopiates",
-    "sessionClosedUnsaved": "{fileName} — Teil on salvestamata kohalikud muudatused. Leidke oma koopia Ajutiste töökoopiate alt.",
-    "takenOverBody": "{fileName} — Avage uuesti stella-st, et muutmine tagasi võtta",
+    "sessionClosedSaved": "{fileName}: kohalik koopia jääb säilitatuks Ajutistes töökoopiates",
+    "sessionClosedUnsaved": "{fileName}: teil on salvestamata kohalikud muudatused. Leidke oma koopia Ajutiste töökoopiate alt.",
+    "takenOverBody": "{fileName}: avage uuesti stella-st, et muutmine tagasi võtta",
     "takenOverLocalError": "Töölaua muutmine teisaldatud teise seadmesse. See kohalik koopia on säilitatud.",
     "takenOverTitle": "Muutmine teisaldatud teise seadmesse"
   },

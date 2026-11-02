@@ -38,7 +38,7 @@
     "reconnectAccount": "Połącz ponownie ze stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Zmiany pozostają lokalne i zostaną automatycznie ponowione",
+    "checkpointDelayedBody": "{fileName}: zmiany pozostają lokalne i zostaną automatycznie ponowione",
     "checkpointDelayedTitle": "Synchronizacja punktu kontrolnego opóźniona",
     "diagnosticsCopiedBody": "Wklej ją do zgłoszenia wsparcia, gdy będzie potrzebna.",
     "diagnosticsCopiedTitle": "Diagnostyka skopiowana",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Lokalne dane odzyskiwania zostały zresetowane",
     "revisionCreatedBody": "{fileName} zapisany jako wersja {versionNumber}. Edycja pulpitu zakończona",
     "revisionCreatedTitle": "Wersja stella utworzona",
-    "sessionClosedSaved": "{fileName} — Lokalna kopia pozostaje zachowana w Tymczasowych kopiach roboczych",
-    "sessionClosedUnsaved": "{fileName} — Masz niezapisane lokalne edycje. Swoją kopię znajdziesz w Tymczasowych kopiach roboczych.",
-    "takenOverBody": "{fileName} — Otwórz ponownie ze stella, aby odzyskać edycję",
+    "sessionClosedSaved": "{fileName}: lokalna kopia pozostaje zachowana w Tymczasowych kopiach roboczych",
+    "sessionClosedUnsaved": "{fileName}: masz niezapisane lokalne edycje. Swoją kopię znajdziesz w Tymczasowych kopiach roboczych.",
+    "takenOverBody": "{fileName}: otwórz ponownie ze stella, aby odzyskać edycję",
     "takenOverLocalError": "Edycja pulpitu przeniesiona na inne urządzenie. Ta lokalna kopia jest zachowana.",
     "takenOverTitle": "Edycja przeniesiona na inne urządzenie"
   },

@@ -201,12 +201,12 @@
   "avt": {
     "anchorFacts": {
       "addInterpretationNote": "Pridať poznámku k výkladu",
-      "description": "Priame dôkazy — e-maily, správy, bankové záznamy, nesporné skutočnosti — spracované do súboru referenčných faktov, s ktorými sa porovnávajú tvrdenia. Fakty môžete kontrolovať, upravovať alebo ručne pridávať.",
+      "description": "Priame dôkazy (e-maily, správy, bankové záznamy, nesporné skutočnosti) spracované do súboru referenčných faktov, s ktorými sa porovnávajú tvrdenia. Fakty môžete kontrolovať, upravovať alebo ručne pridávať.",
       "editInterpretationNote": "Upraviť poznámku k výkladu",
       "empty": "Označte položky tohto zoznamu ako fakty, voči ktorým sa budú kontrolovať dokumenty.",
       "extractionAndReview": "Extrakcia a kontrola",
       "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktov} other {# faktu}}",
-      "heldDescription": "Význam týchto extrahovaných údajov je <strong>skutočne neistý</strong> — ich obsah je predbežný alebo nepotvrdený, nejde iba o ručne písaný text. Do hodnotenia sa nezahrnú, kým ich kontrolujúca osoba nepotvrdí, neupraví alebo neprepíše. Čitateľný zdroj sa nikdy nezaradí do poradia len pre svoje médium.",
+      "heldDescription": "Význam týchto extrahovaných údajov je <strong>skutočne neistý</strong>: ich obsah je predbežný alebo nepotvrdený, nejde iba o ručne písaný text. Do hodnotenia sa nezahrnú, kým ich kontrolujúca osoba nepotvrdí, neupraví alebo neprepíše. Čitateľný zdroj sa nikdy nezaradí do poradia len pre svoje médium.",
       "heldForReview": "Pozastavené na kontrolu",
       "holdOutOfScoring": "Vylúčiť z hodnotenia",
       "inScoring": "Zahrnuté do hodnotenia",
@@ -220,10 +220,10 @@
       "title": "Referenčné fakty"
     },
     "claimDetail": {
-      "escalatedReview": "Postúpené tímu pre dôkazy — kým sa nevyrieši súvisiaci rozpor, nemožno tu potvrdiť ani spochybniť žiadny záver.",
+      "escalatedReview": "Postúpené tímu pre dôkazy; kým sa nevyrieši súvisiaci rozpor, nemožno tu potvrdiť ani spochybniť žiadny záver.",
       "flagDispute": "Označiť spor",
       "humanReview": "Ľudská kontrola",
-      "interpretationCaveat": "Jeden z použitých faktov obsahuje závažnú výkladovú výhradu — neistý je význam dôkazu, nie médium, z ktorého pochádza.",
+      "interpretationCaveat": "Jeden z použitých faktov obsahuje závažnú výkladovú výhradu: neistý je význam dôkazu, nie médium, z ktorého pochádza.",
       "notVerifiable": {
         "reopen": "Znovu otvoriť → porovnať so záznamami",
         "reopenExplanation": "<strong>Odložené ako neoveriteľné.</strong> Ak sa toto tvrdenie v skutočnosti dá overiť, znovu ho otvorte: AVT zachová vašu zmenu klasifikácie a vykoná iba predtým preskočené porovnanie so záznamami.",
@@ -233,15 +233,15 @@
         "add": "Pridať poznámku / opravu",
         "heading": "Vaša poznámka · {savedAt}",
         "headingUndated": "Vaša poznámka",
-        "placeholder": "Zaznamenajte opravu alebo vysvetlenie. Uložená poznámka sa vzťahuje iba na toto tvrdenie — nemení záver ani súbor referenčných faktov.",
+        "placeholder": "Zaznamenajte opravu alebo vysvetlenie. Uložená poznámka sa vzťahuje iba na toto tvrdenie; nemení záver ani súbor referenčných faktov.",
         "saveCorrection": "Uložiť opravu"
       },
       "overridden": "Zmenené",
-      "overrideNotice": "Záver zmenený na <strong>{verdict}</strong> — nižšie je bez zmeny zobrazená vlastná analýza nástroja.",
+      "overrideNotice": "Záver zmenený na <strong>{verdict}</strong>; nižšie je bez zmeny zobrazená vlastná analýza nástroja.",
       "overrideTooltip": "Kontrolujúca osoba zaznamenala iný záver. Nižšie je bez zmeny zobrazená vlastná analýza nástroja.",
       "overrideVerdict": "Zmeniť záver",
       "recordConflict": {
-        "description": "Dva referenčné fakty sa týkajú rovnakej otázky — <strong>{subject}</strong> — ale odporujú si. Oba pochádzajú zo zdrojov s <strong>vysokou mierou istoty</strong>, nejde teda o problém spoľahlivosti: vnútorne rozporné sú samotné záznamy. AVT nevydá záver ani tvrdenie neohodnotí, pretože výber rozhodujúceho záznamu vyžaduje váš úsudok a jeho zaznamenanie — nástroj ho nesmie vykonať bez upozornenia.",
+        "description": "Dva referenčné fakty sa týkajú rovnakej otázky (<strong>{subject}</strong>), ale odporujú si. Oba pochádzajú zo zdrojov s <strong>vysokou mierou istoty</strong>, nejde teda o problém spoľahlivosti: vnútorne rozporné sú samotné záznamy. AVT nevydá záver ani tvrdenie neohodnotí, pretože výber rozhodujúceho záznamu vyžaduje váš úsudok a jeho zaznamenanie; nástroj ho nesmie vykonať bez upozornenia.",
         "escalatedNotice": "Označené pre tím pre dôkazy. Rozpor v záznamoch zostáva otvorený a započítaný, kým sa nevyberie rozhodujúci záznam.",
         "flagForEvidenceTeam": "Označiť pre tím pre dôkazy",
         "governed": "<strong>{value}</strong> je rozhodujúci: tvrdenie sa posudzuje podľa tohto záznamu. Druhý záznam zostáva evidovaný.",
@@ -258,46 +258,46 @@
       "score": {
         "anchorFactsDisagree": "Referenčné fakty si odporujú",
         "conflictCount": "{count, plural, one {# rozpor} few {# rozpory} many {# rozporov} other {# rozporu}}",
-        "noCoverage": "<strong>Záznamy o tom neobsahujú informácie.</strong> Žiadny referenčný fakt v databáze sa tohto tvrdenia netýka. Nejde o nízke hodnotenie — zatiaľ jednoducho nie je s čím tvrdenie porovnať.",
-        "notVerifiable": "<strong>Nejde o overiteľné tvrdenie.</strong> Takéto tvrdenie nemožno rozhodnúť žiadnym dokumentom — ide napríklad o hypotetickú situáciu, predpoveď, vyhlásenie o úmysle, právny záver alebo príliš neurčité tvrdenie. Odkladá sa bez hodnotenia.",
+        "noCoverage": "<strong>Záznamy o tom neobsahujú informácie.</strong> Žiadny referenčný fakt v databáze sa tohto tvrdenia netýka. Nejde o nízke hodnotenie: zatiaľ jednoducho nie je s čím tvrdenie porovnať.",
+        "notVerifiable": "<strong>Nejde o overiteľné tvrdenie.</strong> Takéto tvrdenie nemožno rozhodnúť žiadnym dokumentom: ide napríklad o hypotetickú situáciu, predpoveď, vyhlásenie o úmysle, právny záver alebo príliš neurčité tvrdenie. Odkladá sa bez hodnotenia.",
         "outOf100": "<strong>/ 100</strong> miera podpory",
         "supportCount": "{count, plural, one {# podporný fakt} few {# podporné fakty} many {# podporných faktov} other {# podporného faktu}}",
         "verdictWithheld": "Záver nevydaný"
       },
       "sourceCount": "{count, plural, one {# zdroj} few {# zdroje} many {# zdrojov} other {# zdroja}}",
-      "whyScore": "Odôvodnenie hodnotenia — referenčné fakty"
+      "whyScore": "Odôvodnenie hodnotenia: referenčné fakty"
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objektívne, overiteľné tvrdenie — hodnotí sa podľa záznamov. Patria sem aj tvrdenia formulované ako priznanie alebo popretie: posudzuje sa ich podstata, nie samotné slová."
+        "hint": "Objektívne, overiteľné tvrdenie; hodnotí sa podľa záznamov. Patria sem aj tvrdenia formulované ako priznanie alebo popretie: posudzuje sa ich podstata, nie samotné slová."
       },
       "opinion": {
-        "hint": "Hodnotiaci úsudok alebo charakteristika — žiadny dokument ich nemôže potvrdiť ani vyvrátiť, preto sa odkladajú bez hodnotenia.",
+        "hint": "Hodnotiaci úsudok alebo charakteristika: žiadny dokument ich nemôže potvrdiť ani vyvrátiť, preto sa odkladajú bez hodnotenia.",
         "label": "Názor"
       },
       "setAside": "odložené",
       "unverifiable": {
-        "hint": "Tvrdenie, ktoré nemožno rozhodnúť žiadnym dokumentom — hypotetická situácia, predpoveď, vyhlásenie o úmysle či presvedčení, právny záver alebo príliš neurčité tvrdenie. Odkladá sa bez hodnotenia. Líši sa od stavu Bez pokrytia, keď je fakt overiteľný, ale záznamy o ňom iba neobsahujú informácie.",
+        "hint": "Tvrdenie, ktoré nemožno rozhodnúť žiadnym dokumentom: hypotetická situácia, predpoveď, vyhlásenie o úmysle či presvedčení, právny záver alebo príliš neurčité tvrdenie. Odkladá sa bez hodnotenia. Líši sa od stavu Bez pokrytia, keď je fakt overiteľný, ale záznamy o ňom iba neobsahujú informácie.",
         "label": "Neoveriteľné"
       }
     },
     "confidence": {
       "interpretation": "Výklad",
-      "tooltip": "Istota výkladu — nakoľko je význam tohto dôkazu jednoznačný. Nezávisí od média zdroja (rukopis, sken a pod.)."
+      "tooltip": "Istota výkladu: nakoľko je význam tohto dôkazu jednoznačný. Nezávisí od média zdroja (rukopis, sken a pod.)."
     },
     "confirm": {
       "acknowledge": "Zobrať na vedomie",
       "recordConflict": "Potvrdiť riešenie",
-      "supported": "Potvrdiť — pripravené",
+      "supported": "Potvrdiť: pripravené",
       "verdict": "Potvrdiť záver"
     },
     "disposition": {
-      "contested": "Záver je jednoznačný, ale výklad jedného z použitých faktov je sporný — pred schválením si zaslúži vašu pozornosť.",
+      "contested": "Záver je jednoznačný, ale výklad jedného z použitých faktov je sporný; pred schválením si zaslúži vašu pozornosť.",
       "contradicted": "Záznamy sa od tohto tvrdenia odchyľujú. Pred potvrdením záveru musí rozhodnúť človek.",
       "nocover": "Žiadny referenčný fakt sa tohto tvrdenia netýka, takže ho nemožno s ničím porovnať. Schválenie je nepovinné.",
-      "notverifiable": "Odložené ako neoveriteľné — schválenie je nepovinné. Ak sa tvrdenie v skutočnosti dá overiť, znovu ho otvorte nižšie.",
-      "recordconflict": "Dva dôkazné materiály v spise si odporujú. Vyššie určte, ktorý je rozhodujúci, alebo vec označte pre tím pre dôkazy — nástroj nerozhodne za vás.",
-      "supported": "Záznamy toto tvrdenie potvrdzujú. Svojím schválením potvrdíte, že ich nástroj vyložil správne — nie je potrebný žiadny hodnotiaci úsudok.",
+      "notverifiable": "Odložené ako neoveriteľné; schválenie je nepovinné. Ak sa tvrdenie v skutočnosti dá overiť, znovu ho otvorte nižšie.",
+      "recordconflict": "Dva dôkazné materiály v spise si odporujú. Vyššie určte, ktorý je rozhodujúci, alebo vec označte pre tím pre dôkazy; nástroj nerozhodne za vás.",
+      "supported": "Záznamy toto tvrdenie potvrdzujú. Svojím schválením potvrdíte, že ich nástroj vyložil správne; nie je potrebný žiadny hodnotiaci úsudok.",
       "tension": "Záznamy toto tvrdenie podporujú len čiastočne. Pred potvrdením záveru zvážte vyššie uvedené podporné a odporujúce fakty."
     },
     "documents": {
@@ -356,7 +356,7 @@
       "failed": "Neuložené",
       "failedTitle": "Vaša zmena sa neuložila"
     },
-    "sourceMediumTooltip": "Médium zdroja — neutrálny opis. Samo osebe neznižuje mieru istoty.",
+    "sourceMediumTooltip": "Médium zdroja: neutrálny opis. Samo osebe neznižuje mieru istoty.",
     "states": {
       "contradicted": {
         "chip": "V rozpore",
@@ -386,7 +386,7 @@
     "verification": {
       "acceptRoutine": "Prijať {count, plural, one {# bežné tvrdenie} few {# bežné tvrdenia} many {# bežných tvrdení} other {# bežného tvrdenia}}",
       "attentionComplete": "<strong>Všetky tvrdenia vyžadujúce úsudok boli vybavené.</strong> {count, plural, one {Zostávajúce # bežné posúdenie nevyžaduje samostatnú kontrolu.} few {Zostávajúce # bežné posúdenia nevyžadujú samostatnú kontrolu.} many {Zostávajúcich # bežných posúdení nevyžaduje samostatnú kontrolu.} other {Zostávajúceho # bežného posúdenia nevyžaduje samostatnú kontrolu.}}",
-      "attentionOpen": "<strong>{count, plural, one {# tvrdenie vyžaduje} few {# tvrdenia vyžadujú} many {# tvrdení vyžaduje} other {# tvrdenia vyžaduje}} váš úsudok</strong> — rozpory a sporné výklady. {routineCount, plural, one {Zostávajúce # je bežné a nevyžaduje samostatné schválenie.} few {Zostávajúce # sú bežné a nevyžadujú samostatné schválenie.} many {Zostávajúcich # je bežných a nevyžaduje samostatné schválenie.} other {Zostávajúceho # bežného posúdenia netreba samostatne schvaľovať.}}",
+      "attentionOpen": "<strong>{count, plural, one {# tvrdenie vyžaduje} few {# tvrdenia vyžadujú} many {# tvrdení vyžaduje} other {# tvrdenia vyžaduje}} váš úsudok</strong>: rozpory a sporné výklady. {routineCount, plural, one {Zostávajúce # je bežné a nevyžaduje samostatné schválenie.} few {Zostávajúce # sú bežné a nevyžadujú samostatné schválenie.} many {Zostávajúcich # je bežných a nevyžaduje samostatné schválenie.} other {Zostávajúceho # bežného posúdenia netreba samostatne schvaľovať.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, skontrolované} disputed {, spochybnené} other {}})",
       "documentView": {
         "label": "Zobrazenie dokumentu",
@@ -1505,7 +1505,7 @@
       "updatingDescription": "Vaše rozšírenie stella je v staršej verzii. Chrome ho aktualizuje automaticky, zvyčajne v priebehu niekoľkých hodín, a potom pre vás stella bude môcť znova otvárať a čítať weby."
     },
     "cancelQueuedMessage": "Zrušiť správu v poradí",
-    "caseLawGreeting": "Spýtajte sa na toto rozhodnutie — plný text je k dispozícii.",
+    "caseLawGreeting": "Spýtajte sa na toto rozhodnutie; plný text je k dispozícii.",
     "chatAbout": "Vložiť do AI chatu",
     "choosePromptImprovementStrategy": "Možnosti vylepšenia zadania",
     "commandsSection": "Príkazy",
@@ -1960,7 +1960,7 @@
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znakov}}",
       "consoleLogs": "Výstup konzoly",
       "exactCall": "Presné volanie",
-      "failed": "Tento krok zlyhal — stella si poradí inak.",
+      "failed": "Tento krok zlyhal; stella si poradí inak.",
       "field": "Pole",
       "input": "Vstup",
       "interrupted": "Prerušené pred dokončením",
@@ -1980,7 +1980,7 @@
     },
     "unsupportedFileType": "Nepodporovaný typ súboru",
     "uploadFailed": "Spracovanie súboru zlyhalo",
-    "usageFallbackNotice": "Denný prídel AI je vyčerpaný — odpovede pokračujú na štandardnom modeli.",
+    "usageFallbackNotice": "Denný prídel AI je vyčerpaný; odpovede pokračujú na štandardnom modeli.",
     "videoContent": "Vygenerované video",
     "webSearch": {
       "answer": "Súhrn webového vyhľadávania",
@@ -4258,7 +4258,7 @@
       "derivedQuestion": "Otázka na získanie odpovede",
       "derivedType": "Formát odpovede",
       "descriptionPlaceholder": "Čo tento playbook kontroluje?",
-      "disabledBadge": "Vypnuté — pri spustení sa preskočí",
+      "disabledBadge": "Vypnuté: pri spustení sa preskočí",
       "discardChanges": "Zahodiť zmeny",
       "duplicatePosition": "Duplikovať pozíciu",
       "empty": "Zatiaľ žiadne playbooky",
@@ -4273,7 +4273,7 @@
         "restricted": "Odpoveď nesmie byť uvedená"
       },
       "extractOnlyBadge": "Iba extrakcia",
-      "extractOnlyDescription": "Bez hodnotenia — hodnota sa zapíše do tabuľky.",
+      "extractOnlyDescription": "Bez hodnotenia; hodnota sa zapíše do tabuľky.",
       "extraction": "Extrakcia",
       "extractionAuto": "Automatická",
       "extractionManual": "Ručná",
@@ -4671,7 +4671,7 @@
     "continue": "Pokračovať",
     "enterTeamName": "Zadajte vyššie názov tímu",
     "getStarted": "Začať",
-    "inviteExternal": "Externý používateľ — bude mať prístup k vašim dokumentom",
+    "inviteExternal": "Externý používateľ: bude mať prístup k vašim dokumentom",
     "inviteHint": "Viac adries oddeľte čiarkou alebo vložte zoznam.",
     "inviteInvalidEmail": "Neplatný e-mail: {value}",
     "inviteSubtitle": "Kolegovia dostanú e-mail s odkazom na pripojenie.",
@@ -4768,7 +4768,7 @@
       "prices": {
         "azureManaged": "Ceny nasadenia sa spravujú v Azure.",
         "empty": "Pridajte poskytovateľa a uvidíte ceny modelov",
-        "emptyHint": "Zvoľte poskytovateľa vľavo — zobrazíme ceny jeho modelov.",
+        "emptyHint": "Zvoľte poskytovateľa vľavo. Zobrazíme ceny jeho modelov.",
         "inMtok": "Vst/M",
         "model": "Model",
         "outMtok": "Výst/M",
@@ -5480,7 +5480,7 @@
       "practiceJurisdictions": "Jurisdikcie",
       "practiceJurisdictionsDescription": "Vyberte jurisdikcie, ktoré sú pre vás relevantné.",
       "promptCaching": {
-        "description": "Po zapnutí stella pridáva cache značky tak, aby opakované AI dotazy nad rovnakým dokumentom alebo vláknom stáli ~10× menej a boli rýchlejšie. Cachované prompty zostávajú u poskytovateľa AI až 5 minút a sú obmedzené na vašu organizáciu. Vypnutie zastaví zasielanie cache značiek, ale poskytovatelia môžu prompty stále cachovať oportunisticky — iba zmluva Zero Data Retention s poskytovateľom úplne vypne cachovanie na strane servera.",
+        "description": "Po zapnutí stella pridáva cache značky tak, aby opakované AI dotazy nad rovnakým dokumentom alebo vláknom stáli ~10× menej a boli rýchlejšie. Cachované prompty zostávajú u poskytovateľa AI až 5 minút a sú obmedzené na vašu organizáciu. Vypnutie zastaví zasielanie cache značiek, ale poskytovatelia môžu prompty stále cachovať oportunisticky; iba zmluva Zero Data Retention s poskytovateľom úplne vypne cachovanie na strane servera.",
         "title": "Cachovanie promptov",
         "toggleLabel": "Povoliť cachovanie promptov u poskytovateľov AI"
       },
@@ -6121,7 +6121,7 @@
       "fieldSettingBrackets": "Značka vo vzore nemôže obsahovať zložené zátvorky. Odstráňte ich z nastavenia poľa „{fieldPath}“.",
       "fieldWithoutMarker": "Pole „{fieldPath}“ nemá v dokumente žiadnu značku, jeho nastavenie sa preto neuložilo.",
       "fillFormPreview": "Ako sa zobrazí vo formulári",
-      "fillStale": "Neuložené zmeny — uložte, aby sa vypĺňali aktuálne polia.",
+      "fillStale": "Neuložené zmeny; uložte, aby sa vypĺňali aktuálne polia.",
       "filledByPerson": "Osoba",
       "formulaExampleLabel": "Príklad",
       "formulaNoFields": "Najprv pridajte číselné pole, aby mal vzorec čo počítať.",
@@ -6878,7 +6878,7 @@
       "personalDescription": "Osobné spisy sú iba pre vás. Povýšte ich na klientsky spis, aby ste ich zdieľali s tímom.",
       "personalLabel": "Osobný",
       "promoteCta": "Povýšiť na klientsky spis",
-      "promoteDescription": "Priraďte klienta na zdieľanie tohto spisu s tímom. Akcia je nezvratná — povýšené spisy nie je možné vrátiť na osobné.",
+      "promoteDescription": "Priraďte klienta na zdieľanie tohto spisu s tímom. Akcia je nezvratná: povýšené spisy nie je možné vrátiť na osobné.",
       "promoteToClientConfirm": "Spis <bdi>{matterName}</bdi> bude priradený klientovi <bdi>{clientName}</bdi> a zdieľaný s tímom. Na osobný ho už nebude možné vrátiť.",
       "promotedSuccess": "Spis povýšený",
       "recentClients": "Nedávni klienti",
@@ -7098,7 +7098,7 @@
       "optionsLabel": "Možnosti",
       "person": "Osoba",
       "previewEmpty": "AI nevrátila žiadnu hodnotu.",
-      "previewMockNotice": "Falošný náhľad — backend ešte nie je napojený.",
+      "previewMockNotice": "Falošný náhľad: backend ešte nie je napojený.",
       "previewOnFirst": "Náhľad na: {document}",
       "previewSkipped": "Na tomto dokumente nie je žiadny použiteľný vstup.",
       "previewSubject": "Vyskúšaj na vzorke",

@@ -201,12 +201,12 @@
   "avt": {
     "anchorFacts": {
       "addInterpretationNote": "Dodaj uwagę do interpretacji",
-      "description": "Bezpośrednie dowody — wiadomości e-mail, komunikaty, dokumentacja bankowa i fakty bezsporne — wyodrębnione do rejestru faktów referencyjnych, z którym porównywane są twierdzenia. Fakty można weryfikować, edytować lub dodawać ręcznie.",
+      "description": "Bezpośrednie dowody (wiadomości e-mail, komunikaty, dokumentacja bankowa i fakty bezsporne) wyodrębnione do rejestru faktów referencyjnych, z którym porównywane są twierdzenia. Fakty można weryfikować, edytować lub dodawać ręcznie.",
       "editInterpretationNote": "Edytuj uwagę do interpretacji",
       "empty": "Oznacz pozycje tej listy jako fakty, względem których będą weryfikowane dokumenty.",
       "extractionAndReview": "Wyodrębnianie i weryfikacja",
       "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktów} other {# faktu}}",
-      "heldDescription": "Znaczenie tych wyodrębnionych danych jest <strong>rzeczywiście niepewne</strong> — treść ma charakter wstępny lub niepotwierdzony, a nie tylko odręczny. Dane nie są uwzględniane w ocenie, dopóki osoba weryfikująca ich nie potwierdzi, nie poprawi lub nie przepisze. Czytelne źródło nigdy nie trafia do kolejki wyłącznie ze względu na swój nośnik.",
+      "heldDescription": "Znaczenie tych wyodrębnionych danych jest <strong>rzeczywiście niepewne</strong>: treść ma charakter wstępny lub niepotwierdzony, a nie tylko odręczny. Dane nie są uwzględniane w ocenie, dopóki osoba weryfikująca ich nie potwierdzi, nie poprawi lub nie przepisze. Czytelne źródło nigdy nie trafia do kolejki wyłącznie ze względu na swój nośnik.",
       "heldForReview": "Wstrzymane do weryfikacji",
       "holdOutOfScoring": "Wyklucz z oceny",
       "inScoring": "Uwzględnione w ocenie",
@@ -220,10 +220,10 @@
       "title": "Fakty referencyjne"
     },
     "claimDetail": {
-      "escalatedReview": "Przekazano zespołowi ds. dowodów — dopóki źródłowa sprzeczność nie zostanie rozstrzygnięta, nie ma tu rozstrzygnięcia do potwierdzenia ani zakwestionowania.",
+      "escalatedReview": "Przekazano zespołowi ds. dowodów; dopóki źródłowa sprzeczność nie zostanie rozstrzygnięta, nie ma tu rozstrzygnięcia do potwierdzenia ani zakwestionowania.",
       "flagDispute": "Oznacz spór",
       "humanReview": "Weryfikacja przez człowieka",
-      "interpretationCaveat": "Jeden z uwzględnionych faktów jest obarczony istotnym zastrzeżeniem interpretacyjnym — niepewne jest znaczenie dowodu, a nie nośnik, z którego pochodzi.",
+      "interpretationCaveat": "Jeden z uwzględnionych faktów jest obarczony istotnym zastrzeżeniem interpretacyjnym: niepewne jest znaczenie dowodu, a nie nośnik, z którego pochodzi.",
       "notVerifiable": {
         "reopen": "Otwórz ponownie → porównaj z rejestrem",
         "reopenExplanation": "<strong>Odłożono jako niemożliwe do zweryfikowania.</strong> Jeśli to twierdzenie można jednak sprawdzić, otwórz je ponownie: AVT zachowa zmianę klasyfikacji i wykona tylko pominięte wcześniej porównanie z rejestrem.",
@@ -233,15 +233,15 @@
         "add": "Dodaj uwagę / korektę",
         "heading": "Twoja uwaga · {savedAt}",
         "headingUndated": "Twoja uwaga",
-        "placeholder": "Zapisz korektę lub wyjaśnienie. Uwaga zostanie przypisana wyłącznie do tego twierdzenia — nie zmieni rozstrzygnięcia ani rejestru faktów referencyjnych.",
+        "placeholder": "Zapisz korektę lub wyjaśnienie. Uwaga zostanie przypisana wyłącznie do tego twierdzenia; nie zmieni rozstrzygnięcia ani rejestru faktów referencyjnych.",
         "saveCorrection": "Zapisz korektę"
       },
       "overridden": "Zmienione",
-      "overrideNotice": "Rozstrzygnięcie zmieniono na <strong>{verdict}</strong> — poniżej bez zmian przedstawiono własną analizę narzędzia.",
+      "overrideNotice": "Rozstrzygnięcie zmieniono na <strong>{verdict}</strong>; poniżej bez zmian przedstawiono własną analizę narzędzia.",
       "overrideTooltip": "Osoba weryfikująca zapisała inne rozstrzygnięcie. Poniżej bez zmian przedstawiono własną analizę narzędzia.",
       "overrideVerdict": "Zmień rozstrzygnięcie",
       "recordConflict": {
-        "description": "Dwa fakty referencyjne dotyczą tej samej kwestii — <strong>{subject}</strong> — ale są ze sobą sprzeczne. Oba pochodzą ze źródeł o <strong>wysokim poziomie pewności</strong>, więc nie jest to problem wiarygodności: sam rejestr jest wewnętrznie niespójny. AVT wstrzymuje rozstrzygnięcie zamiast oceniać twierdzenie, ponieważ wybór nadrzędnego wpisu wymaga Twojej decyzji i jej odnotowania — narzędzie nie powinno dokonywać takiego wyboru bez informowania użytkownika.",
+        "description": "Dwa fakty referencyjne dotyczą tej samej kwestii (<strong>{subject}</strong>), ale są ze sobą sprzeczne. Oba pochodzą ze źródeł o <strong>wysokim poziomie pewności</strong>, więc nie jest to problem wiarygodności: sam rejestr jest wewnętrznie niespójny. AVT wstrzymuje rozstrzygnięcie zamiast oceniać twierdzenie, ponieważ wybór nadrzędnego wpisu wymaga Twojej decyzji i jej odnotowania; narzędzie nie powinno dokonywać takiego wyboru bez informowania użytkownika.",
         "escalatedNotice": "Oznaczono dla zespołu ds. dowodów. Sprzeczność w rejestrze pozostaje otwarta i uwzględniana w zestawieniu do czasu wybrania nadrzędnego wpisu.",
         "flagForEvidenceTeam": "Oznacz dla zespołu ds. dowodów",
         "governed": "<strong>{value}</strong> jest nadrzędny: twierdzenie ocenia się względem tego wpisu. Drugi wpis pozostaje zarejestrowany.",
@@ -258,46 +258,46 @@
       "score": {
         "anchorFactsDisagree": "Fakty referencyjne są sprzeczne",
         "conflictCount": "{count, plural, one {# sprzeczność} few {# sprzeczności} many {# sprzeczności} other {# sprzeczności}}",
-        "noCoverage": "<strong>Rejestr nie zawiera informacji na ten temat.</strong> Żaden fakt referencyjny w bazie danych nie odnosi się do tego twierdzenia. Nie jest to słaba ocena — na razie po prostu nie ma z czym porównać twierdzenia.",
-        "notVerifiable": "<strong>Twierdzenie niemożliwe do zweryfikowania.</strong> Żaden dokument nie może rozstrzygnąć takiego twierdzenia — na przykład hipotezy, prognozy, deklaracji zamiaru, wniosku prawnego lub twierdzenia zbyt nieprecyzyjnego, by je sprawdzić. Zostaje odłożone bez oceny.",
+        "noCoverage": "<strong>Rejestr nie zawiera informacji na ten temat.</strong> Żaden fakt referencyjny w bazie danych nie odnosi się do tego twierdzenia. Nie jest to słaba ocena: na razie po prostu nie ma z czym porównać twierdzenia.",
+        "notVerifiable": "<strong>Twierdzenie niemożliwe do zweryfikowania.</strong> Żaden dokument nie może rozstrzygnąć takiego twierdzenia: na przykład hipotezy, prognozy, deklaracji zamiaru, wniosku prawnego lub twierdzenia zbyt nieprecyzyjnego, by je sprawdzić. Zostaje odłożone bez oceny.",
         "outOf100": "<strong>/ 100</strong> poziom potwierdzenia",
         "supportCount": "{count, plural, one {# potwierdzenie} few {# potwierdzenia} many {# potwierdzeń} other {# potwierdzenia}}",
         "verdictWithheld": "Wstrzymano rozstrzygnięcie"
       },
       "sourceCount": "{count, plural, one {# źródło} few {# źródła} many {# źródeł} other {# źródła}}",
-      "whyScore": "Uzasadnienie oceny — fakty referencyjne"
+      "whyScore": "Uzasadnienie oceny: fakty referencyjne"
     },
     "claimTypes": {
       "fact": {
-        "hint": "Obiektywne, możliwe do sprawdzenia twierdzenie — oceniane względem rejestru. Obejmuje twierdzenia sformułowane jako przyznanie lub zaprzeczenie: ocenie podlega ich treść, a nie same słowa."
+        "hint": "Obiektywne, możliwe do sprawdzenia twierdzenie, oceniane względem rejestru. Obejmuje twierdzenia sformułowane jako przyznanie lub zaprzeczenie: ocenie podlega ich treść, a nie same słowa."
       },
       "opinion": {
-        "hint": "Ocena lub charakterystyka — żaden dokument nie może jej potwierdzić ani podważyć, dlatego zostaje odłożona bez oceny.",
+        "hint": "Ocena lub charakterystyka: żaden dokument nie może jej potwierdzić ani podważyć, dlatego zostaje odłożona bez oceny.",
         "label": "Opinia"
       },
       "setAside": "odłożone",
       "unverifiable": {
-        "hint": "Twierdzenie, którego nie może rozstrzygnąć żaden dokument — hipoteza, prognoza, deklaracja zamiaru lub przekonania, wniosek prawny albo twierdzenie zbyt nieprecyzyjne, by je sprawdzić. Zostaje odłożone bez oceny. Różni się od Braku pokrycia, który oznacza możliwy do sprawdzenia fakt, o którym rejestr jedynie nie zawiera informacji.",
+        "hint": "Twierdzenie, którego nie może rozstrzygnąć żaden dokument: hipoteza, prognoza, deklaracja zamiaru lub przekonania, wniosek prawny albo twierdzenie zbyt nieprecyzyjne, by je sprawdzić. Zostaje odłożone bez oceny. Różni się od Braku pokrycia, który oznacza możliwy do sprawdzenia fakt, o którym rejestr jedynie nie zawiera informacji.",
         "label": "Niemożliwe do zweryfikowania"
       }
     },
     "confidence": {
       "interpretation": "Interpretacja",
-      "tooltip": "Pewność interpretacji — stopień jednoznaczności znaczenia tego dowodu. Niezależna od nośnika źródła (pismo odręczne, skan itp.)."
+      "tooltip": "Pewność interpretacji: stopień jednoznaczności znaczenia tego dowodu. Niezależna od nośnika źródła (pismo odręczne, skan itp.)."
     },
     "confirm": {
       "acknowledge": "Przyjmuję do wiadomości",
       "recordConflict": "Potwierdź rozstrzygnięcie",
-      "supported": "Potwierdź — gotowe",
+      "supported": "Potwierdź: gotowe",
       "verdict": "Potwierdź wynik"
     },
     "disposition": {
-      "contested": "Rozstrzygnięcie jest jednoznaczne, ale interpretacja jednego z uwzględnionych faktów jest sporna — warto ją sprawdzić przed zatwierdzeniem.",
+      "contested": "Rozstrzygnięcie jest jednoznaczne, ale interpretacja jednego z uwzględnionych faktów jest sporna; warto ją sprawdzić przed zatwierdzeniem.",
       "contradicted": "Rejestr odbiega od tego twierdzenia. Zanim rozstrzygnięcie zostanie zatwierdzone, potrzebna jest decyzja człowieka.",
       "nocover": "Żaden fakt referencyjny nie odnosi się do tego twierdzenia, więc nie ma z czym go porównać. Zatwierdzenie jest opcjonalne.",
-      "notverifiable": "Odłożone jako niemożliwe do zweryfikowania — zatwierdzenie jest opcjonalne. Jeśli twierdzenie można jednak sprawdzić, otwórz je ponownie poniżej.",
-      "recordconflict": "Dwa materiały dowodowe w aktach są ze sobą sprzeczne. Powyżej wskaż, który jest nadrzędny, albo oznacz sprawę dla zespołu ds. dowodów — narzędzie nie dokona wyboru za Ciebie.",
-      "supported": "Rejestr potwierdza to twierdzenie. Zatwierdzenie potwierdza, że narzędzie odczytało je prawidłowo — nie jest potrzebna decyzja uznaniowa.",
+      "notverifiable": "Odłożone jako niemożliwe do zweryfikowania; zatwierdzenie jest opcjonalne. Jeśli twierdzenie można jednak sprawdzić, otwórz je ponownie poniżej.",
+      "recordconflict": "Dwa materiały dowodowe w aktach są ze sobą sprzeczne. Powyżej wskaż, który jest nadrzędny, albo oznacz sprawę dla zespołu ds. dowodów; narzędzie nie dokona wyboru za Ciebie.",
+      "supported": "Rejestr potwierdza to twierdzenie. Zatwierdzenie potwierdza, że narzędzie odczytało je prawidłowo; nie jest potrzebna decyzja uznaniowa.",
       "tension": "Rejestr potwierdza to twierdzenie tylko częściowo. Przed zatwierdzeniem rozstrzygnięcia rozważ powyższe fakty potwierdzające i przeczące."
     },
     "documents": {
@@ -356,7 +356,7 @@
       "failed": "Nie zapisano",
       "failedTitle": "Twoja zmiana nie została zapisana"
     },
-    "sourceMediumTooltip": "Nośnik źródła — neutralny opis. Sam w sobie nie obniża poziomu pewności.",
+    "sourceMediumTooltip": "Nośnik źródła: neutralny opis. Sam w sobie nie obniża poziomu pewności.",
     "states": {
       "contradicted": {
         "chip": "Sprzeczne",
@@ -386,7 +386,7 @@
     "verification": {
       "acceptRoutine": "Zaakceptuj {count, plural, one {# rutynowe twierdzenie} few {# rutynowe twierdzenia} many {# rutynowych twierdzeń} other {# rutynowego twierdzenia}}",
       "attentionComplete": "<strong>Wszystkie twierdzenia wymagające oceny zostały rozpatrzone.</strong> {count, plural, one {Pozostałe # rutynowe ustalenie nie wymaga indywidualnej weryfikacji.} few {Pozostałe # rutynowe ustalenia nie wymagają indywidualnej weryfikacji.} many {Pozostałych # rutynowych ustaleń nie trzeba weryfikować indywidualnie.} other {Pozostałego # rutynowego ustalenia nie trzeba weryfikować indywidualnie.}}",
-      "attentionOpen": "<strong>{count, plural, one {# twierdzenie wymaga} few {# twierdzenia wymagają} many {# twierdzeń wymaga} other {# twierdzenia wymaga}} Twojej oceny</strong> — sprzeczności i sporne interpretacje. {routineCount, plural, one {Pozostałe # jest rutynowe i nie wymaga indywidualnego zatwierdzenia.} few {Pozostałe # są rutynowe i nie wymagają indywidualnego zatwierdzenia.} many {Pozostałych # jest rutynowych i nie wymaga indywidualnego zatwierdzenia.} other {Pozostałego # rutynowego ustalenia nie trzeba indywidualnie zatwierdzać.}}",
+      "attentionOpen": "<strong>{count, plural, one {# twierdzenie wymaga} few {# twierdzenia wymagają} many {# twierdzeń wymaga} other {# twierdzenia wymaga}} Twojej oceny</strong>: sprzeczności i sporne interpretacje. {routineCount, plural, one {Pozostałe # jest rutynowe i nie wymaga indywidualnego zatwierdzenia.} few {Pozostałe # są rutynowe i nie wymagają indywidualnego zatwierdzenia.} many {Pozostałych # jest rutynowych i nie wymaga indywidualnego zatwierdzenia.} other {Pozostałego # rutynowego ustalenia nie trzeba indywidualnie zatwierdzać.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporne} other {}}{reviewStatus, select, reviewed {, zweryfikowane} disputed {, zakwestionowane} other {}})",
       "documentView": {
         "label": "Widok dokumentu",
@@ -1505,7 +1505,7 @@
       "updatingDescription": "Twoje rozszerzenie stella jest w starszej wersji. Chrome aktualizuje je automatycznie, zwykle w ciągu kilku godzin; potem stella znów będzie mogła otwierać i czytać dla Ciebie strony."
     },
     "cancelQueuedMessage": "Anuluj wiadomość w kolejce",
-    "caseLawGreeting": "Zapytaj mnie o to orzeczenie — mam dostęp do pełnej treści.",
+    "caseLawGreeting": "Zapytaj mnie o to orzeczenie; mam dostęp do pełnej treści.",
     "chatAbout": "Omów na czacie",
     "choosePromptImprovementStrategy": "Opcje ulepszania promptu",
     "commandsSection": "Polecenia",
@@ -1752,7 +1752,7 @@
       "tryOne": "Zacznij od jednego z tych"
     },
     "queuedAttachmentCount": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
-    "queuedNotice": "W kolejce — zostanie wysłana po zakończeniu bieżącej odpowiedzi",
+    "queuedNotice": "W kolejce: zostanie wysłana po zakończeniu bieżącej odpowiedzi",
     "reasoning": "Rozumowanie",
     "reasoningTokens": "{count, plural, one {# token rozumowania} few {# tokeny rozumowania} many {# tokenów rozumowania} other {# tokenu rozumowania}}",
     "recapLoading": "Podsumowywanie rozmowy…",
@@ -1960,7 +1960,7 @@
       "characterCount": "{count, plural, one {# znak} few {# znaki} many {# znaków} other {# znaku}}",
       "consoleLogs": "Dane wyjściowe konsoli",
       "exactCall": "Dokładne wywołanie",
-      "failed": "Ten krok się nie powiódł — stella poradzi sobie inaczej.",
+      "failed": "Ten krok się nie powiódł; stella poradzi sobie inaczej.",
       "field": "Pole",
       "input": "Dane wejściowe",
       "interrupted": "Przerwano przed ukończeniem",
@@ -1980,7 +1980,7 @@
     },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się",
-    "usageFallbackNotice": "Dzienny limit AI wyczerpany — odpowiedzi działają dalej na modelu standardowym.",
+    "usageFallbackNotice": "Dzienny limit AI wyczerpany; odpowiedzi działają dalej na modelu standardowym.",
     "videoContent": "Wygenerowane wideo",
     "webSearch": {
       "answer": "Podsumowanie wyszukiwania w internecie",
@@ -2624,7 +2624,7 @@
       "billingAddress": "Adres rozliczeniowy",
       "billingAddressCity": "Miasto",
       "billingAddressLine1": "Ulica",
-      "billingAddressLine2": "Ulica — linia 2",
+      "billingAddressLine2": "Ulica (linia 2)",
       "billingAddressPostalCode": "Kod pocztowy",
       "billingAddressState": "Województwo / stan",
       "color": "Kolor",
@@ -2671,8 +2671,8 @@
       "description": "Dopasuj kolumny do pól stella, sprawdź każdy wiersz, a następnie zaimportuj wszystkie prawidłowe kontakty.",
       "dropFile": "Przeciągnij tutaj plik z kontaktami",
       "fields": {
-        "address_line_1": "Adres — wiersz 1",
-        "address_line_2": "Adres — wiersz 2",
+        "address_line_1": "Adres (wiersz 1)",
+        "address_line_2": "Adres (wiersz 2)",
         "city": "Miejscowość",
         "first_name": "Imię",
         "last_name": "Nazwisko",
@@ -4258,7 +4258,7 @@
       "derivedQuestion": "Pytanie wyodrębniające",
       "derivedType": "Format odpowiedzi",
       "descriptionPlaceholder": "Co sprawdza ten playbook?",
-      "disabledBadge": "Wyłączone — pomijane podczas uruchomień",
+      "disabledBadge": "Wyłączone: pomijane podczas uruchomień",
       "discardChanges": "Odrzuć zmiany",
       "duplicatePosition": "Duplikuj stanowisko",
       "empty": "Brak playbooków",
@@ -4273,7 +4273,7 @@
         "restricted": "Odpowiedź musi być nieobecna"
       },
       "extractOnlyBadge": "Tylko ekstrakcja",
-      "extractOnlyDescription": "Bez oceny — wartość jest zapisywana w tabeli.",
+      "extractOnlyDescription": "Bez oceny; wartość jest zapisywana w tabeli.",
       "extraction": "Ekstrakcja",
       "extractionAuto": "Automatyczna",
       "extractionManual": "Ręczna",
@@ -4671,7 +4671,7 @@
     "continue": "Kontynuuj",
     "enterTeamName": "Wpisz powyżej nazwę zespołu",
     "getStarted": "Rozpocznij",
-    "inviteExternal": "Użytkownik zewnętrzny — uzyska dostęp do Twoich dokumentów",
+    "inviteExternal": "Użytkownik zewnętrzny: uzyska dostęp do Twoich dokumentów",
     "inviteHint": "Oddziel adresy przecinkami lub wklej listę.",
     "inviteInvalidEmail": "Nieprawidłowy e-mail: {value}",
     "inviteSubtitle": "Otrzymają e-mail z linkiem do dołączenia.",
@@ -4768,7 +4768,7 @@
       "prices": {
         "azureManaged": "Ceny wdrożenia są zarządzane w Azure.",
         "empty": "Dodaj dostawcę, aby zobaczyć ceny modeli",
-        "emptyHint": "Wybierz dostawcę po lewej — pokażemy tu ceny jego modeli.",
+        "emptyHint": "Wybierz dostawcę po lewej. Pokażemy tu ceny jego modeli.",
         "inMtok": "We/M",
         "model": "Model",
         "outMtok": "Wy/M",
@@ -5480,7 +5480,7 @@
       "practiceJurisdictions": "Jurysdykcje",
       "practiceJurisdictionsDescription": "Wybierz jurysdykcje, które są dla Ciebie istotne.",
       "promptCaching": {
-        "description": "Po włączeniu stella dodaje znaczniki cache, dzięki czemu powtarzające się zapytania AI dotyczące tego samego dokumentu lub wątku kosztują ~10× mniej i kończą się szybciej. Cache'owane prompty pozostają u dostawcy AI do 5 minut i są ograniczone do Twojej organizacji. Po wyłączeniu stella przestaje wysyłać znaczniki cache, ale dostawcy mogą nadal cache'ować oportunistycznie — tylko umowa Zero Data Retention z dostawcą całkowicie wyłącza cache'owanie po stronie serwera.",
+        "description": "Po włączeniu stella dodaje znaczniki cache, dzięki czemu powtarzające się zapytania AI dotyczące tego samego dokumentu lub wątku kosztują ~10× mniej i kończą się szybciej. Cache'owane prompty pozostają u dostawcy AI do 5 minut i są ograniczone do Twojej organizacji. Po wyłączeniu stella przestaje wysyłać znaczniki cache, ale dostawcy mogą nadal cache'ować oportunistycznie; tylko umowa Zero Data Retention z dostawcą całkowicie wyłącza cache'owanie po stronie serwera.",
         "title": "Cache'owanie promptów",
         "toggleLabel": "Zezwól na cache'owanie promptów u dostawców AI"
       },
@@ -6121,7 +6121,7 @@
       "fieldSettingBrackets": "Znacznik szablonu nie może zawierać nawiasów klamrowych. Usuń je z ustawień pola „{fieldPath}”.",
       "fieldWithoutMarker": "Pole „{fieldPath}” nie ma znacznika w dokumencie, więc jego ustawienia nie zostały zapisane.",
       "fillFormPreview": "Tak pojawi się w formularzu",
-      "fillStale": "Niezapisane zmiany — zapisz, aby wypełniać najnowsze pola.",
+      "fillStale": "Niezapisane zmiany; zapisz, aby wypełniać najnowsze pola.",
       "filledByPerson": "Osoba",
       "formulaExampleLabel": "Przykład",
       "formulaNoFields": "Najpierw dodaj pole liczbowe, aby formuła miała co obliczać.",
@@ -6878,7 +6878,7 @@
       "personalDescription": "Sprawy osobiste są prywatne. Awansuj je na sprawy klienckie, aby udostępnić zespołowi.",
       "personalLabel": "Osobista",
       "promoteCta": "Awansuj na sprawę kliencką",
-      "promoteDescription": "Przypisz klienta, aby udostępnić tę sprawę zespołowi. Działanie jest nieodwracalne — awansowane sprawy nie mogą wrócić do osobistych.",
+      "promoteDescription": "Przypisz klienta, aby udostępnić tę sprawę zespołowi. Działanie jest nieodwracalne: awansowane sprawy nie mogą wrócić do osobistych.",
       "promoteToClientConfirm": "Sprawa <bdi>{matterName}</bdi> zostanie przypisana do klienta <bdi>{clientName}</bdi> i udostępniona zespołowi. Nie będzie można przywrócić jej jako osobistej.",
       "promotedSuccess": "Sprawa awansowana",
       "recentClients": "Ostatni klienci",
@@ -7098,7 +7098,7 @@
       "optionsLabel": "Opcje",
       "person": "Osoba",
       "previewEmpty": "AI nie zwróciło żadnej wartości.",
-      "previewMockNotice": "Podgląd makietowy — backend jeszcze nie podłączony.",
+      "previewMockNotice": "Podgląd makietowy: backend jeszcze nie podłączony.",
       "previewOnFirst": "Podgląd na: {document}",
       "previewSkipped": "Brak odpowiedniego wejścia w tym dokumencie.",
       "previewSubject": "Wypróbuj na próbce",
