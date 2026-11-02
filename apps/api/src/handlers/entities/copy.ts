@@ -17,7 +17,7 @@ import {
   ENTITY_SNAPSHOT_COLUMNS,
   type EntitySnapshot,
   type EntityTransfer,
-  EVERY_LIVE_VERSION_SELECT,
+  EVERY_VERSION_SELECT,
   getFolderSubtree,
   remapFileIds,
   rollbackS3Copies,
@@ -141,7 +141,7 @@ const readSourceEntity = async ({
     return await tx.query.entities.findFirst({
       where,
       columns: ENTITY_SNAPSHOT_COLUMNS,
-      with: EVERY_LIVE_VERSION_SELECT,
+      with: EVERY_VERSION_SELECT,
     });
   }
 
@@ -170,7 +170,7 @@ const readWorkspaceEntities = async ({
     return await tx.query.entities.findMany({
       where,
       columns: ENTITY_SNAPSHOT_COLUMNS,
-      with: EVERY_LIVE_VERSION_SELECT,
+      with: EVERY_VERSION_SELECT,
       limit: LIMITS.entitiesCount,
     });
   }
