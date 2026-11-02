@@ -36,6 +36,16 @@
           "space": "type"
         },
         {
+          "name": "SearchFoldOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SearchMatchOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "SearchMatchRange",
           "kind": "type",
           "space": "type"
@@ -111,7 +121,22 @@
           "space": "value"
         },
         {
+          "name": "foldSearchMatchTextWithOffsetsAndOptions",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "foldSearchMatchTextWithOptions",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "foldToAscii",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "hasFoldedSearchMatch",
           "kind": "variable",
           "space": "value"
         },
@@ -228,12 +253,12 @@
     "./src/ascii-fold.d.ts": "export declare const applyAsciiFolds: (decomposed: string) => string;\nexport declare const foldToAscii: (text: string) => string;\n",
     "./src/diacritics.d.ts": "export declare const SEARCH_DIACRITIC_SOURCE = \"(?=\\\\p{M}|\\\\p{Script=Latin})\\\\p{Diacritic}\";\nexport declare const stripDiacritics: (text: string) => string;\nexport declare const stripDiacriticsForSlug: (text: string) => string;\n",
     "./src/escape-regexp.d.ts": "export declare const escapeRegExp: (value: string) => string;\n",
-    "./src/index.d.ts": "export { applyArabicFolds, applyArabicFoldsWithOffsets, ARABIC_DIGIT_FOLDS, ARABIC_LETTER_FOLDS, ARABIC_REMOVED, } from \"./arabic.js\";\nexport type { FoldedText } from \"./arabic.js\";\nexport { foldToAscii } from \"./ascii-fold.js\";\nexport { ASCII_FOLD_TABLE } from \"./ascii-fold-table.js\";\nexport { stripDiacritics, stripDiacriticsForSlug } from \"./diacritics.js\";\nexport { escapeRegExp } from \"./escape-regexp.js\";\nexport { arabicNormalize } from \"./normalize.js\";\nexport { findSearchMatchRanges, foldSearchMatchText, foldSearchMatchTextWithOffsets, } from \"./search-match.js\";\nexport type { FoldedSearchText, SearchMatchRange } from \"./search-match.js\";\nexport { collapseSpacedLetters, spacedLetterRunRegex, } from \"./spaced-letters.js\";\nexport { slugify } from \"./slug.js\";\nexport type { SlugCharset, SlugifyOptions, SlugSeparator } from \"./slug.js\";\nexport { normalizeUnicode, stripUnicodeMarks, UNICODE_NORMALIZATION_FORMS, } from \"./unicode.js\";\nexport type { UnicodeMarkClass, UnicodeNormalizationForm } from \"./unicode.js\";\nexport { normalizeNumericIndices } from \"./numeric-indices.js\";\n",
+    "./src/index.d.ts": "export { applyArabicFolds, applyArabicFoldsWithOffsets, ARABIC_DIGIT_FOLDS, ARABIC_LETTER_FOLDS, ARABIC_REMOVED, } from \"./arabic.js\";\nexport type { FoldedText } from \"./arabic.js\";\nexport { foldToAscii } from \"./ascii-fold.js\";\nexport { ASCII_FOLD_TABLE } from \"./ascii-fold-table.js\";\nexport { stripDiacritics, stripDiacriticsForSlug } from \"./diacritics.js\";\nexport { escapeRegExp } from \"./escape-regexp.js\";\nexport { arabicNormalize } from \"./normalize.js\";\nexport { findSearchMatchRanges, foldSearchMatchText, foldSearchMatchTextWithOffsets, foldSearchMatchTextWithOffsetsAndOptions, foldSearchMatchTextWithOptions, hasFoldedSearchMatch, } from \"./search-match.js\";\nexport type { FoldedSearchText, SearchFoldOptions, SearchMatchOptions, SearchMatchRange, } from \"./search-match.js\";\nexport { collapseSpacedLetters, spacedLetterRunRegex, } from \"./spaced-letters.js\";\nexport { slugify } from \"./slug.js\";\nexport type { SlugCharset, SlugifyOptions, SlugSeparator } from \"./slug.js\";\nexport { normalizeUnicode, stripUnicodeMarks, UNICODE_NORMALIZATION_FORMS, } from \"./unicode.js\";\nexport type { UnicodeMarkClass, UnicodeNormalizationForm } from \"./unicode.js\";\nexport { normalizeNumericIndices } from \"./numeric-indices.js\";\n",
     "./src/normalize.d.ts": "export declare const arabicNormalize: (text: string) => string;\n",
     "./src/numeric-indices.d.ts": "export declare const normalizeNumericIndices: (text: string) => string;\n",
     "./src/postgres-search-fold.d.ts": "import type { FoldedSearchText, SearchMatchRange } from \"./search-match.js\";\nexport declare const foldLikePostgresSearch: (value: string) => string;\nexport declare const foldLikePostgresSearchWithOffsets: (content: string) => FoldedSearchText;\nexport declare const findPostgresSearchFoldRanges: (content: string, term: string) => SearchMatchRange[];\n",
     "./src/search-match-key.d.ts": "type SearchMatchKeyRange = {\n    end: number;\n    start: number;\n};\nexport declare const containsSearchMatchKey: (content: string, query: string) => boolean;\ntype FindSearchMatchKeyRangesOptions = {\n    start?: number;\n    end?: number;\n    maxMatches?: number;\n};\nexport declare const findSearchMatchKeyRanges: (content: string, query: string, options?: FindSearchMatchKeyRangesOptions) => SearchMatchKeyRange[];\nexport {};\n",
-    "./src/search-match.d.ts": "export type SearchMatchRange = {\n    end: number;\n    start: number;\n};\nexport type FoldedSearchText = {\n    originalRanges: SearchMatchRange[];\n    text: string;\n};\nexport declare const foldSearchMatchText: (value: string) => string;\nexport declare const foldSearchMatchTextWithOffsets: (content: string) => FoldedSearchText;\ntype FindFoldedRangesOptions = {\n    content: FoldedSearchText;\n    maxMatches: number;\n    query: string;\n};\nexport declare const findFoldedRanges: ({ content, maxMatches, query, }: FindFoldedRangesOptions) => SearchMatchRange[];\ntype FindSearchMatchRangesOptions = {\n    maxMatches?: number;\n};\nexport declare const findSearchMatchRanges: (content: string | FoldedSearchText, query: string, options?: FindSearchMatchRangesOptions) => SearchMatchRange[];\nexport {};\n",
+    "./src/search-match.d.ts": "export type SearchMatchRange = {\n    end: number;\n    start: number;\n};\nexport type FoldedSearchText = {\n    originalRanges: SearchMatchRange[];\n    text: string;\n};\nexport type SearchFoldOptions = {\n    matchCase?: boolean;\n    matchDiacritics?: boolean;\n};\nexport type SearchMatchOptions = SearchFoldOptions & {\n    wholeWords?: boolean;\n};\nexport declare const foldSearchMatchTextWithOptions: (value: string, options: SearchFoldOptions) => string;\nexport declare const foldSearchMatchText: (value: string) => string;\nexport declare const foldSearchMatchTextWithOffsetsAndOptions: (content: string, options: SearchFoldOptions) => FoldedSearchText;\nexport declare const foldSearchMatchTextWithOffsets: (content: string) => FoldedSearchText;\nexport declare const hasFoldedSearchMatch: (text: string, query: string, options?: SearchMatchOptions) => boolean;\ntype FindFoldedRangesOptions = {\n    content: FoldedSearchText;\n    maxMatches: number;\n    query: string;\n    match?: SearchMatchOptions;\n};\nexport declare const findFoldedRanges: ({ content, maxMatches, query, match, }: FindFoldedRangesOptions) => SearchMatchRange[];\ntype FindSearchMatchRangesOptions = SearchMatchOptions & {\n    maxMatches?: number;\n};\nexport declare const findSearchMatchRanges: (content: string | FoldedSearchText, query: string, options?: FindSearchMatchRangesOptions) => SearchMatchRange[];\nexport {};\n",
     "./src/search-query-matcher.d.ts": "export type SearchQueryMatcher = (candidate: string | null | undefined) => boolean;\nexport declare const createSearchQueryMatcher: (query: string) => SearchQueryMatcher;\ntype FilterBySearchQueryOptions<T> = {\n    fields: (item: T) => readonly (string | null | undefined)[];\n    items: readonly T[];\n    query: string;\n};\nexport declare const filterBySearchQuery: <T>({ fields, items, query, }: FilterBySearchQueryOptions<T>) => T[];\nexport {};\n",
     "./src/slug.d.ts": "export type SlugCharset = \"ascii\" | \"unicode\";\nexport type SlugSeparator = \"-\" | \"_\";\nexport type SlugifyOptions = {\n    readonly charset: SlugCharset;\n    readonly separator: SlugSeparator;\n    readonly maxLength: number;\n    readonly fallback: string;\n};\nexport declare const slugify: (value: string, { charset, separator, maxLength, fallback }: SlugifyOptions) => string;\n",
     "./src/spaced-letters.d.ts": "export declare const spacedLetterRunRegex: () => RegExp;\nexport declare const collapseSpacedLetters: (text: string) => string;\n",
