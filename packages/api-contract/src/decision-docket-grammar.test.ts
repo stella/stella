@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import type { Arbitrary } from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   canonicalDecisionDocket,
@@ -374,21 +374,25 @@ describe("declared decision docket grammars", () => {
   });
 
   for (const grammar of Object.values(DECISION_DOCKET_GRAMMARS)) {
-    test(`${grammar.jurisdiction} format is a parse fixed point`, () => {
-      fc.assert(
-        fc.property(
-          canonicalDocketArbitraries[grammar.jurisdiction],
-          (canonical) => {
-            const parsed = grammar.parse(canonical);
-            expect(parsed).not.toBeNull();
-            if (parsed === null) {
-              return;
-            }
-            expect(grammar.parse(formatDecisionDocket(parsed))).toEqual(parsed);
-          },
-        ),
-        propertyConfig(),
-      );
+    describe(grammar.jurisdiction, () => {
+      test("format is a parse fixed point", () => {
+        assertProperty(
+          "format is a parse fixed point",
+          fc.property(
+            canonicalDocketArbitraries[grammar.jurisdiction],
+            (canonical) => {
+              const parsed = grammar.parse(canonical);
+              expect(parsed).not.toBeNull();
+              if (parsed === null) {
+                return;
+              }
+              expect(grammar.parse(formatDecisionDocket(parsed))).toEqual(
+                parsed,
+              );
+            },
+          ),
+        );
+      });
     });
 
     test(`${grammar.jurisdiction} fixtures keep distinct dockets apart`, () => {
@@ -500,7 +504,8 @@ describe("Slovak Constitutional Court dockets", () => {
   });
 
   test("every accepted spelling of one docket normalizes to one key", () => {
-    fc.assert(
+    assertProperty(
+      "every accepted spelling of one docket normalizes to one key",
       fc.property(
         fc.constantFrom("I", "II", "III", "IV", "PL"),
         fc.integer({ min: 1, max: 99_999 }),
@@ -522,7 +527,7 @@ describe("Slovak Constitutional Court dockets", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });
@@ -540,38 +545,40 @@ describe("stored dockets", () => {
   ] as const;
 
   for (const grammar of Object.values(DECISION_DOCKET_GRAMMARS)) {
-    test(`${grammar.jurisdiction} docket with a trailing part marker trims to the docket`, () => {
-      fc.assert(
-        fc.property(
-          canonicalDocketArbitraries[grammar.jurisdiction],
-          fc.constantFrom(...JUNK_TAILS),
-          (docket, tail) => {
-            expect(
-              storedDecisionDocketOf(docket, grammar.jurisdiction),
-            ).toEqual({ type: "canonical", caseNumber: docket });
-            const stored = storedDecisionDocketOf(
-              `${docket}${tail}`,
-              grammar.jurisdiction,
-            );
-            if (stored.type === "canonical") {
-              // The grammar itself accepts the tail (a closing dot).
-              return;
-            }
-            expect(stored.type).toBe("trimmed");
-            if (stored.type === "trimmed") {
-              // The shortest accepted cut: the docket itself, or more of the
-              // tail where a looser form of the grammar accepts that too.
-              expect(grammar.parse(stored.caseNumber)).not.toBeNull();
+    describe(grammar.jurisdiction, () => {
+      test("docket with a trailing part marker trims to the docket", () => {
+        assertProperty(
+          "docket with a trailing part marker trims to the docket",
+          fc.property(
+            canonicalDocketArbitraries[grammar.jurisdiction],
+            fc.constantFrom(...JUNK_TAILS),
+            (docket, tail) => {
               expect(
-                stored.caseNumber.startsWith(
-                  foldDecisionIdentifierInput(docket),
-                ),
-              ).toBe(true);
-            }
-          },
-        ),
-        propertyConfig(),
-      );
+                storedDecisionDocketOf(docket, grammar.jurisdiction),
+              ).toEqual({ type: "canonical", caseNumber: docket });
+              const stored = storedDecisionDocketOf(
+                `${docket}${tail}`,
+                grammar.jurisdiction,
+              );
+              if (stored.type === "canonical") {
+                // The grammar itself accepts the tail (a closing dot).
+                return;
+              }
+              expect(stored.type).toBe("trimmed");
+              if (stored.type === "trimmed") {
+                // The shortest accepted cut: the docket itself, or more of the
+                // tail where a looser form of the grammar accepts that too.
+                expect(grammar.parse(stored.caseNumber)).not.toBeNull();
+                expect(
+                  stored.caseNumber.startsWith(
+                    foldDecisionIdentifierInput(docket),
+                  ),
+                ).toBe(true);
+              }
+            },
+          ),
+        );
+      });
     });
   }
 

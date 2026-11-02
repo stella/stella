@@ -4,7 +4,7 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   absentDecisionTextFields,
@@ -760,7 +760,8 @@ describe("an offset names the same items whatever the publisher numbers from", (
 
 describe("offset cursor codec", () => {
   test("INVARIANT: every encoded safe offset decodes exactly", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: every encoded safe offset decodes exactly",
       fc.property(
         fc.maxSafeInteger().filter((offset) => offset >= 0),
         (offset) => {
@@ -773,12 +774,13 @@ describe("offset cursor codec", () => {
           ).toBe(offset);
         },
       ),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 
   test("INVARIANT: suffixing a canonical cursor with non-digits is rejected", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: suffixing a canonical cursor with non-digits is rejected",
       fc.property(
         fc.maxSafeInteger().filter((offset) => offset >= 0),
         fc.constantFrom("a", ".0", " ", "+", "-", "_"),
@@ -792,7 +794,7 @@ describe("offset cursor codec", () => {
           ).toBeNull();
         },
       ),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 });

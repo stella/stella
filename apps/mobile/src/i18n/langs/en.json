@@ -182,6 +182,17 @@
       "system": "Appearance: automatic",
       "light": "Appearance: light",
       "dark": "Appearance: dark"
+    },
+    "edit": {
+      "saved": "Saved",
+      "saving": "Saving…",
+      "notSaved": "Not saved yet",
+      "done": "Done",
+      "openFailed": "This document cannot be edited right now",
+      "takenOver": "Someone else is now editing this document. Your changes since the last save were not kept.",
+      "finishFailed": "Your changes are saved, but they could not become a new version yet. Tap Done again, or leave: the next edit continues from them.",
+      "stay": "Stay",
+      "leave": "Leave"
     }
   },
   "signIn": {
