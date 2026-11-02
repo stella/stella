@@ -734,6 +734,29 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             continue;
           }
           measured.add(budgetId);
+          if (measurement.measure !== undefined) {
+            const { measure } = measurement;
+            // db-await-in-loop: every writing job measures its fixed batch at both independently seeded history sizes.
+            const runs = await deadline.run(
+              `measure ${jobId}`,
+              async () => await measure(openClient),
+            );
+            for (const run of runs) {
+              log({ event: "read_budget_job_run", jobId, ...run });
+              note(budgetProblem(budgetId, run.metrics));
+            }
+            const small =
+              runs.at(0) ?? panic("Missing small writing-job measurement");
+            const large =
+              runs.at(1) ?? panic("Missing large writing-job measurement");
+            for (const violation of scaleViolations({
+              size: small.metrics.sharedBlocks,
+              double: large.metrics.sharedBlocks,
+            })) {
+              note(`${jobId}: ${violation}`);
+            }
+            continue;
+          }
           const backfill = backfillFixture(jobId);
           if (backfill !== undefined) {
             const pages: number[] = [];

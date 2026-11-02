@@ -18,6 +18,7 @@ import {
   fields,
   fileComparisonUploads,
   folioCollabRooms,
+  hostedCustomerErasures,
   invoiceLines,
   invoices,
   pendingUploads,
@@ -44,6 +45,7 @@ import {
 } from "@/api/lib/file-key";
 import { extractFieldFileRefs } from "@/api/lib/files/field-file-refs";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
+import { hostedExternalAccountRef } from "@/api/lib/hosted-usage-provider/external-account-ref";
 import { LIMITS } from "@/api/lib/limits";
 import {
   forEachOcrDerivativePage,
@@ -1109,6 +1111,15 @@ export const completeOrganizationDeletion = async ({
   pagesMax,
   tx,
 }: OrganizationTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
+  // Every deletion records the intent: a checkout can create the provider
+  // record before any entitlement exists, and a missing record erases as done.
+  await tx
+    .insert(hostedCustomerErasures)
+    .values({ externalCustomerRef: hostedExternalAccountRef(organizationId) })
+    .onConflictDoNothing({
+      target: hostedCustomerErasures.externalCustomerRef,
+    });
+
   const teardown = await recordOrganizationStorageTeardown({
     organizationId,
     ...(pagesMax === undefined ? {} : { pagesMax }),

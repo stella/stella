@@ -13,6 +13,7 @@ import {
   euCompletionControls,
   euCompletionReceipts,
   folioCollabRooms,
+  hostedCustomerErasures,
   invoices,
   legalReaderAnswerMessages,
   ORGANIZATION_ACCESS_STATE,
@@ -242,6 +243,16 @@ const PDF_SIGNING_SESSION_TRANSITIONS = defineTransitions(
   pdfSigningSessions,
   { open: ["finalized", "cancelled"], finalized: [], cancelled: [] },
   { terminal: ["finalized", "cancelled"] },
+);
+
+export const HOSTED_CUSTOMER_ERASURE_TRANSITIONS = defineTransitions(
+  hostedCustomerErasures,
+  {
+    pending: ["erased", "failed"],
+    failed: ["erased", "failed"],
+    erased: [],
+  },
+  { terminal: ["erased"] },
 );
 
 const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
@@ -485,6 +496,7 @@ export const TRANSITIONS = {
   flowRuns: FLOW_RUN_TRANSITIONS_V1,
   flowRunSteps: FLOW_RUN_STEP_TRANSITIONS_V1,
   folioCollabRooms: FOLIO_COLLAB_SEED_TRANSITIONS,
+  hostedCustomerErasures: HOSTED_CUSTOMER_ERASURE_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
   invoices: INVOICE_TRANSITIONS,
   legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },

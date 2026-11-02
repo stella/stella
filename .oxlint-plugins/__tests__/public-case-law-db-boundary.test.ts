@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -38,7 +38,92 @@ const lint = async (
     ...(ruleOptions === undefined ? {} : { ruleOptions }),
   });
 
+test("the public-law plugin and its transitive policy imports load in Node", () => {
+  const pluginUrl = new URL(
+    "../public-case-law-db-boundary.ts",
+    import.meta.url,
+  ).href;
+  const probe = Bun.spawnSync([
+    "node",
+    "--input-type=module",
+    "--eval",
+    `const plugin = await import(${JSON.stringify(pluginUrl)});
+     console.log(plugin.isCaseLawPublicReadModule("apps/api/src/lib/case-law-public-read-db.ts", new Set()));`,
+  ]);
+  expect(probe.exitCode, new TextDecoder().decode(probe.stderr)).toBe(0);
+  expect(new TextDecoder().decode(probe.stdout).trim()).toBe("true");
+});
+
 describe.serial("public-law relation scan", () => {
+  const candidateModules = new Map<string, ReadonlySet<string>>();
+
+  // Parse the production census once, before asynchronous lint cases start.
+  // Shuffled repeats must not reparse the API while a lint subprocess waits
+  // for the test process to read its output within the fixture's deadline.
+  beforeAll(() => {
+    const repositoryRoot = path.resolve(import.meta.dir, "../..");
+    const apiRoot = path.join(repositoryRoot, "apps/api/src");
+    for (const filename of new Bun.Glob("**/*.{ts,tsx}").scanSync({
+      cwd: apiRoot,
+      onlyFiles: true,
+    })) {
+      if (
+        filename.endsWith(".d.ts") ||
+        filename.endsWith(".test.ts") ||
+        filename.endsWith(".test.tsx") ||
+        filename.includes("/tests/")
+      ) {
+        continue;
+      }
+      const sourcePath = `apps/api/src/${filename}`;
+      const { module } = parseSource(
+        sourcePath,
+        readFileSync(path.join(apiRoot, filename), "utf-8"),
+      );
+      const importedModules = new Set<string>();
+      for (const { entries } of module.staticExports) {
+        for (const { moduleRequest } of entries) {
+          if (moduleRequest !== null) {
+            importedModules.add(
+              canonicalModuleId(moduleRequest.value, sourcePath),
+            );
+          }
+        }
+      }
+      let importsReadSurface = false;
+      for (const { entries, moduleRequest } of module.staticImports) {
+        const moduleId = canonicalModuleId(moduleRequest.value, sourcePath);
+        importedModules.add(moduleId);
+        const importedNames = new Set(
+          entries.flatMap(({ importName }) =>
+            importName.name === null ? [] : [importName.name],
+          ),
+        );
+        if (
+          moduleId === "apps/api/src/lib/case-law-public-read-db" &&
+          (importedNames.has("CaseLawPublicReadDb") ||
+            importedNames.has("CaseLawPublicReadTransaction"))
+        ) {
+          importsReadSurface = true;
+        }
+        if (
+          moduleId === "apps/api/src/lib/public-law-shared-query" &&
+          (importedNames.has("definePublicLawSharedQuery") ||
+            importedNames.has("PUBLIC_LAW_SHARED_QUERY"))
+        ) {
+          importsReadSurface = true;
+        }
+      }
+      if (importsReadSurface) {
+        candidateModules.set(sourcePath, importedModules);
+      }
+    }
+    candidateModules.set(
+      "apps/api/src/lib/public-law-shared-query.ts",
+      new Set(),
+    );
+  });
+
   test("withdrawal verdicts are read through their owner", async () => {
     const cases = [
       'import { caseLawWithdrawalStatus } from "@/api/db/schema"; void caseLawWithdrawalStatus;',
@@ -511,69 +596,6 @@ describe.serial("public-law relation scan", () => {
   });
 
   test("every production public-read module is in the rule boundary", () => {
-    const repositoryRoot = path.resolve(import.meta.dir, "../..");
-    const apiRoot = path.join(repositoryRoot, "apps/api/src");
-    const candidateModules = new Map<string, ReadonlySet<string>>();
-    for (const filename of new Bun.Glob("**/*.{ts,tsx}").scanSync({
-      cwd: apiRoot,
-      onlyFiles: true,
-    })) {
-      if (
-        filename.endsWith(".d.ts") ||
-        filename.endsWith(".test.ts") ||
-        filename.endsWith(".test.tsx") ||
-        filename.includes("/tests/")
-      ) {
-        continue;
-      }
-      const sourcePath = `apps/api/src/${filename}`;
-      const { module } = parseSource(
-        sourcePath,
-        readFileSync(path.join(apiRoot, filename), "utf-8"),
-      );
-      const importedModules = new Set<string>();
-      for (const { entries } of module.staticExports) {
-        for (const { moduleRequest } of entries) {
-          if (moduleRequest !== null) {
-            importedModules.add(
-              canonicalModuleId(moduleRequest.value, sourcePath),
-            );
-          }
-        }
-      }
-      let importsReadSurface = false;
-      for (const { entries, moduleRequest } of module.staticImports) {
-        const moduleId = canonicalModuleId(moduleRequest.value, sourcePath);
-        importedModules.add(moduleId);
-        const importedNames = new Set(
-          entries.flatMap(({ importName }) =>
-            importName.name === null ? [] : [importName.name],
-          ),
-        );
-        if (
-          moduleId === "apps/api/src/lib/case-law-public-read-db" &&
-          (importedNames.has("CaseLawPublicReadDb") ||
-            importedNames.has("CaseLawPublicReadTransaction"))
-        ) {
-          importsReadSurface = true;
-        }
-        if (
-          moduleId === "apps/api/src/lib/public-law-shared-query" &&
-          (importedNames.has("definePublicLawSharedQuery") ||
-            importedNames.has("PUBLIC_LAW_SHARED_QUERY"))
-        ) {
-          importsReadSurface = true;
-        }
-      }
-      if (importsReadSurface) {
-        candidateModules.set(sourcePath, importedModules);
-      }
-    }
-    candidateModules.set(
-      "apps/api/src/lib/public-law-shared-query.ts",
-      new Set(),
-    );
-
     expect(candidateModules.size).toBeGreaterThan(1);
     for (const [filename, importedModules] of candidateModules) {
       expect(isCaseLawPublicReadModule(filename, importedModules)).toBe(true);

@@ -227,6 +227,7 @@ export const FAILURE_TAGS = [
   "HandoffCompletionError",
   "HealthCheckError",
   "HeavyWorkSlotError",
+  "HostedCustomerErasureTerminalError",
   "HostedEventNeedsOperator",
   "HostedEventOrderingConflict",
   "HostedProviderContractMismatch",

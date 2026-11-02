@@ -127,6 +127,11 @@ import {
   reconcileFlowRunOrphans,
 } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
 import {
+  ERASE_HOSTED_CUSTOMERS_TASK,
+  eraseHostedCustomers,
+  runHostedCustomerErasures,
+} from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
+import {
   REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK,
   redactHostedUsageWebhookEvents,
 } from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
@@ -245,6 +250,7 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [ERASE_HOSTED_CUSTOMERS_TASK]: eraseHostedCustomers,
   [SWEEP_REQUEST_RECEIPTS_TASK]: sweepRequestReceipts,
   [RECONCILE_PUBLISHER_REMOVALS_TASK]: reconcilePublisherRemovalsTask,
   [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,
@@ -321,6 +327,9 @@ const SCHEDULER_TASKS = {
 >;
 
 type SchedulerTaskRegistryOptions = {
+  hostedCustomerErasureDependencies?: Parameters<
+    typeof runHostedCustomerErasures
+  >[1];
   resetReviewOrganization?: SchedulerTask;
 };
 
@@ -366,6 +375,16 @@ export const createSchedulerTaskRegistry = (
             key: name,
             run: async () => {
               const task = typeof entry === "function" ? entry : entry.task;
+              if (
+                name === ERASE_HOSTED_CUSTOMERS_TASK &&
+                options.hostedCustomerErasureDependencies !== undefined
+              ) {
+                await runHostedCustomerErasures(
+                  context,
+                  options.hostedCustomerErasureDependencies,
+                );
+                return undefined;
+              }
               const outcome = await task(context);
               if (outcome === undefined) {
                 return undefined;
