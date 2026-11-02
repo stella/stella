@@ -10,6 +10,7 @@ import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";
 
 import { parseChangesetEntry, parseChangesetReleases } from "./changeset-entry";
+import { assertOfflineCheckPreload } from "./offline-check-startup";
 import { normalizeCompatibilityDeclarations } from "./package-api-compatibility";
 import { hasRuntimeExport } from "./package-api-export-space";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
@@ -97,9 +98,14 @@ const compilerHost = (): ts.CompilerHost => {
   return host;
 };
 
+// TypeScript exposes symbol categories and modifiers as bitmasks; this is the
+// one place that reads them.
+const hasFlag = (flags: number, flag: number): boolean =>
+  // oxlint-disable-next-line no-bitwise -- TypeScript exposes symbol categories and modifiers as bitmasks.
+  (flags & flag) !== 0;
+
 const hasSymbolFlag = (symbol: ts.Symbol, flag: ts.SymbolFlags): boolean =>
-  // oxlint-disable-next-line no-bitwise -- TypeScript exposes symbol categories as a bitmask.
-  (symbol.flags & flag) !== 0;
+  hasFlag(symbol.flags, flag);
 
 const symbolKind = (symbol: ts.Symbol): string => {
   const kinds = [
@@ -405,9 +411,7 @@ export const generateApiReport = (packageDir: string): ApiReport => {
 const hasModifierFlag = (
   declaration: ts.Declaration,
   flag: ts.ModifierFlags,
-): boolean =>
-  // oxlint-disable-next-line no-bitwise -- TypeScript exposes modifiers as a bitmask.
-  (ts.getCombinedModifierFlags(declaration) & flag) !== 0;
+): boolean => hasFlag(ts.getCombinedModifierFlags(declaration), flag);
 
 const isNonPublicMember = (member: ts.Symbol): boolean =>
   member.name.startsWith("#") ||
@@ -874,6 +878,8 @@ const USAGE =
   "Usage: bun scripts/package-api-report.ts --check --base-dir <directory from scripts/package-api-base.sh>";
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
+
   const [mode, option, baseDir, ...extra] = process.argv.slice(2);
   if (
     mode !== "--check" ||
