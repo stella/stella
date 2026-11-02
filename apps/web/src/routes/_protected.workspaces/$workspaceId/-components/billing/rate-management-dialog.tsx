@@ -344,7 +344,8 @@ export const CreateRateTableForm = ({
 }: {
   /**
    * Whether the matter already has a default table. Without one, the server
-   * makes the new table the default, so the form shows it checked and fixed.
+   * makes the new table the default, so the form shows it checked and fixed;
+   * it still submits only the reader's own choice.
    */
   hasDefaultTable: boolean;
   /** Resolves with the server's message for the name when it rejected it. */
@@ -376,7 +377,10 @@ export const CreateRateTableForm = ({
       defaultValues: {
         name: "",
         currency: "USD",
-        isDefault: !hasDefaultTable,
+        // Only the reader's own choice is sent: the server makes the table
+        // the default when the matter has none, and a list page that missed
+        // the default must not take it away from another table.
+        isDefault: false,
       },
       onSubmit: async ({ value, formApi }) => {
         const nameIssue = await onSubmit(value);

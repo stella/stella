@@ -144,17 +144,19 @@ test("creating a rate table shows the server's length verdict under the name", a
 test.each([
   {
     hasDefaultTable: false,
-    isDefault: true,
+    shownChecked: true,
     hint: messages.billing.rates.firstTableIsDefault,
   },
   {
     hasDefaultTable: true,
-    isDefault: false,
+    shownChecked: false,
     hint: messages.billing.rates.onlyDefaultApplies,
   },
 ])(
-  "a rate table form with hasDefaultTable=$hasDefaultTable submits isDefault=$isDefault",
-  async ({ hasDefaultTable, isDefault, hint }) => {
+  // The server makes a matter's first table its default, so the form never
+  // forces the flag from a table list that may be incomplete.
+  "a rate table form with hasDefaultTable=$hasDefaultTable shows checked=$shownChecked and submits only the reader's choice",
+  async ({ hasDefaultTable, shownChecked, hint }) => {
     const submitted: { isDefault?: boolean | undefined }[] = [];
     render(
       withIntl(
@@ -171,13 +173,13 @@ test.each([
 
     screen.getByText(hint);
     const checkbox = screen.getByRole("checkbox");
-    expect(checkbox.getAttribute("aria-checked")).toBe(String(isDefault));
+    expect(checkbox.getAttribute("aria-checked")).toBe(String(shownChecked));
     const input = screen.getByPlaceholderText(
       messages.billing.rates.tableNamePlaceholder,
     );
     fireEvent.change(input, { target: { value: "Standard" } });
     fireEvent.submit(input.closest("form") ?? input);
 
-    await waitFor(() => expect(submitted).toEqual([{ isDefault }]));
+    await waitFor(() => expect(submitted).toEqual([{ isDefault: false }]));
   },
 );
