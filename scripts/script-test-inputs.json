@@ -3,10 +3,7 @@
     "scripts/api-dockerfile-entrypoints.test.ts": ["**"],
     "scripts/api-test-impact.test.ts": ["**"],
     "scripts/audit-mutation-ledger.test.ts": ["**"],
-    "scripts/autofix-baseline-prune.test.ts": [
-      ".oxlint-plugins/**",
-      "scripts/**"
-    ],
+    "scripts/autofix-baseline-prune.test.ts": ["**"],
     "scripts/autofix-pure-generators.test.ts": [
       "apps/api/**",
       "packages/agent-input/**",
