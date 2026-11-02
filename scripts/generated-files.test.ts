@@ -811,7 +811,11 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
       ).toBe(true);
     }
     expect(entry.outputs.every((glob) => !/[|\n]/u.test(glob))).toBe(true);
-    const scriptFile = entry.write.find((part) => /\.(?:ts|sh)$/u.test(part));
+    // Any file a runtime can execute directly: TypeScript, JavaScript in each
+    // module flavour, or a shell script.
+    const scriptFile = entry.write.find((part) =>
+      /\.(?:[cm]?[jt]s|sh)$/u.test(part),
+    );
     if (scriptFile) {
       expect(existsSync(scriptFile), `${entry.id}: ${scriptFile}`).toBe(true);
       continue;

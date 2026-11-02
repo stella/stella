@@ -89,6 +89,7 @@ import type {
 } from "@/lib/types";
 import { downloadFile } from "@/lib/utils";
 import { useUpdateView } from "@/lib/workspaces/mutations/views";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import {
   workspaceFilesOptions,
   workspaceFoldersOptions,
@@ -1050,12 +1051,13 @@ const useMatterColumnToggleGroups = (
   properties: WorkspaceProperty[],
 ): ColumnToggleGroup[] => {
   const t = useTranslations();
+  const displayName = usePropertyDisplayName();
   const propertyColumns = (tool: WorkspaceProperty["tool"]["type"]) =>
     properties
       .filter((property) => property.tool.type === tool)
       .map((property) => ({
         id: property.id,
-        name: property.name,
+        name: displayName(property),
         icon: <PropertyIcon type={property.content.type} />,
       }));
 
