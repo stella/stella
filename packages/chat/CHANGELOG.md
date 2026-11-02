@@ -1,5 +1,20 @@
 # @stll/chat
 
+## 0.3.4
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/ui@0.64.0
+
+## 0.3.3
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/ai-catalog@0.10.0
+  - @stll/ui@0.63.0
+
 ## 0.3.2
 
 ### Patch Changes

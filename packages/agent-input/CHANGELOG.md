@@ -1,5 +1,11 @@
 # @stll/agent-input
 
+## 0.4.0
+
+### Minor Changes
+
+- Share JSON Schema optional-value handling through the agent-input package.
+
 ## 0.3.0
 
 ### Minor Changes
