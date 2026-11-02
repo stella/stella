@@ -4,6 +4,9 @@ import { eq, sql } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
 
+// Constants only: safe to load before the fixture's environment is read.
+import { SETTING_USER_ID } from "@/api/db/rls";
+
 const email = process.env["APP_REVIEW_ACCOUNT_EMAIL"];
 const organizationId = process.env["APP_REVIEW_ORGANIZATION_ID"];
 
@@ -18,7 +21,6 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
     await import("@/api/db/auth-schema");
   const { accountAuditLogs, userProfessionalUseAcceptances } =
     await import("@/api/db/schema");
-  const { SETTING_USER_ID } = await import("@/api/db/rls");
   const { brandPersistedUserId } = await import("@/api/lib/safe-id-boundaries");
   const { getBetterAuthOAuthResources } =
     await import("@/api/lib/oauth-resource-policy");
@@ -203,7 +205,7 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
     // FORCE RLS binds even owner reads of account history to the account.
     const creationHistory = await rootDb.transaction(async (tx) => {
       await tx.execute(
-        sql`SELECT set_config(${SETTING_USER_ID}, ${created.id}, true)`,
+        sql`SELECT set_config('${sql.raw(SETTING_USER_ID)}', ${created.id}, true)`,
       );
       return await tx
         .select({
