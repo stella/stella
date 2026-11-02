@@ -7,6 +7,7 @@ import type { Verdict } from "@stll/db-load-gate/health";
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
 import { DAY_IN_MS } from "@stll/time";
 
+import { CASE_LAW_REPLAY_PENDING_INDEX } from "@/api/db/case-law-parsed-input-state";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -680,6 +681,45 @@ if (!databaseUrl || !enabled) {
         .update(caseLawSources)
         .set({ adapterKey: `fixture-${cz.source.id}` })
         .where(eq(caseLawSources.id, cz.source.id));
+    });
+
+    test("the lag probe waits for the replay-pending index instead of scanning the source", async () => {
+      const lagging = await fixture(3);
+      await db
+        .update(caseLawSources)
+        .set({ adapterKey: ADAPTER_KEYS.EU_ECJ })
+        .where(eq(caseLawSources.id, lagging.source.id));
+      const lags: string[] = [];
+      const store = createBackgroundReplayStore({
+        db,
+        now: () => Date.UTC(2026, 9, 1),
+        enrolment: {
+          ...OFF_REPLAY_ENROLMENT_FIXTURE,
+          [ADAPTER_KEYS.EU_ECJ]: { mode: "dry-run", dailyBudget: 3 },
+        },
+        onLag: (source) => {
+          lags.push(source.id);
+        },
+      });
+      // The state a deploy finds before the online build: absent by name.
+      const name = CASE_LAW_REPLAY_PENDING_INDEX.name;
+      await db.execute(
+        sql.raw(`ALTER INDEX public."${name}" RENAME TO "${name}_away"`),
+      );
+      try {
+        expect(await store.chooseSource()).toBeNull();
+        expect(lags).toEqual([]);
+      } finally {
+        await db.execute(
+          sql.raw(`ALTER INDEX public."${name}_away" RENAME TO "${name}"`),
+        );
+      }
+      expect((await store.chooseSource())?.id).toBe(lagging.source.id);
+      expect(lags).toEqual([lagging.source.id]);
+      await db
+        .update(caseLawSources)
+        .set({ adapterKey: `fixture-${lagging.source.id}` })
+        .where(eq(caseLawSources.id, lagging.source.id));
     });
 
     test("charges reservations once, reuses pending work, and resets the daily allowance", async () => {

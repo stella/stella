@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 
 import type { Verdict } from "@stll/db-load-gate/health";
@@ -26,6 +26,11 @@ export const BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK =
   "caseLaw.backfillParsedInputState" as const;
 
 const DEFAULT_PAGE_ROWS = 1000;
+
+/** Another runner owns the job: the final checkpoint must not commit. */
+class ParsedInputStateBackfillLeaseLost extends TaggedError(
+  "ParsedInputStateBackfillLeaseLost",
+)<{ message: string }> {}
 const CONTINUATION_DELAY_MS = 1000;
 
 type BackfillOptions = {
@@ -98,7 +103,7 @@ export const createCaseLawParsedInputStateBackfill =
             if (last === undefined) {
               // Use the scheduler's one-shot retirement mechanism. Persist it
               // with the final checkpoint so a crash cannot restart the walk.
-              await tx
+              const retired = await tx
                 .update(schedulerJobs)
                 .set({
                   enabled: false,
@@ -109,9 +114,18 @@ export const createCaseLawParsedInputStateBackfill =
                     eq(schedulerJobs.id, job.id),
                     eq(schedulerJobs.lockedBy, leaseToken),
                   ),
-                );
+                )
+                .returning({ id: schedulerJobs.id });
+              if (retired.length === 0) {
+                throw new ParsedInputStateBackfillLeaseLost({
+                  message:
+                    "Parsed input state backfill lost its scheduler lease before retiring",
+                });
+              }
               return { cursor: null, done: true, value: 0 };
             }
+            // An abort during the page read must not derive one more batch.
+            signal.throwIfAborted();
             const updated = await deriveCaseLawParsedInputStateBatch({
               tx,
               ids: page.map(({ id }) => id),
@@ -146,6 +160,14 @@ export const createCaseLawParsedInputStateBackfill =
               ? {}
               : { heldSince: settled.error.heldSince }),
           }),
+        );
+        return Result.ok();
+      }
+      if (settled.error instanceof ParsedInputStateBackfillLeaseLost) {
+        // The rolled-back step left the cursor and job for the lease holder.
+        logger.info(
+          "scheduler.case_law_parsed_input_state_backfill_lease_lost",
+          {},
         );
         return Result.ok();
       }

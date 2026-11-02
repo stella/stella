@@ -23,6 +23,7 @@ import { sha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS } from "@stll/time";
 
 import { decodeCheckpoint } from "@/api/db/backfill-runtime";
+import { CASE_LAW_REPLAY_PENDING_INDEX } from "@/api/db/case-law-parsed-input-state";
 import type { Transaction } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -49,6 +50,7 @@ import {
   lockCaseLawReplayPendingBatch,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { readOnlineIndexesReady } from "@/api/lib/db/online-index-readiness";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionLifecycle } from "@/api/lib/db/transitions";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -354,9 +356,8 @@ const chooseSource = async (
           }),
         ];
   });
-  const { gateStates, pendingSourceIds } = await withReplayTransaction(
-    db,
-    async (tx) => {
+  const { gateStates, pendingSourceIds, probeIndexReady } =
+    await withReplayTransaction(db, async (tx) => {
       const gateRows =
         gateNames.length === 0
           ? []
@@ -394,9 +395,19 @@ const chooseSource = async (
           gateRows.map((row) => [row.name, decodeCheckpoint(row).batch]),
         ),
         pendingSourceIds: new Set(pendingRows.map((row) => row.sourceId)),
+        // The lag probe is an index-only existence read. Until the online
+        // migrator has built the replay-pending index, the same read scans the
+        // source and outlasts the statement budget on every tick.
+        probeIndexReady: await readOnlineIndexesReady(tx, [
+          CASE_LAW_REPLAY_PENDING_INDEX,
+        ]),
       };
-    },
-  );
+    });
+  if (!probeIndexReady) {
+    logger.info("case_law_replay.lag_probe_index_not_ready", {
+      index: CASE_LAW_REPLAY_PENDING_INDEX.name,
+    });
+  }
   for (const adapterKey of ordered) {
     const policy = enrolment[adapterKey];
     if (policy.mode === "off" || sourceEnabled?.(adapterKey) === false) {
@@ -433,7 +444,7 @@ const chooseSource = async (
       }
       const pending = pendingSourceIds.has(source.id);
       let probe = pending;
-      if (!pending) {
+      if (!pending && probeIndexReady) {
         // db-await-in-loop: Only probe lag after this source has no pending receipt, before advancing to the next source in round-robin order.
         probe = await withReplayTransaction(
           db,

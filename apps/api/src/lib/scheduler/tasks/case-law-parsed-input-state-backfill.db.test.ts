@@ -114,14 +114,15 @@ const fixture = (
   return {
     events,
     continuations,
-    run: async () => {
-      const job =
+    run: async (lease?: string) => {
+      const stored =
         (
           await db
             .select()
             .from(schedulerJobs)
             .where(eq(schedulerJobs.id, JOB_ID))
         ).at(0) ?? panic("Missing fixture job");
+      const job = { ...stored, lockedBy: lease ?? stored.lockedBy };
       const result = await task({
         db,
         job,
@@ -236,4 +237,32 @@ test("a held database gate records a hold without rewriting decisions or advanci
       await db.select().from(schedulerJobs).where(eq(schedulerJobs.id, JOB_ID))
     ).at(0),
   ).toMatchObject({ enabled: true, payload: null });
+});
+
+test("a runner that lost its lease keeps the walk open instead of recording completion", async () => {
+  await insertDecisions();
+  const walk = fixture();
+  await walk.run();
+  await walk.run();
+  const beforeRetirement = await checkpoint();
+  expect(beforeRetirement?.cursor).toBe(decisionId(4));
+  const stale = fixture();
+  await stale.run("stale-lease");
+  expect(stale.events).toEqual([
+    "scheduler.case_law_parsed_input_state_backfill_lease_lost",
+  ]);
+  expect(stale.continuations).toEqual([]);
+  expect((await checkpoint())?.cursor).toBe(decisionId(4));
+  expect(
+    (
+      await db.select().from(schedulerJobs).where(eq(schedulerJobs.id, JOB_ID))
+    ).at(0),
+  ).toMatchObject({ enabled: true, payload: null });
+  // The lease holder still retires the job on its own run.
+  await fixture().run();
+  expect(
+    (
+      await db.select().from(schedulerJobs).where(eq(schedulerJobs.id, JOB_ID))
+    ).at(0),
+  ).toMatchObject({ enabled: false, payload: { completed: true } });
 });
