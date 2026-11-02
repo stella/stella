@@ -30,6 +30,7 @@ import { persistNativeExtractionProjection } from "@/api/lib/search/process-extr
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -317,9 +318,7 @@ if (!databaseUrl || !runPostgresTests) {
                 await releaseFirst.promise;
               }
               if (parent === "organization") {
-                await tx
-                  .delete(organization)
-                  .where(eq(organization.id, organizationId));
+                await deleteOrganizationsForTest(tx, [organizationId]);
               } else {
                 await tx
                   .delete(workspaces)
@@ -393,9 +392,7 @@ if (!databaseUrl || !runPostgresTests) {
           try {
             await Promise.all(pending);
           } finally {
-            await setup.db
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(setup.db, [organizationId]);
           }
         }
       });
@@ -479,9 +476,7 @@ if (!databaseUrl || !runPostgresTests) {
         try {
           await Promise.all(pending);
         } finally {
-          await setup.db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(setup.db, [organizationId]);
         }
       }
     });
