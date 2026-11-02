@@ -93,6 +93,113 @@ const assertVisibleTabTargets = async (page: Page) => {
   }
 };
 
+const blankCellPoint = async (cell: Locator) =>
+  await cell.evaluate(async (element) => {
+    const margin = 8;
+    const rectValues = (rect: DOMRect) => [
+      rect.left,
+      rect.top,
+      rect.right,
+      rect.bottom,
+    ];
+    const nextFrameRect = async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      });
+      return element.getBoundingClientRect();
+    };
+
+    let cellRect = await nextFrameRect();
+    // real-time: layout stability can only be observed across rendered frames.
+    while (true) {
+      const nextRect = await nextFrameRect();
+      if (
+        rectValues(cellRect).every(
+          (value, index) => value === rectValues(nextRect)[index],
+        )
+      ) {
+        cellRect = nextRect;
+        break;
+      }
+      cellRect = nextRect;
+    }
+    // A virtualized row can replace its cell while the frames settle; a
+    // detached or unsized cell has no point to click, so the caller retries
+    // with a freshly resolved cell.
+    if (!element.isConnected || cellRect.width === 0 || cellRect.height === 0) {
+      return null;
+    }
+
+    const y = cellRect.top + cellRect.height / 2;
+    const linkRects = [...element.querySelectorAll("a")].flatMap((link) =>
+      [...link.getClientRects()].map((rect) => ({
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+      })),
+    );
+    const blocked = linkRects
+      .filter((rect) => y >= rect.top - margin && y <= rect.bottom + margin)
+      .map((rect) => ({
+        left: Math.max(cellRect.left + margin, rect.left - margin),
+        right: Math.min(cellRect.right - margin, rect.right + margin),
+      }))
+      .filter((interval) => interval.left < interval.right)
+      .toSorted((first, second) => first.left - second.left);
+    const available: { left: number; right: number }[] = [];
+    let start = cellRect.left + margin;
+    for (const interval of blocked) {
+      if (interval.left > start) {
+        available.push({ left: start, right: interval.left });
+      }
+      start = Math.max(start, interval.right);
+    }
+    if (start < cellRect.right - margin) {
+      available.push({ left: start, right: cellRect.right - margin });
+    }
+    const widest = available
+      .filter((interval) => interval.right - interval.left >= margin)
+      .toSorted(
+        (first, second) =>
+          second.right - second.left - (first.right - first.left),
+      )
+      .at(0);
+    if (widest === undefined) {
+      throw new Error(
+        `No 8px blank interval in email cell ${JSON.stringify(rectValues(cellRect))}; link rects: ${JSON.stringify(linkRects)}`,
+      );
+    }
+    const x = (widest.left + widest.right) / 2;
+    const target = document.elementFromPoint(x, y);
+    const point = { x: x - cellRect.left, y: y - cellRect.top };
+    if (target === null) {
+      return { ...point, hit: "outside-viewport" };
+    }
+    return {
+      ...point,
+      hit: target.closest("a") === null ? "cell-space" : "link",
+    };
+  });
+
+const MAX_CELL_RESOLUTIONS = 20;
+
+const renderedBlankCellPoint = async (cell: Locator) => {
+  // real-time: each attempt re-resolves the locator and waits for rendered
+  // frames, so a replaced cell is measured once the new one is laid out.
+  for (let attempt = 0; attempt < MAX_CELL_RESOLUTIONS; attempt += 1) {
+    const point = await blankCellPoint(cell);
+    if (point !== null) {
+      return point;
+    }
+  }
+  throw new Error(
+    `Email cell stayed detached or unsized across ${MAX_CELL_RESOLUTIONS} resolutions`,
+  );
+};
+
 test.describe("focus target detector", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -249,7 +356,7 @@ for (const email of [null, "a@example.test"]) {
       // elementFromPoint answers null outside the viewport; a wide table can
       // leave the email column's edge off screen.
       await cell.scrollIntoViewIfNeeded();
-      const space = await cellSpacePoint(cell);
+      const space = await renderedBlankCellPoint(cell);
       expect(space.hit).toBe("cell-space");
       await cell.click({ position: { x: space.x, y: space.y } });
       await expect(page).toHaveURL(new RegExp(`/contacts/${contactId}$`, "u"));
