@@ -12,9 +12,12 @@ import path from "node:path";
 
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { ADAPTER_MODULES } from "./adapter-registry-lazy";
+
+const testFetchState = createTestFetch();
 
 const time = Date.now();
 const cacheDirectories: string[] = [];
@@ -26,14 +29,14 @@ const createCacheDirectory = () => {
   cacheDirectories.push(directory);
   return directory;
 };
-const originalFetch = globalThis.fetch;
+
 const originalSleep = Bun.sleep;
 afterEach(() => {
   setSystemTime();
   for (const directory of cacheDirectories.splice(0)) {
     rmSync(directory, { recursive: true });
   }
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   Bun.sleep = originalSleep;
 });
 
@@ -64,10 +67,12 @@ describe("registered adapters classify source availability", () => {
       test(`${key}: ${fault}`, async () => {
         Bun.sleep = async () => undefined;
         let requests = 0;
-        globalThis.fetch = asFetchMock(async () => {
-          requests++;
-          return await fetch();
-        });
+        testFetchState.set(
+          asFetchMock(async () => {
+            requests++;
+            return await fetch();
+          }),
+        );
         const adapter = await load();
         const page = await adapter.fetchPage(null, {
           cacheDirectory: createCacheDirectory(),
@@ -86,10 +91,12 @@ describe("registered adapters classify source availability", () => {
     async (status) => {
       Bun.sleep = async () => undefined;
       let requests = 0;
-      globalThis.fetch = asFetchMock(async () => {
-        requests += 1;
-        return new Response("Publisher unavailable", { status });
-      });
+      testFetchState.set(
+        asFetchMock(async () => {
+          requests += 1;
+          return new Response("Publisher unavailable", { status });
+        }),
+      );
       const adapter = await ADAPTER_MODULES["pl-tk"]();
       const page = await adapter.fetchPage(null, {
         cacheDirectory: createCacheDirectory(),
@@ -112,11 +119,13 @@ describe("registered adapters classify source availability", () => {
   test("a successful landing without the required session is an adapter error", async () => {
     // A successful response with an unexpected session shape is a contract
     // failure; availability cannot be inferred from a missing cookie.
-    globalThis.fetch = asFetchMock(
-      async () =>
-        new Response(
-          "<html><body>The publisher session landing page.</body></html>",
-        ),
+    testFetchState.set(
+      asFetchMock(
+        async () =>
+          new Response(
+            "<html><body>The publisher session landing page.</body></html>",
+          ),
+      ),
     );
     const adapter = await ADAPTER_MODULES["pl-tk"]();
     const page = await adapter.fetchPage(null, {

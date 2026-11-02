@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig } from "@stll/db-load-gate/health";
 
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import { CASE_LAW_POPULATION_SEED_REPAIR_NAME } from "@/api/lib/case-law/population-count-limits";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
@@ -105,7 +105,7 @@ export const CASE_LAW_POPULATION_REPAIR = {
       tableName: "case_law_decisions",
       initialSize: BATCH_SIZE,
       config: {
-        ...defaultConfig,
+        ...loadGateHealthConfig(),
         maxSize: MAX_BATCH_SIZE,
         batchStatementTimeoutMs: BATCH_STATEMENT_TIMEOUT_MS,
         batchLockTimeoutMs: BATCH_LOCK_TIMEOUT_MS,
