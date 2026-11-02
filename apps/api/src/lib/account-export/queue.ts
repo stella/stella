@@ -12,6 +12,7 @@ import {
   enqueueAccountExport,
 } from "@/api/lib/account-export/enqueue";
 import type { AccountExportJob } from "@/api/lib/account-export/enqueue";
+import { buildOrganizationAuditArchive } from "@/api/lib/account-export/organization-audit-archive";
 import type { AccountExportDataDb } from "@/api/lib/account-export/pages";
 import type { AccountExportProjections } from "@/api/lib/account-export/projections";
 import {
@@ -25,9 +26,11 @@ import {
   listRecoverableAccountExports,
 } from "@/api/lib/account-export/store";
 import type {
+  AccountExportBuild,
   AccountExportClaim,
   AccountExportDb,
   AccountExportRow,
+  AccountExportSubject,
 } from "@/api/lib/account-export/store";
 import { detached } from "@/api/lib/analytics/capture";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
@@ -76,8 +79,8 @@ export type AccountExportProcessDeps = {
     options: Omit<
       Parameters<typeof buildAccountExportArchive>[0],
       "projections" | "deps"
-    >,
-  ) => Promise<void>;
+    > & { subject: AccountExportSubject },
+  ) => Promise<AccountExportBuild>;
   complete: typeof completeAccountExport;
   fail: typeof failAccountExport;
   canReclaim: typeof canReclaimAccountExportAttempt;
@@ -89,8 +92,25 @@ const createProcessDeps = (
   projections: AccountExportProjections,
 ): AccountExportProcessDeps => ({
   claim: claimAccountExport,
-  build: async (options) =>
-    await buildAccountExportArchive({ ...options, projections }),
+  build: async ({ subject, ...options }) => {
+    switch (subject.kind) {
+      case "account":
+        await buildAccountExportArchive({ ...options, projections });
+        return { kind: "account" };
+      case "organization_audit":
+        return {
+          kind: "organization_audit",
+          coverage: await buildOrganizationAuditArchive({
+            ...options,
+            organizationId: subject.organizationId,
+          }),
+        };
+      default: {
+        subject satisfies never;
+        return panic("Unknown account export subject");
+      }
+    }
+  },
   complete: completeAccountExport,
   fail: failAccountExport,
   canReclaim: canReclaimAccountExportAttempt,
@@ -157,9 +177,10 @@ export const processAccountExport = async ({
           ? timeout
           : AbortSignal.any([timeout, parentSignal]);
       signal.throwIfAborted();
-      await deps.build({
+      const built = await deps.build({
         db,
         userId: claim.userId,
+        subject: claim.subject,
         objectKey: claim.objectKey,
         signal,
       });
@@ -168,6 +189,7 @@ export const processAccountExport = async ({
       const completed = await deps.complete({
         claim,
         objectKey: claim.objectKey,
+        built,
         db,
       });
       if (!completed) {
