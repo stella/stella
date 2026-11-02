@@ -134,12 +134,11 @@ describe("the app's builds", () => {
   test.each(configs)(
     "$variant declares every interface language to iOS",
     ({ config }) => {
-      expect(
-        [
-          ...((config.ios?.infoPlist?.["CFBundleLocalizations"] as string[]) ??
-            []),
-        ].sort(),
-      ).toEqual([...UI_LOCALES].sort());
+      const declared: unknown =
+        config.ios?.infoPlist?.["CFBundleLocalizations"];
+      // Containing all of them at the same length means exactly them.
+      expect(declared).toEqual(expect.arrayContaining([...UI_LOCALES]));
+      expect(declared).toHaveLength(UI_LOCALES.length);
     },
   );
 
