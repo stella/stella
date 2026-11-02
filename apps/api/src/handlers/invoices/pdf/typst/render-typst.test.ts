@@ -261,15 +261,15 @@ describe("payment QR as SVG", () => {
         })),
       },
       totals: {
-        netAmountMinor: cents(-fixture.totals.netAmountMinor),
-        vatAmountMinor: cents(-fixture.totals.vatAmountMinor),
-        grossAmountMinor: cents(-fixture.totals.grossAmountMinor),
+        netAmountMinor: cents(-1 * fixture.totals.netAmountMinor),
+        vatAmountMinor: cents(-1 * fixture.totals.vatAmountMinor),
+        grossAmountMinor: cents(-1 * fixture.totals.grossAmountMinor),
         vatBreakdown: [],
       },
       settlement: invoicePaymentState({
         documentType: "credit_note",
         status: "finalized",
-        totalAmount: -fixture.totals.grossAmountMinor,
+        totalAmount: -1 * fixture.totals.grossAmountMinor,
         paidAmount: 0,
       }),
     };

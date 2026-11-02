@@ -7,7 +7,7 @@ import { INVOICE_STATUS, type InvoiceStatus } from "@/api/db/schema";
  * What a document settles: the amount owed on an invoice, the refund owed on
  * a credit note (whose total is negative). Payments are always positive.
  */
-export const payableAmount = (totalAmount: number) => Math.abs(totalAmount);
+const payableAmount = (totalAmount: number) => Math.abs(totalAmount);
 
 type PaymentAmounts = { paidAmount: number; outstandingAmount: number };
 
