@@ -411,7 +411,7 @@ const extractProcuracao = createSafeRootHandler(
     }
 
     detached(
-      () =>
+      async () =>
         getS3()
           .delete(key)
           .catch(

@@ -352,7 +352,7 @@ const startPublicationFollowUps = async ({
     );
   });
   detached(
-    () =>
+    async () =>
       enqueuePdfDerivativeOrMarkFailed({
         encrypted: PUBLISHED_FILE_ENCRYPTION.encrypted,
         entityId: publication.entityId,
@@ -373,7 +373,7 @@ const startPublicationFollowUps = async ({
     "publish-folio-collab-version.enqueue-pdf-derivative-or-mark-failed",
   );
   detached(
-    () =>
+    async () =>
       computeVersionDiffStats({
         entityId: publication.entityId,
         organizationId,

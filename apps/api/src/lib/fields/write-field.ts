@@ -450,7 +450,7 @@ export const writeFieldValue = async function* ({
 
   if (flushSearchRepairs) {
     detached(
-      () =>
+      async () =>
         flushEntitySearchRepairs([entityId]).catch(
           createErrorCapture(
             handlerErrorContext("writeFieldValue.flushEntitySearchRepairs"),

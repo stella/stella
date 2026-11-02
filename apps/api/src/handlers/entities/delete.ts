@@ -343,7 +343,7 @@ export const deleteEntitiesHandler = async function* ({
   const provider = getSearchMaintenance();
   for (const entity of deletedEntities) {
     detached(
-      () =>
+      async () =>
         provider
           .removeEntity({ entityId: entity.id, workspaceId })
           .catch(

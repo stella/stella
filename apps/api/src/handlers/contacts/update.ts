@@ -347,7 +347,7 @@ export const updateContactHandler = async function* ({
   }
 
   detached(
-    () =>
+    async () =>
       flushContactSearchRepairs([contactId]).catch(
         createErrorCapture(handlerErrorContext(CONTACT_REPAIR_KEY)),
       ),

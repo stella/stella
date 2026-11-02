@@ -433,7 +433,7 @@ export const createEntityVersionFromBuffer = async ({
   }
 
   detached(
-    () =>
+    async () =>
       dependencies
         .processExtraction(entityId, {
           filePropertyId: written.filePropertyId,
@@ -449,7 +449,7 @@ export const createEntityVersionFromBuffer = async ({
     "create-entity-version-from-buffer.process-extraction",
   );
   detached(
-    () =>
+    async () =>
       dependencies
         .flushEntitySearchRepairs([entityId])
         .catch(
@@ -460,7 +460,7 @@ export const createEntityVersionFromBuffer = async ({
     "create-entity-version-from-buffer.flush-entity-search-repairs",
   );
   detached(
-    () =>
+    async () =>
       dependencies
         .enqueuePdfDerivativeOrMarkFailed({
           encrypted: encryption.encrypted,
@@ -484,7 +484,7 @@ export const createEntityVersionFromBuffer = async ({
     "create-entity-version-from-buffer.enqueue-pdf-derivative-or-mark-failed",
   );
   detached(
-    () =>
+    async () =>
       dependencies
         .enqueueImageThumbnailOrMarkFailed({
           encrypted: encryption.encrypted,
@@ -508,7 +508,7 @@ export const createEntityVersionFromBuffer = async ({
     "create-entity-version-from-buffer.enqueue-image-thumbnail-or-mark-failed",
   );
   detached(
-    () =>
+    async () =>
       dependencies
         .computeVersionDiffStats({
           versionId: entityVersionId,

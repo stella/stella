@@ -373,7 +373,7 @@ export const initDocumentReviewRunWorker = ({ db }: BullMqWorkerContext) => {
     // resort if the process itself threw before that could run.
     if (job) {
       detached(
-        () =>
+        async () =>
           markRunFailed(job.data, "internal").catch((markError: unknown) => {
             captureError(
               markError,

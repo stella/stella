@@ -112,5 +112,5 @@ export const schedulePushDeliveries = (
   if (notificationIds.length === 0 || !configured()) {
     return;
   }
-  detached(() => enqueue(notificationIds), "push-delivery.enqueue");
+  detached(async () => enqueue(notificationIds), "push-delivery.enqueue");
 };

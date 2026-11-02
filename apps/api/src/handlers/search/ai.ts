@@ -852,7 +852,7 @@ export const createSearchSummaryChatThread = async ({
   // Index the freshly seeded summary thread so it is findable in
   // global search. Fire-and-forget: indexing must not fail the create.
   detached(
-    () =>
+    async () =>
       upsertSearchDocument(threadId).catch(
         createErrorCapture(
           handlerErrorContext(

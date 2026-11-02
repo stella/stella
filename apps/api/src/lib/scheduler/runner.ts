@@ -258,7 +258,7 @@ export const startSchedulerLoop = ({
         return;
       }
 
-      detached(() => runTick(), "scheduler-runner.run-tick");
+      detached(async () => runTick(), "scheduler-runner.run-tick");
     }, pollIntervalMs);
   };
 
@@ -294,7 +294,7 @@ export const startSchedulerLoop = ({
       return;
     }
 
-    detached(() => runTick(), "scheduler-runner.run-tick");
+    detached(async () => runTick(), "scheduler-runner.run-tick");
   }, 0);
 
   return {
@@ -524,7 +524,7 @@ export const startLeaseHeartbeat = ({
 
   const timer = setInterval(() => {
     detached(
-      () =>
+      async () =>
         renew().catch((error: unknown) => {
           logger.warn("scheduler.lease_heartbeat_failed", {
             "scheduler.job_id": jobId,

@@ -453,7 +453,7 @@ export const initFileDerivativeWorker = () => {
     // which must still finish the job in hand.
     pause: () => {
       detached(
-        () =>
+        async () =>
           worker.pause(true).catch((error: unknown) => {
             observeFailure(error, {
               sink: CONSUMPTION_TOGGLE_FAILED_SINK,
@@ -465,7 +465,7 @@ export const initFileDerivativeWorker = () => {
     },
     resume: () => {
       detached(
-        () =>
+        async () =>
           worker.resume().catch((error: unknown) => {
             observeFailure(error, {
               sink: CONSUMPTION_TOGGLE_FAILED_SINK,
@@ -482,7 +482,7 @@ export const initFileDerivativeWorker = () => {
       job && job.attemptsMade >= (job.opts.attempts ?? DEFAULT_JOB_ATTEMPTS);
     if (exhausted && job.name === GENERATE_THUMBNAIL_JOB_NAME) {
       detached(
-        () =>
+        async () =>
           markImageThumbnailFailed(
             job.data,
             DERIVATIVE_FAILURE_REASON.PROCESSING,
@@ -500,7 +500,7 @@ export const initFileDerivativeWorker = () => {
       );
     } else if (exhausted) {
       detached(
-        () =>
+        async () =>
           markPdfDerivativeFailed(
             job.data,
             DERIVATIVE_FAILURE_REASON.PROCESSING,

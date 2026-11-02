@@ -1208,7 +1208,7 @@ const pauseAtReviewGate = async ({
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
   detached(
-    () =>
+    async () =>
       flushSearchRepairs([taskEntityId]).catch(
         createErrorCapture(
           handlerErrorContext("pauseAtReviewGate.flushSearchRepairs"),

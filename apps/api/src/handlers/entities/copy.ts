@@ -658,7 +658,7 @@ const copyToWorkspaceHandler = async function* ({
   // Acceleration only: the marks are already committed, and the standing
   // drain repairs whatever a lost flush leaves behind.
   detached(
-    () =>
+    async () =>
       dependencies
         .flushEntitySearchRepairs([
           ...txResult.entityIdsBySearchIndexOwner[
@@ -676,7 +676,7 @@ const copyToWorkspaceHandler = async function* ({
 
   // Acceleration only: each run already committed with its copied source.
   detached(
-    () =>
+    async () =>
       handoffCommittedDocumentProcessingRuns({
         enqueue: dependencies.enqueueDocumentProcessingRun,
         runIds: txResult.nativeExtractionRunIds,
@@ -693,7 +693,7 @@ const copyToWorkspaceHandler = async function* ({
   // Enqueue PDF derivative generation for copied file fields
   for (const fileField of txResult.fileFields) {
     detached(
-      () =>
+      async () =>
         dependencies
           .enqueuePdfDerivativeOrMarkFailed({
             entityId: fileField.entityId,
@@ -712,7 +712,7 @@ const copyToWorkspaceHandler = async function* ({
       "entities-copy.enqueue-pdf-derivative-or-mark-failed",
     );
     detached(
-      () =>
+      async () =>
         dependencies
           .enqueueImageThumbnailOrMarkFailed({
             entityId: fileField.entityId,
@@ -734,7 +734,7 @@ const copyToWorkspaceHandler = async function* ({
 
   // Sync search indexes
   detached(
-    () =>
+    async () =>
       dependencies
         .syncWorkspaceSearchActivity(targetWorkspaceId)
         .catch(
@@ -746,7 +746,7 @@ const copyToWorkspaceHandler = async function* ({
   );
   if (deleteSource) {
     detached(
-      () =>
+      async () =>
         dependencies
           .syncWorkspaceSearchActivity(sourceWorkspaceId)
           .catch(

@@ -214,7 +214,7 @@ export const desktopEditSessionEventsHandler = async (
 
   const refreshLivenessInBackground = () => {
     detached(
-      () =>
+      async () =>
         refreshLiveness().catch((error: unknown) => {
           captureError(
             error,

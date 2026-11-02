@@ -181,7 +181,7 @@ export const fillHandler = async ({
   // the request and is not stored, so the row has no template and no audit
   // event (there is no resource to audit against).
   detached(
-    () =>
+    async () =>
       scopedDb(
         async (tx) =>
           await recordTemplateFill({

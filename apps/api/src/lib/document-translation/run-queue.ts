@@ -1473,7 +1473,7 @@ export const initDocumentTranslationRunWorker = ({
   worker.on("failed", (job, error) => {
     if (job) {
       detached(
-        () =>
+        async () =>
           setRunFailed(brandActor(job.data), "internal").catch(
             (markError: unknown) =>
               captureError(

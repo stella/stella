@@ -174,7 +174,7 @@ export default createSafeHandler(
     }
 
     detached(
-      () =>
+      async () =>
         flushEntitySearchRepairs([entityId]).catch(
           createErrorCapture(
             handlerErrorContext("clip.flushEntitySearchRepairs"),

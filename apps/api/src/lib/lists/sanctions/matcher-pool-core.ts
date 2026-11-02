@@ -158,7 +158,7 @@ const drainMatcherReply = async ({
     const cancelGrace = clock.schedule(() => {
       worker.off("message", drain);
       detachRetirement(
-        () => retireMatcherSlot(slot, reportFailure).then(resolve),
+        async () => retireMatcherSlot(slot, reportFailure).then(resolve),
         "sanctions.matcher-reply-grace",
       );
     }, SANCTIONS_MATCHER_REPLY_GRACE_MS);
@@ -202,7 +202,7 @@ const handleMatcherExit = ({
   reportUnownedFailure({ stage: "matcher-pool", reason, error });
   slot.busy = true;
   detachRetirement(
-    () =>
+    async () =>
       retireMatcherSlot(slot, reportFailure).then(() => {
         slot.busy = false;
         notify();
@@ -671,7 +671,7 @@ export const createSanctionsMatcherPoolCore = ({
             return undefined;
           };
           detachRetirement(
-            () =>
+            async () =>
               Promise.all([
                 pendingWork.then(
                   () => undefined,

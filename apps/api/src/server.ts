@@ -157,7 +157,7 @@ const startS3RefreshLoop = () => {
     // resolution still in flight when the next tick arrives is joined rather
     // than started again.
     detached(
-      () =>
+      async () =>
         refreshStaleS3().catch((error: unknown) => {
           logger.error("s3.refresh_failed", {
             "error.type": errorTag(error),
@@ -167,7 +167,7 @@ const startS3RefreshLoop = () => {
     );
 
     detached(
-      () =>
+      async () =>
         refreshStaleCorpusS3().catch((error: unknown) => {
           logger.error("s3.corpus_refresh_failed", {
             "error.type": errorTag(error),
@@ -204,10 +204,13 @@ const startServer = async (): Promise<void> => {
     }).unwrap("Redis connection configuration must be valid.");
     logger.info("redis.connection.mode", { mode });
     if (isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-      detached(() => startActionAdmissionRedis(), "admission-store.start");
+      detached(
+        async () => startActionAdmissionRedis(),
+        "admission-store.start",
+      );
     }
     if (isDeploymentFeatureEnabled("FEATURE_MCP_READ_FENCE")) {
-      detached(() => startMcpReadFenceRedis(), "read-fence-store.start");
+      detached(async () => startMcpReadFenceRedis(), "read-fence-store.start");
     }
   }
 
@@ -353,10 +356,10 @@ const startServer = async (): Promise<void> => {
     }
   };
   process.once("SIGTERM", () => {
-    detached(() => shutdownWorkers("SIGTERM"), "server.shutdown");
+    detached(async () => shutdownWorkers("SIGTERM"), "server.shutdown");
   });
   process.once("SIGINT", () => {
-    detached(() => shutdownWorkers("SIGINT"), "server.shutdown");
+    detached(async () => shutdownWorkers("SIGINT"), "server.shutdown");
   });
 
   // Scheduled jobs run here rather than in a process of their own. A separate

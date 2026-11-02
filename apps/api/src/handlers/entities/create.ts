@@ -155,7 +155,7 @@ export const createEntitiesHandler = async function* ({
   }
 
   detached(
-    () =>
+    async () =>
       flushEntitySearchRepairs([txResult.entityId]).catch(
         createErrorCapture(
           handlerErrorContext("createEntitiesHandler.flushEntitySearchRepairs"),

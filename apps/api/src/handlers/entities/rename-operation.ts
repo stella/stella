@@ -147,7 +147,7 @@ export const createRenameEntityHandler = ({
     }
 
     detached(
-      () =>
+      async () =>
         flushRepairs([body.entityId]).catch(
           createErrorCapture(
             handlerErrorContext("createRenameEntityHandler.flushRepairs"),

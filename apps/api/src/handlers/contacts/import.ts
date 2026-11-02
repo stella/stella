@@ -64,7 +64,7 @@ const importContacts = createSafeRootHandler(
     );
     if (writtenContactIds.length > 0) {
       detached(
-        () =>
+        async () =>
           flushContactSearchRepairs(writtenContactIds).catch(
             createErrorCapture(
               handlerErrorContext("importContacts.flushContactSearchRepairs"),

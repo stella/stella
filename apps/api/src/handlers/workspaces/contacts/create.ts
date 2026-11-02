@@ -209,7 +209,7 @@ export const createWorkspaceContactHandler = async function* ({
   }
 
   detached(
-    () =>
+    async () =>
       dependencies
         .flushWorkspaceSearchRepairs([workspaceId])
         .catch(

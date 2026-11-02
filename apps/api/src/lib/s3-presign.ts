@@ -393,7 +393,7 @@ let scopedS3ClientFactory: ScopedS3ClientFactory = buildScopedAwsS3Client;
 
 const disposeScopedClient = (entry: ScopedClientCacheEntry): void => {
   detached(
-    () => entry.promise.then(({ client }) => client.destroy()),
+    async () => entry.promise.then(({ client }) => client.destroy()),
     "s3-presign.dispose-scoped-client",
   );
 };
@@ -470,7 +470,7 @@ const getScopedAwsS3Client = async (
     throw error;
   });
   detached(
-    () =>
+    async () =>
       entry.promise.then((cached) => {
         entry.cached = cached;
         pruneScopedClientCache();

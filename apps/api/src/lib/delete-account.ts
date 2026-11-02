@@ -402,7 +402,7 @@ const enqueueStorageCleanupOrLog = async (
     });
 
     detached(
-      () =>
+      async () =>
         processAccountDeletionCleanupRequest(
           deletionRequestId,
           createAccountDeletionCleanupRequestDeps(rootDb),

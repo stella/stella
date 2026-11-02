@@ -333,7 +333,7 @@ const withHeartbeatFrames = (
           closeHeartbeat();
           closeControllerQuietly(controller);
           detached(
-            () =>
+            async () =>
               reader.cancel(CREDENTIAL_ENDED).catch((error: unknown) => {
                 observeFailure(error, {
                   sink: BOUND_STREAM_CANCEL_FAILURE_SINK,
@@ -783,7 +783,7 @@ const queueWorkspaceDelivery = (
   });
   workspaceDeliveryTails.set(workspaceId, current);
   detached(
-    () =>
+    async () =>
       current
         .then(() => {
           if (workspaceDeliveryTails.get(workspaceId) === current) {
@@ -820,7 +820,7 @@ const queueUserDelivery = (
   });
   userDeliveryTails.set(userId, current);
   detached(
-    () =>
+    async () =>
       current
         .then(() => {
           if (userDeliveryTails.get(userId) === current) {
@@ -1027,7 +1027,7 @@ export const broadcastToUser = (
   }
 
   detached(
-    () =>
+    async () =>
       activePublisher()
         .publishUserEvent(userId, organizationId, event, {
           originInstanceId: INSTANCE_ID,
@@ -1084,7 +1084,7 @@ export const broadcast = (
   const publishWorkspace =
     publishWorkspaceOverride ?? activePublisher().publishWorkspaceEvent;
   detached(
-    () =>
+    async () =>
       publishWorkspace(workspaceId, event, {
         originInstanceId: INSTANCE_ID,
         deliveredInline: deliveredLocally,
@@ -1115,7 +1115,7 @@ export const broadcastToOrganization = (
   }
 
   detached(
-    () =>
+    async () =>
       activePublisher()
         .publishOrganizationEvent(organizationId, event, {
           originInstanceId: INSTANCE_ID,
@@ -1245,7 +1245,7 @@ export const broadcastSessionEvent = (
   sessionDeliveryHandler?.(sessionId, event);
 
   detached(
-    () =>
+    async () =>
       activePublisher()
         .publishSessionEvent(sessionId, event, {
           originInstanceId: INSTANCE_ID,
@@ -1584,7 +1584,7 @@ const launchAttachAttempt = (
   attempt: number,
 ): void => {
   detached(
-    () =>
+    async () =>
       runAttachAttempt(lifecycle, attempt).catch((error: unknown) => {
         logger.error(
           "sse.redis_connection_failed",
@@ -1650,7 +1650,7 @@ export const startSse = (
     }
     sweeping = true;
     detached(
-      () =>
+      async () =>
         sweepBoundStreams(authorizers.sessions).finally(() => {
           sweeping = false;
         }),

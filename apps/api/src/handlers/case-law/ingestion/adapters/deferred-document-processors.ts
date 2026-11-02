@@ -35,7 +35,7 @@ const skCourtsDocumentRetention: SkDocumentRetentionCheck = ({
   pdfBytes,
 }) => {
   detached(
-    () =>
+    async () =>
       startProjectedRetentionCheck({
         adapterKey: ADAPTER_KEYS.SK_COURTS,
         subject: {

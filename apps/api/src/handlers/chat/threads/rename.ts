@@ -128,7 +128,7 @@ const renameThread = createSafeRootHandler(
     // forget after the rename commits: indexing must never block or fail the
     // rename. Mirrors generate-thread-title.ts and send-message.ts.
     detached(
-      () =>
+      async () =>
         upsertChatThreadSearchDocument(params.threadId).catch(
           createErrorCapture(
             handlerErrorContext("renameThread.upsertChatThreadSearchDocument"),

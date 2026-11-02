@@ -764,7 +764,7 @@ export const finalizeDesktopEditSessionHandler = async ({
       });
 
       detached(
-        () =>
+        async () =>
           enqueuePdfDerivativeOrMarkFailed({
             encrypted: officeFileEncryption(
               desktopEditMimeTypeForFileType(result.fileType),
@@ -790,7 +790,7 @@ export const finalizeDesktopEditSessionHandler = async ({
 
       if (result.fileType === "docx") {
         detached(
-          () =>
+          async () =>
             computeVersionDiffStats({
               versionId: result.versionId,
               entityId: result.entityId,

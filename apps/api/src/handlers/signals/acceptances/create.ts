@@ -244,7 +244,7 @@ export const createAcceptSignal = (
             }),
           );
           detached(
-            () =>
+            async () =>
               dependencies
                 .flushEntitySearchRepairs([created.entityId])
                 .catch(

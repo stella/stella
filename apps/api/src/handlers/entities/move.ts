@@ -256,7 +256,7 @@ export const moveEntityHandler = async function* ({
   yield* moved;
 
   detached(
-    () =>
+    async () =>
       syncSearchActivity(workspaceId).catch(
         createErrorCapture(
           handlerErrorContext("moveEntityHandler.syncSearchActivity"),

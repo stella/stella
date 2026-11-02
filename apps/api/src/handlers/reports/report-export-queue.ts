@@ -132,7 +132,7 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
     // resort if the process itself threw before that could run.
     if (job) {
       detached(
-        () =>
+        async () =>
           markExportFailed(job.data, toExportErrorMessage(error)).catch(
             (markError: unknown) => {
               captureError(

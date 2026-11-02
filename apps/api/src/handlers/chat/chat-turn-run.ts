@@ -162,7 +162,7 @@ const eagerlyDeliverTurn = (
             source.current = { status: "closed" };
           }
         };
-        detached(() => drain(), "chat-turn-run.delivery");
+        detached(async () => drain(), "chat-turn-run.delivery");
       },
       pull: () => {
         room.resolve(undefined);
@@ -364,7 +364,10 @@ export class ChatTurnOwnership {
     this.liveRuns.set(run.execution.executionId, run);
     this.noteChange();
     if (this.relinquishing) {
-      detached(() => run.relinquish(), "chat-turn-run.relinquish-late-run");
+      detached(
+        async () => run.relinquish(),
+        "chat-turn-run.relinquish-late-run",
+      );
     }
   }
 
@@ -428,7 +431,7 @@ export class ChatTurnOwnership {
         if (!shortened.has(claim)) {
           shortened.add(claim);
           detached(
-            () => this.followUp(shortenClaimLease(claim)),
+            async () => this.followUp(shortenClaimLease(claim)),
             "chat-turn-run.relinquish-claim",
           );
         }
@@ -882,7 +885,7 @@ export class ChatTurnRun {
         return;
       }
       const current = beat();
-      detached(() => current, "chat-turn-run.heartbeat");
+      detached(async () => current, "chat-turn-run.heartbeat");
       beating = Promise.allSettled([current]).finally(() => {
         beating = undefined;
       });

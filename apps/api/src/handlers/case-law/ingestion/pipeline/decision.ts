@@ -345,7 +345,7 @@ const runDecisionAttempt = async ({
   // check failures and this write's abort never reject the write.
   if (shape.incomingCarriesDocument) {
     detached(
-      () =>
+      async () =>
         startDecisionRetentionCheck({
           ...retention,
           result: observation.observed,

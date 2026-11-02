@@ -319,7 +319,7 @@ const createEditionWarmer = ({
   const start = () => {
     state.active = true;
     detached(
-      () => {
+      async () => {
         const running = pass().finally(() => {
           // A newer pass may already run; only this pass's own state is cleared.
           if (state.running === running) {

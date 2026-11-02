@@ -274,7 +274,7 @@ export const createContactHandler = async function* ({
   const created = outcome.row ?? panic("Contact insert returned no row");
 
   detached(
-    () =>
+    async () =>
       flushContactSearchRepairs([created.id]).catch(
         createErrorCapture(
           handlerErrorContext("createContactHandler.flushContactSearchRepairs"),

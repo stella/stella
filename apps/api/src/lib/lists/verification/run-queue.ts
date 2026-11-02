@@ -970,7 +970,7 @@ export const initListVerificationRunWorker = () => {
   worker.on("failed", (job, error) => {
     if (job) {
       detached(
-        () =>
+        async () =>
           setRunFailed({
             actor: brandActor(job.data),
             errorCode: "internal",

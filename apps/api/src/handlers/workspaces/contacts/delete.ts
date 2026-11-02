@@ -97,7 +97,7 @@ export const deleteWorkspaceContactHandler = async function* ({
   }
 
   detached(
-    () =>
+    async () =>
       flushWorkspaceSearchRepairs([workspaceId]).catch(
         createErrorCapture(
           handlerErrorContext(

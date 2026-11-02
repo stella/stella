@@ -128,7 +128,7 @@ export const classifyCitation = async ({
     if (!options?.dryRun) {
       // Fire-and-forget: increment match count
       detached(
-        () =>
+        async () =>
           incrementMatchCount({
             observedAt,
             ruleId: ruleMatch.ruleId,
@@ -186,7 +186,7 @@ export const classifyCitation = async ({
     keyPhrase.trim().length >= MIN_PROMOTION_PHRASE_LENGTH
   ) {
     detached(
-      () =>
+      async () =>
         trackSurfaceForm({
           keyPhrase,
           language,

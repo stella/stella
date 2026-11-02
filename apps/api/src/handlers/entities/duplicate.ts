@@ -112,14 +112,14 @@ const startCopyDerivatives = (
   file: Parameters<typeof enqueuePdfDerivativeOrMarkFailed>[0],
 ) => {
   detached(
-    () =>
+    async () =>
       enqueuePdfDerivativeOrMarkFailed(file).catch(
         createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.pdfDerivative),
       ),
     "entities-duplicate.enqueue-pdf-derivative-or-mark-failed",
   );
   detached(
-    () =>
+    async () =>
       enqueueImageThumbnailOrMarkFailed(file).catch(
         createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.imageThumbnail),
       ),
@@ -286,7 +286,7 @@ const duplicateEntityHandler = async function* ({
   // Acceleration only: the marks are already committed, and the standing
   // drain repairs whatever a lost flush leaves behind.
   detached(
-    () =>
+    async () =>
       dependencies
         .flushEntitySearchRepairs([
           ...txResult.entityIdsBySearchIndexOwner[
@@ -301,7 +301,7 @@ const duplicateEntityHandler = async function* ({
   );
 
   detached(
-    () =>
+    async () =>
       handoffCommittedDocumentProcessingRuns({
         enqueue: dependencies.enqueueDocumentProcessingRun,
         runIds: txResult.nativeExtractionRunIds,

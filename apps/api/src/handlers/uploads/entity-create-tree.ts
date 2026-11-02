@@ -697,7 +697,7 @@ const entityCreateTree = createSafeHandler(
     }
 
     detached(
-      () =>
+      async () =>
         flushEntitySearchRepairs(writeResult.indexedDirectoryIds).catch(
           createErrorCapture(
             handlerErrorContext("entityCreateTree.flushEntitySearchRepairs"),

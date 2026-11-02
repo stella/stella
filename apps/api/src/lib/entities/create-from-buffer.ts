@@ -620,7 +620,7 @@ export const createEntityFromBuffer = async ({
   // fire the file-upload trigger, so a flow-created document can never spawn
   // another flow run. Keep the upload trigger out of this call site.
   detached(
-    () =>
+    async () =>
       dependencies
         .processExtraction(entityId)
         .catch(
@@ -633,7 +633,7 @@ export const createEntityFromBuffer = async ({
     "create-from-buffer.process-extraction",
   );
   detached(
-    () =>
+    async () =>
       dependencies
         .flushEntitySearchRepairs([entityId])
         .catch(
@@ -647,7 +647,7 @@ export const createEntityFromBuffer = async ({
   );
 
   detached(
-    () =>
+    async () =>
       dependencies
         .enqueuePdfDerivativeOrMarkFailed({
           encrypted: encryption.encrypted,
@@ -667,7 +667,7 @@ export const createEntityFromBuffer = async ({
   );
 
   detached(
-    () =>
+    async () =>
       dependencies
         .enqueueImageThumbnailOrMarkFailed({
           encrypted: encryption.encrypted,

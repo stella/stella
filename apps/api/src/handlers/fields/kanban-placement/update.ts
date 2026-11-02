@@ -152,7 +152,7 @@ export const createUpdateKanbanPlacement = ({
 
       if (body.fields.length > 0) {
         detached(
-          () =>
+          async () =>
             flushSearchRepairs([body.entityId]).catch(
               createErrorCapture(
                 handlerErrorContext(

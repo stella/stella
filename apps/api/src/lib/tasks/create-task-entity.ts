@@ -514,7 +514,7 @@ export const createTaskEntityHandler = async function* ({
   if (props.tx === undefined) {
     fileNotifications(txResult.notifications);
     detached(
-      () =>
+      async () =>
         flushEntitySearchRepairs([txResult.entityId]).catch(
           createErrorCapture(
             handlerErrorContext(

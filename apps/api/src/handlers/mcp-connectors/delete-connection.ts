@@ -148,7 +148,10 @@ export const createDeleteMcpConnectionHandler = (
           }),
         );
       };
-      detached(() => revokeDeletedTokens(), "mcp-connection.revoke-tokens");
+      detached(
+        async () => revokeDeletedTokens(),
+        "mcp-connection.revoke-tokens",
+      );
 
       return Result.ok({ id: connection.userConnectionId });
     },

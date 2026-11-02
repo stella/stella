@@ -446,7 +446,7 @@ export const deleteEntityVersionHandler = async function* ({
   }
 
   detached(
-    () =>
+    async () =>
       flushEntitySearchRepairs([params.entityId]).catch(
         createErrorCapture(
           handlerErrorContext(

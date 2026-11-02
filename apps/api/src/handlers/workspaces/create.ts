@@ -96,7 +96,7 @@ const flushCreatedWorkspaceSearch = (
   workspaceId: Parameters<typeof flushWorkspaceSearchRepairs>[0][number],
 ) => {
   detached(
-    () =>
+    async () =>
       flushWorkspaceSearchRepairs([workspaceId]).catch(
         createErrorCapture(
           handlerErrorContext(

@@ -170,7 +170,7 @@ export type UpdateWorkspaceHandlerProps = {
 /** Repairs the matter's search projection after the response, off the request. */
 const flushUpdatedWorkspaceSearch = (workspaceId: SafeId<"workspace">) => {
   detached(
-    () =>
+    async () =>
       flushWorkspaceSearchRepairs([workspaceId]).catch(
         createErrorCapture(
           handlerErrorContext(

@@ -1038,7 +1038,7 @@ export const createForkThread = ({
       // fail it. Rebuilds both the thread and message search documents for the
       // new thread. Mirrors rename-thread.ts and send-message.ts.
       detached(
-        () =>
+        async () =>
           indexChatThread(newThreadId).catch(
             createErrorCapture(
               handlerErrorContext("createForkThread.indexChatThread"),

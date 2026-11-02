@@ -526,7 +526,7 @@ export const detached = (
   context: `${string}.${string}`,
   onRejection?: (error: unknown) => void,
 ): void => {
-  const started = runOutsideQueryCounter(() => Promise.try(work));
+  const started = runOutsideQueryCounter(async () => Promise.try(work));
   if (onRejection === undefined) {
     captureDetachedRejection(started, context);
     return;

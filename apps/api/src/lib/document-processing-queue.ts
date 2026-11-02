@@ -419,7 +419,7 @@ export const createDocumentProcessingLeaseRenewal = ({
       }
     };
     detached(
-      () => renewal.then(releaseRenewal, releaseRenewal),
+      async () => renewal.then(releaseRenewal, releaseRenewal),
       "document-processing.lease-heartbeat-release",
     );
     detached(async () => {
@@ -3308,7 +3308,7 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
     null;
   let closing = false;
   detached(
-    () =>
+    async () =>
       worker.waitUntilReady().then(() => {
         if (closing) {
           return undefined;
@@ -3335,13 +3335,13 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
     }
     reconciling = true;
     detached(
-      () =>
+      async () =>
         reconcileDocumentProcessing({
           onComplete: () => {
             reconciling = false;
             if (!closing) {
               detached(
-                () => scheduleReconciliation(),
+                async () => scheduleReconciliation(),
                 "document-processing.schedule-reconciliation",
               );
             }

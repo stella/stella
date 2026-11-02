@@ -149,7 +149,7 @@ export const deleteContactHandler = async function* ({
 
   const flushedWorkspaceIds = txResult.value.affectedWorkspaceIds;
   detached(
-    () =>
+    async () =>
       flushRepairs(flushedWorkspaceIds).catch(
         createErrorCapture(
           handlerErrorContext(

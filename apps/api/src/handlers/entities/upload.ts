@@ -1251,7 +1251,7 @@ export const uploadEntityHandler = async function* ({
 
     if (uploadTriggeredFlowPolicy(origin) === "start") {
       detached(
-        () =>
+        async () =>
           maybeStartUploadTriggeredFlows({
             entityId,
             workspaceId,
@@ -1271,7 +1271,7 @@ export const uploadEntityHandler = async function* ({
     }
 
     detached(
-      () =>
+      async () =>
         enqueuePdfDerivativeOrMarkFailed({
           encrypted,
           entityId,
@@ -1294,7 +1294,7 @@ export const uploadEntityHandler = async function* ({
     );
 
     detached(
-      () =>
+      async () =>
         enqueueImageThumbnailOrMarkFailed({
           encrypted,
           entityId,

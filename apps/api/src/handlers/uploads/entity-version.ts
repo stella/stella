@@ -159,14 +159,14 @@ const startVersionFollowUpWork = ({
   const { entityId, fieldId, mimeType, organizationId, userId, workspaceId } =
     file;
   detached(
-    () =>
+    async () =>
       processExtraction(entityId).catch((error: unknown) => {
         captureError(error, handlerErrorContext(EXTRACTION_KEY, { entityId }));
       }),
     "entity-version.process-extraction",
   );
   detached(
-    () =>
+    async () =>
       enqueuePdfDerivativeOrMarkFailed(file).catch((error: unknown) => {
         const context = { entityId, fieldId, mimeType };
         captureError(error, handlerErrorContext(PDF_KEY, context));
@@ -174,7 +174,7 @@ const startVersionFollowUpWork = ({
     "entity-version.enqueue-pdf-derivative-or-mark-failed",
   );
   detached(
-    () =>
+    async () =>
       enqueueImageThumbnailOrMarkFailed(file).catch((error: unknown) => {
         const context = { entityId, fieldId, mimeType };
         captureError(error, handlerErrorContext(THUMBNAIL_KEY, context));
@@ -182,7 +182,7 @@ const startVersionFollowUpWork = ({
     "entity-version.enqueue-image-thumbnail-or-mark-failed",
   );
   detached(
-    () =>
+    async () =>
       computeVersionDiffStats({
         versionId,
         entityId,
@@ -384,7 +384,7 @@ export const finalizeEntityVersion = async function* ({
       finalized ??
       panic("Entity version write completed without finalize result");
     detached(
-      () =>
+      async () =>
         flushEntitySearchRepairs([entityId]).catch(
           createErrorCapture(handlerErrorContext("entityVersion.flushSearch")),
         ),

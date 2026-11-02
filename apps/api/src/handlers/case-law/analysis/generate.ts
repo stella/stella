@@ -775,7 +775,7 @@ export const generateAnalysis = async ({
       // moved costs one indexed query.
       if (derivedAi && promptCachingEnabled !== null) {
         detached(
-          () =>
+          async () =>
             refreshSignificance({
               admitModelAction,
               analysis: stored.analysis,

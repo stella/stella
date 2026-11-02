@@ -729,7 +729,7 @@ export const finalizeEntityCreate = async function* ({
     const { finalized } = writeResult;
 
     detached(
-      () =>
+      async () =>
         flushEntitySearchRepairs([entityId]).catch(
           createErrorCapture(handlerErrorContext("entityCreate.flushSearch")),
         ),
@@ -741,7 +741,7 @@ export const finalizeEntityCreate = async function* ({
       // both promotion and the DB transaction have succeeded, so
       // consumers never read a final key before it exists.
       detached(
-        () =>
+        async () =>
           processExtraction(entityId).catch((error: unknown) => {
             captureError(
               error,
@@ -756,7 +756,7 @@ export const finalizeEntityCreate = async function* ({
       // File-upload flow trigger. Fire-and-forget on the USER upload path only;
       // flow-created documents (create-document step) never reach this call site.
       detached(
-        () =>
+        async () =>
           maybeStartUploadTriggeredFlows({
             entityId,
             workspaceId,
@@ -774,7 +774,7 @@ export const finalizeEntityCreate = async function* ({
         "entity-create.maybe-start-upload-triggered-flows",
       );
       detached(
-        () =>
+        async () =>
           enqueuePdfDerivativeOrMarkFailed({
             encrypted,
             entityId,
@@ -796,7 +796,7 @@ export const finalizeEntityCreate = async function* ({
         "entity-create.enqueue-pdf-derivative-or-mark-failed",
       );
       detached(
-        () =>
+        async () =>
           enqueueImageThumbnailOrMarkFailed({
             encrypted,
             entityId,

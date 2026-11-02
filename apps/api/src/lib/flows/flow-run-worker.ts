@@ -161,7 +161,7 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
     }
 
     detached(
-      () =>
+      async () =>
         failFlowRunFromWorker(job.data, error, { database: db }).catch(
           (finalizeError: unknown) => {
             captureError(
@@ -195,7 +195,7 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
   // without one because a restart is proof that this process's in-flight
   // jobs are gone: waiting out the window would idle every run it just lost.
   detached(
-    () =>
+    async () =>
       reconcileOrphanedFlowRuns({}, { database: db }).catch(
         (error: unknown) => {
           captureError(error, handlerErrorContext("flows.initFlowRunWorker"));

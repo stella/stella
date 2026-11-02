@@ -224,7 +224,7 @@ const ownedResponse = ({
     controller?.error(signal?.reason);
     // The registered operation remains pending until actual stream cancellation settles.
     detached(
-      () => Promise.allSettled([cancel(signal?.reason)]),
+      async () => Promise.allSettled([cancel(signal?.reason)]),
       "public-read.cancel-body",
     );
   };

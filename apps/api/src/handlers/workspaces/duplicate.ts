@@ -1123,7 +1123,7 @@ export const createDuplicateWorkspace = (
       // These post-commit calls only accelerate work the transaction already
       // made durable: projection marks and immutable-source extraction runs.
       detached(
-        () =>
+        async () =>
           dependencies
             .flushWorkspaceSearchRepairs([txResult.value.workspaceId])
             .catch(
@@ -1134,7 +1134,7 @@ export const createDuplicateWorkspace = (
         "workspaces-duplicate.flush-workspace-search-repairs",
       );
       detached(
-        () =>
+        async () =>
           dependencies
             .flushEntitySearchRepairs([
               ...txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
@@ -1149,7 +1149,7 @@ export const createDuplicateWorkspace = (
       );
 
       detached(
-        () =>
+        async () =>
           handoffCommittedDocumentProcessingRuns({
             enqueue: dependencies.enqueueDocumentProcessingRun,
             runIds: txResult.value.nativeExtractionRunIds,

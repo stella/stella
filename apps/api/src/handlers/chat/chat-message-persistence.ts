@@ -357,7 +357,7 @@ export const persistMessage = async (props: PersistMessageProps) => {
   // fail a chat turn.
   if (Result.isOk(result) && props.persistencePlan.type !== "none") {
     detached(
-      () =>
+      async () =>
         props
           .indexThread(props.threadId)
           .catch(
@@ -1251,7 +1251,7 @@ export const persistAcceptedMessageWithClaim = async ({
     return Result.err(result.value.error);
   }
   detached(
-    () =>
+    async () =>
       persistenceProps
         .indexThread(persistenceProps.threadId)
         .catch(
@@ -1298,7 +1298,7 @@ export const persistClaimedReplayMessage = async ({
     return Result.ok(null);
   }
   detached(
-    () =>
+    async () =>
       persistenceProps
         .indexThread(persistenceProps.threadId)
         .catch(

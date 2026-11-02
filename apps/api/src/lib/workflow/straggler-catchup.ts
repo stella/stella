@@ -106,7 +106,7 @@ export const startStragglerCatchUp = async ({
     // the same thing here, work this workspace is owed that no longer has a
     // successor coming.
     detached(
-      () =>
+      async () =>
         startWorkflow({
           workspaceId,
           organizationId,

@@ -181,7 +181,7 @@ export default createSafeHandler(
     );
 
     detached(
-      () =>
+      async () =>
         maybeStartUploadTriggeredFlows({
           entityId: created.entityId,
           workspaceId: destinationWorkspaceId,

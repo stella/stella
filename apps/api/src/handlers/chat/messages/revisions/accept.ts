@@ -141,7 +141,7 @@ const acceptMessageRevision = createSafeRootHandler(
     );
     if (result.type === "ok") {
       detached(
-        () =>
+        async () =>
           upsertChatThreadSearchDocument(threadId).catch(
             createErrorCapture(
               handlerErrorContext(

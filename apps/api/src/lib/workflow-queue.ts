@@ -1138,7 +1138,7 @@ export const createWorkflowReconcileRunner = (
     }
     running = true;
     detached(
-      () =>
+      async () =>
         reconcile({})
           .catch(handleWorkflowReconcileFailure)
           .finally(() => {
@@ -2319,7 +2319,7 @@ const finishWorkflow = async (
   // recursion guard inside — a playbook run's materialized columns are never the
   // classifier, so they cannot re-trigger routing — keeps this from looping.
   detached(
-    () =>
+    async () =>
       maybeRouteClassifiedDocuments({
         actor,
         planPropertyIds,
