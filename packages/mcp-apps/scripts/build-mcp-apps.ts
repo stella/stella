@@ -10,7 +10,6 @@ import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plu
 import { parseSource } from "@stll/scripts/src/syntax-tree";
 
 import { formattedArtifactsLikeRepository } from "../../../scripts/generated-artifacts";
-import readerPackage from "../../decision-reader/package.json";
 import { assembleMcpAppDocument } from "../src/app-document";
 import type { McpAppDocumentParts } from "../src/app-document";
 import {
@@ -26,6 +25,7 @@ import {
 import {
   inspectMcpReaderUi,
   MCP_READER_UI_APP_DIRECTORIES,
+  MCP_SHARED_UI_MODULE_FILES,
 } from "./lib/mcp-reader-ui-guard";
 import { namespaceMembers } from "./lib/namespace-members";
 
@@ -425,11 +425,8 @@ const analyseMcpApp = async (directory: McpAppDirectory) => {
       file,
       text: await Bun.file(path.join(repoRoot, file)).text(),
     });
-    const sharedFiles = Object.values(readerPackage.exports)
-      .filter((file) => file.endsWith(".tsx"))
-      .map((file) => `packages/decision-reader/${file.replace(/^\.\//u, "")}`);
     const [sharedModules, astModules, bundleModules] = await Promise.all([
-      Promise.all(sharedFiles.map(loadModule)),
+      Promise.all(MCP_SHARED_UI_MODULE_FILES.map(loadModule)),
       Promise.all(
         [
           "packages/legal-ast/src/document-ast.ts",
@@ -1034,7 +1031,12 @@ const documentParts = await Promise.all(
     const generated = path.join(appsRoot, directory, "generated");
     await Promise.all([
       writeGenerated(path.join(generated, "app.js.txt"), appScript),
-      writeGenerated(path.join(generated, "app.css.txt"), appStyle),
+      writeGenerated(
+        path.join(generated, "app.css.txt"),
+        appStyle === ""
+          ? `/* Generated styles for ${directory}. */\n`
+          : appStyle,
+      ),
       // The served document, for tests and budgets that read one file.
       writeGenerated(path.join(generated, "app.html.txt"), html),
     ]);

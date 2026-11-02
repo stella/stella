@@ -1831,6 +1831,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/desktop/billing-drafts",
+      "reason": "Returns review-only proposals for at most 20 selected entries and never records time; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
+    },
+    {
       "id": "POST /v1/desktop/presence",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2197,6 +2201,10 @@
     {
       "id": "POST /v1/organization-settings/ai-config/defaults-preview",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/organization-settings/billing-drafts",
+      "reason": "Under the organization lock, compare-and-set updates replace at most 10 client guideline bindings (or one firm binding) and one client format, with bounded batch validation and one audit event. A write-harness fixture for guideline replacement is pending."
     },
     {
       "id": "POST /v1/organization-settings/business-registry-credentials",
@@ -2809,6 +2817,10 @@
     {
       "id": "PUT /v1/contacts/import",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/desktop/billing-drafts/settings",
+      "reason": "Upserts one authenticated organization/user primary-key row and records an audit event; no per-entry work grows with existing preferences. A write-harness fixture for consent changes is pending."
     },
     {
       "id": "PUT /v1/desktop/time-entries/:workspaceId",

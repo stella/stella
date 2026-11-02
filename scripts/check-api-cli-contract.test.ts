@@ -194,7 +194,15 @@ describe("API and CLI release contract", () => {
   test("release and pull-request smoke tests refuse corrupt history with pending SQL", async () => {
     const [releaseSmoke, migrationSmoke] = await Promise.all([
       readReleaseSmokeSource(),
-      Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text(),
+      // The migration smoke job runs its history rehearsal from a script.
+      Promise.all([
+        Bun.file(
+          new URL("../.github/workflows/ci.yml", import.meta.url),
+        ).text(),
+        Bun.file(
+          new URL("check-migration-history-refusal.sh", import.meta.url),
+        ).text(),
+      ]).then((sources) => sources.join("\n")),
     ]);
 
     for (const source of [releaseSmoke, migrationSmoke]) {
@@ -227,7 +235,15 @@ describe("API and CLI release contract", () => {
   test("release and migration smoke tests wait for scheduler initialization", async () => {
     const [releaseSmoke, migrationSmoke] = await Promise.all([
       readReleaseSmokeSource(),
-      Bun.file(new URL("../.github/workflows/ci.yml", import.meta.url)).text(),
+      // The migration smoke job runs its history rehearsal from a script.
+      Promise.all([
+        Bun.file(
+          new URL("../.github/workflows/ci.yml", import.meta.url),
+        ).text(),
+        Bun.file(
+          new URL("check-migration-history-refusal.sh", import.meta.url),
+        ).text(),
+      ]).then((sources) => sources.join("\n")),
     ]);
 
     expect(releaseSmoke).toContain('fetch("http://127.0.0.1:3001/live")');

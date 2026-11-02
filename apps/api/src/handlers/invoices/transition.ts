@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import * as v from "valibot";
 
+import { INVOICE_ISSUE_BLOCKER } from "@stll/api-contract/billing";
 import {
   INVOICE_COUNTRY_PROFILES,
   invoiceCountryOf,
@@ -30,6 +31,10 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { hasActiveInvoiceCredit } from "@/api/lib/billing/invoice-document-type";
+import {
+  invoiceIssueBlockerError,
+  readInvoiceIssueBlockers,
+} from "@/api/lib/billing/invoice-issue-readiness";
 import {
   lockDraftInvoiceForLines,
   recalculateInvoiceTotals,
@@ -341,11 +346,7 @@ const allocateDefaultInvoiceNumber = async (
   );
   if (!series) {
     return Result.err(
-      new HandlerError({
-        status: 409,
-        message: "No default number series configured for this document type",
-        hint: "Create a number series for this documentType and this seller or all sellers, set it as default, then finalize again.",
-      }),
+      invoiceIssueBlockerError(INVOICE_ISSUE_BLOCKER.numberSeriesMissing),
     );
   }
   return await allocateNumber(
@@ -647,6 +648,48 @@ type ApplyTransitionOptions = {
   workspaceId: SafeId<"workspace">;
 };
 
+type PrepareFirstIssueOptions = {
+  existing: Pick<
+    NonNullable<Awaited<ReturnType<typeof lockInvoiceInStatus>>>,
+    "id" | "sellerProfileId"
+  >;
+  matterLocks: InvoiceMatterLocks;
+  options: ApplyTransitionOptions;
+  set: Partial<typeof invoices.$inferInsert>;
+};
+
+/**
+ * The content an invoice is first issued with: the official VAT rate resolved
+ * before the write, and totals recomputed from its lines.
+ */
+const prepareFirstIssue = async (
+  tx: Transaction,
+  { existing, matterLocks, options, set }: PrepareFirstIssueOptions,
+) => {
+  if (options.resolvedVatRate !== null) {
+    const changedError = await storeResolvedVatRate(
+      tx,
+      existing.id,
+      options.resolvedVatRate,
+      set,
+    );
+    if (changedError !== null) {
+      return Result.err(changedError);
+    }
+  }
+  return await refreshDraftInvoiceAmounts(tx, {
+    scope: {
+      invoiceId: existing.id,
+      workspaceId: options.workspaceId,
+      organizationId: options.organizationId,
+      matterLocks,
+    },
+    sellerProfileId: existing.sellerProfileId,
+    now: options.now,
+    recordAuditEvent: options.recordAuditEvent,
+  });
+};
+
 const applyTransition = async (
   tx: Transaction,
   options: ApplyTransitionOptions,
@@ -705,32 +748,20 @@ const applyTransition = async (
     set.finalizedAt = existing.finalizedAt ?? options.now;
   }
   if (options.action === "finalize") {
-    const scope = {
-      invoiceId: existing.id,
-      workspaceId: options.workspaceId,
-      organizationId: options.organizationId,
-    };
+    const blocker = (await readInvoiceIssueBlockers(tx, existing)).at(0);
+    if (blocker !== undefined) {
+      return Result.err(invoiceIssueBlockerError(blocker));
+    }
     // Re-finalizing changes status, never the previously issued content.
     if (existing.finalizedAt === null) {
-      if (options.resolvedVatRate !== null) {
-        const changedError = await storeResolvedVatRate(
-          tx,
-          existing.id,
-          options.resolvedVatRate,
-          set,
-        );
-        if (changedError !== null) {
-          return Result.err(changedError);
-        }
-      }
-      const totals = await refreshDraftInvoiceAmounts(tx, {
-        scope: { ...scope, matterLocks },
-        sellerProfileId: existing.sellerProfileId,
-        now: options.now,
-        recordAuditEvent: options.recordAuditEvent,
+      const prepared = await prepareFirstIssue(tx, {
+        existing,
+        matterLocks,
+        options,
+        set,
       });
-      if (totals.isErr()) {
-        return Result.err(totals.error);
+      if (prepared.isErr()) {
+        return Result.err(prepared.error);
       }
     } else {
       const taxRequirementsError = await validateFinalizeTaxRequirements({
@@ -844,8 +875,10 @@ const transitionInvoiceHandler = (rateSource: VatRateSource) =>
       description:
         "Move an invoice through finalize, send, void, or revert_to_draft; " +
         "recording payments that reach its total marks it paid. " +
-        "Finalize assigns an omitted number from the document type's default series, " +
-        "using the issue date; configure a default number series first. Manual numbers " +
+        "Finalize requires a seller profile on the invoice and assigns an omitted number " +
+        "from the document type's default series, using the issue date; without either it " +
+        "is refused with invoice_seller_profile_missing or invoice_number_series_missing, " +
+        "which invoices.prefill reports in advance as issueBlockers. Manual numbers " +
         "and numbers kept after reverting to draft are preserved. A credit note must " +
         "reference an eligible original and cannot exceed its total. Voiding releases " +
         "attached entries; it and reverting are refused while unvoided payments remain. Finalizing a VAT invoice in a " +

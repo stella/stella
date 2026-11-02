@@ -41,24 +41,22 @@ import {
   draftedBlocks,
   manualSuggestion,
   matchedSuggestions,
-  NARRATIVE_DECLINES_BEFORE_FOLD,
-  narrativeTitles,
   nextSuggestion,
   segmentTitles,
 } from "./activity-calendar-logic";
 import type { ActivitySuggestion } from "./activity-calendar-logic";
 import { calendarDate, timedSegments } from "./activity-logic";
-import type {
-  ActivityDaySnapshot,
-  ActivityNarrativeAssist,
-} from "./activity-types";
+import type { ActivityDaySnapshot } from "./activity-types";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { ActivitySuggestionCard } from "./ActivitySuggestionCard";
+import type { DraftAssistView, SuggestionEdit } from "./ActivitySuggestionCard";
+import { cardDraftEntry, cardDraftFrom } from "./billing-draft-logic";
+import type { CardDraft, DraftFailureKind } from "./billing-draft-logic";
+import { useBillingDraftSettings } from "./billing-draft-settings";
 import type {
-  AssistChoice,
-  NarrativeAssistView,
-  SuggestionEdit,
-} from "./ActivitySuggestionCard";
+  BillingDraftSettings,
+  BillingDraftSettingsControl,
+} from "./billing-draft-settings";
 import { EVIDENCE_DETAIL_LIMIT, matchDay } from "./day-review-logic";
 import type { MatchedSegment } from "./day-review-logic";
 import { useDurationLabel } from "./use-duration-label";
@@ -90,21 +88,9 @@ type OpenCard =
   | { id: string; type: "suggestion" }
   | { range: DayCalendarRange; type: "range" };
 
-/** The stella AI description of one suggestion. */
-type NarrativeStatus =
-  | { type: "template" }
-  | { type: "declined" }
-  | { request: string; type: "writing" }
-  | { type: "written" }
-  | { type: "failed" };
-
-type NarrativeApproval = Exclude<AssistChoice, "no">;
-
-/** View preferences that outlive one day: the grid, and how often the user
- * declined a stella AI description in a row. */
+/** View preferences that outlive one day: the grid. */
 export type ActivityCalendarPreferences = {
   granularity: DayCalendarGranularity;
-  narrativeDeclines: number;
 };
 
 /** An Activity block's hover: its range, then each app with its time and the
@@ -321,10 +307,12 @@ export const ActivityDayCalendar = ({
   });
   const suggestions = matchedSuggestions(day.groups, leftOut);
   const editable = submission.type === "editing" || submission.type === "saved";
-  const narratives = useSuggestionNarratives({
-    assistSetting: snapshot.narrativeAssist,
-    preferences,
-    onPreferencesChange,
+  const drafting = useBillingDraftSettings(true);
+  const narratives = useSuggestionDrafts({
+    drafting,
+    date: snapshot.date,
+    timeZone,
+    captureDetails: snapshot.captureDetails,
   });
 
   const openSuggestion = (() => {
@@ -380,6 +368,9 @@ export const ActivityDayCalendar = ({
               durationMinutes: suggestion.roundedTenths * 6,
               narrative: edit.narrative,
               billable: edit.billable,
+              ...(edit.classification === null
+                ? {}
+                : { classification: edit.classification }),
             },
             ranges: suggestion.ranges,
           },
@@ -431,7 +422,17 @@ export const ActivityDayCalendar = ({
         })}
         sourceAppVisuals={snapshot.sourceAppVisuals}
         assist={narratives.view(openSuggestion)}
-        onAssist={(choice) => narratives.choose(openSuggestion, choice)}
+        earlierEntries={narratives.earlierEntries(openSuggestion)}
+        flags={narratives.flags(openSuggestion)}
+        onDraft={() => narratives.draft(openSuggestion)}
+        onAllow={() => narratives.allow(openSuggestion)}
+        onRefine={(steer, remember) =>
+          narratives.refine(openSuggestion, steer, remember)
+        }
+        onAcceptProposal={() => narratives.acceptProposal(openSuggestion)}
+        onDismissProposal={() => narratives.dismissProposal(openSuggestion)}
+        onUndo={() => narratives.undo(openSuggestion)}
+        onRestoreTemplate={() => narratives.restoreTemplate(openSuggestion)}
         onEdit={(change) => narratives.update(openSuggestion, change)}
         onAccept={() => accept(openSuggestion)}
         onReject={() => reject(openSuggestion)}
@@ -737,33 +738,140 @@ function matterTone(
     : { color: matter.color, matterId: matter.id, type: "matter" };
 }
 
-type SuggestionNarrativesOptions = {
-  assistSetting: ActivityNarrativeAssist;
-  preferences: ActivityCalendarPreferences;
-  onPreferencesChange: (preferences: ActivityCalendarPreferences) => void;
+type SuggestionDraftsOptions = {
+  drafting: BillingDraftSettingsControl;
+  date: string;
+  timeZone: string;
+  captureDetails: boolean;
+};
+
+/** What a written draft leaves on a card. */
+type Drafted = {
+  earlierEntries: CardDraft["earlierEntries"];
+  flags: CardDraft["flags"];
+  /** The server's result, which a refinement sends back unchanged. */
+  result: CardDraft["result"];
+  /** The matter the draft was written for. */
+  matterId: string;
+  /** Why the last refinement failed, until the next one. */
+  refineFailure: DraftFailureKind | null;
+};
+
+/** A suggestion's stella AI description. */
+type DraftStatus =
+  | { type: "template" }
+  | { request: string; type: "writing" }
+  | (Drafted & { type: "drafted" })
+  | { drafted: Drafted; request: string; type: "refining" }
+  /** A refinement waiting for the user: shown as a change to `base`.
+   * Dismissing it keeps `previous`; accepting it moves to `drafted`. */
+  | {
+      base: string;
+      drafted: Drafted;
+      previous: Drafted;
+      proposal: CardDraft;
+      type: "proposed";
+    }
+  | { kind: DraftFailureKind; type: "failed" };
+
+type DraftAnswer =
+  | { draft: CardDraft; type: "drafted" }
+  | { kind: DraftFailureKind; type: "failed" }
+  /** Consent changed meanwhile; nothing to show. */
+  | { type: "quiet" };
+
+const draftedFrom = (draft: CardDraft, matterId: string): Drafted => ({
+  earlierEntries: draft.earlierEntries,
+  flags: draft.flags,
+  result: draft.result,
+  matterId,
+  refineFailure: null,
+});
+
+/** A card with AI text applied, keeping what it replaces for Undo. */
+const withAiText = (
+  edit: SuggestionEdit,
+  change: Pick<SuggestionEdit, "narrative" | "classification">,
+): SuggestionEdit => ({
+  ...edit,
+  narrative: change.narrative.slice(0, DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH),
+  classification: change.classification,
+  written: edit.written + 1,
+  undo: { narrative: edit.narrative, classification: edit.classification },
+});
+
+/** What a card's stella AI area shows. */
+const draftAssistView = ({
+  settings,
+  status,
+  edit,
+  template,
+}: {
+  settings: BillingDraftSettings;
+  status: DraftStatus;
+  edit: SuggestionEdit;
+  template: string;
+}): DraftAssistView => {
+  if (settings.type !== "ready" || settings.mode === "off") {
+    return { type: "hidden" };
+  }
+  switch (status.type) {
+    case "writing":
+      return { type: "writing" };
+    case "refining":
+      return { type: "refining" };
+    case "proposed":
+      return {
+        after: status.proposal.narrative,
+        before: status.base,
+        type: "proposal",
+      };
+    case "template":
+    case "drafted":
+    case "failed":
+      break;
+    default:
+      status satisfies never;
+      return panic("Unhandled stella AI draft status");
+  }
+  if (edit.matter === null) {
+    return { type: "needsMatter" };
+  }
+  if (settings.consent !== "granted") {
+    return {
+      pending: settings.consent === "pending-grant",
+      type: "consent",
+    };
+  }
+  if (status.type === "failed") {
+    return { kind: status.kind, type: "failed" };
+  }
+  return {
+    canUndo: edit.undo !== null,
+    canRestoreTemplate: edit.narrative !== template,
+    drafted: status.type === "drafted",
+    refineFailure: status.type === "drafted" ? status.refineFailure : null,
+    type: "ready",
+  };
 };
 
 /**
- * Each suggestion's editable fields and its stella AI description. Titles
- * leave the window only after the user approves, once or always; without
- * approval the narrative stays the local template.
+ * Each suggestion's editable fields and its stella AI description. Nothing
+ * about a suggestion leaves the window until the user has consented on the
+ * server; then a card with a matter is drafted as it opens, and text the user
+ * typed meanwhile always wins over the draft. A refinement is a proposal the
+ * user accepts or dismisses; the last applied change can be undone.
  */
-function useSuggestionNarratives({
-  assistSetting,
-  preferences,
-  onPreferencesChange,
-}: SuggestionNarrativesOptions) {
+function useSuggestionDrafts({
+  drafting,
+  date,
+  timeZone,
+  captureDetails,
+}: SuggestionDraftsOptions) {
   const t = useTranslations("activity");
   const format = useFormatter();
-  const locale = useLocale();
   const [edits, setEdits] = useState<Record<string, SuggestionEdit>>({});
-  const [statuses, setStatuses] = useState<Record<string, NarrativeStatus>>({});
-  // The change event that carries a persisted "always" can arrive after the
-  // next card opens, so the choice applies at once; it lasts only until its
-  // request settles, after which the saved setting decides again, so a failed
-  // save or a later "ask" in Settings never leaves a standing approval.
-  const [alwaysApproved, setAlwaysApproved] = useState(false);
-  const assist = alwaysApproved ? "always" : assistSetting;
+  const [statuses, setStatuses] = useState<Record<string, DraftStatus>>({});
 
   // The template never exceeds what a time entry accepts.
   const template = (suggestion: ActivitySuggestion) => {
@@ -791,61 +899,173 @@ function useSuggestionNarratives({
       matter: suggestion.matter,
       narrative: template(suggestion),
       written: 0,
+      classification: null,
+      undo: null,
     };
-  const statusFor = (suggestion: ActivitySuggestion): NarrativeStatus =>
+  const statusFor = (suggestion: ActivitySuggestion): DraftStatus =>
     statuses[suggestion.id] ?? { type: "template" };
-  const setStatus = (id: string, status: NarrativeStatus) =>
+  const setStatus = (id: string, status: DraftStatus) =>
     setStatuses((current) => ({ ...current, [id]: status }));
   /** Applies `status` only while `request` is still the latest request. */
-  const settle = (id: string, request: string, status: NarrativeStatus) =>
+  const settle = (id: string, request: string, status: DraftStatus) =>
     setStatuses((current) => {
       const latest = current[id];
-      return latest?.type === "writing" && latest.request === request
+      return latest !== undefined &&
+        "request" in latest &&
+        latest.request === request
         ? { ...current, [id]: status }
         : current;
     });
+  const { settings } = drafting;
+  const available = settings.type === "ready" && settings.mode !== "off";
+  const consented = settings.type === "ready" && settings.consent === "granted";
 
-  const generate = (
+  /** Applies AI text to a card, keeping what it replaces for Undo; `when`
+   * decides against the card as it is when the change lands. */
+  const apply = (
     suggestion: ActivitySuggestion,
-    approval: NarrativeApproval,
-  ) => {
-    const titles = narrativeTitles(suggestion);
-    if (titles.length === 0) {
+    change: Pick<SuggestionEdit, "narrative" | "classification">,
+    when: (edit: SuggestionEdit) => boolean = () => true,
+  ) =>
+    setEdits((current) => {
+      const edit = current[suggestion.id] ?? editFor(suggestion);
+      return when(edit)
+        ? { ...current, [suggestion.id]: withAiText(edit, change) }
+        : current;
+    });
+
+  // Only this entry's matter, date, duration, app names and, when titles
+  // are recorded, the names the card shows leave the window.
+  const send = async (
+    suggestion: ActivitySuggestion,
+    matterId: string,
+    steering?: { steer: string; previousResult?: CardDraft["result"] },
+  ): Promise<DraftAnswer> => {
+    const outcome = await drafting.consent.request({
+      entries: [
+        cardDraftEntry({
+          suggestion,
+          matterId,
+          date,
+          timezone: timeZone,
+          captureDetails,
+        }),
+      ],
+      ...steering,
+    });
+    switch (outcome.type) {
+      case "blocked":
+      case "discarded":
+        return { type: "quiet" };
+      case "completed":
+        break;
+      default:
+        outcome satisfies never;
+        return panic("Unhandled drafting outcome");
+    }
+    if (outcome.response.isErr()) {
+      const kind = outcome.response.error;
+      // The server's switch or consent changed: read them again.
+      if (kind === "off" || kind === "consentRequired") {
+        drafting.reload();
+      }
+      return { kind, type: "failed" };
+    }
+    const draft = cardDraftFrom(outcome.response.value);
+    return draft === null
+      ? { kind: "failed", type: "failed" }
+      : { draft, type: "drafted" };
+  };
+
+  const draft = (suggestion: ActivitySuggestion) => {
+    const { matter, narrative: before } = editFor(suggestion);
+    if (matter === null || !available) {
       return;
     }
     const request = crypto.randomUUID();
-    const { matter, narrative: before } = editFor(suggestion);
-    setStatus(suggestion.id, { request, type: "writing" });
-    // Only this suggestion's titles, the reader's language and the chosen
-    // matter's name leave the window, and only after the user approved.
-    invoke<string>("activity_generate_narrative", {
-      request: { titles, locale, matterName: matter?.name ?? null, approval },
-    })
-      .finally(() => {
-        if (approval === "always") {
-          setAlwaysApproved(false);
-        }
-      })
-      .then((narrative) => {
-        settle(suggestion.id, request, { type: "written" });
-        setEdits((current) => {
-          const edit = current[suggestion.id] ?? editFor(suggestion);
-          // Text the user typed meanwhile wins over the description.
-          if (edit.narrative !== before) {
-            return current;
-          }
-          return {
-            ...current,
-            [suggestion.id]: {
-              ...edit,
-              narrative,
-              written: edit.written + 1,
-            },
-          };
-        });
-        return undefined;
-      })
-      .catch(() => settle(suggestion.id, request, { type: "failed" }));
+    const id = suggestion.id;
+    setStatus(id, { request, type: "writing" });
+    void send(suggestion, matter.id).then((answer) => {
+      switch (answer.type) {
+        case "quiet":
+          settle(id, request, { type: "template" });
+          return undefined;
+        case "failed":
+          settle(id, request, { kind: answer.kind, type: "failed" });
+          return undefined;
+        case "drafted":
+          break;
+        default:
+          answer satisfies never;
+          return panic("Unhandled draft answer");
+      }
+      settle(id, request, {
+        ...draftedFrom(answer.draft, matter.id),
+        type: "drafted",
+      });
+      // A classification belongs to the matter it was drafted for, and text
+      // the user typed meanwhile wins over the draft.
+      apply(
+        suggestion,
+        {
+          narrative: answer.draft.narrative,
+          classification: answer.draft.classification,
+        },
+        (edit) => edit.matter?.id === matter.id && edit.narrative === before,
+      );
+      return undefined;
+    });
+  };
+
+  const refine = (
+    suggestion: ActivitySuggestion,
+    steer: string,
+    remember: boolean,
+  ) => {
+    const status = statusFor(suggestion);
+    const { matter, narrative: base } = editFor(suggestion);
+    if (status.type !== "drafted" || matter === null || !available) {
+      return;
+    }
+    if (remember) {
+      void drafting.setPreference(steer);
+    }
+    const request = crypto.randomUUID();
+    const id = suggestion.id;
+    const drafted: Drafted = { ...status, refineFailure: null };
+    setStatus(id, { drafted, request, type: "refining" });
+    // A draft for another matter cannot be refined; a new matter is drafted
+    // afresh with the same instruction.
+    const steering =
+      drafted.matterId === matter.id
+        ? { steer, previousResult: drafted.result }
+        : { steer };
+    void send(suggestion, matter.id, steering).then((answer) => {
+      switch (answer.type) {
+        case "quiet":
+          settle(id, request, { ...drafted, type: "drafted" });
+          return undefined;
+        case "failed":
+          settle(id, request, {
+            ...drafted,
+            refineFailure: answer.kind,
+            type: "drafted",
+          });
+          return undefined;
+        case "drafted":
+          settle(id, request, {
+            base,
+            drafted: draftedFrom(answer.draft, matter.id),
+            previous: drafted,
+            proposal: answer.draft,
+            type: "proposed",
+          });
+          return undefined;
+        default:
+          answer satisfies never;
+          return panic("Unhandled draft answer");
+      }
+    });
   };
 
   return {
@@ -858,62 +1078,92 @@ function useSuggestionNarratives({
           ...change,
         },
       })),
-    /** With standing approval, a card writes its description as it opens. */
+    /** With consent, a card the user has not touched is drafted as it opens. */
     opened: (suggestion: ActivitySuggestion) => {
-      if (assist === "always" && statusFor(suggestion).type === "template") {
-        generate(suggestion, "once");
+      if (
+        consented &&
+        edits[suggestion.id] === undefined &&
+        statusFor(suggestion).type === "template"
+      ) {
+        draft(suggestion);
       }
     },
-    choose: (suggestion: ActivitySuggestion, choice: AssistChoice) => {
-      switch (choice) {
-        case "no":
-          setStatus(suggestion.id, { type: "declined" });
-          onPreferencesChange({
-            ...preferences,
-            narrativeDeclines: preferences.narrativeDeclines + 1,
-          });
-          return;
-        case "always":
-          setAlwaysApproved(true);
-          onPreferencesChange({ ...preferences, narrativeDeclines: 0 });
-          generate(suggestion, "always");
-          return;
-        case "once":
-          onPreferencesChange({ ...preferences, narrativeDeclines: 0 });
-          generate(suggestion, "once");
-          return;
-        default:
-          choice satisfies never;
-          panic("Unhandled stella AI choice");
-      }
+    draft,
+    refine,
+    /** Consent is granted on the server; the card drafts once it is. */
+    allow: (suggestion: ActivitySuggestion) => {
+      void drafting.setConsent("granted").then((granted) => {
+        if (granted) {
+          draft(suggestion);
+        }
+        return undefined;
+      });
     },
-    view: (suggestion: ActivitySuggestion): NarrativeAssistView => {
-      if (narrativeTitles(suggestion).length === 0) {
-        return { type: "hidden" };
-      }
+    acceptProposal: (suggestion: ActivitySuggestion) => {
       const status = statusFor(suggestion);
-      switch (status.type) {
-        case "writing":
-          return { type: "writing" };
-        case "written":
-          return { type: "hidden" };
-        case "failed":
-          return { type: "failed" };
-        case "declined":
-          return { type: "folded" };
-        case "template":
-          if (
-            assist === "always" ||
-            preferences.narrativeDeclines >= NARRATIVE_DECLINES_BEFORE_FOLD
-          ) {
-            return { type: "folded" };
-          }
-          return { type: "ask" };
-        default:
-          status satisfies never;
-          return panic("Unhandled stella AI description status");
+      if (status.type !== "proposed") {
+        return;
+      }
+      const { matter } = editFor(suggestion);
+      apply(suggestion, {
+        narrative: status.proposal.narrative,
+        classification:
+          matter?.id === status.drafted.matterId
+            ? status.proposal.classification
+            : null,
+      });
+      setStatus(suggestion.id, { ...status.drafted, type: "drafted" });
+    },
+    dismissProposal: (suggestion: ActivitySuggestion) => {
+      const status = statusFor(suggestion);
+      if (status.type === "proposed") {
+        // The draft stays the one the user had; the next refinement builds
+        // on it.
+        setStatus(suggestion.id, { ...status.previous, type: "drafted" });
       }
     },
+    undo: (suggestion: ActivitySuggestion) =>
+      setEdits((current) => {
+        const edit = current[suggestion.id] ?? editFor(suggestion);
+        return edit.undo === null
+          ? current
+          : {
+              ...current,
+              [suggestion.id]: { ...edit, ...edit.undo, undo: null },
+            };
+      }),
+    /** Puts the template back; Undo returns the text it replaced. */
+    restoreTemplate: (suggestion: ActivitySuggestion) =>
+      setEdits((current) => {
+        const edit = current[suggestion.id] ?? editFor(suggestion);
+        return {
+          ...current,
+          [suggestion.id]: {
+            ...edit,
+            narrative: template(suggestion),
+            classification: null,
+            undo: {
+              narrative: edit.narrative,
+              classification: edit.classification,
+            },
+          },
+        };
+      }),
+    earlierEntries: (suggestion: ActivitySuggestion) => {
+      const status = statusFor(suggestion);
+      return status.type === "drafted" ? status.earlierEntries : [];
+    },
+    flags: (suggestion: ActivitySuggestion) => {
+      const status = statusFor(suggestion);
+      return status.type === "drafted" ? status.flags : [];
+    },
+    view: (suggestion: ActivitySuggestion) =>
+      draftAssistView({
+        settings,
+        status: statusFor(suggestion),
+        edit: editFor(suggestion),
+        template: template(suggestion),
+      }),
   };
 }
 
