@@ -1,6 +1,7 @@
 import {
   createContext,
   Fragment,
+  memo,
   use,
   useLayoutEffect,
   useMemo,
@@ -281,29 +282,29 @@ const useOlderMessagePaging = ({
   return { sentinelRef, triggerLoadOlder };
 };
 
-/** The live status line of the turn that is running now. */
-const ActiveTurnStatus = ({
-  assistant,
-}: {
-  assistant: ChatUIMessage | undefined;
-}) => {
-  const t = useTranslations();
-  return (
-    <ChatTurnStatus
-      turn={
-        assistant === undefined
-          ? { state: "submitted", phase: null }
-          : {
-              state: "streaming",
-              phase: turnPhaseFromParts(assistant.parts, (name) =>
-                t(getChatToolTitleKey(name)),
-              ),
-              timing: assistant.metadata?.turnTiming,
-            }
-      }
-    />
-  );
-};
+/** The live status line of the turn that is running now. Memoized: the
+ *  thread re-renders on every streamed chunk, while the line only changes
+ *  with the running assistant message. */
+const ActiveTurnStatus = memo(
+  ({ assistant }: { assistant: ChatUIMessage | undefined }) => {
+    const t = useTranslations();
+    return (
+      <ChatTurnStatus
+        turn={
+          assistant === undefined
+            ? { state: "submitted", phase: null }
+            : {
+                state: "streaming",
+                phase: turnPhaseFromParts(assistant.parts, (name) =>
+                  t(getChatToolTitleKey(name)),
+                ),
+                timing: assistant.metadata?.turnTiming,
+              }
+        }
+      />
+    );
+  },
+);
 
 export const ChatThreadMessages = ({
   activitySession,
