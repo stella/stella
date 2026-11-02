@@ -1,0 +1,26 @@
+[
+  {
+    "file": "apps/api/scripts/seed-dev.ts",
+    "from": "d62f2f84c35437280b562a4f0272fdce216959c21448bb452608b91a6604f59c",
+    "to": "20d8754dafa48dc04be8480a7b47cb2b74b7e5b38d8eaae0887442cca1b5549f",
+    "reason": "Existing seed issuing-setup transaction; reading the seller profile and VAT rates from the locale content pack changes its fingerprint without changing the transaction boundary."
+  },
+  {
+    "file": "apps/api/scripts/seed-templates.ts",
+    "from": "6cd2d193027f7e4310ef9d3c654179b89d01283d684238b36bfffdcbd30d7205",
+    "to": "50dba6cbdaed9a24c027d70cf2f6c38395936dc99aa76e0871df13a1a9f5a1ef",
+    "reason": "Existing seed template insert transaction; reading names from the locale content pack changes its fingerprint without changing the transaction boundary."
+  },
+  {
+    "file": "apps/api/scripts/seed-templates.ts",
+    "from": "7ca903fdb3d9b66c8fbeb6817f8510b2409e8d0440dd2fb2252de403cf369819",
+    "to": "fd4162922e93a331f728a0cebb86836d387d0324c19d0285fa1a803312d55fdf",
+    "reason": "Existing seed template insert transaction; reading names from the locale content pack changes its fingerprint without changing the transaction boundary."
+  },
+  {
+    "file": "apps/api/scripts/seed-test-user.ts",
+    "from": "827f04315ff26440b6f89ab305dea6773ad398c3ac50d2b1c9c500690156cea7",
+    "to": "af1c74b0ea77106d50f76ccaf78a73acbef8fc38b75abd3890f799bbe093be68",
+    "reason": "Existing time-billing enrolment transaction, extracted into a helper the marketing locale seed reuses; the transaction boundary is unchanged."
+  }
+]

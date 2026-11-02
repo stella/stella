@@ -16,18 +16,23 @@ import {
   visualPreviewToolOutputSchema,
 } from "@stll/api-contract/visual-preview";
 import { compareCodeUnit } from "@stll/collation";
+import {
+  MARKETING_LOCALE_MARKERS,
+  MARKETING_LOCALES,
+} from "@stll/playwright-tools/marketing-locales";
+import type { MarketingLocale } from "@stll/playwright-tools/marketing-locales";
 
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
-import exposureView from "@/api/handlers/visual-sandbox/fixtures/showcase/change-of-control-exposure.json";
 import { prepareGeneratedVisual } from "@/api/handlers/visual-sandbox/prepare";
 import { toSafeId } from "@/api/lib/branded-types";
 
+import { SEED_CONTENT_BY_LOCALE } from "./seed-content/locales";
 import {
   buildExportReviewCitationSeeds,
+  buildExportReviewDocNames,
   buildExportReviewDocumentText,
   buildExportReviewMetadata,
-  EXPORT_REVIEW_DOC_NAMES,
   exportReviewCitationBlockId,
   exportReviewDocumentIds,
 } from "./seed-export-review";
@@ -35,31 +40,32 @@ import {
   aggregateChangeOfControlExposure,
   buildMarketingAgentThread,
   CHANGE_OF_CONTROL_POSITIONS,
-  MARKETING_AGENT_QUESTIONS,
-  MARKETING_AGENT_THREAD_TITLE,
   rankChangeOfControlExposure,
-  RISK_SEVERITY,
+  riskSeverity,
 } from "./seed-marketing-agent-thread";
 
 const workspaceId = toSafeId<"workspace">(
   "bb8641dc-0667-574c-8e30-152a1fd4b3f5",
 );
-const build = () =>
+const build = (locale: MarketingLocale) =>
   buildMarketingAgentThread({
     createdAt: new Date("2026-07-16T09:30:00.000Z"),
+    locale,
     organizationId: toSafeId<"organization">("test-org-stella-dev"),
     userId: "test-user-stella-dev",
     workspaceId,
   });
 
-const reload = (row: ReturnType<typeof build>["messages"][number]) =>
+type BuiltMessage = ReturnType<typeof build>["messages"][number];
+
+const reload = (row: BuiltMessage) =>
   chatMessageFromPersisted({
     id: row.id,
     role: row.role,
     content: row.content,
   });
 
-const textOf = (row: ReturnType<typeof build>["messages"][number]) =>
+const textOf = (row: BuiltMessage) =>
   reload(row)
     .parts.flatMap((part) => (part.type === "text" ? [part.content] : []))
     .join("\n");
@@ -80,10 +86,15 @@ const citationLinks = (text: string) =>
     href: match.groups?.["href"] ?? "",
   })).filter(({ href }) => href.startsWith(CHAT_SOURCE_CITATION_HREF_PREFIX));
 
-describe("marketing agent thread", () => {
+describe.each(MARKETING_LOCALES)("marketing agent thread (%s)", (locale) => {
+  const copy = SEED_CONTENT_BY_LOCALE[locale].exportReview;
+  const agentCopy = SEED_CONTENT_BY_LOCALE[locale].agent;
+  const markers = MARKETING_LOCALE_MARKERS[locale].agent;
+  const docNames = buildExportReviewDocNames(copy);
+
   test("is a finished three-turn conversation the API reloads unchanged", () => {
-    const { messages, thread } = build();
-    expect(thread.title).toBe(MARKETING_AGENT_THREAD_TITLE);
+    const { messages, thread } = build(locale);
+    expect(thread.title).toBe(markers.threadTitle);
     expect(messages.map(({ role }) => role)).toEqual([
       "user",
       "assistant",
@@ -94,7 +105,7 @@ describe("marketing agent thread", () => {
     ]);
     expect(
       messages.filter(({ role }) => role === "user").map((row) => textOf(row)),
-    ).toEqual([...MARKETING_AGENT_QUESTIONS]);
+    ).toEqual([...markers.questions]);
     for (const [index, row] of messages.entries()) {
       expect(row.content.version).toBe(3);
       expect(row.threadId).toBe(thread.id);
@@ -114,15 +125,25 @@ describe("marketing agent thread", () => {
   });
 
   test("pins the recap to the last message so reopening spends no model call", () => {
-    const { messages, thread } = build();
+    const { messages, thread } = build(locale);
+    expect(thread.recapText.startsWith(markers.recapPrefix)).toBe(true);
     expect(thread.recapMessageId).toBe(lastOf(messages).id);
     expect(thread.recapPromptVersion).toBe(RECAP_PROMPT_VERSION);
     expect(thread.recapText.length).toBeGreaterThan(0);
     expect(thread.recapText.length).toBeLessThanOrEqual(700);
   });
 
+  test("the final answer carries the chips the capture waits on", () => {
+    const { messages } = build(locale);
+    const citations = citationLinks(textOf(lastOf(messages)));
+    for (const { chipLabel, fileName } of markers.citedSources) {
+      expect(citations.map(({ label }) => label)).toContain(chipLabel);
+      expect(docNames).toContain(fileName);
+    }
+  });
+
   test("every inline citation resolves to a seeded passage that states its quote", () => {
-    const { messages } = build();
+    const { messages } = build(locale);
     const assistantTexts = messages
       .filter(({ role }) => role === "assistant")
       .map((row) => textOf(row));
@@ -138,7 +159,7 @@ describe("marketing agent thread", () => {
         throw new TypeError(`Not a canonical DOCX citation: ${href}`);
       }
       expect(target.workspaceId).toBe(workspaceId);
-      const index = EXPORT_REVIEW_DOC_NAMES.findIndex(
+      const index = docNames.findIndex(
         (_name, row) =>
           exportReviewDocumentIds(row).entityId === target.entityId,
       );
@@ -146,23 +167,24 @@ describe("marketing agent thread", () => {
       const ids = exportReviewDocumentIds(index);
       expect(target.entityVersionId).toBe(ids.entityVersionId);
       expect(target.fieldId).toBe(ids.fileFieldId);
-      const fileName = EXPORT_REVIEW_DOC_NAMES.at(index) ?? "";
+      const fileName = docNames.at(index) ?? "";
       expect(fileName.endsWith(".docx")).toBe(true);
       const citationSeed = buildExportReviewCitationSeeds(
-        buildExportReviewMetadata(index),
+        copy,
+        buildExportReviewMetadata(copy, index),
       ).find(({ quote }) => quote === target.text);
       if (!citationSeed) {
         throw new TypeError(`No citation seed quotes "${target.text}"`);
       }
       expect(target.blockId).toBe(exportReviewCitationBlockId(citationSeed));
       expect(
-        buildExportReviewDocumentText(fileName, index).split("\n"),
+        buildExportReviewDocumentText(copy, fileName, index).split("\n"),
       ).toContain(target.text);
     }
   });
 
   test("the first answer's table ranks every counterparty by position, severity and value", () => {
-    const { messages } = build();
+    const { messages } = build(locale);
     const firstAnswer = messages.at(1);
     if (!firstAnswer) {
       throw new TypeError("The thread has no first answer");
@@ -177,30 +199,24 @@ describe("marketing agent thread", () => {
     expect(
       tableRows.map((cells) => [cells.at(0), cells.at(2), cells.at(3)]),
     ).toEqual(
-      rankChangeOfControlExposure(aggregateChangeOfControlExposure()).map(
-        (row) => [
-          row.name,
-          row.risk,
-          exposureView.data.labels.positions[row.position],
-        ],
-      ),
+      rankChangeOfControlExposure(
+        copy,
+        aggregateChangeOfControlExposure(copy),
+      ).map((row) => [
+        row.name,
+        row.risk,
+        agentCopy.viewLabels.positions[row.position],
+      ]),
     );
     // The lead-ins cite the Critical agreements as leading the review, so
-    // they head the table.
-    expect(tableRows.map((cells) => cells.at(0))).toEqual([
-      "Delta Logistics Kft.",
-      "Helios Energy a.s.",
-      "Granite Properties B.V.",
-      "Cedar Cloud Ltd.",
-      "BluePeak Manufacturing s.r.o.",
-      "Fjord Analytics AB",
-      "Aurora Retail GmbH",
-      "Edison Bank plc",
-    ]);
+    // they head the table. Every locale's data room has the same shape.
+    expect(tableRows.map((cells) => cells.at(0))).toEqual(
+      [3, 7, 6, 2, 1, 5, 0, 4].map((index) => copy.counterparties[index]),
+    );
   });
 
   test("the final turn shows the stored generated view through a completed show_visual call", () => {
-    const { messages, thread, visualFile } = build();
+    const { messages, thread, visualFile } = build(locale);
     const lastAnswer = messages.at(-1);
     if (!lastAnswer) {
       throw new TypeError("The thread has no final answer");
@@ -244,15 +260,16 @@ describe("marketing agent thread", () => {
       v.parse(generatedVisualInputSchema, stored),
     ).unwrap();
     expect(page.title).toBe(resource.resource.text);
+    expect(page.title).toBe(markers.viewTitle);
     expect(page.data).toMatchObject({
-      labels: exposureView.data.labels,
+      labels: agentCopy.viewLabels,
       positions: [...CHANGE_OF_CONTROL_POSITIONS],
-      risks: [...RISK_SEVERITY],
+      risks: [...riskSeverity(copy)],
     });
   });
 
   test("the stored view accounts for every seeded document exactly once", () => {
-    const { visualFile } = build();
+    const { visualFile } = build(locale);
     const { counterparties } = v.parse(
       v.object({
         data: v.object({
@@ -267,8 +284,8 @@ describe("marketing agent thread", () => {
       }),
       JSON.parse(new TextDecoder().decode(visualFile.bytes)),
     ).data;
-    const rows = EXPORT_REVIEW_DOC_NAMES.map((_name, index) =>
-      buildExportReviewMetadata(index),
+    const rows = docNames.map((_name, index) =>
+      buildExportReviewMetadata(copy, index),
     );
     expect(
       counterparties.map(({ name }) => name).toSorted(compareCodeUnit),
@@ -286,6 +303,6 @@ describe("marketing agent thread", () => {
   });
 
   test("rebuilding is deterministic", () => {
-    expect(build()).toEqual(build());
+    expect(build(locale)).toEqual(build(locale));
   });
 });
