@@ -21,7 +21,7 @@ const gzFixtureText = async (name: string): Promise<string> =>
 
 const project = async (sourceRaw: string) =>
   plKioRetention.type === "checked"
-    ? await plKioRetention.project(sourceRaw)
+    ? await plKioRetention.project(sourceRaw, { sourceRawObjects: {} })
     : panic("pl-kio is a checked source");
 
 /** The recorded rulings the adapter's tests build from all three pages. */

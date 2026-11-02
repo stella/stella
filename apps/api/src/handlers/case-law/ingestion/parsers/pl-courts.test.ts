@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
-import * as cheerio from "cheerio";
-import { isTag } from "domhandler";
 
+import { load } from "@stll/html";
+import { isTag } from "@stll/html/nodes";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
@@ -82,7 +82,7 @@ describe("parsePlDecisionContent", () => {
         block.plainText.startsWith(opening),
       );
       expect(recital?.plainText).toBe(
-        `${opening} ${cheerio.load(continuation).text()}`.replace(/\s+/gu, " "),
+        `${opening} ${load(continuation).text()}`.replace(/\s+/gu, " "),
       );
       expect(
         documentAst.blocks.some((block) =>
@@ -637,7 +637,7 @@ describe("markup whitespace", () => {
       const html = await gunzipText(name);
       // The capture reaches the fault: a paragraph whose markup puts a line
       // break or a run of spaces between two of its words.
-      const $ = cheerio.load(html);
+      const $ = load(html);
       expect(
         $("p")
           .toArray()
@@ -862,7 +862,7 @@ describe("ordered list items print the number a browser gives them", () => {
       value !== null &&
       Object.hasOwn(value, "contents");
     // The prototype cheerio defines `contents` on, above each load's class.
-    let contentsOwner: unknown = cheerio.load("<p></p>").root();
+    let contentsOwner: unknown = load("<p></p>").root();
     while (contentsOwner !== null && !ownsContents(contentsOwner)) {
       contentsOwner = Object.getPrototypeOf(contentsOwner);
     }
@@ -904,7 +904,7 @@ describe("ordered list items print the number a browser gives them", () => {
         baseInput(`<ol>${"<li>Treść punktu</li>".repeat(count)}</ol>`, {
           decisionType: undefined,
           loadHtml: (html) => {
-            const $ = cheerio.load(html);
+            const $ = load(html);
             $("li").each((_, element) => {
               if (!isTag(element)) {
                 return;
@@ -993,4 +993,34 @@ test("retains nested table text only in its owning outer cell", () => {
   expect(fulltext.match(/Inner/gu)).toHaveLength(1);
   expect(fulltext).toContain("Header");
   expect(fulltext).toContain("Footer");
+});
+
+const parsedLinkHrefs = (inlines: readonly Inline[]): string[] =>
+  inlines.flatMap((inline) => [
+    ...(inline.type === "link" ? [inline.href] : []),
+    ...(hasInlineChildren(inline) ? parsedLinkHrefs(inline.children) : []),
+  ]);
+
+const footnoteLinksOf = (content: string, footnoteIds?: readonly string[]) => {
+  const result = parsePlDecisionContent(baseInput(content, { footnoteIds }));
+  return result.documentAst.blocks.flatMap((block) =>
+    "inlines" in block ? parsedLinkHrefs(block.inlines) : [],
+  );
+};
+
+test("only exact footnotes from the current document extend the URL policy", async () => {
+  const html = await Bun.file(
+    new URL("__fixtures__/pl-footnote-fragments.html", import.meta.url),
+  ).text();
+  expect(footnoteLinksOf(html)).toEqual(["https://example.test/source"]);
+  expect(footnoteLinksOf(html, ["note"])).toEqual([
+    "#note",
+    "https://example.test/source",
+  ]);
+  expect(
+    footnoteLinksOf(
+      '<p>Other <a href="#note">source</a> <a href="#other-document-note">note</a></p>',
+      ["other-document-note"],
+    ),
+  ).toEqual(["#other-document-note"]);
 });
