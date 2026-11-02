@@ -179,12 +179,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
   },
 
   {
-    path: "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
-    class: "package-owned-client",
-    reason: "Stubs fetch with fixture responses for adapter checks.",
-    transports: ["global:fetch"],
-  },
-  {
     path: "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts",
     class: "third-party",
     reason: "Reads roster data from public court sites.",
@@ -643,6 +637,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:jose"],
   },
   {
+    path: "apps/api/src/lib/push/apns-client.ts",
+    class: "third-party",
+    reason:
+      "Sends push alerts over HTTP/2 to the two fixed Apple Push Notification service gateways.",
+    transports: ["module:node:http2"],
+  },
+  {
     path: "apps/api/src/lib/redis-client.ts",
     class: "operator-configured-infrastructure",
     reason:
@@ -1056,7 +1057,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "packages/fetch/src/index.ts",
     class: "package-owned-client",
     reason:
-      "Shared fetch owner resolves the runtime transport and applies caller-selected header or idle deadlines.",
+      "Shared fetch owner resolves the runtime transport and applies caller-selected header or total deadlines.",
     transports: ["global:fetch"],
   },
   {

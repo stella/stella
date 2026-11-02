@@ -80,6 +80,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "credential",
   },
+  "DELETE /v1/me/push-devices/:token": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/memories/:memoryId": {
     type: "non-replay",
     reason: "current-state",
@@ -533,6 +537,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/dictation/transcribe": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
   "POST /v1/feedback": {
     type: "non-replay",
     reason: "external-effect",
@@ -605,6 +613,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "read",
   },
+  "POST /v1/organization-settings/billing-drafts": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/organization-settings/business-registry-credentials": {
     type: "non-replay",
     reason: "current-state",
@@ -635,6 +647,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "POST /v1/organization-settings/web-search-key": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organizations/slug": {
     type: "non-replay",
     reason: "current-state",
   },
@@ -997,6 +1013,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "PUT /v1/me/push-devices": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "PUT /v1/organization-settings/anonymization-blacklist": {
     type: "non-replay",
     reason: "current-state",
@@ -1271,7 +1291,7 @@ const hasReplayConfig = (source: string) => {
     if (
       !ts.isCallExpression(node) ||
       !ts.isIdentifier(node.expression) ||
-      !/^createSafe(?:Root)?Handler$/u.test(node.expression.text)
+      !/^createSafe(?:Root|Session)?Handler$/u.test(node.expression.text)
     ) {
       return;
     }
@@ -1319,10 +1339,18 @@ test("every create route and capability declares JSON request replay or a reason
     file: "src/handlers/api-keys/create.ts",
     replay: false,
   });
+  expect(mounted).toContainEqual({
+    method: "POST",
+    path: "/v1/organizations",
+    file: "src/handlers/organizations/create.ts",
+    replay: true,
+  });
   const creates = new Set(mounted.map(({ file }) => file));
   for (const file of new Bun.Glob(
     "src/mcp/generated/capability-dispatch/*.ts",
-  ).scanSync({ cwd: apiRoot })) {
+  ).scanSync({
+    cwd: apiRoot,
+  })) {
     for (const handler of collectCreateCapabilities(
       readFileSync(path.join(apiRoot, file), "utf-8"),
     )) {

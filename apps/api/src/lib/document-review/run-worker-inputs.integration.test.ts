@@ -43,11 +43,14 @@ import * as modelTransport from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
+
+const testFetchState = createTestFetch();
 
 const { testDb, ids } = await getRlsFixture();
 const database = asTestRaw<RlsDatabase<Transaction>>(testDb);
@@ -134,7 +137,10 @@ const analytics = installRecordingAnalytics();
 beforeEach(async () => {
   preparationSpy = spyOn(preparation, "fetchAndPrepareReviewFiles");
   modelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
-  fetchSpy = spyOn(globalThis, "fetch");
+  fetchSpy = Object.assign(mock(globalThis.fetch), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(asFetchMock(fetchSpy));
 
   preparationSpy.mockClear();
   preparationSpy.mockImplementation(async () =>
@@ -208,7 +214,7 @@ afterEach(async () => {
 afterAll(async () => {
   preparationSpy.mockRestore();
   modelSpy.mockRestore();
-  fetchSpy.mockRestore();
+  testFetchState.restore();
   analytics.restore();
   await releaseRlsFixture();
 });

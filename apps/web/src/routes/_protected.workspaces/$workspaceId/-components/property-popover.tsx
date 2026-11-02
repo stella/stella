@@ -52,6 +52,7 @@ import type {
 } from "@/lib/types";
 import { useUpdateProperty } from "@/lib/workspaces/mutations/properties";
 import { isPlaybookVerdictProperty } from "@/lib/workspaces/playbook-verdicts";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { useGroupScope } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 
@@ -90,6 +91,7 @@ export const PropertyPopover = ({
 }: PropertyPopoverProps) => {
   const t = useTranslations();
   const { workspaceId, id, name } = property;
+  const displayName = usePropertyDisplayName();
   const groupScope = useGroupScope();
   const [isOpen, setIsOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -363,7 +365,7 @@ export const PropertyPopover = ({
           <span className="min-w-0 flex-1">
             <PropertyPopoverTrigger
               disabled={updateProperty.isPending}
-              name={name}
+              name={displayName(property)}
               property={property}
             />
           </span>

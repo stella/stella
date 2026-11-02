@@ -26,6 +26,7 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 import { declareFingerprintFields } from "@stll/errors";
+import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
 import { member, organization } from "@/api/db/auth-schema";
 import type {
@@ -33,11 +34,14 @@ import type {
   OnlineMigrationParam,
 } from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
-import type { InvoiceStatus } from "@/api/db/schema";
+import type { caseLawDecisions, InvoiceStatus } from "@/api/db/schema";
 import {
   billingArrangements,
   billingCodes,
+  caseLawDecisionIdentifiers,
   caseLawReplayBatches,
+  contacts,
+  corpusIndexProjectionStates,
   entities,
   entityVersions,
   fields,
@@ -163,6 +167,7 @@ const CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE = 0x0f_10_cc_b3;
 const CHAT_OWNER_STORED_CONTENT_EGRESS_LOCK_NAMESPACE = 0x0f_10_cc_b4;
 const ORGANIZATION_OBJECT_INTENT_LOCK_NAMESPACE = 0x0f_10_cc_b0;
 const READER_ANNOTATION_LOCK_NAMESPACE = 0x0f_10_cc_af;
+const BILLING_DRAFT_SETTINGS_LOCK_NAMESPACE = 0x0f_10_cc_b6;
 
 const chatOwnerStoredContentEgressKey = ({
   organizationId,
@@ -1244,6 +1249,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.id.organizationId,
           options.id.userId,
         ],
+      };
+    case "billingDraftSettings":
+      return {
+        first: sql`${BILLING_DRAFT_SETTINGS_LOCK_NAMESPACE}::integer`,
+        second: sql`hashtext(${options.id.organizationId})`,
+        order: [options.aggregate, options.id.organizationId],
       };
     case "fileComparisonCapacity":
       return {
@@ -2813,6 +2824,57 @@ type MemberAccessRowLockOptions = {
   mode: "share" | "no key update" | "update";
 };
 
+type MatterCreationClientLockOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  contactId: SafeId<"contact">;
+};
+
+/** Keep the selected client attached until matter creation commits. */
+export const lockMatterCreationClient = async ({
+  tx,
+  organizationId,
+  contactId,
+}: MatterCreationClientLockOptions) =>
+  (
+    await tx
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.id, contactId),
+          eq(contacts.organizationId, organizationId),
+        ),
+      )
+      .for("update")
+      .limit(1)
+  ).at(0) ?? null;
+
+type MatterCreationMembersLockOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  userIds: readonly string[];
+};
+
+/** Organization removal takes the same membership rows in user ID order. */
+export const lockMatterCreationMembers = async ({
+  tx,
+  organizationId,
+  userIds,
+}: MatterCreationMembersLockOptions) =>
+  await tx
+    .select({ userId: member.userId })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, organizationId),
+        inArray(member.userId, [...userIds]),
+      ),
+    )
+    .orderBy(member.userId)
+    .limit(userIds.length)
+    .for("update");
+
 /** Lock the member within the caller's lifecycle or access-hold sequence. */
 export const lockMemberAccessRow = async ({
   tx,
@@ -3001,6 +3063,14 @@ export const lockCaseLawRemovalSnapshots = async (
     IN SHARE ROW EXCLUSIVE MODE`);
 };
 
+/** A sitemap recount holds its snapshot fence before reading its inputs. */
+export const lockCaseLawSitemapSnapshot = async (
+  tx: ExecuteTransaction,
+): Promise<void> => {
+  await tx.execute(sql`LOCK TABLE case_law_sitemap_shard_counts, case_law_sitemap_shards
+    IN SHARE ROW EXCLUSIVE MODE`);
+};
+
 /** A coverage answer holds its snapshot fence before reading its inputs. */
 export const lockCaseLawCoverageSnapshot = async (
   tx: ExecuteTransaction,
@@ -3049,6 +3119,28 @@ export const lockBillingCode = async (
       .for("update")
   ).at(0);
 
+/**
+ * The time entries a batch action locks before it checks and updates them;
+ * the caller holds the matter/timer guards. The action then updates these
+ * rows by id, so it never changes a row it did not lock and check.
+ */
+export const lockBatchTimeEntryCandidates = async (
+  tx: Transaction,
+  condition: SQL | undefined,
+  limit: number,
+) =>
+  await tx
+    .select({
+      id: timeEntries.id,
+      dateWorked: timeEntries.dateWorked,
+      narrative: timeEntries.narrative,
+      timezoneId: timeEntries.timezoneId,
+    })
+    .from(timeEntries)
+    .where(condition)
+    .limit(limit)
+    .for("update");
+
 /** Caller holds the matter/timer guards before changing nonbillable work. */
 export const lockUnbillableRateCandidates = async (
   tx: Transaction,
@@ -3067,4 +3159,95 @@ export const lockUnbillableRateCandidates = async (
     })
     .from(timeEntries)
     .where(condition)
+    .for("update");
+
+const caseLawProjectionCanonicalColumns = (
+  decisions: typeof caseLawDecisions,
+) => ({
+  documentId: decisions.id,
+  sourceId: decisions.sourceId,
+  jurisdiction: decisions.country,
+  language: decisions.language,
+  documentType: decisions.decisionType,
+  contentHash: decisions.contentHash,
+  redactedAt: decisions.redactedAt,
+  caseNumber: decisions.caseNumber,
+  court: decisions.court,
+  courtId: decisions.courtId,
+  decisionDate: decisions.decisionDate,
+  ecli: decisions.ecli,
+  metadata: decisions.metadata,
+  projectionEpoch: decisions.projectionEpoch,
+});
+
+type CaseLawProjectionRepairRowsOptions = {
+  decisions: typeof caseLawDecisions;
+  sourceId: SafeId<"caseLawSource">;
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+};
+
+/** Source policy is already locked; acquire canonical rows in id order. */
+export const lockCaseLawProjectionRepairRows = async (
+  tx: Transaction,
+  { decisions, sourceId, decisionIds }: CaseLawProjectionRepairRowsOptions,
+) =>
+  await tx
+    .select(caseLawProjectionCanonicalColumns(decisions))
+    .from(decisions)
+    .where(
+      and(
+        eq(decisions.sourceId, sourceId),
+        inArray(decisions.id, [...decisionIds]),
+      ),
+    )
+    .orderBy(asc(decisions.id))
+    .limit(decisionIds.length)
+    .for("update");
+
+/** Retain identifier inputs until the matching canonical batch commits. */
+export const lockCaseLawProjectionRepairIdentifiers = async (
+  tx: Transaction,
+  decisionIds: readonly SafeId<"caseLawDecision">[],
+) =>
+  await tx
+    .select({
+      decisionId: caseLawDecisionIdentifiers.decisionId,
+      type: caseLawDecisionIdentifiers.type,
+      value: caseLawDecisionIdentifiers.value,
+    })
+    .from(caseLawDecisionIdentifiers)
+    .where(inArray(caseLawDecisionIdentifiers.decisionId, [...decisionIds]))
+    .orderBy(
+      asc(caseLawDecisionIdentifiers.decisionId),
+      asc(caseLawDecisionIdentifiers.type),
+      asc(caseLawDecisionIdentifiers.value),
+    )
+    .limit(decisionIds.length * DECISION_IDENTIFIER_MAX_COUNT + 1)
+    .for("share");
+
+type CaseLawProjectionRepairStatesOptions = {
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+  generations: readonly string[];
+};
+
+/** Canonical rows precede desired-state rows in the projection lock order. */
+export const lockCaseLawProjectionRepairStates = async (
+  tx: Transaction,
+  { decisionIds, generations }: CaseLawProjectionRepairStatesOptions,
+) =>
+  await tx
+    .select()
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, "case_law"),
+        inArray(corpusIndexProjectionStates.generation, [...generations]),
+        inArray(corpusIndexProjectionStates.entityId, [...decisionIds]),
+      ),
+    )
+    .orderBy(
+      asc(corpusIndexProjectionStates.entityId),
+      asc(corpusIndexProjectionStates.generation),
+    )
+    .limit(decisionIds.length * generations.length)
     .for("update");

@@ -30,8 +30,8 @@ import {
   projectReleaseDates,
   readPendingChangesets,
   readPreviousRelease,
+  readReleaseManifest,
   refreshMaintenanceReleaseFiles,
-  refreshUnpromotedReleases,
   resolveGitHubToken,
   withFileRollback,
 } from "./prepare-maintenance-release";
@@ -61,22 +61,6 @@ const PUBLISHED = {
   publishedAt: "2026-02-03T04:05:06Z",
 } as const;
 const UNPROMOTED = { kind: "unpromoted" } as const;
-
-const failingRead = async (): Promise<typeof UNPROMOTED> => {
-  throw new MaintenanceReleaseError("GitHub is unreachable");
-};
-
-/** What the refresh rejects with; null when it completes. */
-const refreshFailure = async (
-  options: Parameters<typeof refreshUnpromotedReleases>[0],
-): Promise<unknown> => {
-  try {
-    await refreshUnpromotedReleases(options);
-  } catch (error) {
-    return error;
-  }
-  return null;
-};
 
 const failureMessage = async (tag: string): Promise<string> => {
   let previous: unknown;
@@ -881,84 +865,69 @@ describe("maintenance release preparation", () => {
     expect(readReleaseDates(root)).toEqual({ "v1.2.3": PUBLISHED.publishedAt });
   });
 
-  test("an unpromoted record GitHub now dates is refreshed, one still unpublished stays null", async () => {
-    const dates = {
-      "v1.2.0": "2026-01-01T00:00:00Z",
-      "v1.2.1": null,
-      "v1.2.2": null,
-      "v1.2.3": null,
-    };
-    const asked: string[] = [];
-    const refreshed = await refreshUnpromotedReleases({
-      cutVersion: "1.2.4",
-      dates,
-      previousTag: "v1.2.3",
-      readRelease: async (tag) => {
-        asked.push(tag);
-        return tag === "v1.2.2" ? PUBLISHED : UNPROMOTED;
+  test("a recorded never-promoted release stays null even when GitHub shows it published", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    const recorded = `${JSON.stringify(
+      {
+        _note: "Publication timestamps, keyed by tag.",
+        "v0.8.10": null,
+        "v0.9.14": null,
+        "v1.2.2": "2026-01-01T00:00:00Z",
       },
+      null,
+      2,
+    )}\n`;
+    releaseFixture(root, recorded);
+
+    // Each recorded null is a release that was never promoted to production;
+    // a GitHub release published for it later does not change that.
+    prepareMaintenanceReleaseFiles({
+      previousRelease: PUBLISHED,
+      previousFinalVersion: "1.2.3",
+      rootDir: root,
     });
-    // The previous final is read by the cut itself, never twice.
-    expect(asked).toEqual(["v1.2.1", "v1.2.2"]);
-    expect(refreshed).toEqual({ "v1.2.2": PUBLISHED.publishedAt });
+    expect(
+      readFileSync(
+        nodePath.join(
+          root,
+          "apps/landing/src/data/changelog-release-dates.json",
+        ),
+        "utf-8",
+      ),
+    ).toBe(
+      `${JSON.stringify(
+        {
+          _note: "Publication timestamps, keyed by tag.",
+          "v0.8.10": null,
+          "v0.9.14": null,
+          "v1.2.2": "2026-01-01T00:00:00Z",
+          "v1.2.3": PUBLISHED.publishedAt,
+        },
+        null,
+        2,
+      )}\n`,
+    );
     expect(
       projectReleaseDates({
-        dates,
+        dates: readReleaseManifest(root).releases,
         previousRelease: UNPROMOTED,
-        previousTag: "v1.2.3",
-        refreshed,
+        previousTag: "v1.2.4",
       }),
-    ).toEqual({
-      "v1.2.0": "2026-01-01T00:00:00Z",
-      "v1.2.1": null,
-      "v1.2.2": PUBLISHED.publishedAt,
-      "v1.2.3": null,
-    });
+    ).toMatchObject({ "v0.8.10": null, "v0.9.14": null, "v1.2.4": null });
   });
 
-  test("a failed lookup stops the cut unless the tag is older than the newest promoted release", async () => {
-    const dates = { "v1.2.0": "2026-01-01T00:00:00Z", "v1.1.0": null };
-    const failing = failingRead;
-    expect(
-      await refreshUnpromotedReleases({
-        cutVersion: "1.2.4",
-        dates,
-        previousTag: "v1.2.3",
-        readRelease: failing,
-      }),
-    ).toEqual({});
-    expect(
-      await refreshFailure({
-        cutVersion: "1.2.4",
-        dates: { ...dates, "v1.2.1": null },
-        previousTag: "v1.2.3",
-        readRelease: failing,
-      }),
-    ).toBeInstanceOf(MaintenanceReleaseError);
-  });
+  test.each([
+    [{ latest: "2026-01-01T00:00:00Z" }, "invalid stable release ref: latest"],
+    [{ "v1.2": null }, "invalid stable release ref: v1.2"],
+    [{ _note: 3 }, "note must be a string"],
+    [{ "v1.2.1": 1 }, "invalid publication time for v1.2.1"],
+  ])("the manifest reader refuses %j", (entries, message) => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    releaseFixture(root, `${JSON.stringify(entries, null, 2)}\n`);
 
-  test("the previous final never sets the bound for tolerated lookup failures", async () => {
-    // v1.2.3 is recorded as promoted, but the cut reads it itself: v1.1.0 is
-    // not older than a release that can be trusted, so its failure stops the cut.
-    expect(
-      await refreshFailure({
-        cutVersion: "1.2.4",
-        dates: { "v1.1.0": null, "v1.2.3": "2026-02-01T00:00:00Z" },
-        previousTag: "v1.2.3",
-        readRelease: failingRead,
-      }),
-    ).toBeInstanceOf(MaintenanceReleaseError);
-  });
-
-  test("a release at or above the cut version never sets the bound", async () => {
-    expect(
-      await refreshFailure({
-        cutVersion: "1.2.4",
-        dates: { "v1.1.0": null, "v1.3.0": "2026-02-01T00:00:00Z" },
-        previousTag: "v1.2.3",
-        readRelease: failingRead,
-      }),
-    ).toBeInstanceOf(MaintenanceReleaseError);
+    expect(() => readReleaseManifest(root)).toThrow(message);
   });
 
   test("reads the publication date of a published release", async () => {

@@ -27,6 +27,7 @@
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { US_REPORTER_SPELLING_SOURCE } from "@stll/api-contract/us-reporter-citation";
 import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
+import { US_CODE_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
 /** The two codes, keyed as the corpus addresses them. */
 export const US_CODES = {
@@ -635,7 +636,7 @@ const codeOfSection = (section: string): UsCode | null => {
 };
 
 /** The separator between the levels of a US anchor. */
-export const US_CODE_ANCHOR_SEPARATOR = "/";
+export const US_CODE_ANCHOR_SEPARATOR = US_CODE_ANCHORS.segmentSeparator;
 
 /**
  * The anchor a reference lands on in the section's statute text:

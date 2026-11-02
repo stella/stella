@@ -9,6 +9,15 @@ import { expect, request as apiRequestFactory, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import * as v from "valibot";
+
+import {
+  INSPECTOR_STORAGE,
+  inspectorStorageBaseKey,
+  ownerStorageKey,
+} from "@stll/api-contract/browser-storage";
+import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
 
 import {
   partitionRoundRobin,
@@ -26,6 +35,10 @@ import {
   registerDeferredE2eCleanup,
 } from "../helpers/deferred-cleanup";
 import { createUploadedDocumentRoute } from "../helpers/document";
+import {
+  assertRouteLayoutShift,
+  observeLayoutShift,
+} from "../helpers/layout-shift";
 import {
   assertNetworkBaseline,
   assertNetworkBaselineCoverage,
@@ -135,8 +148,12 @@ const timeBillingRedirectDestination = ({
   if (template.startsWith("/admin/")) {
     return "/admin/members";
   }
-  // My week and its approval queue leave for the matters list.
-  if (template === "/time" || template === "/time_/approvals") {
+  // My week, its approval queue and the team report leave for the matters list.
+  if (
+    template === "/time" ||
+    template === "/time_/approvals" ||
+    template === "/time_/report"
+  ) {
     return "/workspaces";
   }
   throw new Error(`No unenrolled redirect expectation for ${template}`);
@@ -256,6 +273,44 @@ const declareRouteSmokeGroup = ({
       declareRouteTest(def);
     }
 
+    if (defs.some((def) => def.template === "/knowledge")) {
+      test("/knowledge with a restored inspector", async () => {
+        const response = await apiRequest.get(
+          `${E2E_API_ORIGIN}/api/auth/get-session`,
+        );
+        expect(response.ok()).toBe(true);
+        const session = v.parse(
+          v.object({
+            user: v.object({ id: v.string() }),
+            session: v.object({ activeOrganizationId: v.string() }),
+          }),
+          await response.json(),
+        );
+        await measureRouteTarget({
+          browser: browserForPages,
+          route: {
+            template: "/knowledge (restored inspector)",
+            path: "/knowledge",
+          },
+          restoredInspector: {
+            userId: session.user.id,
+            organizationId: session.session.activeOrganizationId,
+          },
+        });
+      });
+      test("/tools layout", async () => {
+        const response = await apiRequest.get(
+          `${process.env["E2E_WEB_URL"] ?? "http://localhost:3000"}/tools`,
+        );
+        test.skip(response.status() === 404, "Legacy Tools route is disabled");
+        expect(response.ok()).toBe(true);
+        await measureRouteTarget({
+          browser: browserForPages,
+          route: { template: "/tools", path: "/tools" },
+        });
+      });
+    }
+
     if (checkUnenrolledRoutes) {
       test("unenrolled callers leave every time-billing route before its loader", async () => {
         test.setTimeout(180_000);
@@ -277,11 +332,18 @@ const declareRouteSmokeGroup = ({
             `unenrolled-route-smoke-${token}@stella.dev`,
           );
           const organizationResponse = await negativeRequest.post(
-            `${E2E_API_ORIGIN}/api/auth/organization/create`,
+            `${E2E_API_ORIGIN}/v1/organizations`,
             {
               data: {
-                name: `Unenrolled route smoke ${token}`,
+                name: `Unenrolled route smoke ${token}`.slice(
+                  0,
+                  ORGANIZATION_NAME_MAX_LENGTH,
+                ),
                 slug: `unenrolled-smoke-${token}`,
+              },
+              headers: {
+                "Idempotency-Key": `unenrolled-smoke-${token}`,
+                [CAPABILITY_REQUEST_HEADER]: "organizations.create",
               },
             },
           );
@@ -293,12 +355,12 @@ const declareRouteSmokeGroup = ({
           if (
             typeof organization !== "object" ||
             organization === null ||
-            !("id" in organization) ||
-            typeof organization.id !== "string"
+            !("organizationId" in organization) ||
+            typeof organization.organizationId !== "string"
           ) {
             throw new Error("Organization creation returned no id");
           }
-          negativeOrganizationId = organization.id;
+          negativeOrganizationId = organization.organizationId;
           const activation = await negativeRequest.post(
             `${E2E_API_ORIGIN}/api/auth/organization/set-active`,
             { data: { organizationId: negativeOrganizationId } },
@@ -506,9 +568,11 @@ const smokeRouteTarget = async ({
 const measureRouteTarget = async ({
   browser,
   route,
+  restoredInspector,
 }: {
   browser: Browser;
   route: SmokeRoute;
+  restoredInspector?: { userId: string; organizationId: string };
 }): Promise<RouteNetworkMetrics> => {
   const { context, page } = await openCleanPage(browser);
   const browserErrors = createBrowserErrorCollector({
@@ -519,6 +583,58 @@ const measureRouteTarget = async ({
   let detachNetwork: (() => Promise<void>) | undefined;
 
   try {
+    await observeLayoutShift(page);
+    if (restoredInspector !== undefined) {
+      const { userId, organizationId } = restoredInspector;
+      await page.addInitScript(
+        ({
+          stateKey,
+          minimizedKey,
+          stateVersion,
+          minimizedVersion,
+          restoredTab,
+        }) => {
+          localStorage.setItem(
+            stateKey,
+            JSON.stringify({
+              version: stateVersion,
+              value: {
+                tabs: [restoredTab],
+                groups: [],
+                groupAssignments: {},
+                activeId: restoredTab.id,
+                collapsedGroupIds: [],
+              },
+            }),
+          );
+          localStorage.setItem(
+            minimizedKey,
+            JSON.stringify({ version: minimizedVersion, value: false }),
+          );
+        },
+        {
+          stateKey: ownerStorageKey(
+            inspectorStorageBaseKey(INSPECTOR_STORAGE.state, organizationId),
+            { kind: "user", userId },
+          ),
+          minimizedKey: ownerStorageKey(
+            inspectorStorageBaseKey(
+              INSPECTOR_STORAGE.minimized,
+              organizationId,
+            ),
+            { kind: "user", userId },
+          ),
+          stateVersion: INSPECTOR_STORAGE.state.version,
+          minimizedVersion: INSPECTOR_STORAGE.minimized.version,
+          restoredTab: {
+            type: "chat",
+            id: randomUUID(),
+            label: "Route smoke",
+            contextMatterIds: [],
+          },
+        },
+      );
+    }
     detachNetwork = await network.trackPage(page);
     await network.measureRounds(page);
     await renderSmokeRoute({ page, route });
@@ -529,6 +645,12 @@ const measureRouteTarget = async ({
       timeoutMs: Math.max(route.settleMs ?? DEFAULT_SETTLE_MS, 10_000),
     });
     network.finishRounds();
+    if (restoredInspector !== undefined) {
+      await expect(
+        page.locator('[data-slot="inspector-dock"][data-state="expanded"]'),
+      ).toBeVisible();
+    }
+    await assertRouteLayoutShift(page, route.template);
     await assertNoRouteBoundary(page, route.template);
     assertFinalDestination(page, route);
     await assertRouteContentVisible(page, route.template);

@@ -25,6 +25,9 @@ import {
   testAppliedProjectionsFor,
   testRevisionsFor,
 } from "@/api/tests/helpers/corpus-projection-revisions";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 /**
  * Where "the search index is unavailable" is decided: at the client, from
@@ -40,16 +43,18 @@ const originalFetch = globalThis.fetch;
 const originalSearchEndpoint = envBase.CORPUS_INDEX_Q09_SEARCH_ENDPOINT;
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   Object.assign(envBase, {
     CORPUS_INDEX_Q09_SEARCH_ENDPOINT: originalSearchEndpoint,
   });
 });
 
 const stubFetch = (answer: () => Promise<Response>) => {
-  globalThis.fetch = Object.assign(answer, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(answer, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 };
 
 const failureWithCode = (message: string, code: string): Error =>

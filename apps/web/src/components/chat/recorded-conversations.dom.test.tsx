@@ -1175,9 +1175,15 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "edit-answer": notRecorded(
     "The recorder drives the chat runtime, not the session hook that edits and reruns an answer.",
   ),
+  "edit-message": notRecorded(
+    "The recorder drives the chat runtime, not the session hook that edits a sent message and runs it again.",
+  ),
   export: OUTSIDE_THE_CONVERSATION,
   fork: notRecorded(
     "A fork opens another thread; the conversation property test covers it (ForkFrom).",
+  ),
+  "hold-queue-for-message-edit": notRecorded(
+    "The recorder drives the chat runtime, not the session queue an open message editor holds.",
   ),
   "improve-prompt": OUTSIDE_THE_CONVERSATION,
   "load-older": OUTSIDE_THE_CONVERSATION,
@@ -1185,6 +1191,9 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "new-chat": OUTSIDE_THE_CONVERSATION,
   "open-created-document": OUTSIDE_THE_CONVERSATION,
   "open-draft": OUTSIDE_THE_CONVERSATION,
+  "open-message-editor": notRecorded(
+    "Opening the editor only stops a running turn, which the recorder records as its own stop step.",
+  ),
   "open-playbook": OUTSIDE_THE_CONVERSATION,
   "refresh-edited-answer": notRecorded(
     "It reloads the canonical answer after a revision write or conflict; the recorder does not drive answer revisions.",

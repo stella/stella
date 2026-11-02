@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_KIS",
   "key": "pl-kis",
-  "parserVersion": 13,
+  "parserVersion": 14,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own."
+    "reason": "Re-read word-processor HTML so single printed line breaks stay inside their sentence and blank lines alone end paragraphs."
   }
 }

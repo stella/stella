@@ -489,6 +489,10 @@ describe("member pickers save the chosen member", () => {
 });
 
 const contactFixture = {
+  externalSource: null,
+  externalId: null,
+  externalChangeKey: null,
+  importedAt: null,
   id: toSafeId<"contact">(CONTACT),
   organizationId: toSafeId<"organization">(ORGANIZATION),
   type: "person",
@@ -511,6 +515,7 @@ const contactFixture = {
   vatId: null,
   vatPayer: null,
   invoiceLanguage: null,
+  timeBillingFormat: "categories",
   bankAccounts: null,
   billingAddress: null,
   defaultHourlyRate: null,

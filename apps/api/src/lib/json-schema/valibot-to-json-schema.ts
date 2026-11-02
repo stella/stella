@@ -9,6 +9,7 @@ import { API_DATE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/api-date";
 import { DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/decision-paragraph-range";
 import { wireValueOf } from "@stll/api-contract/http-input";
 import { keepUnicodePatternSource } from "@stll/api-contract/json-schema-regex";
+import { UUID_RUNTIME_ONLY_ACTIONS } from "@stll/api-contract/uuid";
 import { ANALYSIS_RUNTIME_ONLY_CHECKS } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS } from "@stll/legal-ast/decision-identifier";
 import { DOCUMENT_AST_RUNTIME_ONLY_ACTIONS } from "@stll/legal-ast/document-ast";
@@ -68,6 +69,7 @@ const stripRouteInternalMetadata = stripMetadataExcept(isExtensionKeyword);
  */
 const RUNTIME_ONLY_ACTIONS: ReadonlySet<unknown> = new Set([
   ...API_DATE_RUNTIME_ONLY_CHECKS,
+  ...UUID_RUNTIME_ONLY_ACTIONS,
   ...ANALYSIS_RUNTIME_ONLY_CHECKS,
   ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
   ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,

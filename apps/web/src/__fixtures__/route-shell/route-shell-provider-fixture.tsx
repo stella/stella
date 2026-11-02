@@ -281,6 +281,7 @@ const installFixtureNetwork = () => {
     timeLockedThroughMonth: null,
     timeNarrativeRequired: false,
     timeZone,
+    primaryJurisdictionTimeZone: timeZone,
     timeZoneSource: "organization",
   } satisfies NonNullable<
     Awaited<ReturnType<(typeof api)["organization-settings"]["get"]>>["data"]
@@ -289,10 +290,15 @@ const installFixtureNetwork = () => {
     id: toSafeId<"workspace">("00000000-0000-4000-8000-000000000001"),
     organizationId: session.activeOrganizationId,
     name: "Fixture matter",
+    externalSource: null,
+    externalId: null,
+    externalChangeKey: null,
+    importedAt: null,
     reference: "2026/1",
     clientId: null,
     leadUserId: null,
     billingReference: null,
+    billingNarrativeLanguage: null,
     color: null,
     status: "active",
     lastActivityAt: "2026-10-01T00:00:00.000Z",
