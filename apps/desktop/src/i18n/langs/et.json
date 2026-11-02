@@ -500,7 +500,7 @@
     "aiDraftFailed": "stella AI ei saanud seda selgitust koostada.",
     "aiDraftEarlierEntries": "{count, plural, one {Järgib # varasemat kannet} other {Järgib # varasemat kannet}}",
     "aiDraftLabel": "TI",
-    "aiDraftDisclosure": "TI kavandid on soovitused, mille stella loob ülevaadatavast kandest, teie varasematest kannetest selles asjas ja büroo arveldusjuhistest, kui büroo on need lisanud. Vaadake iga kanne enne loomist üle.",
+    "aiDraftDisclosure": "AI kavandid on soovitused, mille stella loob ülevaadatavast kandest, teie varasematest kannetest selles toimikus ja teie organisatsiooni arveldusjuhistest, kui need on lisatud. Vaadake iga kanne enne loomist üle.",
     "billingDraftsTitle": "stella AI kavandid",
     "billingDraftsGranted": "stella AI koostab teie ajakannete selgitused iga kande üksikasjade põhjal.",
     "billingDraftsRevoked": "stella AI koostab selgitusi alles pärast seda, kui olete selle ajakande juures lubanud.",
