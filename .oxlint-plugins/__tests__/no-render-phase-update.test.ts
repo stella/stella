@@ -64,3 +64,42 @@ test("allows a shadowed setter inside a nested function", async () => {
     ),
   ).toEqual([]);
 });
+
+test("compares a guard's member keys by what they read", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        "function List({ values }) { const [prev, setPrev] = useState(values[0]); if (prev !== values[0]) { setPrev(values[1]); } }",
+        "function Keys({ values, key }) { const [prev, setPrev] = useState(values.key); if (prev !== values.key) { setPrev(values[key]); } }",
+      ].join("\n"),
+    ),
+  ).toEqual([1, 2]);
+});
+
+test("covers wrapped components, namespace hooks and useMemo factories", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        'import * as React from "react";',
+        "const Wrapped = memo(() => { const [, setValue] = useState(0); setValue(1); });",
+        "const Forwarded = React.forwardRef(function (props, ref) { const [, setValue] = React.useState(0); setValue(1); });",
+        "function Memo() { const [, setValue] = useState(0); useMemo(() => setValue(1), []); }",
+      ].join("\n"),
+    ),
+  ).toEqual([2, 3, 4]);
+});
+
+test("follows router bindings rather than names", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        'import { redirect as goTo, useNavigate, useRouter } from "@tanstack/react-router";',
+        "function Page() { const go = useNavigate(); go({ to: '/next' }); const nav = useRouter(); nav.navigate({ to: '/next' }); throw goTo({ to: '/next' }); }",
+        "function Local() { const navigate = (value) => value; navigate(1); }",
+      ].join("\n"),
+    ),
+  ).toEqual([2, 2, 2]);
+});

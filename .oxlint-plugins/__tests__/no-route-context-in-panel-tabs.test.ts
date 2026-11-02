@@ -65,12 +65,14 @@ test("panel tabs reject route-specific params, loader data, and strict matches",
     await lintSingleRule(
       RULE,
       [
-        'import { useParams, useMatch } from "@tanstack/react-router";',
+        'import { useLoaderData, useParams, useMatch } from "@tanstack/react-router";',
         'useParams({ from: "/knowledge" });',
         'useMatch({ from: "/knowledge" });',
         "Route.useParams();",
         "Route.useLoaderData();",
+        'useLoaderData({ from: "/knowledge" });',
+        "useMatch({ strict: false, ...options });",
       ].join("\n"),
     ),
-  ).toEqual([2, 3, 4, 5]);
+  ).toEqual([2, 3, 4, 5, 6, 7]);
 });

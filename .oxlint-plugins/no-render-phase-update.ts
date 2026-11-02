@@ -6,7 +6,9 @@ import {
   isIdentifier,
   isIdentifierReference,
   repoRelativeFilename,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
+  stableInitializer,
 } from "./utils.ts";
 
 const FUNCTIONS = new Set([
@@ -15,6 +17,28 @@ const FUNCTIONS = new Set([
   "FunctionExpression",
 ]);
 const ROUTE_HANDLERS = new Set(["beforeLoad", "loader"]);
+const COMPONENT_WRAPPERS = new Set(["memo", "forwardRef"]);
+const STATE_HOOKS = new Set(["useState", "useReducer"]);
+const ROUTER_MODULE = "@tanstack/react-router";
+
+// The name a callee is called by: `name(...)` or `object.name(...)`.
+const calleeName = (callee) =>
+  isIdentifier(callee)
+    ? callee.name
+    : callee?.type === "MemberExpression"
+      ? getPropertyName(callee.property)
+      : null;
+
+// A component passed straight to `memo(...)` or `forwardRef(...)` has no name
+// of its own, but renders like any other component.
+const isWrappedComponent = (node) => {
+  const parent = node.parent;
+  if (parent?.type !== "CallExpression" || parent.arguments[0] !== node) {
+    return false;
+  }
+  const name = calleeName(parent.callee);
+  return name !== null && COMPONENT_WRAPPERS.has(name);
+};
 
 const functionName = (node) => {
   if (isIdentifier(node.id)) {
@@ -32,7 +56,9 @@ const functionName = (node) => {
 
 const isReactOwner = (node) => {
   const name = functionName(node);
-  return name !== null && (/^[A-Z]/u.test(name) || /^use[A-Z0-9]/u.test(name));
+  return name === null
+    ? isWrappedComponent(node)
+    : /^[A-Z]/u.test(name) || /^use[A-Z0-9]/u.test(name);
 };
 
 const enclosingFunction = (node) => {
@@ -57,6 +83,73 @@ const enclosingReactOwner = (node) => {
   return null;
 };
 
+// A `useMemo` factory runs during render, like the owner's body around it.
+const renderEvaluatedFunction = (node) => {
+  let fn = enclosingFunction(node);
+  while (
+    fn?.parent?.type === "CallExpression" &&
+    fn.parent.arguments[0] === fn &&
+    calleeName(fn.parent.callee) === "useMemo"
+  ) {
+    fn = enclosingFunction(fn.parent);
+  }
+  return fn;
+};
+
+// The hook call a binding was initialized from, by the hook's name.
+const initializedFromHook = (context, reference, hooks) => {
+  if (!isIdentifierReference(reference)) {
+    return false;
+  }
+  const variable = resolveVariable(context, reference);
+  const initializer = variable === null ? null : stableInitializer(variable);
+  if (initializer?.type !== "CallExpression") {
+    return false;
+  }
+  const name = calleeName(initializer.callee);
+  return name !== null && hooks.has(name);
+};
+
+const NAVIGATE_HOOKS = new Set(["useNavigate"]);
+const ROUTER_HOOKS = new Set(["useRouter"]);
+
+// `navigate(...)` from `useNavigate()` under any name, and the router's own
+// `redirect`. A same-named local that is neither is someone else's function.
+const isNavigationCall = (context, callee) => {
+  if (!isIdentifierReference(callee)) {
+    return false;
+  }
+  if (resolveVariable(context, callee) === null) {
+    return callee.name === "navigate" || callee.name === "redirect";
+  }
+  if (initializedFromHook(context, callee, NAVIGATE_HOOKS)) {
+    return true;
+  }
+  const imported = resolveImportedExpressionForEnforcement(context, callee);
+  return imported?.source === ROUTER_MODULE && imported.imported === "redirect";
+};
+
+const isStateHook = (context, callee) => {
+  if (isIdentifier(callee) && STATE_HOOKS.has(callee.name)) {
+    return true;
+  }
+  const imported = resolveImportedExpressionForEnforcement(context, callee);
+  return imported?.source === "react" && STATE_HOOKS.has(imported.imported);
+};
+
+// A member key compared by what it reads: `.name` and a static `[literal]`
+// stay apart, and a dynamic key matches nothing.
+const memberKey = (member) => {
+  if (!member.computed) {
+    return isIdentifier(member.property) ? `.${member.property.name}` : null;
+  }
+  const property = member.property;
+  return property?.type === "Literal" &&
+    (typeof property.value === "string" || typeof property.value === "number")
+    ? `[${typeof property.value}:${String(property.value)}]`
+    : null;
+};
+
 const isRouteHandler = (fn) => {
   if (fn?.parent?.type !== "Property") {
     return false;
@@ -74,7 +167,8 @@ const isGuardedAdjustment = (node, setters, context, owner) => {
     (left?.type === "MemberExpression" &&
       right?.type === "MemberExpression" &&
       sameExpression(left.object, right.object) &&
-      getPropertyName(left.property) === getPropertyName(right.property));
+      memberKey(left) !== null &&
+      memberKey(left) === memberKey(right));
   let descendant = node;
   let current = node.parent;
   while (current && !FUNCTIONS.has(current.type)) {
@@ -158,8 +252,7 @@ export default eslintCompatPlugin({
             if (
               node.id.type !== "ArrayPattern" ||
               node.init?.type !== "CallExpression" ||
-              !isIdentifier(node.init.callee) ||
-              !["useState", "useReducer"].includes(node.init.callee.name)
+              !isStateHook(context, node.init.callee)
             ) {
               return;
             }
@@ -180,7 +273,7 @@ export default eslintCompatPlugin({
             const owner = enclosingReactOwner(node);
             if (
               !owner ||
-              enclosingFunction(node) !== owner ||
+              renderEvaluatedFunction(node) !== owner ||
               isRouteHandler(owner)
             ) {
               return;
@@ -191,8 +284,7 @@ export default eslintCompatPlugin({
                 ? setters.get(resolveVariable(context, node.callee))
                 : undefined;
               forbidden =
-                node.callee.name === "navigate" ||
-                node.callee.name === "redirect" ||
+                isNavigationCall(context, node.callee) ||
                 setter?.owner === owner;
               if (
                 setter?.owner === owner &&
@@ -204,7 +296,9 @@ export default eslintCompatPlugin({
               const method = getPropertyName(node.callee.property);
               const object = node.callee.object;
               forbidden =
-                (method === "navigate" && isIdentifier(object, "router")) ||
+                (method === "navigate" &&
+                  (isIdentifier(object, "router") ||
+                    initializedFromHook(context, object, ROUTER_HOOKS))) ||
                 (method !== null &&
                   ["push", "replace"].includes(method) &&
                   isIdentifier(object, "history"));

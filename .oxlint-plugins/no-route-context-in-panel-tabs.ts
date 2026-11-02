@@ -55,14 +55,17 @@ export default eslintCompatPlugin({
             );
             if (
               hook?.source === "@tanstack/react-router" &&
-              (hook.imported === "useRouteContext" ||
-                hook.imported === "useParams" ||
-                hook.imported === "useMatch")
+              (ROUTE_METHODS.has(hook.imported) || hook.imported === "useMatch")
             ) {
               if (hook.imported === "useMatch") {
                 const options = node.arguments[0];
+                // A spread may set `strict` back to true, so only a literal
+                // object without one is known to be non-strict.
                 const nonStrict =
                   options?.type === "ObjectExpression" &&
+                  options.properties.every(
+                    (property) => property.type === "Property",
+                  ) &&
                   options.properties.some(
                     (property) =>
                       property.type === "Property" &&
