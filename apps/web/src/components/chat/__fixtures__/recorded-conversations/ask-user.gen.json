@@ -38,7 +38,7 @@
               "runId": "run-recorded-1",
               "sendMode": "rawOverride",
               "browserExtension": {
-                "protocolVersion": 5,
+                "protocolVersion": 6,
                 "status": "unsupported-browser"
               },
               "message": {
@@ -58,7 +58,7 @@
               "runId": "run-recorded-1",
               "sendMode": "rawOverride",
               "browserExtension": {
-                "protocolVersion": 5,
+                "protocolVersion": 6,
                 "status": "unsupported-browser"
               },
               "message": {
@@ -289,7 +289,7 @@
               "runId": "run-recorded-2",
               "sendMode": "rawOverride",
               "browserExtension": {
-                "protocolVersion": 5,
+                "protocolVersion": 6,
                 "status": "unsupported-browser"
               },
               "message": {
@@ -379,7 +379,7 @@
               "runId": "run-recorded-2",
               "sendMode": "rawOverride",
               "browserExtension": {
-                "protocolVersion": 5,
+                "protocolVersion": 6,
                 "status": "unsupported-browser"
               },
               "message": {
