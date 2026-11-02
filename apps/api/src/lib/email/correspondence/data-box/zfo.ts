@@ -14,12 +14,12 @@ import * as v from "valibot";
 
 import { CORRESPONDENCE_MAX_ATTACHMENTS } from "@stll/api-contract/correspondence";
 import {
-  DATA_BOX_ID_PATTERN,
   DATA_BOX_MESSAGE_ID_PATTERN,
   DATA_BOX_MESSAGE_STATUSES,
   type DataBoxParty,
   type DataBoxSeal,
   type DataBoxStatedEnvelope,
+  STORED_DATA_BOX_ID_PATTERN,
 } from "@stll/api-contract/data-box";
 import { numberFromString } from "@stll/api-contract/http-input";
 import { declareFingerprintFields } from "@stll/errors";
@@ -274,7 +274,7 @@ const fieldStatus = (element: Element) => {
 
 const boxId = (element: Element, localName: string) => {
   const text = fieldText(element, localName)?.toLowerCase() ?? null;
-  return text !== null && DATA_BOX_ID_PATTERN.test(text) ? text : null;
+  return text !== null && STORED_DATA_BOX_ID_PATTERN.test(text) ? text : null;
 };
 
 type PartyFields = {

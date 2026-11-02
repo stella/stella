@@ -105,6 +105,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
       type: "non-replay",
       reason: "current-state",
     },
+  "DELETE /v1/organization-settings/correspondence/data-boxes/:boxId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/organization-settings/deepl": {
     type: "non-replay",
     reason: "current-state",
@@ -630,6 +634,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
       type: "non-replay",
       reason: "current-state",
     },
+  "POST /v1/organization-settings/correspondence/data-boxes": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/organization-settings/deepl": {
     type: "non-replay",
     reason: "current-state",

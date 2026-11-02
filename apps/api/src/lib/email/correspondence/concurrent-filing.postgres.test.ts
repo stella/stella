@@ -195,7 +195,7 @@ if (!databaseUrl || !runPostgresTests) {
               .map((outcome) =>
                 outcome.type === "ok" ? outcome.created : null,
               )
-              .toSorted(),
+              .toSorted((left, right) => Number(left) - Number(right)),
           ).toEqual([false, true]);
           expect(
             outcomes.map((outcome) =>

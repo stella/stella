@@ -12,8 +12,11 @@ const DATA_BOX_MESSAGE_EXTENSION = "zfo";
 
 export const DATA_BOX_ID_LENGTH = 7;
 
-/** A box ID: seven characters, stored lowercase like contact data boxes. */
-export const DATA_BOX_ID_PATTERN = /^[a-z0-9]{7}$/u;
+/**
+ * A stored box ID: seven characters, lowercase like contact data boxes. Input
+ * readers accept either case (`@stll/agent-input`) and store it lowercased.
+ */
+export const STORED_DATA_BOX_ID_PATTERN = /^[a-z0-9]{7}$/u;
 
 /** At most this many of the organization's own boxes are recorded. */
 export const ORGANIZATION_DATA_BOX_LIMIT = 20;

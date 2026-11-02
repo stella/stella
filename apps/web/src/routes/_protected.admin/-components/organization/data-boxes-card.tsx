@@ -5,9 +5,10 @@ import { useTranslations } from "use-intl";
 
 import {
   DATA_BOX_ID_LENGTH,
-  DATA_BOX_ID_PATTERN,
+  STORED_DATA_BOX_ID_PATTERN,
 } from "@stll/api-contract/data-box";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
@@ -140,12 +141,12 @@ export const OrganizationDataBoxesCard = () => {
             </ul>
           )}
           {canEdit && (
-            <form
+            <Form
               className="flex flex-wrap items-end gap-2"
               onSubmit={(event) => {
                 event.preventDefault();
                 const boxId = draft.trim().toLowerCase();
-                const valid = DATA_BOX_ID_PATTERN.test(boxId);
+                const valid = STORED_DATA_BOX_ID_PATTERN.test(boxId);
                 setInvalid(!valid);
                 if (valid) {
                   add.mutate(boxId);
@@ -172,7 +173,7 @@ export const OrganizationDataBoxesCard = () => {
               <Button className="min-h-11" disabled={pending} type="submit">
                 {t("common.add")}
               </Button>
-            </form>
+            </Form>
           )}
           {invalid && (
             <p className="text-destructive text-xs">
