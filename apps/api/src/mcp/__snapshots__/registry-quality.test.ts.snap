@@ -3140,7 +3140,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                 },
                 "value": {
                   "type": "string",
-                  "description": "The value: string for text, string or null for single-select, string array for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3168,7 +3168,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, string array for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3193,7 +3193,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                     "type": "string",
                     "minLength": 1
                   },
-                  "description": "The value: string for text, string or null for single-select, string array for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3222,7 +3222,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, string array for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3250,7 +3250,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, string array for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 },
                 "currency": {
                   "anyOf": [
@@ -10421,7 +10421,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                 },
                 "value": {
                   "type": "string",
-                  "description": "The value: string for text, string or null for single-select, string array for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -10449,7 +10449,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, string array for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -10474,7 +10474,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     "type": "string",
                     "minLength": 1
                   },
-                  "description": "The value: string for text, string or null for single-select, string array for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -10503,7 +10503,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, string array for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -10531,7 +10531,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, string array for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 },
                 "currency": {
                   "anyOf": [
@@ -15094,7 +15094,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                 },
                 "value": {
                   "type": "string",
-                  "description": "The value: string for text, string or null for single-select, string array for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -15122,7 +15122,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, string array for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -15147,7 +15147,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                     "type": "string",
                     "minLength": 1
                   },
-                  "description": "The value: string for text, string or null for single-select, string array for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -15176,7 +15176,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, string array for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -15204,7 +15204,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, string array for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 },
                 "currency": {
                   "anyOf": [
