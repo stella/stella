@@ -125,7 +125,7 @@
         "title": "Tehisintellekti agent, mis töötab su toimikute, failide ja tööriistadega."
       },
       "anonymization": {
-        "blurb": "Eemalda nimed, üksused ja tuvastavad andmed enne, kui materjal jõuab tehisintellektini, otse vestlusest ja dokumentide ülevaatusest, ning kontrolli anonüümitud tulemust, enne kui miski edasi liigub.",
+        "blurb": "Eemalda nimed, organisatsioonid ja tuvastavad andmed enne, kui materjal jõuab tehisintellektini, otse vestlusest ja dokumentide ülevaatusest, ning kontrolli anonüümitud tulemust, enne kui miski edasi liigub.",
         "discover": "Avasta Anonüümimine",
         "eyebrow": "Anonüümimine",
         "title": "Valmista materjal tehisintellekti jaoks ette, tuvastavaid andmeid paljastamata."
@@ -278,7 +278,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Eemaldab nimed, üksused ja tuvastavad andmed enne, kui materjal jõuab tehisintellekti sammuni.",
+          "body": "Eemaldab nimed, organisatsioonid ja tuvastavad andmed enne, kui materjal jõuab tehisintellekti sammuni.",
           "title": "Tuvastavad andmed jäävad välja"
         },
         "1": {
@@ -303,20 +303,20 @@
           "question": "Kas anonüümimine on juba saadaval?"
         },
         "1": {
-          "answer": "Materjali ettevalmistamisel tehisintellekti töövoogude jaoks, nimesid, üksusi või tuvastavaid andmeid paljastamata, nii et anonüümitud tulemus jääb ülevaatamiseks alles.",
+          "answer": "Materjali ettevalmistamisel tehisintellekti töövoogude jaoks, nimesid, organisatsioone või tuvastavaid andmeid paljastamata, nii et anonüümitud tulemus jääb ülevaatamiseks alles.",
           "question": "Millega see aitab?"
         }
       },
-      "metaDescription": "Eemalda nimed, üksused ja tuvastavad andmed enne, kui materjal jõuab tehisintellektini, otse vestlusest ja ülevaatusest, ning kontrolli tulemust.",
+      "metaDescription": "Eemalda nimed, organisatsioonid ja tuvastavad andmed enne, kui materjal jõuab tehisintellektini, otse vestlusest ja ülevaatusest, ning kontrolli tulemust.",
       "metaTitle": "Dokumentide anonüümimine tehisintellekti jaoks | stella",
       "quickAnswer": {
-        "answer": "See eemaldab nimed, üksused ja tuvastavad andmed enne, kui materjal siseneb tehisintellekti töövoogu, ja näitab sulle anonüümitud tulemust, et saaksid kinnitada, mis toimikust välja läheb. See on lõimitud otse vestlusesse ja dokumentide ülevaatusesse.",
+        "answer": "See eemaldab nimed, organisatsioonid ja tuvastavad andmed enne, kui materjal siseneb tehisintellekti töövoogu, ja näitab sulle anonüümitud tulemust, et saaksid kinnitada, mis toimikust välja läheb. See on lõimitud otse vestlusesse ja dokumentide ülevaatusesse.",
         "question": "Mis on anonüümimine rakenduses stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Hoiab nimed, üksused ja tuvastavad andmed tehisintellekti sammudest eemal",
+            "0": "Hoiab nimed, organisatsioonid ja tuvastavad andmed tehisintellekti sammudest eemal",
             "1": "Loodud õigusvaldkonna tehisintellekti töövoogudele, mitte üldiseks dokumentide maskimiseks",
             "2": "Jätab enne järgmist sammu alles ülevaadatava anonüümitud dokumendi"
           },
