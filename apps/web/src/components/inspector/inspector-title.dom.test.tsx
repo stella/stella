@@ -24,10 +24,15 @@ test("a named title renders in the foreground colour, editable or not", () => {
     </>,
   );
 
-  for (const element of [
-    getByRole("button", { name: NAMED }),
-    getByText(STATIC),
-  ]) {
+  // The editable title's button runs inline inside the heading and inherits
+  // its colour, so the colour is read where the button is.
+  const editable = getByRole("button", { name: NAMED }).closest(
+    '[data-slot="inspector-title"]',
+  );
+  for (const element of [editable, getByText(STATIC)]) {
+    if (element === null) {
+      throw new Error("the title has no heading");
+    }
     expect(element.classList.contains("text-foreground")).toBe(true);
     expect(element.classList.contains("text-muted-foreground")).toBe(false);
   }
@@ -40,7 +45,12 @@ test("an empty title shows its placeholder muted", () => {
     </InspectorTitle>,
   );
 
-  const title = getByRole("button", { name: PLACEHOLDER });
+  const title = getByRole("button", { name: PLACEHOLDER }).closest(
+    '[data-slot="inspector-title"]',
+  );
+  if (title === null) {
+    throw new Error("the title has no heading");
+  }
   expect(title.classList.contains("text-muted-foreground")).toBe(true);
   expect(title.classList.contains("text-foreground")).toBe(false);
 });

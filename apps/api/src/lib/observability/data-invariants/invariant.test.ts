@@ -82,16 +82,9 @@ describe("publishing a verdict", () => {
         checked: 3,
         findings: 2,
         DataInvariantUnhealthy: 1,
-        _aws: expect.objectContaining({
-          CloudWatchMetrics: [
-            expect.objectContaining({
-              Dimensions: [["invariant", "severity"]],
-              Metrics: [{ Name: "DataInvariantUnhealthy", Unit: "Count" }],
-            }),
-          ],
-        }),
       }),
     ]);
+    expect(lines.at(0)).not.toHaveProperty("_aws");
     expect(
       logs.at("ERROR").map(({ attributes }) => attributes?.["finding.target"]),
     ).toEqual(["list-0", "list-1"]);

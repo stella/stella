@@ -1,8 +1,14 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import parse from "shell-quote/parse";
-import ts from "typescript6";
 
+import {
+  type CallExpression,
+  type Node,
+  parseSource,
+  type StringLiteral,
+  walk,
+} from "../packages/scripts/src/syntax-tree.ts";
 import { isRecord, repoRoot, trackedRepoFiles } from "./oxlint-config-scopes";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
@@ -34,85 +40,92 @@ const rawShellTest = (source: string): boolean =>
       );
     });
 
+const isStringLiteral = (node: Node): node is StringLiteral =>
+  node.type === "Literal" && typeof node.value === "string";
+
 const rawSpawnTest = (source: string): boolean => {
   if (!source.includes(TEST_PATH)) {
     return false;
   }
-  const file = ts.createSourceFile(
-    "runner.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  const bindings = new Map<string, ts.Expression>();
-  const collect = (node: ts.Node): void => {
+  const { program } = parseSource("runner.ts", source);
+  const bindings = new Map<string, Node>();
+  walk(program, (node) => {
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.init !== null
     ) {
-      bindings.set(node.name.text, node.initializer);
+      bindings.set(node.id.name, node.init);
     }
-    ts.forEachChild(node, collect);
-  };
-  collect(file);
-  const resolve = (
-    node: ts.Expression,
-    seen = new Set<string>(),
-  ): ts.Expression => {
-    if (!ts.isIdentifier(node) || seen.has(node.text)) {
+  });
+  const resolve = (node: Node, seen = new Set<string>()): Node => {
+    if (node.type !== "Identifier" || seen.has(node.name)) {
       return node;
     }
-    seen.add(node.text);
-    const bound = bindings.get(node.text);
+    seen.add(node.name);
+    const bound = bindings.get(node.name);
     return bound === undefined ? node : resolve(bound, seen);
   };
-  const visit = (node: ts.Node): boolean => {
-    if (ts.isCallExpression(node)) {
-      const name = ts.isPropertyAccessExpression(node.expression)
-        ? node.expression.name.text
-        : node.expression.getText(file);
-      const first = node.arguments.at(0);
-      if (SPAWN_APIS.has(name) && first !== undefined) {
-        const command = resolve(first);
-        if (ts.isStringLiteral(command) && rawShellTest(command.text)) {
-          return true;
-        }
-        const arrays = [command, node.arguments.at(1)]
-          .filter((argument) => argument !== undefined)
-          .map((argument) => resolve(argument));
-        if (ts.isObjectLiteralExpression(command)) {
-          for (const property of command.properties) {
-            if (
-              ts.isPropertyAssignment(property) &&
-              (ts.isIdentifier(property.name) ||
-                ts.isStringLiteral(property.name)) &&
-              property.name.text === "cmd"
-            ) {
-              arrays.push(resolve(property.initializer));
-            }
-          }
-        }
-        for (const array of arrays) {
-          if (!ts.isArrayLiteralExpression(array)) {
-            continue;
-          }
-          const words = array.elements
-            .map((element) => resolve(element))
-            .filter(ts.isStringLiteral)
-            .map(({ text }) => text);
-          if (
-            words.includes("test") &&
-            words.some((word) => word.includes(TEST_PATH))
-          ) {
-            return true;
-          }
+  const spawnsTest = (node: CallExpression): boolean => {
+    const { callee } = node;
+    const name =
+      callee.type === "MemberExpression" &&
+      !callee.computed &&
+      callee.property.type === "Identifier"
+        ? callee.property.name
+        : source.slice(callee.start, callee.end);
+    const first = node.arguments.at(0);
+    if (!SPAWN_APIS.has(name) || first === undefined) {
+      return false;
+    }
+    const command = resolve(first);
+    if (isStringLiteral(command) && rawShellTest(command.value)) {
+      return true;
+    }
+    const arrays = [command, node.arguments.at(1)]
+      .filter((argument) => argument !== undefined)
+      .map((argument) => resolve(argument));
+    if (command.type === "ObjectExpression") {
+      for (const property of command.properties) {
+        if (
+          property.type === "Property" &&
+          property.kind === "init" &&
+          !property.method &&
+          !property.shorthand &&
+          !property.computed &&
+          ((property.key.type === "Identifier" &&
+            property.key.name === "cmd") ||
+            (isStringLiteral(property.key) && property.key.value === "cmd"))
+        ) {
+          arrays.push(resolve(property.value));
         }
       }
     }
-    return ts.forEachChild(node, visit) ?? false;
+    return arrays.some((array) => {
+      if (array.type !== "ArrayExpression") {
+        return false;
+      }
+      const words = array.elements
+        .filter((element) => element !== null)
+        .map((element) => resolve(element))
+        .filter(isStringLiteral)
+        .map(({ value }) => value);
+      return (
+        words.includes("test") && words.some((word) => word.includes(TEST_PATH))
+      );
+    });
   };
-  return visit(file);
+  let found = false;
+  walk(program, (node) => {
+    if (found) {
+      return "skip-children";
+    }
+    if (node.type === "CallExpression" && spawnsTest(node)) {
+      found = true;
+    }
+    return undefined;
+  });
+  return found;
 };
 
 export const customLintRunnerViolations = (

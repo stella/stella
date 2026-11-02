@@ -14,6 +14,7 @@ import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { NumberInput } from "@stll/ui/number-input";
 import {
   Select,
   SelectItem,
@@ -295,15 +296,15 @@ export const ExpenseForm = ({
           <Label>{t("billing.expenses.markup")}</Label>
           <form.Field name="markup">
             {(field) => (
-              <Input
+              <NumberInput
                 className="w-16"
+                // A whole percentage, as the old integer parse kept it.
+                format={{ maximumFractionDigits: 0 }}
                 max={100}
                 min={0}
-                onChange={(e) => {
-                  const val = Number.parseInt(e.currentTarget.value, 10);
-                  field.handleChange(Number.isNaN(val) ? 0 : val);
+                onValueChange={(value) => {
+                  field.handleChange(value === null ? 0 : Math.trunc(value));
                 }}
-                type="number"
                 value={field.state.value}
               />
             )}

@@ -1300,6 +1300,31 @@ describe("resolution across runs", () => {
     expect(git(origin, "rev-parse", "HEAD")).toBe(head);
   });
 
+  test("local regeneration discards declared generator caches", () => {
+    const cache = ".cache/fixture-local/runtime.json";
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) => write(repo, ".gitignore", "/.cache/\n"),
+    });
+    git(origin, "switch", "-q", "feature");
+    const generator = localGenerator(
+      `fs.mkdirSync(${JSON.stringify(path.dirname(cache))}, { recursive: true }); fs.writeFileSync(${JSON.stringify(cache)}, "disposable")`,
+    );
+    generator.cacheOutputs = [".cache/fixture-local/**"];
+
+    resolveDerived({ repo: origin, main, generators: [generator] });
+
+    expect(existsSync(path.join(origin, cache))).toBe(false);
+    expect(
+      git(origin, "status", "--porcelain", "--untracked-files=all"),
+    ).not.toContain(cache);
+    expect(
+      git(origin, "ls-files", "--others", "--ignored", "--exclude-standard"),
+    ).not.toContain(cache);
+    expect(git(origin, "rev-parse", "MERGE_HEAD")).toBe(main);
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    git(origin, "merge", "--abort");
+  });
+
   test("local regeneration refuses a new ignored file outside generator outputs", () => {
     const ignored = "ignored-outside.txt";
     const { origin, head, main } = fixture({

@@ -5,6 +5,11 @@ import path from "node:path";
 
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { ciBrowserScopePredicate } from "./ci-browser-scope";
+import {
+  directlyChangedSuiteSpecs,
+  hostedSuiteSpecs,
+  PRODUCTION_JOB,
+} from "./ci-browser-suites";
 import { type DependencyScope, dependencyScope } from "./ci-dependency-scope";
 import {
   requiresDesktopBrowser,
@@ -895,9 +900,19 @@ export const OUTPUT_RULES = {
           full
             ? e2eCore
             : input.eventName === "pull_request" &&
-                failClosedDetector("production e2e", () =>
+                (failClosedDetector("production e2e", () =>
                   productionE2eChanged(files),
-                ),
+                ) ||
+                  // The job also runs the suites it hosts; the e2e planner
+                  // adds the changes their import graphs reach.
+                  failClosedDetector(
+                    "production browser suites",
+                    () =>
+                      hostedSuiteSpecs(
+                        directlyChangedSuiteSpecs(files, input.root),
+                        PRODUCTION_JOB,
+                      ).length > 0,
+                  )),
         ),
     ),
   e2e_landing_required: (facts) =>

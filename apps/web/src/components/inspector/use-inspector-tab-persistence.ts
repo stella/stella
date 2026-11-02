@@ -1,5 +1,6 @@
 import { useLayoutEffect } from "react";
 
+import { readPersistedInspectorPaneOpen } from "@/components/inspector/inspector-broadcast";
 import { initializeInspectorTabBroadcast } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorBroadcastScope } from "@/components/inspector/inspector-tabs-store";
 import { useStorageOwner } from "@/lib/account/use-owner-scoped-state";
@@ -27,4 +28,12 @@ export const useInspectorTabPersistence = ({
     }
     return initializeInspectorTabBroadcast({ organizationId, userId });
   }, [organizationId, owner, userId]);
+
+  // The authenticated shell already knows the scope. Reserve its saved layout
+  // while the storage-owner subscription is still hydrating; unknown tabs are
+  // not an empty inspector. Tab contents still restore through the owner gate.
+  if (owner.kind === "user" && owner.userId === userId) {
+    return false;
+  }
+  return readPersistedInspectorPaneOpen({ organizationId, userId });
 };

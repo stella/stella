@@ -12,7 +12,7 @@ import { executeBrowserExtensionCommand } from "./browser-extension-bridge";
 import { createBrowserToolExecutionCache } from "./browser-tool-execution";
 import { createTurnStopper } from "./browser-turn";
 
-type BrowserClientToolOptions = {
+type BrowserExtensionToolOptions = {
   /**
    * The chat turn a tool call belongs to, or the latest turn without one;
    * null before the thread has a user message. The extension budgets
@@ -21,9 +21,9 @@ type BrowserClientToolOptions = {
   turnIdFor: (toolCallId?: string) => string | null;
 };
 
-export const createBrowserClientTool = ({
+export const createBrowserExtensionTool = ({
   turnIdFor,
-}: BrowserClientToolOptions) => {
+}: BrowserExtensionToolOptions) => {
   // The outcome is tracked per web tab, not per chat runtime: every chat in
   // this tab drives the same controlled Chrome tab.
   const executions = createBrowserToolExecutionCache(

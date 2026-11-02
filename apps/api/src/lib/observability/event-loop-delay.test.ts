@@ -176,7 +176,7 @@ describe("event-loop delay monitoring", () => {
     }
   });
 
-  test("each window is one undimensioned EMF record with max and p99", () => {
+  test("each window is one record with max and p99", () => {
     const lines: string[] = [];
     setMetricLineSinkForTesting((line) => {
       lines.push(line);
@@ -186,19 +186,6 @@ describe("event-loop delay monitoring", () => {
 
     expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
       {
-        _aws: {
-          Timestamp: expect.any(Number),
-          CloudWatchMetrics: [
-            {
-              Namespace: "Stella/Api",
-              Dimensions: [[]],
-              Metrics: [
-                { Name: "EventLoopDelayMax", Unit: "Milliseconds" },
-                { Name: "EventLoopDelayP99", Unit: "Milliseconds" },
-              ],
-            },
-          ],
-        },
         EventLoopDelayMax: 19_000,
         EventLoopDelayP99: 12,
       },

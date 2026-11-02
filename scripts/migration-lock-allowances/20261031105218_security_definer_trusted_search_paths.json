@@ -1,0 +1,4 @@
+{
+  "alter-function": "Function configuration changes update only catalog metadata, take no lock on an existing application relation, and are bounded by 3s lock_timeout and 30s statement_timeout.",
+  "create-function": "Replacing function bodies preserves signatures, owners and privileges; it updates catalog metadata without locking an existing application relation, bounded by 3s lock_timeout and 30s statement_timeout."
+}

@@ -3,6 +3,11 @@ import { panic } from "better-result";
 import { apiStatus, apiUploadDocx } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+} from "../helpers/wait-budgets";
+import {
   createTestWorkspace,
   deleteTestWorkspace,
   type TestWorkspace,
@@ -93,7 +98,7 @@ test.describe("PDF preview in the inspector", () => {
       .poll(
         async () =>
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
-        { timeout: 10_000 },
+        { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS },
       )
       .toBe(200);
 
@@ -101,12 +106,16 @@ test.describe("PDF preview in the inspector", () => {
       waitUntil: "domcontentloaded",
     });
     const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
-    await expect(tableTab).toBeVisible({ timeout: 30_000 });
+    await expect(tableTab).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await tableTab.click();
     const fileButton = page
       .locator('[data-slot="workspace-grid-cell"]')
       .getByRole("button", { exact: true, name: FILE_NAME });
-    await expect(fileButton).toBeVisible({ timeout: 30_000 });
+    await expect(fileButton).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await fileButton.click();
 
     const textLayer = page.locator(
@@ -114,7 +123,9 @@ test.describe("PDF preview in the inspector", () => {
     );
     const startRun = textLayer.locator("span", { hasText: LINES[1] });
     const endRun = textLayer.locator("span", { hasText: LINES[2] });
-    await expect(startRun).toBeVisible({ timeout: 45_000 });
+    await expect(startRun).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+    });
     await expect(endRun).toBeVisible();
 
     const startBox = await startRun.boundingBox();

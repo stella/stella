@@ -1,3 +1,4 @@
+// parser-output-unchanged: Page publisher-request status affects ingestion freshness, not decision fields parsed from stored XML.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result } from "better-result";
 import { load } from "cheerio";
@@ -14,6 +15,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   defineSourceAdapter,
   excludedSourceSurface,
+  PUBLISHER_REQUEST,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
@@ -297,6 +299,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
         case "tip":
           return Result.ok({
             decisions,
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             sourceUrl,
             nextCursor: JSON.stringify(
               reached
@@ -313,6 +316,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
           if (listed.next !== null) {
             return Result.ok({
               decisions,
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               sourceUrl,
               nextCursor: JSON.stringify({
                 type: "sweep",
@@ -342,6 +346,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
           ) {
             return Result.ok({
               decisions,
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               sourceUrl,
               nextCursor: JSON.stringify(state),
             });
