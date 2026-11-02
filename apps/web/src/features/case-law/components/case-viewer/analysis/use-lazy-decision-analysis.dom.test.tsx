@@ -433,6 +433,7 @@ describe("shared lazy decision analysis", () => {
     expect(new URL(requests[1]?.url ?? "").searchParams.get("retry")).toBe(
       "true",
     );
+    // real-time: the hook polls the analysis status on its own interval
     await waitFor(() => expect(result.current.state.status).toBe("done"), {
       timeout: 5000,
     });
@@ -494,6 +495,7 @@ describe("shared lazy decision analysis", () => {
             new URL(request.url).searchParams.get("retry") === "true",
         ),
     ).toBe(true);
+    // real-time: the hook polls the analysis status on its own interval
     await waitFor(() => expect(result.current.state.status).toBe("done"), {
       timeout: 5000,
     });

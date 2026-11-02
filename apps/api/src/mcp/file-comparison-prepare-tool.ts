@@ -26,6 +26,7 @@ import {
 } from "@/api/lib/uploads/file-comparison/uploads";
 import { PRESIGN_URL_EXPIRY_SECONDS } from "@/api/lib/uploads/runtime";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { nullAsAbsent } from "@/api/mcp/input-schemas";
 import type {
   InternalToolErrorResult,
   TypedMcpToolHandler,
@@ -33,7 +34,6 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   internalFailureResult,
-  nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
   validationErrorResult,
