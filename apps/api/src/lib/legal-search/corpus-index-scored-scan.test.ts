@@ -28,6 +28,9 @@ import {
   testRevisionOf,
   testRevisionsFor,
 } from "@/api/tests/helpers/corpus-projection-revisions";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 /**
  * The candidate scan through both engine transports.
@@ -300,13 +303,15 @@ beforeEach(() => {
       snippets: [],
     });
   };
-  globalThis.fetch = Object.assign(stub, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const BLEND_WEIGHT = DEFAULT_AUTHORITY_WEIGHT + DEFAULT_COURT_TIER_WEIGHT;

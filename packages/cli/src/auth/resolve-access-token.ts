@@ -39,7 +39,7 @@ export type ResolveAccessTokenOptions = {
  *  - `ok`: a token usable now (fresh, or freshly refreshed). `persistWarning`
  *    is set when a freshly-refreshed token could not be saved to disk (e.g.
  *    a read-only config dir) — the token is still valid for this command,
- *    but the caller should tell the user the next command will need to
+ *    but the caller should tell the user a later command may need to
  *    refresh again rather than finding it on disk;
  *  - `unauthenticated`: no stored credential for `serverUrl` at all;
  *  - `refresh-failed`: a credential exists but is expired and could not be

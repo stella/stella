@@ -24,6 +24,7 @@ const decision: Decision = {
   languageAlternates: [],
   decisionDate: "2025-05-21",
   decisionType: "rozsudek",
+  decisionTypeKind: null,
   headnote: { type: "absent", reason: "not_published" },
   citationCount: 0,
 };

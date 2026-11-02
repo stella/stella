@@ -23,8 +23,6 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/decisions/slug";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -36,16 +34,22 @@ import {
   presentTextField,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   openGatedTestDatabase,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
+  testFetchState.restore();
   mock.restore();
 });
 
@@ -1221,7 +1225,7 @@ if (!databaseUrl || !runPostgresTests) {
           </td></tr>
         </table>Výsledky 1 - 1 z celkem 1</body></html>`;
         const sleepSpy = spyOn(Bun, "sleep").mockResolvedValue(undefined);
-        const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
+        const fetchSpy = mock(
           asFetchMock(async (input, init) => {
             const url = new URL(
               input instanceof Request ? input.url : String(input),
@@ -1248,6 +1252,7 @@ if (!databaseUrl || !runPostgresTests) {
             return new Response("missing", { status: 404 });
           }),
         );
+        testFetchState.set(asFetchMock(fetchSpy));
         const page = await Result.tryPromise(
           async () =>
             await czUsAdapter.fetchPage(
@@ -1255,7 +1260,7 @@ if (!databaseUrl || !runPostgresTests) {
               {},
             ),
         );
-        fetchSpy.mockRestore();
+        testFetchState.restore();
         sleepSpy.mockRestore();
         if (Result.isError(page)) {
           panic(page.error.message);

@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { invoices } from "@/api/db/schema";
 import {
@@ -17,7 +17,8 @@ const cursorTimestamp = (date: Date, microseconds: number): string =>
 
 describe("PostgreSQL timestamp cursor values", () => {
   test("INVARIANT: valid microsecond values round-trip without precision loss", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: valid microsecond values round-trip without precision loss",
       fc.property(
         fc.date({
           min: new Date("2000-01-01T00:00:00.000Z"),
@@ -34,7 +35,7 @@ describe("PostgreSQL timestamp cursor values", () => {
           });
         },
       ),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 
@@ -82,7 +83,8 @@ describe("createTimestampIdCursorCodec", () => {
   });
 
   test("INVARIANT: decode ∘ encode round-trips any (timestamp, id)", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: decode ∘ encode round-trips any (timestamp, id)",
       fc.property(
         fc.date({
           min: new Date("2000-01-01T00:00:00.000Z"),
@@ -104,17 +106,18 @@ describe("createTimestampIdCursorCodec", () => {
           });
         },
       ),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 
   test("garbage or malformed cursors decode to null (→ first page)", () => {
-    fc.assert(
+    assertProperty(
+      "garbage or malformed cursors decode to null (→ first page)",
       fc.property(fc.string(), (raw) => {
         const decoded = codec.decode(raw);
         expect(decoded === null || typeof decoded.id === "string").toBe(true);
       }),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
     // A well-formed cursor whose id is not a UUID is rejected.
     expect(

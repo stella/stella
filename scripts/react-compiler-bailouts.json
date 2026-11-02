@@ -13,7 +13,6 @@
   "apps/web/src/components/chat-editor-provider.tsx::useChatEditor": {
     "memos": 19,
     "reasons": [
-      "(BuildHIR::lowerExpression) Handle ThisExpression expressions",
       "Cannot access refs during render",
       "`try`/`finally` without `catch` is not supported by React Compiler"
     ]

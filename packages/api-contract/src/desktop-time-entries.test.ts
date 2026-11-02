@@ -3,10 +3,17 @@ import * as v from "valibot";
 
 import {
   DESKTOP_ACTIVITY_REVIEW_LIMIT,
+  DESKTOP_TIME_ENTRY_NARRATIVE_LOCALE_MAX_LENGTH,
+  DESKTOP_TIME_ENTRY_NARRATIVE_MATTER_NAME_MAX_LENGTH,
+  DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH,
+  DESKTOP_TIME_ENTRY_NARRATIVE_TITLE_LIMIT,
+  DESKTOP_TIME_ENTRY_NARRATIVE_TITLE_MAX_LENGTH,
   desktopMatterCandidatesResponseSchema,
   desktopTimeEntryBatchSchema,
   desktopTimeEntryBatchStatusRequestSchema,
   desktopTimeEntryBatchStatusSchema,
+  desktopTimeEntryNarrativeRequestSchema,
+  desktopTimeEntryNarrativeResponseSchema,
 } from "./desktop-time-entries";
 
 const entry = {
@@ -129,5 +136,97 @@ test("batch recovery accepts only a key and distinguishes committed receipts fro
     expect(
       v.safeParse(desktopTimeEntryBatchStatusSchema, invalid).success,
     ).toBe(false);
+  }
+});
+
+const narrativeRequest = {
+  titles: ["Smlouva o dílo – návrh.docx", "Katastr nemovitostí"],
+  locale: "cs-CZ",
+  matterName: null,
+};
+
+test("narrative requests trim titles and accept only bounded titles, a locale tag and a matter name", () => {
+  expect(
+    v.parse(desktopTimeEntryNarrativeRequestSchema, {
+      ...narrativeRequest,
+      titles: ["  Katastr nemovitostí  "],
+      matterName: "Matter",
+    }),
+  ).toEqual({
+    titles: ["Katastr nemovitostí"],
+    locale: "cs-CZ",
+    matterName: "Matter",
+  });
+  for (const valid of [
+    {
+      ...narrativeRequest,
+      titles: Array.from(
+        { length: DESKTOP_TIME_ENTRY_NARRATIVE_TITLE_LIMIT },
+        () => "Katastr nemovitostí",
+      ),
+    },
+    {
+      ...narrativeRequest,
+      titles: ["x".repeat(DESKTOP_TIME_ENTRY_NARRATIVE_TITLE_MAX_LENGTH)],
+    },
+    {
+      ...narrativeRequest,
+      matterName: "m".repeat(
+        DESKTOP_TIME_ENTRY_NARRATIVE_MATTER_NAME_MAX_LENGTH,
+      ),
+    },
+    { ...narrativeRequest, locale: "pt-BR" },
+    { ...narrativeRequest, locale: "sr-Latn-RS" },
+  ]) {
+    expect(
+      v.safeParse(desktopTimeEntryNarrativeRequestSchema, valid).success,
+    ).toBe(true);
+  }
+  for (const invalid of [
+    { ...narrativeRequest, titles: [] },
+    {
+      ...narrativeRequest,
+      titles: Array.from(
+        { length: DESKTOP_TIME_ENTRY_NARRATIVE_TITLE_LIMIT + 1 },
+        () => "Katastr nemovitostí",
+      ),
+    },
+    { ...narrativeRequest, titles: ["   "] },
+    {
+      ...narrativeRequest,
+      titles: ["x".repeat(DESKTOP_TIME_ENTRY_NARRATIVE_TITLE_MAX_LENGTH + 1)],
+    },
+    { ...narrativeRequest, locale: "" },
+    { ...narrativeRequest, locale: "cs_CZ" },
+    {
+      ...narrativeRequest,
+      locale: "x".repeat(DESKTOP_TIME_ENTRY_NARRATIVE_LOCALE_MAX_LENGTH + 1),
+    },
+    {
+      ...narrativeRequest,
+      matterName: "m".repeat(
+        DESKTOP_TIME_ENTRY_NARRATIVE_MATTER_NAME_MAX_LENGTH + 1,
+      ),
+    },
+    { titles: narrativeRequest.titles, locale: "cs-CZ" },
+    { ...narrativeRequest, appName: "private" },
+  ]) {
+    expect(
+      v.safeParse(desktopTimeEntryNarrativeRequestSchema, invalid).success,
+    ).toBe(false);
+  }
+});
+
+test("narrative responses carry one non-empty narrative within the entry limit", () => {
+  for (const [narrative, success] of [
+    ["Revize smlouvy o dílo.", true],
+    ["n".repeat(DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH), true],
+    ["n".repeat(DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH + 1), false],
+    ["", false],
+  ] as const) {
+    expect(
+      v.safeParse(desktopTimeEntryNarrativeResponseSchema, { narrative })
+        .success,
+    ).toBe(success);
   }
 });

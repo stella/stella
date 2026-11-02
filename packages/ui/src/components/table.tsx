@@ -20,13 +20,29 @@ type TableInset = "default" | "card";
  */
 type TableScroll = "self" | "parent";
 
+/**
+ * How tightly a table sets its cells.
+ *
+ * `default` is a data table: padded cells on one line, rows that light up
+ * under the pointer. `compact` is a small reading table inside a card or a
+ * review (a term set against a standard, a presence matrix): cells sit at
+ * text leading with no side padding, headings keep a trailing gap so a
+ * right-aligned heading never touches the next column, values wrap, and rows
+ * do not highlight because nothing in them is a row-wide target. A row
+ * header (`<TableHead scope="row">`) in a compact body reads as the row's
+ * first cell rather than as a column heading.
+ */
+type TableDensity = "default" | "compact";
+
 type TableProps = React.ComponentProps<"table"> & {
+  density?: TableDensity;
   inset?: TableInset;
   scroll?: TableScroll;
 };
 
 const Table = ({
   className,
+  density = "default",
   inset = "default",
   scroll = "self",
   ...props
@@ -37,6 +53,7 @@ const Table = ({
         "w-full caption-bottom text-sm in-data-[slot=frame]:border-separate in-data-[slot=frame]:border-spacing-0",
         className,
       )}
+      data-density={density}
       data-inset={inset}
       data-slot="table"
       {...props}
@@ -124,7 +141,7 @@ const TableRow = ({
 }: React.ComponentProps<"tr"> & { tone?: TableTone | undefined }) => (
   <tr
     className={cn(
-      "hover:bg-muted/72 data-[state=selected]:bg-muted/72 border-b in-data-[slot=frame]:hover:bg-transparent in-data-[slot=frame]:data-[state=selected]:bg-transparent",
+      "hover:bg-muted/72 data-[state=selected]:bg-muted/72 border-b in-data-[density=compact]:hover:bg-transparent in-data-[slot=frame]:hover:bg-transparent in-data-[slot=frame]:data-[state=selected]:bg-transparent",
       tone === "muted" && "text-muted-foreground",
       className,
     )}
@@ -170,6 +187,8 @@ const TableHead = ({
   <th
     className={cn(
       "text-muted-foreground h-10 px-2.5 align-middle leading-none font-medium whitespace-nowrap in-data-[inset=card]:px-4 has-[[role=checkbox]]:w-px has-[[role=checkbox]]:pe-0",
+      "in-data-[density=compact]:h-auto in-data-[density=compact]:px-0 in-data-[density=compact]:py-1 in-data-[density=compact]:pe-3 in-data-[density=compact]:text-xs",
+      "in-data-[density=compact]:[tbody_&]:py-1.5 in-data-[density=compact]:[tbody_&]:text-sm in-data-[density=compact]:[tbody_&]:leading-6 in-data-[density=compact]:[tbody_&]:font-normal in-data-[density=compact]:[tbody_&]:whitespace-normal in-data-[density=compact]:[tbody_&]:text-inherit",
       TABLE_ALIGN_CLASS[resolveTableAlign(align, numeric) ?? "start"],
       numeric && "tabular-nums",
       className,
@@ -216,7 +235,8 @@ const TableCell = ({
         "align-middle leading-none whitespace-nowrap has-[[role=checkbox]]:pe-0",
         flush
           ? "p-0"
-          : "p-2.5 in-data-[inset=card]:px-4 in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)]",
+          : "p-2.5 in-data-[density=compact]:px-0 in-data-[density=compact]:py-1.5 in-data-[inset=card]:px-4 in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)]",
+        "in-data-[density=compact]:leading-6 in-data-[density=compact]:whitespace-normal",
         resolvedAlign !== undefined && TABLE_ALIGN_CLASS[resolvedAlign],
         tone === "muted" && "text-muted-foreground",
         numeric && "tabular-nums",
@@ -331,6 +351,7 @@ export {
 export type {
   SortDirection,
   TableAlign,
+  TableDensity,
   TableHeadProps,
   TableCellProps,
   TableHeaderProps,

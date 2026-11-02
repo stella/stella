@@ -6,6 +6,8 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { DEFAULT_FILE_PROPERTY_NAME } from "@stll/api-contract/property-policy";
+
 import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -20,10 +22,6 @@ import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { useTableStore } from "@/lib/workspaces/table-store";
-
-// Hardcoded in English: these are persisted in the DB and shared
-// across all organization members regardless of their locale.
-const DEFAULT_FILE_PROPERTY_NAME = "Documents";
 
 type CreateWorkspaceVars = {
   // Omit `clientId` to create a personal matter (initially visible

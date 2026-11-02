@@ -21,10 +21,6 @@ import {
   relations,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import type {
-  IngestionResult,
-  StoredRawResultReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildPlItem,
   normalizeSaosDumpItem,
@@ -45,6 +41,10 @@ import { ABSORBED_INTO_METADATA_KEY } from "@/api/lib/case-law/decision-absorpti
 import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import type {
+  IngestionResult,
+  StoredRawResultReader,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";

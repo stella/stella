@@ -651,6 +651,21 @@ describe("changed-file autofix boundary", () => {
     // the step continues so formatting and generators still push.
     expect(autofix).toBeGreaterThan(prepare);
     expect(typecheck).toBeGreaterThan(autofix);
+    // A syntactic pass with the same rules runs first, reads nothing it
+    // would rewrite, and only its clean exit skips the type graph.
+    const precheck = fix.indexOf(
+      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --max-warnings 0 "\${safe_rule_args[@]}" "\${lint_paths[@]}" || precheck_status=$?`,
+    );
+    expect(precheck).toBeGreaterThan(0);
+    expect(prepare).toBeGreaterThan(precheck);
+    expect(fix.slice(precheck, prepare)).toContain(
+      `bun scripts/autofix-type-aware-precheck.ts "\${lint_paths[@]}" || precheck_status=$?`,
+    );
+    expect(fix.slice(precheck, prepare)).toContain(
+      "if (( precheck_status == 0 )); then",
+    );
+    expect(fix.slice(precheck, prepare)).not.toContain("--fix");
+    expect(fix.slice(precheck, prepare)).not.toContain("--type-aware");
     expect(fix.slice(typecheck)).toContain("restore_lint_paths");
     expect(fix.slice(typecheck)).not.toContain('exit "$typecheck_status"');
     expect(fix).toContain("set -euo pipefail");

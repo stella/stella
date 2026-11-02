@@ -5,12 +5,14 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { statuteEliParts } from "@stll/api-contract/statute-act-number";
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import {
   createStatuteRouteParams,
   normalizeStatuteStoredSlug,
   type StatuteRouteParams,
 } from "@stll/api-contract/statute-route";
+import { READER_BREADCRUMB_CLEARANCE } from "@stll/decision-reader/reader-landing";
 import {
   jumpToAnchor,
   resolveAnchorPct,
@@ -46,7 +48,6 @@ import {
   outlineMatchItems,
   rankOutlineMatches,
 } from "@/components/legal-reader/outline-jump-field.logic";
-import { READER_BREADCRUMB_CLEARANCE } from "@/components/legal-reader/reader-breadcrumb-scroll";
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { useRecordOpenedLawDocument } from "@/features/law-search-history/law-search-history-query";
@@ -176,7 +177,6 @@ export const PublicStatuteViewer = ({
   work,
 }: PublicStatuteViewerProps) => {
   const t = useTranslations();
-  const navigate = useNavigate();
   const asOfLabelId = useId();
   const routeHash = useRouterState({ select: (state) => state.location.hash });
   const {
@@ -205,69 +205,13 @@ export const PublicStatuteViewer = ({
   // for keeps the version menu, which switches by id.
   const canPickDate = normalizeStatuteStoredSlug(work.slug) !== null;
 
-  const goTo = useCallback(
-    (params: StatuteRouteParams, nextAsOf: string | undefined) => {
-      const search = { asOf: nextAsOf, q: find.findQuery || undefined };
-
-      detached(
-        params.version === undefined
-          ? navigate({
-              params: { country: params.country, slug: params.slug },
-              search,
-              to: "/law/$country/statutes/$slug",
-            })
-          : navigate({
-              params: {
-                country: params.country,
-                slug: params.slug,
-                version: params.version,
-              },
-              search,
-              to: "/law/$country/statutes/$slug/v/$version",
-            }),
-        "statutes.reader-navigate",
-      );
-    },
-    [find.findQuery, navigate],
-  );
-
-  const handleVersionChange = useCallback(
-    (nextDocumentId: string) => {
-      const next = versions.find((version) => version.id === nextDocumentId);
-
-      if (next === undefined) {
-        return;
-      }
-
-      // A version that cannot apply opens at its id: no day names it.
-      goTo(
-        statuteVersionRouteParams({ isDefault: next.isDefault, version: next }),
-        undefined,
-      );
-    },
-    [goTo, versions],
-  );
-
-  // A comparison is a view of the text on screen, not another address: it
-  // lives in the search params, beside the path that names the text.
-  const navigateComparison = (next: StatuteCompareSearch) => {
-    detached(
-      navigate({
-        search: (previous) => ({
-          ...previous,
-          compare: next.compare,
-          provision: next.provision,
-          show: next.show,
-        }),
-        to: ".",
-      }),
-      "statutes.reader-compare",
-    );
-  };
-
-  const handleCompare = (versionValidFrom: string) => {
-    navigateComparison({ ...NO_STATUTE_COMPARE, compare: versionValidFrom });
-  };
+  const {
+    goTo,
+    handleCompare,
+    handleVersionChange,
+    navigateComparison,
+    openComparedVersion,
+  } = useStatuteNavigation({ findQuery: find.findQuery, versions });
 
   const handleAsOfChange = (value: string | null) => {
     // A day is a lookup, not an address: it is asked on the act's own page
@@ -318,6 +262,7 @@ export const PublicStatuteViewer = ({
 
   useStatuteRouteLanding({
     blocks,
+    country: header.country,
     exactJumpId: outlineMatches.exactId,
     readerRef,
     requestedJump,
@@ -412,10 +357,12 @@ export const PublicStatuteViewer = ({
           <LazyStatuteCompareView
             compare={comparison.compare}
             onNavigate={navigateComparison}
+            onOpenVersion={openComparedVersion}
             onScreen={statute}
             onScreenBlocks={ast === null ? null : ast.blocks}
             provision={comparison.provision}
             show={comparison.show ?? STATUTE_COMPARE_SHOW.changed}
+            textScale={textScale}
             versions={versions}
           />
         </Suspense>
@@ -513,8 +460,109 @@ export const PublicStatuteViewer = ({
   );
 };
 
+type StatuteNavigationOptions = {
+  /** The find bar's query, which a move to another consolidation keeps. */
+  findQuery: string;
+  versions: PublicStatuteRouteData["versions"];
+};
+
+/**
+ * Moves between consolidations and in and out of a comparison. Every
+ * consolidation has its own address; a comparison lives in the search
+ * params beside it.
+ */
+function useStatuteNavigation({
+  findQuery,
+  versions,
+}: StatuteNavigationOptions) {
+  const navigate = useNavigate();
+
+  const goTo = useCallback(
+    (
+      params: StatuteRouteParams,
+      nextAsOf: string | undefined,
+      compareSearch: StatuteCompareSearch = NO_STATUTE_COMPARE,
+    ) => {
+      const search = {
+        asOf: nextAsOf,
+        q: findQuery || undefined,
+        ...compareSearch,
+      };
+
+      detached(
+        params.version === undefined
+          ? navigate({
+              params: { country: params.country, slug: params.slug },
+              search,
+              to: "/law/$country/statutes/$slug",
+            })
+          : navigate({
+              params: {
+                country: params.country,
+                slug: params.slug,
+                version: params.version,
+              },
+              search,
+              to: "/law/$country/statutes/$slug/v/$version",
+            }),
+        "statutes.reader-navigate",
+      );
+    },
+    [findQuery, navigate],
+  );
+
+  // A version that cannot apply opens at its id: no day names it. The
+  // comparison, when one is passed, comes along.
+  const openVersion = (
+    documentId: string,
+    compareSearch: StatuteCompareSearch = NO_STATUTE_COMPARE,
+  ) => {
+    const next = versions.find((version) => version.id === documentId);
+
+    if (next === undefined) {
+      return;
+    }
+
+    goTo(
+      statuteVersionRouteParams({ isDefault: next.isDefault, version: next }),
+      undefined,
+      compareSearch,
+    );
+  };
+
+  // A comparison is a view of the text on screen, not another address: it
+  // lives in the search params, beside the path that names the text.
+  const navigateComparison = (next: StatuteCompareSearch) => {
+    detached(
+      navigate({
+        search: (previous) => ({
+          ...previous,
+          compare: next.compare,
+          provision: next.provision,
+          show: next.show,
+        }),
+        to: ".",
+      }),
+      "statutes.reader-compare",
+    );
+  };
+
+  return {
+    goTo,
+    handleCompare: (versionValidFrom: string) =>
+      navigateComparison({ ...NO_STATUTE_COMPARE, compare: versionValidFrom }),
+    handleVersionChange: (documentId: string) => openVersion(documentId),
+    navigateComparison,
+    // A comparison whose on-screen side the reader swapped: the other
+    // version goes on screen, and the comparison comes along.
+    openComparedVersion: openVersion,
+  };
+}
+
 type StatuteRouteLandingOptions = {
   blocks: readonly Block[];
+  /** The statute's country, whose publisher's grammar its anchors are in. */
+  country: string;
   exactJumpId: string | null;
   readerRef: RefObject<HTMLElement | null>;
   requestedJump: string | undefined;
@@ -523,6 +571,7 @@ type StatuteRouteLandingOptions = {
 
 function useStatuteRouteLanding({
   blocks,
+  country,
   exactJumpId,
   readerRef,
   requestedJump,
@@ -555,7 +604,10 @@ function useStatuteRouteLanding({
     if (container === null || requestedAnchorId === "") {
       return;
     }
-    const resolved = resolveDocumentAnchor(blocks, requestedAnchorId);
+    const resolved = resolveDocumentAnchor(
+      { blocks, scheme: statuteAnchorSchemeFor(country) },
+      requestedAnchorId,
+    );
     if (resolved === null || resolved.anchorId === requestedAnchorId) {
       return;
     }

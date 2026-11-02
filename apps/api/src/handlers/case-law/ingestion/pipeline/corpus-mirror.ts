@@ -8,7 +8,6 @@ import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
 } from "@/api/db/schema";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
@@ -32,6 +31,7 @@ import type {
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 /**
  * Where this decision's canonical payload ends up.

@@ -30,7 +30,7 @@ import * as v from "valibot";
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  type BrowserClientCapability,
+  type BrowserExtensionCapability,
 } from "@stll/api-contract";
 import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
@@ -307,12 +307,13 @@ const suggestChangesOperationTypeEnum = (
 // register by default (no disabled slugs).
 const DEFAULT_BROWSER_CLIENT = {
   protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-} satisfies BrowserClientCapability;
+  status: "connected",
+} satisfies BrowserExtensionCapability;
 
 const buildFullCoverageChatTools = (
   thirdPartyBoundary: ChatThirdPartyBoundary = rawThirdPartyBoundary,
   refRegistry: ChatRefRegistry = createChatRefRegistry(),
-  browserClient: BrowserClientCapability | null = DEFAULT_BROWSER_CLIENT,
+  browserExtension: BrowserExtensionCapability | null = DEFAULT_BROWSER_CLIENT,
 ) => {
   const webSearchProvider: WebSearchProvider = {
     name: "tavily",
@@ -355,7 +356,7 @@ const buildFullCoverageChatTools = (
     hasActiveDocxEditClient: true,
     hasActiveDocxFileClient: true,
     docxSuggestionSurface: "file-overlay",
-    browserClient: browserClient ?? undefined,
+    browserExtension: browserExtension ?? undefined,
     // Explicit "manual": DEFAULT_CHAT_EDIT_APPLY_MODE is now "auto", which
     // would suppress suggest_changes here (this call sets no
     // activeFile, so the auto tool never registers either) and drop it out
@@ -944,6 +945,19 @@ describe("chat tool schemas", () => {
         rawThirdPartyBoundary,
         createChatRefRegistry(),
         null,
+      ),
+    ).not.toHaveProperty(BROWSER_CONTROL_TOOL_NAME);
+  });
+
+  test.each([
+    BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+    BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+  ])("omits browser control for protocol version %s", (protocolVersion) => {
+    expect(
+      buildFullCoverageChatTools(
+        rawThirdPartyBoundary,
+        createChatRefRegistry(),
+        { protocolVersion, status: "connected" },
       ),
     ).not.toHaveProperty(BROWSER_CONTROL_TOOL_NAME);
   });

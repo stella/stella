@@ -25,9 +25,11 @@ import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution"
 import {
   decisionBucketSqlFor,
   SITEMAP_ALL_BUCKET,
+  SITEMAP_MULTILINGUAL_URL_WEIGHT,
   SITEMAP_UNDATED_MONTH,
   SITEMAP_UNDATED_YEAR,
   sitemapDocumentRepresentativeFor,
+  sitemapHasLanguageAlternatesFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
@@ -214,6 +216,9 @@ export const sitemapShardDecisionsQuery = (
       court: publishedCaseLawDecisions.court,
       language: publishedCaseLawDecisions.language,
       languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+      hasLanguageAlternates: sitemapHasLanguageAlternatesFor(
+        publishedCaseLawDecisions,
+      ),
       updatedAt: publishedCaseLawDecisions.updatedAt,
     })
     .from(publishedCaseLawDecisions)
@@ -313,13 +318,20 @@ export const listSitemapShardDecisionsHandler = async (
   const queryResult = await caseLawDb(async (tx) => {
     const rows = await sitemapShardDecisionsQuery(tx, conditions);
 
-    if (rows.length > LIMITS.caseLawSitemapShardUrlLimit) {
+    const weightedTotal = rows.reduce(
+      (total, row) =>
+        total +
+        (row.hasLanguageAlternates ? SITEMAP_MULTILINGUAL_URL_WEIGHT : 1),
+      0,
+    );
+    if (weightedTotal > LIMITS.caseLawSitemapShardUrlLimit) {
       return { type: "capacityExceeded" as const };
     }
 
     const languageGroupKeys = [
       ...new Set(
         rows
+          .filter((row) => row.hasLanguageAlternates)
           .map((row) => row.languageGroupKey)
           .filter((value): value is string => value !== null),
       ),

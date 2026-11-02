@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
@@ -11,13 +11,22 @@ import {
   useColorScheme,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Text } from "@stll/ui/text";
 
 import DocumentView from "@/components/document-viewer/document-view.dom";
+import { FIT_ZOOM, pageAppearance } from "@/components/document-viewer/zoom";
+import type { ViewerAppearance } from "@/components/document-viewer/zoom";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
+import { useDocumentEditing } from "@/components/use-document-editing";
+import {
+  viewerBarClearance,
+  ViewerControls,
+} from "@/components/viewer-controls";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import {
@@ -138,6 +147,9 @@ const OpenedDocument = ({
   const source = state.status === "signed-in" ? state.source : null;
   const [phase, setPhase] = useState<Phase>({ status: "opening" });
   const [ready, setReady] = useState(false);
+  const insets = useSafeAreaInsets();
+  const [zoom, setZoom] = useState(FIT_ZOOM);
+  const [appearance, setAppearance] = useState<ViewerAppearance>("system");
   // The viewer's web view may still ask for bytes, or be answered, after this
   // screen has gone; an answer sent to a removed web view throws, so none is.
   const mounted = useRef(true);
@@ -196,6 +208,29 @@ const OpenedDocument = ({
     }
   }, [quickLook]);
 
+  // A Word document opens for editing on the first tap into its text.
+  const editableProperty =
+    phase.status === "open" && phase.file.viewer === "docx"
+      ? phase.file.propertyId
+      : null;
+  const target = useMemo(
+    () =>
+      editableProperty === null
+        ? null
+        : { workspaceId, entityId, propertyId: editableProperty },
+    [workspaceId, entityId, editableProperty],
+  );
+  const editing = useDocumentEditing({
+    source,
+    target,
+    // The edit is the document's new version: open it afresh.
+    onFinished: onRetry,
+  });
+  const editingFile =
+    editing.phase.status === "editing" || editing.phase.status === "finishing"
+      ? editing.phase.file
+      : null;
+
   const title =
     phase.status === "open" ? phase.file.fileName : (name ?? t("title"));
 
@@ -221,7 +256,9 @@ const OpenedDocument = ({
         </View>
       );
     }
-    const { file, opened } = phase;
+    const { file } = phase;
+    // While editing, the viewer shows the working copy the edit started from.
+    const opened = editingFile ?? phase.opened;
     if (file.viewer === "quick-look" || phase.unrendered) {
       return (
         <View style={screenStyles.content}>
@@ -247,13 +284,28 @@ const OpenedDocument = ({
     return (
       <View style={screenStyles.screen}>
         <DocumentView
-          appearance={scheme === "dark" ? "dark" : "light"}
+          appearance={pageAppearance(
+            appearance,
+            scheme === "dark" ? "dark" : "light",
+          )}
           dom={{ style: { flex: 1 } }}
+          editable={editingFile !== null}
+          key={opened.uri}
           kind={file.viewer}
           locale={locale}
           onFailed={() => {
             if (mounted.current) {
               setPhase({ ...phase, unrendered: true });
+            }
+          }}
+          onEditRequest={() => {
+            if (mounted.current) {
+              editing.requestEdit();
+            }
+          }}
+          onEditSaved={async (size: number | null, final: boolean) => {
+            if (mounted.current) {
+              await editing.editSaved(size, final);
             }
           }}
           onReady={() => {
@@ -265,9 +317,24 @@ const OpenedDocument = ({
             const slice = await readOpenedFile(opened, offset, length);
             return mounted.current ? slice : await UNANSWERED;
           }}
+          clearance={viewerBarClearance(insets.bottom)}
+          saveRequest={editing.saveRequest}
           size={opened.size}
+          writeEdit={(offset: number, base64: string) => {
+            if (mounted.current) {
+              editing.writeEdit(offset, base64);
+            }
+          }}
+          zoom={zoom}
         />
-        {ready ? null : (
+        {ready ? (
+          <ViewerControls
+            appearance={appearance}
+            onAppearance={setAppearance}
+            onZoom={setZoom}
+            zoom={zoom}
+          />
+        ) : (
           <View
             pointerEvents="none"
             style={[
@@ -287,25 +354,62 @@ const OpenedDocument = ({
     <View style={[screenStyles.screen, { backgroundColor: colors.background }]}>
       <Stack.Screen
         options={{
-          headerRight: () => (
-            <Pressable
-              accessibilityLabel={t("details")}
-              accessibilityRole="button"
-              hitSlop={8}
-              onPress={() => {
-                router.push({
-                  pathname: "/matter/[workspaceId]/[entityId]",
-                  params: { workspaceId, entityId },
-                });
-              }}
-            >
-              <LucideGlyphs color={colors.text} name="info" size={22} />
-            </Pressable>
-          ),
+          headerRight: () =>
+            editing.phase.status === "viewing" ? (
+              <Pressable
+                accessibilityLabel={t("details")}
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={() => {
+                  router.push({
+                    pathname: "/matter/[workspaceId]/[entityId]",
+                    params: { workspaceId, entityId },
+                  });
+                }}
+              >
+                <LucideGlyphs color={colors.text} name="info" size={22} />
+              </Pressable>
+            ) : (
+              <EditingStatus
+                onDone={editing.requestFinish}
+                phase={editing.phase.status}
+                saveState={editing.saveState}
+              />
+            ),
           title,
         }}
       />
       {body}
+    </View>
+  );
+};
+
+/**
+ * The header while a document is open for editing: whether the edits are
+ * stored, and Done, which saves the rest as the document's new version.
+ */
+const EditingStatus = ({
+  phase,
+  saveState,
+  onDone,
+}: {
+  phase: "opening" | "editing" | "finishing";
+  saveState: "saved" | "saving" | "notSaved";
+  onDone: () => void;
+}) => {
+  const t = useTranslations("document.edit");
+  const colors = useAppColors();
+  if (phase !== "editing") {
+    return <ActivityIndicator color={colors.muted} />;
+  }
+  return (
+    <View style={styles.editing}>
+      <Text variant="caption">{t(saveState)}</Text>
+      <Pressable accessibilityRole="button" hitSlop={8} onPress={onDone}>
+        <Text style={{ color: colors.text }} variant="headline">
+          {t("done")}
+        </Text>
+      </Pressable>
     </View>
   );
 };
@@ -315,6 +419,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
     justifyContent: "center",
+  },
+  editing: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
   },
 });
 

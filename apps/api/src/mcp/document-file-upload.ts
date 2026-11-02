@@ -17,6 +17,7 @@ import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { putPresignedUpload } from "@/api/lib/s3-presign";
 import { isRecord } from "@/api/lib/type-guards";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
+import { nullAsAbsent, uuidInputSchema } from "@/api/mcp/input-schemas";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
@@ -24,10 +25,8 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   internalFailureResult,
-  nullAsAbsent,
   structuredEgressPlan,
   structuredErrorResult,
-  uuidInputSchema,
 } from "@/api/mcp/tool-utils";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 

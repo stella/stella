@@ -17,8 +17,6 @@ import {
   caseLawDecisionSourceIdentities,
   caseLawSources,
 } from "@/api/db/schema";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   listSourceRegistrations,
   type SourceRegistration,
@@ -40,6 +38,8 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { STATED_ECLI_IDENTITY } from "@/api/lib/legal-search/adapter-manifest";
+import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 

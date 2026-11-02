@@ -82,7 +82,7 @@ const forwardedArguments = runnerArguments.filter(
 
 const allTestPaths = restrictApiTestFiles(
   listApiTestPaths(apiRoot),
-  process.env["API_TEST_FILES"],
+  process.env["API_TEST_FILES_ENCODED"],
 );
 const durationWeights = loadTestDurationWeights({
   files: allTestPaths,

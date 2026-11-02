@@ -1,30 +1,34 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: Page publisher-request status affects ingestion freshness, not decision fields parsed from stored XML.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result } from "better-result";
-import { load } from "cheerio";
 import * as slimdom from "slimdom";
 import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { GBR_EWHC_DIVISIONS } from "@stll/api-contract/decision-docket-grammar";
+import { load } from "@stll/html";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   defineSourceAdapter,
   excludedSourceSurface,
+  PUBLISHER_REQUEST,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
   storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   IngestionResult,
   SourceFieldDisposition,
   SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+} from "@/api/lib/legal-search/ingestion-types";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 import { publisherRequestIntervalMs } from "./publisher-policy";
@@ -296,6 +300,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
         case "tip":
           return Result.ok({
             decisions,
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             sourceUrl,
             nextCursor: JSON.stringify(
               reached
@@ -312,6 +317,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
           if (listed.next !== null) {
             return Result.ok({
               decisions,
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               sourceUrl,
               nextCursor: JSON.stringify({
                 type: "sweep",
@@ -341,6 +347,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
           ) {
             return Result.ok({
               decisions,
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               sourceUrl,
               nextCursor: JSON.stringify(state),
             });

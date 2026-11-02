@@ -111,11 +111,13 @@ describe("search summary chat", () => {
         },
       ],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 1,
     });
 
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
+      grantedScopes: undefined,
       body: {
         ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
@@ -193,11 +195,13 @@ describe("search summary chat", () => {
         },
       ],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 1,
     });
 
     await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
+      grantedScopes: undefined,
       body: {
         ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
@@ -254,11 +258,13 @@ describe("search summary chat", () => {
         },
       ],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 1,
     });
 
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
+      grantedScopes: undefined,
       body: {
         ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
@@ -341,11 +347,13 @@ describe("search summary chat", () => {
         },
       ],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 2,
     });
 
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [firstWorkspaceId, secondWorkspaceId],
+      grantedScopes: undefined,
       body: {
         ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
@@ -420,11 +428,13 @@ describe("search summary chat", () => {
         },
       ],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 1,
     });
 
     await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
+      grantedScopes: undefined,
       body: {
         ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],

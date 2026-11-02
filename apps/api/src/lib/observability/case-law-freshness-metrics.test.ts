@@ -32,15 +32,13 @@ test("an incomplete oldest age emits no age record", () => {
     oldestUnpublishedAge: { type: "incomplete" },
   });
 
-  expect(
-    records.flatMap((record) =>
-      Object.keys(record).filter((key) => key !== "_aws"),
-    ),
-  ).not.toContain("CaseLawOldestUnpublishedAgeSeconds");
+  expect(records.flatMap((record) => Object.keys(record))).not.toContain(
+    "CaseLawOldestUnpublishedAgeSeconds",
+  );
   expect(records).toHaveLength(5);
 });
 
-test("emits one owned EMF record per metric with only its bounded dimension", () => {
+test("emits one record per metric with bounded top-level fields", () => {
   const records: Record<string, unknown>[] = [];
   setMetricLineSinkForTesting((line) => {
     records.push(JSON.parse(line));
@@ -48,76 +46,13 @@ test("emits one owned EMF record per metric with only its bounded dimension", ()
   emitCaseLawFreshnessReport(report);
 
   expect(records).toHaveLength(6);
-  expect(
-    records.map((record) =>
-      Object.keys(record).filter((key) => key !== "_aws"),
-    ),
-  ).toEqual([
-    ["CaseLawProjectionBacklogItems"],
-    ["CaseLawOldestUnpublishedAgeSeconds"],
-    ["CaseLawSourceSyncAgeSeconds", "source"],
-    ["CaseLawDecisionIdentifierRepairs"],
-    ["CaseLawDecisionIdentifierPassAgeSeconds"],
-    ["CaseLawProjectionConvergence", "status"],
-  ]);
-  expect(records.map((record) => record["_aws"])).toEqual([
-    expect.objectContaining({
-      CloudWatchMetrics: [
-        expect.objectContaining({
-          Dimensions: [[]],
-          Metrics: [{ Name: "CaseLawProjectionBacklogItems", Unit: "Count" }],
-        }),
-      ],
-    }),
-    expect.objectContaining({
-      CloudWatchMetrics: [
-        expect.objectContaining({
-          Dimensions: [[]],
-          Metrics: [
-            { Name: "CaseLawOldestUnpublishedAgeSeconds", Unit: "Seconds" },
-          ],
-        }),
-      ],
-    }),
-    expect.objectContaining({
-      CloudWatchMetrics: [
-        expect.objectContaining({
-          Dimensions: [["source"]],
-          Metrics: [{ Name: "CaseLawSourceSyncAgeSeconds", Unit: "Seconds" }],
-        }),
-      ],
-    }),
-    expect.objectContaining({
-      CloudWatchMetrics: [
-        expect.objectContaining({
-          Dimensions: [[]],
-          Metrics: [
-            { Name: "CaseLawDecisionIdentifierRepairs", Unit: "Count" },
-          ],
-        }),
-      ],
-    }),
-    expect.objectContaining({
-      CloudWatchMetrics: [
-        expect.objectContaining({
-          Dimensions: [[]],
-          Metrics: [
-            {
-              Name: "CaseLawDecisionIdentifierPassAgeSeconds",
-              Unit: "Seconds",
-            },
-          ],
-        }),
-      ],
-    }),
-    expect.objectContaining({
-      CloudWatchMetrics: [
-        expect.objectContaining({
-          Dimensions: [["status"]],
-          Metrics: [{ Name: "CaseLawProjectionConvergence", Unit: "Count" }],
-        }),
-      ],
-    }),
+  expect(records).toEqual([
+    { CaseLawProjectionBacklogItems: 3 },
+    { CaseLawOldestUnpublishedAgeSeconds: 42 },
+    { CaseLawSourceSyncAgeSeconds: 19, source: "cz-ns" },
+    { CaseLawDecisionIdentifierRepairs: 2 },
+    { CaseLawDecisionIdentifierPassAgeSeconds: 120 },
+    { CaseLawProjectionConvergence: 1, status: "pending" },
   ]);
 });
 
@@ -132,16 +67,12 @@ test("a never-completed identifier pass emits no completion metrics", () => {
   });
 
   expect(records).toHaveLength(4);
-  expect(
-    records.flatMap((record) =>
-      Object.keys(record).filter((key) => key !== "_aws"),
-    ),
-  ).not.toContain("CaseLawDecisionIdentifierPassAgeSeconds");
-  expect(
-    records.flatMap((record) =>
-      Object.keys(record).filter((key) => key !== "_aws"),
-    ),
-  ).not.toContain("CaseLawDecisionIdentifierRepairs");
+  expect(records.flatMap((record) => Object.keys(record))).not.toContain(
+    "CaseLawDecisionIdentifierPassAgeSeconds",
+  );
+  expect(records.flatMap((record) => Object.keys(record))).not.toContain(
+    "CaseLawDecisionIdentifierRepairs",
+  );
 });
 
 test("the scheduler task reads and emits one report per run", async () => {

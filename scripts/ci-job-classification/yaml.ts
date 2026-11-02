@@ -154,6 +154,7 @@ const containsCredential = (value: unknown): boolean => {
   if (typeof value === "string") {
     return (
       /secrets(?:\.|\[)(?!github_token\b)/iu.test(value) ||
+      /toJSON\(\s*secrets\s*\)/iu.test(value) ||
       /actions\/(?:create-github-app-token|github-app-token)@|steps\.[^.]+\.outputs\.token/iu.test(
         value,
       )
@@ -405,6 +406,34 @@ const privilegedJobSurface = (
   return surface;
 };
 
+const REUSABLE_WORKFLOW_CALL_KEYS = [
+  "uses",
+  "with",
+  "secrets",
+  "permissions",
+  "runs-on",
+  "environment",
+  "if",
+  "concurrency",
+  "needs",
+  "strategy",
+] as const;
+
+const reusableWorkflowCallSurface = (job: JsonRecord, workflow: JsonRecord) =>
+  Object.fromEntries([
+    ...REUSABLE_WORKFLOW_CALL_KEYS.flatMap((key) =>
+      key in job ? [[key, job[key]]] : [],
+    ),
+    ...("permissions" in workflow
+      ? [["workflow-permissions", workflow["permissions"]]]
+      : []),
+    // A privileged event runs every callee in its context, whatever
+    // permissions the callee declares.
+    ...(workflowHasPrivilegedEvent(workflow["on"])
+      ? [["workflow-privileged-event", true]]
+      : []),
+  ]);
+
 const stepShapes = (value: unknown): JsonRecord[] => {
   if (!Array.isArray(value)) {
     throw new AdmissionError({ message: "steps must be array" });
@@ -581,13 +610,19 @@ const parse = (text: string): ParsedDocument => {
       }
       addActionDependencies(jobDependencies, steps, {});
       const isPrivileged = jobIsPrivileged(job, data);
+      const callSurface =
+        typeof job["uses"] === "string"
+          ? reusableWorkflowCallSurface(job, data)
+          : undefined;
       const workflowSurface =
         isPrivileged && "on" in data ? { on: data["on"] } : {};
-      const jobShape = privilegedJobSurface(job, data);
+      const jobShape = callSurface ?? privilegedJobSurface(job, data);
       const jobContext = { document: workflowSurface, job: jobShape };
+      // The trigger decides whether a reusable-workflow call runs privileged,
+      // so a call job's privileged digest binds it like any other job's.
       const privilegedJobContext = {
         document: "on" in data ? { on: data["on"] } : {},
-        job: privilegedJobSurface(job, data, true),
+        job: callSurface ?? privilegedJobSurface(job, data, true),
       };
       jobs[id] = {
         digest: digest(jobContext),

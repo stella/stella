@@ -1,6 +1,11 @@
 import { panic } from "better-result";
 
-import { getModelRate, resolveModelRate } from "@stll/ai-catalog";
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import {
+  getModelRate,
+  MODEL_RATE_UNITS_PER_USD,
+  resolveModelRate,
+} from "@stll/ai-catalog";
 /**
  * Per-model usage conversion for the usage ledger.
  *
@@ -11,6 +16,10 @@ import { getModelRate, resolveModelRate } from "@stll/ai-catalog";
  * chat middleware.
  */
 import type { AIProvider, ModelRate } from "@stll/ai-catalog";
+import {
+  TRANSCRIPTION_MODELS,
+  type TranscriptionModelId,
+} from "@stll/ai-catalog/transcription";
 
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import type { DecisionModelProvider } from "@/api/lib/ai-config";
@@ -446,6 +455,44 @@ export const decisionUsageUnitsFromTokens = ({
     isByok,
     serviceTier: "standard",
   });
+
+type TranscriptionUsageUnitsOptions = {
+  modelId: TranscriptionModelId;
+  durationMs: number;
+  isByok: boolean;
+  residency: "eu" | "us";
+};
+
+export const transcriptionUsageUnits = ({
+  modelId,
+  durationMs,
+  isByok,
+  residency,
+}: TranscriptionUsageUnitsOptions): UsageUnitsFromTokensResult => {
+  if (!Number.isSafeInteger(durationMs) || durationMs < 0) {
+    return panic("Transcription duration must be a non-negative safe integer");
+  }
+  const regional = TRANSCRIPTION_MODELS[modelId].residency[residency];
+  if (regional.status !== "available") {
+    return panic("Transcription model must have a confirmed regional rate");
+  }
+  const numerator =
+    BigInt(durationMs) *
+    BigInt(regional.price.usdNumerator) *
+    BigInt(MODEL_RATE_UNITS_PER_USD);
+  const denominator = BigInt(regional.price.secondsDenominator) * 1000n;
+  const raw = (numerator + denominator - 1n) / denominator;
+  const parsedRaw = parseIntegerToken(raw.toString(), { sign: "unsigned" });
+  if (parsedRaw.isErr()) {
+    return panic("Transcription usage exceeds the safe integer range");
+  }
+  return unitsFromRawUsage({
+    rawUsageMicroUnits: parsedRaw.value,
+    actionType: "transcription",
+    serviceTier: "standard",
+    isByok,
+  });
+};
 
 type UnitsFromRawUsageOptions = {
   rawUsageMicroUnits: number;

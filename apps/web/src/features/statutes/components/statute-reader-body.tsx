@@ -2,6 +2,7 @@ import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -59,7 +60,7 @@ export const StatuteReaderBody = ({
   const countsData =
     citationCountsView.type === "items" ? citationCountsView.items : undefined;
   const provisionCitationCounts = provisionCitationCountByBlockAnchor(
-    blocks,
+    { blocks, scheme: statuteAnchorSchemeFor(statute.country) },
     countsData?.status === "ready" ? countsData.provisions : [],
   );
 

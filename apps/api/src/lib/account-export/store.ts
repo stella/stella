@@ -372,11 +372,11 @@ export const claimAccountExport = async (
         to: "processing",
         set: {
           claimToken: token,
-          leaseExpiresAt: sql`clock_timestamp() + (${ACCOUNT_EXPORT_LIMITS.leaseMs} * INTERVAL '1 millisecond')`,
+          leaseExpiresAt: sql`statement_timestamp() + (${ACCOUNT_EXPORT_LIMITS.leaseMs} * INTERVAL '1 millisecond')`,
           objectKey,
           attemptCount: sql`${accountExports.attemptCount} + 1`,
           attemptObjectKeys: sql`${accountExports.attemptObjectKeys} || jsonb_build_array(${objectKey}::text)`,
-          updatedAt: sql`clock_timestamp()`,
+          updatedAt: sql`statement_timestamp()`,
         },
       },
       recordTransitionAuditEvent: executionStateOnly,
@@ -424,8 +424,10 @@ export const completeAccountExport = async ({
         set: {
           claimToken: null,
           leaseExpiresAt: null,
-          expiresAt: sql`clock_timestamp() + (${ACCOUNT_EXPORT_LIMITS.ttlMs} * INTERVAL '1 millisecond')`,
-          updatedAt: sql`clock_timestamp()`,
+          // clock_timestamp() advances within a statement; one instant keeps
+          // the expiry exactly one TTL after the ready transition.
+          expiresAt: sql`statement_timestamp() + (${ACCOUNT_EXPORT_LIMITS.ttlMs} * INTERVAL '1 millisecond')`,
+          updatedAt: sql`statement_timestamp()`,
         },
       },
       recordTransitionAuditEvent: recordAccountExportTransition(

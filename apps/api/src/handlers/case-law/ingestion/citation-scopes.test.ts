@@ -1,12 +1,16 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-import { isDocumentAst, plainTextOf } from "@stll/legal-ast/document-ast";
+import {
+  isDocumentAst,
+  persistedDocumentAstSchema,
+  plainTextOf,
+} from "@stll/legal-ast/document-ast";
 import { createSha256 } from "@stll/sha256/node";
 import { stableStringify } from "@stll/stable-stringify";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { mapCourtListenerRecord } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import { recordedClusters } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -21,6 +25,7 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { sortDeep } from "@/api/lib/sort-deep";
 
@@ -135,6 +140,109 @@ describe("persisted citation scopes", () => {
     expect(envelope.astHash).toBe(citationScopeAstHash(stored.documentAst));
     expect(extract(stored.documentAst).documentAst).toEqual(stored.documentAst);
     expect(extract(stored.documentAst).occurrences).toEqual(first.occurrences);
+  });
+
+  test("round-trips the writer's stored AST with undeclared fields", () => {
+    const documentAst = {
+      ...ast(),
+      parserContext: { revision: 1 },
+    };
+    expect(isDocumentAst(documentAst)).toBe(true);
+    const parsed = v.parse(persistedDocumentAstSchema, documentAst);
+    expect(parsed).not.toEqual(documentAst);
+    const envelope = citationScopeEnvelope(documentAst, opinions);
+    expect(envelope.astHash).not.toBe(citationScopeAstHash(parsed));
+
+    const stored: unknown = structuredClone(documentAst);
+    const checked = validatedCitationScopes(
+      { [CITATION_SCOPE_METADATA_KEY]: envelope },
+      stored,
+    );
+    expect(checked.unwrap()).toEqual(opinions);
+  });
+
+  test("round-trips stored scopes when head matter follows the body", () => {
+    const documentAst = {
+      ...ast(),
+      blocks: [
+        ...ast().blocks,
+        {
+          id: "late-head-matter",
+          anchorId: "late-head-matter",
+          type: "paragraph",
+          role: "apparatus",
+          inlines: [{ type: "text", text: "Publisher head matter" }],
+          plainText: "Publisher head matter",
+        },
+      ],
+    } satisfies DocumentAst;
+    expect(isDocumentAst(documentAst)).toBe(false);
+    expect(v.safeParse(persistedDocumentAstSchema, documentAst).success).toBe(
+      true,
+    );
+    const envelope = citationScopeEnvelope(documentAst, opinions);
+    const stored: unknown = structuredClone(documentAst);
+    const checked = validatedCitationScopes(
+      { [CITATION_SCOPE_METADATA_KEY]: envelope },
+      stored,
+    );
+    expect(checked.unwrap()).toEqual(opinions);
+  });
+
+  test("refuses scopes over repeated block identities, which no writer stores", () => {
+    const paragraph = (id: string, anchorId: string) => ({
+      id,
+      anchorId,
+      type: "paragraph" as const,
+      inlines: [{ type: "text" as const, text: anchorId }],
+      plainText: anchorId,
+    });
+    // The reader re-keys a repeated "p", so scopes naming it could point at a
+    // different block than the writer meant.
+    const documentAst = {
+      ...ast(),
+      blocks: [
+        paragraph("p", "paragraph-1"),
+        paragraph("p", "paragraph-2"),
+        paragraph("q", "paragraph-3"),
+      ],
+    } satisfies DocumentAst;
+    expect(isDocumentAst(documentAst)).toBe(false);
+    const scopes = [
+      { opinionId: "majority", blockIds: ["p", "q"], boundaries: "proven" },
+    ] as const;
+    const checked = validatedCitationScopes(
+      {
+        [CITATION_SCOPE_METADATA_KEY]: citationScopeEnvelope(
+          documentAst,
+          scopes,
+        ),
+      },
+      structuredClone(documentAst),
+    );
+    if (!Result.isError(checked)) {
+      expect.unreachable("Repeated identities carry no scopes");
+    }
+    expect(checked.error.defect).toBe("invalid-envelope");
+  });
+
+  test("refuses scopes over a legacy-shaped AST the writer contract no longer describes", () => {
+    const { source: _source, ...legacy } = ast();
+    expect(v.safeParse(persistedDocumentAstSchema, legacy).success).toBe(true);
+    expect(isDocumentAst(legacy)).toBe(false);
+    const envelope = {
+      version: citationScopeEnvelope(ast(), opinions).version,
+      astHash: citationScopeAstHash(legacy),
+      opinions,
+    };
+    const checked = validatedCitationScopes(
+      { [CITATION_SCOPE_METADATA_KEY]: envelope },
+      structuredClone(legacy),
+    );
+    if (!Result.isError(checked)) {
+      expect.unreachable("A legacy-shaped AST carries no scopes");
+    }
+    expect(checked.error.defect).toBe("invalid-envelope");
   });
 
   test("rejects a stale hash even when the old scope names still exist", () => {

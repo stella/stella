@@ -21,10 +21,6 @@ import {
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import { envDbLoadGate } from "@/api/env-db-load-gate";
-import {
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import sparqlFixture from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/eu-ecj-sparql.json";
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import {
@@ -50,6 +46,10 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
 import { isRecord } from "@/api/lib/type-guards";
 import {
@@ -58,8 +58,11 @@ import {
 } from "@/api/tests/gated-test-database";
 import { runEuCompletionTickFixture } from "@/api/tests/helpers/eu-completion-tick";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
+
+const testFetchState = createTestFetch();
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -391,26 +394,29 @@ if (!databaseUrl || !enabled) {
       clock?: () => number;
       run: (sent: { url: string; at: number }[]) => Promise<void>;
     }) => {
-      const original = globalThis.fetch;
       const sent: { url: string; at: number }[] = [];
-      globalThis.fetch = asFetchMock(
-        mock(async (input, init) => {
-          const url = input instanceof Request ? input.url : String(input);
-          const host = new URL(url).hostname;
-          if (!["publications.europa.eu", "eur-lex.europa.eu"].includes(host)) {
-            panic("Completion publisher fixture refuses an unrelated host");
-          }
-          sent.push({
-            url,
-            at: options.clock?.() ?? Temporal.Now.instant().epochMilliseconds,
-          });
-          return await options.respond(url, init);
-        }),
+      testFetchState.set(
+        asFetchMock(
+          mock(async (input, init) => {
+            const url = input instanceof Request ? input.url : String(input);
+            const host = new URL(url).hostname;
+            if (
+              !["publications.europa.eu", "eur-lex.europa.eu"].includes(host)
+            ) {
+              panic("Completion publisher fixture refuses an unrelated host");
+            }
+            sent.push({
+              url,
+              at: options.clock?.() ?? Temporal.Now.instant().epochMilliseconds,
+            });
+            return await options.respond(url, init);
+          }),
+        ),
       );
       try {
         await options.run(sent);
       } finally {
-        globalThis.fetch = original;
+        testFetchState.restore();
       }
     };
     const successfulPublisher = async (url: string, init?: RequestInit) => {

@@ -27,13 +27,15 @@ import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution"
 import {
   decisionBucketSqlFor,
   SITEMAP_ALL_BUCKET,
+  SITEMAP_MULTILINGUAL_URL_WEIGHT,
   SITEMAP_UNDATED_MONTH,
   SITEMAP_UNDATED_YEAR,
   sitemapDocumentRepresentativeFor,
+  sitemapHasLanguageAlternatesFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
 import {
-  lockCaseLawRemovalSnapshots,
   lockCaseLawSitemapRefreshCursor,
+  lockCaseLawSitemapSnapshot,
   tryLockCaseLawSitemapMonth,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
@@ -44,15 +46,14 @@ import { transitionScopedBatch } from "@/api/lib/db/transitions";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
-/**
- * A month is split into buckets once it holds more than this many decisions.
- * The snapshot is as old as the last refresh while the shard read counts live
- * rows and refuses more than the URL limit, so splitting at half the limit
- * leaves a month room to grow between refreshes without its shard overflowing.
- */
-export const SITEMAP_SHARD_SPLIT_THRESHOLD = Math.floor(
-  LIMITS.caseLawSitemapShardUrlLimit / 2,
-);
+/** Growth between refreshes must not consume the protocol ceiling. */
+export const SITEMAP_SHARD_URL_HEADROOM = 1000;
+/** Language alternates reserve extra URL weight within the protocol ceiling. */
+export const SITEMAP_SHARD_SPLIT_THRESHOLD =
+  LIMITS.caseLawSitemapShardUrlLimit - SITEMAP_SHARD_URL_HEADROOM;
+
+export const shouldSplitSitemapMonth = (weightedUrlCount: number): boolean =>
+  weightedUrlCount > SITEMAP_SHARD_SPLIT_THRESHOLD;
 
 /**
  * A change-log row whose year and month are this asks for a whole country,
@@ -175,6 +176,8 @@ export const sitemapMonthCountSql = (target: SitemapMonth): SQL => sql`
     SELECT
       ${decisionBucketSqlFor(caseLawDecisions)} AS bucket,
       count(*)::int AS total,
+      sum(CASE WHEN ${sitemapHasLanguageAlternatesFor(caseLawDecisions)}
+        THEN ${SITEMAP_MULTILINGUAL_URL_WEIGHT} ELSE 1 END)::int AS weighted_total,
       (extract(epoch FROM max(${caseLawDecisions.updatedAt})) * 1000)::float8 AS last_modified_ms
     FROM ${caseLawDecisions}
     INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = ${caseLawDecisions.sourceId}
@@ -185,7 +188,7 @@ export const sitemapMonthCountSql = (target: SitemapMonth): SQL => sql`
       AND ${sitemapDocumentRepresentativeFor(caseLawDecisions)}
     GROUP BY 1
   )
-  SELECT counts.bucket, counts.total, counts.last_modified_ms
+  SELECT counts.bucket, counts.total, counts.weighted_total, counts.last_modified_ms
   FROM (VALUES (1)) AS empty_month(value)
   LEFT JOIN counts ON true
 `;
@@ -268,17 +271,20 @@ const monthCountRowSchema = v.union([
   v.object({
     bucket: v.string(),
     total: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
+    weighted_total: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
     last_modified_ms: v.number(),
   }),
   v.object({
     bucket: v.null(),
     total: v.null(),
+    weighted_total: v.null(),
     last_modified_ms: v.null(),
   }),
 ]);
 type BucketCount = {
   bucket: string;
   total: number;
+  weighted_total: number;
   last_modified_ms: number;
 };
 
@@ -295,16 +301,18 @@ const shardRows = (
   buckets: readonly BucketCount[],
 ): ShardRow[] => {
   let monthTotal = 0;
+  let monthWeightedTotal = 0;
   let monthLastModifiedMs = 0;
-  for (const { total, last_modified_ms } of buckets) {
+  for (const { total, weighted_total, last_modified_ms } of buckets) {
     monthTotal += total;
+    monthWeightedTotal += weighted_total;
     monthLastModifiedMs = Math.max(monthLastModifiedMs, last_modified_ms);
   }
   if (monthTotal === 0) {
     return [];
   }
   const { country, year, month } = target;
-  if (monthTotal > SITEMAP_SHARD_SPLIT_THRESHOLD) {
+  if (shouldSplitSitemapMonth(monthWeightedTotal)) {
     return buckets.map(({ bucket, total, last_modified_ms }) => ({
       bucket,
       country,
@@ -575,7 +583,10 @@ const drainMonth = async (
     if (!(await tryLockCaseLawSitemapMonth({ tx, month: target }))) {
       return { status: "held" };
     }
-    await lockCaseLawRemovalSnapshots(tx);
+    // Skip an already held month before waiting on the sitemap snapshot
+    // fence, which removal also takes. Hold it from the count's snapshot
+    // through publication.
+    await lockCaseLawSitemapSnapshot(tx);
     const [progress] = await tx
       .select()
       .from(caseLawSitemapDrainProgress)

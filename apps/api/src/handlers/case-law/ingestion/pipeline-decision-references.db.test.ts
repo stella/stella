@@ -31,8 +31,6 @@ import {
 import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
 import type { CitationResolutionStatus } from "@/api/handlers/case-law/citation-resolution-status";
 import { resolveDecisionReference } from "@/api/handlers/case-law/citations/reference-resolution";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   citationKeyOf,
   normalizeDecisionIdentifier,
@@ -50,6 +48,8 @@ import {
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import {
@@ -61,8 +61,11 @@ import {
   skCourtsFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { readReferenceHolders } from "@/api/tests/helpers/citation-reference-holders";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+const testFetchState = createTestFetch();
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 const connect = (pglite: Awaited<ReturnType<typeof createTestPglite>>) =>
@@ -617,9 +620,8 @@ afterAll(async () => {
 const expectRowsFollowReferences = async (
   scenario: Scenario,
 ): Promise<void> => {
-  const fetchBefore = globalThis.fetch;
   const base = await scenario.build().finally(() => {
-    globalThis.fetch = fetchBefore;
+    testFetchState.restore();
   });
   expect(base.country).toBe(scenario.jurisdiction);
   await seedHolders(scenario.holders);

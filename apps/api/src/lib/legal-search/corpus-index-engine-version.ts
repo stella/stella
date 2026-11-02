@@ -10,6 +10,6 @@ export const QUICKWIT_V09_BUILD_VERSION = "0.9.0";
  * 0.9.x patch release reads splits built by `QUICKWIT_V09_BUILD_VERSION`.
  */
 export const QUICKWIT_V09_RUNTIME = {
-  version: "0.9.1",
-  commit: "962685f5a334f6c9d8516d2d7c1fdd08891b687c",
+  version: "0.9.2",
+  commit: "6a1e3f2386b62ba7e363f486a2c97ebbb54a9541",
 } as const;

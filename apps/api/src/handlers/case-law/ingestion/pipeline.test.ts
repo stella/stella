@@ -36,11 +36,6 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import {
-  EMPTY_AST,
-  SOURCE_DOCUMENT_ID_MAX_LENGTH,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
@@ -84,9 +79,15 @@ import {
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
-import { defineSourceAdapter } from "@/api/lib/legal-search/ingestion-types";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  PUBLISHER_REQUEST,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   DecisionJudgeInput,
+  IngestionResult,
   RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -842,7 +843,11 @@ describe("runIngestionPipeline — database timeouts", () => {
 
     const decision = baseResult({});
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [decision], nextCursor: "cursor-2" });
+      Result.ok({
+        decisions: [decision],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
 
     let calls = 0;
     let persistedCursor: string | null | undefined;
@@ -1029,7 +1034,11 @@ describe("runIngestionPipeline — failure records", () => {
         [field]: value,
       });
       czNsAdapter.fetchPage = async () =>
-        Result.ok({ decisions: [input], nextCursor: "cursor-2" });
+        Result.ok({
+          decisions: [input],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        });
       // Normalization refuses before the decision write; the ledger insert is
       // the next transaction and must not receive a synthetic write failure.
       const { scopedDb, state } = failingDecisionDb(null, false);
@@ -1071,7 +1080,11 @@ describe("runIngestionPipeline — failure records", () => {
     });
     expect(fitsDecisionSearchCandidateRow(input)).toBe(false);
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [input], nextCursor: "cursor-2" });
+      Result.ok({
+        decisions: [input],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     const { scopedDb, state } = failingDecisionDb(null, false);
     const result = await runIngestionPipeline({
       acquireStoredTotalAdmission: async () => "held",
@@ -1126,7 +1139,11 @@ describe("runIngestionPipeline — failure records", () => {
         fulltext: citationText,
       });
       czNsAdapter.fetchPage = async () =>
-        Result.ok({ decisions: [input], nextCursor: "cursor-2" });
+        Result.ok({
+          decisions: [input],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        });
       const { scopedDb, state } = failingDecisionDb(null, false);
 
       const result = await runIngestionPipeline({
@@ -1163,6 +1180,7 @@ describe("runIngestionPipeline — failure records", () => {
           }),
         ],
         itemBuildFailures: { type: "item_build_failed", count: 2 },
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: "cursor-2",
       });
     const { scopedDb, state } = failingDecisionDb(null);
@@ -1195,7 +1213,11 @@ describe("runIngestionPipeline — failure records", () => {
   test("reports a failure record the database rejects as invalid data and moves the cursor on", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [baseResult({})], nextCursor: "cursor-2" });
+      Result.ok({
+        decisions: [baseResult({})],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     const { scopedDb, state } = failingDecisionDb(postgresError("22021"));
     logs = installRecordingLogger();
 
@@ -1222,7 +1244,11 @@ describe("runIngestionPipeline — failure records", () => {
   test("holds the source cursor when the failure record write meets a serialization failure", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [baseResult({})], nextCursor: "cursor-2" });
+      Result.ok({
+        decisions: [baseResult({})],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     const { scopedDb, state } = failingDecisionDb(postgresError("40001"));
 
     const result = await runIngestionPipeline({
@@ -1253,7 +1279,11 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
     const controller = new AbortController();
     czNsAdapter.fetchPage = async () => {
       controller.abort();
-      return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+      return Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     };
 
     let acquires = 0;
@@ -1348,7 +1378,11 @@ describe("runIngestionPipeline — document observer failures", () => {
               fetch: async () => new Response("document"),
             });
           }
-          return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+          return Result.ok({
+            decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+            nextCursor: "cursor-2",
+          });
         },
       });
       czNsAdapter.fetchPage = wrappedAdapter.fetchPage;
@@ -1526,6 +1560,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
         decisions: [
           { ...baseResult(EMPTY_AST), sourceRaw: "<html>source</html>" },
         ],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: "cursor-2",
       });
     try {
@@ -1613,7 +1648,11 @@ describe("runIngestionPipeline — cycle deadline", () => {
     let fetches = 0;
     czNsAdapter.fetchPage = async () => {
       fetches++;
-      return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+      return Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     };
 
     let persistedCursor: string | null | undefined;
@@ -1644,7 +1683,11 @@ describe("runIngestionPipeline — cycle deadline", () => {
     let fetches = 0;
     czNsAdapter.fetchPage = async () => {
       fetches++;
-      return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+      return Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     };
 
     // The production lease renews itself before the request. This one ends
@@ -1686,7 +1729,11 @@ describe("runIngestionPipeline — cycle deadline", () => {
     let fetches = 0;
     czNsAdapter.fetchPage = async () => {
       fetches++;
-      return Result.ok({ decisions: [], nextCursor: null });
+      return Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: null,
+      });
     };
 
     let persistedCursor: string | null | undefined;

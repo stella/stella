@@ -6,7 +6,6 @@ import * as v from "valibot";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { caseLawDecisions } from "@/api/db/schema";
-import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   ECJ_LANGUAGES,
   isValidCelex,
@@ -21,6 +20,7 @@ import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/typ
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawIngestionHandle } from "@/api/lib/case-law/maintenance-lane";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
 import { iterateCursorPages } from "@/api/lib/pagination";
 
 import { hashArtifactBytes as rawDigest } from "./artifact-content-hash";
