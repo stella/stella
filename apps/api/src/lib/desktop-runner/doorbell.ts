@@ -156,15 +156,17 @@ export const createRedisDoorbell = ({
         /** Renewals run one at a time, so a channel is never subscribed twice. */
         queue: Promise.resolve(),
       };
+      // Read fresh after every await: a stop can land while one is pending.
+      const stopped = () => subscription.stopped;
       // SUBSCRIBE, after an UNSUBSCRIBE unless it is the first one. A failure
       // is observed and retried on a timer, so a connection that stays up
       // never stays unsubscribed; a reconnect renews at once instead.
-      const renew = (attempt: number, first: boolean) => {
+      const renew = async (attempt: number, first: boolean) => {
         subscription.cancelRetry();
         const previous = subscription.queue;
         subscription.queue = (async () => {
           await previous;
-          if (subscription.stopped) {
+          if (stopped()) {
             return;
           }
           const renewed = await Result.tryPromise(async () => {
@@ -175,7 +177,7 @@ export const createRedisDoorbell = ({
               onRing(sessionId),
             );
           });
-          if (renewed.isOk() || subscription.stopped) {
+          if (renewed.isOk() || stopped()) {
             return;
           }
           observeSubscribeFailure(renewed.error);
@@ -186,7 +188,7 @@ export const createRedisDoorbell = ({
             Math.min(SUBSCRIBE_RETRY_MS * 2 ** attempt, SUBSCRIBE_RETRY_CAP_MS),
           );
         })();
-        return subscription.queue;
+        await subscription.queue;
       };
       const stopReconnects: { stop: () => void } = { stop: () => undefined };
       // Not awaited: a subscriber waits for Redis, and boot must not. Until it
@@ -194,7 +196,7 @@ export const createRedisDoorbell = ({
       // observed only after the first attempt, so it is not issued twice.
       bestEffort(async () => {
         await renew(0, true);
-        if (!subscription.stopped) {
+        if (!stopped()) {
           stopReconnects.stop = subscriber.onReconnect(() => {
             detached(renew(0, false), "desktop-runner.doorbell");
           });
