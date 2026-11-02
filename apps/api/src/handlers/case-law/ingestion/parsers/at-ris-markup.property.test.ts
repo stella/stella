@@ -13,12 +13,15 @@ import {
   propertySeed,
 } from "@stll/property-testing";
 
-import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
+import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import {
   normalizeInlineLayout,
   readRisContent,
   RIS_ELEMENTS,
 } from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);
 
 const config = (numRuns: number) =>
   propertyConfig({ numRuns, seed: propertySeed() });
