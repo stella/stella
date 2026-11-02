@@ -182,6 +182,17 @@
       "system": "Megjelenés: automatikus",
       "light": "Megjelenés: világos",
       "dark": "Megjelenés: sötét"
+    },
+    "edit": {
+      "saved": "Mentve",
+      "saving": "Mentés…",
+      "notSaved": "Még nincs mentve",
+      "done": "Kész",
+      "openFailed": "Ez a dokumentum most nem szerkeszthető",
+      "takenOver": "Valaki más szerkeszti most ezt a dokumentumot. A legutóbbi mentés óta végzett módosításai nem maradtak meg.",
+      "finishFailed": "A módosításai mentve vannak, de még nem lett belőlük új verzió. Koppintson újra a Kész gombra, vagy lépjen ki: a következő szerkesztés innen folytatódik.",
+      "stay": "Maradok",
+      "leave": "Kilépés"
     }
   },
   "signIn": {

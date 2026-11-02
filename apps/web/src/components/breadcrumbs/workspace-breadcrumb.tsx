@@ -7,7 +7,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
-import { BidiText } from "@stll/ui/bidi-text";
+import { BidiText, stripDirectionalControls } from "@stll/ui/bidi-text";
 import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
 import { Button } from "@stll/ui/button";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
@@ -164,7 +164,8 @@ export const WorkspaceBreadcrumb = ({
   }
   const workspace = workspaceView.items;
 
-  const displayName = workspace.name;
+  // Also a `title`, which the browser shows outside any isolating element.
+  const displayName = stripDirectionalControls(workspace.name);
 
   const startEditingName = () => {
     nameRename.startEditing(displayName);
@@ -445,7 +446,7 @@ export const WorkspaceBreadcrumb = ({
           title={displayName}
           to="/workspaces/$workspaceId"
         >
-          {displayName}
+          <BidiText as="span">{displayName}</BidiText>
         </Link>
         {referenceSegment}
         {isEditingRef ? null : <MatterSwitcher matter={workspace} />}
