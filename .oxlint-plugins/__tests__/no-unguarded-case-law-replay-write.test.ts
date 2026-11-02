@@ -169,7 +169,7 @@ describe.serial(RULE, () => {
     ];
     expect(
       await Promise.all(cases.map(async ([source]) => await lint(source))),
-    ).toEqual(cases.map(([, lines]) => lines));
+    ).toEqual(cases.map(([, lines]) => [...lines]));
   });
   test("a saved update builder must still carry the plan's predicate", async () => {
     expect(
