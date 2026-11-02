@@ -12,7 +12,7 @@ import {
   type EuCompletionReport,
   EuCompletionStop,
 } from "@/api/handlers/case-law/ingestion/eu-completion";
-import { REPLAY_HEALTH_CONFIG } from "@/api/handlers/case-law/ingestion/replay-enrolment";
+import { replayHealthConfig } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { classifyReplayFailure } from "@/api/handlers/case-law/ingestion/replay-failure";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -360,7 +360,7 @@ const runCompletionSession = async (
     db: handles.rootDb,
     tableName: "case_law_decisions",
     clock: now,
-    config: { ...REPLAY_HEALTH_CONFIG, ...fixture.healthConfig },
+    config: { ...replayHealthConfig(), ...fixture.healthConfig },
   });
   const preflight = createReplayPreflightGate({
     readVerdict: async () =>

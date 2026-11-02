@@ -6,6 +6,7 @@ import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/node";
 import { getStorageKey } from "../../src/consts";
 import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 const API_BASE_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
 const WEB_BASE_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
@@ -125,7 +126,7 @@ const openConsent = async ({
     page.getByRole("heading", {
       name: `Connect Consent browser test ${id} to stella`,
     }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 };
 
 test("OAuth consent keeps its decision in view on a laptop and a phone", async ({
@@ -289,7 +290,7 @@ test("account switching preserves the signed OAuth query through auth routing", 
     page.getByRole("heading", {
       name: `Connect Consent browser test ${id} to stella`,
     }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
   await expect(page).toHaveURL((url) => url.pathname === "/consent");
 
   const queryBeforeSwitch = new URLSearchParams(
@@ -393,7 +394,7 @@ test("organization picker names the signed-in account and switches it without lo
   });
   await expect(
     page.getByText(`Second organization ${id}`, { exact: true }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
   await expect(
     page.getByText("Select an organization", { exact: true }),
   ).toBeVisible();
@@ -441,7 +442,7 @@ test("a client asking for a fresh sign-in gets the sign-in form despite a sessio
     },
   );
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({
-    timeout: 30_000,
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
   await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
   await expect(page).toHaveURL((url) => {
@@ -496,7 +497,7 @@ test("a client asking for account selection gets the organization step with the 
   );
   await expect(
     page.getByText("Select an organization", { exact: true }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
   await expect(page).toHaveURL((url) => url.pathname === "/auth/organization");
   await expect(
     page.getByRole("term").filter({ hasText: "Account" }),
@@ -510,7 +511,7 @@ test("a client asking for account selection gets the organization step with the 
     page.getByRole("heading", {
       name: `Connect Consent browser test ${id} to stella`,
     }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 });
 
 test("consent discloses permissions on demand and brands only verified locations", async ({
@@ -583,7 +584,7 @@ test("consent discloses permissions on demand and brands only verified locations
     );
     await expect(permission).toBeHidden();
     const disclosure = page.locator(
-      '[data-slot="consent-permissions"] > summary',
+      '[data-slot="consent-permissions"] button[aria-expanded]',
     );
     await disclosure.click();
     await expect(permission).toBeVisible();

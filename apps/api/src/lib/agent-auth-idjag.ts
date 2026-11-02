@@ -21,7 +21,7 @@ import {
 import { prepareAgentClientCredential } from "@/api/agent-auth/credentials";
 import { IdJagValidationError, validateIdJag } from "@/api/agent-auth/id-jag";
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
-import { rootDb } from "@/api/db/root";
+import { createOrganizationForAccount, rootDb } from "@/api/db/root";
 import {
   AgentTokenError,
   createAgentOAuthClient,
@@ -35,10 +35,15 @@ import {
 import type { ServiceAuthCeremony } from "@/api/lib/agent-auth";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
+import { createOrganizationInTransaction } from "@/api/lib/auth/create-organization-in-transaction";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
+import {
+  brandActorSessionIdentity,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
+import { newOrganizationEvaluation } from "@/api/lib/usage/organization-access-state";
 
 /**
  * Service-issued ES256 signing key for the intermediate
@@ -130,57 +135,75 @@ class ProvisionError extends Error {
   override name = "ProvisionError";
 }
 
+type AgentFirstOrganizationOptions = {
+  userId: SafeId<"user">;
+  name: string;
+};
+
+/**
+ * An agent-provisioned account's first organization is created by the same
+ * owner as every other organization: it holds an evaluation grant, the
+ * creation audit and the organization commit in one transaction, and the
+ * lifetime evaluation limit refuses it with the same typed error.
+ */
+export const createAgentFirstOrganization = async ({
+  userId,
+  name,
+}: AgentFirstOrganizationOptions) =>
+  await createOrganizationForAccount(
+    {
+      userId,
+      name,
+      evaluation: newOrganizationEvaluation(),
+      idempotencyKey: null,
+    },
+    { createOrganization: createOrganizationInTransaction },
+  );
+
 /**
  * Auto-provision a brand-new identity: create a better-auth user from the
  * verified email through the internal adapter (so the same user-create
  * database hooks normal signup runs apply) and bootstrap a default org
- * through the organization plugin's `createOrganization` (the same path a
- * human's first org goes through), which also adds the user as the owner
- * member. No org/member creation is hand-rolled here.
+ * through the shared organization creation owner (the same path a human's
+ * first org goes through), which also adds the user as the owner member.
+ * No org/member creation is hand-rolled here.
  */
-const autoProvision = async (
+export const autoProvision = async (
   email: string,
-): Promise<Result<ResolvedPrincipal, ProvisionError>> => {
+): Promise<Result<ResolvedPrincipal, ProvisionError | HandlerError>> => {
   const auth = getAuth();
-  const provisioned = await Result.tryPromise(async () => {
-    const ctx = await auth.$context;
-    const localPart = email.split("@").at(0)?.trim() ?? "";
-    const createdUser = await auth.api.createAgentUser({
-      body: {
-        email,
-        name: localPart.length > 0 ? localPart : email,
-        emailVerified: true,
-      },
-    });
+  return await Result.tryPromise({
+    try: async () => {
+      const ctx = await auth.$context;
+      const localPart = email.split("@").at(0)?.trim() ?? "";
+      const createdUser = await auth.api.createAgentUser({
+        body: {
+          email,
+          name: localPart.length > 0 ? localPart : email,
+          emailVerified: true,
+        },
+      });
 
-    // If org bootstrap fails the user is already persisted; delete it so a
-    // failed provision never leaves an orgless, unreachable account behind.
-    const orgResult = await Result.tryPromise(
-      async () =>
-        await auth.api.createOrganization({
-          body: {
-            name:
-              localPart.length > 0 ? `${localPart}'s workspace` : "Workspace",
-            slug: `agent-${Bun.randomUUIDv7()}`,
-            userId: createdUser.id,
-            keepCurrentActiveOrganization: true,
-          },
-        }),
-    );
-    if (Result.isError(orgResult)) {
-      await ctx.internalAdapter.deleteUser(createdUser.id);
-      throw new ProvisionError();
-    }
-    return brandActorSessionIdentity({
-      organizationId: orgResult.value.id,
-      userId: createdUser.id,
-    });
+      // If org bootstrap fails the user is already persisted; delete it so a
+      // failed provision never leaves an orgless, unreachable account behind.
+      const created = await createAgentFirstOrganization({
+        userId: brandPersistedUserId(createdUser.id),
+        name: localPart.length > 0 ? `${localPart}'s workspace` : "Workspace",
+      });
+      if (Result.isError(created)) {
+        await ctx.internalAdapter.deleteUser(createdUser.id);
+        throw created.error;
+      }
+      return brandActorSessionIdentity({
+        organizationId: created.value.organizationId,
+        userId: createdUser.id,
+      });
+    },
+    catch: (cause) =>
+      HandlerError.is(cause)
+        ? cause
+        : new ProvisionError("Agent account provisioning failed.", { cause }),
   });
-
-  if (Result.isError(provisioned)) {
-    return Result.err(new ProvisionError());
-  }
-  return Result.ok(provisioned.value);
 };
 
 const writeDelegation = async ({
@@ -412,10 +435,12 @@ export const resolveIdJagIdentity = async (
   if (Result.isError(provisioned)) {
     return {
       kind: "rejected",
-      error: new IdJagValidationError(
-        "invalid_assertion",
-        "Could not provision an account for this identity.",
-      ),
+      error: HandlerError.is(provisioned.error)
+        ? provisioned.error
+        : new IdJagValidationError(
+            "invalid_assertion",
+            "Could not provision an account for this identity.",
+          ),
     };
   }
   await writeDelegation({ iss, sub, ...provisioned.value });

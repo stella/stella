@@ -34,10 +34,25 @@ type BrowserExtensionRow =
 export const BROWSER_EXTENSION_PROTOCOL_MISMATCH = "protocol-mismatch";
 
 export const BROWSER_EXTENSION_CAPABILITY = {
+  // The tab's page and the stella server run different versions: the tab was
+  // open across an update, and a reload brings it to the server's version.
   [BROWSER_EXTENSION_PROTOCOL_MISMATCH]: {
     toolOffered: false,
     availability:
-      "Browser tools are not available in this chat because this stella tab and the browser extension run different versions.",
+      "Browser tools are not available in this chat because this stella tab runs an older version of stella.",
+    recoveryStep: "to reload this stella tab to use the browser extension",
+  },
+  [BROWSER_EXTENSION_STATUS.extensionOutdated]: {
+    toolOffered: false,
+    availability:
+      "Browser tools are not available in this chat because the user's stella browser extension is an older version that Chrome has not updated yet.",
+    recoveryStep:
+      "that Chrome updates the stella browser extension automatically, usually within a few hours, and that you can use their browser once it has",
+  },
+  [BROWSER_EXTENSION_STATUS.stellaOutdated]: {
+    toolOffered: false,
+    availability:
+      "Browser tools are not available in this chat because the user's stella browser extension is newer than this stella tab.",
     recoveryStep: "to reload this stella tab to use the browser extension",
   },
   [BROWSER_EXTENSION_STATUS.checking]: {
