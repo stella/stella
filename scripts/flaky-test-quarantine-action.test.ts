@@ -1,7 +1,8 @@
 import { expect, spyOn, test } from "bun:test";
 import * as childProcess from "node:child_process";
 
-import { createTestState } from "../apps/api/src/tests/helpers/test-state";
+import { createTestState } from "@stll/test-state";
+
 import { reportFlakyTestQuarantine } from "./flaky-test-quarantine-action";
 
 const testState = createTestState({ file: import.meta.path, config: {} });
