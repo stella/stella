@@ -1,10 +1,15 @@
 import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_MESSAGE_EDIT_ERROR_CODE,
   CHAT_MESSAGE_EMPTY_ERROR_CODE,
 } from "@stll/api-contract";
+import type { ChatMessageEditErrorCode } from "@stll/api-contract";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
-import { hasRunningToolCallInLatestAssistantMessage } from "@/components/chat/chat-ui-tools";
+import {
+  getAwaitedAssistantMessageId,
+  hasRunningToolCallInLatestAssistantMessage,
+} from "@/components/chat/chat-ui-tools";
 import type { ChatStopState } from "@/features/chat/chat-runtime";
 import type { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import type { TranslationKey } from "@/i18n/types";
@@ -70,8 +75,15 @@ export const CHAT_USER_ACTIONS = {
   "delete-thread": { via: "request" },
   deny: { handler: "handleDeny", via: "session" },
   "edit-answer": { handler: "handleAskUserEditAndRerun", via: "session" },
+  /** Replaces one of the user's own messages and drops every later turn. */
+  "edit-message": { handler: "editUserMessage", via: "session" },
   export: { via: "page" },
   fork: { via: "request" },
+  /** An open message editor holds queued prompts until it closes. */
+  "hold-queue-for-message-edit": {
+    handler: "holdQueueForMessageEdit",
+    via: "session",
+  },
   "improve-prompt": { via: "page" },
   "load-older": { handler: "loadOlder", via: "session" },
   "move-to-side": { via: "page" },
@@ -82,6 +94,8 @@ export const CHAT_USER_ACTIONS = {
     via: "session",
   },
   "open-draft": { handler: "handleOpenCreateDocumentDraft", via: "session" },
+  /** Opens a sent message's editor; a running turn is stopped first. */
+  "open-message-editor": { handler: "startUserMessageEdit", via: "session" },
   "open-playbook": { handler: "handleOpenPlaybook", via: "session" },
   /** Reloads the canonical answer after an accepted edit or revision conflict. */
   "refresh-edited-answer": { handler: "refreshAnswers", via: "session" },
@@ -195,10 +209,32 @@ export const finalChatRefusalKey = (
     : undefined;
 };
 
-export const canRetryChatRequest = (error: Error | undefined): boolean =>
-  finalChatRefusalKey(error) === undefined;
+/** Why the server refused to edit a message, or null when `error` is no
+ *  such refusal. */
+export const chatMessageEditRefusalCode = (
+  error: unknown,
+): ChatMessageEditErrorCode | null => {
+  const code = chatRefusal(error)?.code;
+  return (
+    Object.values(CHAT_MESSAGE_EDIT_ERROR_CODE).find(
+      (candidate) => candidate === code,
+    ) ?? null
+  );
+};
 
-/** Retry regenerates the latest answer, once no turn runs. */
+/** The server refused to edit a message; the page reloads what it stores. */
+export const isChatMessageEditRefusal = (error: Error | undefined): boolean =>
+  chatMessageEditRefusalCode(error) !== null;
+
+/** A final refusal stays final when replayed, and replaying a refused edit
+ *  would answer the history it left in place. */
+export const canRetryChatRequest = (error: Error | undefined): boolean =>
+  finalChatRefusalKey(error) === undefined && !isChatMessageEditRefusal(error);
+
+/**
+ * Retry regenerates the latest answer, once no turn runs. A turn waiting on an
+ * approval or a question is still owned by that decision, not finished.
+ */
 export const canRetryAssistantMessage = ({
   error,
   isGenerating,
@@ -206,7 +242,8 @@ export const canRetryAssistantMessage = ({
 }: AssistantMessageActionState & { error: Error | undefined }): boolean =>
   canRetryChatRequest(error) &&
   !isGenerating &&
-  isLatestAssistantMessage(message);
+  isLatestAssistantMessage(message) &&
+  getAwaitedAssistantMessageId(message.messages) !== message.messageId;
 
 /**
  * Forking reads persisted history, so it is offered on every settled answer

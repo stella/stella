@@ -48,6 +48,7 @@
           "y": 210
         }
       },
+      "entitlements": "./Entitlements.plist",
       "minimumSystemVersion": "10.15"
     },
     "windows": {

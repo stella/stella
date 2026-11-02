@@ -1,4 +1,5 @@
 import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import initWasm, { clean_scan_rgba } from "../generated/scan_engine.js";
 import type { WorkerRequest, WorkerResponse } from "./worker-protocol";
@@ -14,9 +15,14 @@ let initialized: Promise<void> | undefined;
 const initialize = async () => {
   initialized ??= fetchWithTimeout(
     new URL("../generated/scan_engine_bg.wasm", import.meta.url),
-    { timeout: { type: "idle", ms: WASM_LOAD_TIMEOUT_MS } },
+    { timeout: { type: "headers", ms: WASM_LOAD_TIMEOUT_MS } },
   )
-    .then(async (response) => await response.arrayBuffer())
+    .then(
+      async (response) =>
+        await readBodyWithIdleDeadline(response, {
+          idleMs: WASM_LOAD_TIMEOUT_MS,
+        }),
+    )
     .then(async (module_or_path) => {
       await initWasm({ module_or_path });
       return undefined;

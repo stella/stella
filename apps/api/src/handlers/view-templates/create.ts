@@ -11,7 +11,7 @@ import {
   AVT_LAYOUT_FEATURE_ACCESS,
   avtViewAccessStatus,
 } from "@/api/lib/auth/feature-access/view-eligibility";
-import { defaultVarcharSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -30,7 +30,7 @@ import {
 } from "@/api/lib/views/utils";
 
 const createViewTemplateBodySchema = v.strictObject({
-  name: defaultVarcharSchema,
+  name: displayNameSchema(),
   layout: tViewLayoutSchema,
 });
 

@@ -6,6 +6,10 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import "@/api/tests/setup-env";
 
 import { AI_PROVIDERS } from "@stll/ai-catalog";
+import {
+  isTranscriptionModelId,
+  TRANSCRIPTION_MODELS,
+} from "@stll/ai-catalog/transcription";
 import { compareCodeUnit } from "@stll/collation";
 
 import { CHAT_TURN_FAILURE_CODES } from "@/api/handlers/chat/chat-turn-state";
@@ -26,6 +30,7 @@ import {
   emitPromptCacheMetric,
   emitRawSourceStoredMetric,
   emitReasoningReplayDroppedMetric,
+  emitTranscriptionDurationMismatchMetric,
   emitVerificationRunFailureMetric,
   REQUEST_CLASSES,
   resetMetricLineSinkForTesting,
@@ -113,6 +118,37 @@ test("stage log fields pass the content-key policy", () => {
   for (const key of ["content", "decisionContent", "statuteTitle"]) {
     expect(SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.test(key), key).toBe(true);
   }
+});
+
+test("a tools/call phase record says whether the call ran over its budget", () => {
+  const record = (totalMs: number) =>
+    buildMcpRequestMetricRecord({
+      method: "tools/call",
+      mode: "default",
+      overlap: false,
+      path: "modern",
+      toolName: "search_legislation",
+      phases: {
+        auth: 0,
+        context: 0,
+        server_build: 0,
+        tool_projection: 0,
+        dispatch: totalMs,
+      },
+      queryCount: 0,
+      totalMs,
+      latencyBudgetMs: 8000,
+    });
+  expect(record(10_499.2)).toMatchObject({
+    total: 10_500,
+    budget: 8000,
+    overBudget: true,
+  });
+  expect(record(7999.5)).toMatchObject({
+    total: 8000,
+    budget: 8000,
+    overBudget: false,
+  });
 });
 
 test("MCP phase records are integral, non-overlapping, and bounded", () => {
@@ -342,6 +378,30 @@ test("cost drop metrics count observations rather than failed batches", () => {
     expect(JSON.parse(lines.at(0) ?? "null")).toMatchObject({
       ActionCostObservationsDropped: 7,
     });
+  } finally {
+    resetMetricLineSinkForTesting();
+  }
+});
+
+test("transcription duration mismatches emit a structured count with catalog metadata only", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  try {
+    const modelIds = Object.keys(TRANSCRIPTION_MODELS).filter(
+      isTranscriptionModelId,
+    );
+    for (const modelId of modelIds) {
+      emitTranscriptionDurationMismatchMetric(modelId);
+      const record: unknown = JSON.parse(lines.at(-1) ?? "null");
+      expect(record).toEqual({
+        event: "transcription.duration_mismatch",
+        modelId,
+        TranscriptionDurationMismatch: 1,
+      });
+    }
+    expect(lines).toHaveLength(modelIds.length);
   } finally {
     resetMetricLineSinkForTesting();
   }

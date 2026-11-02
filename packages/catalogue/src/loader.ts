@@ -1,12 +1,17 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { GENERATED_ENTRIES, GENERATED_RECOMMENDED } from "./catalogue.gen";
+import {
+  GENERATED_ENTRIES,
+  type GENERATED_NATIVE_TOOL_SLUGS,
+  GENERATED_RECOMMENDED,
+} from "./catalogue.gen";
 import {
   type CatalogueEntry,
-  catalogueEntrySchema,
   type CatalogueKind,
+  formatCatalogueIssues,
   type GithubSkillEntry,
+  parseCatalogueEntry,
   type Recommended,
   recommendedSchema,
 } from "./schema";
@@ -15,20 +20,15 @@ export type LoadedCatalogueEntry = CatalogueEntry & {
   icon: string | null;
 };
 
-const formatIssues = (issues: readonly v.BaseIssue<unknown>[]): string =>
-  issues
-    .map((issue) => `${v.getDotPath(issue) ?? "<root>"}: ${issue.message}`)
-    .join("; ");
+/** The slug of every native-tool manifest, generated from the entries. */
+export type NativeToolSlug = (typeof GENERATED_NATIVE_TOOL_SLUGS)[number];
 
 const loaded: readonly LoadedCatalogueEntry[] = GENERATED_ENTRIES.map(
   ({ manifest, icon }) => {
-    const parsed = v.safeParse(catalogueEntrySchema, manifest);
-    if (!parsed.success) {
-      panic(`Invalid catalogue entry: ${formatIssues(parsed.issues)}`);
-    }
-    const output: LoadedCatalogueEntry = Object.assign(parsed.output, {
-      icon,
-    });
+    const output: LoadedCatalogueEntry = Object.assign(
+      parseCatalogueEntry(manifest),
+      { icon },
+    );
     return output;
   },
 );
@@ -36,7 +36,7 @@ const loaded: readonly LoadedCatalogueEntry[] = GENERATED_ENTRIES.map(
 const parsedRecommended = (() => {
   const result = v.safeParse(recommendedSchema, GENERATED_RECOMMENDED);
   if (!result.success) {
-    panic(`Invalid recommended.json: ${formatIssues(result.issues)}`);
+    panic(`Invalid recommended.json: ${formatCatalogueIssues(result.issues)}`);
   }
   return result.output;
 })();

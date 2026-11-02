@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
+import { MAX_CONTACT_NATIONALITY_CODES } from "@stll/api-contract/contact-write";
 import { COUNTRY_CODES } from "@stll/country-codes";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -15,7 +16,6 @@ import {
 import { routes } from "@/api/http/route";
 import type { RouteDefinition } from "@/api/http/route";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
-import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nationality-codes";
 import { defineEndpoint } from "@/api/lib/endpoints";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { SANCTIONS_WARMING_RETRY_AFTER_SECONDS } from "@/api/lib/lists/sanctions/public-screening";

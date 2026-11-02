@@ -10,7 +10,7 @@ import type {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  defaultVarcharSchema,
+  displayNameSchema,
   fileSchema,
   resourceIdSchema,
   withDescription,
@@ -27,7 +27,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const createTemplateBodySchema = v.object({
   file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
-  name: withDescription(defaultVarcharSchema, "Template display name"),
+  name: withDescription(displayNameSchema(), "Template display name"),
   categoryId: v.exactOptional(resourceIdSchema("templateCategory")),
 });
 

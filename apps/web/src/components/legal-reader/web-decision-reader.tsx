@@ -29,6 +29,7 @@ import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-
 import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 
 export type WebDecisionReaderProps = Omit<
   DecisionTextProps,
@@ -49,17 +50,6 @@ type WebDecisionReaderContentProps = WebDecisionReaderProps & {
 };
 
 const NO_ANCHORS = [] as const;
-
-/** A paragraph inside a folded section is out of sight until it unfolds. */
-const openEnclosingDisclosures = (target: HTMLElement) => {
-  for (
-    let disclosure = target.closest("details");
-    disclosure !== null;
-    disclosure = disclosure.parentElement?.closest("details") ?? null
-  ) {
-    disclosure.open = true;
-  }
-};
 
 const WebDecisionReaderContent = ({
   annotationAnchors = NO_ANCHORS,
@@ -93,7 +83,7 @@ const WebDecisionReaderContent = ({
     const target =
       readerBlockByAnchor(article, anchorId) ??
       panic("Citation jump to a paragraph the reader did not render");
-    openEnclosingDisclosures(target);
+    revealEnclosingDisclosures(target);
     target.scrollIntoView({
       behavior: "instant",
       block: "center",
@@ -143,7 +133,7 @@ const WebDecisionReaderContent = ({
     if (!target) {
       return undefined;
     }
-    openEnclosingDisclosures(target);
+    revealEnclosingDisclosures(target);
     return holdLanding({ article, target });
   }, [landingAnchorId, landingSessionId]);
 

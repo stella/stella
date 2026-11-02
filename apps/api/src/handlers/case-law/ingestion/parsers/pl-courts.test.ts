@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
-import * as cheerio from "cheerio";
-import { isTag } from "domhandler";
 
+import { load } from "@stll/html";
+import { isTag } from "@stll/html/nodes";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
@@ -9,7 +9,10 @@ import {
   PL_KIO_HTML_BUDGET,
   PlKioHtmlBudgetError,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import {
+  parsePlDecisionContent,
+  PL_DECISION_MARKUP,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
@@ -58,6 +61,37 @@ const flattenInlineText = (inlines: Inline[]): string =>
     .join("");
 
 describe("parsePlDecisionContent", () => {
+  test.each([
+    [
+      "Sąd Apelacyjny w Szczecinie III Wydział Pracy i Ubezpieczeń Społecznych w osobie sędziego SA Urszuli Iwanowskiej, po rozpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym,",
+      '<strong>sprawy z odwołania </strong><span class="anon-block">A. N.</span>',
+    ],
+    [
+      "po rozpoznaniu w dniu 22 marca 2018 r., na posiedzeniu niejawnym,",
+      '<strong>sprawy z odwołania </strong><span class="anon-block"> (...) DRUKARNIA spółki z ograniczoną odpowiedzialnością</span> w <span class="anon-block">S.</span>',
+    ],
+  ])(
+    "a common-court opening recital stays whole across its printed lines",
+    (opening, continuation) => {
+      const { documentAst } = parsePlDecisionContent(
+        baseInput(`<p>${opening}</p><p>${continuation}</p>`, {
+          markup: PL_DECISION_MARKUP.COMMON_COURT,
+        }),
+      );
+      const recital = documentAst.blocks.find((block) =>
+        block.plainText.startsWith(opening),
+      );
+      expect(recital?.plainText).toBe(
+        `${opening} ${load(continuation).text()}`.replace(/\s+/gu, " "),
+      );
+      expect(
+        documentAst.blocks.some((block) =>
+          block.plainText.startsWith("sprawy z odwołania"),
+        ),
+      ).toBe(false);
+    },
+  );
+
   test("keeps a Polish court's printed order and assigns roles from its text", () => {
     const content = `
       <p><strong>II CSKP 1456/22</strong></p>
@@ -603,7 +637,7 @@ describe("markup whitespace", () => {
       const html = await gunzipText(name);
       // The capture reaches the fault: a paragraph whose markup puts a line
       // break or a run of spaces between two of its words.
-      const $ = cheerio.load(html);
+      const $ = load(html);
       expect(
         $("p")
           .toArray()
@@ -686,6 +720,25 @@ describe("markup whitespace", () => {
         { type: "text", text: "B" },
       ],
     });
+  });
+
+  test("a printed blank line inside an inline element splits its formatting", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<p><b>First<br> \n <br>Second</b></p>", {
+        decisionType: undefined,
+        markup: PL_DECISION_MARKUP.PRINTED_LINES,
+      }),
+    );
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "First",
+      "Second",
+    ]);
+    expect(
+      documentAst.blocks.map((block) =>
+        "inlines" in block ? block.inlines.at(0)?.type : undefined,
+      ),
+    ).toEqual(["bold", "bold"]);
   });
 
   test("paragraphs inside one cell stay apart, a line each", () => {
@@ -786,6 +839,20 @@ describe("ordered list items print the number a browser gives them", () => {
     expect(itemsOf(html)).toEqual(expected);
   });
 
+  test("a numbered first paragraph keeps a printed blank line", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<ol><li><p>First<br> \n <br>Second</p></li></ol>", {
+        decisionType: undefined,
+        markup: PL_DECISION_MARKUP.PRINTED_LINES,
+      }),
+    );
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "1. First",
+      "Second",
+    ]);
+  });
+
   test("reading an item's runs around its blocks costs work linear in the item", () => {
     // Every inline walk lists an element's children once; the total listed
     // is the work. Copying the item per run made it quadratic.
@@ -795,7 +862,7 @@ describe("ordered list items print the number a browser gives them", () => {
       value !== null &&
       Object.hasOwn(value, "contents");
     // The prototype cheerio defines `contents` on, above each load's class.
-    let contentsOwner: unknown = cheerio.load("<p></p>").root();
+    let contentsOwner: unknown = load("<p></p>").root();
     while (contentsOwner !== null && !ownsContents(contentsOwner)) {
       contentsOwner = Object.getPrototypeOf(contentsOwner);
     }
@@ -837,7 +904,7 @@ describe("ordered list items print the number a browser gives them", () => {
         baseInput(`<ol>${"<li>Treść punktu</li>".repeat(count)}</ol>`, {
           decisionType: undefined,
           loadHtml: (html) => {
-            const $ = cheerio.load(html);
+            const $ = load(html);
             $("li").each((_, element) => {
               if (!isTag(element)) {
                 return;
@@ -926,4 +993,34 @@ test("retains nested table text only in its owning outer cell", () => {
   expect(fulltext.match(/Inner/gu)).toHaveLength(1);
   expect(fulltext).toContain("Header");
   expect(fulltext).toContain("Footer");
+});
+
+const parsedLinkHrefs = (inlines: readonly Inline[]): string[] =>
+  inlines.flatMap((inline) => [
+    ...(inline.type === "link" ? [inline.href] : []),
+    ...(hasInlineChildren(inline) ? parsedLinkHrefs(inline.children) : []),
+  ]);
+
+const footnoteLinksOf = (content: string, footnoteIds?: readonly string[]) => {
+  const result = parsePlDecisionContent(baseInput(content, { footnoteIds }));
+  return result.documentAst.blocks.flatMap((block) =>
+    "inlines" in block ? parsedLinkHrefs(block.inlines) : [],
+  );
+};
+
+test("only exact footnotes from the current document extend the URL policy", async () => {
+  const html = await Bun.file(
+    new URL("__fixtures__/pl-footnote-fragments.html", import.meta.url),
+  ).text();
+  expect(footnoteLinksOf(html)).toEqual(["https://example.test/source"]);
+  expect(footnoteLinksOf(html, ["note"])).toEqual([
+    "#note",
+    "https://example.test/source",
+  ]);
+  expect(
+    footnoteLinksOf(
+      '<p>Other <a href="#note">source</a> <a href="#other-document-note">note</a></p>',
+      ["other-document-note"],
+    ),
+  ).toEqual(["#other-document-note"]);
 });

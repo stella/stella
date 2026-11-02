@@ -52,6 +52,11 @@ const { ChatThreadMessages, ChatErrorMessage } =
 const { buildMessageTurns, CHAT_MESSAGE_RENDER_POLICY } =
   await import("@/components/chat/chat-thread-messages.logic");
 
+// A button's label, which may sit in the button's cut-to-fit span.
+const RETRY_BUTTON = />Retry<\/(?:span><\/)?button>/u;
+const RETRY_BUTTONS = new RegExp(RETRY_BUTTON.source, "gu");
+const RESEND_BUTTON = />Resend<\/(?:span><\/)?button>/u;
+
 afterAll(() => {
   if (previousApiUrl === undefined) {
     delete process.env["VITE_API_URL"];
@@ -111,6 +116,23 @@ const renderedText = (html: string) => {
   // safe-html: React renderToStaticMarkup/renderToReadableStream output from this test's own components, parsed in a detached happy-dom document.
   root.innerHTML = html;
   return root.textContent;
+};
+
+/**
+ * Whether the disclosure whose trigger reads `label` is open: its trigger's
+ * `aria-expanded`, or null when no trigger carries that label. The innermost
+ * matching trigger wins, so a step list around a reasoning trace does not
+ * answer for it.
+ */
+const disclosureExpanded = (html: string, label: string): string | null => {
+  const window = new Window();
+  const root = window.document.createElement("div");
+  // safe-html: React renderToStaticMarkup/renderToReadableStream output from this test's own components, parsed in a detached happy-dom document.
+  root.innerHTML = html;
+  const triggers = [
+    ...root.querySelectorAll('[data-slot="collapsible-trigger"]'),
+  ].filter((trigger) => trigger.textContent.includes(label));
+  return triggers.at(-1)?.getAttribute("aria-expanded") ?? null;
 };
 
 describe("chat thread messages", () => {
@@ -573,8 +595,8 @@ describe("chat thread messages", () => {
     );
 
     expect(html).toContain(">Reasoning trace<");
-    expect(html).toContain("<details");
-    expect(html).not.toContain('open=""');
+    // Folded: the trace is still in the page, behind a closed disclosure.
+    expect(disclosureExpanded(html, "Reasoning trace")).toBe("false");
     expect(html).toContain("12 reasoning tokens");
     expect(html).toContain("Checked the contract timeline.");
     expect(html).toContain("The deadline is Friday.");
@@ -826,7 +848,9 @@ describe("chat thread messages", () => {
     // safe-html: React's static markup from this test's own components is parsed in a detached document.
     root.innerHTML = html;
     expect(
-      root.querySelector('input[type="password"]')?.closest("details"),
+      root
+        .querySelector('input[type="password"]')
+        ?.closest('[data-slot="collapsible-panel"]'),
     ).toBeNull();
   });
 
@@ -874,7 +898,7 @@ describe("chat thread messages", () => {
     root.innerHTML = html;
     const card = root.querySelector('[data-slot="connect-connector-card"]');
     expect(card).not.toBeNull();
-    expect(card?.closest("details")).toBeNull();
+    expect(card?.closest('[data-slot="collapsible-panel"]')).toBeNull();
   });
 
   // The same supersession withdraws a user-input card: the runtime has no
@@ -974,7 +998,8 @@ describe("chat thread messages", () => {
     // own disclosure.
     expect(html).toContain(">1 analysis<");
     expect(html).not.toContain("3 steps");
-    expect(html).not.toContain("<details open");
+    expect(disclosureExpanded(html, "1 analysis")).toBe("false");
+    expect(disclosureExpanded(html, "Show details")).toBe("false");
     expect(html).toContain("This step failed — stella will work around it.");
     expect(html).toContain(">Show details<");
     expect(html).toContain("Here is the answer.");
@@ -1055,8 +1080,7 @@ describe("chat thread messages", () => {
     const loadedHtml = await renderWithLoadedMarkdown(content);
     expect(loadedHtml).toContain('data-streamdown="strong"');
     for (const output of [html, loadedHtml]) {
-      expect(output).toContain("<details");
-      expect(output).toContain('open=""');
+      expect(disclosureExpanded(output, "Reasoning trace")).toBe("true");
       expect(renderedText(output)).toContain(
         "Reading cited documents with create-document.",
       );
@@ -1090,10 +1114,9 @@ describe("chat thread messages", () => {
     );
 
     // A settled message that never produced answer text now collapses into a
-    // foldable <details> (collapsed by default) rather than staying pinned
+    // foldable disclosure (collapsed by default) rather than staying pinned
     // open — the reasoning text is still present, just tucked away.
-    expect(html).toContain("<details");
-    expect(html).not.toContain("<details open");
+    expect(disclosureExpanded(html, "Reasoning trace")).toBe("false");
     expect(html).toContain("Checking cited filings.");
     expect(html).not.toContain("Working with context");
   });
@@ -1342,7 +1365,7 @@ describe("chat thread messages", () => {
     expect(html).toContain("First answer");
     expect(html).toContain("Second answer");
     expect(html.match(/aria-label="Copy"/gu)?.length).toBe(2);
-    expect(html.match(/>Retry<\/button>/gu)?.length).toBe(1);
+    expect(html.match(RETRY_BUTTONS)?.length).toBe(1);
   });
 
   test("hides retry when a later user message is the final turn", () => {
@@ -1377,7 +1400,7 @@ describe("chat thread messages", () => {
     expect(html).toContain("Answer before retry");
     expect(html).toContain("Follow-up prompt");
     expect(html.match(/aria-label="Copy"/gu)?.length).toBe(1);
-    expect(html).not.toContain(">Retry</button>");
+    expect(html).not.toMatch(RETRY_BUTTON);
   });
 
   test("hides retry while the latest assistant response is generating", () => {
@@ -1407,7 +1430,7 @@ describe("chat thread messages", () => {
 
     expect(html).toContain("Streaming answer");
     expect(html).toContain('aria-label="Copy"');
-    expect(html).not.toContain(">Retry</button>");
+    expect(html).not.toMatch(RETRY_BUTTON);
   });
 
   test("shows a resendable chat message when the chat runtime errors", () => {
@@ -1534,8 +1557,8 @@ describe("chat thread messages", () => {
     expect(html).toContain("Answer awaiting continuation");
     expect(html).toContain(messages.chat.sendErrorContinuationRejected);
     expect(html).not.toContain('aria-label="Retry"');
-    expect(html).not.toContain(">Retry</button>");
-    expect(html).not.toContain(">Resend</button>");
+    expect(html).not.toMatch(RETRY_BUTTON);
+    expect(html).not.toMatch(RESEND_BUTTON);
   });
 
   test("maps model-unavailable stream errors to admin-facing copy", () => {
@@ -1669,7 +1692,7 @@ describe("buildMessageTurns", () => {
     // Both assistant messages retain their secondary actions in the menu. The
     // user message has no assistant-message action row.
     expect(html.match(/aria-label="Actions"/gu)).toHaveLength(2);
-    expect(html.match(/>Retry<\/button>/gu)).toHaveLength(1);
+    expect(html.match(RETRY_BUTTONS)).toHaveLength(1);
   });
 
   test("keeps the actions menu off the sticky user header", () => {

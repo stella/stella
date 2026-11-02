@@ -3,10 +3,10 @@ import type { BrowserController } from "./controller";
 
 export type PopupMessageKey = keyof typeof enMessages;
 export type PopupActiveTab =
-  | { kind: "stella"; tabId: number }
+  | { kind: "stella"; origin: string; tabId: number }
   | { kind: "controllable" }
   | { kind: "unsupported" };
-export type PopupController = Pick<BrowserController, "origin" | "tabId">;
+export type PopupController = Pick<BrowserController, "origin">;
 export type PopupAction = {
   action: "adopt" | "connect" | "grant" | "grant-and-connect";
   messageKey: PopupMessageKey;
@@ -67,7 +67,7 @@ export const popupView = ({
   if (controller === null) {
     if (activeTab.kind === "stella") {
       return {
-        primary: { action: "connect", messageKey: "connectTab" },
+        primary: { action: "connect", messageKey: "connectStella" },
         secondary: [REVOKE],
         state: { type: "not-connected" },
         statusMessageKey: "statusNotConnected",
@@ -80,9 +80,10 @@ export const popupView = ({
       statusMessageKey: "statusOpenStella",
     };
   }
-  if (activeTab.kind === "stella" && activeTab.tabId !== controller.tabId) {
+  // One connection covers every stella tab on its origin.
+  if (activeTab.kind === "stella" && activeTab.origin !== controller.origin) {
     return {
-      primary: { action: "connect", messageKey: "connectTabInstead" },
+      primary: { action: "connect", messageKey: "connectStellaInstead" },
       secondary: [DISCONNECT, REVOKE],
       state: { type: "connected-elsewhere" },
       statusMessageKey: "statusConnectedElsewhere",
