@@ -246,6 +246,7 @@ describe("API test batch planning", () => {
       'import type {} from "@/api/db/root";',
       'import { type RootDb } from "@/api/db/root";',
       'import type * as pglite from "@electric-sql/pglite";',
+      'import type {} from "@electric-sql/pglite";',
       'const example = "@/api/db/root";',
       '// import { rootDb } from "@/api/db/root";',
       'test("mentions pglite", () => {});',

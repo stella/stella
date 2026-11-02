@@ -22,6 +22,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/agent-engine"
   },
   "dependencies": {
+    "@stll/api-contract": "workspace:*",
     "@tanstack/ai": "catalog:",
     "@tanstack/ai-codex": "catalog:",
     "@tanstack/ai-persistence": "catalog:",

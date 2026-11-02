@@ -654,9 +654,9 @@ export const isDbTest = (testPath: string, source: string) => {
   return parseSource(testPath, source).program.body.some(
     (statement) =>
       statement.type === "ImportDeclaration" &&
+      // A bare or empty value import runs the module; a type-only
+      // declaration, empty or not, and an import of only types do not.
       statement.importKind !== "type" &&
-      // A bare or empty import runs the module; an import of only types does
-      // not.
       (statement.specifiers.length === 0 ||
         statement.specifiers.some(
           (specifier) =>

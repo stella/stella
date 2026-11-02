@@ -1455,10 +1455,12 @@
           "click": "Kliknout",
           "fill": "Zadat text",
           "open": "Otevřít web",
+          "openNewTab": "Otevřít web na nové kartě",
           "pressKey": "Stisknout klávesu",
           "select": "Vybrat možnost",
           "snapshot": "Přečíst stránku",
-          "snapshotContinue": "Pokračovat ve čtení stránky"
+          "snapshotContinue": "Pokračovat ve čtení stránky",
+          "switchTab": "Přepnout na kartu"
         },
         "askAgain": "Znovu se ptát",
         "autoApproveReads": "Automaticky schvalovat čtení stránek",
@@ -5450,6 +5452,12 @@
         "work_obligation": "pracovní povinnost",
         "workspace_contact": "kontakt spisu",
         "workspace_member": "člen spisu"
+      },
+      "billingDrafts": {
+        "description": "Navrhujte popisy práce z vybrané aktivity a znalostních souborů kanceláře nebo klienta. Každý uživatel také uděluje souhlas. Před zapnutím návrhů připojte pravidla kanceláře.",
+        "firm": "Pravidla kanceláře",
+        "ledes": "Elektronická fakturace (LEDES)",
+        "title": "AI návrhy výkazů práce"
       },
       "documentProcessing": {
         "description": "Automaticky rozpoznávejte text v naskenovaných PDF, aby v nich šlo vyhledávat.",
