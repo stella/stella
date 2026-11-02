@@ -33,9 +33,9 @@ import {
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import type { DeploymentFeatureException } from "@/api/lib/deployment-feature-route";
-import { errorTag } from "@/api/lib/errors/error-tag";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { logger } from "@/api/lib/observability/logger";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { projectionPayload } from "@/api/lib/projection-totality";
 
 import {
@@ -255,6 +255,12 @@ export const createDesktopBillingDraftSettingsReadEndpoint = (
     },
   );
 
+/** The committed change's answer could not read the settings view back. */
+const settingsViewReadFailed = failureSink({
+  event: "billing_draft_settings.view_read_failed",
+  expected: [],
+});
+
 type SettingsUpdateDependencies = {
   /** Test seam for the answer's second read. */
   readView?: typeof readSettingsView;
@@ -335,9 +341,9 @@ export const createDesktopBillingDraftSettingsUpdateEndpoint = (
         // drafting the caller gets is unknown and answers `off` until the
         // next read names it.
         if (view.isErr()) {
-          logger.warn("billing_draft_settings.view_read_failed", {
-            change: body.type,
-            "error.type": errorTag(view.error),
+          observeFailure(view.error, {
+            sink: settingsViewReadFailed,
+            ctx: { operation: body.type },
           });
         }
         const settings = view.isOk()
