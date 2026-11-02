@@ -46,7 +46,7 @@ Project: root
 - @hocuspocus/provider 4.7.1 — MIT
 - @hocuspocus/server 4.7.1 — MIT
 - @jitl/quickjs-wasmfile-release-asyncify 0.32.0 — MIT
-- @libpdf/core 0.5.2 — MIT
+- @libpdf/core 0.5.3 — MIT
 - @litko/yara-x 0.7.5 — MIT
 - @modelcontextprotocol/client 2.3.1 — Apache-2.0
 - @modelcontextprotocol/ext-apps 2.0.3 — MIT
@@ -57,7 +57,7 @@ Project: root
 - @openrouter/sdk 0.13.67 — Apache-2.0
 - @playwright/test 1.63.0 — Apache-2.0
 - @resvg/resvg-js 2.6.2 — MPL-2.0
-- @silurus/ooxml 0.88.0 — MIT
+- @silurus/ooxml 0.89.2 — MIT
 - @smithy/fetch-http-handler 5.8.0 — Apache-2.0
 - @sparticuz/chromium-min 153.0.0 — MIT
 - @standard-schema/spec 1.1.0 — MIT
@@ -129,6 +129,7 @@ Project: root
 - disposable-email-domains-js 1.26.0 — CC0-1.0
 - domhandler 6.0.1 — BSD-2-Clause
 - driver.js 1.10.2 — MIT
+- drizzle-kit 1.0.0-rc.4 — MIT
 - drizzle-orm 1.0.0-rc.4 — Apache-2.0
 - entities 8.1.0 — BSD-2-Clause
 - expo 58.0.17 — MIT
@@ -175,7 +176,7 @@ Project: root
 - parse5-htmlparser2-tree-adapter 7.1.0 — MIT
 - pdfjs-dist 6.4.299 — Apache-2.0
 - pele 1.9.0 — MIT
-- pkijs 3.4.1 — BSD-3-Clause
+- pkijs 3.4.2 — BSD-3-Clause
 - playwright-core 1.63.0 — Apache-2.0
 - postal-mime 4.0.11 — MIT-0
 - postcss 8.5.29 — MIT
@@ -223,6 +224,8 @@ Project: desktop-tauri
 - aho-corasick 1.1.5 — MIT OR Unlicense
 - alloc-no-stdlib 3.0.0 — BSD-3-Clause
 - alloc-stdlib 0.3.0 — BSD-3-Clause
+- alsa 0.11.0 — Apache-2.0/MIT
+- alsa-sys 0.4.0 — MIT
 - ammonia 4.2.4 — Apache-2.0 OR MIT
 - android_system_properties 0.1.6 — Apache-2.0 OR MIT
 - anyhow 1.0.104 — Apache-2.0 OR MIT
@@ -302,6 +305,8 @@ Project: desktop-tauri
 - core-foundation-sys 0.8.7 — Apache-2.0 OR MIT
 - core-graphics 0.25.0 — Apache-2.0 OR MIT
 - core-graphics-types 0.2.0 — Apache-2.0 OR MIT
+- coreaudio-rs 0.14.2 — MIT/Apache-2.0
+- cpal 0.18.2 — Apache-2.0
 - cpubits 0.1.1 — Apache-2.0 OR MIT
 - cpufeatures 0.2.17 — Apache-2.0 OR MIT
 - cpufeatures 0.3.0 — Apache-2.0 OR MIT
@@ -321,6 +326,7 @@ Project: desktop-tauri
 - darling 0.23.0 — MIT
 - darling_core 0.23.0 — MIT
 - darling_macro 0.23.0 — MIT
+- dasp_sample 0.11.0 — Apache-2.0 OR MIT
 - data-url 0.3.2 — Apache-2.0 OR MIT
 - dbus 0.9.12 — Apache-2.0/MIT
 - deranged 0.5.8 — Apache-2.0 OR MIT
@@ -489,6 +495,7 @@ Project: desktop-tauri
 - log 0.4.33 — Apache-2.0 OR MIT
 - lru-slab 0.1.2 — Apache-2.0 OR MIT OR Zlib
 - mac-notification-sys 0.6.15 — MIT/Apache-2.0
+- mach2 0.6.0 — Apache-2.0 OR BSD-2-Clause OR MIT
 - maplit 1.0.2 — MIT/Apache-2.0
 - markup5ever 0.39.0 — Apache-2.0 OR MIT
 - markup5ever 0.40.0 — Apache-2.0 OR MIT
@@ -520,6 +527,7 @@ Project: desktop-tauri
 - num-bigint 0.4.8 — Apache-2.0 OR MIT
 - num-complex 0.4.6 — Apache-2.0 OR MIT
 - num-conv 0.2.2 — Apache-2.0 OR MIT
+- num-derive 0.4.2 — Apache-2.0 OR MIT
 - num-integer 0.1.46 — Apache-2.0 OR MIT
 - num-iter 0.1.46 — Apache-2.0 OR MIT
 - num-rational 0.4.2 — Apache-2.0 OR MIT
@@ -528,7 +536,11 @@ Project: desktop-tauri
 - num_enum_derive 0.7.6 — Apache-2.0 OR BSD-3-Clause OR MIT
 - objc2 0.6.5 — MIT
 - objc2-app-kit 0.3.2 — Apache-2.0 OR MIT OR Zlib
+- objc2-audio-toolbox 0.3.2 — Apache-2.0 OR MIT OR Zlib
+- objc2-avf-audio 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-cloud-kit 0.3.2 — Apache-2.0 OR MIT OR Zlib
+- objc2-core-audio 0.3.2 — Apache-2.0 OR MIT OR Zlib
+- objc2-core-audio-types 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-core-data 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-core-foundation 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-core-graphics 0.3.2 — Apache-2.0 OR MIT OR Zlib
@@ -757,6 +769,8 @@ Project: desktop-tauri
 - tracing-core 0.1.36 — MIT
 - tracing-log 0.2.0 — MIT
 - tracing-subscriber 0.3.23 — MIT
+- transcribe-cpp 0.4.1 — MIT
+- transcribe-cpp-sys 0.4.1 — MIT
 - tray-icon 0.25.1 — Apache-2.0 OR MIT
 - tree_magic_mini 3.2.2 — MIT
 - trim-in-place 0.1.8 — MIT

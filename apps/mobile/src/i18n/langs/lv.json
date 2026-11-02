@@ -34,6 +34,14 @@
     "composerPlaceholder": "Jautājiet stellai",
     "send": "Sūtīt",
     "stop": "Apturēt",
+    "dictate": "Diktēt",
+    "dictationCancel": "Atcelt diktēšanu",
+    "dictationFinish": "Pabeigt diktēšanu",
+    "dictationListening": "Klausos… {elapsed} no {limit}",
+    "dictationTranscribing": "Transkribē…",
+    "dictationDenied": "Diktēšanai vajag mikrofonu. Atļaujiet to stella iestatījumos.",
+    "dictationFailed": "Ierakstu neizdevās transkribēt. Mēģiniet vēlreiz.",
+    "dictationSilent": "Runa netika sadzirdēta.",
     "sendFailed": "Ziņojumu neizdevās nosūtīt. Mēģiniet vēlreiz.",
     "answerWorking": "Strādāju…",
     "answerStopped": "Apturēts.",
@@ -174,6 +182,17 @@
       "system": "Izskats: automātisks",
       "light": "Izskats: gaišs",
       "dark": "Izskats: tumšs"
+    },
+    "edit": {
+      "saved": "Saglabāts",
+      "saving": "Saglabā…",
+      "notSaved": "Vēl nav saglabāts",
+      "done": "Gatavs",
+      "openFailed": "Šo dokumentu pašlaik nevar rediģēt",
+      "takenOver": "Šo dokumentu tagad rediģē kāds cits. Jūsu izmaiņas kopš pēdējās saglabāšanas netika saglabātas.",
+      "finishFailed": "Jūsu izmaiņas ir saglabātas, bet no tām vēl nav izveidota jauna versija. Vēlreiz pieskarieties Gatavs vai izejiet: nākamā rediģēšana turpināsies no tām.",
+      "stay": "Palikt",
+      "leave": "Iziet"
     }
   },
   "signIn": {
@@ -222,9 +241,7 @@
     "share": "Kopīgot"
   },
   "more": {
-    "soon": "Drīzumā",
-    "timers": "Taimeri",
-    "voiceInput": "Balss ievade"
+    "timers": "Taimeri"
   },
   "writes": {
     "consentNeeded": "Lai lietotnē veiktu izmaiņas, stella nepieciešama jūsu atļauja. Piesakieties vēlreiz, lai to piešķirtu.",

@@ -124,6 +124,20 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:documents_write",
     handler: "apps/api/src/handlers/entities/versions/upload.ts",
   },
+  // Editing a document, as the web does: open takes the document's edit
+  // lock and hands back a session token; the checkpoints and the finalize
+  // that make the edit a new version authorize themselves with that token,
+  // not with this one. Release gives the lock back when nothing changed.
+  "POST /v1/entities/:workspaceId/desktop-edit-sessions/open": {
+    scope: "stella:documents_write",
+    handler: "apps/api/src/handlers/entities/open-desktop-edit-session.ts",
+    uncataloged: "session_token_exchange",
+  },
+  "POST /v1/entities/:workspaceId/desktop-edit-sessions/release": {
+    scope: "stella:documents_write",
+    handler: "apps/api/src/handlers/entities/release-desktop-edit-lock.ts",
+    uncataloged: "session_token_exchange",
+  },
   // The matter's columns, among them the file column a new document's upload
   // names as its `propertyId`.
   "GET /v1/properties/:workspaceId": {
@@ -257,7 +271,11 @@ export const API_OAUTH_ROUTES = {
     exportName?: string;
     /** Why the handler has no capability: its `mcp.internal` reason. */
     uncataloged?:
-      "realtime_stream" | "upload_mechanics" | "search_ui" | "native_device";
+      | "realtime_stream"
+      | "upload_mechanics"
+      | "search_ui"
+      | "native_device"
+      | "session_token_exchange";
   }
 >;
 

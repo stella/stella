@@ -12,6 +12,7 @@ import {
   readOutcomeOfStatus,
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -25,9 +26,10 @@ import {
   unreadPublisherError,
 } from "./publisher-read";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
+
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const URL_UNDER_TEST = "https://publisher.invalid/document/1";
@@ -42,7 +44,7 @@ const init = (
 });
 
 const serve = (response: () => Response | Promise<Response>) => {
-  globalThis.fetch = asFetchMock(async () => await response());
+  testFetchState.set(asFetchMock(async () => await response()));
 };
 
 const nullBodyStatus = (status: number) =>
@@ -118,7 +120,7 @@ describe("readPublisher", () => {
 
   test("a thrown request (timeout, network) is a failure to read", async () => {
     const timeout = new DOMException("timed out", "TimeoutError");
-    globalThis.fetch = asFetchMock(async () => await Promise.reject(timeout));
+    testFetchState.set(asFetchMock(async () => await Promise.reject(timeout)));
     const outcome = await readPublisher(URL_UNDER_TEST, init());
     expect(outcome.type).toBe("unavailable");
     expect(outcome.type === "unavailable" ? outcome.cause.kind : null).toBe(
@@ -129,9 +131,11 @@ describe("readPublisher", () => {
   test("the caller's cancellation still ends the read by throwing", async () => {
     const controller = new AbortController();
     controller.abort(new DOMException("cancelled", "AbortError"));
-    globalThis.fetch = asFetchMock(
-      async () =>
-        await Promise.reject(new DOMException("cancelled", "AbortError")),
+    testFetchState.set(
+      asFetchMock(
+        async () =>
+          await Promise.reject(new DOMException("cancelled", "AbortError")),
+      ),
     );
     const rejection = await rejectionOf(
       readPublisher(URL_UNDER_TEST, init({ signal: controller.signal })),
@@ -141,15 +145,17 @@ describe("readPublisher", () => {
 
   test("a 429 halts the cycle as a typed publisher refusal after one request", async () => {
     let requests = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      requests += 1;
-      return await Promise.resolve(
-        new Response("slow down", {
-          status: 429,
-          headers: { "Retry-After": "120" },
-        }),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        requests += 1;
+        return await Promise.resolve(
+          new Response("slow down", {
+            status: 429,
+            headers: { "Retry-After": "120" },
+          }),
+        );
+      }),
+    );
     const rejection = await rejectionOf(
       readPublisherText(URL_UNDER_TEST, init()),
     );
@@ -210,11 +216,16 @@ describe("unreadPublisherError", () => {
   ] as const)(
     "a $scope refusal carries its typed marker and stops as $stopKind",
     async ({ scope, stopKind }) => {
-      globalThis.fetch = asFetchMock(
-        async () =>
-          await Promise.resolve(
-            new Response("", { status: 403, headers: { "Retry-After": "60" } }),
-          ),
+      testFetchState.set(
+        asFetchMock(
+          async () =>
+            await Promise.resolve(
+              new Response("", {
+                status: 403,
+                headers: { "Retry-After": "60" },
+              }),
+            ),
+        ),
       );
       const outcome = await readPublisher(
         URL_UNDER_TEST,

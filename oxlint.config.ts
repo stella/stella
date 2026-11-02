@@ -12,6 +12,7 @@ import {
   nativeEntries,
   nativeRuleId,
 } from "./.oxlint-plugins/no-native-ui-registry.ts";
+import { GLOBALLY_MOUNTED_UI } from "./.oxlint-plugins/no-route-context-in-panel-tabs.ts";
 import { PUBLIC_LAW_MIXED_MODULES } from "./.oxlint-plugins/public-law-decision-surface-modules.ts";
 import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
@@ -63,6 +64,11 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
   files: [`.oxlint-plugins/__fixtures__/${file}`],
   rules: Object.fromEntries(rules.map((rule) => [rule, "error"] as const)),
 });
+
+export const NO_RENDER_PHASE_UPDATE_GOVERNED_PATHS = [
+  "apps",
+  "packages",
+] as const;
 
 // Only the rows that declare an enforcement kind reach the lint rule; the rest
 // document an owner that no rule can yet prove.
@@ -464,6 +470,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-section-sign-glyph.fixture.tsx", [
     "no-section-sign-glyph/no-section-sign-glyph",
   ]),
+  fixtureRuleOverride("no-style-substring-match.fixture.ts", [
+    "no-style-substring-match/no-style-substring-match",
+  ]),
   fixtureRuleOverride("no-inert-autofocus.fixture.tsx", [
     "no-inert-autofocus/no-inert-autofocus",
   ]),
@@ -580,7 +589,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("test-timing.fixture.ts", [
     "test-timing/no-real-time-wait",
     "test-timing/no-polling-loop",
+    "test-timing/no-literal-wait-timeout",
     "test-timing/no-unreasoned-timeout",
+    "test-timing/no-file-existence-wait",
   ]),
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
     "no-untyped-updates/no-untyped-updates",
@@ -1644,6 +1655,7 @@ const config = defineConfig({
     ],
     "no-nanoid/no-nanoid": "error",
     "no-section-sign-glyph/no-section-sign-glyph": "error",
+    "no-style-substring-match/no-style-substring-match": "error",
     "no-inert-autofocus/no-inert-autofocus": "error",
     "no-hand-built-date-range-filter/no-hand-built-date-range-filter": "error",
     "confine-server-reads/confine-server-reads": "error",
@@ -1903,6 +1915,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
+    "./.oxlint-plugins/no-style-substring-match.ts",
     "./.oxlint-plugins/no-inert-autofocus.ts",
     "./.oxlint-plugins/no-optional-chain-null-compare.ts",
     "./.oxlint-plugins/no-constructed-fetch-object.ts",
@@ -1942,6 +1955,7 @@ const config = defineConfig({
     "./.oxlint-plugins/query-data-requires-state.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
     "./.oxlint-plugins/no-route-context-in-panel-tabs.ts",
+    "./.oxlint-plugins/no-render-phase-update.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
@@ -2074,6 +2088,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-dropped-fake-timers.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
+    "./.oxlint-plugins/no-global-fetch-replacement.ts",
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/inspector-header-title.ts",
@@ -2159,6 +2174,17 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-render-phase-update.fixture.tsx",
+        ...NO_RENDER_PHASE_UPDATE_GOVERNED_PATHS.map(
+          (directory) => `${directory}/**/*.{ts,tsx}`,
+        ),
+      ],
+      rules: {
+        "no-render-phase-update/no-render-phase-update": "error",
+      },
+    },
     {
       // Page-level narrative copy owns a readable measure. Reusable component
       // internals and task-shaped surfaces are outside this narrow enrolment.
@@ -2448,8 +2474,10 @@ const config = defineConfig({
       // which only shrinks.
       files: ["**/*.{test,spec}.{ts,tsx,mts,cts,js,mjs}"],
       rules: {
+        "test-timing/no-literal-wait-timeout": "error",
         "test-timing/no-real-time-wait": "error",
         "test-timing/no-polling-loop": "error",
+        "test-timing/no-file-existence-wait": "error",
       },
     },
     {
@@ -2951,14 +2979,6 @@ const config = defineConfig({
       // code. It uses standard Node-style `throw new Error(...)` because
       // it doesn't depend on better-result.
       files: [".claude/mcp/**/*.ts"],
-      rules: { "no-bare-error/no-bare-error": "off" },
-    },
-    {
-      // Test-only adapter helper consumed exclusively from
-      // `**/*.test.ts`. Not part of any production code path.
-      files: [
-        "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
-      ],
       rules: { "no-bare-error/no-bare-error": "off" },
     },
     {
@@ -5236,15 +5256,7 @@ const config = defineConfig({
       // belongs to shared providers, including for tabs owned outside inspector.
       files: [
         ".oxlint-plugins/__fixtures__/no-route-context-in-panel-tabs.fixture.tsx",
-        "apps/web/src/**/*inspector*.tsx",
-        "apps/web/src/components/inspector/**/*.tsx",
-        "apps/web/src/components/inspector/**/*.ts",
-        "apps/web/src/features/knowledge/playbook-editor/playbook-draft-view.tsx",
-        "apps/web/src/features/knowledge/views/tools/tool-detail-panel-view.tsx",
-        "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx",
-        "apps/web/src/components/workspaces/matter-metadata-sheet.tsx",
-        "apps/web/src/components/workspaces/hooks/use-start-workflow.ts",
-        "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts",
+        ...GLOBALLY_MOUNTED_UI,
       ],
       rules: {
         "no-route-context-in-panel-tabs/no-route-context-in-panel-tabs":
@@ -6463,6 +6475,23 @@ const config = defineConfig({
       rules: {
         "no-direct-test-state/no-direct-test-state": "error",
         "no-shared-checkout-mutation/no-shared-checkout-mutation": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/**/*.{test,spec}.{ts,tsx,js,jsx}",
+        "apps/api/**/__tests__/**/*.{ts,tsx,js,jsx}",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/src/mcp/__fixtures__/external-source/replay.ts",
+        ".oxlint-plugins/__fixtures__/no-global-fetch-replacement.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/tests/helpers/test-fetch.ts",
+        // The process-wide guard that restores fetch after every test.
+        "apps/api/src/tests/fetch-global-guard.ts",
+      ],
+      rules: {
+        "no-global-fetch-replacement/no-global-fetch-replacement": "error",
       },
     },
     {
