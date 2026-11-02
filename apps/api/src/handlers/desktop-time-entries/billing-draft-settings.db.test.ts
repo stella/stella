@@ -580,7 +580,7 @@ test("a withdrawal stays committed and answers revoked when reading the settings
       )
       .map(({ attributes }) => attributes),
   ).toMatchObject([
-    { change: "withdraw_consent", "error.type": "UnhandledException" },
+    { operation: "withdraw_consent", "error.type": "UnhandledException" },
   ]);
 
   expect(withdrawn.status).toBe(200);

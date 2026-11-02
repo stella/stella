@@ -528,6 +528,17 @@ describe("the print view's listing", () => {
     });
   });
 
+  test("a span nested in the italic subject inherits it without repeating it", async () => {
+    const page = parsePlTkListingPage(
+      (await listingFixture("pl-tk-listing-merits-page-0.html.gz")).replace(
+        'font-style: italic;">Tryb uchwalenia ustawy.</span>',
+        'font-style: italic;">Tryb <span style="font-style:inherit">uchwalenia</span> ustawy.</span>',
+      ),
+      "merits",
+    );
+    expect(page?.rows[1]?.subject).toBe("Tryb uchwalenia ustawy");
+  });
+
   test("every row of the oldest page dates, including a padded day", async () => {
     const page = parsePlTkListingPage(
       await listingFixture("pl-tk-listing-merits-page-149.html.gz"),

@@ -304,6 +304,29 @@
     "placeholder": "Hledejte spisy a konverzace, nebo spusťte příkaz",
     "noResults": "Nic neodpovídá „{query}“"
   },
+  "search": {
+    "placeholder": "Hledat ve stella",
+    "clear": "Vymazat hledání",
+    "cancel": "Zrušit",
+    "recent": "Nedávná hledání",
+    "clearRecent": "Vymazat",
+    "hint": "Hledejte ve spisech, dokumentech, úkolech, konverzacích a judikatuře.",
+    "filters": "Filtry",
+    "noResultsTitle": "Žádné výsledky",
+    "noResults": "Nic neodpovídá „{query}“. Zkuste jiná slova nebo odeberte filtr.",
+    "loadFailed": "Hledání se nepodařilo provést.",
+    "retry": "Zkusit znovu",
+    "type": {
+      "document": "Dokumenty",
+      "matter": "Spisy",
+      "task": "Úkoly",
+      "caseLaw": "Judikatura",
+      "chat": "Konverzace",
+      "folder": "Složky",
+      "message": "E-maily",
+      "link": "Odkazy"
+    }
+  },
   "pane": {
     "showList": "Zobrazit seznam",
     "hideList": "Skrýt seznam"
