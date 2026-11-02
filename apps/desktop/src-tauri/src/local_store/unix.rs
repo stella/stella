@@ -94,7 +94,9 @@ fn roots() -> Vec<(PathBuf, bool)> {
     ));
     roots.push((home.join("Library/LaunchAgents"), false));
   }
-  #[cfg(test)]
+  // Test builds, the allocation harness included, keep their fixtures under
+  // the temporary directory.
+  #[cfg(any(test, feature = "allocation-tests"))]
   roots.push((std::env::temp_dir(), false));
   roots
 }
@@ -105,9 +107,9 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
     .filter(|(root, _)| path.starts_with(root))
     .max_by_key(|(root, _)| root.components().count())
     .ok_or_else(invalid_path)?;
-  #[cfg(test)]
+  #[cfg(any(test, feature = "allocation-tests"))]
   let temporary_anchor = root_path == std::env::temp_dir();
-  #[cfg(not(test))]
+  #[cfg(not(any(test, feature = "allocation-tests")))]
   let temporary_anchor = false;
   let relative = path
     .strip_prefix(&root_path)
@@ -143,7 +145,7 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
   opened.remove(&root_path);
   // Only the platform-supplied temporary anchor may contain a system alias.
   // All descendants, including test fixtures, still use no-follow traversal.
-  #[cfg(test)]
+  #[cfg(any(test, feature = "allocation-tests"))]
   let physical_root = if root_path == std::env::temp_dir() {
     root_path.canonicalize()?
   } else {
@@ -151,7 +153,7 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
   };
   // The platform base may contain system or user symlinks; resolve it once.
   // The application directory and every descendant keep no-follow traversal.
-  #[cfg(not(test))]
+  #[cfg(not(any(test, feature = "allocation-tests")))]
   let physical_root = {
     let base = root_path.parent().ok_or_else(invalid_path)?;
     let name = root_path.file_name().ok_or_else(invalid_path)?;
