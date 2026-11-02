@@ -6428,7 +6428,8 @@
       "errored": "Kļūda",
       "formatNotSupported": "Formāts netiek atbalstīts",
       "selectAValue": "Izvēlieties vērtību",
-      "selectValues": "Izvēlieties vērtības"
+      "selectValues": "Izvēlieties vērtības",
+      "wholeNumberOnly": "Ievadiet veselu skaitli"
     },
     "files": {
       "addFilePropertyToUpload": "Pievienojiet faila rekvizītu, lai augšupielādētu failus",

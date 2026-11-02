@@ -6428,7 +6428,8 @@
       "errored": "Klaida",
       "formatNotSupported": "Formatas nepalaikomas",
       "selectAValue": "Pasirinkite reikšmę",
-      "selectValues": "Pasirinkite reikšmes"
+      "selectValues": "Pasirinkite reikšmes",
+      "wholeNumberOnly": "Įveskite sveikąjį skaičių"
     },
     "files": {
       "addFilePropertyToUpload": "Pridėkite failo savybę norėdami įkelti failus",
