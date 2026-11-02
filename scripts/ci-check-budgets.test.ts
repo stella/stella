@@ -3,8 +3,11 @@ import { expect, test } from "bun:test";
 import {
   checkBudget,
   DEFAULT_BUDGET_MINUTES,
+  DEFAULT_PEAK_RSS_MIB,
   MINIMUM_BUDGET_SECONDS,
   passedDurations,
+  passedPeaks,
+  peakRssMiB,
   percentile,
   poolJobOf,
 } from "./ci-check-budgets";
@@ -50,6 +53,28 @@ test("durations come from the pool's passed check groups only", () => {
     { name: "Content delivery declarations", seconds: 75.1 },
     { name: "A: b", seconds: 235.9 },
   ]);
+});
+
+test("peaks come from the summary table's passed rows only", () => {
+  // Rows as a job log shows the pool's summary table.
+  const log = [
+    "2026-11-01T02:37:13.1425591Z | Check | Result | Seconds | Peak RSS (MiB) |",
+    "2026-11-01T02:37:13.1425700Z | --- | --- | ---: | ---: |",
+    "2026-11-01T02:37:13.1425800Z | Code quality (web) | success | 237.2 | 11960 |",
+    "2026-11-01T02:37:13.1425900Z | Broken | failure: exit code 1 | 3.0 | 700 |",
+    "2026-11-01T02:37:13.1426000Z | Other | skipped |  |  |",
+    "2026-11-01T02:37:13.1426100Z | A \\| b | success | 1.2 | 80 |",
+  ].join("\r\n");
+  expect(passedPeaks(log)).toEqual([
+    { name: "Code quality (web)", mib: 11_960 },
+    { name: "A | b", mib: 80 },
+  ]);
+});
+
+test("a check's peak is the largest measured, and an unmeasured check gets the default", () => {
+  expect(peakRssMiB([165, 11_960, 2140])).toBe(11_960);
+  expect(peakRssMiB([0])).toBe(1);
+  expect(peakRssMiB([])).toBe(DEFAULT_PEAK_RSS_MIB);
 });
 
 test("matrix partitions map to their pool", () => {

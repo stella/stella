@@ -31,6 +31,7 @@ import {
   type GuardRollout,
   guardRolloutSource,
 } from "./guard-rollout-policy.ts";
+import { assertOfflineCheckPreload } from "./offline-check-startup";
 import { parseLedger } from "./suppression-waivers";
 
 export const DAY_MS = 86_400_000;
@@ -678,6 +679,8 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
+
   const check = process.argv.includes("--check");
   const trackedFilesFlag = process.argv.indexOf("--tracked-files");
   if (check && trackedFilesFlag === -1) {
