@@ -1,3 +1,6 @@
+import { parseChangesetFile } from "@changesets/parse";
+import { Result } from "better-result";
+
 const CHANGESET_FRONTMATTER_FENCE = "---";
 
 class ChangesetEntryError extends Error {
@@ -35,13 +38,14 @@ const changesetPackageName = (line: string): string | null => {
 const parseChangesetFrontmatter = (entry: string) => {
   const lines = entry.split("\n");
   if (lines.at(0)?.trim() !== CHANGESET_FRONTMATTER_FENCE) {
-    return { entries: [], summary: "" };
+    return { names: [], hasFrontmatter: false, summary: "" };
   }
-  const entries: { name: string; bump: string }[] = [];
+  const names: string[] = [];
   for (const [index, line] of lines.slice(1).entries()) {
     if (line.trim() === CHANGESET_FRONTMATTER_FENCE) {
       return {
-        entries,
+        names,
+        hasFrontmatter: true,
         summary: lines
           .slice(index + 2)
           .join("\n")
@@ -50,7 +54,7 @@ const parseChangesetFrontmatter = (entry: string) => {
     }
     const name = changesetPackageName(line);
     if (name !== null) {
-      entries.push({ name, bump: line.slice(line.indexOf(":") + 1).trim() });
+      names.push(name);
     }
   }
   throw new ChangesetEntryError(
@@ -61,32 +65,32 @@ const parseChangesetFrontmatter = (entry: string) => {
 export const parseChangesetEntry = (
   entry: string,
 ): { packages: readonly string[]; summary: string } => {
-  const { entries, summary } = parseChangesetFrontmatter(entry);
-  return { packages: entries.map(({ name }) => name), summary };
+  const { names, summary } = parseChangesetFrontmatter(entry);
+  return { packages: names, summary };
 };
 
 type ChangesetRelease = { name: string; type: "major" | "minor" | "patch" };
 
 /**
- * The bump as the YAML reader Changesets uses sees it: a single- or
- * double-quoted scalar is unquoted, and a trailing ` # comment` is dropped.
- * Anything else stays as written, so only an exact bump name authorizes.
+ * The releases exactly as Changesets reads them at release time: the entry
+ * goes through Changesets' own parser, so quoting, comments and block scalars
+ * mean what they mean to `changeset version`. An entry that parser rejects
+ * (invalid YAML, a non-mapping, an unknown bump) fails the check instead of
+ * reading as no release; a `none` bump authorizes nothing.
  */
-const changesetBumpValue = (raw: string): string => {
-  const quoted = /^(["'])([^"']*)\1(?:\s+#.*)?$/u.exec(raw);
-  if (quoted !== null) {
-    return quoted[2] ?? "";
-  }
-  const comment = /\s#/u.exec(raw);
-  return comment === null ? raw : raw.slice(0, comment.index).trimEnd();
-};
-
 export const parseChangesetReleases = (
   entry: string,
-): readonly ChangesetRelease[] =>
-  parseChangesetFrontmatter(entry).entries.flatMap(({ name, bump }) => {
-    const type = changesetBumpValue(bump);
-    return type === "major" || type === "minor" || type === "patch"
-      ? [{ name, type }]
-      : [];
-  });
+): readonly ChangesetRelease[] => {
+  if (!parseChangesetFrontmatter(entry).hasFrontmatter) {
+    return [];
+  }
+  const parsed = Result.try(() => parseChangesetFile(entry));
+  if (parsed.isErr()) {
+    throw new ChangesetEntryError(
+      `Changesets cannot read a pending changeset: ${parsed.error.message}`,
+    );
+  }
+  return parsed.value.releases.flatMap(({ name, type }) =>
+    type === "none" ? [] : [{ name, type }],
+  );
+};
