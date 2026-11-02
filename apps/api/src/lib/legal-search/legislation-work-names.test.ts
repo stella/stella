@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import { statuteGazetteEliCollection } from "@stll/api-contract/statute-gazette";
+import type { ActTitleSpec } from "@stll/legal-atlas/provision-citation-profile";
+import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
+
 import { createSafeId } from "@/api/lib/branded-types";
 import {
+  declinedTitleReference,
   legislationNameMatchKey,
   legislationNameQueryKeys,
   legislationWorkNameForms,
@@ -91,6 +96,74 @@ describe("legislationNameQueryKeys", () => {
       legislationNameQueryKeys("zákona o obětech trestných činů", undefined),
     ).toEqual(["zákona o obětech trestných činů"]);
     expect(legislationNameQueryKeys("2012", "CZE")).toEqual([]);
+  });
+});
+
+describe("declinedTitleReference", () => {
+  const PROFILES = [
+    ["cze", PROVISION_CITATION_PROFILES.CZE],
+    ["svk", PROVISION_CITATION_PROFILES.SVK],
+  ] as const;
+
+  test("every declined short title a profile reads names its act, in any letter case", () => {
+    for (const [country, profile] of PROFILES) {
+      const titles: readonly ActTitleSpec[] = profile.titles;
+      for (const spec of titles) {
+        // A day inside the entry's window: its start, the end of the act's
+        // year for a closed window without one, today for an open one.
+        const citedOn =
+          spec.citedFrom ??
+          (spec.citedUntil === undefined
+            ? "2026-11-02"
+            : `${String(spec.identifier.year)}-12-31`);
+        if (spec.citedUntil !== undefined && citedOn >= spec.citedUntil) {
+          continue;
+        }
+        const expected = {
+          country,
+          collection: statuteGazetteEliCollection(spec.identifier.collection),
+          number: String(spec.identifier.number),
+          year: String(spec.identifier.year),
+          label: null,
+        };
+        for (const spelling of spec.spellings) {
+          for (const query of [
+            spelling,
+            spelling.toUpperCase(),
+            ` ${spelling.replaceAll(" ", "  ")} `,
+          ]) {
+            expect({
+              query,
+              reference: declinedTitleReference(query, country, citedOn),
+            }).toEqual({ query, reference: expected });
+          }
+        }
+      }
+    }
+  });
+
+  test("the reading date picks the act a recodified title named then", () => {
+    expect(
+      declinedTitleReference("občanského zákoníku", "cze", "2026-11-02"),
+    ).toMatchObject({ number: "89", year: "2012", collection: "sb" });
+    expect(
+      declinedTitleReference("občanského zákoníku", "cze", "2010-01-01"),
+    ).toMatchObject({ number: "40", year: "1964", collection: "sb" });
+    expect(
+      declinedTitleReference("Trestného zákona", "svk", "2026-11-02"),
+    ).toMatchObject({ number: "300", year: "2005", collection: "zz" });
+  });
+
+  test("a title inside longer prose, an abbreviation or an unknown name names nothing", () => {
+    for (const query of [
+      "náhrada škody podle občanského zákoníku",
+      "občanského zákoníku § 2910",
+      "OZ",
+      "zákona o něčem neznámém",
+      "",
+    ]) {
+      expect(declinedTitleReference(query, "cze", "2026-11-02")).toBeNull();
+    }
   });
 });
 
