@@ -621,31 +621,24 @@ const queryDecisions = async ({
  * e.g. "62024CJ0436" → "C-436/24"
  *      "62023TJ0201" → "T-201/23"
  */
+/**
+ * A case-law CELEX number: sector 6, the year, a two-letter descriptor and
+ * the case number. The descriptor's first letter names the court (C the Court
+ * of Justice, T the General Court, F the Civil Service Tribunal) and its
+ * second the document (J judgment, O order, C opinion, T third-party
+ * proceedings, …), so every document form of a court maps to that court's
+ * register, `62013FO0060` (an order) as much as `62009FJ0100`.
+ */
+const CASE_LAW_CELEX =
+  /^6(?<year>\d{4})(?<court>[CTF])[A-Z](?<num>\d{1,4})(?!\d)/u;
+
 export const celexToCaseNumber = (celex: string): string => {
-  const match = /^6(?<year>\d{4})(?<type>CJ|TJ|CC|CO|TO|FJ)(?<num>\d+)/u.exec(
-    celex,
-  );
-  if (!match) {
+  const { year, court, num } = CASE_LAW_CELEX.exec(celex)?.groups ?? {};
+  if (year === undefined || court === undefined || num === undefined) {
     return celex;
   }
-
-  const { year: yearStr, type: typeStr, num: numStr } = match.groups ?? {};
-  if (!yearStr || !typeStr || !numStr) {
-    return celex;
-  }
-  const year = yearStr.slice(2); // "2024" → "24"
-  const caseNum = Number.parseInt(numStr, 10);
-  const CELEX_PREFIX: Record<string, string> = {
-    CJ: "C",
-    CC: "C",
-    CO: "C",
-    TJ: "T",
-    TO: "T",
-    FJ: "F",
-  };
-  const prefix = CELEX_PREFIX[typeStr] ?? "C";
-
-  return `${prefix}-${caseNum}/${year}`;
+  // "2024" → "24"; leading zeros of the case number drop.
+  return `${court}-${String(Number.parseInt(num, 10))}/${year.slice(2)}`;
 };
 
 /**

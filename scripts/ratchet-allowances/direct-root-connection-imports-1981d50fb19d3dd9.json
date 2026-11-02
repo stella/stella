@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/account-export/organization-audit-archive.ts",
+  "delta": 1,
+  "reason": "The organization audit archive reads matter visibility with the deleting owner's own matter authorization, through a scoped RLS connection built from the request handle like the account export pages; tests inject the connection."
+}
