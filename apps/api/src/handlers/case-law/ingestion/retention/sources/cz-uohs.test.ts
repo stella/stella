@@ -8,7 +8,7 @@ import {
   czUohsSyntheticPdf,
 } from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
 import {
-  buildCzUohsDecision,
+  buildCzUohsDecision as uncheckedBuildCzUohsDecision,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import {
@@ -17,11 +17,13 @@ import {
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { czUohsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { czUohsRetention } from "./cz-uohs";
 
+const buildCzUohsDecision = guardParser(uncheckedBuildCzUohsDecision);
 const testFetchState = createTestFetch();
 
 const ADAPTER_FIXTURES = new URL(

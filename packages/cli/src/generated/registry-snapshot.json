@@ -7304,7 +7304,7 @@
                 },
                 "value": {
                   "type": "string",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": ["type", "value"],
@@ -7327,7 +7327,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": ["type", "value"],
@@ -7347,7 +7347,7 @@
                     "type": "string",
                     "minLength": 1
                   },
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": ["type", "value"],
@@ -7371,7 +7371,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": ["type", "value"],
@@ -7386,8 +7386,15 @@
                   "type": "string"
                 },
                 "value": {
-                  "type": "integer",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 },
                 "currency": {
                   "anyOf": [

@@ -7,7 +7,7 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { assertProperty } from "@stll/property-testing";
 
-import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import type { ParseUsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
@@ -22,6 +22,7 @@ import {
   visibleRunDocument,
 } from "@/api/lib/legal-search/parsers/run-content-text.fixtures";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import { classifyUsDocumentLines, usDocumentLinesOf } from "./cz-us";
 import {
@@ -34,6 +35,8 @@ import {
 } from "./document-note-paths.fixtures";
 import { assertHtmlRtfLineParity } from "./rtf-line-parity.fixtures";
 import { inlinesToPlainText } from "./shared-inlines";
+
+const parseUsDecisionHtml = guardParser(uncheckedParseUsDecisionHtml);
 
 test("CZ field results keep visible hyphens and omit instructions", () => {
   const line = usDocumentLinesOf(VISIBLE_FIELD_DOCUMENT).at(0);
