@@ -25,8 +25,14 @@ test("the answer footer keeps its actions and consulted sources on one row", asy
     waitUntil: "domcontentloaded",
   });
   const footer = page.locator("[data-chat-answer-footer]").last();
-  const trigger = footer.getByRole("button", { name: /Also consulted/u });
+  // The disclosure leads the citations, ahead of the cited sources; its label
+  // is translated, so the "ar" project finds it by position, not by name.
+  const trigger = footer
+    .locator("[data-chat-answer-citations]")
+    .getByRole("button")
+    .first();
   await expect(trigger).toBeVisible();
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
 
   const centre = async (selector: string) => {
     const box = await stableBoundingBox(page, footer.locator(selector).first());

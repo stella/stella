@@ -870,7 +870,6 @@
   },
   "no-native-ui/no-native-accordion": {
     "apps/desktop/src/activity/ActivityApp.tsx": 2,
-    "apps/web/src/features/chat/source-chips.tsx": 2,
     "packages/decision-reader/src/decision-text.tsx": 2,
     "packages/decision-reader/src/headnote-block.tsx": 2
   },
