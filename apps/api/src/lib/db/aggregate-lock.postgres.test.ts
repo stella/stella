@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
+import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -19,6 +19,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 import {
@@ -77,9 +78,7 @@ const withPublicRowFixture = async ({
     }
     await run({ organizationId, otherOrganizationId, workspaceId });
   } finally {
-    await db
-      .delete(organization)
-      .where(inArray(organization.id, [organizationId, otherOrganizationId]));
+    await deleteOrganizationsForTest(db, [organizationId, otherOrganizationId]);
   }
 };
 

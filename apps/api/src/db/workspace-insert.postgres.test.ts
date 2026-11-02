@@ -11,6 +11,7 @@ import {
 } from "@/api/db/rls";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { ORGANIZATION_DELETION_FOR_TEST_SQL } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -58,7 +59,9 @@ describe.skipIf(!runPostgresTests)("workspace insert policy (postgres)", () => {
                 SELECT id FROM workspaces WHERE id = ${workspaceId}`;
               expect([...rows]).toEqual(allowed ? [{ id: workspaceId }] : []);
             } finally {
-              await client`DELETE FROM organization WHERE id = ${organizationId}`;
+              await client.unsafe(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+                organizationId,
+              ]);
               await client`DELETE FROM "user" WHERE id = ${userId}`;
             }
           });

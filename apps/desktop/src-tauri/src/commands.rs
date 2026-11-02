@@ -291,14 +291,10 @@ pub async fn set_autostart(
   enabled: bool,
   app: tauri::AppHandle,
 ) -> Result<bool, String> {
-  use tauri_plugin_autostart::ManagerExt;
   if enabled {
     crate::autostart::enable(&app)?;
   } else {
-    app
-      .autolaunch()
-      .disable()
-      .map_err(|e| format!("autostart disable failed: {e}"))?;
+    crate::local_store::disable_autostart(&app)?;
   }
   Ok(enabled)
 }
