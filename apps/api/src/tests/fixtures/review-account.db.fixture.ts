@@ -1,8 +1,11 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
+
+// Constants only: safe to load before the fixture's environment is read.
+import { SETTING_USER_ID } from "@/api/db/rls";
 
 const email = process.env["APP_REVIEW_ACCOUNT_EMAIL"];
 const organizationId = process.env["APP_REVIEW_ORGANIZATION_ID"];
@@ -16,7 +19,9 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
   const { rootDb } = await import("@/api/db/root");
   const { user, organization, verification, oauthResource } =
     await import("@/api/db/auth-schema");
-  const { userProfessionalUseAcceptances } = await import("@/api/db/schema");
+  const { accountAuditLogs, userProfessionalUseAcceptances } =
+    await import("@/api/db/schema");
+  const { brandPersistedUserId } = await import("@/api/lib/safe-id-boundaries");
   const { getBetterAuthOAuthResources } =
     await import("@/api/lib/oauth-resource-policy");
   const { getAuthEndpointUrl } = await import("@/api/lib/auth/auth-paths");
@@ -49,7 +54,10 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
     if (stored.allowedScopes === null) {
       return panic("Configured OAuth resource has no allowed scopes");
     }
-    return { ...stored, allowedScopes: stored.allowedScopes.toSorted(compareCodeUnit) };
+    return {
+      ...stored,
+      allowedScopes: stored.allowedScopes.toSorted(compareCodeUnit),
+    };
   });
   expect(storedResources).toHaveLength(configuredResources.length);
   for (const resource of configuredResources) {
@@ -194,6 +202,23 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
         where: { organizationId: { eq: organizationId } },
       }),
     ).toEqual(memberships);
+    // FORCE RLS binds even owner reads of account history to the account.
+    const creationHistory = await rootDb.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('${sql.raw(SETTING_USER_ID)}', ${created.id}, true)`,
+      );
+      return await tx
+        .select({
+          eventType: accountAuditLogs.eventType,
+          resourceId: accountAuditLogs.resourceId,
+        })
+        .from(accountAuditLogs)
+        .where(eq(accountAuditLogs.userId, brandPersistedUserId(created.id)));
+    });
+    expect(creationHistory).toContainEqual({
+      eventType: "organization.created",
+      resourceId: organizationId,
+    });
     const firstAcceptances = await rootDb
       .select()
       .from(userProfessionalUseAcceptances)
@@ -331,7 +356,8 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
     await rootDb
       .delete(organization)
       .where(eq(organization.id, organizationId));
-    await rootDb.delete(user).where(eq(user.email, email));
+    // Account history is append-only and keeps the review account's row;
+    // each run provisions its own random account.
     await rootDb.delete(user).where(eq(user.email, ordinaryEmail));
     await rootDb
       .delete(verification)
