@@ -1789,21 +1789,9 @@
   },
   {
     "file": "apps/api/src/handlers/time-entries/batch/update.ts",
-    "fingerprint": "79b524ca823812018b5fb66c7f9c92ce2b38bd5703a8c07b07c5a9d213d7ef91",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/time-entries/batch/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/time-entries/batch/update.ts",
     "fingerprint": "bc51ffce8fe7227ad57efae890ed95d71f13edd7c73013aaa974a25c9787bc6f",
     "count": 1,
     "reason": "Batch approval locks the same rows, now selected as submitted entries or the caller's own drafts instead of every draft, and reads each row's status for its audit."
-  },
-  {
-    "file": "apps/api/src/handlers/time-entries/batch/update.ts",
-    "fingerprint": "c3117ba7dcce102968bb31361bc04cf99a0798ebcb72c78708932acc1d2ebae8",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/time-entries/batch/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/handlers/time-entries/split.ts",
@@ -3002,12 +2990,6 @@
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts",
     "fingerprint": "761e4ecb8b45c0479d4099ad94157f0fd84dd5a63cf01a210c4a2cd147076cd9",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts",
-    "fingerprint": "96c5a6a41c9ab423985e3673ce7ea8f0788a44f3aa6a99ed66794d77af23bfaa",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },

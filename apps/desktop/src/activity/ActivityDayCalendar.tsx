@@ -581,62 +581,70 @@ function useCalendarColumns({
       const range = formatRange(block.startMs, block.endMs);
       const tooltip = (
         <ActivityBlockDetails
-          details={blockDetails(
-            block.type === "mixed" ? block.sources : [block.segment],
-            titleOf,
-          )}
+          details={blockDetails(block.sources, titleOf)}
           range={range}
           sourceAppVisuals={sourceAppVisuals}
         />
       );
-      if (block.type === "mixed") {
-        const apps = format.list(
-          block.apps.map(({ name }) => name),
-          { type: "unit" },
+      const apps = format.list(
+        block.apps.map(({ name }) => name),
+        { type: "unit" },
+      );
+      const duration = durationLabel(
+        block.sources.reduce(
+          (sum, segment) => sum + segment.endMs - segment.startMs,
+          0,
+        ),
+      );
+      const onlyApp = block.apps.length === 1 ? block.sources.at(0) : undefined;
+      const onCall =
+        onlyApp !== undefined && block.sources.every(({ call }) => call);
+      // A block on one app names the app and shows its icon; one that moved
+      // between apps lists them under its topic.
+      let appName: string | null = null;
+      let appIcon: ReactNode = null;
+      if (onlyApp !== undefined && onCall) {
+        appName = t("callIn", { app: onlyApp.appName });
+        appIcon = (
+          <PhoneIcon aria-hidden="true" className="size-3.5 shrink-0" />
         );
-        return {
-          accessibleLabel: t("mixedActivityLabel", { apps, range }),
-          caption: apps,
-          endMs: block.endMs,
-          id: block.id,
-          kind: "mixed",
-          startMs: block.startMs,
-          title: t("mixedActivity"),
-          tone: { type: "neutral" },
-          tooltip,
-        };
+      } else if (onlyApp !== undefined) {
+        appName = onlyApp.appName;
+        appIcon = (
+          <ActivitySourceIcon
+            appIdentifier={onlyApp.appIdentifier}
+            sourceAppVisuals={sourceAppVisuals}
+          />
+        );
       }
-      const { segment } = block;
-      const name = segment.call
-        ? t("callIn", { app: segment.appName })
-        : segment.appName;
-      const detailTitle = titleOf(segment);
-      const duration = durationLabel(segment.endMs - segment.startMs);
+      const topic =
+        block.matter?.name ?? appName ?? block.title ?? t("mixedActivity");
+      const detail =
+        block.matter === null && appName === null ? null : block.title;
+      const label = [topic, duration, detail]
+        .filter((part) => part !== null)
+        .join(" · ");
+      const switching = block.matter === null && onlyApp === undefined;
+      // The apps are the caption unless the block is named by its one app.
+      const namedByApp = block.matter === null && onlyApp !== undefined;
       return {
-        accessibleLabel: `${detailTitle === null ? name : `${name} · ${detailTitle}`}, ${range}`,
-        caption: range,
+        accessibleLabel: switching
+          ? t("mixedActivityLabel", { apps, range })
+          : `${[topic, detail, namedByApp ? null : apps]
+              .filter((part) => part !== null)
+              .join(" · ")}, ${range}`,
+        caption: namedByApp ? range : apps,
         endMs: block.endMs,
         id: block.id,
-        kind: "segment",
+        kind: switching ? "mixed" : "segment",
         startMs: block.startMs,
         title: (
           <span className="flex min-w-0 items-center gap-1.5">
-            {segment.call ? (
-              <PhoneIcon aria-hidden="true" className="size-3.5 shrink-0" />
-            ) : (
-              <ActivitySourceIcon
-                appIdentifier={segment.appIdentifier}
-                sourceAppVisuals={sourceAppVisuals}
-              />
-            )}
-            <bdi className="truncate">
-              {[name, duration, detailTitle]
-                .filter((part) => part !== null)
-                .join(" · ")}
-            </bdi>
+            {appIcon}
+            <bdi className="truncate">{label}</bdi>
           </span>
         ),
-        tone: matterTone(segment.matter),
+        tone: matterTone(block.matter),
         tooltip,
       };
     },

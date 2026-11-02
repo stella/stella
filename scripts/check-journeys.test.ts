@@ -73,7 +73,8 @@ type Scenario = {
     | "sse"
     | "auth-error"
     | "invalid-hit"
-    | "absent-decision";
+    | "absent-decision"
+    | "stale-coverage";
   promotionVersion?: string;
   promotionAgeSeconds?: number;
   cliVersion?: string;
@@ -96,6 +97,7 @@ type Scenario = {
   firstAssetStatus?: number;
   session?: "required" | "notification-error";
   redirect?: "once" | "chain";
+  searchSlot?: string;
 };
 
 type WorkflowRun = {
@@ -105,8 +107,29 @@ type WorkflowRun = {
   display_title?: string;
 };
 
+const coverageFixture = (status: string) => ({
+  asOf: "2026-11-01T10:00:00.000Z",
+  freshness: { status, ageSeconds: 60 },
+  countries: [
+    {
+      country: "CZE",
+      availability: "searchable",
+      sources: [{ adapterKey: "fixture" }],
+    },
+    { country: "USA", availability: "in-preparation", sources: [] },
+  ],
+});
+
 type McpPayloadOptions = { name: string; rpc: Scenario["rpc"] };
 const mcpPayload = ({ name, rpc }: McpPayloadOptions) => {
+  if (name === "case_law_coverage") {
+    if (rpc === "empty") {
+      return { ...coverageFixture("current"), countries: [] };
+    }
+    return coverageFixture(
+      rpc === "stale-coverage" ? "refresh_pending" : "current",
+    );
+  }
   if (name !== "read_case_law_decision") {
     if (rpc === "empty") {
       return { results: [] };
@@ -251,12 +274,17 @@ const run = async ({
   const work = await mkdtemp(path.join(tmpdir(), "journey-test-"));
   const counts = new Map<string, number>();
   const calls: { name: string; args: unknown }[] = [];
+  const searchUrls: string[] = [];
   let initialized = false;
   const server = Bun.serve({
     port: 0,
     async fetch(req) {
-      const pathname = new URL(req.url).pathname;
+      const url = new URL(req.url);
+      const { pathname } = url;
       counts.set(pathname, (counts.get(pathname) ?? 0) + 1);
+      if (pathname === "/law/cases") {
+        searchUrls.push(`${pathname}${url.search}`);
+      }
       if (pathname === "/releases") {
         return Response.json([
           {
@@ -467,6 +495,7 @@ rm -f "$response"
           JOURNEY_MCP_URL: `${server.url.toString()}mcp`,
           JOURNEY_CLI_URL: server.url.toString().replace(/\/$/u, ""),
           JOURNEY_RETRY_PAUSE_SECONDS: "0",
+          JOURNEY_SEARCH_SLOT: scenario.searchSlot ?? "0",
           STELLA_DESKTOP_RETRY_PAUSE_SECONDS: "0",
           STELLA_DESKTOP_NOW_EPOCH: "1791536400",
           JOURNEY_TIMEOUT_SECONDS: scenario.delay ? "0.1" : "3",
@@ -515,7 +544,7 @@ rm -f "$response"
         (entry) => !entry.startsWith("journey-detail "),
       )) {
         expect(line).toMatch(
-          /^journey [a-z_]+ (passed|passed_after_retry|failed|skipped) (http_status|timeout|missing_marker|empty_result|contract_error|publish_lagging|pending_release|promotion_unavailable|registry_rejected|no_credential|auth_rejected|ok)$/u,
+          /^journey [a-z_]+ (passed|passed_after_retry|failed|skipped) (http_status|timeout|missing_marker|empty_result|stale_result|contract_error|publish_lagging|pending_release|promotion_unavailable|registry_rejected|no_credential|auth_rejected|ok)$/u,
         );
       }
     }
@@ -525,7 +554,16 @@ rm -f "$response"
     const installClean = await Bun.file(
       path.join(work, "install-check"),
     ).exists();
-    return { stdout, stderr, exit, counts, calls, cliCalls, installClean };
+    return {
+      stdout,
+      stderr,
+      exit,
+      counts,
+      calls,
+      searchUrls,
+      cliCalls,
+      installClean,
+    };
   } finally {
     await server.stop(true);
     await rm(work, { recursive: true, force: true });
@@ -536,11 +574,12 @@ describe("scheduled read journeys", () => {
   test("reports each public and authenticated probe", async () => {
     const result = await run();
     expect(result.exit).toBe(0);
-    expect(result.stdout.match(/ passed /gu)).toHaveLength(7);
+    expect(result.stdout.match(/ passed /gu)).toHaveLength(8);
     expect(result.calls.map(({ name }) => name)).toEqual([
       "search_case_law",
       "read_case_law_decision",
       "search_legislation",
+      "case_law_coverage",
     ]);
     expect(result.calls.at(0)?.args).toEqual({
       queries: ["smlouva"],
@@ -554,12 +593,12 @@ describe("scheduled read journeys", () => {
     });
     expect(
       [...result.counts.values()].reduce((sum, value) => sum + value, 0),
-    ).toBe(7);
+    ).toBe(8);
   });
   test("names all skips without credentials", async () => {
     const result = await run({ token: "" });
     expect(result.exit).toBe(0);
-    expect(result.stdout.match(/ skipped no_credential/gu)).toHaveLength(4);
+    expect(result.stdout.match(/ skipped no_credential/gu)).toHaveLength(5);
     expect(result.counts.get("/mcp")).toBeUndefined();
   });
   test("retries a request once and bounds the request budget", async () => {
@@ -572,20 +611,20 @@ describe("scheduled read journeys", () => {
     expect(result.stdout).not.toContain("web_search passed ok");
     expect(
       [...result.counts.values()].reduce((sum, value) => sum + value, 0),
-    ).toBe(10);
+    ).toBe(11);
   });
   test("counts a bounded public redirect", async () => {
     const result = await run({ scenario: { redirect: "once" } });
     expect(result.exit).toBe(0);
     expect(
       [...result.counts.values()].reduce((sum, value) => sum + value, 0),
-    ).toBe(8);
+    ).toBe(9);
     const chain = await run({ scenario: { redirect: "chain" } });
     expect(chain.exit).toBe(1);
     expect(chain.stdout).toContain("web_statutes failed http_status");
     expect(
       [...chain.counts.values()].reduce((sum, value) => sum + value, 0),
-    ).toBeLessThanOrEqual(10);
+    ).toBeLessThanOrEqual(11);
   });
   test("retains the first failure reason after recovery", async () => {
     const result = await run({ scenario: { firstHtml: "<h1>Fixture</h1>" } });
@@ -631,14 +670,14 @@ describe("scheduled read journeys", () => {
       expect(result.stdout).toContain(`failed ${reason}`);
       expect(
         [...result.counts.values()].reduce((sum, value) => sum + value, 0),
-      ).toBeLessThanOrEqual(10);
+      ).toBeLessThanOrEqual(11);
     });
   }
   test("negotiates a session and initializes it before tools", async () => {
     const result = await run({ scenario: { session: "required" } });
     expect(result.exit).toBe(0);
     expect(result.stdout).not.toContain("fixture-session");
-    expect(result.counts.get("/mcp")).toBe(5);
+    expect(result.counts.get("/mcp")).toBe(6);
   });
   test("reports initialization notification failures", async () => {
     const result = await run({ scenario: { session: "notification-error" } });
@@ -646,7 +685,30 @@ describe("scheduled read journeys", () => {
     expect(result.stdout).toContain("mcp_initialize failed http_status");
     expect(
       [...result.counts.values()].reduce((sum, value) => sum + value, 0),
-    ).toBeLessThanOrEqual(10);
+    ).toBeLessThanOrEqual(11);
+  });
+  test("fails coverage whose refreshes stopped landing", async () => {
+    const result = await run({ scenario: { rpc: "stale-coverage" } });
+    expect(result.exit).toBe(1);
+    expect(result.stdout).toContain("journey mcp_coverage failed stale_result");
+    expect(result.stdout).toContain("journey mcp_search passed ok");
+  });
+  test("rotates the searched country by slot on the web and MCP", async () => {
+    const result = await run({
+      scenario: {
+        searchSlot: "8",
+        html: '<h1>Fixture</h1><a href="/law/hun/cases/fixture">case</a><a href="/law/cze/statutes/fixture">statute</a><article>text</article>',
+      },
+    });
+    expect(result.exit).toBe(0);
+    expect(result.calls.at(0)?.args).toEqual({
+      queries: ["szerződés"],
+      country: "HUN",
+      limit: 1,
+    });
+    expect(result.searchUrls).toEqual([
+      "/law/cases?q=szerz%C5%91d%C3%A9s&country=hun",
+    ]);
   });
   test("accepts SSE envelopes", async () => {
     expect((await run({ scenario: { rpc: "sse" } })).exit).toBe(0);
