@@ -318,6 +318,7 @@ const MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE = {
   "stella:admin_write": "admin_write",
   "stella:account_export_read": null,
   "stella:account_export_write": null,
+  "stella:organization_create": "organization_create",
   "stella:feedback": "feedback",
   "stella:skills": null,
   "stella:external_mcps": null,

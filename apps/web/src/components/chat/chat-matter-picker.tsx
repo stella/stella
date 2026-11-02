@@ -6,8 +6,9 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { compareByLocale } from "@stll/collation";
+import { Button } from "@stll/ui/button";
 import { COMPOSER_PICKER_TRIGGER_CLASS } from "@stll/ui/composer";
-import { ChevronDownIcon, ExternalLinkIcon, SearchIcon } from "@stll/ui/icons";
+import { ChevronDownIcon, ExternalLinkIcon } from "@stll/ui/icons";
 import { resolveMatterColor } from "@stll/ui/matter-colors";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import {
@@ -17,6 +18,7 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { SearchField } from "@stll/ui/search-field";
 import { Skeleton } from "@stll/ui/skeleton";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
@@ -158,12 +160,15 @@ type MatterPickerSearchProps = {
   search: string;
   onChange: (search: string) => void;
   searchRef: RefObject<HTMLInputElement | null>;
+  /** Closes the picker: Escape in the field dismisses it, as it always has. */
+  onDismiss: () => void;
 };
 
 const MatterPickerSearch = ({
   search,
   onChange,
   searchRef,
+  onDismiss,
 }: MatterPickerSearchProps) => {
   const t = useTranslations();
   return (
@@ -174,33 +179,85 @@ const MatterPickerSearch = ({
       <p className="text-muted-foreground text-xs leading-snug text-pretty">
         {t("inspector.matterPicker.description")}
       </p>
-      <div className="border-input focus-within:border-ring focus-within:ring-ring/16 bg-background relative flex items-center gap-1.5 rounded-md border px-1.5 focus-within:ring-2">
-        <SearchIcon
-          aria-hidden="true"
-          className="text-muted-foreground size-3.5 shrink-0"
-        />
-        <input
-          className="placeholder:text-foreground-placeholder h-7 w-full min-w-0 bg-transparent text-sm outline-none"
-          dir={contentDir(search)}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            // base-ui's Menu listens for keystrokes (typeahead
-            // jumps to items, arrows move focus, etc.) which
-            // hijacks the user's typing in this search input.
-            // Stop every non-closing key so typed characters
-            // actually land here, but keep Escape so the menu
-            // can still be dismissed from inside the field.
-            if (e.key !== "Escape") {
-              e.stopPropagation();
-            }
-          }}
-          placeholder={t("inspector.matterPicker.searchPlaceholder")}
-          ref={searchRef}
-          type="text"
-          value={search}
-        />
-      </div>
+      <SearchField
+        clearLabel={t("common.clearSearch")}
+        dir={contentDir(search)}
+        onKeyDown={(e) => {
+          // base-ui's Menu listens for keystrokes (typeahead
+          // jumps to items, arrows move focus, etc.) which
+          // hijacks the user's typing in this search input.
+          // Stop every non-closing key so typed characters
+          // actually land here. Escape closes the picker from
+          // inside the field: SearchField would otherwise spend
+          // it on clearing a typed query and keep it from the
+          // menu.
+          if (e.key === "Escape") {
+            onDismiss();
+            return;
+          }
+          e.stopPropagation();
+        }}
+        onValueChange={onChange}
+        placeholder={t("inspector.matterPicker.searchPlaceholder")}
+        ref={searchRef}
+        size="sm"
+        value={search}
+      />
     </div>
+  );
+};
+
+/** One matter in the picker: its toggle, and a link that opens it in a new
+ *  tab without toggling it. */
+const MatterCheckboxItem = ({
+  checked,
+  matter,
+  onToggle,
+}: {
+  checked: boolean;
+  matter: Matter;
+  onToggle: () => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <MenuCheckboxItem
+      checked={checked}
+      className={TRUNCATING_ITEM_CLASS}
+      closeOnClick={false}
+      onClick={onToggle}
+    >
+      <span className="flex min-w-0 items-center gap-2">
+        <MatterIcon
+          className="size-3.5 shrink-0"
+          matter={{ id: matter.id, color: matter.color }}
+        />
+        <span className="min-w-0 flex-1 truncate text-sm" dir="auto">
+          {matter.name}
+        </span>
+        {/* No tooltip: a tooltip's popup would portal its pointer events
+            through this menu item and toggle the matter. The label names
+            the link. */}
+        <Button
+          aria-label={t("common.openInNewTab")}
+          className="ms-auto"
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+          render={
+            <a
+              href={`/workspaces/${matter.id}`}
+              rel="noreferrer"
+              target="_blank"
+            />
+          }
+          size="icon-xs"
+          tooltip={false}
+          variant="outline"
+        >
+          <ExternalLinkIcon className="size-3.5" />
+        </Button>
+      </span>
+    </MenuCheckboxItem>
   );
 };
 
@@ -212,6 +269,7 @@ export const ChatMatterPicker = ({
   const format = useFormatter();
   const locale = useFormattingLocale();
   const [search, setSearch] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
   const deferredSearch = useDeferredValue(search);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -369,6 +427,7 @@ export const ChatMatterPicker = ({
   return (
     <Menu
       onOpenChange={(open) => {
+        setMenuOpen(open);
         if (open) {
           // Defer focus past base-ui's own focus-trap logic so the
           // search input wins over auto-focusing the first item.
@@ -377,6 +436,7 @@ export const ChatMatterPicker = ({
           setSearch("");
         }
       }}
+      open={menuOpen}
     >
       <MenuTrigger
         className={cn(COMPOSER_PICKER_TRIGGER_CLASS, "max-w-[220px] gap-0.5")}
@@ -412,6 +472,10 @@ export const ChatMatterPicker = ({
         className="w-72"
         header={
           <MatterPickerSearch
+            onDismiss={() => {
+              setMenuOpen(false);
+              setSearch("");
+            }}
             search={search}
             onChange={setSearch}
             searchRef={searchRef}
@@ -481,43 +545,14 @@ export const ChatMatterPicker = ({
                   isSelected={(matterId) => selectedIdSet.has(matterId)}
                   onToggle={() => toggleGroup(group)}
                 />
-                {group.matters.map((m) => {
-                  const isOn = selectedIdSet.has(m.id);
-                  return (
-                    <MenuCheckboxItem
-                      checked={isOn}
-                      className={TRUNCATING_ITEM_CLASS}
-                      closeOnClick={false}
-                      key={m.id}
-                      onClick={() => toggle(m.id)}
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <MatterIcon
-                          className="size-3.5 shrink-0"
-                          matter={{ id: m.id, color: m.color }}
-                        />
-                        <span
-                          className="min-w-0 flex-1 truncate text-sm"
-                          dir="auto"
-                        >
-                          {m.name}
-                        </span>
-                        <a
-                          href={`/workspaces/${m.id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                          }}
-                          className="text-muted-foreground bg-muted hover:bg-background hover:text-foreground focus-visible:ring-ring relative ms-auto inline-flex size-7 shrink-0 items-center justify-center rounded-md shadow-sm/5 outline-none before:absolute before:-inset-2 before:content-[''] focus-visible:ring-2"
-                          title={t("common.openInNewTab")}
-                        >
-                          <ExternalLinkIcon className="size-3.5" />
-                        </a>
-                      </span>
-                    </MenuCheckboxItem>
-                  );
-                })}
+                {group.matters.map((m) => (
+                  <MatterCheckboxItem
+                    checked={selectedIdSet.has(m.id)}
+                    key={m.id}
+                    matter={m}
+                    onToggle={() => toggle(m.id)}
+                  />
+                ))}
               </MenuGroup>
             ));
           })()}

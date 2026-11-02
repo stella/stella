@@ -19,6 +19,7 @@ import {
   createFeedbackIntakeGuards,
   type FeedbackIntakeGuards,
 } from "@/api/handlers/feedback/intake-guards";
+import { consumeOrganizationCreateRateLimit } from "@/api/handlers/organizations/rate-limit";
 import {
   consumeSkillSourceRateLimit,
   type SkillSourceRateLimitResult,
@@ -27,6 +28,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
+import { ORGANIZATION_SLUG_RATE_LIMIT } from "@/api/lib/rate-limit/organization-slug";
 
 /** Counter bucket, distinct from the feedback intake's per-IP/per-org buckets. */
 const INVOKE_CAPABILITY_BUCKET = "mcp:invoke_capability";
@@ -35,11 +37,12 @@ export type InvokeRateLimit = { windowMs: number; max: number };
 
 type InvokeRateLimitPolicy =
   | {
-      budget: "capability";
+      budget: "capability" | "organization";
       limit: InvokeRateLimit;
       name: Parameters<typeof recordBudgetRejection>[0]["name"];
     }
-  | { budget: "skill-source"; limit: InvokeRateLimit };
+  | { budget: "skill-source"; limit: InvokeRateLimit }
+  | { budget: "organization-create"; limit: InvokeRateLimit };
 
 /**
  * Default per-(organization, capability) invoke budget: 60 invocations per
@@ -65,6 +68,18 @@ const DEFAULT_INVOKE_RATE_LIMIT_POLICY = {
 const INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY: Readonly<
   Record<string, InvokeRateLimitPolicy>
 > = {
+  "organizations.create": {
+    budget: "organization-create",
+    limit: {
+      windowMs: API_RATE_LIMITS.organizationCreate.duration,
+      max: API_RATE_LIMITS.organizationCreate.max,
+    },
+  },
+  "organizations.slug.update": {
+    budget: "organization",
+    name: "mcp.capability.user",
+    limit: ORGANIZATION_SLUG_RATE_LIMIT,
+  },
   // A translation run ships a document to the provider and spends the org's
   // paid character quota; a bilingual layout shares the same conversion budget
   // (REST: translate limiter on both routes).
@@ -157,6 +172,7 @@ export const consumeInvokeCapabilityRateLimit = async ({
   userId,
   guards = invokeCapabilityGuards,
   consumeSkillSource = consumeSkillSourceRateLimit,
+  consumeOrganizationCreate = consumeOrganizationCreateRateLimit,
   recordRejection = recordBudgetRejection,
 }: {
   capabilityId: string;
@@ -165,6 +181,7 @@ export const consumeInvokeCapabilityRateLimit = async ({
   userId: SafeId<"user">;
   guards?: FeedbackIntakeGuards;
   recordRejection?: typeof recordBudgetRejection;
+  consumeOrganizationCreate?: typeof consumeOrganizationCreateRateLimit;
   consumeSkillSource?: (input: {
     clientIp: string | null;
     userId: SafeId<"user">;
@@ -172,13 +189,19 @@ export const consumeInvokeCapabilityRateLimit = async ({
 }): Promise<InvokeRateLimitResult> => {
   const policy = resolveInvokeRateLimitPolicy(capabilityId);
   switch (policy.budget) {
+    case "organization-create":
+      return await consumeOrganizationCreate({ userId });
     case "skill-source":
       return await consumeSkillSource({ clientIp, userId });
+    case "organization":
     case "capability": {
       const { limit } = policy;
       const ok = await guards.consumeCounter({
         bucket: INVOKE_CAPABILITY_BUCKET,
-        key: `${organizationId}:${userId}:${capabilityId}`,
+        key:
+          policy.budget === "organization"
+            ? `${organizationId}:${capabilityId}`
+            : `${organizationId}:${userId}:${capabilityId}`,
         windowMs: limit.windowMs,
         max: limit.max,
       });

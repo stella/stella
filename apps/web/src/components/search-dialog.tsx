@@ -22,7 +22,8 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@stll/api-contract";
-import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
+import { GLOBAL_SEARCH_CHAT_COVERAGE } from "@stll/api-contract/search";
+import type { GlobalSearchChatCoverage } from "@stll/api-contract/search";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -144,6 +145,7 @@ import {
 import type { SearchFilters } from "@/components/search-filters.logic";
 import { SearchScopeFilter, SearchScopeInput } from "@/components/search-scope";
 import type { SearchScope } from "@/components/search-scope";
+import { useCaseLawReadingLanguages } from "@/features/case-law/reading-languages";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import { invalidateGroupedChatThreads } from "@/features/chat/queries";
@@ -166,7 +168,7 @@ import { getChatSendMode } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapApiResponse } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
 import {
@@ -340,7 +342,6 @@ type SearchResultsStatus =
   | { type: "hidden" }
   | { type: "unavailable" }
   | { type: "error" }
-  | { type: "refine" }
   | { type: "loading" }
   | { query: string | null; type: "empty" }
   | { type: "results" };
@@ -539,7 +540,6 @@ const resolveSearchResultsStatus = ({
   isBlockingSearchError,
   isLoading,
   searchQuery,
-  searchError,
 }: {
   hasActiveSearch: boolean;
   hasQuery: boolean;
@@ -549,7 +549,6 @@ const resolveSearchResultsStatus = ({
   isBlockingSearchError: boolean;
   isLoading: boolean;
   searchQuery: string;
-  searchError: unknown;
 }): SearchResultsStatus => {
   if (!hasVisibleSearch) {
     return { type: "hidden" };
@@ -558,12 +557,6 @@ const resolveSearchResultsStatus = ({
     return { type: "unavailable" };
   }
   if (hasActiveSearch && isBlockingSearchError) {
-    if (
-      APIError.is(searchError) &&
-      searchError.code === GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE
-    ) {
-      return { type: "refine" };
-    }
     return { type: "error" };
   }
   if (
@@ -622,14 +615,13 @@ const useCitationSearch = ({
   locale,
 }: CitationSearchOptions) => {
   const citationCountry = defaultCaseLawCountryForLocale(locale);
-  const citationEnabled =
-    open &&
+  const citationShaped =
     mode.type === "browse" &&
     publicLawEnabled &&
     searchScope === "all" &&
     citationCountry !== null &&
-    query === debouncedQuery &&
     isLegalCitationSearch({ country: citationCountry, query: debouncedQuery });
+  const citationEnabled = open && query === debouncedQuery && citationShaped;
   const citationQuery = useQuery({
     ...legalCitationSearchOptions({
       country: citationCountry ?? "",
@@ -642,8 +634,59 @@ const useCitationSearch = ({
     citationEnabled ? citationQuery.data : undefined,
   );
 
-  return { hits, query: citationQuery, enabled: citationEnabled };
+  return {
+    hits,
+    query: citationQuery,
+    enabled: citationEnabled,
+    citationShaped,
+    // Use the existing advanced-search phrase grammar, so individual docket
+    // tokens cannot activate the ordinary keyword/prefix recall fallbacks.
+    matterQuery: citationShaped
+      ? `"${debouncedQuery.trim().replaceAll('"', " ")}"`
+      : debouncedQuery.trim(),
+  };
 };
+
+type CaseLawExpansion = {
+  query: string | null;
+  expanded: boolean;
+};
+
+type CitationSearchDisplayOptions = {
+  citationShaped: boolean;
+  debouncedQuery: string;
+  expansion: CaseLawExpansion | null;
+  isPlaceholderData: boolean;
+  isLoading: boolean;
+};
+
+const resolveCitationSearchDisplay = ({
+  citationShaped,
+  debouncedQuery,
+  expansion,
+  isPlaceholderData,
+  isLoading,
+}: CitationSearchDisplayOptions) => {
+  const expansionQuery = citationShaped ? debouncedQuery : null;
+  const hasStaleHits = citationShaped && isPlaceholderData;
+  return {
+    expansionQuery,
+    expanded:
+      expansion?.query === expansionQuery ? expansion.expanded : citationShaped,
+    hasStaleHits,
+    isLoading: isLoading || hasStaleHits,
+  };
+};
+
+/** `shown` gates the pages the same way the first page's counts are gated. */
+const isChatCoveragePartial = (
+  shown: boolean,
+  data: { pages: { chatCoverage: GlobalSearchChatCoverage }[] } | undefined,
+) =>
+  shown &&
+  data?.pages.some(
+    ({ chatCoverage }) => chatCoverage === GLOBAL_SEARCH_CHAT_COVERAGE.PARTIAL,
+  ) === true;
 
 export const SearchDialog = ({
   open,
@@ -656,6 +699,7 @@ export const SearchDialog = ({
   // The AI search API caps locale at 16 chars; send the base language, not the
   // formatting locale (which may carry a region and -u- extensions).
   const apiLocale = useI18nStore((s) => s.loadedLang);
+  const readingLanguages = useCaseLawReadingLanguages();
   const navigate = useNavigate();
   const router = useRouter();
   const currentView = useCurrentWorkspaceView();
@@ -714,7 +758,8 @@ export const SearchDialog = ({
   const searchScope = resolveSearchScope(selectedSearchScope, publicLawEnabled);
   const [scopeFilterOpen, setScopeFilterOpen] = useState(false);
   const [registryExpanded, setRegistryExpanded] = useState(false);
-  const [caseLawExpanded, setCaseLawExpanded] = useState(false);
+  const [caseLawExpansion, setCaseLawExpansion] =
+    useState<CaseLawExpansion | null>(null);
   const [supplementalPreview, setSupplementalPreview] =
     useState<SupplementalPreview>({ type: "internal" });
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -850,6 +895,21 @@ export const SearchDialog = ({
   );
 
   const {
+    hits: citationHits,
+    query: citationQuery,
+    enabled: citationEnabled,
+    citationShaped,
+    matterQuery: matterSearchQuery,
+  } = useCitationSearch({
+    open,
+    mode,
+    publicLawEnabled,
+    searchScope,
+    query,
+    debouncedQuery,
+    locale: apiLocale,
+  });
+  const {
     data,
     error: searchError,
     isError: isSearchError,
@@ -866,7 +926,7 @@ export const SearchDialog = ({
       enabled: hasActiveSearch,
       organizationId: searchRecentsScope.organizationId,
       userId: searchRecentsScope.userId,
-      query: searchQuery,
+      query: matterSearchQuery,
       workspaceIds: filters.workspaceIds,
       kinds: filters.kinds,
       types: activeSearchTypes,
@@ -876,21 +936,20 @@ export const SearchDialog = ({
       updatedTo,
     }),
   );
-  const {
-    hits: citationHits,
-    query: citationQuery,
-    enabled: citationEnabled,
-  } = useCitationSearch({
-    open,
-    mode,
-    publicLawEnabled,
-    searchScope,
-    query,
-    debouncedQuery,
-    locale: apiLocale,
-  });
 
   const isBlockingSearchError = isSearchError && !isFetchNextPageError;
+  const {
+    expansionQuery: caseLawExpansionQuery,
+    expanded: caseLawExpanded,
+    hasStaleHits: hasStaleCitationHits,
+    isLoading: isLoadingSearchResults,
+  } = resolveCitationSearchDisplay({
+    citationShaped,
+    debouncedQuery,
+    expansion: caseLawExpansion,
+    isPlaceholderData,
+    isLoading,
+  });
 
   // Keyed by value: the caller rebuilds the mode object every render, and the
   // exclusion only needs to invalidate when the excluded set itself changes.
@@ -898,7 +957,12 @@ export const SearchDialog = ({
     mode.type === "pick" ? mode.excludeEntityIds : NO_EXCLUDED_ENTITY_IDS;
   const excludedEntityIdsKey = excludedEntityIds.join("|");
   const allHits = useMemo(() => {
-    if (!data || searchScope === "registries" || !hasActiveSearch) {
+    if (
+      !data ||
+      searchScope === "registries" ||
+      !hasActiveSearch ||
+      hasStaleCitationHits
+    ) {
       return EMPTY_SEARCH_HITS;
     }
     const hits = data.pages.flatMap((page) => page.hits);
@@ -909,7 +973,13 @@ export const SearchDialog = ({
     return hits.filter(
       (hit) => !("entityId" in hit) || !excluded.has(hit.entityId),
     );
-  }, [data, excludedEntityIdsKey, searchScope, hasActiveSearch]);
+  }, [
+    data,
+    excludedEntityIdsKey,
+    searchScope,
+    hasActiveSearch,
+    hasStaleCitationHits,
+  ]);
   const previewLocatorCandidates =
     data?.pages.at(0)?.previewLocatorCandidates ??
     EMPTY_SEARCH_PREVIEW_LOCATOR_CANDIDATES;
@@ -943,13 +1013,19 @@ export const SearchDialog = ({
   // ignore them entirely while the query is empty so a cleared input
   // doesn't leave stale numbers in the sidebar.
   const firstPage =
-    hasActiveSearch && !isBlockingSearchError ? data?.pages.at(0) : undefined;
+    hasActiveSearch && !isBlockingSearchError && !hasStaleCitationHits
+      ? data?.pages.at(0)
+      : undefined;
   const facets = firstPage?.facets;
   const typeBuckets = facets ? facets.type : EMPTY_FACET_BUCKETS;
   const mimeTypeBuckets = facets ? facets.mimeType : EMPTY_FACET_BUCKETS;
   const editorBuckets = facets ? facets.editor : EMPTY_FACET_BUCKETS;
   const workspaceBuckets = facets ? facets.workspace : EMPTY_FACET_BUCKETS;
   const totalCount = firstPage?.totalCount ?? 0;
+  const chatCoveragePartial = isChatCoveragePartial(
+    firstPage !== undefined,
+    data,
+  );
   const filterTypesKey = filters.types.join("|");
   const filterKindsKey = filters.kinds.join("|");
   const filterMimeTypesKey = filters.mimeTypes.join("|");
@@ -985,7 +1061,7 @@ export const SearchDialog = ({
     setLastRecentsOwner(owner);
     setLastRecentsSnapshotKey(recentsSnapshotKey);
     setRegistryExpanded(false);
-    setCaseLawExpanded(false);
+    setCaseLawExpansion(null);
     setSupplementalPreview({ type: "internal" });
     setRecentPreviewFile(null);
   }
@@ -1003,7 +1079,7 @@ export const SearchDialog = ({
     enabled: hasActiveSearch,
     organizationId: searchRecentsScope.organizationId,
     userId: searchRecentsScope.userId,
-    query: searchQuery,
+    query: matterSearchQuery,
     kinds: filters.kinds,
     ...searchFilterParams,
   };
@@ -1162,7 +1238,7 @@ export const SearchDialog = ({
   const clearSearch = () => {
     clearSearchQuery();
     setRegistryExpanded(false);
-    setCaseLawExpanded(false);
+    setCaseLawExpansion(null);
     setSupplementalPreview({ type: "internal" });
     setSearchScope("all");
     setFilters(initialFiltersForMode(mode, initialWorkspaceId));
@@ -1179,7 +1255,7 @@ export const SearchDialog = ({
   };
 
   const handleSummarizeResults = () => {
-    const trimmedQuery = searchQuery.trim();
+    const trimmedQuery = matterSearchQuery.trim();
     if (
       capabilities.ai.type !== "available" ||
       !trimmedQuery ||
@@ -1222,7 +1298,7 @@ export const SearchDialog = ({
   };
 
   const handleOpenSummaryChat = () => {
-    const trimmedQuery = searchQuery.trim();
+    const trimmedQuery = matterSearchQuery.trim();
     const summaryData = summarizeSearchMutation.data;
     if (
       capabilities.ai.type !== "available" ||
@@ -1646,9 +1722,8 @@ export const SearchDialog = ({
     hasUnavailableSelectedType,
     hasVisibleSearch: scopeVisibility.visibleSearch,
     isBlockingSearchError,
-    isLoading,
+    isLoading: isLoadingSearchResults,
     searchQuery,
-    searchError,
   });
   const filterEditorIdsKey = filters.editedByUserIds.join("|");
 
@@ -2143,12 +2218,15 @@ export const SearchDialog = ({
                         onOpen={(hit) => {
                           onOpenChange(false);
                           detached(
-                            navigate(citationCommandRoute(hit, apiLocale)),
+                            navigate(
+                              citationCommandRoute(hit, readingLanguages),
+                            ),
                             "search-citation.open",
                           );
                         }}
                       />
                       <SearchResultsContent
+                        chatCoveragePartial={chatCoveragePartial}
                         onRetry={() => {
                           detached(
                             refetchSearch(),
@@ -2185,6 +2263,7 @@ export const SearchDialog = ({
                             summarizeMutation: summarizeSearchMutation,
                             visible: showSearchSummary,
                           }}
+                          chatCoveragePartial={chatCoveragePartial}
                           totalCount={totalCount}
                           virtual={{
                             items: virtualHits,
@@ -2221,7 +2300,10 @@ export const SearchDialog = ({
                       caseLawProps={{
                         expanded: caseLawExpanded,
                         onExpandedChange: (expanded) => {
-                          setCaseLawExpanded(expanded);
+                          setCaseLawExpansion({
+                            query: caseLawExpansionQuery,
+                            expanded,
+                          });
                           setSupplementalPreview({ type: "internal" });
                         },
                         query,
@@ -2258,7 +2340,7 @@ export const SearchDialog = ({
                   onResize={resizePreviewColumn}
                   previewLocatorCandidates={previewLocatorCandidates}
                   previewWidth={previewWidth}
-                  query={searchQuery}
+                  query={matterSearchQuery}
                   scope={searchRecentsScope}
                   visible={showPreview}
                 />
@@ -2686,10 +2768,12 @@ const SearchRecentsScreen = ({
 };
 
 const SearchResultsContent = ({
+  chatCoveragePartial,
   children,
   onRetry,
   status,
 }: {
+  chatCoveragePartial: boolean;
   children: ReactElement;
   onRetry: () => void;
   status: SearchResultsStatus;
@@ -2703,14 +2787,6 @@ const SearchResultsContent = ({
         <div className="flex h-full items-center justify-center px-4 py-8">
           <p className="text-muted-foreground text-sm">
             {t("common.comingSoon")}
-          </p>
-        </div>
-      );
-    case "refine":
-      return (
-        <div className="flex h-full items-center justify-center px-4 py-8">
-          <p className="text-muted-foreground text-sm">
-            {t("caseLaw.pagination.refineForMore")}
           </p>
         </div>
       );
@@ -2743,6 +2819,7 @@ const SearchResultsContent = ({
             {status.query === null
               ? t("common.noResults")
               : t("search.noResults", { query: status.query })}
+            {chatCoveragePartial ? ` ${t("search.chatCoveragePartial")}` : null}
           </p>
         </div>
       );
@@ -2776,6 +2853,7 @@ type SearchHitResultsProps = {
     >["summarizeMutation"];
     visible: boolean;
   };
+  chatCoveragePartial: boolean;
   totalCount: number;
   virtual: {
     items: VirtualItem[];
@@ -2786,6 +2864,7 @@ type SearchHitResultsProps = {
 };
 
 const SearchHitResults = ({
+  chatCoveragePartial,
   measureContainer,
   hits,
   indexOffset,
@@ -2800,6 +2879,7 @@ const SearchHitResults = ({
     <div className="px-2 py-2">
       <p className="text-muted-foreground px-2 pb-2 text-xs">
         {t("search.resultCount", { count: totalCount })}
+        {chatCoveragePartial ? ` · ${t("search.chatCoveragePartial")}` : null}
       </p>
       {summary.visible && (
         <SearchSummaryItem

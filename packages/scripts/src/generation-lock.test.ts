@@ -1,15 +1,9 @@
 import { expect, test } from "bun:test";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { waitForExternalState } from "@stll/property-testing/external-state";
+import { waitForFileContent } from "@stll/property-testing/external-state";
 
 import { withGenerationLock } from "./generation-lock";
 
@@ -60,9 +54,11 @@ const fixture = () => {
 };
 
 const waitFor = async (filename: string) => {
-  await waitForExternalState({
+  await waitForFileContent({
     description: `a worker publishes ${filename}`,
-    read: () => existsSync(filename),
+    path: filename,
+    // An empty marker: once it exists, the announcement is complete.
+    parse: () => true,
   });
 };
 

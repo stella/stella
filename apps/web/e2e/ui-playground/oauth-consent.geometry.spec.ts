@@ -91,8 +91,8 @@ for (const [name, viewport] of Object.entries(VIEWPORTS)) {
       await card.evaluate((element) => {
         element.closest("main")?.scrollIntoView({ block: "start" });
       });
-      await page.locator(`${PERMISSIONS} > summary`).click();
-      await expect(page.locator(PERMISSIONS)).toHaveAttribute("open", "");
+      await page.locator(`${PERMISSIONS} button[aria-expanded]`).click();
+      await expect(page.locator(PERMISSIONS)).toHaveAttribute("data-open", "");
 
       const geometry = await readGeometry(page);
       expect(

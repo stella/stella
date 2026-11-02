@@ -11,6 +11,8 @@ import { refreshTokens } from "./tokens";
  * refresh token alone, which the server can revoke and rotates on use.
  */
 export const storedSessionSchema = v.object({
+  /** Local sign-in identity, preserved across refresh-token rotations. */
+  signInId: v.pipe(v.string(), v.minLength(1)),
   serverUrl: v.pipe(v.string(), v.url()),
   issuer: v.pipe(v.string(), v.url()),
   clientId: v.pipe(v.string(), v.minLength(1)),
@@ -30,10 +32,181 @@ export const storedSessionSchema = v.object({
 
 export type StoredSession = v.InferOutput<typeof storedSessionSchema>;
 
-export type SessionStore = {
-  readonly read: () => Promise<StoredSession | undefined>;
+type SessionPersistence = {
+  /** `null` marks an unusable entry (a tombstone or invalid stored shape). */
+  readonly read: () => Promise<StoredSession | null | undefined>;
   readonly write: (session: StoredSession) => Promise<void>;
+  readonly prepareClear: () => Promise<void>;
   readonly clear: () => Promise<void>;
+};
+
+const sessionGenerationBrand = Symbol("session-generation");
+export type SessionGeneration = {
+  readonly [sessionGenerationBrand]: true;
+};
+
+type SessionWriteOutcome =
+  | { readonly type: "committed"; readonly generation: SessionGeneration }
+  | { readonly type: "stale" };
+
+/**
+ * A sign-in or sign-out in progress. It retires the current generation only when its
+ * credentials change commits, so an abandoned or failed transition leaves the current
+ * session usable; a later transition supersedes an earlier one.
+ */
+type SessionTransition = {
+  readonly write: (session: StoredSession) => Promise<SessionWriteOutcome>;
+  readonly clear: () => Promise<SessionWriteOutcome>;
+};
+
+export type SessionStore = {
+  readonly read: (
+    generation: SessionGeneration,
+  ) => Promise<StoredSession | undefined>;
+  readonly commit: <Value>(
+    generation: SessionGeneration,
+    publish: () => Value,
+  ) => Value | undefined;
+  readonly generation: () => SessionGeneration;
+  readonly advance: () => SessionGeneration;
+  readonly begin: () => SessionTransition;
+  readonly isCurrent: (generation: SessionGeneration) => boolean;
+  readonly write: (
+    session: StoredSession,
+    generation: SessionGeneration,
+  ) => Promise<SessionWriteOutcome>;
+  readonly clear: (
+    generation: SessionGeneration,
+    expected?: StoredSession,
+  ) => Promise<SessionWriteOutcome>;
+};
+
+/** Owns every credential mutation and orders it against session generation changes. */
+export const createSessionStore = (
+  persistence: SessionPersistence,
+): SessionStore => {
+  let generation: SessionGeneration = { [sessionGenerationBrand]: true };
+  let latestTransition = 0;
+  let mutations = Promise.resolve();
+
+  const advance = (): SessionGeneration => {
+    generation = { [sessionGenerationBrand]: true };
+    return generation;
+  };
+  const enqueue = async <Value>(mutation: () => Promise<Value>) => {
+    const pending = mutations.then(mutation, mutation);
+    mutations = pending.then(
+      () => undefined,
+      () => undefined,
+    );
+    return await pending;
+  };
+
+  const store: SessionStore = {
+    read: async (captured) => {
+      const session = await persistence.read();
+      if (session === null) {
+        await enqueue(async () => {
+          if (captured !== generation) {
+            return;
+          }
+          const current = await persistence.read();
+          if (captured === generation && current === null) {
+            await persistence.clear();
+          }
+        });
+        return undefined;
+      }
+      return captured === generation ? session : undefined;
+    },
+    commit: (captured, publish) =>
+      captured === generation ? publish() : undefined,
+    generation: () => generation,
+    advance,
+    begin: () => {
+      latestTransition += 1;
+      const ticket = latestTransition;
+      const latest = () => ticket === latestTransition;
+      return {
+        write: async (session) =>
+          await enqueue(async () => {
+            if (!latest()) {
+              return { type: "stale" };
+            }
+            await persistence.write(session);
+            return latest()
+              ? { type: "committed", generation: advance() }
+              : { type: "stale" };
+          }),
+        clear: async () =>
+          await enqueue(async () => {
+            if (!latest()) {
+              return { type: "stale" };
+            }
+            await persistence.prepareClear();
+            if (!latest()) {
+              return { type: "stale" };
+            }
+            const current = await persistence.read();
+            if (!latest()) {
+              return { type: "stale" };
+            }
+            if (current === null) {
+              await persistence.clear();
+            }
+            return latest()
+              ? { type: "committed", generation: advance() }
+              : { type: "stale" };
+          }),
+      };
+    },
+    isCurrent: (captured) => captured === generation,
+    write: async (session, captured) =>
+      await enqueue(async () => {
+        if (captured !== generation) {
+          return { type: "stale" };
+        }
+        await persistence.write(session);
+        return captured === generation
+          ? { type: "committed", generation: captured }
+          : { type: "stale" };
+      }),
+    clear: async (captured, expected) =>
+      await enqueue(async () => {
+        if (captured !== generation) {
+          return { type: "stale" };
+        }
+        if (expected !== undefined) {
+          const kept = await persistence.read();
+          if (captured !== generation) {
+            return { type: "stale" };
+          }
+          if (
+            kept !== undefined &&
+            (kept === null ||
+              !sameSessionIdentity(kept, expected) ||
+              kept.refreshToken !== expected.refreshToken)
+          ) {
+            return { type: "stale" };
+          }
+        }
+        await persistence.prepareClear();
+        if (captured !== generation) {
+          return { type: "stale" };
+        }
+        const current = await persistence.read();
+        if (captured !== generation) {
+          return { type: "stale" };
+        }
+        if (current === null) {
+          await persistence.clear();
+        }
+        return captured === generation
+          ? { type: "committed", generation: captured }
+          : { type: "stale" };
+      }),
+  };
+  return store;
 };
 
 export type AccessToken = {
@@ -53,7 +226,8 @@ const TERMINAL_REFRESH_ERRORS: ReadonlySet<string> = new Set([
 ]);
 
 export type AccessTokenSource = {
-  readonly session: () => StoredSession;
+  /** Metadata is unavailable once another transition owns the session. */
+  readonly session: () => StoredSession | undefined;
   /** A current access token, refreshing first when the held one is spent. */
   readonly accessToken: () => Promise<
     Result<string, SignedOutError | TokenError>
@@ -62,6 +236,12 @@ export type AccessTokenSource = {
   readonly invalidate: () => void;
 };
 
+/** Matches an asynchronous failure to the source that still owns the UI. */
+export const isCurrentSessionSource = (
+  current: AccessTokenSource | undefined,
+  failed: AccessTokenSource,
+): boolean => current === failed && failed.session() !== undefined;
+
 /**
  * Hands out access tokens for one signed-in session. Concurrent callers
  * share one refresh: refresh tokens rotate, so a second refresh racing the
@@ -69,6 +249,7 @@ export type AccessTokenSource = {
  */
 export const createAccessTokenSource = ({
   fetch,
+  generation,
   initialAccess,
   now,
   session,
@@ -78,6 +259,7 @@ export const createAccessTokenSource = ({
   readonly initialAccess: AccessToken | undefined;
   readonly now: () => number;
   readonly session: StoredSession;
+  readonly generation: SessionGeneration;
   readonly store: SessionStore;
 }): AccessTokenSource => {
   let current = session;
@@ -85,27 +267,19 @@ export const createAccessTokenSource = ({
   let refreshing:
     Promise<Result<string, SignedOutError | TokenError>> | undefined;
 
-  /**
-   * After the server refuses `presented`: another run of the app (a reload
-   * during development, a render React threw away) may have rotated the
-   * grant first and kept its successor, which this source then adopts and
-   * presents once. Only a successor for exactly this session (same server,
-   * issuer, client, endpoints and resource) is adopted, so a source left
-   * over from another sign-in never takes, or sends anywhere, a token that
-   * belongs to the one now kept. Only a keychain still holding the refused
-   * token means the grant itself ended and is cleared; one holding another
-   * session is left alone. Never throws: a keychain that cannot be read or
-   * cleared still ends in a signed-out session.
-   */
   const afterRefusal = async (
     presented: string,
     oauthError: string,
     adopted: boolean,
   ): Promise<Result<string, SignedOutError | TokenError>> => {
-    const kept = await Result.tryPromise(async () => await store.read());
+    const kept = await Result.tryPromise(
+      async () => await store.read(generation),
+    );
     const successor = Result.isOk(kept) ? kept.value : undefined;
     const sameSession =
-      successor !== undefined && sameSessionIdentity(successor, current);
+      store.isCurrent(generation) &&
+      successor !== undefined &&
+      sameSessionIdentity(successor, current);
     if (!adopted && sameSession && successor.refreshToken !== presented) {
       current = successor;
       return await refresh(true);
@@ -120,7 +294,7 @@ export const createAccessTokenSource = ({
     if (refusedKept) {
       (
         await Result.tryPromise(async () => {
-          await store.clear();
+          await store.clear(generation, current);
         })
       ).unwrapOr(undefined);
     }
@@ -134,6 +308,11 @@ export const createAccessTokenSource = ({
   const refresh = async (
     adopted = false,
   ): Promise<Result<string, SignedOutError | TokenError>> => {
+    if (!store.isCurrent(generation)) {
+      return Result.err(
+        new SignedOutError({ message: "The session is no longer current" }),
+      );
+    }
     const presented = current.refreshToken;
     const refreshed = await refreshTokens({
       fetch,
@@ -156,9 +335,7 @@ export const createAccessTokenSource = ({
     ) {
       current = { ...current, refreshToken: tokens.refresh_token };
       const persisted = await Result.tryPromise({
-        try: async () => {
-          await store.write(current);
-        },
+        try: async () => await store.write(current, generation),
         catch: (cause) =>
           new TokenError({
             message: "Could not keep the rotated session",
@@ -168,6 +345,16 @@ export const createAccessTokenSource = ({
       if (Result.isError(persisted)) {
         return Result.err(persisted.error);
       }
+      if (persisted.value.type === "stale") {
+        return Result.err(
+          new SignedOutError({ message: "The session is no longer current" }),
+        );
+      }
+    }
+    if (!store.isCurrent(generation)) {
+      return Result.err(
+        new SignedOutError({ message: "The session is no longer current" }),
+      );
     }
     access = {
       token: tokens.access_token,
@@ -177,8 +364,13 @@ export const createAccessTokenSource = ({
   };
 
   return {
-    session: () => current,
+    session: () => (store.isCurrent(generation) ? current : undefined),
     accessToken: async () => {
+      if (!store.isCurrent(generation)) {
+        return Result.err(
+          new SignedOutError({ message: "The session is no longer current" }),
+        );
+      }
       if (access !== undefined && access.expiresAt - EARLY_REFRESH_MS > now()) {
         return Result.ok(access.token);
       }
@@ -196,6 +388,7 @@ export const createAccessTokenSource = ({
 /** Whether two stored sessions are the same sign-in, whatever their refresh token. */
 function sameSessionIdentity(a: StoredSession, b: StoredSession): boolean {
   return (
+    a.signInId === b.signInId &&
     a.serverUrl === b.serverUrl &&
     a.userId === b.userId &&
     a.issuer === b.issuer &&

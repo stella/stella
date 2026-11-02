@@ -137,6 +137,8 @@ describe("MCP country inputs are read by the shared reader", () => {
       "check_counterparty.subject.country",
       "resolve_case_law_decision.country",
       "resolve_law_citation.country",
+      "save_contact.addresses[].country",
+      "save_contact.billing_address.country",
       "search_case_law.country",
       "search_legislation.country",
       "set_practice_jurisdictions.jurisdictions[].country_code",
@@ -318,4 +320,37 @@ describe("a country input reads the spellings a model writes", () => {
       readCountry("search_case_law", { queries: ["q"], country: "Germany" }),
     ).toMatchObject({ country: "DEU" });
   });
+});
+
+test("contact readers normalize nullable arrays through the advertised boundary", () => {
+  const normalized = normalizeObjectInputAtBoundary({
+    access: "write",
+    schema: schemaOf("save_contact"),
+    value: {
+      type: "person",
+      display_name: "Example",
+      emails: [
+        { type: "work", address: "  Name@example.com  ", is_primary: true },
+      ],
+      addresses: [
+        { type: "office", line1: "Street", country: "Česko", is_primary: true },
+      ],
+      billing_address: { country: "Slovensko" },
+      bank_accounts: [{ currency: " eur " }],
+      metadata: { data_boxes: [{ id: " aB12cD3 ", is_primary: true }] },
+    },
+  });
+  expect(normalized).toMatchObject({
+    ok: true,
+    value: {
+      emails: [{ address: "Name@example.com" }],
+      addresses: [{ country: "CZ" }],
+      billing_address: { country: "SK" },
+      bank_accounts: [{ currency: "EUR" }],
+      metadata: { data_boxes: [{ id: "aB12cD3" }] },
+    },
+  });
+  if (normalized.ok) {
+    expect(sourceSchemaRejects("save_contact", normalized.value)).toEqual([]);
+  }
 });

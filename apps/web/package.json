@@ -188,6 +188,7 @@
     "zustand": "^5.0.16"
   },
   "devDependencies": {
+    "@formatjs/icu-messageformat-parser": "3.5.22",
     "@happy-dom/global-registrator": "21.0.4",
     "@playwright/test": "^1.64.1",
     "@stll/playwright-tools": "workspace:*",
@@ -196,6 +197,7 @@
     "@stll/sanctions": "workspace:*",
     "@stll/scripts": "workspace:*",
     "@stll/ssr-testkit": "workspace:^",
+    "@stll/test-kit": "0.3.0",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/devtools-vite": "^0.8.5",

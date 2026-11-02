@@ -19,6 +19,7 @@ import {
   assertLockfileWorkspaces,
   classifyConflicts,
   collect,
+  type ConflictRefusal,
   conflictsOf,
   indentationOnly,
   isAllowedResolution,
@@ -244,35 +245,70 @@ describe("classification", () => {
     }
   });
 
-  const leftToPeople: { name: string; path: string; kind?: "delete-modify" }[] =
-    [
-      { name: "source", path: "apps/api/src/index.ts" },
-      { name: "the root lockfile", path: "bun.lock" },
-      { name: "a nested lockfile", path: "apps/desktop/src-tauri/Cargo.lock" },
-      { name: "a baseline", path: "apps/api/mcp-surface-baseline.json" },
-      { name: "a changeset", path: ".changeset/new.md" },
-      {
-        name: "a job classification decision",
-        path: ".github/ci-job-classification-decisions/candidate%3A.github%2Fworkflows%2Fci.yml%2Fcheck.json",
-      },
-      { name: "hand-written regions", path: "DESIGN.md" },
-      {
-        name: "a generator autofix may not run",
-        path: "packages/ai-catalog/upstream/openrouter.gen.json",
-      },
-      {
-        name: "a product screenshot",
-        path: "apps/landing/public/media/products/workspace-light.png",
-      },
-      { name: "delete/modify", path: MESSAGES, kind: "delete-modify" },
-    ];
-  for (const { name, path: file, kind } of leftToPeople) {
+  const leftToPeople: {
+    name: string;
+    path: string;
+    kind?: "delete-modify";
+    type: ConflictRefusal["type"];
+  }[] = [
+    { name: "source", type: "source-conflict", path: "apps/api/src/index.ts" },
+    { name: "the root lockfile", type: "lockfile", path: "bun.lock" },
+    {
+      name: "a nested lockfile",
+      type: "lockfile",
+      path: "apps/desktop/src-tauri/Cargo.lock",
+    },
+    {
+      name: "a baseline",
+      type: "protected-path",
+      path: "apps/api/mcp-surface-baseline.json",
+    },
+    { name: "a changeset", type: "protected-path", path: ".changeset/new.md" },
+    {
+      name: "a job classification decision",
+      type: "protected-path",
+      path: ".github/ci-job-classification-decisions/candidate%3A.github%2Fworkflows%2Fci.yml%2Fcheck.json",
+    },
+    {
+      name: "hand-written regions",
+      type: "partial-generated",
+      path: "DESIGN.md",
+    },
+    {
+      name: "a generator autofix may not run",
+      type: "generator-ineligible",
+      path: "packages/ai-catalog/upstream/openrouter.gen.json",
+    },
+    {
+      name: "a product screenshot",
+      type: "source-conflict",
+      path: "apps/landing/public/media/products/workspace-light.png",
+    },
+    {
+      name: "delete/modify",
+      type: "delete-modify",
+      path: MESSAGES,
+      kind: "delete-modify",
+    },
+  ];
+  for (const { name, path: file, kind, type } of leftToPeople) {
     test(`leaves ${name} to people`, () => {
       const result = classifyConflicts([
         { path: MESSAGES, kind: "both-modified" },
         { path: file, kind: kind ?? "both-modified" },
       ]);
       expect(result.eligible).toBe(false);
+      if (result.eligible) {
+        return;
+      }
+      expect(result.reasons).toHaveLength(1);
+      expect(result.refusals).toEqual(
+        result.reasons.map((message) => ({
+          path: file,
+          type,
+          message,
+        })),
+      );
     });
   }
 
@@ -1262,6 +1298,31 @@ describe("resolution across runs", () => {
     git(origin, "merge", "--abort");
     expect(git(origin, "status", "--porcelain")).toBe("");
     expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+  });
+
+  test("local regeneration discards declared generator caches", () => {
+    const cache = ".cache/fixture-local/runtime.json";
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) => write(repo, ".gitignore", "/.cache/\n"),
+    });
+    git(origin, "switch", "-q", "feature");
+    const generator = localGenerator(
+      `fs.mkdirSync(${JSON.stringify(path.dirname(cache))}, { recursive: true }); fs.writeFileSync(${JSON.stringify(cache)}, "disposable")`,
+    );
+    generator.cacheOutputs = [".cache/fixture-local/**"];
+
+    resolveDerived({ repo: origin, main, generators: [generator] });
+
+    expect(existsSync(path.join(origin, cache))).toBe(false);
+    expect(
+      git(origin, "status", "--porcelain", "--untracked-files=all"),
+    ).not.toContain(cache);
+    expect(
+      git(origin, "ls-files", "--others", "--ignored", "--exclude-standard"),
+    ).not.toContain(cache);
+    expect(git(origin, "rev-parse", "MERGE_HEAD")).toBe(main);
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    git(origin, "merge", "--abort");
   });
 
   test("local regeneration refuses a new ignored file outside generator outputs", () => {

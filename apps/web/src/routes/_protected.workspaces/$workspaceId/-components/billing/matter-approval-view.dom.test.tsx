@@ -171,6 +171,10 @@ const emptyPrefill = {
   dueDaysSource: "default",
   seller: null,
   sellerSource: "none",
+  issueBlockers: [
+    "invoice_seller_profile_missing",
+    "invoice_number_series_missing",
+  ],
   buyer: { buyerName: null },
   buyerSource: "none",
   vat: {

@@ -1,21 +1,22 @@
 import * as v from "valibot";
 
 import type { CONTACT_IMPORT_TAX_ID_SCHEMES } from "@stll/api-contract";
-
 import {
   contactAddressSchema,
   contactCustomFieldSchema,
   contactEmailSchema,
   contactPhoneSchema,
-} from "@/api/db/schema-validators";
+  MAX_CONTACT_NATIONALITY_CODES,
+} from "@stll/api-contract/contact-write";
 import type {
   ContactAddress,
   ContactCustomField,
   ContactEmail,
   ContactPhone,
-} from "@/api/db/schema-validators";
+} from "@stll/api-contract/contact-write";
+
 import { createContactTypeSchema } from "@/api/handlers/contacts/schema";
-import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nationality-codes";
+import { displayNameSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 /**
@@ -35,6 +36,12 @@ const DRAFT_LIST_MAX_ITEMS = 200;
 
 const draftText = v.pipe(v.string(), v.maxLength(DRAFT_TEXT_MAX_CHARS));
 const optionalDraftText = v.exactOptional(draftText);
+/** Name parts are normalized here: a row commits the value it was checked as. */
+const draftName = displayNameSchema({
+  maxLength: DRAFT_TEXT_MAX_CHARS,
+  allowEmpty: true,
+});
+const optionalDraftName = v.exactOptional(draftName);
 
 const draftEmailSchema = v.intersect([
   v.pick(contactEmailSchema, ["type", "isPrimary", "label"]),
@@ -67,13 +74,13 @@ const draftCustomFieldSchema = v.intersect([
 
 export const contactImportCandidateSchema = v.object({
   type: createContactTypeSchema,
-  displayName: draftText,
-  prefix: optionalDraftText,
-  firstName: optionalDraftText,
-  middleName: optionalDraftText,
-  lastName: optionalDraftText,
-  suffix: optionalDraftText,
-  organizationName: optionalDraftText,
+  displayName: draftName,
+  prefix: optionalDraftName,
+  firstName: optionalDraftName,
+  middleName: optionalDraftName,
+  lastName: optionalDraftName,
+  suffix: optionalDraftName,
+  organizationName: optionalDraftName,
   notes: optionalDraftText,
   emails: v.exactOptional(
     v.pipe(v.array(draftEmailSchema), v.maxLength(DRAFT_LIST_MAX_ITEMS)),

@@ -88,6 +88,7 @@ export const CLI_DEFAULT_RESOURCE_SCOPES: readonly CliResourceScope[] = [
   "stella:admin_read",
   "stella:skills",
   "stella:feedback",
+  "stella:organization_create",
 ];
 
 /**
