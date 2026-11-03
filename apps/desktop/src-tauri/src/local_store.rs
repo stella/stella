@@ -4,6 +4,10 @@
 //! `apps/desktop/docs/local-only-data.md`): its own keychain key, AES-256-GCM
 //! JSON envelopes written atomically with owner-only permissions, and a key
 //! that is never re-minted while encrypted data still depends on it.
+//!
+//! Harness files and staged directories are created and published through
+//! pinned parent handles. The Codex token channel's directory, socket and
+//! pipe operations are owned by [`token_broker`].
 
 #![allow(
   clippy::disallowed_methods,
@@ -222,19 +226,25 @@ mod platform;
 #[derive(Clone, Copy)]
 pub enum OpenMode {
   Read,
+  #[cfg(windows)]
+  ExclusiveRead,
   CreateNew,
   Append,
-  #[cfg(windows)]
+  #[cfg(test)]
   AppendExisting,
   Lock,
 }
 
-pub fn create_private_dir(directory: &Path) -> std::io::Result<()> {
-  platform::create_directory(directory)
+pub fn create_private_dir_new(path: &Path) -> std::io::Result<()> {
+  platform::Parent::at(path)?.create_directory_new()
 }
 
-pub(crate) fn create_private_dir_new(path: &Path) -> std::io::Result<()> {
-  platform::create_directory_new(path)
+pub fn publish_directory(source: &Path, destination: &Path) -> std::io::Result<()> {
+  platform::Parent::at(source)?.publish_directory(&platform::Parent::at(destination)?)
+}
+
+pub fn create_private_dir(directory: &Path) -> std::io::Result<()> {
+  platform::create_directory(directory)
 }
 
 #[cfg(test)]
@@ -286,15 +296,16 @@ pub(crate) fn create_harness_file(
   Ok(file)
 }
 
-pub(crate) fn publish_harness_directory(
-  source: &Path,
-  destination: &Path,
-) -> std::io::Result<()> {
-  platform::Parent::at(source)?.rename_directory_to(&platform::Parent::at(destination)?)
-}
-
 pub fn rename_private(source: &Path, destination: &Path) -> std::io::Result<()> {
   platform::Parent::at(source)?.rename_to(&platform::Parent::at(destination)?)
+}
+
+pub fn remove_private(path: &Path) -> std::io::Result<()> {
+  platform::Parent::at(path)?.remove()
+}
+
+pub fn move_private(source: &Path, destination: &Path) -> std::io::Result<()> {
+  platform::Parent::at(source)?.move_to(&platform::Parent::at(destination)?)
 }
 
 pub fn link_private(source: &Path, destination: &Path) -> std::io::Result<()> {
@@ -320,9 +331,11 @@ pub fn disable_autostart(app: &tauri::AppHandle) -> Result<(), String> {
 
 pub fn install_update(
   update: &tauri_plugin_updater::Update,
-  package: &[u8],
+  package: &crate::updater::VerifiedUpdatePackage,
 ) -> Result<(), String> {
-  update.install(package).map_err(|error| error.to_string())
+  update
+    .install(package.as_bytes())
+    .map_err(|error| error.to_string())
 }
 
 // Repository code generation writes a fixed source artifact, outside application data.
@@ -472,6 +485,80 @@ pub fn debug_build_is_memory_only(_env: &str) -> bool {
 mod tests {
   use super::*;
 
+  #[cfg(windows)]
+  #[test]
+  fn runtime_publication_pins_windows_directory_paths() {
+    let root = unique_path().parent().unwrap().to_path_buf();
+    create_private_dir(&root).unwrap();
+    let staging = root.join("staging");
+    create_private_dir_new(&staging).unwrap();
+    let path = staging.join("tool.exe");
+    let mut file = create_harness_file(&path, true).unwrap();
+    file.write_all(b"runtime").unwrap();
+    drop(file);
+    let source = platform::Parent::at(&staging).unwrap();
+    let destination = platform::Parent::at(&root.join("published")).unwrap();
+    assert!(fs::rename(&root, root.with_extension("moved")).is_err());
+    source.publish_directory(&destination).unwrap();
+    assert_eq!(
+      fs::read(root.join("published/tool.exe")).unwrap(),
+      b"runtime"
+    );
+    drop(source);
+    drop(destination);
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn harness_modes_and_directory_publication_use_pinned_parents() {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let root = unique_path().parent().unwrap().to_path_buf();
+    create_private_dir(&root).unwrap();
+    assert_eq!(
+      fs::metadata(&root).unwrap().permissions().mode() & 0o777,
+      0o700
+    );
+    let staging = root.join("staging");
+    create_private_dir_new(&staging).unwrap();
+    assert_eq!(
+      create_private_dir_new(&staging).unwrap_err().kind(),
+      std::io::ErrorKind::AlreadyExists
+    );
+    for (name, executable, expected) in [("tool", true, 0o700), ("data", false, 0o600)]
+    {
+      let file = create_harness_file(&staging.join(name), executable).unwrap();
+      assert_eq!(
+        file.metadata().unwrap().permissions().mode() & 0o777,
+        expected
+      );
+    }
+    let source = platform::Parent::at(&staging).unwrap();
+    let destination = platform::Parent::at(&root.join("published")).unwrap();
+    let moved = root.with_extension("moved");
+    let outside = root.with_extension("outside");
+    create_private_dir(&outside).unwrap();
+    fs::rename(&root, &moved).unwrap();
+    symlink(&outside, &root).unwrap();
+    source.publish_directory(&destination).unwrap();
+    assert!(!moved.join("staging").exists());
+    assert!(moved.join("published/tool").is_file());
+    assert_eq!(
+      fs::metadata(moved.join("published/tool"))
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o777,
+      0o700
+    );
+    assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
+    assert!(create_harness_file(&root.join("unexpected"), true).is_err());
+    assert!(create_private_dir_new(&root.join("unexpected")).is_err());
+    fs::remove_file(&root).unwrap();
+    fs::remove_dir_all(moved).unwrap();
+    fs::remove_dir(outside).unwrap();
+  }
+
   #[cfg(unix)]
   fn assert_link_error(error: std::io::Error) {
     assert!(
@@ -505,7 +592,7 @@ mod tests {
     symlink(&outside, &directory_link).unwrap();
     assert_link_error(create_private_dir(&directory_link).unwrap_err());
     assert_link_error(
-      publish_harness_directory(&directory_link, &root.join("published")).unwrap_err(),
+      publish_directory(&directory_link, &root.join("published")).unwrap_err(),
     );
     assert!(write_private_atomic(&directory_link.join("file"), b"value").is_err());
     let middle = root.join("middle");
@@ -537,7 +624,7 @@ mod tests {
     );
     write_private_atomic(&staged.join("record"), b"complete").unwrap();
     let published = root.join("published");
-    publish_harness_directory(&staged, &published).unwrap();
+    publish_directory(&staged, &published).unwrap();
     assert!(!staged.exists());
     assert_eq!(fs::read(published.join("record")).unwrap(), b"complete");
     fs::remove_dir_all(root).unwrap();
@@ -619,6 +706,39 @@ mod tests {
     assert!(directory_target.is_dir());
     assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 2);
     fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
+
+  #[cfg(windows)]
+  #[test]
+  fn local_file_creation_observes_shared_handles() {
+    let path = unique_path();
+    create_private_dir(path.parent().unwrap()).unwrap();
+    write_private_atomic(&path, b"document").unwrap();
+    drop(open_private(OpenMode::ExclusiveRead, &path).unwrap());
+    let reader = open_private(OpenMode::Read, &path).unwrap();
+    assert!(open_private(OpenMode::ExclusiveRead, &path).is_err());
+    drop(reader);
+    drop(open_private(OpenMode::ExclusiveRead, &path).unwrap());
+    fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
+
+  #[test]
+  fn local_file_creation_moves_without_replacing_a_copy() {
+    let source = unique_path();
+    let destination = source.with_file_name("recovery.docx");
+    create_private_dir(source.parent().unwrap()).unwrap();
+    write_private_atomic(&source, b"first").unwrap();
+    move_private(&source, &destination).unwrap();
+    assert!(!source.exists());
+    assert_eq!(fs::read(&destination).unwrap(), b"first");
+    write_private_atomic(&source, b"second").unwrap();
+    assert_eq!(
+      move_private(&source, &destination).unwrap_err().kind(),
+      std::io::ErrorKind::AlreadyExists
+    );
+    assert_eq!(fs::read(&source).unwrap(), b"second");
+    assert_eq!(fs::read(&destination).unwrap(), b"first");
+    fs::remove_dir_all(source.parent().unwrap()).unwrap();
   }
 
   /// A store path in its own fresh directory, so `persist` restricts that
@@ -830,6 +950,58 @@ mod tests {
       expected.push((true, 0, "new".to_owned()));
     }
     assert_eq!(synced.into_inner(), expected);
+    remove_store(&path);
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn atomic_writes_sync_the_pinned_directory_after_a_platform_path_change() {
+    use std::os::unix::fs::{MetadataExt, symlink};
+    let root = unique_path().parent().unwrap().to_path_buf();
+    let original = root.join("original");
+    let moved = root.join("moved");
+    let outside = root.join("outside");
+    create_private_dir(&original).unwrap();
+    create_private_dir(&outside).unwrap();
+    let path = original.join("store.json");
+    write_private_atomic(&path, b"old").unwrap();
+    let pinned_inode = fs::metadata(&original).unwrap().ino();
+    let directory_synced = std::cell::Cell::new(false);
+    write_private_atomic_with(&path, b"new", |file| {
+      if file.metadata()?.is_dir() {
+        assert_eq!(file.metadata()?.ino(), pinned_inode);
+        assert_eq!(fs::read(moved.join("store.json"))?, b"new");
+        directory_synced.set(true);
+      } else {
+        assert_eq!(fs::read(&path)?, b"old");
+        fs::rename(&original, &moved)?;
+        symlink(&outside, &original)?;
+      }
+      file.sync_all()
+    })
+    .unwrap();
+    assert!(directory_synced.get());
+    assert_eq!(fs::read(moved.join("store.json")).unwrap(), b"new");
+    assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(&moved).unwrap().count(), 1);
+    fs::remove_dir_all(root).unwrap();
+  }
+
+  #[cfg(unix)]
+  #[test]
+  fn a_failed_directory_sync_is_reported_after_replacement() {
+    let path = unique_path();
+    create_private_dir(path.parent().unwrap()).unwrap();
+    write_private_atomic(&path, b"old").unwrap();
+    let result = write_private_atomic_with(&path, b"new", |file| {
+      if file.metadata()?.is_dir() {
+        return Err(std::io::Error::other("directory sync unavailable"));
+      }
+      file.sync_all()
+    });
+    assert!(result.unwrap_err().contains("directory sync unavailable"));
+    assert_eq!(fs::read(&path).unwrap(), b"new");
+    assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
     remove_store(&path);
   }
 
