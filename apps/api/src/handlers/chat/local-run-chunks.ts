@@ -221,47 +221,50 @@ const asChatChunk = (
   { runnerRunId, chatRunId, threadId }: RewriteContext,
 ): PublicStreamChunk => {
   const callId = (id: string) => localCallId(runnerRunId, id);
-  switch (chunk.type) {
-    case EventType.RUN_STARTED:
-      return { ...chunk, runId: chatRunId, threadId };
-    case EventType.RUN_FINISHED:
-      return {
-        ...chunk,
-        runId: chatRunId,
-        threadId,
-        ...(chunk.outcome?.type === "interrupt"
-          ? {
-              outcome: {
-                ...chunk.outcome,
-                interrupts: chunk.outcome.interrupts.map((interrupt) =>
-                  interrupt.toolCallId === undefined
-                    ? interrupt
-                    : {
-                        ...interrupt,
-                        toolCallId: callId(interrupt.toolCallId),
-                      },
-                ),
-              },
-            }
-          : {}),
-      };
-    case EventType.TOOL_CALL_START:
-    case EventType.TOOL_CALL_ARGS:
-    case EventType.TOOL_CALL_END:
-    case EventType.TOOL_CALL_RESULT:
-      return { ...chunk, toolCallId: callId(chunk.toolCallId) };
-    case EventType.CUSTOM: {
-      const value: unknown = chunk.value;
-      return isRecord(value) && typeof value["toolCallId"] === "string"
-        ? {
-            ...chunk,
-            value: { ...value, toolCallId: callId(value["toolCallId"]) },
-          }
-        : chunk;
-    }
-    default:
-      return chunk;
+  // Only these name a run, a thread or a call; every other chunk passes as is.
+  if (chunk.type === EventType.RUN_STARTED) {
+    return { ...chunk, runId: chatRunId, threadId };
   }
+  if (chunk.type === EventType.RUN_FINISHED) {
+    return {
+      ...chunk,
+      runId: chatRunId,
+      threadId,
+      ...(chunk.outcome?.type === "interrupt"
+        ? {
+            outcome: {
+              ...chunk.outcome,
+              interrupts: chunk.outcome.interrupts.map((interrupt) =>
+                interrupt.toolCallId === undefined
+                  ? interrupt
+                  : {
+                      ...interrupt,
+                      toolCallId: callId(interrupt.toolCallId),
+                    },
+              ),
+            },
+          }
+        : {}),
+    };
+  }
+  if (
+    chunk.type === EventType.TOOL_CALL_START ||
+    chunk.type === EventType.TOOL_CALL_ARGS ||
+    chunk.type === EventType.TOOL_CALL_END ||
+    chunk.type === EventType.TOOL_CALL_RESULT
+  ) {
+    return { ...chunk, toolCallId: callId(chunk.toolCallId) };
+  }
+  if (chunk.type === EventType.CUSTOM) {
+    const value: unknown = chunk.value;
+    return isRecord(value) && typeof value["toolCallId"] === "string"
+      ? {
+          ...chunk,
+          value: { ...value, toolCallId: callId(value["toolCallId"]) },
+        }
+      : chunk;
+  }
+  return chunk;
 };
 
 type RunFinishedChunk = Extract<
