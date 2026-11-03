@@ -2,7 +2,7 @@ Approval interrupts update the actual tool owner without rebuilding unrelated me
 Canonical TOOL_CALL_END input updates completed calls without resetting their state.
 Snapshot sibling results do not enrich terminal calls with absent output.
 Sequential calls wait behind the first pending approval; plain client requests proceed.
-RUN_ERROR raw evidence retains HTTP status and AWS exception identity.
+RUN_ERROR raw evidence retains HTTP status, AWS exception identity and transport failure class.
 Reasoning provenance survives UI/model conversions and AG-UI snapshots.
 TOOL_CALL_START flushes before waiting for further provider output.
 Durable delivery respects consumer demand until cancellation detaches its producer.
@@ -80,7 +80,7 @@ diff --git a/dist/esm/activities/error-payload.js b/dist/esm/activities/error-pa
 index adf8a899dda16d289331cebfece36a6c80263d0c..c62fdcfe2421fea1e474165ebcdbbe5a3f55e56f 100644
 --- a/dist/esm/activities/error-payload.js
 +++ b/dist/esm/activities/error-payload.js
-@@ -91,12 +91,52 @@ function toRunErrorPayload(error, fallbackMessage = "Unknown error occurred") {
+@@ -91,12 +91,79 @@ function toRunErrorPayload(error, fallbackMessage = "Unknown error occurred") {
  *   const rawEvent = toRunErrorRawEvent(error)
  *   yield { type: EventType.RUN_ERROR, ..., ...(rawEvent !== undefined && { rawEvent }) }
  */
@@ -123,6 +123,33 @@ index adf8a899dda16d289331cebfece36a6c80263d0c..c62fdcfe2421fea1e474165ebcdbbe5a
 +	const status = httpStatusOf(e);
 +	return status === void 0 ? void 0 : { status };
 +}
++/**
++* A request that got no response (a refused or reset connection, a timeout)
++* carries no body and no status. Its identity is the transport class the SDK
++* raised and the network code under it; neither carries request content.
++*/
++var TRANSPORT_ERROR_NAMES = new Set([
++	"APIConnectionError",
++	"APIConnectionTimeoutError",
++	"ConnectionError",
++	"RequestTimeoutError"
++]);
++var NETWORK_CODE = /^(?:E[A-Z]+|UND_ERR_[A-Z_]+|Connection[A-Za-z]+|FailedToOpenSocket)$/;
++function transportEvidence(e) {
++	let name;
++	let code;
++	let current = e;
++	for (let depth = 0; depth < 4 && current !== null && typeof current === "object"; depth++) {
++		if (name === void 0 && typeof current.name === "string" && TRANSPORT_ERROR_NAMES.has(current.name)) name = current.name;
++		if (code === void 0 && typeof current.code === "string" && NETWORK_CODE.test(current.code)) code = current.code;
++		current = current.cause;
++	}
++	if (name === void 0 && code === void 0) return void 0;
++	return {
++		...name !== void 0 && { name },
++		...code !== void 0 && { code }
++	};
++}
  function toRunErrorRawEvent(error) {
  	if (!error || typeof error !== "object") return void 0;
  	const e = error;
@@ -132,7 +159,7 @@ index adf8a899dda16d289331cebfece36a6c80263d0c..c62fdcfe2421fea1e474165ebcdbbe5a
 +	if (e.rawEvent !== void 0 && e.rawEvent !== null) return withHttpStatus(e.rawEvent, e);
 +	if (e.error !== void 0 && e.error !== null && typeof e.error === "object") return withHttpStatus(e.error, e);
 +	if (e.metadata !== void 0 && e.metadata !== null) return withHttpStatus(e.metadata, e);
-+	return awsExceptionEvidence(e) ?? statusEvidence(e);
++	return awsExceptionEvidence(e) ?? statusEvidence(e) ?? transportEvidence(e);
  }
  //#endregion
  export { isAbortShapedError, toRunErrorPayload, toRunErrorRawEvent };
