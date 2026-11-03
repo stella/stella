@@ -2,11 +2,13 @@ import type { Result } from "better-result";
 import * as v from "valibot";
 
 import { MAX_TRANSCRIPTION_AUDIO_SECONDS } from "@stll/api-contract/transcription";
+import type { TRANSCRIPTION_AUDIO_MEDIA_TYPES } from "@stll/api-contract/transcription";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
+import { partOfType } from "@/state/form-part";
 import type { FormPart } from "@/state/form-part";
 
 /** The longest recording one transcription takes; recording stops there. */
@@ -19,6 +21,10 @@ export const DICTATION_MAX_SECONDS = MAX_TRANSCRIPTION_AUDIO_SECONDS;
 const TRANSCRIBE_TIMEOUT_MS = 75_000;
 
 const transcriptionSchema = v.object({ text: v.string() });
+
+/** What the recorder writes on iOS and Android: AAC in an MP4 container. */
+const RECORDING_TYPE: (typeof TRANSCRIPTION_AUDIO_MEDIA_TYPES)[number] =
+  "audio/mp4";
 
 /**
  * Turns one recording into text through the server's transcription, which
@@ -37,7 +43,7 @@ export const transcribeRecording = async ({
   readonly audio: FormPart;
 }): Promise<Result<string, ApiError>> => {
   const form = new FormData();
-  form.append("file", audio);
+  form.append("file", partOfType(audio, RECORDING_TYPE));
   const transcribed = await requestApi({
     fetch,
     source,

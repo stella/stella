@@ -5,6 +5,8 @@ import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
+import { DOCX_MIME_TYPE } from "@/state/document-file";
+import { partOfType } from "@/state/form-part";
 import type { FormPart } from "@/state/form-part";
 
 /**
@@ -74,8 +76,8 @@ const checkpointSchema = v.object({
 });
 
 /**
- * Stores the edited file: on the phone, Expo's `File`, whose type the server
- * checks is a Word document's. The session
+ * Stores the edited file, on the phone Expo's `File`, as a Word document,
+ * the type the server checks. The session
  * the next request must use comes back: the server may rotate its token.
  */
 export const checkpointEditSession = async ({
@@ -88,7 +90,7 @@ export const checkpointEditSession = async ({
   readonly file: FormPart;
 }): Promise<Result<EditSession, ApiError>> => {
   const form = new FormData();
-  form.append("file", file);
+  form.append("file", partOfType(file, DOCX_MIME_TYPE));
   form.append("sessionToken", session.sessionToken);
   const stored = await requestApi({
     fetch,

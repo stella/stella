@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -6,18 +6,27 @@ import {
   createSessionStore,
   type StoredSession,
 } from "@/connection/session";
+import { ExpoFormData } from "@/connection/test-support/expo-form-data";
 
 import { appendDictation, transcribeRecording } from "./dictation";
 
-// A recording as the phone hands it over: a file, which Expo's `fetch`
-// reads as bytes.
+// A recording as Android hands it over: a file, which Expo's `fetch` reads
+// as bytes, under the type the platform guesses from its name.
 const RECORDING = new File(
   [new Uint8Array([0, 0, 0, 24, 102, 116])],
   "rec.m4a",
   {
-    type: "audio/mp4",
+    type: "audio/mpeg",
   },
 );
+
+const BUN_FORM_DATA = globalThis.FormData;
+beforeEach(() => {
+  globalThis.FormData = ExpoFormData;
+});
+afterEach(() => {
+  globalThis.FormData = BUN_FORM_DATA;
+});
 
 const SESSION: StoredSession = {
   serverUrl: "https://stella.example.com",
@@ -98,19 +107,16 @@ describe("transcribing a recording", () => {
     expect(request?.headers.get("authorization")).toBe("Bearer access-0");
     // The platform writes the multipart boundary; a JSON type would hide it.
     expect(request?.headers.get("content-type")).toBeNull();
-    expect(request?.body).toBeInstanceOf(FormData);
-    const form = request?.body instanceof FormData ? request.body : undefined;
+    expect(request?.body).toBeInstanceOf(ExpoFormData);
+    const form =
+      request?.body instanceof ExpoFormData ? request.body : undefined;
     expect([...(form?.keys() ?? [])]).toEqual(["file"]);
-    // The recording itself goes up, with its type, not a stand-in for it.
-    const sentFile = form?.get("file");
-    expect(sentFile).toBeInstanceOf(Blob);
-    if (!(sentFile instanceof Blob)) {
-      return;
-    }
-    expect(sentFile.type).toBe("audio/mp4");
-    expect(new Uint8Array(await sentFile.arrayBuffer())).toEqual(
-      new Uint8Array(await RECORDING.arrayBuffer()),
-    );
+    // The recording itself goes up, as the type the server takes rather
+    // than the platform's guess, not a stand-in for it.
+    const sentFile = form?.part("file");
+    expect(sentFile?.name).toBe("rec.m4a");
+    expect(sentFile?.type).toBe("audio/mp4");
+    expect(await sentFile?.bytes()).toEqual(await RECORDING.bytes());
   });
 
   test("a refusal keeps the server's status and words", async () => {

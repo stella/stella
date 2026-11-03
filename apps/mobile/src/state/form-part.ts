@@ -10,6 +10,18 @@ export type FormPart = {
   readonly bytes: () => Promise<Uint8Array>;
 };
 
+/**
+ * A file on the phone as a part of the type the server takes. The type of
+ * Expo's `File` is the platform's guess from the name, and Android guesses
+ * `audio/mpeg` for a recording the server only takes as `audio/mp4`, so an
+ * upload states its type rather than reading it from the file.
+ */
+export const partOfType = (file: FormPart, type: string): FormPart => ({
+  name: file.name,
+  type,
+  bytes: async () => await file.bytes(),
+});
+
 declare global {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- only an interface merges into the global FormData
   interface FormData {

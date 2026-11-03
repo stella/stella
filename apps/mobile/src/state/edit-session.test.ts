@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -6,6 +6,7 @@ import {
   createSessionStore,
   type StoredSession,
 } from "@/connection/session";
+import { ExpoFormData } from "@/connection/test-support/expo-form-data";
 import { DOCX_MIME_TYPE } from "@/state/document-file";
 
 import {
@@ -77,10 +78,18 @@ const EDITING = {
   fileName: "Smlouva.docx",
 } as const;
 
-// The edited document as the phone hands it over: a file with the Word
-// type the server checks.
+// The edited document as the phone hands it over, here under no type: what
+// the platform guesses from the name is not what goes up.
 const EDITED = new File([new Uint8Array([80, 75, 3, 4])], "edit.docx", {
-  type: DOCX_MIME_TYPE,
+  type: "",
+});
+
+const BUN_FORM_DATA = globalThis.FormData;
+beforeEach(() => {
+  globalThis.FormData = ExpoFormData;
+});
+afterEach(() => {
+  globalThis.FormData = BUN_FORM_DATA;
 });
 
 describe("opening a document for editing", () => {
@@ -145,19 +154,15 @@ describe("storing a checkpoint", () => {
     );
     // The platform writes the multipart boundary; a JSON type would hide it.
     expect(request?.headers.get("content-type")).toBeNull();
-    const form = request?.body instanceof FormData ? request.body : undefined;
+    const form =
+      request?.body instanceof ExpoFormData ? request.body : undefined;
     expect([...(form?.keys() ?? [])]).toEqual(["file", "sessionToken"]);
     expect(form?.get("sessionToken")).toBe(EDITING.sessionToken);
-    // The document itself goes up, with the Word type, not a stand-in for it.
-    const sentFile = form?.get("file");
-    expect(sentFile).toBeInstanceOf(Blob);
-    if (!(sentFile instanceof Blob)) {
-      return;
-    }
-    expect(sentFile.type).toBe(DOCX_MIME_TYPE);
-    expect(new Uint8Array(await sentFile.arrayBuffer())).toEqual(
-      new Uint8Array(await EDITED.arrayBuffer()),
-    );
+    // The document itself goes up, as a Word document, not a stand-in for it.
+    const sentFile = form?.part("file");
+    expect(sentFile?.name).toBe("edit.docx");
+    expect(sentFile?.type).toBe(DOCX_MIME_TYPE);
+    expect(await sentFile?.bytes()).toEqual(await EDITED.bytes());
   });
 
   test("keeps the token when the server does not rotate it", async () => {
