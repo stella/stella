@@ -45,7 +45,7 @@ const RULES: readonly RefusalRule[] = [
 ];
 
 // Bun's report of an uncaught startup error: `error: …`, `Panic: …`, `XError: …`.
-const UNCAUGHT_LINE = /^\s*(?:error|panic|[A-Za-z]*Error):\s+(.+)$/imu;
+const UNCAUGHT_LINE = /^ *(?:error|panic|[A-Za-z]*Error): \S/iu;
 const FAILED_CHECKS = /failedChecks:\s*\[([^\]]*)\]/u;
 
 const ledgerNames = (text: string): string[] =>
