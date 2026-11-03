@@ -2,10 +2,11 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import messages from "@/i18n/langs/en.json";
 import type { api } from "@/lib/api";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/admin/ai" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
